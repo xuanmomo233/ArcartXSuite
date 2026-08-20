@@ -98,7 +98,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.dialect", ValueType.STRING)
+            ValidationRule.required("storage.mode", ValueType.STRING)
                 .withEnum(Set.of("sqlite", "mysql")),
             ValidationRule.of("selection.max-volume", ValueType.INT).withRange(1, 100000000)
         );
@@ -168,7 +168,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
-        // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         if (configuration.storage().hasOverride()) {
             // 旧路径：模块自建连接池
             repository = new RegionsRepository(dataFolder, configuration.storage(), logger);
@@ -177,7 +177,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             repository = new RegionsRepository(
                 storageManager, "regions",
                 configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFile(), logger);
+                configuration.storage().sqliteFileName(), logger);
         }
         repository.initialize();
         regionManager = new RegionManager(repository, configuration, logger);

@@ -92,45 +92,66 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
     }
 
     private void initTables(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "homes ("
-            + "uuid VARCHAR(36) NOT NULL, name VARCHAR(64) NOT NULL, "
-            + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
-            + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL, "
-            + "PRIMARY KEY (uuid, name))");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            homes (
+                uuid VARCHAR(36) NOT NULL, name VARCHAR(64) NOT NULL,
+                world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
+                yaw FLOAT NOT NULL, pitch FLOAT NOT NULL,
+                PRIMARY KEY (uuid, name)
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "warps ("
-            + "name VARCHAR(64) NOT NULL PRIMARY KEY, "
-            + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
-            + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            warps (
+                name VARCHAR(64) NOT NULL PRIMARY KEY,
+                world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
+                yaw FLOAT NOT NULL, pitch FLOAT NOT NULL
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "spawn ("
-            + "id INT NOT NULL PRIMARY KEY, "
-            + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
-            + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            spawn (
+                id INT NOT NULL PRIMARY KEY,
+                world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,
+                yaw FLOAT NOT NULL, pitch FLOAT NOT NULL
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "bans ("
-            + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
-            + "player_name VARCHAR(32) NOT NULL, "
-            + "reason TEXT, operator VARCHAR(32) NOT NULL, "
-            + "created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, "
-            + "ip VARCHAR(45))");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            bans (
+                uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                player_name VARCHAR(32) NOT NULL,
+                reason TEXT, operator VARCHAR(32) NOT NULL,
+                created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL,
+                ip VARCHAR(45)
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "warnings ("
-            + "id INTEGER PRIMARY KEY " + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + ", "
-            + "uuid VARCHAR(36) NOT NULL, "
-            + "player_name VARCHAR(32) NOT NULL, "
-            + "reason TEXT, operator VARCHAR(32) NOT NULL, "
-            + "created_at BIGINT NOT NULL)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            warnings (
+                id INTEGER PRIMARY KEY """ + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + """
+                , uuid VARCHAR(36) NOT NULL,
+                player_name VARCHAR(32) NOT NULL,
+                reason TEXT, operator VARCHAR(32) NOT NULL,
+                created_at BIGINT NOT NULL
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "nicknames ("
-            + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
-            + "nickname VARCHAR(128) NOT NULL)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            nicknames (
+                uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                nickname VARCHAR(128) NOT NULL
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "player_data ("
-            + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
-            + "last_seen BIGINT NOT NULL DEFAULT 0, "
-            + "last_ip VARCHAR(45), "
-            + "first_join BIGINT NOT NULL DEFAULT 0)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            player_data (
+                uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                last_seen BIGINT NOT NULL DEFAULT 0,
+                last_ip VARCHAR(45),
+                first_join BIGINT NOT NULL DEFAULT 0
+            )
+            """);
     }
 
     // ─── Homes ───

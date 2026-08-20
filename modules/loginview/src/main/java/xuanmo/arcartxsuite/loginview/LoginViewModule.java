@@ -308,7 +308,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             service == null ? messages().get("status.service-stopped") : messages().get("status.service-running")));
         if (configuration != null) {
             sender.sendMessage(msg("status.auth-mode", configuration.authMode().configKey()));
-            sender.sendMessage(msg("status.storage", configuration.storage().dialect().configKey()));
+            sender.sendMessage(msg("status.storage", configuration.storage().mode()));
             sender.sendMessage(msg("status.ui", service == null ? configuration.ui().uiId() : service.uiId()));
             sender.sendMessage(msg("status.ui-file", configuration.ui().relativeUiPath()));
             sender.sendMessage(msg("status.lock",

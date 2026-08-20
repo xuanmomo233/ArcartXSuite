@@ -1,6 +1,6 @@
 # 文件用途: ArcartXLottery 抽奖模块的主配置文件。
 # 配置奖池目录路径、数据存储方式（SQLite/MySQL）和原神跨池共享保底分组。
-config-version: 1  # 配置文件版本号
+config-version: 2  # 配置文件版本号
 
 # ─── UI 配置 ────────────────────────────────────────
 ui:
@@ -15,18 +15,25 @@ exchange-directory: "lottery/exchange"
 # ─── 数据存储 ────────────────────────────────────────
 storage:
   # 存储模式：sqlite 或 mysql。
-  mode: sqlite
+  mode: "sqlite"
   # SQLite 文件名（相对模块数据目录）。
-  sqlite-file-name: "lottery.db"
+  sqlite:
+    file: "lottery.db"
   # JDBC 连接池大小，SQLite 建议保持 1。
   pool-size: 1
-  # 以下仅在 mode: mysql 时生效。
-  # mysql-host: "localhost"
-  # mysql-port: 3306
-  # mysql-database: "axs_lottery"
-  # mysql-username: "root"
-  # mysql-password: ""
-  # table-prefix: "lottery_"
+  # ── MySQL 自建模式（不推荐） ──
+  # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
+  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
+  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
+  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
+  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # mysql:
+  #   host: "127.0.0.1"
+  #   port: 3306
+  #   database: "arcartxsuite"
+  #   username: "root"
+  #   password: ""
+  #   table-prefix: "axs_lottery_"
 
 # ─── 原神跨池共享保底组 ────────────────────────────────────────
 # 同一组内的 Gacha 池子共享保底计数。

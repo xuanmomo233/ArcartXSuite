@@ -11,29 +11,29 @@ public record QQBotStorageConfig(
     /** 存储模式：{@code sqlite} 或 {@code mysql} */
     String mode,
     /** SQLite 数据库文件名 */
-    String sqliteFile,
+    String sqliteFileName,
     /** MySQL 主机地址 */
-    String mysqlHost,
+    String host,
     /** MySQL 端口 */
-    int mysqlPort,
+    int port,
     /** MySQL 数据库名 */
-    String mysqlDatabase,
+    String database,
     /** MySQL 用户名 */
-    String mysqlUsername,
+    String username,
     /** MySQL 密码 */
-    String mysqlPassword,
+    String password,
     /** MySQL 表名前缀 */
-    String mysqlTablePrefix,
+    String tablePrefix,
     /** 连接池大小 */
     int poolSize
 ) {
     /**
-     * 判断当前存储模式是否为 MySQL。
+     * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
      *
-     * @return {@code true} 表示使用 MySQL
+     * @return {@code true} 表示使用 SQLite
      */
-    public boolean isMysql() {
-        return "mysql".equalsIgnoreCase(mode);
+    public boolean isSqlite() {
+        return !"mysql".equalsIgnoreCase(mode);
     }
 
     /**
@@ -42,11 +42,11 @@ public record QQBotStorageConfig(
      * @return 对应的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}
      */
     public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-        if (isMysql()) {
+        if (!isSqlite()) {
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, poolSize, mysqlTablePrefix);
+                host, port, database, username, password, poolSize, tablePrefix);
         }
-        return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFile);
+        return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
     }
 
     /**
@@ -59,6 +59,6 @@ public record QQBotStorageConfig(
      * @since 1.4.0
      */
     public boolean hasOverride() {
-        return isMysql();
+        return "mysql".equalsIgnoreCase(mode);
     }
 }

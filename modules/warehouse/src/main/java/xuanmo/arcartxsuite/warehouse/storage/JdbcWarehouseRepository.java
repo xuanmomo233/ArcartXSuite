@@ -105,7 +105,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<WarehouseRecord> loadPersonalWarehouses(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT warehouse_id, level, custom_name, showcase_enabled, updated_at FROM warehouse_personal WHERE player_uuid = ? ORDER BY warehouse_id ASC"
              )) {
@@ -132,7 +132,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_personal", List.of("player_uuid", "warehouse_id"), List.of("level", "custom_name", "updated_at")))) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, warehouseId);
@@ -154,7 +154,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? ORDER BY slot ASC"
              )) {
@@ -173,7 +173,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
 
     @Override
     public List<SlotItemRecord> loadAllSlots() throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM warehouse_slots ORDER BY slot ASC"
              )) {
@@ -199,7 +199,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND slot = ?"
              )) {
@@ -225,7 +225,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Optional<SlotItemRecord> findSlotByHash(String ownerType, String ownerId, String warehouseId, String itemHash) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND item_hash = ? ORDER BY slot ASC LIMIT 1"
              )) {
@@ -247,7 +247,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void upsertSlot(SlotItemRecord item) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql(
                  "warehouse_slots",
                  List.of("owner_type", "owner_id", "warehouse_id", "slot"),
@@ -284,7 +284,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void deleteSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND slot = ?"
              )) {
@@ -305,7 +305,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Map<String, BigDecimal> loadBankBalances(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT currency_id, balance FROM warehouse_bank_balances WHERE player_uuid = ?"
              )) {
@@ -331,7 +331,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void setBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_bank_balances", List.of("player_uuid", "currency_id"), List.of("balance", "updated_at")))) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, currencyId);
@@ -370,7 +370,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     balance = balance + VALUES(balance),
                     updated_at = VALUES(updated_at)
                 """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, currencyId);
@@ -406,7 +406,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                 SET balance = CAST(balance AS DECIMAL(38,8)) - ?, updated_at = ?
                 WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS DECIMAL(38,8)) >= ?
                 """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, amount.toPlainString());
             statement.setLong(2, updatedAt);
@@ -430,7 +430,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
                 FixedDepositRecord deposit;
@@ -508,7 +508,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             .setScale(8, java.math.RoundingMode.DOWN)
             .stripTrailingZeros();
 
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement mark = connection.prepareStatement(
@@ -575,7 +575,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void createFixedDeposit(FixedDepositRecord deposit) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "INSERT INTO warehouse_fixed_deposits (id, player_uuid, product_id, currency_id, principal, interest_rate, created_at, matures_at, claimed, claimed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
              )) {
@@ -602,7 +602,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<FixedDepositRecord> loadFixedDeposits(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM warehouse_fixed_deposits WHERE player_uuid = ? ORDER BY claimed ASC, matures_at ASC"
              )) {
@@ -637,7 +637,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void markFixedDepositClaimed(String depositId, long claimedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_fixed_deposits SET claimed = ?, claimed_at = ? WHERE id = ?"
              )) {
@@ -656,7 +656,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void createSharedWarehouse(SharedWarehouseRecord warehouse) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement shared = connection.prepareStatement(
@@ -698,7 +698,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void updateSharedWarehouseLevel(String sharedId, int level, long capacity, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_shared SET level = ?, capacity = ?, updated_at = ? WHERE id = ?"
              )) {
@@ -720,7 +720,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void updateSharedWarehouseName(String sharedId, String name, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_shared SET name = ?, updated_at = ? WHERE id = ?"
              )) {
@@ -741,7 +741,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_shared SET showcase_enabled = ?, updated_at = ? WHERE id = ?"
              )) {
@@ -763,7 +763,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void updatePersonalWarehouseName(UUID playerUuid, String warehouseId, String customName, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_personal SET custom_name = ?, updated_at = ? WHERE player_uuid = ? AND warehouse_id = ?"
              )) {
@@ -786,7 +786,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void updatePersonalWarehouseShowcase(UUID playerUuid, String warehouseId, boolean showcaseEnabled, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "UPDATE warehouse_personal SET showcase_enabled = ?, updated_at = ? WHERE player_uuid = ? AND warehouse_id = ?"
              )) {
@@ -807,7 +807,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void deletePersonalWarehouse(UUID playerUuid, String warehouseId) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement slots = connection.prepareStatement(
@@ -841,7 +841,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement shared = connection.prepareStatement(
@@ -888,7 +888,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void upsertPendingTransfer(PendingTransfer transfer) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement delete = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?");
@@ -921,7 +921,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public Optional<PendingTransfer> loadPendingTransfer(String sharedId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT from_owner_uuid, to_uuid, created_at, expires_at FROM warehouse_pending_transfers WHERE shared_id = ?")) {
             statement.setString(1, sharedId);
@@ -944,7 +944,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<PendingTransfer> loadPendingTransfers(UUID targetUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT shared_id, from_owner_uuid, created_at, expires_at FROM warehouse_pending_transfers WHERE to_uuid = ? ORDER BY created_at ASC")) {
             statement.setString(1, targetUuid.toString());
@@ -968,7 +968,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void deletePendingTransfer(String sharedId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?")) {
             statement.setString(1, sharedId);
             statement.executeUpdate();
@@ -983,7 +983,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void deleteSharedWarehouse(String sharedId) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement slots = connection.prepareStatement("DELETE FROM warehouse_slots WHERE owner_type = 'shared' AND owner_id = ?");
@@ -1024,7 +1024,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             WHERE m.player_uuid = ?
             ORDER BY s.created_at DESC
             """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -1063,7 +1063,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             JOIN warehouse_shared_members m ON s.id = m.shared_id
             WHERE m.player_uuid = ? AND s.id = ?
             """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, sharedId);
@@ -1095,7 +1095,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<SharedWarehouseRecord> loadSharedWarehousesByOwner(UUID ownerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT id, owner_uuid, name, level, capacity, created_at, updated_at, showcase_enabled FROM warehouse_shared WHERE owner_uuid = ? ORDER BY created_at DESC"
              )) {
@@ -1129,7 +1129,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public List<SharedMemberRecord> loadSharedMembers(String sharedId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT shared_id, player_uuid, role, updated_at FROM warehouse_shared_members WHERE shared_id = ? ORDER BY role ASC, updated_at ASC"
              )) {
@@ -1184,7 +1184,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void upsertSharedMember(String sharedId, UUID playerUuid, String role, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_shared_members", List.of("shared_id", "player_uuid"), List.of("role", "updated_at")))) {
             statement.setString(1, sharedId);
             statement.setString(2, playerUuid.toString());
@@ -1203,7 +1203,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
      */
     @Override
     public void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM warehouse_shared_members WHERE shared_id = ? AND player_uuid = ? AND role <> 'owner'"
              )) {
@@ -1355,7 +1355,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     private int count(String sql, String parameter) throws SQLException {
-        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, parameter);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt(1) : 0;
@@ -1382,10 +1382,6 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             assignments.add(column + (sqlite ? " = excluded." : " = VALUES(") + column + (sqlite ? "" : ")"));
         }
         return String.join(", ", assignments);
-    }
-
-    private Connection connection() throws SQLException {
-        return getConnection();
     }
 
     private static BigDecimal decimal(String value) {

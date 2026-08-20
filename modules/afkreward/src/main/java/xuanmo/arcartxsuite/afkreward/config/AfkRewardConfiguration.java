@@ -119,36 +119,29 @@ public record AfkRewardConfiguration(
     /**
      * 存储子配置，支持 SQLite 与 MySQL。
      *
-     * @param dialect      存储方言（SQLITE / MYSQL）
-     * @param sqliteFile   SQLite 数据库文件名
-     * @param host         MySQL 主机地址
-     * @param port         MySQL 端口
-     * @param database     MySQL 数据库名
-     * @param username     MySQL 用户名
-     * @param password     MySQL 密码
-     * @param tablePrefix  表名前缀
-     * @param poolSize     连接池大小
+     * @param mode           存储模式（sqlite / mysql）
+     * @param sqliteFileName SQLite 数据库文件名
+     * @param host           MySQL 主机地址
+     * @param port           MySQL 端口
+     * @param database       MySQL 数据库名
+     * @param username       MySQL 用户名
+     * @param password       MySQL 密码
+     * @param tablePrefix    表名前缀
+     * @param poolSize       连接池大小
      */
     public record StorageConfig(
-        Dialect dialect, String sqliteFile,
+        String mode, String sqliteFileName,
         String host, int port, String database,
         String username, String password,
         String tablePrefix, int poolSize
     ) {
         /**
-         * 存储方言枚举。
+         * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
+         *
+         * @return {@code true} 表示使用 SQLite
          */
-        public enum Dialect {
-            SQLITE, MYSQL;
-            /**
-             * 将字符串解析为方言，{@code mysql}（不区分大小写）返回 {@link #MYSQL}，其余返回 {@link #SQLITE}。
-             *
-             * @param s 方言字符串
-             * @return 对应枚举值
-             */
-            public static Dialect from(String s) {
-                return "mysql".equalsIgnoreCase(s) ? MYSQL : SQLITE;
-            }
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
         }
 
         /**
@@ -157,24 +150,24 @@ public record AfkRewardConfiguration(
          * @return 对应方言的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}
          */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == Dialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
                     host, port, database, username, password, poolSize, tablePrefix);
             }
-            return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFile);
+            return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
 
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == Dialect.MYSQL;
+            return "mysql".equalsIgnoreCase(mode);
         }
     }
 
@@ -256,15 +249,16 @@ public record AfkRewardConfiguration(
 
         // storage
         ConfigurationSection storSec = yaml.getConfigurationSection("storage");
+        ConfigurationSection mysql = storSec != null ? storSec.getConfigurationSection("mysql") : null;
         StorageConfig storage = new StorageConfig(
-            StorageConfig.Dialect.from(storSec != null ? storSec.getString("dialect", "sqlite") : "sqlite"),
-            storSec != null ? storSec.getString("sqlite-file", "afkreward.db") : "afkreward.db",
-            storSec != null ? storSec.getString("host", "127.0.0.1") : "127.0.0.1",
-            storSec != null ? storSec.getInt("port", 3306) : 3306,
-            storSec != null ? storSec.getString("database", "arcartxsuite") : "arcartxsuite",
-            storSec != null ? storSec.getString("username", "root") : "root",
-            storSec != null ? storSec.getString("password", "") : "",
-            storSec != null ? storSec.getString("table-prefix", "axs_afk_") : "axs_afk_",
+            storSec != null ? storSec.getString("mode", "sqlite") : "sqlite",
+            storSec != null ? storSec.getString("sqlite.file", "afkreward.db") : "afkreward.db",
+            mysql != null ? mysql.getString("host", "127.0.0.1") : "127.0.0.1",
+            mysql != null ? mysql.getInt("port", 3306) : 3306,
+            mysql != null ? mysql.getString("database", "arcartxsuite") : "arcartxsuite",
+            mysql != null ? mysql.getString("username", "root") : "root",
+            mysql != null ? mysql.getString("password", "") : "",
+            mysql != null ? mysql.getString("table-prefix", "axs_afk_") : "axs_afk_",
             storSec != null ? storSec.getInt("pool-size", 3) : 3
         );
 

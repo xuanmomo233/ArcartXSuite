@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.essentials.config;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.ConfigurationSection;
@@ -176,37 +175,34 @@ public record EssentialsConfiguration(
     /**
      * 存储子配置，支持 SQLite 与 MySQL 两种方言。
      *
-     * @param dialect      数据库方言
-     * @param sqliteFile   SQLite 数据库文件名（仅 dialect=SQLITE 时使用）
-     * @param host         MySQL 主机地址
-     * @param port         MySQL 端口
-     * @param database     MySQL 数据库名
-     * @param username     MySQL 用户名
-     * @param password     MySQL 密码
-     * @param tablePrefix  数据表前缀
+     * @param mode           存储模式（sqlite / mysql）
+     * @param sqliteFileName SQLite 数据库文件名（仅 SQLite 模式时使用）
+     * @param host           MySQL 主机地址
+     * @param port           MySQL 端口
+     * @param database       MySQL 数据库名
+     * @param username       MySQL 用户名
+     * @param password       MySQL 密码
+     * @param tablePrefix    数据表前缀
+     * @param poolSize       连接池大小
      */
     public record StorageConfiguration(
-        Dialect dialect,
-        String sqliteFile,
+        String mode,
+        String sqliteFileName,
         String host,
         int port,
         String database,
         String username,
         String password,
-        String tablePrefix
+        String tablePrefix,
+        int poolSize
     ) {
         /**
-         * 存储方言枚举。
+         * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
+         *
+         * @return {@code true} 表示使用 SQLite
          */
-        public enum Dialect {
-            SQLITE("sqlite"), MYSQL("mysql");
-            private final String key;
-            Dialect(String key) { this.key = key; }
-            public String configKey() { return key; }
-            public static Dialect parse(String raw, Logger logger) {
-                if (raw != null && raw.trim().toLowerCase(Locale.ROOT).equals("mysql")) return MYSQL;
-                return SQLITE;
-            }
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
         }
 
         /**
@@ -215,37 +211,38 @@ public record EssentialsConfiguration(
          * @return 存储描述符
          */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == Dialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    host, port, database, username, password, 5, tablePrefix);
+                    host, port, database, username, password, poolSize, tablePrefix);
             }
-            return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFile);
+            return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
 
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == Dialect.MYSQL;
+            return "mysql".equalsIgnoreCase(mode);
         }
 
         static StorageConfiguration load(ConfigurationSection s, Logger logger) {
             ConfigurationSection mysql = s.getConfigurationSection("mysql");
             return new StorageConfiguration(
-                Dialect.parse(s.getString("dialect", "sqlite"), logger),
-                s.getString("sqlite-file", "essentials.db"),
+                s.getString("mode", "sqlite"),
+                s.getString("sqlite.file", "essentials.db"),
                 mysql != null ? mysql.getString("host", "localhost") : "localhost",
                 mysql != null ? mysql.getInt("port", 3306) : 3306,
                 mysql != null ? mysql.getString("database", "arcartxsuite") : "arcartxsuite",
                 mysql != null ? mysql.getString("username", "root") : "root",
                 mysql != null ? mysql.getString("password", "") : "",
-                mysql != null ? mysql.getString("table-prefix", "axs_ess_") : "axs_ess_"
+                mysql != null ? mysql.getString("table-prefix", "axs_ess_") : "axs_ess_",
+                s.getInt("pool-size", 4)
             );
         }
     }

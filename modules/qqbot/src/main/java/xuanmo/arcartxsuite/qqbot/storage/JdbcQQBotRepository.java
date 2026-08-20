@@ -41,7 +41,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     public JdbcQQBotRepository(File dataFolder, QQBotStorageConfig config, Logger logger) {
         super("AXS-QQBot", dataFolder, config.toDescriptor(), logger);
-        String prefix = config.isMysql() ? config.mysqlTablePrefix() : "axs_qqbot_";
+        String prefix = !config.isSqlite() ? config.tablePrefix() : "axs_qqbot_";
         this.tableBindings = prefix + "bindings";
         this.tablePoints = prefix + "points";
         this.tableSignin = prefix + "signin";
@@ -80,14 +80,16 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        String sql = "CREATE TABLE IF NOT EXISTS " + tableBindings + " ("
-            + "id INTEGER PRIMARY KEY " + autoIncrement() + ","
-            + "qq_id BIGINT NOT NULL,"
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "player_name VARCHAR(64) NOT NULL,"
-            + "bound_at BIGINT NOT NULL DEFAULT 0,"
-            + "UNIQUE(qq_id, player_uuid)"
-            + ")";
+        String sql = "CREATE TABLE IF NOT EXISTS " + tableBindings + """
+             (
+                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                , qq_id BIGINT NOT NULL,
+                player_uuid VARCHAR(36) NOT NULL,
+                player_name VARCHAR(64) NOT NULL,
+                bound_at BIGINT NOT NULL DEFAULT 0,
+                UNIQUE(qq_id, player_uuid)
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.executeUpdate();
         }
@@ -96,92 +98,106 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_name ON " + tableBindings + " (player_name)");
 
         // 积分账户表
-        String pointsSql = "CREATE TABLE IF NOT EXISTS " + tablePoints + " ("
-            + "qq_id BIGINT PRIMARY KEY,"
-            + "balance INT NOT NULL DEFAULT 0,"
-            + "total_earned INT NOT NULL DEFAULT 0,"
-            + "total_spent INT NOT NULL DEFAULT 0,"
-            + "updated_at BIGINT NOT NULL DEFAULT 0"
-            + ")";
+        String pointsSql = "CREATE TABLE IF NOT EXISTS " + tablePoints + """
+             (
+                qq_id BIGINT PRIMARY KEY,
+                balance INT NOT NULL DEFAULT 0,
+                total_earned INT NOT NULL DEFAULT 0,
+                total_spent INT NOT NULL DEFAULT 0,
+                updated_at BIGINT NOT NULL DEFAULT 0
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(pointsSql)) {
             ps.executeUpdate();
         }
 
         // 签到记录表（联合主键防重复签到）
-        String signinSql = "CREATE TABLE IF NOT EXISTS " + tableSignin + " ("
-            + "qq_id BIGINT NOT NULL,"
-            + "sign_date VARCHAR(10) NOT NULL,"
-            + "streak INT NOT NULL DEFAULT 1,"
-            + "signed_at BIGINT NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (qq_id, sign_date)"
-            + ")";
+        String signinSql = "CREATE TABLE IF NOT EXISTS " + tableSignin + """
+             (
+                qq_id BIGINT NOT NULL,
+                sign_date VARCHAR(10) NOT NULL,
+                streak INT NOT NULL DEFAULT 1,
+                signed_at BIGINT NOT NULL DEFAULT 0,
+                PRIMARY KEY (qq_id, sign_date)
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(signinSql)) {
             ps.executeUpdate();
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_signin_qq ON " + tableSignin + " (qq_id)");
 
         // 兑换流水表
-        String redeemSql = "CREATE TABLE IF NOT EXISTS " + tableRedeemLog + " ("
-            + "id INTEGER PRIMARY KEY " + autoIncrement() + ","
-            + "qq_id BIGINT NOT NULL,"
-            + "prize_id VARCHAR(64) NOT NULL,"
-            + "cost INT NOT NULL DEFAULT 0,"
-            + "redeem_date VARCHAR(10) NOT NULL,"
-            + "created_at BIGINT NOT NULL DEFAULT 0"
-            + ")";
+        String redeemSql = "CREATE TABLE IF NOT EXISTS " + tableRedeemLog + """
+             (
+                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                , qq_id BIGINT NOT NULL,
+                prize_id VARCHAR(64) NOT NULL,
+                cost INT NOT NULL DEFAULT 0,
+                redeem_date VARCHAR(10) NOT NULL,
+                created_at BIGINT NOT NULL DEFAULT 0
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(redeemSql)) {
             ps.executeUpdate();
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_redeem_qq ON " + tableRedeemLog + " (qq_id, redeem_date)");
 
         // 黑名单表
-        String blacklistSql = "CREATE TABLE IF NOT EXISTS " + tableBlacklist + " ("
-            + "qq_id BIGINT PRIMARY KEY,"
-            + "added_by BIGINT NOT NULL DEFAULT 0,"
-            + "added_at BIGINT NOT NULL DEFAULT 0"
-            + ")";
+        String blacklistSql = "CREATE TABLE IF NOT EXISTS " + tableBlacklist + """
+             (
+                qq_id BIGINT PRIMARY KEY,
+                added_by BIGINT NOT NULL DEFAULT 0,
+                added_at BIGINT NOT NULL DEFAULT 0
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(blacklistSql)) {
             ps.executeUpdate();
         }
 
         // 红包表
-        String redPacketSql = "CREATE TABLE IF NOT EXISTS " + tableRedPackets + " ("
-            + "id INTEGER PRIMARY KEY " + autoIncrement() + ","
-            + "sender_qq BIGINT NOT NULL,"
-            + "group_id BIGINT NOT NULL,"
-            + "total_amount INT NOT NULL DEFAULT 0,"
-            + "remaining_amount INT NOT NULL DEFAULT 0,"
-            + "count INT NOT NULL DEFAULT 0,"
-            + "claimed_count INT NOT NULL DEFAULT 0,"
-            + "expire_at BIGINT NOT NULL DEFAULT 0,"
-            + "created_at BIGINT NOT NULL DEFAULT 0"
-            + ")";
+        String redPacketSql = "CREATE TABLE IF NOT EXISTS " + tableRedPackets + """
+             (
+                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                , sender_qq BIGINT NOT NULL,
+                group_id BIGINT NOT NULL,
+                total_amount INT NOT NULL DEFAULT 0,
+                remaining_amount INT NOT NULL DEFAULT 0,
+                count INT NOT NULL DEFAULT 0,
+                claimed_count INT NOT NULL DEFAULT 0,
+                expire_at BIGINT NOT NULL DEFAULT 0,
+                created_at BIGINT NOT NULL DEFAULT 0
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(redPacketSql)) {
             ps.executeUpdate();
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_rp_group ON " + tableRedPackets + " (group_id, expire_at)");
 
         // 红包领取记录表
-        String claimSql = "CREATE TABLE IF NOT EXISTS " + tableRedPacketClaims + " ("
-            + "id INTEGER PRIMARY KEY " + autoIncrement() + ","
-            + "red_packet_id BIGINT NOT NULL,"
-            + "claimer_qq BIGINT NOT NULL,"
-            + "amount INT NOT NULL DEFAULT 0,"
-            + "claimed_at BIGINT NOT NULL DEFAULT 0"
-            + ")";
+        String claimSql = "CREATE TABLE IF NOT EXISTS " + tableRedPacketClaims + """
+             (
+                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                , red_packet_id BIGINT NOT NULL,
+                claimer_qq BIGINT NOT NULL,
+                amount INT NOT NULL DEFAULT 0,
+                claimed_at BIGINT NOT NULL DEFAULT 0
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(claimSql)) {
             ps.executeUpdate();
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_qqbot_rpc_redpacket ON " + tableRedPacketClaims + " (red_packet_id)");
 
         // 活跃度表
-        String activitySql = "CREATE TABLE IF NOT EXISTS " + tableActivity + " ("
-            + "qq_id BIGINT NOT NULL,"
-            + "group_id BIGINT NOT NULL,"
-            + "activity_date VARCHAR(10) NOT NULL,"
-            + "message_count INT NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (qq_id, group_id, activity_date)"
-            + ")";
+        String activitySql = "CREATE TABLE IF NOT EXISTS " + tableActivity + """
+             (
+                qq_id BIGINT NOT NULL,
+                group_id BIGINT NOT NULL,
+                activity_date VARCHAR(10) NOT NULL,
+                message_count INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (qq_id, group_id, activity_date)
+            )
+            """;
         try (PreparedStatement ps = conn.prepareStatement(activitySql)) {
             ps.executeUpdate();
         }

@@ -299,38 +299,45 @@ public record LoginViewModuleConfiguration(
     }
 
     /**
-     * 存储后端配置，支持 SQLite 与 MySQL 两种方言。
+     * 存储后端配置，支持 SQLite 与 MySQL 两种模式。
      *
-     * @param dialect        存储方言
+     * @param mode          存储模式（sqlite / mysql）
      * @param sqliteFileName SQLite 文件名
-     * @param mysqlHost      MySQL 主机地址
-     * @param mysqlPort      MySQL 端口
-     * @param mysqlDatabase  MySQL 数据库名
-     * @param mysqlUsername  MySQL 用户名
-     * @param mysqlPassword  MySQL 密码
-     * @param tablePrefix    表名前缀
+     * @param host          MySQL 主机地址
+     * @param port          MySQL 端口
+     * @param database      MySQL 数据库名
+     * @param username      MySQL 用户名
+     * @param password      MySQL 密码
+     * @param tablePrefix   表名前缀
+     * @param poolSize      连接池大小
      */
     public record StorageConfiguration(
-        StorageDialect dialect,
+        String mode,
         String sqliteFileName,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword,
-        String tablePrefix
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
         private static StorageConfiguration load(ConfigurationSection section) {
             return new StorageConfiguration(
-                StorageDialect.parse(section == null ? null : section.getString("mode", "sqlite")),
+                string(section, "mode", "sqlite"),
                 string(section, "sqlite.file", "loginview.db"),
                 string(section, "mysql.host", "127.0.0.1"),
                 integer(section, "mysql.port", 3306, 1),
                 string(section, "mysql.database", "minecraft"),
                 string(section, "mysql.username", "root"),
                 string(section, "mysql.password", ""),
-                sanitizeIdentifier(string(section, "table-prefix", "AXS_loginview_"), "AXS_loginview_")
+                sanitizeIdentifier(string(section, "mysql.table-prefix", "AXS_loginview_"), "AXS_loginview_"),
+                integer(section, "pool-size", 4, 1)
             );
+        }
+
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
         }
 
         /**
@@ -339,9 +346,9 @@ public record LoginViewModuleConfiguration(
          * @return 存储描述符
          */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == StorageDialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, 4, tablePrefix);
+                    host, port, database, username, password, poolSize, tablePrefix);
             }
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
@@ -349,47 +356,14 @@ public record LoginViewModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == StorageDialect.MYSQL;
-        }
-    }
-
-    /**
-     * 存储方言枚举：{@code SQLITE} 或 {@code MYSQL}。
-     */
-    public enum StorageDialect {
-        SQLITE("sqlite"),
-        MYSQL("mysql");
-
-        private final String configKey;
-
-        StorageDialect(String configKey) {
-            this.configKey = configKey;
-        }
-
-        /**
-         * 该方言在配置文件中使用的键名。
-         *
-         * @return 配置键名
-         */
-        public String configKey() {
-            return configKey;
-        }
-
-        /**
-         * 从配置原始字符串解析存储方言，非 {@code mysql} 一律回退为 {@link #SQLITE}。
-         *
-         * @param rawValue 原始配置值
-         * @return 解析得到的存储方言
-         */
-        public static StorageDialect parse(String rawValue) {
-            return "mysql".equalsIgnoreCase(rawValue == null ? "" : rawValue.trim()) ? MYSQL : SQLITE;
+            return "mysql".equalsIgnoreCase(mode);
         }
     }
 

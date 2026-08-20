@@ -196,7 +196,7 @@ public record QQBotConfiguration(
 
         QQBotStorageConfig storage = new QQBotStorageConfig(
             yaml.getString("storage.mode", "sqlite"),
-            yaml.getString("storage.sqlite-file", "qqbot.db"),
+            yaml.getString("storage.sqlite.file", "qqbot.db"),
             yaml.getString("storage.mysql.host", "127.0.0.1"),
             yaml.getInt("storage.mysql.port", 3306),
             yaml.getString("storage.mysql.database", "arcartxsuite"),

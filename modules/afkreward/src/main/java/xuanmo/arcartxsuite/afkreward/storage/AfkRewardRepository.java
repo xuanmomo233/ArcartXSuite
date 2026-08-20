@@ -67,12 +67,22 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         );
     }
 
+    @Override
+    protected List<String> allTables() {
+        return List.of(
+            tablePrefix() + "stats",
+            tablePrefix() + "sessions",
+            tablePrefix() + "area_stats"
+        );
+    }
+
     private void createStatsTable(Connection conn) throws SQLException {
         String table = tablePrefix() + "stats";
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid TEXT PRIMARY KEY,
                         player_name TEXT NOT NULL DEFAULT '',
                         today_date TEXT NOT NULL DEFAULT '',
@@ -80,10 +90,11 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         total_count INTEGER NOT NULL DEFAULT 0,
                         total_seconds INTEGER NOT NULL DEFAULT 0
                     );
-                    """.formatted(table));
+                    """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid VARCHAR(36) PRIMARY KEY,
                         player_name VARCHAR(64) NOT NULL DEFAULT '',
                         today_date VARCHAR(32) NOT NULL DEFAULT '',
@@ -91,7 +102,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         total_count INT NOT NULL DEFAULT 0,
                         total_seconds INT NOT NULL DEFAULT 0
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                    """.formatted(table));
+                    """);
             }
         }
     }
@@ -101,7 +112,8 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid TEXT PRIMARY KEY,
                         player_name TEXT NOT NULL DEFAULT '',
                         area_name TEXT NOT NULL DEFAULT '',
@@ -114,10 +126,11 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         today_date TEXT NOT NULL DEFAULT '',
                         total_seconds INTEGER NOT NULL DEFAULT 0
                     );
-                    """.formatted(table));
+                    """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid VARCHAR(36) PRIMARY KEY,
                         player_name VARCHAR(64) NOT NULL DEFAULT '',
                         area_name VARCHAR(64) NOT NULL DEFAULT '',
@@ -130,7 +143,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         today_date VARCHAR(32) NOT NULL DEFAULT '',
                         total_seconds INT NOT NULL DEFAULT 0
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                    """.formatted(table));
+                    """);
             }
         }
     }
@@ -140,7 +153,8 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid TEXT NOT NULL,
                         area_name TEXT NOT NULL,
                         total_seconds INTEGER NOT NULL DEFAULT 0,
@@ -148,10 +162,11 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         today_date TEXT NOT NULL DEFAULT '',
                         PRIMARY KEY (player_uuid, area_name)
                     );
-                    """.formatted(table));
+                    """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS %s (
+                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    (
                         player_uuid VARCHAR(36) NOT NULL,
                         area_name VARCHAR(64) NOT NULL,
                         total_seconds INT NOT NULL DEFAULT 0,
@@ -159,7 +174,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         today_date VARCHAR(32) NOT NULL DEFAULT '',
                         PRIMARY KEY (player_uuid, area_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                    """.formatted(table));
+                    """);
             }
         }
     }

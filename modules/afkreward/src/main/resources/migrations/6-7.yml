@@ -1,0 +1,11 @@
+# 文件用途: AfkReward 配置迁移 6 -> 7
+# 迁移目的: storage.dialect 重命名回 storage.mode，与其余 14 个模块统一存储字段命名
+from-version: 6  # 迁移起始版本号
+to-version: 7    # 迁移目标版本号
+description: "storage.dialect 重命名回 storage.mode，统一存储字段命名"  # 迁移说明
+
+operations:
+  # storage.dialect → storage.mode（还原 4-5 迁移的 rename，统一为 mode）
+  - type: rename          # 重命名操作：同层级键名变更
+    from: storage.dialect # 旧字段路径
+    to: storage.mode      # 新字段路径

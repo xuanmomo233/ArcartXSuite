@@ -15,7 +15,6 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.title.config.TitlePersistenceDialect;
 import xuanmo.arcartxsuite.title.config.TitleStorageConfiguration;
 import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
 import xuanmo.arcartxsuite.title.model.PlayerTitleState;
@@ -68,6 +67,11 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         return List.of("title_player_titles", "title_player_equipped_groups", "title_player_display_title");
     }
 
+    @Override
+    protected List<String> allTables() {
+        return List.of("title_player_titles", "title_player_equipped_groups", "title_player_display_title");
+    }
+
     /**
      * 加载玩家的完整称号状态（拥有称号、装备分组、展示称号）。
      *
@@ -80,7 +84,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         Instant updatedAt = Instant.EPOCH;
 
         Map<String, PlayerOwnedTitle> ownedTitles = new LinkedHashMap<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by "
                      + "FROM title_player_titles WHERE player_uuid = ? ORDER BY granted_at ASC"
@@ -110,7 +114,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         }
 
         Map<String, String> equippedTitleIdsByGroup = new LinkedHashMap<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT group_id, title_id, updated_at FROM title_player_equipped_groups WHERE player_uuid = ? ORDER BY group_id ASC"
              )) {
@@ -127,7 +131,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         }
 
         String displayTitleId = "";
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT title_id, updated_at FROM title_player_display_title WHERE player_uuid = ?"
              )) {
@@ -160,7 +164,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         if (groupId == null || groupId.isBlank() || titleId == null || titleId.isBlank()) {
             return;
         }
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(equippedUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, groupId);
@@ -179,7 +183,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteEquippedGroup(UUID playerUuid, String groupId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_equipped_groups WHERE player_uuid = ? AND group_id = ?"
              )) {
@@ -198,7 +202,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteEquippedTitle(UUID playerUuid, String titleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_equipped_groups WHERE player_uuid = ? AND title_id = ?"
              )) {
@@ -216,7 +220,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteAllEquippedGroups(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_equipped_groups WHERE player_uuid = ?"
              )) {
@@ -234,7 +238,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void saveOwnedTitle(UUID playerUuid, PlayerOwnedTitle ownedTitle) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(titleUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ownedTitle.titleId());
@@ -265,7 +269,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteOwnedTitle(UUID playerUuid, String titleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_titles WHERE player_uuid = ? AND title_id = ?"
              )) {
@@ -288,7 +292,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         if (titleId == null || titleId.isBlank()) {
             return;
         }
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(displayTitleUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, titleId);
@@ -305,7 +309,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void deleteDisplayTitle(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_display_title WHERE player_uuid = ?"
              )) {
@@ -323,7 +327,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
      */
     @Override
     public int deleteExpiredTitles(Instant now) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM title_player_titles WHERE expires_at IS NOT NULL AND expires_at <= ?"
              )) {
@@ -467,10 +471,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
             """;
     }
 
-
-    private Connection connection() throws SQLException {
-        return getConnection();
-    }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {
         if (value == null) {

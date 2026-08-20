@@ -1,0 +1,28 @@
+from-version: 2
+to-version: 3
+description: "数据库配置节从 database 统一为 storage：database.type→storage.mode, database.sqlite.file→storage.sqlite.file, database.mysql.*→storage.mysql.*"
+operations:
+  - type: move
+    from: database.type
+    to: storage.mode
+  - type: move
+    from: database.sqlite.file
+    to: storage.sqlite.file
+  - type: move
+    from: database.mysql.host
+    to: storage.mysql.host
+  - type: move
+    from: database.mysql.port
+    to: storage.mysql.port
+  - type: move
+    from: database.mysql.database
+    to: storage.mysql.database
+  - type: move
+    from: database.mysql.username
+    to: storage.mysql.username
+  - type: move
+    from: database.mysql.password
+    to: storage.mysql.password
+  - type: move
+    from: database.mysql.pool-size
+    to: storage.pool-size

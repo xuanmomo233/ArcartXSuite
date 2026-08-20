@@ -70,13 +70,14 @@ public record WarehouseModuleConfiguration(
 
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         StorageConfiguration storage = new StorageConfiguration(
-            StorageDialect.parse(storageSection == null ? null : storageSection.getString("mode", "sqlite")),
+            storageSection == null ? "sqlite" : readString(storageSection, "mode", "sqlite"),
             storageSection == null ? "warehouse.db" : readString(storageSection, "sqlite.file", "warehouse.db"),
             storageSection == null ? "127.0.0.1" : readString(storageSection, "mysql.host", "127.0.0.1"),
             storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
             storageSection == null ? "arcartxsuite" : readString(storageSection, "mysql.database", "arcartxsuite"),
             storageSection == null ? "root" : readString(storageSection, "mysql.username", "root"),
             storageSection == null ? "" : readString(storageSection, "mysql.password", ""),
+            storageSection == null ? "axs_warehouse_" : readString(storageSection, "mysql.table-prefix", "axs_warehouse_"),
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 
@@ -495,25 +496,6 @@ public record WarehouseModuleConfiguration(
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
-    public enum StorageDialect {
-        SQLITE("sqlite"),
-        MYSQL("mysql");
-
-        private final String configKey;
-
-        StorageDialect(String configKey) {
-            this.configKey = configKey;
-        }
-
-        public String configKey() {
-            return configKey;
-        }
-
-        public static StorageDialect parse(String rawValue) {
-            return "mysql".equals(normalizeId(rawValue)) ? MYSQL : SQLITE;
-        }
-    }
-
     /** 三套 AXUI 的 ID 与包标识配置。 */
     public record UiConfiguration(
         String uiId,
@@ -528,19 +510,24 @@ public record WarehouseModuleConfiguration(
 
     /** 存储后端配置：SQLite 文件或 MySQL 连接参数。 */
     public record StorageConfiguration(
-        StorageDialect dialect,
+        String mode,
         String sqliteFileName,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword,
-        int connectionPoolSize
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
+        }
+
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == StorageDialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, connectionPoolSize, "");
+                    host, port, database, username, password, poolSize, tablePrefix);
             }
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
@@ -548,14 +535,14 @@ public record WarehouseModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == StorageDialect.MYSQL;
+            return "mysql".equalsIgnoreCase(mode);
         }
     }
 

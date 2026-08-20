@@ -1,5 +1,5 @@
 # 配置版本号（请勿手动修改）
-config-version: 1
+config-version: 2
 # ArcartXSuite Regions - 区域保护模块
 # 重载: /axs regions reload
 
@@ -49,16 +49,23 @@ world-rules:
 # 存储
 storage:
   # 存储模式: sqlite / mysql
-  dialect: sqlite
+  mode: sqlite
   # SQLite 文件名（相对模块数据目录）
-  sqlite-file: "regions.db"
-  # MySQL 配置（dialect 为 mysql 时使用）
-  host: "127.0.0.1"
-  port: 3306
-  database: "arcartxsuite"
-  username: "root"
-  password: ""
-  # 表名前缀
-  table-prefix: "axs_rg_"
+  sqlite:
+    file: "regions.db"
+  # ── MySQL 自建模式（不推荐） ──
+  # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
+  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
+  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
+  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
+  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # mysql:
+  #   host: "127.0.0.1"
+  #   port: 3306
+  #   database: "arcartxsuite"
+  #   username: "root"
+  #   password: ""
+  #   # 表名前缀
+  #   table-prefix: "axs_rg_"
   # 数据库连接池大小
   pool-size: 3

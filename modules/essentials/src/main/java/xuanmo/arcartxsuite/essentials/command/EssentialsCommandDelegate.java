@@ -627,7 +627,7 @@ public final class EssentialsCommandDelegate {
         String runningState = playerService == null ? messages().get("status.stopped") : messages().get("status.running");
         sender.sendMessage(fullMsg("status.service", runningState));
         if (configuration != null) {
-            sender.sendMessage(fullMsg("status.storage", configuration.storage().dialect().configKey()));
+            sender.sendMessage(fullMsg("status.storage", configuration.storage().mode()));
             sender.sendMessage(fullMsg("status.afk-timeout", configuration.player().afkTimeout()));
             sender.sendMessage(fullMsg("status.teleport-delay", configuration.teleport().teleportDelay()));
             sender.sendMessage(fullMsg("status.max-homes", configuration.teleport().maxHomes()));

@@ -11,13 +11,12 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
+import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerStorageConfiguration;
 
 /**
  * EntityTracker 标准 JDBC 数据仓库。
@@ -28,8 +27,8 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
 
     private final Logger logger;
 
-    public JdbcEntityTrackerRepository(File dataFolder, FileConfiguration config, Logger logger) {
-        super("AXS-EntityTracker", dataFolder, parseDescriptor(config), logger);
+    public JdbcEntityTrackerRepository(File dataFolder, EntityTrackerStorageConfiguration config, Logger logger) {
+        super("AXS-EntityTracker", dataFolder, config.toDescriptor(), logger);
         this.logger = logger;
     }
 
@@ -49,25 +48,6 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
                                         String sqliteFileName, Logger logger) {
         super("AXS-EntityTracker", storageManager, moduleId, "", sqliteFileName, logger);
         this.logger = logger;
-    }
-
-    private static StorageDescriptor parseDescriptor(FileConfiguration config) {
-        ConfigurationSection dbSection = config.getConfigurationSection("database");
-        boolean isMysql = "mysql".equalsIgnoreCase(
-            dbSection != null ? dbSection.getString("type", "sqlite") : "sqlite");
-        if (isMysql) {
-            return StorageDescriptor.mysql(
-                dbSection.getString("mysql.host", "localhost"),
-                dbSection.getInt("mysql.port", 3306),
-                dbSection.getString("mysql.database", "arcartxsuite"),
-                dbSection.getString("mysql.username", "root"),
-                dbSection.getString("mysql.password", ""),
-                dbSection.getInt("mysql.pool-size", 5),
-                ""
-            );
-        }
-        return StorageDescriptor.sqlite(
-            dbSection != null ? dbSection.getString("sqlite.file", "entitytracker.db") : "entitytracker.db");
     }
 
     @Override

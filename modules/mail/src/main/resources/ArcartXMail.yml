@@ -24,17 +24,24 @@ storage:
     # SQLite 文件会创建在插件数据目录下。
     file: mail.db
 
-  mysql:
-    # MySQL 服务器地址。
-    host: 127.0.0.1
-    # MySQL 服务器端口。
-    port: 3306
-    # 数据库名称。
-    database: arcartxsuite
-    # 数据库用户名。
-    username: root
-    # 数据库密码。
-    password: ""
+  # ── MySQL 自建模式（不推荐） ──
+  # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
+  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
+  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
+  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
+  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # mysql:
+  #   # MySQL 服务器地址。
+  #   host: 127.0.0.1
+  #   # MySQL 服务器端口。
+  #   port: 3306
+  #   # 数据库名称。
+  #   database: arcartxsuite
+  #   # 数据库用户名。
+  #   username: root
+  #   # 数据库密码。
+  #   password: ""
+  #   table-prefix: "axs_mail_"
 
   # 数据库连接池大小。
   pool-size: 4

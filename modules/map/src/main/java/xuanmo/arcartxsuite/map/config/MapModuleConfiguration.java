@@ -97,13 +97,14 @@ public record MapModuleConfiguration(
 
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         StorageConfiguration storage = new StorageConfiguration(
-            StorageDialect.parse(storageSection == null ? null : storageSection.getString("mode", "sqlite")),
+            storageSection == null ? "sqlite" : string(storageSection.getString("mode", "sqlite"), "sqlite"),
             storageSection == null ? "map.db" : string(storageSection.getString("sqlite.file", "map.db"), "map.db"),
             storageSection == null ? "127.0.0.1" : string(storageSection.getString("mysql.host", "127.0.0.1"), "127.0.0.1"),
             storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
             storageSection == null ? "arcartxsuite" : string(storageSection.getString("mysql.database", "arcartxsuite"), "arcartxsuite"),
             storageSection == null ? "root" : string(storageSection.getString("mysql.username", "root"), "root"),
             storageSection == null ? "" : string(storageSection.getString("mysql.password", ""), ""),
+            storageSection == null ? "axs_map_" : string(storageSection.getString("mysql.table-prefix", "axs_map_"), "axs_map_"),
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 
@@ -516,59 +517,37 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 存储后端方言枚举（SQLite / MySQL）。
-     */
-    public enum StorageDialect {
-        SQLITE("sqlite"),
-        MYSQL("mysql");
-
-        private final String configKey;
-
-        StorageDialect(String configKey) {
-            this.configKey = configKey;
-        }
-
-        public String configKey() {
-            return configKey;
-        }
-
-        /**
-         * 从配置字符串解析存储方言。
-         *
-         * @param rawValue 原始字符串值
-         * @return 解析后的方言枚举，默认为 SQLITE
-         */
-        public static StorageDialect parse(String rawValue) {
-            return "mysql".equalsIgnoreCase(string(rawValue, "sqlite")) ? MYSQL : SQLITE;
-        }
-    }
-
-    /**
      * 存储后端配置。
      *
-     * @param dialect            存储方言
-     * @param sqliteFileName     SQLite 文件名
-     * @param mysqlHost          MySQL 主机地址
-     * @param mysqlPort          MySQL 端口
-     * @param mysqlDatabase      MySQL 数据库名
-     * @param mysqlUsername      MySQL 用户名
-     * @param mysqlPassword      MySQL 密码
-     * @param connectionPoolSize 连接池大小
+     * @param mode          存储模式（sqlite / mysql）
+     * @param sqliteFileName SQLite 文件名
+     * @param host          MySQL 主机地址
+     * @param port          MySQL 端口
+     * @param database      MySQL 数据库名
+     * @param username      MySQL 用户名
+     * @param password      MySQL 密码
+     * @param tablePrefix   MySQL 表名前缀
+     * @param poolSize      连接池大小
      */
     public record StorageConfiguration(
-        StorageDialect dialect,
+        String mode,
         String sqliteFileName,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword,
-        int connectionPoolSize
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
+        }
+
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == StorageDialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, connectionPoolSize, "");
+                    host, port, database, username, password, poolSize, tablePrefix);
             }
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
@@ -576,14 +555,14 @@ public record MapModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == StorageDialect.MYSQL;
+            return "mysql".equalsIgnoreCase(mode);
         }
     }
 

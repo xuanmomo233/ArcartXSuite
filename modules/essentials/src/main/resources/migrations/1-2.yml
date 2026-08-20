@@ -1,0 +1,7 @@
+from-version: 1
+to-version: 2
+description: "storage.sqlite-file 重命名为 storage.sqlite.file，统一嵌套结构"
+operations:
+  - type: rename
+    from: storage.sqlite-file
+    to: storage.sqlite.file

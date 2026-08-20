@@ -11,6 +11,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerStorageConfiguration;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
@@ -93,7 +94,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
@@ -488,20 +489,16 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             return;
         }
         try {
-            ConfigurationSection dbSection = moduleYaml.getConfigurationSection("database");
-            boolean isMysql = "mysql".equalsIgnoreCase(
-                dbSection != null ? dbSection.getString("type", "sqlite") : "sqlite");
-            if (isMysql) {
+            ConfigurationSection storageSection = moduleYaml.getConfigurationSection("storage");
+            EntityTrackerStorageConfiguration storageConfig = EntityTrackerStorageConfiguration.load(storageSection);
+            if (storageConfig.hasOverride()) {
                 // 旧路径：模块自建连接池
                 repository = new JdbcEntityTrackerRepository(
-                    dataFolder, moduleYaml, logger);
+                    dataFolder, storageConfig, logger);
             } else {
                 // 新路径：共享本体数据源
-                String sqliteFile = dbSection != null
-                    ? dbSection.getString("sqlite.file", "entitytracker.db")
-                    : "entitytracker.db";
                 repository = new JdbcEntityTrackerRepository(
-                    storageManager, "entitytracker", sqliteFile, logger);
+                    storageManager, "entitytracker", storageConfig.sqliteFileName(), logger);
             }
             repository.initialize();
         } catch (Exception e) {

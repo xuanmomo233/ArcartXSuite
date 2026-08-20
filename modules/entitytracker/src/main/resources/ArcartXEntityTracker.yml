@@ -167,18 +167,18 @@ new-features:                   # 新功能配置区（1.1.0-beta 新增）
       detailed-logging: true
 
 # 数据库配置
-database:
-  # 数据库类型: sqlite/mysql
-  type: "sqlite"
+storage:
+  # 存储模式: sqlite/mysql
+  mode: "sqlite"
   # SQLite配置
   sqlite:
     file: "entitytracker.db"
-  # MySQL配置
-  mysql:
-    host: "localhost"
-    port: 3306
-    database: "arcartxsuite"      # 数据库名称
-    username: "root"
-    password: ""
-    # 连接池配置
-    pool-size: 5
+  # 以下仅在 mode: mysql 时生效，需自行填写 MySQL 连接信息。
+  # mysql:
+  #   host: "localhost"
+  #   port: 3306
+  #   database: "arcartxsuite"
+  #   username: "root"
+  #   password: ""
+  # 数据库连接池大小
+  pool-size: 5

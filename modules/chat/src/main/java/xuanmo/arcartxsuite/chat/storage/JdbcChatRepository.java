@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
  * <p>
  * 继承 {@link AbstractModuleRepository} 获得连接池管理与数据迁移能力，
  * 实现 {@link ChatRepository} 接口提供玩家状态、禁言记录与玩家档案的 CRUD 操作。
- * 建表语句根据 {@link ChatPersistenceDialect} 自动适配方言。
+ * 建表语句根据存储模式自动适配方言。
  */
 public final class JdbcChatRepository extends AbstractModuleRepository implements ChatRepository {
 
@@ -71,6 +71,11 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     }
 
     @Override
+    protected List<String> allTables() {
+        return List.of("chat_player_states", "chat_player_mutes", "chat_player_profiles", "chat_ignored_players");
+    }
+
+    @Override
     public ChatPlayerState loadState(UUID playerUuid, String defaultChannelId) throws SQLException {
         String channelId = defaultChannelId;
         boolean acceptsPrivate = true;
@@ -78,7 +83,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
         boolean socialSpy = false;
         Instant updatedAt = Instant.now();
 
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT current_channel_id, accepts_private_messages, accepts_mentions, social_spy_enabled, updated_at "
                      + "FROM chat_player_states WHERE player_uuid = ?"
@@ -96,7 +101,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
         }
 
         Set<UUID> ignored = new LinkedHashSet<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT ignored_uuid FROM chat_ignored_players WHERE player_uuid = ? ORDER BY ignored_uuid ASC"
              )) {
@@ -112,7 +117,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public void saveState(ChatPlayerState state) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(stateUpsertSql())) {
             statement.setString(1, state.playerUuid().toString());
             statement.setString(2, state.currentChannelId());
@@ -126,7 +131,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public void saveIgnoredPlayers(UUID playerUuid, Set<UUID> ignoredPlayers) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement delete = connection.prepareStatement(
                 "DELETE FROM chat_ignored_players WHERE player_uuid = ?"
@@ -153,7 +158,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<ChatMuteRecord> loadMute(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, muted_by, reason, created_at, expires_at "
                      + "FROM chat_player_mutes WHERE player_uuid = ? LIMIT 1"
@@ -177,7 +182,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public void saveMute(ChatMuteRecord muteRecord) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(muteUpsertSql())) {
             statement.setString(1, muteRecord.playerUuid().toString());
             statement.setString(2, nullToEmpty(muteRecord.mutedBy()));
@@ -194,7 +199,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public void deleteMute(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM chat_player_mutes WHERE player_uuid = ?"
              )) {
@@ -205,7 +210,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public void upsertProfile(ChatPlayerProfile profile) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(profileUpsertSql())) {
             statement.setString(1, profile.playerUuid().toString());
             statement.setString(2, nullToEmpty(profile.lastKnownName()));
@@ -218,7 +223,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<ChatPlayerProfile> loadProfile(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, last_known_name, last_seen_at, last_server "
                      + "FROM chat_player_profiles WHERE player_uuid = ? LIMIT 1"
@@ -232,7 +237,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<ChatPlayerProfile> findProfileByName(String playerName) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, last_known_name, last_seen_at, last_server "
                      + "FROM chat_player_profiles WHERE last_known_name_lower = ? LIMIT 1"
@@ -398,10 +403,6 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
                 last_seen_at = VALUES(last_seen_at),
                 last_server = VALUES(last_server)
             """;
-    }
-
-    private Connection connection() throws SQLException {
-        return getConnection();
     }
 
     private static ChatPlayerProfile readProfile(ResultSet resultSet) throws SQLException {

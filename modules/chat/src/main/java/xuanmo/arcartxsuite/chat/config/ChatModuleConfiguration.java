@@ -73,13 +73,14 @@ public record ChatModuleConfiguration(
 
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         ChatStorageConfiguration storage = new ChatStorageConfiguration(
-            ChatPersistenceDialect.parse(storageSection == null ? null : storageSection.getString("mode", "sqlite")),
+            storageSection == null ? "sqlite" : storageSection.getString("mode", "sqlite"),
             storageSection == null ? "chat.db" : string(storageSection.getString("sqlite.file", "chat.db")),
             storageSection == null ? "127.0.0.1" : string(storageSection.getString("mysql.host", "127.0.0.1")),
             storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
             storageSection == null ? "arcartxsuite" : string(storageSection.getString("mysql.database", "arcartxsuite")),
             storageSection == null ? "root" : string(storageSection.getString("mysql.username", "root")),
             storageSection == null ? "" : string(storageSection.getString("mysql.password", "")),
+            storageSection == null ? "axs_chat_" : string(storageSection.getString("mysql.table-prefix", "axs_chat_")),
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 

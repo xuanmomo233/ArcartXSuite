@@ -104,135 +104,163 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     }
 
     private void createTablesSqlite(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGachaState + " ("
-            + "player_uuid TEXT NOT NULL,"
-            + "pool_id TEXT NOT NULL,"
-            + "pity_5star INTEGER NOT NULL DEFAULT 0,"
-            + "pity_4star INTEGER NOT NULL DEFAULT 0,"
-            + "guaranteed_up INTEGER NOT NULL DEFAULT 0,"
-            + "fate_points INTEGER NOT NULL DEFAULT 0,"
-            + "fate_target TEXT,"
-            + "PRIMARY KEY (player_uuid, pool_id)"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid TEXT NOT NULL,
+                pool_id TEXT NOT NULL,
+                pity_5star INTEGER NOT NULL DEFAULT 0,
+                pity_4star INTEGER NOT NULL DEFAULT 0,
+                guaranteed_up INTEGER NOT NULL DEFAULT 0,
+                fate_points INTEGER NOT NULL DEFAULT 0,
+                fate_target TEXT,
+                PRIMARY KEY (player_uuid, pool_id)
+            )
+            """.formatted(tGachaState));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGachaLog + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "player_uuid TEXT NOT NULL,"
-            + "pool_id TEXT NOT NULL,"
-            + "pull_time INTEGER NOT NULL,"
-            + "pull_count INTEGER NOT NULL DEFAULT 1,"
-            + "items_json TEXT NOT NULL,"
-            + "pity_at_pull INTEGER NOT NULL DEFAULT 0,"
-            + "is_guaranteed INTEGER NOT NULL DEFAULT 0"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_uuid TEXT NOT NULL,
+                pool_id TEXT NOT NULL,
+                pull_time INTEGER NOT NULL,
+                pull_count INTEGER NOT NULL DEFAULT 1,
+                items_json TEXT NOT NULL,
+                pity_at_pull INTEGER NOT NULL DEFAULT 0,
+                is_guaranteed INTEGER NOT NULL DEFAULT 0
+            )
+            """.formatted(tGachaLog));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_gacha_log_player_pool ON " + tGachaLog + " (player_uuid, pool_id)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tCaseState + " ("
-            + "player_uuid TEXT NOT NULL,"
-            + "pool_id TEXT NOT NULL,"
-            + "open_count INTEGER NOT NULL DEFAULT 0,"
-            + "last_open_time INTEGER,"
-            + "PRIMARY KEY (player_uuid, pool_id)"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid TEXT NOT NULL,
+                pool_id TEXT NOT NULL,
+                open_count INTEGER NOT NULL DEFAULT 0,
+                last_open_time INTEGER,
+                PRIMARY KEY (player_uuid, pool_id)
+            )
+            """.formatted(tCaseState));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tCaseLog + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "player_uuid TEXT NOT NULL,"
-            + "pool_id TEXT NOT NULL,"
-            + "open_time INTEGER NOT NULL,"
-            + "item_id TEXT NOT NULL,"
-            + "rarity TEXT NOT NULL"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_uuid TEXT NOT NULL,
+                pool_id TEXT NOT NULL,
+                open_time INTEGER NOT NULL,
+                item_id TEXT NOT NULL,
+                rarity TEXT NOT NULL
+            )
+            """.formatted(tCaseLog));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_case_log_player_pool ON " + tCaseLog + " (player_uuid, pool_id)");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "player_uuid TEXT NOT NULL,"
-            + "pool_id TEXT NOT NULL,"
-            + "item_metadata TEXT NOT NULL,"
-            + "item_data TEXT,"
-            + "created_time INTEGER NOT NULL,"
-            + "claimed INTEGER NOT NULL DEFAULT 0,"
-            + "attempts INTEGER NOT NULL DEFAULT 0"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_uuid TEXT NOT NULL,
+                pool_id TEXT NOT NULL,
+                item_metadata TEXT NOT NULL,
+                item_data TEXT,
+                created_time INTEGER NOT NULL,
+                claimed INTEGER NOT NULL DEFAULT 0,
+                attempts INTEGER NOT NULL DEFAULT 0
+            )
+            """.formatted(tPendingClaim));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_claim_player ON " + tPendingClaim + " (player_uuid, claimed)");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPoints + " ("
-            + "player_uuid TEXT NOT NULL,"
-            + "point_id TEXT NOT NULL,"
-            + "amount INTEGER NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player_uuid, point_id)"
-            + ")");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tExchange + " ("
-            + "player_uuid TEXT NOT NULL,"
-            + "item_id TEXT NOT NULL,"
-            + "amount INTEGER NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player_uuid, item_id)"
-            + ")");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid TEXT NOT NULL,
+                point_id TEXT NOT NULL,
+                amount INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_uuid, point_id)
+            )
+            """.formatted(tPoints));
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                amount INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_uuid, item_id)
+            )
+            """.formatted(tExchange));
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGachaState + " ("
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "pool_id VARCHAR(64) NOT NULL,"
-            + "pity_5star INT NOT NULL DEFAULT 0,"
-            + "pity_4star INT NOT NULL DEFAULT 0,"
-            + "guaranteed_up BOOLEAN NOT NULL DEFAULT FALSE,"
-            + "fate_points INT NOT NULL DEFAULT 0,"
-            + "fate_target VARCHAR(64),"
-            + "PRIMARY KEY (player_uuid, pool_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid VARCHAR(36) NOT NULL,
+                pool_id VARCHAR(64) NOT NULL,
+                pity_5star INT NOT NULL DEFAULT 0,
+                pity_4star INT NOT NULL DEFAULT 0,
+                guaranteed_up BOOLEAN NOT NULL DEFAULT FALSE,
+                fate_points INT NOT NULL DEFAULT 0,
+                fate_target VARCHAR(64),
+                PRIMARY KEY (player_uuid, pool_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tGachaState));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGachaLog + " ("
-            + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "pool_id VARCHAR(64) NOT NULL,"
-            + "pull_time BIGINT NOT NULL,"
-            + "pull_count INT NOT NULL DEFAULT 1,"
-            + "items_json TEXT NOT NULL,"
-            + "pity_at_pull INT NOT NULL DEFAULT 0,"
-            + "is_guaranteed BOOLEAN NOT NULL DEFAULT FALSE,"
-            + "INDEX idx_player_pool (player_uuid, pool_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                player_uuid VARCHAR(36) NOT NULL,
+                pool_id VARCHAR(64) NOT NULL,
+                pull_time BIGINT NOT NULL,
+                pull_count INT NOT NULL DEFAULT 1,
+                items_json TEXT NOT NULL,
+                pity_at_pull INT NOT NULL DEFAULT 0,
+                is_guaranteed BOOLEAN NOT NULL DEFAULT FALSE,
+                INDEX idx_player_pool (player_uuid, pool_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tGachaLog));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tCaseState + " ("
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "pool_id VARCHAR(64) NOT NULL,"
-            + "open_count INT NOT NULL DEFAULT 0,"
-            + "last_open_time BIGINT,"
-            + "PRIMARY KEY (player_uuid, pool_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid VARCHAR(36) NOT NULL,
+                pool_id VARCHAR(64) NOT NULL,
+                open_count INT NOT NULL DEFAULT 0,
+                last_open_time BIGINT,
+                PRIMARY KEY (player_uuid, pool_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tCaseState));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tCaseLog + " ("
-            + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "pool_id VARCHAR(64) NOT NULL,"
-            + "open_time BIGINT NOT NULL,"
-            + "item_id VARCHAR(64) NOT NULL,"
-            + "rarity VARCHAR(32) NOT NULL,"
-            + "INDEX idx_player_pool (player_uuid, pool_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
-            + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "pool_id VARCHAR(64) NOT NULL,"
-            + "item_metadata TEXT NOT NULL,"
-            + "item_data LONGTEXT,"
-            + "created_time BIGINT NOT NULL,"
-            + "claimed BOOLEAN NOT NULL DEFAULT FALSE,"
-            + "attempts INT NOT NULL DEFAULT 0,"
-            + "INDEX idx_pending_claim_player (player_uuid, claimed)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPoints + " ("
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "point_id VARCHAR(64) NOT NULL,"
-            + "amount BIGINT NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player_uuid, point_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tExchange + " ("
-            + "player_uuid VARCHAR(36) NOT NULL,"
-            + "item_id VARCHAR(64) NOT NULL,"
-            + "amount INT NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player_uuid, item_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                player_uuid VARCHAR(36) NOT NULL,
+                pool_id VARCHAR(64) NOT NULL,
+                open_time BIGINT NOT NULL,
+                item_id VARCHAR(64) NOT NULL,
+                rarity VARCHAR(32) NOT NULL,
+                INDEX idx_player_pool (player_uuid, pool_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tCaseLog));
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                player_uuid VARCHAR(36) NOT NULL,
+                pool_id VARCHAR(64) NOT NULL,
+                item_metadata TEXT NOT NULL,
+                item_data LONGTEXT,
+                created_time BIGINT NOT NULL,
+                claimed BOOLEAN NOT NULL DEFAULT FALSE,
+                attempts INT NOT NULL DEFAULT 0,
+                INDEX idx_pending_claim_player (player_uuid, claimed)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPendingClaim));
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid VARCHAR(36) NOT NULL,
+                point_id VARCHAR(64) NOT NULL,
+                amount BIGINT NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_uuid, point_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPoints));
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player_uuid VARCHAR(36) NOT NULL,
+                item_id VARCHAR(64) NOT NULL,
+                amount INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_uuid, item_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tExchange));
     }
 
     // ─── Gacha State CRUD ─────────────────────────────────

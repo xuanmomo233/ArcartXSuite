@@ -1,0 +1,22 @@
+from-version: 1
+to-version: 2
+description: "storage 字段统一为嵌套结构：sqlite-file-name→sqlite.file，扁平 mysql-* 字段→mysql 子节"
+operations:
+  - type: rename
+    from: storage.sqlite-file-name
+    to: storage.sqlite.file
+  - type: rename
+    from: storage.mysql-host
+    to: storage.mysql.host
+  - type: rename
+    from: storage.mysql-port
+    to: storage.mysql.port
+  - type: rename
+    from: storage.mysql-database
+    to: storage.mysql.database
+  - type: rename
+    from: storage.mysql-username
+    to: storage.mysql.username
+  - type: rename
+    from: storage.mysql-password
+    to: storage.mysql.password

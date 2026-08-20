@@ -234,22 +234,24 @@ public record BattlePassModuleConfiguration(
      *
      * @param mode           存储模式（sqlite / mysql）
      * @param sqliteFileName SQLite 文件名
+     * @param host           MySQL 主机地址
+     * @param port           MySQL 端口
+     * @param database       MySQL 数据库名
+     * @param username       MySQL 用户名
+     * @param password       MySQL 密码
+     * @param tablePrefix    MySQL 表名前缀
      * @param poolSize       连接池大小
-     * @param mysqlHost      MySQL 主机地址
-     * @param mysqlPort      MySQL 端口
-     * @param mysqlDatabase  MySQL 数据库名
-     * @param mysqlUsername  MySQL 用户名
-     * @param mysqlPassword  MySQL 密码
      */
     public record BattlePassStorageConfiguration(
         String mode,
         String sqliteFileName,
-        int poolSize,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
         /**
          * 从配置节加载存储配置。
@@ -261,14 +263,24 @@ public record BattlePassModuleConfiguration(
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassStorageConfiguration(
                 section.getString("mode", "sqlite"),
-                section.getString("sqlite-file-name", "battlepass.db"),
-                section.getInt("pool-size", 1),
-                section.getString("mysql-host", "localhost"),
-                section.getInt("mysql-port", 3306),
-                section.getString("mysql-database", "axs_battlepass"),
-                section.getString("mysql-username", "root"),
-                section.getString("mysql-password", "")
+                section.getString("sqlite.file", "battlepass.db"),
+                section.getString("mysql.host", "localhost"),
+                section.getInt("mysql.port", 3306),
+                section.getString("mysql.database", "arcartxsuite"),
+                section.getString("mysql.username", "root"),
+                section.getString("mysql.password", ""),
+                section.getString("mysql.table-prefix", "axs_battlepass_"),
+                section.getInt("pool-size", 1)
             );
+        }
+
+        /**
+         * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
+         *
+         * @return {@code true} 表示使用 SQLite
+         */
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
         }
 
         /**
@@ -277,9 +289,8 @@ public record BattlePassModuleConfiguration(
          * @return 对应的存储描述符
          */
         public StorageDescriptor toDescriptor() {
-            boolean isMysql = "mysql".equalsIgnoreCase(mode);
-            if (isMysql) {
-                return StorageDescriptor.mysql(mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, poolSize, "");
+            if (!isSqlite()) {
+                return StorageDescriptor.mysql(host, port, database, username, password, poolSize, tablePrefix);
             }
             return StorageDescriptor.sqlite(sqliteFileName);
         }

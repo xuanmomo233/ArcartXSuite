@@ -50,13 +50,14 @@ public record MailModuleConfiguration(
 
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         MailStorageConfiguration storage = new MailStorageConfiguration(
-            MailPersistenceDialect.parse(storageSection == null ? null : storageSection.getString("mode", "sqlite")),
+            storageSection == null ? "sqlite" : storageSection.getString("mode", "sqlite"),
             storageSection == null ? "mail.db" : string(storageSection.getString("sqlite.file", "mail.db")),
             storageSection == null ? "127.0.0.1" : string(storageSection.getString("mysql.host", "127.0.0.1")),
             storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
             storageSection == null ? "arcartxsuite" : string(storageSection.getString("mysql.database", "arcartxsuite")),
             storageSection == null ? "root" : string(storageSection.getString("mysql.username", "root")),
             storageSection == null ? "" : string(storageSection.getString("mysql.password", "")),
+            storageSection == null ? "axs_mail_" : string(storageSection.getString("mysql.table-prefix", "axs_mail_")),
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 

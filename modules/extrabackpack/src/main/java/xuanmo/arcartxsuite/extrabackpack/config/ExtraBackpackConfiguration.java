@@ -46,13 +46,14 @@ public record ExtraBackpackConfiguration(
         );
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         StorageConfiguration storage = new StorageConfiguration(
-            StorageDialect.parse(storageSection == null ? null : storageSection.getString("mode", "sqlite")),
+            storageSection == null ? "sqlite" : readString(storageSection, "mode", "sqlite"),
             storageSection == null ? "extrabackpack.db" : readString(storageSection, "sqlite.file", "extrabackpack.db"),
             storageSection == null ? "127.0.0.1" : readString(storageSection, "mysql.host", "127.0.0.1"),
             storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
             storageSection == null ? "arcartxsuite" : readString(storageSection, "mysql.database", "arcartxsuite"),
             storageSection == null ? "root" : readString(storageSection, "mysql.username", "root"),
             storageSection == null ? "" : readString(storageSection, "mysql.password", ""),
+            storageSection == null ? "axs_extrabackpack_" : readString(storageSection, "mysql.table-prefix", "axs_extrabackpack_"),
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
         ExtraBackpackConfig extraBackpack =
@@ -148,39 +149,6 @@ public record ExtraBackpackConfiguration(
     }
 
     /**
-     * 存储方言枚举，区分 SQLite 与 MySQL 两种持久化模式。
-     */
-    public enum StorageDialect {
-        SQLITE("sqlite"),
-        MYSQL("mysql");
-
-        private final String configKey;
-
-        StorageDialect(String configKey) {
-            this.configKey = configKey;
-        }
-
-        /**
-         * 返回该方言在配置文件中对应的键值。
-         *
-         * @return 配置键字符串
-         */
-        public String configKey() {
-            return configKey;
-        }
-
-        /**
-         * 将配置中的原始字符串解析为方言枚举，无法识别时默认返回 {@link #SQLITE}。
-         *
-         * @param rawValue 原始字符串值
-         * @return 解析后的方言
-         */
-        public static StorageDialect parse(String rawValue) {
-            return "mysql".equals(normalizeId(rawValue)) ? MYSQL : SQLITE;
-        }
-    }
-
-    /**
      * UI 相关配置 record。
      *
      * @param registerUiOnEnable 启用时是否自动注册 UI 资源
@@ -198,35 +166,41 @@ public record ExtraBackpackConfiguration(
      * 通过 {@link #toDescriptor()} 转换为 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}，
      * 供 {@link xuanmo.arcartxsuite.extrabackpack.storage.JdbcExtraBackpackRepository} 构造连接池使用。
      *
-     * @param dialect           存储方言（SQLite / MySQL）
-     * @param sqliteFileName    SQLite 模式下的数据库文件名
-     * @param mysqlHost         MySQL 主机地址
-     * @param mysqlPort         MySQL 端口
-     * @param mysqlDatabase     MySQL 数据库名
-     * @param mysqlUsername     MySQL 用户名
-     * @param mysqlPassword     MySQL 密码
-     * @param connectionPoolSize 连接池大小
+     * @param mode           存储模式（sqlite / mysql）
+     * @param sqliteFileName SQLite 模式下的数据库文件名
+     * @param host           MySQL 主机地址
+     * @param port           MySQL 端口
+     * @param database       MySQL 数据库名
+     * @param username       MySQL 用户名
+     * @param password       MySQL 密码
+     * @param tablePrefix    MySQL 表名前缀
+     * @param poolSize       连接池大小
      */
     public record StorageConfiguration(
-        StorageDialect dialect,
+        String mode,
         String sqliteFileName,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword,
-        int connectionPoolSize
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
+        }
+
         /**
          * 将本配置转换为 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}，
-         * 根据 {@link #dialect} 选择 SQLite 或 MySQL 描述符。
+         * 根据 {@link #mode} 选择 SQLite 或 MySQL 描述符。
          *
          * @return 存储描述符
          */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
-            if (dialect == StorageDialect.MYSQL) {
+            if (!isSqlite()) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
-                    mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, connectionPoolSize, "");
+                    host, port, database, username, password, poolSize, tablePrefix);
             }
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
@@ -234,14 +208,14 @@ public record ExtraBackpackConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 dialect=MYSQL 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * dialect=SQLITE 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
          * @return {@code true} 表示模块应自建连接池（旧路径）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return dialect == StorageDialect.MYSQL;
+            return "mysql".equalsIgnoreCase(mode);
         }
     }
 

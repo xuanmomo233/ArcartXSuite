@@ -87,13 +87,14 @@ public record OnlineRewardsModuleConfiguration(
         );
 
         OnlineRewardsStorageConfiguration storage = new OnlineRewardsStorageConfiguration(
-            OnlineRewardsPersistenceDialect.parse(configuration.getString("storage.mode", "sqlite")),
+            configuration.getString("storage.mode", "sqlite"),
             readString(configuration, "storage.sqlite.file", "online-rewards.db"),
             readString(configuration, "storage.mysql.host", "127.0.0.1"),
             Math.max(1, configuration.getInt("storage.mysql.port", 3306)),
             readString(configuration, "storage.mysql.database", "arcartxsuite"),
             readString(configuration, "storage.mysql.username", "root"),
             readString(configuration, "storage.mysql.password", ""),
+            readString(configuration, "storage.mysql.table-prefix", "axs_onlinerewards_"),
             // 优先读 storage.pool-size（与配置文件和校验规则一致），向后兼容 storage.mysql.pool-size
             Math.max(1, configuration.getInt("storage.pool-size",
                 configuration.getInt("storage.mysql.pool-size", 2)))

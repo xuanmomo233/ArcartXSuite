@@ -247,7 +247,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
         logger.fine(
             "Warehouse 模块已载入，UI=" + configuration.ui().uiId()
-                + " | 存储=" + configuration.storage().dialect().configKey()
+                + " | 存储=" + configuration.storage().mode()
                 + " | 跨服编辑锁=" + (service.crossServerActive() ? "ON" : "OFF")
         );
     }

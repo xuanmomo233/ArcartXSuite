@@ -14,7 +14,6 @@ import java.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.eventpacket.config.EventPacketPersistenceDialect;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
 
 /**
@@ -67,6 +66,11 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         return List.of("eventpacket_kill_progress", "eventpacket_fired_rules");
     }
 
+    @Override
+    protected List<String> allTables() {
+        return List.of("eventpacket_kill_progress", "eventpacket_fired_rules");
+    }
+
     // ─── Kill count ──────────────────────────────────────────
 
     /**
@@ -79,7 +83,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public int getKillCount(UUID playerUuid, String ruleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT kill_count FROM eventpacket_kill_progress WHERE player_uuid = ? AND rule_id = ?"
              )) {
@@ -101,7 +105,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public void setKillCount(UUID playerUuid, String ruleId, int count) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(killCountUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ruleId);
@@ -125,7 +129,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     @Override
     public void incrementKillCount(UUID playerUuid, String ruleId) throws SQLException {
         if (!isMysql()) {
-            try (Connection connection = connection();
+            try (Connection connection = getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
                      VALUES (?, ?, 1, ?)
@@ -139,7 +143,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
                 statement.executeUpdate();
             }
         } else {
-            try (Connection connection = connection();
+            try (Connection connection = getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
                      VALUES (?, ?, 1, ?)
@@ -165,7 +169,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     @Override
     public Map<String, Integer> loadAllKillCounts(UUID playerUuid) throws SQLException {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT rule_id, kill_count FROM eventpacket_kill_progress WHERE player_uuid = ?"
              )) {
@@ -191,7 +195,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public boolean hasFired(UUID playerUuid, String ruleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT 1 FROM eventpacket_fired_rules WHERE player_uuid = ? AND rule_id = ?"
              )) {
@@ -212,7 +216,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public void markFired(UUID playerUuid, String ruleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(firedRuleUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ruleId);
@@ -233,7 +237,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public void removeFired(UUID playerUuid, String ruleId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "DELETE FROM eventpacket_fired_rules WHERE player_uuid = ? AND rule_id = ?"
              )) {
@@ -254,10 +258,6 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     }
 
     // ─── Internal ────────────────────────────────────────────
-
-    private Connection connection() throws SQLException {
-        return getConnection();
-    }
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {

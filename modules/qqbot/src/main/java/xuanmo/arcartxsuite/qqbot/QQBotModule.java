@@ -141,8 +141,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             // 新路径：共享本体数据源
             repository = new JdbcQQBotRepository(
                 storageManager, "qqbot",
-                configuration.storage().mysqlTablePrefix(),
-                configuration.storage().sqliteFile(), logger
+                configuration.storage().tablePrefix(),
+                configuration.storage().sqliteFileName(), logger
             );
         }
         repository.initialize();

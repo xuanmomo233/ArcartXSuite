@@ -57,106 +57,126 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 // ── SQLite 建表 ──────────────────────────────────────
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_season ("
-                    + "uuid TEXT NOT NULL,"
-                    + "season_id TEXT NOT NULL,"
-                    + "level INTEGER NOT NULL DEFAULT 1,"
-                    + "current_xp INTEGER NOT NULL DEFAULT 0,"
-                    + "talent_points INTEGER NOT NULL DEFAULT 0,"
-                    + "unspent_talent_points INTEGER NOT NULL DEFAULT 0,"
-                    + "talents TEXT NOT NULL DEFAULT '',"
-                    + "claimed_rewards TEXT NOT NULL DEFAULT '',"
-                    + "updated_at INTEGER NOT NULL,"
-                    + "PRIMARY KEY (uuid, season_id))");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_season (
+                        uuid TEXT NOT NULL,
+                        season_id TEXT NOT NULL,
+                        level INTEGER NOT NULL DEFAULT 1,
+                        current_xp INTEGER NOT NULL DEFAULT 0,
+                        talent_points INTEGER NOT NULL DEFAULT 0,
+                        unspent_talent_points INTEGER NOT NULL DEFAULT 0,
+                        talents TEXT NOT NULL DEFAULT '',
+                        claimed_rewards TEXT NOT NULL DEFAULT '',
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (uuid, season_id))
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_permanent ("
-                    + "uuid TEXT PRIMARY KEY,"
-                    + "total_caught INTEGER NOT NULL DEFAULT 0,"
-                    + "perfect_catches INTEGER NOT NULL DEFAULT 0,"
-                    + "treasure_caught INTEGER NOT NULL DEFAULT 0,"
-                    + "updated_at INTEGER NOT NULL)");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_permanent (
+                        uuid TEXT PRIMARY KEY,
+                        total_caught INTEGER NOT NULL DEFAULT 0,
+                        perfect_catches INTEGER NOT NULL DEFAULT 0,
+                        treasure_caught INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL)
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_collection ("
-                    + "uuid TEXT NOT NULL,"
-                    + "fish_id TEXT NOT NULL,"
-                    + "caught_count INTEGER NOT NULL DEFAULT 0,"
-                    + "max_size INTEGER NOT NULL DEFAULT 0,"
-                    + "first_catch_at INTEGER NOT NULL,"
-                    + "PRIMARY KEY (uuid, fish_id))");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_collection (
+                        uuid TEXT NOT NULL,
+                        fish_id TEXT NOT NULL,
+                        caught_count INTEGER NOT NULL DEFAULT 0,
+                        max_size INTEGER NOT NULL DEFAULT 0,
+                        first_catch_at INTEGER NOT NULL,
+                        PRIMARY KEY (uuid, fish_id))
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards ("
-                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                    + "uuid TEXT NOT NULL,"
-                    + "season_id TEXT NOT NULL,"
-                    + "reward_type TEXT NOT NULL,"
-                    + "currency_id TEXT NOT NULL DEFAULT '',"
-                    + "amount REAL NOT NULL DEFAULT 0,"
-                    + "item_data TEXT NOT NULL DEFAULT '',"
-                    + "command TEXT NOT NULL DEFAULT '',"
-                    + "description TEXT NOT NULL DEFAULT '',"
-                    + "created_at INTEGER NOT NULL)");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT NOT NULL,
+                        season_id TEXT NOT NULL,
+                        reward_type TEXT NOT NULL,
+                        currency_id TEXT NOT NULL DEFAULT '',
+                        amount REAL NOT NULL DEFAULT 0,
+                        item_data TEXT NOT NULL DEFAULT '',
+                        command TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL)
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
-                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                    + "uuid TEXT NOT NULL,"
-                    + "fish_id TEXT NOT NULL,"
-                    + "fish_name TEXT NOT NULL,"
-                    + "rarity TEXT NOT NULL,"
-                    + "size INTEGER NOT NULL DEFAULT 0,"
-                    + "perfect INTEGER NOT NULL DEFAULT 0,"
-                    + "timestamp INTEGER NOT NULL)");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_catch_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT NOT NULL,
+                        fish_id TEXT NOT NULL,
+                        fish_name TEXT NOT NULL,
+                        rarity TEXT NOT NULL,
+                        size INTEGER NOT NULL DEFAULT 0,
+                        perfect INTEGER NOT NULL DEFAULT 0,
+                        timestamp INTEGER NOT NULL)
+                    """);
             } else {
                 // ── MySQL 建表 ───────────────────────────────────────
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_season ("
-                    + "uuid VARCHAR(36) NOT NULL,"
-                    + "season_id VARCHAR(64) NOT NULL,"
-                    + "level INT NOT NULL DEFAULT 1,"
-                    + "current_xp INT NOT NULL DEFAULT 0,"
-                    + "talent_points INT NOT NULL DEFAULT 0,"
-                    + "unspent_talent_points INT NOT NULL DEFAULT 0,"
-                    + "talents TEXT NOT NULL,"
-                    + "claimed_rewards TEXT NOT NULL,"
-                    + "updated_at BIGINT NOT NULL,"
-                    + "PRIMARY KEY (uuid, season_id))");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_season (
+                        uuid VARCHAR(36) NOT NULL,
+                        season_id VARCHAR(64) NOT NULL,
+                        level INT NOT NULL DEFAULT 1,
+                        current_xp INT NOT NULL DEFAULT 0,
+                        talent_points INT NOT NULL DEFAULT 0,
+                        unspent_talent_points INT NOT NULL DEFAULT 0,
+                        talents TEXT NOT NULL,
+                        claimed_rewards TEXT NOT NULL,
+                        updated_at BIGINT NOT NULL,
+                        PRIMARY KEY (uuid, season_id))
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_permanent ("
-                    + "uuid VARCHAR(36) NOT NULL PRIMARY KEY,"
-                    + "total_caught INT NOT NULL DEFAULT 0,"
-                    + "perfect_catches INT NOT NULL DEFAULT 0,"
-                    + "treasure_caught INT NOT NULL DEFAULT 0,"
-                    + "updated_at BIGINT NOT NULL)");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_permanent (
+                        uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                        total_caught INT NOT NULL DEFAULT 0,
+                        perfect_catches INT NOT NULL DEFAULT 0,
+                        treasure_caught INT NOT NULL DEFAULT 0,
+                        updated_at BIGINT NOT NULL)
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_collection ("
-                    + "uuid VARCHAR(36) NOT NULL,"
-                    + "fish_id VARCHAR(64) NOT NULL,"
-                    + "caught_count INT NOT NULL DEFAULT 0,"
-                    + "max_size INT NOT NULL DEFAULT 0,"
-                    + "first_catch_at BIGINT NOT NULL,"
-                    + "PRIMARY KEY (uuid, fish_id))");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_collection (
+                        uuid VARCHAR(36) NOT NULL,
+                        fish_id VARCHAR(64) NOT NULL,
+                        caught_count INT NOT NULL DEFAULT 0,
+                        max_size INT NOT NULL DEFAULT 0,
+                        first_catch_at BIGINT NOT NULL,
+                        PRIMARY KEY (uuid, fish_id))
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards ("
-                    + "id INTEGER PRIMARY KEY AUTO_INCREMENT,"
-                    + "uuid VARCHAR(36) NOT NULL,"
-                    + "season_id VARCHAR(64) NOT NULL,"
-                    + "reward_type VARCHAR(32) NOT NULL,"
-                    + "currency_id VARCHAR(64) NOT NULL DEFAULT '',"
-                    + "amount DOUBLE NOT NULL DEFAULT 0,"
-                    + "item_data TEXT NOT NULL,"
-                    + "command TEXT NOT NULL,"
-                    + "description TEXT NOT NULL,"
-                    + "created_at BIGINT NOT NULL)");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        uuid VARCHAR(36) NOT NULL,
+                        season_id VARCHAR(64) NOT NULL,
+                        reward_type VARCHAR(32) NOT NULL,
+                        currency_id VARCHAR(64) NOT NULL DEFAULT '',
+                        amount DOUBLE NOT NULL DEFAULT 0,
+                        item_data TEXT NOT NULL,
+                        command TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        created_at BIGINT NOT NULL)
+                    """);
 
-                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
-                    + "id INTEGER PRIMARY KEY AUTO_INCREMENT,"
-                    + "uuid VARCHAR(36) NOT NULL,"
-                    + "fish_id VARCHAR(64) NOT NULL,"
-                    + "fish_name VARCHAR(128) NOT NULL,"
-                    + "rarity VARCHAR(16) NOT NULL,"
-                    + "size INT NOT NULL DEFAULT 0,"
-                    + "perfect TINYINT NOT NULL DEFAULT 0,"
-                    + "timestamp BIGINT NOT NULL,"
-                    + "INDEX idx_catch_uuid (uuid),"
-                    + "INDEX idx_catch_time (timestamp))");
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_catch_records (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        uuid VARCHAR(36) NOT NULL,
+                        fish_id VARCHAR(64) NOT NULL,
+                        fish_name VARCHAR(128) NOT NULL,
+                        rarity VARCHAR(16) NOT NULL,
+                        size INT NOT NULL DEFAULT 0,
+                        perfect TINYINT NOT NULL DEFAULT 0,
+                        timestamp BIGINT NOT NULL,
+                        INDEX idx_catch_uuid (uuid),
+                        INDEX idx_catch_time (timestamp))
+                    """);
             }
         }
     }

@@ -91,7 +91,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public void upsertPlayerProfile(MailPlayerProfile profile) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(playerProfileUpsertSql())) {
             statement.setString(1, profile.playerUuid().toString());
             statement.setString(2, nullToEmpty(profile.lastKnownName()));
@@ -105,7 +105,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<MailPlayerProfile> loadPlayerProfile(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, last_known_name, last_send_at, last_seen_at, last_server "
                      + "FROM mail_player_profiles WHERE player_uuid = ?"
@@ -122,7 +122,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<MailPlayerProfile> findPlayerProfileByName(String playerName) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, last_known_name, last_send_at, last_seen_at, last_server "
                      + "FROM mail_player_profiles WHERE last_known_name_lower = ? LIMIT 1"
@@ -140,7 +140,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     @Override
     public List<MailPlayerProfile> loadAllProfiles() throws SQLException {
         List<MailPlayerProfile> result = new ArrayList<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT player_uuid, last_known_name, last_send_at, last_seen_at, last_server "
                      + "FROM mail_player_profiles ORDER BY last_seen_at DESC"
@@ -155,7 +155,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public MailInsertResult insertMail(MailMessage message) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(mailInsertSql(), Statement.RETURN_GENERATED_KEYS)) {
                 writeMail(statement, message, false);
@@ -198,7 +198,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public void updateMailState(MailMessage message) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(mailUpdateSql())) {
             writeMail(statement, message, true);
             statement.executeUpdate();
@@ -211,7 +211,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             UPDATE mail_entries SET status = 'CLAIMED', claimed_at = ?, updated_at = ?
             WHERE id = ? AND owner_uuid = ? AND status IN ('UNREAD', 'READ')
             """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, now.toEpochMilli());
             statement.setLong(2, now.toEpochMilli());
@@ -223,7 +223,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<MailMessage> loadMail(UUID ownerUuid, long mailId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM mail_entries WHERE owner_uuid = ? AND id = ? LIMIT 1"
              )) {
@@ -241,7 +241,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     @Override
     public List<MailMessage> loadInbox(UUID ownerUuid) throws SQLException {
         List<MailMessage> messages = new ArrayList<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT * FROM mail_entries WHERE owner_uuid = ? AND status <> 'DELETED' ORDER BY created_at DESC, id DESC"
              )) {
@@ -267,7 +267,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         String condition = filterCondition(query.filter());
         List<MailMessage> messages = new ArrayList<>();
         String sql = "SELECT * FROM mail_entries WHERE owner_uuid = ?" + condition + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?";
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, ownerUuid.toString());
             statement.setInt(2, query.pageSize());
@@ -284,7 +284,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     @Override
     public int countInbox(UUID ownerUuid, MailInboxFilter filter) throws SQLException {
         String sql = "SELECT COUNT(*) AS total_count FROM mail_entries WHERE owner_uuid = ?" + filterCondition(filter);
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, ownerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
@@ -298,7 +298,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         int total = 0;
         int unread = 0;
         int claimable = 0;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT COUNT(*) AS total_count, "
                      + "SUM(CASE WHEN status = 'UNREAD' THEN 1 ELSE 0 END) AS unread_count, "
@@ -321,7 +321,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public void appendLog(MailLogEntry entry) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement insert = connection.prepareStatement(
                 "INSERT INTO mail_logs (player_uuid, log_type, content, created_at) VALUES (?, ?, ?, ?)"
@@ -350,7 +350,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     public MailPage<MailLogEntry> loadLogPage(UUID playerUuid, int page, int pageSize) throws SQLException {
         int normalizedPageSize = Math.max(1, pageSize);
         int totalItems;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement countStatement = connection.prepareStatement(
                  "SELECT COUNT(*) AS total_count FROM mail_logs WHERE player_uuid = ?"
              )) {
@@ -366,7 +366,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         int normalizedPage = Math.min(Math.max(1, page), totalPages);
         int offset = (normalizedPage - 1) * normalizedPageSize;
         List<MailLogEntry> entries = new ArrayList<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT id, player_uuid, log_type, content, created_at FROM mail_logs WHERE player_uuid = ? "
                      + "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
@@ -394,7 +394,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     @Override
     public int cleanupMail(Instant now, Instant claimedBefore, Instant deletedBefore) throws SQLException {
         int cleaned = 0;
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement expireStatement = connection.prepareStatement(
@@ -455,7 +455,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public void saveCdk(MailCdkDefinition definition) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(cdkUpsertSql())) {
             statement.setString(1, definition.code());
             statement.setString(2, definition.presetId());
@@ -476,7 +476,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public Optional<MailCdkDefinition> loadCdk(String code) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             return loadCdk(connection, code);
         }
     }
@@ -485,7 +485,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     public List<MailCdkDefinition> loadCdks(int page, int pageSize) throws SQLException {
         int safePage = Math.max(1, page);
         int safePageSize = Math.max(1, Math.min(100, pageSize));
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at "
                      + "FROM mail_cdk_definitions "
@@ -506,7 +506,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public boolean deleteCdk(String code) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement deleteClaims = connection.prepareStatement("DELETE FROM mail_cdk_claims WHERE code = ?");
                  PreparedStatement deleteDefinition = connection.prepareStatement("DELETE FROM mail_cdk_definitions WHERE code = ?")) {
@@ -527,7 +527,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     @Override
     public CdkClaimResult claimCdk(String code, UUID playerUuid, Instant now) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
                 Optional<MailCdkDefinition> optionalDefinition = loadCdk(connection, code);
@@ -601,7 +601,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     @Override
     public int cleanupCdks(Instant now) throws SQLException {
         int deleted;
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try {
                 try (PreparedStatement deleteClaims = connection.prepareStatement(
@@ -1047,10 +1047,6 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                 ) retained
               )
             """;
-    }
-
-    private Connection connection() throws SQLException {
-        return getConnection();
     }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {

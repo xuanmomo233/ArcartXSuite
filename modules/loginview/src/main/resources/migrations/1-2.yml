@@ -1,0 +1,7 @@
+from-version: 1
+to-version: 2
+description: "storage.table-prefix 移入 storage.mysql.table-prefix，统一嵌套结构"
+operations:
+  - type: rename
+    from: storage.table-prefix
+    to: storage.mysql.table-prefix

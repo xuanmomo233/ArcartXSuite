@@ -73,14 +73,10 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_season_settlement");
     }
 
-    /** 获取当前方言标识。 */
-    private String dialect() {
-        return isMysql() ? "mysql" : "sqlite";
-    }
-
     private void createTables(Connection conn) throws SQLException {
-        String progressTable = switch (dialect()) {
-            case "sqlite" -> """
+        String progressTable;
+        if (!isMysql()) {
+            progressTable = """
                 CREATE TABLE IF NOT EXISTS bp_player_progress (
                     player_uuid TEXT NOT NULL,
                     season_id TEXT NOT NULL,
@@ -94,7 +90,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id)
                 )
                 """;
-            default -> """
+        } else {
+            progressTable = """
                 CREATE TABLE IF NOT EXISTS bp_player_progress (
                     player_uuid VARCHAR(36) NOT NULL,
                     season_id VARCHAR(64) NOT NULL,
@@ -108,10 +105,11 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id)
                 )
                 """;
-        };
+        }
 
-        String taskTable = switch (dialect()) {
-            case "sqlite" -> """
+        String taskTable;
+        if (!isMysql()) {
+            taskTable = """
                 CREATE TABLE IF NOT EXISTS bp_task_progress (
                     player_uuid TEXT NOT NULL,
                     season_id TEXT NOT NULL,
@@ -121,7 +119,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, task_id)
                 )
                 """;
-            default -> """
+        } else {
+            taskTable = """
                 CREATE TABLE IF NOT EXISTS bp_task_progress (
                     player_uuid VARCHAR(36) NOT NULL,
                     season_id VARCHAR(64) NOT NULL,
@@ -131,10 +130,11 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, task_id)
                 )
                 """;
-        };
+        }
 
-        String rewardTable = switch (dialect()) {
-            case "sqlite" -> """
+        String rewardTable;
+        if (!isMysql()) {
+            rewardTable = """
                 CREATE TABLE IF NOT EXISTS bp_claimed_rewards (
                     player_uuid TEXT NOT NULL,
                     season_id TEXT NOT NULL,
@@ -143,7 +143,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, reward_id)
                 )
                 """;
-            default -> """
+        } else {
+            rewardTable = """
                 CREATE TABLE IF NOT EXISTS bp_claimed_rewards (
                     player_uuid VARCHAR(36) NOT NULL,
                     season_id VARCHAR(64) NOT NULL,
@@ -152,10 +153,11 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, reward_id)
                 )
                 """;
-        };
+        }
 
-        String playerTaskTable = switch (dialect()) {
-            case "sqlite" -> """
+        String playerTaskTable;
+        if (!isMysql()) {
+            playerTaskTable = """
                 CREATE TABLE IF NOT EXISTS bp_player_tasks (
                     player_uuid TEXT NOT NULL,
                     season_id TEXT NOT NULL,
@@ -170,7 +172,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, instance_id)
                 )
                 """;
-            default -> """
+        } else {
+            playerTaskTable = """
                 CREATE TABLE IF NOT EXISTS bp_player_tasks (
                     player_uuid VARCHAR(36) NOT NULL,
                     season_id VARCHAR(64) NOT NULL,
@@ -185,22 +188,24 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                     PRIMARY KEY (player_uuid, season_id, instance_id)
                 )
                 """;
-        };
+        }
 
-        String settlementTable = switch (dialect()) {
-            case "sqlite" -> """
+        String settlementTable;
+        if (!isMysql()) {
+            settlementTable = """
                 CREATE TABLE IF NOT EXISTS bp_season_settlement (
                     season_id TEXT NOT NULL PRIMARY KEY,
                     settled_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
                 """;
-            default -> """
+        } else {
+            settlementTable = """
                 CREATE TABLE IF NOT EXISTS bp_season_settlement (
                     season_id VARCHAR(64) NOT NULL PRIMARY KEY,
                     settled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """;
-        };
+        }
 
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(progressTable);
@@ -213,7 +218,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     private void ensureIndexes(Connection conn) {
         // MySQL 不支持 CREATE INDEX IF NOT EXISTS，重复创建时静默忽略
-        String prefix = "sqlite".equalsIgnoreCase(dialect()) ? "CREATE INDEX IF NOT EXISTS " : "CREATE INDEX ";
+        String prefix = !isMysql() ? "CREATE INDEX IF NOT EXISTS " : "CREATE INDEX ";
         tryExecute(conn, prefix + "idx_bp_progress_season ON bp_player_progress(season_id)");
         tryExecute(conn, prefix + "idx_bp_task_season ON bp_task_progress(season_id)");
         tryExecute(conn, prefix + "idx_bp_reward_season ON bp_claimed_rewards(season_id)");
@@ -259,8 +264,9 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveProgress(BattlePassPlayerProgress progress) throws SQLException {
-        String sql = switch (dialect()) {
-            case "sqlite" -> """
+        String sql;
+        if (!isMysql()) {
+            sql = """
                 INSERT INTO bp_player_progress (player_uuid, season_id, current_level, current_xp, pass_tier, unlocked_premium, last_daily_reset_date, last_weekly_reset_date, current_week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid, season_id) DO UPDATE SET
@@ -272,7 +278,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 last_weekly_reset_date = excluded.last_weekly_reset_date,
                 current_week_number = excluded.current_week_number
                 """;
-            default -> """
+        } else {
+            sql = """
                 INSERT INTO bp_player_progress (player_uuid, season_id, current_level, current_xp, pass_tier, unlocked_premium, last_daily_reset_date, last_weekly_reset_date, current_week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
@@ -284,7 +291,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 last_weekly_reset_date = VALUES(last_weekly_reset_date),
                 current_week_number = VALUES(current_week_number)
                 """;
-        };
+        }
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, progress.playerUuid().toString());
@@ -326,22 +333,24 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveTaskProgress(UUID playerUuid, String seasonId, String taskId, int count) throws SQLException {
-        String sql = switch (dialect()) {
-            case "sqlite" -> """
+        String sql;
+        if (!isMysql()) {
+            sql = """
                 INSERT INTO bp_task_progress (player_uuid, season_id, task_id, completed_count, last_update)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid, season_id, task_id) DO UPDATE SET
                 completed_count = excluded.completed_count,
                 last_update = excluded.last_update
                 """;
-            default -> """
+        } else {
+            sql = """
                 INSERT INTO bp_task_progress (player_uuid, season_id, task_id, completed_count, last_update)
                 VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 completed_count = VALUES(completed_count),
                 last_update = VALUES(last_update)
                 """;
-        };
+        }
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, playerUuid.toString());
@@ -373,17 +382,19 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveClaimedReward(UUID playerUuid, String seasonId, String rewardId) throws SQLException {
-        String sql = switch (dialect()) {
-            case "sqlite" -> """
+        String sql;
+        if (!isMysql()) {
+            sql = """
                 INSERT INTO bp_claimed_rewards (player_uuid, season_id, reward_id, claimed_at)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(player_uuid, season_id, reward_id) DO NOTHING
                 """;
-            default -> """
+        } else {
+            sql = """
                 INSERT IGNORE INTO bp_claimed_rewards (player_uuid, season_id, reward_id, claimed_at)
                 VALUES (?, ?, ?, ?)
                 """;
-        };
+        }
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, playerUuid.toString());
@@ -471,8 +482,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     }
 
     private String playerTaskUpsertSql() {
-        return switch (dialect()) {
-            case "sqlite" -> """
+        if (!isMysql()) {
+            return """
                 INSERT INTO bp_player_tasks (player_uuid, season_id, instance_id, template_id, category, target_count, current_progress, completed, assigned_date, week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid, season_id, instance_id) DO UPDATE SET
@@ -481,7 +492,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 completed = excluded.completed,
                 week_number = excluded.week_number
                 """;
-            default -> """
+        } else {
+            return """
                 INSERT INTO bp_player_tasks (player_uuid, season_id, instance_id, template_id, category, target_count, current_progress, completed, assigned_date, week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
@@ -490,7 +502,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 completed = VALUES(completed),
                 week_number = VALUES(week_number)
                 """;
-        };
+        }
     }
 
     @Override
@@ -599,15 +611,17 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void markSeasonSettled(String seasonId) throws SQLException {
-        String sql = switch (dialect()) {
-            case "sqlite" -> """
+        String sql;
+        if (!isMysql()) {
+            sql = """
                 INSERT INTO bp_season_settlement (season_id) VALUES (?)
                 ON CONFLICT(season_id) DO NOTHING
                 """;
-            default -> """
+        } else {
+            sql = """
                 INSERT IGNORE INTO bp_season_settlement (season_id) VALUES (?)
                 """;
-        };
+        }
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, seasonId);

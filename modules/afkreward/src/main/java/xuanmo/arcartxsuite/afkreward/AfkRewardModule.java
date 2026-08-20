@@ -77,7 +77,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.dialect", ValueType.STRING)
+            ValidationRule.required("storage.mode", ValueType.STRING)
                 .withEnum(java.util.Set.of("sqlite", "mysql")),
             ValidationRule.of("manual.leaderboard-size", ValueType.INT)
                 .withRange(1, 100),
@@ -140,7 +140,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         configuration = configuration.withAreas(loadedAreas);
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
-        // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         if (configuration.storage().hasOverride()) {
             // 旧路径：模块自建连接池
             repository = new AfkRewardRepository(
@@ -151,7 +151,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             repository = new AfkRewardRepository(
                 storageManager, "afkreward",
                 configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFile(), logger
+                configuration.storage().sqliteFileName(), logger
             );
         }
         repository.initialize();

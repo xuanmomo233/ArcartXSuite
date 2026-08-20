@@ -229,7 +229,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
         logger.fine(
             "OnlineRewards 模块已载入，rewards=" + configuration.rewards().size()
-                + " | storage=" + configuration.storage().dialect().configKey()
+                + " | storage=" + configuration.storage().mode()
                 + " | menu-ui=" + service.runtimeMenuUiId()
         );
     }

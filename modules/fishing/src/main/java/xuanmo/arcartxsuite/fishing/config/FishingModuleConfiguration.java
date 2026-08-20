@@ -575,31 +575,36 @@ public record FishingModuleConfiguration(
     public record StorageConfiguration(
         String mode,
         String sqliteFileName,
-        int poolSize,
-        String mysqlHost,
-        int mysqlPort,
-        String mysqlDatabase,
-        String mysqlUsername,
-        String mysqlPassword
+        String host,
+        int port,
+        String database,
+        String username,
+        String password,
+        String tablePrefix,
+        int poolSize
     ) {
         public static StorageConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new StorageConfiguration(
                 section.getString("mode", "sqlite"),
-                section.getString("sqlite-file-name", "fishing.db"),
-                section.getInt("pool-size", 1),
-                section.getString("mysql-host", "localhost"),
-                section.getInt("mysql-port", 3306),
-                section.getString("mysql-database", "axs_fishing"),
-                section.getString("mysql-username", "root"),
-                section.getString("mysql-password", "")
+                section.getString("sqlite.file", "fishing.db"),
+                section.getString("mysql.host", "localhost"),
+                section.getInt("mysql.port", 3306),
+                section.getString("mysql.database", "arcartxsuite"),
+                section.getString("mysql.username", "root"),
+                section.getString("mysql.password", ""),
+                section.getString("mysql.table-prefix", "axs_fishing_"),
+                section.getInt("pool-size", 1)
             );
         }
 
+        public boolean isSqlite() {
+            return !"mysql".equalsIgnoreCase(mode);
+        }
+
         public StorageDescriptor toDescriptor() {
-            boolean isMysql = "mysql".equalsIgnoreCase(mode);
-            if (isMysql) {
-                return StorageDescriptor.mysql(mysqlHost, mysqlPort, mysqlDatabase, mysqlUsername, mysqlPassword, poolSize, "");
+            if (!isSqlite()) {
+                return StorageDescriptor.mysql(host, port, database, username, password, poolSize, tablePrefix);
             }
             return StorageDescriptor.sqlite(sqliteFileName);
         }

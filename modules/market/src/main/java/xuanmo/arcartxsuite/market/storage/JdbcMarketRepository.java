@@ -110,203 +110,239 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     private void createTablesSqlite(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tListings + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "seller TEXT NOT NULL,"
-            + "seller_name TEXT NOT NULL,"
-            + "item_data TEXT NOT NULL,"
-            + "item_display_name TEXT NOT NULL,"
-            + "pinyin TEXT NOT NULL DEFAULT '',"
-            + "initials TEXT NOT NULL DEFAULT '',"
-            + "category TEXT NOT NULL DEFAULT 'other',"
-            + "buy_now_price REAL NOT NULL DEFAULT 0,"
-            + "starting_bid REAL NOT NULL DEFAULT 0,"
-            + "current_bid REAL NOT NULL DEFAULT 0,"
-            + "highest_bidder TEXT,"
-            + "currency TEXT NOT NULL DEFAULT 'money',"
-            + "type TEXT NOT NULL DEFAULT 'BUY_NOW',"
-            + "status TEXT NOT NULL DEFAULT 'ACTIVE',"
-            + "created_at INTEGER NOT NULL,"
-            + "expires_at INTEGER NOT NULL)");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seller TEXT NOT NULL,
+                seller_name TEXT NOT NULL,
+                item_data TEXT NOT NULL,
+                item_display_name TEXT NOT NULL,
+                pinyin TEXT NOT NULL DEFAULT '',
+                initials TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT 'other',
+                buy_now_price REAL NOT NULL DEFAULT 0,
+                starting_bid REAL NOT NULL DEFAULT 0,
+                current_bid REAL NOT NULL DEFAULT 0,
+                highest_bidder TEXT,
+                currency TEXT NOT NULL DEFAULT 'money',
+                type TEXT NOT NULL DEFAULT 'BUY_NOW',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL)
+            """.formatted(tListings));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_market_status ON " + tListings + "(status)");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_market_seller ON " + tListings + "(seller)");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_market_category ON " + tListings + "(category)");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_market_expires ON " + tListings + "(expires_at)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tBids + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "listing_id INTEGER NOT NULL,"
-            + "bidder TEXT NOT NULL,"
-            + "bidder_name TEXT NOT NULL,"
-            + "amount REAL NOT NULL,"
-            + "timestamp INTEGER NOT NULL)");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                listing_id INTEGER NOT NULL,
+                bidder TEXT NOT NULL,
+                bidder_name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                timestamp INTEGER NOT NULL)
+            """.formatted(tBids));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_bids_listing ON " + tBids + "(listing_id)");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_bids_bidder ON " + tBids + "(bidder)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tHistory + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "listing_id INTEGER NOT NULL,"
-            + "seller TEXT NOT NULL,"
-            + "buyer TEXT,"
-            + "item_data TEXT NOT NULL,"
-            + "item_display_name TEXT NOT NULL,"
-            + "price REAL NOT NULL,"
-            + "currency TEXT NOT NULL,"
-            + "tax_amount REAL NOT NULL DEFAULT 0,"
-            + "transaction_type TEXT NOT NULL,"
-            + "timestamp INTEGER NOT NULL)");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                listing_id INTEGER NOT NULL,
+                seller TEXT NOT NULL,
+                buyer TEXT,
+                item_data TEXT NOT NULL,
+                item_display_name TEXT NOT NULL,
+                price REAL NOT NULL,
+                currency TEXT NOT NULL,
+                tax_amount REAL NOT NULL DEFAULT 0,
+                transaction_type TEXT NOT NULL,
+                timestamp INTEGER NOT NULL)
+            """.formatted(tHistory));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_history_seller ON " + tHistory + "(seller)");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_history_buyer ON " + tHistory + "(buyer)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tFavorites + " ("
-            + "player TEXT NOT NULL,"
-            + "listing_id INTEGER NOT NULL,"
-            + "PRIMARY KEY (player, listing_id))");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player TEXT NOT NULL,
+                listing_id INTEGER NOT NULL,
+                PRIMARY KEY (player, listing_id))
+            """.formatted(tFavorites));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tShopLimits + " ("
-            + "player TEXT NOT NULL,"
-            + "shop_id TEXT NOT NULL,"
-            + "item_id TEXT NOT NULL,"
-            + "purchased_count INTEGER NOT NULL DEFAULT 0,"
-            + "last_purchase_time INTEGER NOT NULL,"
-            + "reset_time INTEGER NOT NULL,"
-            + "PRIMARY KEY (player, shop_id, item_id))");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player TEXT NOT NULL,
+                shop_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                purchased_count INTEGER NOT NULL DEFAULT 0,
+                last_purchase_time INTEGER NOT NULL,
+                reset_time INTEGER NOT NULL,
+                PRIMARY KEY (player, shop_id, item_id))
+            """.formatted(tShopLimits));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tRecycleStats + " ("
-            + "player TEXT NOT NULL,"
-            + "currency TEXT NOT NULL,"
-            + "total_amount REAL NOT NULL DEFAULT 0,"
-            + "total_items INTEGER NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player, currency))");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                total_amount REAL NOT NULL DEFAULT 0,
+                total_items INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (player, currency))
+            """.formatted(tRecycleStats));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPending + " ("
-            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            + "player TEXT NOT NULL,"
-            + "type TEXT NOT NULL,"
-            + "item_data TEXT,"
-            + "currency TEXT,"
-            + "amount REAL NOT NULL DEFAULT 0,"
-            + "reason TEXT,"
-            + "created_at INTEGER NOT NULL)");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player TEXT NOT NULL,
+                type TEXT NOT NULL,
+                item_data TEXT,
+                currency TEXT,
+                amount REAL NOT NULL DEFAULT 0,
+                reason TEXT,
+                created_at INTEGER NOT NULL)
+            """.formatted(tPending));
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_player ON " + tPending + "(player)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobalStock + " ("
-            + "shop_id TEXT NOT NULL,"
-            + "item_id TEXT NOT NULL,"
-            + "remaining INTEGER NOT NULL,"
-            + "PRIMARY KEY (shop_id, item_id))");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                shop_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                remaining INTEGER NOT NULL,
+                PRIMARY KEY (shop_id, item_id))
+            """.formatted(tGlobalStock));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayerStock + " ("
-            + "player TEXT NOT NULL,"
-            + "shop_id TEXT NOT NULL,"
-            + "item_id TEXT NOT NULL,"
-            + "remaining INTEGER NOT NULL,"
-            + "PRIMARY KEY (player, shop_id, item_id))");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player TEXT NOT NULL,
+                shop_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                remaining INTEGER NOT NULL,
+                PRIMARY KEY (player, shop_id, item_id))
+            """.formatted(tPlayerStock));
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tListings + " ("
-            + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-            + "seller CHAR(36) NOT NULL,"
-            + "seller_name VARCHAR(64) NOT NULL,"
-            + "item_data MEDIUMTEXT NOT NULL,"
-            + "item_display_name VARCHAR(256) NOT NULL,"
-            + "pinyin VARCHAR(512) NOT NULL DEFAULT '',"
-            + "initials VARCHAR(512) NOT NULL DEFAULT '',"
-            + "category VARCHAR(64) NOT NULL DEFAULT 'other',"
-            + "buy_now_price DOUBLE NOT NULL DEFAULT 0,"
-            + "starting_bid DOUBLE NOT NULL DEFAULT 0,"
-            + "current_bid DOUBLE NOT NULL DEFAULT 0,"
-            + "highest_bidder CHAR(36),"
-            + "currency VARCHAR(32) NOT NULL DEFAULT 'money',"
-            + "type VARCHAR(16) NOT NULL DEFAULT 'BUY_NOW',"
-            + "status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',"
-            + "created_at BIGINT NOT NULL,"
-            + "expires_at BIGINT NOT NULL,"
-            + "INDEX idx_status (status),"
-            + "INDEX idx_seller (seller),"
-            + "INDEX idx_category (category),"
-            + "INDEX idx_expires (expires_at)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                seller CHAR(36) NOT NULL,
+                seller_name VARCHAR(64) NOT NULL,
+                item_data MEDIUMTEXT NOT NULL,
+                item_display_name VARCHAR(256) NOT NULL,
+                pinyin VARCHAR(512) NOT NULL DEFAULT '',
+                initials VARCHAR(512) NOT NULL DEFAULT '',
+                category VARCHAR(64) NOT NULL DEFAULT 'other',
+                buy_now_price DOUBLE NOT NULL DEFAULT 0,
+                starting_bid DOUBLE NOT NULL DEFAULT 0,
+                current_bid DOUBLE NOT NULL DEFAULT 0,
+                highest_bidder CHAR(36),
+                currency VARCHAR(32) NOT NULL DEFAULT 'money',
+                type VARCHAR(16) NOT NULL DEFAULT 'BUY_NOW',
+                status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+                created_at BIGINT NOT NULL,
+                expires_at BIGINT NOT NULL,
+                INDEX idx_status (status),
+                INDEX idx_seller (seller),
+                INDEX idx_category (category),
+                INDEX idx_expires (expires_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tListings));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tBids + " ("
-            + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-            + "listing_id BIGINT NOT NULL,"
-            + "bidder CHAR(36) NOT NULL,"
-            + "bidder_name VARCHAR(64) NOT NULL,"
-            + "amount DOUBLE NOT NULL,"
-            + "timestamp BIGINT NOT NULL,"
-            + "INDEX idx_listing (listing_id),"
-            + "INDEX idx_bidder (bidder)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                listing_id BIGINT NOT NULL,
+                bidder CHAR(36) NOT NULL,
+                bidder_name VARCHAR(64) NOT NULL,
+                amount DOUBLE NOT NULL,
+                timestamp BIGINT NOT NULL,
+                INDEX idx_listing (listing_id),
+                INDEX idx_bidder (bidder)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tBids));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tHistory + " ("
-            + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-            + "listing_id BIGINT NOT NULL,"
-            + "seller CHAR(36) NOT NULL,"
-            + "buyer CHAR(36),"
-            + "item_data MEDIUMTEXT NOT NULL,"
-            + "item_display_name VARCHAR(256) NOT NULL,"
-            + "price DOUBLE NOT NULL,"
-            + "currency VARCHAR(32) NOT NULL,"
-            + "tax_amount DOUBLE NOT NULL DEFAULT 0,"
-            + "transaction_type VARCHAR(16) NOT NULL,"
-            + "timestamp BIGINT NOT NULL,"
-            + "INDEX idx_seller (seller),"
-            + "INDEX idx_buyer (buyer)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                listing_id BIGINT NOT NULL,
+                seller CHAR(36) NOT NULL,
+                buyer CHAR(36),
+                item_data MEDIUMTEXT NOT NULL,
+                item_display_name VARCHAR(256) NOT NULL,
+                price DOUBLE NOT NULL,
+                currency VARCHAR(32) NOT NULL,
+                tax_amount DOUBLE NOT NULL DEFAULT 0,
+                transaction_type VARCHAR(16) NOT NULL,
+                timestamp BIGINT NOT NULL,
+                INDEX idx_seller (seller),
+                INDEX idx_buyer (buyer)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tHistory));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tFavorites + " ("
-            + "player CHAR(36) NOT NULL,"
-            + "listing_id BIGINT NOT NULL,"
-            + "PRIMARY KEY (player, listing_id),"
-            + "INDEX idx_player (player)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player CHAR(36) NOT NULL,
+                listing_id BIGINT NOT NULL,
+                PRIMARY KEY (player, listing_id),
+                INDEX idx_player (player)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tFavorites));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tShopLimits + " ("
-            + "player CHAR(36) NOT NULL,"
-            + "shop_id VARCHAR(64) NOT NULL,"
-            + "item_id VARCHAR(64) NOT NULL,"
-            + "purchased_count INT NOT NULL DEFAULT 0,"
-            + "last_purchase_time BIGINT NOT NULL,"
-            + "reset_time BIGINT NOT NULL,"
-            + "PRIMARY KEY (player, shop_id, item_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player CHAR(36) NOT NULL,
+                shop_id VARCHAR(64) NOT NULL,
+                item_id VARCHAR(64) NOT NULL,
+                purchased_count INT NOT NULL DEFAULT 0,
+                last_purchase_time BIGINT NOT NULL,
+                reset_time BIGINT NOT NULL,
+                PRIMARY KEY (player, shop_id, item_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tShopLimits));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tRecycleStats + " ("
-            + "player CHAR(36) NOT NULL,"
-            + "currency VARCHAR(32) NOT NULL,"
-            + "total_amount DOUBLE NOT NULL DEFAULT 0,"
-            + "total_items INT NOT NULL DEFAULT 0,"
-            + "PRIMARY KEY (player, currency)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player CHAR(36) NOT NULL,
+                currency VARCHAR(32) NOT NULL,
+                total_amount DOUBLE NOT NULL DEFAULT 0,
+                total_items INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (player, currency)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tRecycleStats));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPending + " ("
-            + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-            + "player CHAR(36) NOT NULL,"
-            + "type VARCHAR(16) NOT NULL,"
-            + "item_data MEDIUMTEXT,"
-            + "currency VARCHAR(32),"
-            + "amount DOUBLE NOT NULL DEFAULT 0,"
-            + "reason VARCHAR(128),"
-            + "created_at BIGINT NOT NULL,"
-            + "INDEX idx_pending_player (player)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                player CHAR(36) NOT NULL,
+                type VARCHAR(16) NOT NULL,
+                item_data MEDIUMTEXT,
+                currency VARCHAR(32),
+                amount DOUBLE NOT NULL DEFAULT 0,
+                reason VARCHAR(128),
+                created_at BIGINT NOT NULL,
+                INDEX idx_pending_player (player)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPending));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobalStock + " ("
-            + "shop_id VARCHAR(64) NOT NULL,"
-            + "item_id VARCHAR(64) NOT NULL,"
-            + "remaining INT NOT NULL,"
-            + "PRIMARY KEY (shop_id, item_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                shop_id VARCHAR(64) NOT NULL,
+                item_id VARCHAR(64) NOT NULL,
+                remaining INT NOT NULL,
+                PRIMARY KEY (shop_id, item_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tGlobalStock));
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayerStock + " ("
-            + "player CHAR(36) NOT NULL,"
-            + "shop_id VARCHAR(64) NOT NULL,"
-            + "item_id VARCHAR(64) NOT NULL,"
-            + "remaining INT NOT NULL,"
-            + "PRIMARY KEY (player, shop_id, item_id)"
-            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                player CHAR(36) NOT NULL,
+                shop_id VARCHAR(64) NOT NULL,
+                item_id VARCHAR(64) NOT NULL,
+                remaining INT NOT NULL,
+                PRIMARY KEY (player, shop_id, item_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPlayerStock));
     }
 
     @Override

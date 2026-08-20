@@ -1,18 +1,27 @@
 # ArcartXBattlePass 主配置文件
 # 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
 
-config-version: 4  # 配置版本号，变更时触发迁移
+config-version: 5  # 配置版本号，变更时触发迁移
 
 # 存储配置：支持 sqlite 与 mysql 两种模式
 storage:
-  mode: sqlite  # 存储模式：sqlite 或 mysql
-  sqlite-file-name: battlepass.db  # SQLite 数据库文件名
+  mode: "sqlite"  # 存储模式：sqlite 或 mysql
+  sqlite:
+    file: "battlepass.db"  # SQLite 数据库文件名
   pool-size: 1  # 数据库连接池大小
-  mysql-host: localhost  # MySQL 主机地址
-  mysql-port: 3306  # MySQL 端口
-  mysql-database: axs_battlepass  # MySQL 数据库名
-  mysql-username: root  # MySQL 用户名
-  mysql-password: ""  # MySQL 密码
+  # ── MySQL 自建模式（不推荐） ──
+  # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
+  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
+  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
+  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
+  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # mysql:
+  #   host: "127.0.0.1"  # MySQL 主机地址
+  #   port: 3306  # MySQL 端口
+  #   database: "arcartxsuite"  # MySQL 数据库名
+  #   username: "root"  # MySQL 用户名
+  #   password: ""  # MySQL 密码
+  #   table-prefix: "axs_battlepass_"  # MySQL 表名前缀
 
 # 赛季配置：定义当前赛季的基本参数
 season:

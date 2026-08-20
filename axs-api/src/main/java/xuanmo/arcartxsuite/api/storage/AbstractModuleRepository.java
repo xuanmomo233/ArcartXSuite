@@ -200,6 +200,9 @@ public abstract class AbstractModuleRepository {
         if (descriptor == null) {
             throw new SQLException(poolName + " 数据源不可用：StorageDescriptor 为 null 且未使用共享模式");
         }
+        if (descriptor.isMysql()) {
+            validateMysqlDescriptor(descriptor);
+        }
         if (dataFolder != null && !dataFolder.exists() && !dataFolder.mkdirs()) {
             throw new SQLException("无法创建数据目录: " + dataFolder.getAbsolutePath());
         }
@@ -230,7 +233,17 @@ public abstract class AbstractModuleRepository {
             hc.setConnectionTestQuery("SELECT 1");
         }
 
-        dataSource = new HikariDataSource(hc);
+        try {
+            dataSource = new HikariDataSource(hc);
+        } catch (Exception e) {
+            String hint = descriptor.isMysql()
+                ? "MySQL 连接失败 [" + poolName + "]: 请检查模块配置中的 storage.mysql 连接参数"
+                  + "（host=" + descriptor.host() + ", port=" + descriptor.port()
+                  + ", database=" + descriptor.database() + ", username=" + descriptor.username() + "）。"
+                  + "如果尚未配置 MySQL，请将 storage.mode 改回 sqlite 使用共享模式。"
+                : "SQLite 数据源初始化失败 [" + poolName + "]: " + e.getMessage();
+            throw new SQLException(hint + " 原始错误: " + e.getMessage(), e);
+        }
 
         if (!descriptor.isMysql()) {
             configureSqlite();
@@ -238,9 +251,36 @@ public abstract class AbstractModuleRepository {
 
         try (Connection conn = dataSource.getConnection()) {
             onInitialize(conn);
+        } catch (SQLException e) {
+            if (descriptor.isMysql()) {
+                throw new SQLException("MySQL 建表/连接验证失败 [" + poolName + "]: "
+                    + "数据库连接成功但后续操作失败，请检查数据库权限和表前缀配置。原始错误: " + e.getMessage(), e);
+            }
+            throw e;
         }
 
         logger.info(poolName + " 数据库已初始化 (" + (descriptor.isMysql() ? "MySQL" : "SQLite") + ")");
+    }
+
+    /**
+     * 校验 MySQL 描述符的必填字段，在自建模式建池前调用。
+     * <p>
+     * 当 host 或 database 为空白时抛出带友好提示的 SQLException，
+     * 避免用空配置去连接 MySQL 产生难以理解的底层错误。
+     *
+     * @param desc 待校验的存储描述符
+     * @throws SQLException 配置缺失时抛出
+     * @since 1.4.0
+     */
+    private void validateMysqlDescriptor(StorageDescriptor desc) throws SQLException {
+        if (desc.host() == null || desc.host().isBlank()) {
+            throw new SQLException("MySQL 配置缺失 [" + poolName + "]: storage.mysql.host 为空。"
+                + "请在模块配置中填写 MySQL 连接信息，或将 storage.mode 改回 sqlite 使用共享模式。");
+        }
+        if (desc.database() == null || desc.database().isBlank()) {
+            throw new SQLException("MySQL 配置缺失 [" + poolName + "]: storage.mysql.database 为空。"
+                + "请在模块配置中填写 MySQL 连接信息，或将 storage.mode 改回 sqlite 使用共享模式。");
+        }
     }
 
     /**

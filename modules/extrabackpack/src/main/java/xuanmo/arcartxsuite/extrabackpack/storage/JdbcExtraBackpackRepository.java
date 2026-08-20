@@ -14,7 +14,6 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.StorageConfiguration;
-import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.StorageDialect;
 import xuanmo.arcartxsuite.extrabackpack.storage.ExtraBackpackRepository.ExtraBackpackSlotRecord;
 
 /**
@@ -95,7 +94,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
      */
     @Override
     public long loadExtraBackpackCapacity(UUID playerUuid, String categoryId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT capacity FROM extra_backpack_capacity WHERE player_uuid = ? AND category_id = ?"
              )) {
@@ -114,7 +113,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
      */
     @Override
     public void setExtraBackpackCapacity(UUID playerUuid, String categoryId, long capacity, long updatedAt) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  upsertSql("extra_backpack_capacity", List.of("player_uuid", "category_id"), List.of("capacity", "updated_at"))
              )) {
@@ -133,7 +132,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
      */
     @Override
     public List<ExtraBackpackSlotRecord> loadExtraBackpackSlots(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT category_id, slot, item_data, updated_at FROM extra_backpack_slots WHERE player_uuid = ? ORDER BY category_id ASC, slot ASC"
              )) {
@@ -161,7 +160,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
      */
     @Override
     public void saveExtraBackpackSlots(UUID playerUuid, List<ExtraBackpackSlotRecord> items) throws SQLException {
-        try (Connection connection = connection()) {
+        try (Connection connection = getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement delete = connection.prepareStatement(
@@ -249,10 +248,6 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
             assignments.add(column + (sqlite ? " = excluded." : " = VALUES(") + column + (sqlite ? "" : ")"));
         }
         return String.join(", ", assignments);
-    }
-
-    private Connection connection() throws SQLException {
-        return getConnection();
     }
 
 }

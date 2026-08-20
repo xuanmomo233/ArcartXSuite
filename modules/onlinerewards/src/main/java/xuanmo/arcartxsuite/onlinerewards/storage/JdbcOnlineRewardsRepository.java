@@ -18,7 +18,6 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardScope;
-import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPersistenceDialect;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsStorageConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
@@ -72,6 +71,11 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return List.of("online_rewards_players", "online_rewards_sign_ins", "online_rewards_server_goals");
     }
 
+    @Override
+    protected List<String> allTables() {
+        return List.of("online_rewards_players", "online_rewards_sign_ins", "online_rewards_server_goals", "online_rewards_schema_meta");
+    }
+
     /**
      * 加载玩家运行时状态，不存在时返回默认状态。
      *
@@ -81,7 +85,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public OnlineRewardsPlayerState loadState(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  """
                  SELECT player_name, reward_date, online_minutes, reward_stage, week_key, week_minutes,
@@ -129,7 +133,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public void saveState(UUID playerUuid, OnlineRewardsPlayerState state) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, state.playerName());
@@ -165,7 +169,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     @Override
     public Set<String> loadSignInDates(UUID playerUuid, String fromDate, String toDate) throws SQLException {
         LinkedHashSet<String> dates = new LinkedHashSet<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  """
                  SELECT sign_in_date
@@ -196,7 +200,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     @Override
     public Set<String> loadAllSignInDates(UUID playerUuid) throws SQLException {
         LinkedHashSet<String> dates = new LinkedHashSet<>();
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  """
                  SELECT sign_in_date
@@ -225,7 +229,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public boolean hasSignInRecord(UUID playerUuid, String date) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  """
                  SELECT 1
@@ -252,7 +256,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public void saveSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(signInUpsertSql())) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, playerName == null ? "" : playerName);
@@ -274,7 +278,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public boolean tryInsertSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException {
-        String sql = isSqliteDialect()
+        String sql = !isMysql()
             ? """
                 INSERT OR IGNORE INTO online_rewards_sign_ins (player_uuid, player_name, sign_in_date, makeup)
                 VALUES (?, ?, ?, ?)
@@ -283,7 +287,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                 INSERT IGNORE INTO online_rewards_sign_ins (player_uuid, player_name, sign_in_date, makeup)
                 VALUES (?, ?, ?, ?)
                 """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, playerName == null ? "" : playerName);
@@ -344,7 +348,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         };
 
         List<OnlineRewardsLeaderboardEntry> entries = new ArrayList<>();
-        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             int parameterIndex = 1;
             if (scope != OnlineRewardsLeaderboardScope.TOTAL) {
                 statement.setString(parameterIndex++, periodKey == null ? "" : periodKey);
@@ -374,7 +378,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public int countSignInRecords(String date) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT COUNT(DISTINCT player_uuid) FROM online_rewards_sign_ins WHERE sign_in_date = ?"
              )) {
@@ -395,7 +399,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public boolean isServerGoalTriggered(String date, String goalId) throws SQLException {
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                  "SELECT 1 FROM online_rewards_server_goals WHERE goal_date = ? AND goal_id = ? AND triggered = 1"
              )) {
@@ -416,7 +420,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      */
     @Override
     public void saveServerGoalTriggered(String date, String goalId) throws SQLException {
-        String sql = isSqliteDialect()
+        String sql = !isMysql()
             ? """
                 INSERT INTO online_rewards_server_goals (goal_date, goal_id, triggered)
                 VALUES (?, ?, 1)
@@ -427,7 +431,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                 VALUES (?, ?, 1)
                 ON DUPLICATE KEY UPDATE triggered = 1
                 """;
-        try (Connection connection = connection();
+        try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, date == null ? "" : date);
             statement.setString(2, goalId == null ? "" : goalId);
@@ -451,7 +455,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
 
     private void createOrMigrateTable(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqliteDialect()) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS online_rewards_players (
                         player_uuid TEXT PRIMARY KEY,
@@ -549,7 +553,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
 
     private boolean isMigrationCompleted(Connection connection, String migrationId) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqliteDialect()) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS %s (
                         migration_id TEXT PRIMARY KEY,
@@ -576,7 +580,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     private void markMigrationCompleted(Connection connection, String migrationId) throws SQLException {
-        String sql = isSqliteDialect()
+        String sql = !isMysql()
             ? "INSERT OR IGNORE INTO %s (migration_id) VALUES (?)".formatted(MIGRATION_TABLE)
             : "INSERT IGNORE INTO %s (migration_id) VALUES (?)".formatted(MIGRATION_TABLE);
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -621,7 +625,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
 
     private void migrateLastSignInRecords(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqliteDialect()) {
+            if (!isMysql()) {
                 statement.execute("""
                     INSERT OR IGNORE INTO online_rewards_sign_ins (player_uuid, sign_in_date, player_name, makeup)
                     SELECT player_uuid, last_sign_in_date, player_name, 0
@@ -639,25 +643,8 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
-    private Connection connection() throws SQLException {
-        return getConnection();
-    }
-
-    /**
-     * 判断当前是否为 SQLite 方言。
-     * <p>
-     * 共享模式下通过 {@link #isMysql()} 判断（基于本体全局描述符）；
-     * 自建模式下通过 {@code descriptor} 判断（来自模块配置的 {@code dialect}）。
-     *
-     * @return {@code true} 表示当前使用 SQLite 方言
-     * @since 1.4.0
-     */
-    private boolean isSqliteDialect() {
-        return !isMysql();
-    }
-
     private String upsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO online_rewards_players (
                     player_uuid, player_name, reward_date, online_minutes, reward_stage,
@@ -716,7 +703,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     private String signInUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO online_rewards_sign_ins (player_uuid, player_name, sign_in_date, makeup)
                 VALUES (?, ?, ?, ?)
@@ -751,7 +738,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     private String sqliteType(String sqliteDefinition, String mysqlDefinition) {
-        return isSqliteDialect() ? sqliteDefinition : mysqlDefinition;
+        return !isMysql() ? sqliteDefinition : mysqlDefinition;
     }
 
     private Set<String> loadColumns(Connection connection) throws SQLException {

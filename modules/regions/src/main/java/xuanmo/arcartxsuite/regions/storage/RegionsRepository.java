@@ -97,29 +97,38 @@ public final class RegionsRepository extends AbstractModuleRepository implements
     }
 
     private void initTables(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "regions ("
-            + "id VARCHAR(64) NOT NULL, "
-            + "world VARCHAR(128) NOT NULL, "
-            + "min_x INT NOT NULL, min_y INT NOT NULL, min_z INT NOT NULL, "
-            + "max_x INT NOT NULL, max_y INT NOT NULL, max_z INT NOT NULL, "
-            + "priority INT NOT NULL DEFAULT 0, "
-            + "parent_id VARCHAR(64), "
-            + "PRIMARY KEY (id, world))");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            regions (
+                id VARCHAR(64) NOT NULL,
+                world VARCHAR(128) NOT NULL,
+                min_x INT NOT NULL, min_y INT NOT NULL, min_z INT NOT NULL,
+                max_x INT NOT NULL, max_y INT NOT NULL, max_z INT NOT NULL,
+                priority INT NOT NULL DEFAULT 0,
+                parent_id VARCHAR(64),
+                PRIMARY KEY (id, world)
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "flags ("
-            + "region_id VARCHAR(64) NOT NULL, "
-            + "world VARCHAR(128) NOT NULL, "
-            + "flag VARCHAR(32) NOT NULL, "
-            + "state VARCHAR(8) NOT NULL, "
-            + "data TEXT, "
-            + "PRIMARY KEY (region_id, world, flag))");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            flags (
+                region_id VARCHAR(64) NOT NULL,
+                world VARCHAR(128) NOT NULL,
+                flag VARCHAR(32) NOT NULL,
+                state VARCHAR(8) NOT NULL,
+                data TEXT,
+                PRIMARY KEY (region_id, world, flag)
+            )
+            """);
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "members ("
-            + "region_id VARCHAR(64) NOT NULL, "
-            + "world VARCHAR(128) NOT NULL, "
-            + "uuid VARCHAR(36), "
-            + "group_name VARCHAR(64), "
-            + "role VARCHAR(8) NOT NULL)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
+            members (
+                region_id VARCHAR(64) NOT NULL,
+                world VARCHAR(128) NOT NULL,
+                uuid VARCHAR(36),
+                group_name VARCHAR(64),
+                role VARCHAR(8) NOT NULL
+            )
+            """);
 
         if (isMysql()) {
             try {
