@@ -55,51 +55,47 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            // 赛季数据表（按 seasonId 隔离）
-            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_season ("
-                + "uuid TEXT NOT NULL,"
-                + "season_id TEXT NOT NULL,"
-                + "level INTEGER NOT NULL DEFAULT 1,"
-                + "current_xp INTEGER NOT NULL DEFAULT 0,"
-                + "talent_points INTEGER NOT NULL DEFAULT 0,"
-                + "unspent_talent_points INTEGER NOT NULL DEFAULT 0,"
-                + "talents TEXT NOT NULL DEFAULT '',"
-                + "claimed_rewards TEXT NOT NULL DEFAULT '',"
-                + "updated_at INTEGER NOT NULL,"
-                + "PRIMARY KEY (uuid, season_id))");
-
-            // 永久数据表（跨赛季保留）
-            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_permanent ("
-                + "uuid TEXT PRIMARY KEY,"
-                + "total_caught INTEGER NOT NULL DEFAULT 0,"
-                + "perfect_catches INTEGER NOT NULL DEFAULT 0,"
-                + "treasure_caught INTEGER NOT NULL DEFAULT 0,"
-                + "updated_at INTEGER NOT NULL)");
-
-            // 图鉴表（跨赛季保留）
-            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_collection ("
-                + "uuid TEXT NOT NULL,"
-                + "fish_id TEXT NOT NULL,"
-                + "caught_count INTEGER NOT NULL DEFAULT 0,"
-                + "max_size INTEGER NOT NULL DEFAULT 0,"
-                + "first_catch_at INTEGER NOT NULL,"
-                + "PRIMARY KEY (uuid, fish_id))");
-
-            // 待发放奖励表
-            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards ("
-                + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                + "uuid TEXT NOT NULL,"
-                + "season_id TEXT NOT NULL,"
-                + "reward_type TEXT NOT NULL,"
-                + "currency_id TEXT NOT NULL DEFAULT '',"
-                + "amount REAL NOT NULL DEFAULT 0,"
-                + "item_data TEXT NOT NULL DEFAULT '',"
-                + "command TEXT NOT NULL DEFAULT '',"
-                + "description TEXT NOT NULL DEFAULT '',"
-                + "created_at INTEGER NOT NULL)");
-
-            // 捕获记录表（跨赛季保留，用于 UI 最近捕获记录流）
             if (!isMysql()) {
+                // ── SQLite 建表 ──────────────────────────────────────
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_season ("
+                    + "uuid TEXT NOT NULL,"
+                    + "season_id TEXT NOT NULL,"
+                    + "level INTEGER NOT NULL DEFAULT 1,"
+                    + "current_xp INTEGER NOT NULL DEFAULT 0,"
+                    + "talent_points INTEGER NOT NULL DEFAULT 0,"
+                    + "unspent_talent_points INTEGER NOT NULL DEFAULT 0,"
+                    + "talents TEXT NOT NULL DEFAULT '',"
+                    + "claimed_rewards TEXT NOT NULL DEFAULT '',"
+                    + "updated_at INTEGER NOT NULL,"
+                    + "PRIMARY KEY (uuid, season_id))");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_permanent ("
+                    + "uuid TEXT PRIMARY KEY,"
+                    + "total_caught INTEGER NOT NULL DEFAULT 0,"
+                    + "perfect_catches INTEGER NOT NULL DEFAULT 0,"
+                    + "treasure_caught INTEGER NOT NULL DEFAULT 0,"
+                    + "updated_at INTEGER NOT NULL)");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_collection ("
+                    + "uuid TEXT NOT NULL,"
+                    + "fish_id TEXT NOT NULL,"
+                    + "caught_count INTEGER NOT NULL DEFAULT 0,"
+                    + "max_size INTEGER NOT NULL DEFAULT 0,"
+                    + "first_catch_at INTEGER NOT NULL,"
+                    + "PRIMARY KEY (uuid, fish_id))");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    + "uuid TEXT NOT NULL,"
+                    + "season_id TEXT NOT NULL,"
+                    + "reward_type TEXT NOT NULL,"
+                    + "currency_id TEXT NOT NULL DEFAULT '',"
+                    + "amount REAL NOT NULL DEFAULT 0,"
+                    + "item_data TEXT NOT NULL DEFAULT '',"
+                    + "command TEXT NOT NULL DEFAULT '',"
+                    + "description TEXT NOT NULL DEFAULT '',"
+                    + "created_at INTEGER NOT NULL)");
+
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
                     + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "uuid TEXT NOT NULL,"
@@ -110,6 +106,46 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                     + "perfect INTEGER NOT NULL DEFAULT 0,"
                     + "timestamp INTEGER NOT NULL)");
             } else {
+                // ── MySQL 建表 ───────────────────────────────────────
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_season ("
+                    + "uuid VARCHAR(36) NOT NULL,"
+                    + "season_id VARCHAR(64) NOT NULL,"
+                    + "level INT NOT NULL DEFAULT 1,"
+                    + "current_xp INT NOT NULL DEFAULT 0,"
+                    + "talent_points INT NOT NULL DEFAULT 0,"
+                    + "unspent_talent_points INT NOT NULL DEFAULT 0,"
+                    + "talents TEXT NOT NULL,"
+                    + "claimed_rewards TEXT NOT NULL,"
+                    + "updated_at BIGINT NOT NULL,"
+                    + "PRIMARY KEY (uuid, season_id))");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_permanent ("
+                    + "uuid VARCHAR(36) NOT NULL PRIMARY KEY,"
+                    + "total_caught INT NOT NULL DEFAULT 0,"
+                    + "perfect_catches INT NOT NULL DEFAULT 0,"
+                    + "treasure_caught INT NOT NULL DEFAULT 0,"
+                    + "updated_at BIGINT NOT NULL)");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_collection ("
+                    + "uuid VARCHAR(36) NOT NULL,"
+                    + "fish_id VARCHAR(64) NOT NULL,"
+                    + "caught_count INT NOT NULL DEFAULT 0,"
+                    + "max_size INT NOT NULL DEFAULT 0,"
+                    + "first_catch_at BIGINT NOT NULL,"
+                    + "PRIMARY KEY (uuid, fish_id))");
+
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_pending_rewards ("
+                    + "id INTEGER PRIMARY KEY AUTO_INCREMENT,"
+                    + "uuid VARCHAR(36) NOT NULL,"
+                    + "season_id VARCHAR(64) NOT NULL,"
+                    + "reward_type VARCHAR(32) NOT NULL,"
+                    + "currency_id VARCHAR(64) NOT NULL DEFAULT '',"
+                    + "amount DOUBLE NOT NULL DEFAULT 0,"
+                    + "item_data TEXT NOT NULL,"
+                    + "command TEXT NOT NULL,"
+                    + "description TEXT NOT NULL,"
+                    + "created_at BIGINT NOT NULL)");
+
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
                     + "id INTEGER PRIMARY KEY AUTO_INCREMENT,"
                     + "uuid VARCHAR(36) NOT NULL,"
@@ -171,12 +207,19 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     public void saveSeasonData(@NotNull FishingSeasonData data) {
-        String sql = "INSERT INTO axs_fishing_season (uuid, season_id, level, current_xp, "
+        String sql = !isMysql()
+            ? "INSERT INTO axs_fishing_season (uuid, season_id, level, current_xp, "
             + "talent_points, unspent_talent_points, talents, claimed_rewards, updated_at) "
             + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
             + "ON CONFLICT(uuid, season_id) DO UPDATE SET level=excluded.level, current_xp=excluded.current_xp, "
             + "talent_points=excluded.talent_points, unspent_talent_points=excluded.unspent_talent_points, "
-            + "talents=excluded.talents, claimed_rewards=excluded.claimed_rewards, updated_at=excluded.updated_at";
+            + "talents=excluded.talents, claimed_rewards=excluded.claimed_rewards, updated_at=excluded.updated_at"
+            : "INSERT INTO axs_fishing_season (uuid, season_id, level, current_xp, "
+            + "talent_points, unspent_talent_points, talents, claimed_rewards, updated_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            + "ON DUPLICATE KEY UPDATE level=VALUES(level), current_xp=VALUES(current_xp), "
+            + "talent_points=VALUES(talent_points), unspent_talent_points=VALUES(unspent_talent_points), "
+            + "talents=VALUES(talents), claimed_rewards=VALUES(claimed_rewards), updated_at=VALUES(updated_at)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, data.uuid().toString());
@@ -232,11 +275,17 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     public void savePermanentData(@NotNull FishingPermanentData data) {
-        String sql = "INSERT INTO axs_fishing_permanent (uuid, total_caught, perfect_catches, treasure_caught, updated_at) "
+        String sql = !isMysql()
+            ? "INSERT INTO axs_fishing_permanent (uuid, total_caught, perfect_catches, treasure_caught, updated_at) "
             + "VALUES (?, ?, ?, ?, ?) "
             + "ON CONFLICT(uuid) DO UPDATE SET total_caught=excluded.total_caught, "
             + "perfect_catches=excluded.perfect_catches, treasure_caught=excluded.treasure_caught, "
-            + "updated_at=excluded.updated_at";
+            + "updated_at=excluded.updated_at"
+            : "INSERT INTO axs_fishing_permanent (uuid, total_caught, perfect_catches, treasure_caught, updated_at) "
+            + "VALUES (?, ?, ?, ?, ?) "
+            + "ON DUPLICATE KEY UPDATE total_caught=VALUES(total_caught), "
+            + "perfect_catches=VALUES(perfect_catches), treasure_caught=VALUES(treasure_caught), "
+            + "updated_at=VALUES(updated_at)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, data.uuid().toString());
@@ -277,10 +326,15 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     public void saveCollectionEntry(@NotNull FishCollectionEntry entry) {
-        String sql = "INSERT INTO axs_fishing_collection (uuid, fish_id, caught_count, max_size, first_catch_at) "
+        String sql = !isMysql()
+            ? "INSERT INTO axs_fishing_collection (uuid, fish_id, caught_count, max_size, first_catch_at) "
             + "VALUES (?, ?, ?, ?, ?) "
             + "ON CONFLICT(uuid, fish_id) DO UPDATE SET caught_count=excluded.caught_count, "
-            + "max_size=excluded.max_size, first_catch_at=excluded.first_catch_at";
+            + "max_size=excluded.max_size, first_catch_at=excluded.first_catch_at"
+            : "INSERT INTO axs_fishing_collection (uuid, fish_id, caught_count, max_size, first_catch_at) "
+            + "VALUES (?, ?, ?, ?, ?) "
+            + "ON DUPLICATE KEY UPDATE caught_count=VALUES(caught_count), "
+            + "max_size=VALUES(max_size), first_catch_at=VALUES(first_catch_at)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, entry.playerUuid().toString());
