@@ -78,14 +78,17 @@ ui:
       var.links = {}
       var.linkCount = 0
       var.needRebuild = false
+      var.iconDelay = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 树布局参数（参考萨满天赋树：紧凑、连线明显）
-      var.nodeSize = 88
-      var.tierGap = 120
-      var.colGap = 70
-      var.treeW = 280
+      var.nodeSize = 72
+      var.tierGap = 170
+      var.colGap = 88
+      var.treeW = 520
       var.treeGap = 0
-      var.lineW = 6
+      var.lineW = 7
+      var.rootY = 80
+      var.canvasW = 2680
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
       var.treeNames['swift'] = '&b迅捷'
@@ -106,7 +109,6 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.treeW = (var.contentW - 48) / 5
     open: |-
       Packet.send(var.packetId, 'refresh_talents')
     resize: |-
@@ -117,22 +119,23 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.treeW = (var.contentW - 48) / 5
       var.needRebuild = true
     # tick: 数据变化时重建完整天赋网络
     tick: |-
       if(var.needRebuild){
         var.needRebuild = false
+        var.iconDelay = 2
         while(val.树画布.childrenCount() > 3){
           val.树画布.get(3).remove()
         }
         var.treeIds = ['steady', 'swift', 'pressure', 'focus', 'lucky']
-        var.treeIndex = 0
-        for(treeKey in var.treeIds){
+        for(ti in range(0, 4)){
+          treeIndex = ti.round()
+          treeKey = var.treeIds[treeIndex]
           treeData = var.trees[treeKey]
           if(treeData != none){
-            treeX = treeIndex * var.treeW
-            titleCtrl = val.树标题模板.copy('树标题_' + treeKey)
+            treeX = 40 + treeIndex * var.treeW
+            titleCtrl = val.树标题模板.copy('树标题_' + treeIndex)
             titleCtrl.x = treeX + var.treeW / 2 - 100
             titleCtrl.y = 0
             titleCtrl.treeId = treeKey
@@ -144,7 +147,7 @@ ui:
               key = i.round()
               entry = nodes[key]
               if(entry != none){
-                node = val.天赋节点模板.copy('节点_' + treeKey + '_' + key)
+                node = val.天赋节点模板.copy('节点_' + treeIndex + '_' + key)
                 node.entryKey = key
                 node.treeId = treeKey
                 node.isLink = false
@@ -160,8 +163,8 @@ ui:
                   if(branch == 'c'){ colOff = 0.5 * var.colGap }
                   if(branch == 'd'){ colOff = 1.5 * var.colGap }
                 }
-                nodeY = 52 + (tier - 1) * var.tierGap
-                if(tier >= 4){ nodeY = nodeY + 145 }
+                nodeY = var.rootY + (tier - 1) * var.tierGap
+                if(tier >= 4){ nodeY = nodeY + 350 }
                 node.x = treeX + var.treeW / 2 + colOff - var.nodeSize / 2
                 node.y = nodeY
                 if(tier > 1){
@@ -171,7 +174,7 @@ ui:
                     parentOff = branch == 'a' || branch == 'b' ? -var.colGap : var.colGap
                   }
                   if(tier == 5){ parentOff = colOff }
-                  parentY = tier == 4 ? 52 + 2 * var.tierGap : nodeY - var.tierGap
+                  parentY = tier == 4 ? var.rootY + 2 * var.tierGap : nodeY - var.tierGap
                   gap = nodeY - parentY
                   delta = parentOff - colOff
                   if(delta == 0){
@@ -184,12 +187,15 @@ ui:
                   } else {
                     lineLV = node['连线L竖']
                     lineLH = node['连线L横']
+                    lineLP = node['连线L父竖']
+                    topRel = -gap + var.nodeSize
+                    routeRel = topRel / 2
                     lineLV.x = var.nodeSize / 2 - var.lineW / 2
-                    lineLV.y = -gap + var.nodeSize
+                    lineLV.y = routeRel
                     lineLV.width = var.lineW
-                    lineLV.height = (gap - var.nodeSize) / 2
+                    lineLV.height = -routeRel
                     lineLV.visible = true
-                    lineLH.y = -gap + var.nodeSize + (gap - var.nodeSize) / 2 - var.lineW / 2
+                    lineLH.y = routeRel - var.lineW / 2
                     lineLH.height = var.lineW
                     if(delta < 0){
                       lineLH.x = var.nodeSize / 2 + delta
@@ -199,18 +205,17 @@ ui:
                       lineLH.width = delta
                     }
                     lineLH.visible = true
+                    lineLP.x = var.nodeSize / 2 + delta - var.lineW / 2
+                    lineLP.y = topRel
+                    lineLP.width = var.lineW
+                    lineLP.height = routeRel - topRel
+                    lineLP.visible = true
                   }
-                }
-                if(node['节点图标'] != none){
-                  node['节点图标'].setItemIcon(entry['iconJson'])
                 }
               }
             }
-            treeIndex = treeIndex + 1
           }
         }
-        linkY = 432
-        canvasW = var.contentW - 48
         for(i in range(0, var.linkCount - 1)){
           key = i.round()
           entry = var.links[key]
@@ -219,8 +224,6 @@ ui:
             node.entryKey = key
             node.treeId = 'link'
             node.isLink = true
-            node.x = 20 + i * (canvasW - var.nodeSize - 40) / (var.linkCount - 1)
-            node.y = linkY
             prereq1 = entry['prerequisites'][0]
             prereq2 = entry['prerequisites'][1]
             parts1 = prereq1.split('-')
@@ -233,45 +236,72 @@ ui:
             treeIndex2 = tree2 == 'steady' ? 0 : (tree2 == 'swift' ? 1 : (tree2 == 'pressure' ? 2 : (tree2 == 'focus' ? 3 : 4)))
             branch1 = parts1[1].substring(2)
             branch2 = parts2[1].substring(2)
-            sourceX1 = treeIndex1 * var.treeW + var.treeW / 2 + (branch1 == 'a' ? -var.colGap : var.colGap)
-            sourceX2 = treeIndex2 * var.treeW + var.treeW / 2 + (branch2 == 'a' ? -var.colGap : var.colGap)
-            linkCenter = node.x + var.nodeSize / 2
-            delta1 = sourceX1 - linkCenter
-            delta2 = sourceX2 - linkCenter
-            pathGap = linkY - (52 + 2 * var.tierGap + var.nodeSize)
-            routeY = -pathGap / 2
+            sourceX1 = 40 + treeIndex1 * var.treeW + var.treeW / 2 + (branch1 == 'a' ? -var.colGap : var.colGap)
+            sourceX2 = 40 + treeIndex2 * var.treeW + var.treeW / 2 + (branch2 == 'a' ? -var.colGap : var.colGap)
+            linkCenter = (sourceX1 + sourceX2) / 2
+            linkY = 650
+            if(key == 0){ linkCenter = linkCenter - 80; linkY = 560 }
+            if(key == 1){ linkCenter = linkCenter + 80; linkY = 740 }
+            if(key == 3){ linkCenter = linkCenter - 80; linkY = 560 }
+            if(key == 4){ linkY = 650 }
+            if(key == 5){ linkCenter = linkCenter + 80; linkY = 830 }
+            if(key == 6){ linkY = 830 }
+            if(key == 7){ linkY = 560 }
+            node.x = linkCenter - var.nodeSize / 2
+            node.y = linkY
+            sourceRel1 = sourceX1 - node.x
+            sourceRel2 = sourceX2 - node.x
+            targetRel1 = var.nodeSize / 2 - 10
+            targetRel2 = var.nodeSize / 2 + 10
+            topRel = var.rootY + 2 * var.tierGap + var.nodeSize - linkY
+            route1 = topRel / 2 - 10
+            route2 = topRel / 2 + 10
             p1v = node['联动1竖']
             p1h = node['联动1横']
+            p1in = node['联动入竖']
             p2v = node['联动2竖']
             p2h = node['联动2横']
-            pin = node['联动入竖']
-            p1v.x = var.nodeSize / 2 + delta1 - var.lineW / 2
-            p1v.y = -pathGap
+            p2in = node['联动2入竖']
+            p1v.x = sourceRel1 - var.lineW / 2
+            p1v.y = topRel
             p1v.width = var.lineW
-            p1v.height = pathGap / 2
+            p1v.height = route1 - topRel
             p1v.visible = true
-            p1h.x = delta1 < 0 ? var.nodeSize / 2 + delta1 : var.nodeSize / 2
-            p1h.y = routeY - var.lineW / 2
-            p1h.width = delta1 < 0 ? -delta1 : delta1
+            p1h.x = sourceRel1 < targetRel1 ? sourceRel1 : targetRel1
+            p1h.y = route1 - var.lineW / 2
+            p1h.width = sourceRel1 < targetRel1 ? targetRel1 - sourceRel1 : sourceRel1 - targetRel1
             p1h.height = var.lineW
             p1h.visible = true
-            p2v.x = var.nodeSize / 2 + delta2 - var.lineW / 2
-            p2v.y = -pathGap
+            p1in.x = targetRel1 - var.lineW / 2
+            p1in.y = route1
+            p1in.width = var.lineW
+            p1in.height = -route1
+            p1in.visible = true
+            p2v.x = sourceRel2 - var.lineW / 2
+            p2v.y = topRel
             p2v.width = var.lineW
-            p2v.height = pathGap / 2
+            p2v.height = route2 - topRel
             p2v.visible = true
-            p2h.x = delta2 < 0 ? var.nodeSize / 2 + delta2 : var.nodeSize / 2
-            p2h.y = routeY - var.lineW / 2
-            p2h.width = delta2 < 0 ? -delta2 : delta2
+            p2h.x = sourceRel2 < targetRel2 ? sourceRel2 : targetRel2
+            p2h.y = route2 - var.lineW / 2
+            p2h.width = sourceRel2 < targetRel2 ? targetRel2 - sourceRel2 : sourceRel2 - targetRel2
             p2h.height = var.lineW
             p2h.visible = true
-            pin.x = var.nodeSize / 2 - var.lineW / 2
-            pin.y = routeY
-            pin.width = var.lineW
-            pin.height = -routeY
-            pin.visible = true
-            if(node['节点图标'] != none){
-              node['节点图标'].setItemIcon(entry['iconJson'])
+            p2in.x = targetRel2 - var.lineW / 2
+            p2in.y = route2
+            p2in.width = var.lineW
+            p2in.height = -route2
+            p2in.visible = true
+          }
+        }
+      }
+      if(var.iconDelay > 0){
+        var.iconDelay = var.iconDelay - 1
+        if(var.iconDelay == 0){
+          for(ci in range(3, val.树画布.childrenCount() - 1)){
+            ctrl = val.树画布.get(ci.round())
+            if(ctrl != none && ctrl.entry != none && ctrl['节点图标'] != none){
+              ctrl['节点图标'].setItemIcon(ctrl.entry['iconJson'])
             }
           }
         }
@@ -711,15 +741,16 @@ controls:
               x: 24
               y: 76
               width: "var.contentW - 48"
-              height: "var.viewH - 212"
+              height: "var.viewH - 236"
+              moveX: "self.parent['树横滑块'].getDragXRatio()"
               moveY: "self.parent['树滑块'].getDragYRatio()"
             children:
               树画布:
                 val: 树画布
                 type: Canvas
                 attribute:
-                  width: "var.contentW - 48"
-                  height: 810
+                  width: "var.canvasW"
+                  height: 1210
                 children:
                   # 树标题模板
                   树标题模板:
@@ -768,17 +799,19 @@ controls:
                       isLink: false
                       entry: "self.isLink == true ? var.links[self.entryKey] : (var.trees[self.treeId] != none ? var.trees[self.treeId]['nodes'][self.entryKey] : none)"
                       visible: "self.entry != none"
-                      width: 88
-                      height: 88
+                      width: "var.nodeSize"
+                      height: "var.nodeSize"
                       brightColor: "self.treeId == 'steady' ? '82,214,118,255' : (self.treeId == 'swift' ? '65,198,235,255' : (self.treeId == 'pressure' ? '235,86,86,255' : (self.treeId == 'focus' ? '190,105,235,255' : (self.treeId == 'lucky' ? '245,196,72,255' : '255,138,64,255'))))"
-                      dimColor: "self.treeId == 'steady' ? '42,92,57,150' : (self.treeId == 'swift' ? '36,84,101,150' : (self.treeId == 'pressure' ? '100,42,42,150' : (self.treeId == 'focus' ? '82,46,101,150' : (self.treeId == 'lucky' ? '104,84,38,150' : '110,61,34,150'))))"
+                      dimColor: "self.treeId == 'steady' ? '48,138,76,215' : (self.treeId == 'swift' ? '38,126,154,215' : (self.treeId == 'pressure' ? '152,52,52,215' : (self.treeId == 'focus' ? '126,62,158,215' : (self.treeId == 'lucky' ? '158,126,38,215' : '168,82,38,215'))))"
                       lineColor: "self.entry != none && self.entry['unlocked'] == true ? self.brightColor : self.dimColor"
                       linkTree1: 'steady'
                       linkTree2: 'steady'
-                      linkBright1: "self.linkTree1 == 'steady' ? '82,214,118,255' : (self.linkTree1 == 'swift' ? '65,198,235,255' : (self.linkTree1 == 'pressure' ? '235,86,86,255' : (self.linkTree1 == 'focus' ? '190,105,235,255' : '245,196,72,255')))"
-                      linkBright2: "self.linkTree2 == 'steady' ? '82,214,118,255' : (self.linkTree2 == 'swift' ? '65,198,235,255' : (self.linkTree2 == 'pressure' ? '235,86,86,255' : (self.linkTree2 == 'focus' ? '190,105,235,255' : '245,196,72,255')))"
-                      linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : '70,70,76,100'"
-                      linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : '70,70,76,100'"
+                      linkBright1: "self.linkTree1 == 'steady' ? '82,255,128,255' : (self.linkTree1 == 'swift' ? '60,220,255,255' : (self.linkTree1 == 'pressure' ? '255,78,78,255' : (self.linkTree1 == 'focus' ? '218,95,255,255' : '255,210,55,255')))"
+                      linkBright2: "self.linkTree2 == 'steady' ? '82,255,128,255' : (self.linkTree2 == 'swift' ? '60,220,255,255' : (self.linkTree2 == 'pressure' ? '255,78,78,255' : (self.linkTree2 == 'focus' ? '218,95,255,255' : '255,210,55,255')))"
+                      linkDim1: "self.linkTree1 == 'steady' ? '48,165,82,210' : (self.linkTree1 == 'swift' ? '38,145,178,210' : (self.linkTree1 == 'pressure' ? '178,48,48,210' : (self.linkTree1 == 'focus' ? '142,58,178,210' : '184,142,34,210')))"
+                      linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,210' : (self.linkTree2 == 'swift' ? '38,145,178,210' : (self.linkTree2 == 'pressure' ? '178,48,48,210' : (self.linkTree2 == 'focus' ? '142,58,178,210' : '184,142,34,210')))"
+                      linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : self.linkDim1"
+                      linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : self.linkDim2"
                       tip: "self.entry != none ? (self.entry['name'] + '\\n&7' + self.entry['description'] + (self.entry['unlocked'] == true ? '\\n&a✔ 已激活' : (self.entry['canUnlock'] == true ? '\\n&e点击激活' : '\\n&8尚未解锁'))) : ''"
                     action:
                       clickLeft: |-
@@ -822,6 +855,16 @@ controls:
                           normal: "self.parent.lineColor"
                           visible: false
                           through: true
+                      连线L父竖:
+                        type: Texture
+                        attribute:
+                          x: 0
+                          y: -24
+                          width: 3
+                          height: 24
+                          normal: "self.parent.lineColor"
+                          visible: false
+                          through: true
                       # 联动节点双前置路径：两条来源线分别标记两个前置天赋
                       联动1竖:
                         type: Texture
@@ -860,7 +903,15 @@ controls:
                         attribute:
                           width: 1
                           height: 1
-                          normal: "self.parent.entry != none && self.parent.entry['canUnlock'] == true ? '255,138,64,230' : '110,61,34,120'"
+                          normal: "self.parent.linkColor1"
+                          visible: false
+                          through: true
+                      联动2入竖:
+                        type: Texture
+                        attribute:
+                          width: 1
+                          height: 1
+                          normal: "self.parent.linkColor2"
                           visible: false
                           through: true
                       # 节点底（正方形色块）
@@ -884,12 +935,12 @@ controls:
                       节点图标:
                         type: Slot
                         attribute:
-                          x: 8
-                          y: 8
-                          width: 72
-                          height: 72
+                          x: 6
+                          y: 6
+                          width: 60
+                          height: 60
                           slotType: ~Icon
-                          itemScale: 1.2
+                          itemScale: 1.1
                           normal: ~0,0,0,0
                           through: true
                           overwriteText: "~"
@@ -901,20 +952,20 @@ controls:
                           point: ~bottom_right
                           x: 3
                           y: 3
-                          width: 28
-                          height: 22
+                          width: 22
+                          height: 18
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
                           shape: ~round_rect
-                          radius: 5
+                          radius: 4
                           through: true
                         children:
                           层级文字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: 28
+                              width: 22
                               texts: "self.parent.parent.entry != none && self.parent.parent.isLink != true ? '&fT' + type.toNumber(self.parent.parent.entry['tier']).round() : '&f联'"
-                              fontSize: 16
+                              fontSize: 14
                               through: true
 
           # 滚动滑块（纵向）
@@ -930,19 +981,19 @@ controls:
               normal: ~50,170,200,200
               shape: ~round_rect
               radius: 3
-              maxDragY: "var.viewH - 324"
+              maxDragY: "var.viewH - 348"
           # 横向无需滚动：五系始终按内容区宽度常驻
           树横滑块:
             type: Texture
             val: 树横滑块
             attribute:
-              visible: false
+              visible: true
               point: ~bottom_left
               x: 24
-              y: -8
-              width: 80
-              height: 6
-              normal: ~50,170,200,200
+              y: -10
+              width: 160
+              height: 8
+              normal: ~50,190,220,230
               shape: ~round_rect
-              radius: 3
-              maxDragX: "var.contentW - 128"
+              radius: 4
+              maxDragX: "var.contentW - 208"
