@@ -120,7 +120,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
      */
     @Override
     public boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
-        String sql = isSqliteDialect()
+        String sql = !isMysql()
             ? "INSERT OR IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)"
             : "INSERT IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)";
         try (Connection connection = connection();
@@ -316,7 +316,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqliteDialect()) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS AXS_map_unlocks (
                         uuid TEXT NOT NULL,
@@ -367,7 +367,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     }
 
     private String unlockUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO AXS_map_unlocks (uuid, anchor_id, unlock_time)
                 VALUES (?, ?, ?)
@@ -384,7 +384,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     }
 
     private String waypointUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, world, x, y, z, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -412,18 +412,5 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     private Connection connection() throws SQLException {
         return getConnection();
-    }
-
-    /**
-     * 判断当前是否为 SQLite 方言。
-     * <p>
-     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor），
-     * 自建模式构造时已传入模块配置生成的描述符。
-     *
-     * @return {@code true} 表示当前使用 SQLite 方言
-     * @since 1.4.0
-     */
-    private boolean isSqliteDialect() {
-        return !isMysql();
     }
 }

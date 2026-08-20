@@ -57,17 +57,6 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         this.configuration = null;
     }
 
-    /**
-     * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
-     * <p>
-     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor）。
-     *
-     * @return {@code true} 表示 SQLite
-     */
-    private boolean isSqlite() {
-        return !isMysql();
-    }
-
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
@@ -118,7 +107,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(2, ruleId);
             statement.setInt(3, Math.max(0, count));
             statement.setLong(4, System.currentTimeMillis());
-            if (!isSqlite()) {
+            if (isMysql()) {
                 statement.setInt(5, Math.max(0, count));
                 statement.setLong(6, System.currentTimeMillis());
             }
@@ -135,7 +124,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public void incrementKillCount(UUID playerUuid, String ruleId) throws SQLException {
-        if (isSqlite()) {
+        if (!isMysql()) {
             try (Connection connection = connection();
                  PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
@@ -228,7 +217,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ruleId);
             statement.setLong(3, System.currentTimeMillis());
-            if (!isSqlite()) {
+            if (isMysql()) {
                 statement.setLong(4, System.currentTimeMillis());
             }
             statement.executeUpdate();
@@ -272,7 +261,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqlite()) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS eventpacket_kill_progress (
                         player_uuid TEXT NOT NULL,
@@ -313,7 +302,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     }
 
     private String killCountUpsertSql() {
-        if (isSqlite()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -332,7 +321,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     }
 
     private String firedRuleUpsertSql() {
-        if (isSqlite()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO eventpacket_fired_rules (player_uuid, rule_id, fired_at)
                 VALUES (?, ?, ?)

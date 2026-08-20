@@ -29,7 +29,6 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
 
     private final StorageConfiguration config;
     private final Logger logger;
-    private boolean sqlite;
 
     private String tGachaState;
     private String tGachaLog;
@@ -72,7 +71,6 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        sqlite = !isMysql();
         String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
         tGachaState = prefix + "gacha_state";
         tGachaLog = prefix + "gacha_log";
@@ -82,7 +80,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         tPoints = prefix + "points";
         tExchange = prefix + "exchange";
         createTables(conn);
-        logger.info("" + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
+        logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
@@ -97,7 +95,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
 
     private void createTables(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            if (sqlite) {
+            if (!isMysql()) {
                 createTablesSqlite(stmt);
             } else {
                 createTablesMysql(stmt);
@@ -269,7 +267,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         String sql = "INSERT INTO " + tGachaState + " (player_uuid, pool_id, pity_5star, pity_4star, guaranteed_up, fate_points, fate_target) "
             + "VALUES (?, ?, ?, ?, ?, ?, ?) "
             + "ON DUPLICATE KEY UPDATE pity_5star = VALUES(pity_5star), pity_4star = VALUES(pity_4star), guaranteed_up = VALUES(guaranteed_up), fate_points = VALUES(fate_points), fate_target = VALUES(fate_target)";
-        if (sqlite) {
+        if (!isMysql()) {
             sql = "INSERT INTO " + tGachaState + " (player_uuid, pool_id, pity_5star, pity_4star, guaranteed_up, fate_points, fate_target) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?) "
                 + "ON CONFLICT(player_uuid, pool_id) DO UPDATE SET pity_5star = excluded.pity_5star, pity_4star = excluded.pity_4star, guaranteed_up = excluded.guaranteed_up, fate_points = excluded.fate_points, fate_target = excluded.fate_target";
@@ -331,7 +329,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         String sql = "INSERT INTO " + tCaseState + " (player_uuid, pool_id, open_count, last_open_time) "
             + "VALUES (?, ?, ?, ?) "
             + "ON DUPLICATE KEY UPDATE open_count = VALUES(open_count), last_open_time = VALUES(last_open_time)";
-        if (sqlite) {
+        if (!isMysql()) {
             sql = "INSERT INTO " + tCaseState + " (player_uuid, pool_id, open_count, last_open_time) "
                 + "VALUES (?, ?, ?, ?) "
                 + "ON CONFLICT(player_uuid, pool_id) DO UPDATE SET open_count = excluded.open_count, last_open_time = excluded.last_open_time";
@@ -573,7 +571,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 conn.rollback();
                 return false;
             }
-            String sql = sqlite
+            String sql = (!isMysql())
                 ? "INSERT INTO " + tPoints + " (player_uuid, point_id, amount) VALUES (?, ?, ?) "
                     + "ON CONFLICT(player_uuid, point_id) DO UPDATE SET amount = excluded.amount"
                 : "INSERT INTO " + tPoints + " (player_uuid, point_id, amount) VALUES (?, ?, ?) "
@@ -609,7 +607,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
 
     @Override
     public boolean incrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId) {
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT INTO " + tExchange + " (player_uuid, item_id, amount) VALUES (?, ?, 1) "
                 + "ON CONFLICT(player_uuid, item_id) DO UPDATE SET amount = amount + 1"
             : "INSERT INTO " + tExchange + " (player_uuid, item_id, amount) VALUES (?, ?, 1) "

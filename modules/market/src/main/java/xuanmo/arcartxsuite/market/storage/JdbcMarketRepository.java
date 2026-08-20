@@ -26,7 +26,6 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     private final StorageConfiguration config;
     private final Logger logger;
-    private boolean sqlite;
 
     private String tListings;
     private String tBids;
@@ -64,7 +63,6 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        sqlite = !isMysql();
         String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
         tListings = prefix + "listings";
         tBids = prefix + "bids";
@@ -76,7 +74,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tGlobalStock = prefix + "shop_global_stock";
         tPlayerStock = prefix + "shop_player_stock";
         createTables(conn);
-        logger.info("" + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
+        logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
@@ -103,7 +101,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     private void createTables(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            if (sqlite) {
+            if (!isMysql()) {
                 createTablesSqlite(stmt);
             } else {
                 createTablesMysql(stmt);
@@ -660,7 +658,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
     @Override
     public void addFavorite(UUID player, long listingId) {
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT OR IGNORE INTO " + tFavorites + " (player, listing_id) VALUES (?,?)"
             : "INSERT IGNORE INTO " + tFavorites + " (player, listing_id) VALUES (?,?)";
         exec(sql, player.toString(), listingId);
@@ -734,7 +732,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public void upsertShopLimit(ShopLimitRecord record) {
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT INTO " + tShopLimits
                 + " (player, shop_id, item_id, purchased_count, last_purchase_time, reset_time)"
                 + " VALUES (?,?,?,?,?,?)"
@@ -770,7 +768,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public void addRecycleStats(UUID player, String currency, double amount, int itemCount) {
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT INTO " + tRecycleStats
                 + " (player, currency, total_amount, total_items) VALUES (?,?,?,?)"
                 + " ON CONFLICT(player, currency) DO UPDATE SET"
@@ -848,7 +846,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                         return true;
                     }
                 }
-                String insertSql = sqlite
+                String insertSql = (!isMysql())
                     ? "INSERT OR IGNORE INTO " + tGlobalStock + " (shop_id, item_id, remaining) VALUES (?,?,?)"
                     : "INSERT IGNORE INTO " + tGlobalStock + " (shop_id, item_id, remaining) VALUES (?,?,?)";
                 try (PreparedStatement insert = conn.prepareStatement(insertSql)) {
@@ -930,7 +928,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                         return true;
                     }
                 }
-                String insertSql = sqlite
+                String insertSql = (!isMysql())
                     ? "INSERT OR IGNORE INTO " + tPlayerStock + " (player, shop_id, item_id, remaining) VALUES (?,?,?,?)"
                     : "INSERT IGNORE INTO " + tPlayerStock + " (player, shop_id, item_id, remaining) VALUES (?,?,?,?)";
                 try (PreparedStatement insert = conn.prepareStatement(insertSql)) {

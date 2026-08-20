@@ -334,7 +334,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (isSqliteDialect()) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS title_player_titles (
                         player_uuid TEXT NOT NULL,
@@ -403,7 +403,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String displayTitleUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
                 VALUES (?, ?, ?)
@@ -422,7 +422,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String equippedUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO title_player_equipped_groups (player_uuid, group_id, title_id, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -441,7 +441,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String titleUpsertSql() {
-        if (isSqliteDialect()) {
+        if (!isMysql()) {
             return """
                 INSERT INTO title_player_titles (player_uuid, title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -470,19 +470,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
 
     private Connection connection() throws SQLException {
         return getConnection();
-    }
-
-    /**
-     * 判断当前是否为 SQLite 方言。
-     * <p>
-     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor），
-     * 自建模式构造时已传入 {@link TitleStorageConfiguration#toDescriptor()} 生成的描述符。
-     *
-     * @return {@code true} 表示当前使用 SQLite 方言
-     * @since 1.4.0
-     */
-    private boolean isSqliteDialect() {
-        return !isMysql();
     }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {

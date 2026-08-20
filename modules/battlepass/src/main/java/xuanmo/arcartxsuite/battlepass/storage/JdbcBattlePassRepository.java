@@ -32,8 +32,6 @@ import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
  */
 public final class JdbcBattlePassRepository extends AbstractModuleRepository implements BattlePassRepository {
 
-    private final BattlePassModuleConfiguration.BattlePassStorageConfiguration configuration;
-
     /**
      * 构造 JDBC 战令仓储实例。
      *
@@ -43,7 +41,6 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
      */
     public JdbcBattlePassRepository(File dataFolder, BattlePassModuleConfiguration.BattlePassStorageConfiguration configuration, Logger logger) {
         super("AXS-BattlePass", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
     }
 
     /**
@@ -58,7 +55,6 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     public JdbcBattlePassRepository(StorageManager storageManager, String moduleId,
                                     String sqliteFileName, Logger logger) {
         super("AXS-BattlePass", storageManager, moduleId, "", sqliteFileName, logger);
-        this.configuration = null;
     }
 
     @Override
@@ -77,12 +73,9 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_season_settlement");
     }
 
-    /** 获取当前方言标识，兼容共享模式和自建模式。 */
+    /** 获取当前方言标识。 */
     private String dialect() {
-        if (isSharedMode()) {
-            return isMysql() ? "mysql" : "sqlite";
-        }
-        return configuration.mode();
+        return isMysql() ? "mysql" : "sqlite";
     }
 
     private void createTables(Connection conn) throws SQLException {

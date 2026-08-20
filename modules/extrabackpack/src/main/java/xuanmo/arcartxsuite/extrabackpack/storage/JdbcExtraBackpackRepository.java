@@ -58,17 +58,6 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
     }
 
     /**
-     * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
-     * <p>
-     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor）。
-     *
-     * @return {@code true} 表示 SQLite
-     */
-    private boolean isSqlite() {
-        return !isMysql();
-    }
-
-    /**
      * 初始化时创建容量表、槽位表及索引。
      *
      * @param connection 数据库连接
@@ -229,7 +218,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
                     PRIMARY KEY (player_uuid, category_id, slot)
                 )
                 """);
-            if (isSqlite()) {
+            if (!isMysql()) {
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_extra_backpack_slots_player ON extra_backpack_slots(player_uuid, category_id, slot)");
             } else {
                 try {
@@ -246,7 +235,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         all.addAll(updateColumns);
         String columns = String.join(", ", all);
         String placeholders = String.join(", ", java.util.Collections.nCopies(all.size(), "?"));
-        if (isSqlite()) {
+        if (!isMysql()) {
             return "INSERT INTO " + table + " (" + columns + ") VALUES (" + placeholders + ") ON CONFLICT(" + String.join(", ", keys) + ") DO UPDATE SET "
                 + updateAssignments(updateColumns, true);
         }

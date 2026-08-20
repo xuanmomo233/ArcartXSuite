@@ -30,8 +30,6 @@ import xuanmo.arcartxsuite.regions.model.RegionFlag;
 public final class RegionsRepository extends AbstractModuleRepository implements AutoCloseable {
 
     private final Logger logger;
-    private final String prefix;
-    private final boolean mysql;
 
     /**
      * 构造仓储实例。
@@ -43,8 +41,6 @@ public final class RegionsRepository extends AbstractModuleRepository implements
     public RegionsRepository(File dataFolder, StorageConfig config, Logger logger) {
         super("AXS-Regions", dataFolder, config.toDescriptor(), logger);
         this.logger = logger;
-        this.prefix = config.tablePrefix();
-        this.mysql = config.dialect() == StorageConfig.Dialect.MYSQL;
     }
 
     /**
@@ -62,8 +58,6 @@ public final class RegionsRepository extends AbstractModuleRepository implements
                              String tablePrefix, String sqliteFileName, Logger logger) {
         super("AXS-Regions", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
         this.logger = logger;
-        this.prefix = tablePrefix();
-        this.mysql = isMysql();
     }
 
     /**
@@ -99,11 +93,11 @@ public final class RegionsRepository extends AbstractModuleRepository implements
      */
     @Override
     protected List<String> allTables() {
-        return List.of(prefix + "regions", prefix + "flags", prefix + "members");
+        return List.of(tablePrefix() + "regions", tablePrefix() + "flags", tablePrefix() + "members");
     }
 
     private void initTables(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "regions ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "regions ("
             + "id VARCHAR(64) NOT NULL, "
             + "world VARCHAR(128) NOT NULL, "
             + "min_x INT NOT NULL, min_y INT NOT NULL, min_z INT NOT NULL, "
@@ -112,7 +106,7 @@ public final class RegionsRepository extends AbstractModuleRepository implements
             + "parent_id VARCHAR(64), "
             + "PRIMARY KEY (id, world))");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "flags ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "flags ("
             + "region_id VARCHAR(64) NOT NULL, "
             + "world VARCHAR(128) NOT NULL, "
             + "flag VARCHAR(32) NOT NULL, "
@@ -120,16 +114,16 @@ public final class RegionsRepository extends AbstractModuleRepository implements
             + "data TEXT, "
             + "PRIMARY KEY (region_id, world, flag))");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "members ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "members ("
             + "region_id VARCHAR(64) NOT NULL, "
             + "world VARCHAR(128) NOT NULL, "
             + "uuid VARCHAR(36), "
             + "group_name VARCHAR(64), "
             + "role VARCHAR(8) NOT NULL)");
 
-        if (mysql) {
+        if (isMysql()) {
             try {
-                stmt.executeUpdate("CREATE INDEX idx_rg_members ON " + prefix + "members (region_id, world)");
+                stmt.executeUpdate("CREATE INDEX idx_rg_members ON " + tablePrefix() + "members (region_id, world)");
             } catch (SQLException ignored) {}
         }
     }
@@ -146,7 +140,7 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try {
-                String sql = "REPLACE INTO " + prefix + "regions (id, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent_id) "
+                String sql = "REPLACE INTO " + tablePrefix() + "regions (id, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent_id) "
                     + "VALUES (?,?,?,?,?,?,?,?,?,?)";
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setString(1, region.id());
@@ -182,13 +176,13 @@ public final class RegionsRepository extends AbstractModuleRepository implements
      */
     public void deleteRegion(String id, String world) throws SQLException {
         try (Connection conn = getConnection()) {
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + prefix + "regions WHERE id=? AND world=?")) {
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "regions WHERE id=? AND world=?")) {
                 ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + prefix + "flags WHERE region_id=? AND world=?")) {
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "flags WHERE region_id=? AND world=?")) {
                 ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + prefix + "members WHERE region_id=? AND world=?")) {
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + tablePrefix() + "members WHERE region_id=? AND world=?")) {
                 ps.setString(1, id); ps.setString(2, world); ps.executeUpdate();
             }
         }
@@ -204,7 +198,7 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         List<Region> regions = new ArrayList<>();
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + prefix + "regions")) {
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "regions")) {
             while (rs.next()) {
                 Region region = new Region(
                     rs.getString("id"), rs.getString("world"),
@@ -219,7 +213,7 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         // 加载标志
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + prefix + "flags")) {
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "flags")) {
             while (rs.next()) {
                 String id = rs.getString("region_id");
                 String world = rs.getString("world");
@@ -242,7 +236,7 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         // 加载成员
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT * FROM " + prefix + "members")) {
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + tablePrefix() + "members")) {
             while (rs.next()) {
                 String id = rs.getString("region_id");
                 String world = rs.getString("world");
@@ -270,11 +264,11 @@ public final class RegionsRepository extends AbstractModuleRepository implements
 
     private void saveFlags(Connection conn, Region region) throws SQLException {
         try (PreparedStatement del = conn.prepareStatement(
-            "DELETE FROM " + prefix + "flags WHERE region_id=? AND world=?")) {
+            "DELETE FROM " + tablePrefix() + "flags WHERE region_id=? AND world=?")) {
             del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
         }
         if (region.flags().isEmpty()) return;
-        String sql = "INSERT INTO " + prefix + "flags (region_id, world, flag, state, data) VALUES (?,?,?,?,?)";
+        String sql = "INSERT INTO " + tablePrefix() + "flags (region_id, world, flag, state, data) VALUES (?,?,?,?,?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             for (Map.Entry<RegionFlag, RegionFlag.State> entry : region.flags().entrySet()) {
                 ps.setString(1, region.id());
@@ -290,10 +284,10 @@ public final class RegionsRepository extends AbstractModuleRepository implements
 
     private void saveMembers(Connection conn, Region region) throws SQLException {
         try (PreparedStatement del = conn.prepareStatement(
-            "DELETE FROM " + prefix + "members WHERE region_id=? AND world=?")) {
+            "DELETE FROM " + tablePrefix() + "members WHERE region_id=? AND world=?")) {
             del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
         }
-        String sql = "INSERT INTO " + prefix + "members (region_id, world, uuid, group_name, role) VALUES (?,?,?,?,?)";
+        String sql = "INSERT INTO " + tablePrefix() + "members (region_id, world, uuid, group_name, role) VALUES (?,?,?,?,?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             for (UUID uuid : region.owners()) {
                 ps.setString(1, region.id()); ps.setString(2, region.world());

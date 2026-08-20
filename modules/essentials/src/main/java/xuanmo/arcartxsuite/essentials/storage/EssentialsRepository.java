@@ -31,8 +31,6 @@ import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration.StorageConf
 public final class EssentialsRepository extends AbstractModuleRepository implements AutoCloseable {
 
     private final Logger logger;
-    private final String prefix;
-    private final boolean mysql;
 
     /**
      * 构造数据仓储。
@@ -44,8 +42,6 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
     public EssentialsRepository(File pluginDataFolder, StorageConfiguration config, Logger logger) {
         super("AXS-Essentials", pluginDataFolder, config.toDescriptor(), logger);
         this.logger = logger;
-        this.prefix = config.tablePrefix();
-        this.mysql = config.dialect() == StorageConfiguration.Dialect.MYSQL;
     }
 
     /**
@@ -63,8 +59,6 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
                                 String tablePrefix, String sqliteFileName, Logger logger) {
         super("AXS-Essentials", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
         this.logger = logger;
-        this.prefix = tablePrefix();
-        this.mysql = isMysql();
     }
 
     @Override
@@ -76,19 +70,19 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(prefix + "homes", prefix + "bans", prefix + "warnings", prefix + "nicknames", prefix + "player_data");
+        return List.of(tablePrefix() + "homes", tablePrefix() + "bans", tablePrefix() + "warnings", tablePrefix() + "nicknames", tablePrefix() + "player_data");
     }
 
     @Override
     protected List<String> allTables() {
         return List.of(
-            prefix + "homes",
-            prefix + "bans",
-            prefix + "warnings",
-            prefix + "nicknames",
-            prefix + "player_data",
-            prefix + "warps",
-            prefix + "spawn"
+            tablePrefix() + "homes",
+            tablePrefix() + "bans",
+            tablePrefix() + "warnings",
+            tablePrefix() + "nicknames",
+            tablePrefix() + "player_data",
+            tablePrefix() + "warps",
+            tablePrefix() + "spawn"
         );
     }
 
@@ -98,41 +92,41 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
     }
 
     private void initTables(Statement stmt) throws SQLException {
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "homes ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "homes ("
             + "uuid VARCHAR(36) NOT NULL, name VARCHAR(64) NOT NULL, "
             + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
             + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL, "
             + "PRIMARY KEY (uuid, name))");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "warps ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "warps ("
             + "name VARCHAR(64) NOT NULL PRIMARY KEY, "
             + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
             + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "spawn ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "spawn ("
             + "id INT NOT NULL PRIMARY KEY, "
             + "world VARCHAR(128) NOT NULL, x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL, "
             + "yaw FLOAT NOT NULL, pitch FLOAT NOT NULL)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "bans ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "bans ("
             + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
             + "player_name VARCHAR(32) NOT NULL, "
             + "reason TEXT, operator VARCHAR(32) NOT NULL, "
             + "created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, "
             + "ip VARCHAR(45))");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "warnings ("
-            + "id INTEGER PRIMARY KEY " + (mysql ? "AUTO_INCREMENT" : "AUTOINCREMENT") + ", "
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "warnings ("
+            + "id INTEGER PRIMARY KEY " + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + ", "
             + "uuid VARCHAR(36) NOT NULL, "
             + "player_name VARCHAR(32) NOT NULL, "
             + "reason TEXT, operator VARCHAR(32) NOT NULL, "
             + "created_at BIGINT NOT NULL)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "nicknames ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "nicknames ("
             + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
             + "nickname VARCHAR(128) NOT NULL)");
 
-        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "player_data ("
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + "player_data ("
             + "uuid VARCHAR(36) NOT NULL PRIMARY KEY, "
             + "last_seen BIGINT NOT NULL DEFAULT 0, "
             + "last_ip VARCHAR(45), "
@@ -150,7 +144,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void setHome(UUID uuid, String name, Location loc) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "homes (uuid, name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?,?)";
+        String sql = "REPLACE INTO " + tablePrefix() + "homes (uuid, name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, name.toLowerCase());
@@ -172,7 +166,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void deleteHome(UUID uuid, String name) throws SQLException {
-        String sql = "DELETE FROM " + prefix + "homes WHERE uuid=? AND name=?";
+        String sql = "DELETE FROM " + tablePrefix() + "homes WHERE uuid=? AND name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, name.toLowerCase());
@@ -189,7 +183,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public Location getHome(UUID uuid, String name) throws SQLException {
-        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + prefix + "homes WHERE uuid=? AND name=?";
+        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "homes WHERE uuid=? AND name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, name.toLowerCase());
@@ -209,7 +203,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      */
     public Map<String, Location> getHomes(UUID uuid) throws SQLException {
         Map<String, Location> homes = new HashMap<>();
-        String sql = "SELECT name, world, x, y, z, yaw, pitch FROM " + prefix + "homes WHERE uuid=?";
+        String sql = "SELECT name, world, x, y, z, yaw, pitch FROM " + tablePrefix() + "homes WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -230,7 +224,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public int homeCount(UUID uuid) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM " + prefix + "homes WHERE uuid=?";
+        String sql = "SELECT COUNT(*) FROM " + tablePrefix() + "homes WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -249,7 +243,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void setWarp(String name, Location loc) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "warps (name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?)";
+        String sql = "REPLACE INTO " + tablePrefix() + "warps (name, world, x, y, z, yaw, pitch) VALUES (?,?,?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, name.toLowerCase());
             ps.setString(2, loc.getWorld().getName());
@@ -269,7 +263,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void deleteWarp(String name) throws SQLException {
-        String sql = "DELETE FROM " + prefix + "warps WHERE name=?";
+        String sql = "DELETE FROM " + tablePrefix() + "warps WHERE name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, name.toLowerCase());
             ps.executeUpdate();
@@ -284,7 +278,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public Location getWarp(String name) throws SQLException {
-        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + prefix + "warps WHERE name=?";
+        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "warps WHERE name=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, name.toLowerCase());
             try (ResultSet rs = ps.executeQuery()) {
@@ -302,7 +296,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      */
     public List<String> getWarpNames() throws SQLException {
         List<String> names = new ArrayList<>();
-        String sql = "SELECT name FROM " + prefix + "warps ORDER BY name";
+        String sql = "SELECT name FROM " + tablePrefix() + "warps ORDER BY name";
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -320,7 +314,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void setSpawn(Location loc) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "spawn (id, world, x, y, z, yaw, pitch) VALUES (1,?,?,?,?,?,?)";
+        String sql = "REPLACE INTO " + tablePrefix() + "spawn (id, world, x, y, z, yaw, pitch) VALUES (1,?,?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, loc.getWorld().getName());
             ps.setDouble(2, loc.getX());
@@ -339,7 +333,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public Location getSpawn() throws SQLException {
-        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + prefix + "spawn WHERE id=1";
+        String sql = "SELECT world, x, y, z, yaw, pitch FROM " + tablePrefix() + "spawn WHERE id=1";
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -362,7 +356,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void ban(UUID uuid, String playerName, String reason, String operator, long expiresAt, String ip) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "bans (uuid, player_name, reason, operator, created_at, expires_at, ip) VALUES (?,?,?,?,?,?,?)";
+        String sql = "REPLACE INTO " + tablePrefix() + "bans (uuid, player_name, reason, operator, created_at, expires_at, ip) VALUES (?,?,?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, playerName);
@@ -382,7 +376,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void unban(UUID uuid) throws SQLException {
-        String sql = "DELETE FROM " + prefix + "bans WHERE uuid=?";
+        String sql = "DELETE FROM " + tablePrefix() + "bans WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.executeUpdate();
@@ -396,7 +390,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public List<BanRecord> getAllBans() throws SQLException {
-        String sql = "SELECT * FROM " + prefix + "bans ORDER BY created_at DESC";
+        String sql = "SELECT * FROM " + tablePrefix() + "bans ORDER BY created_at DESC";
         List<BanRecord> list = new ArrayList<>();
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -413,7 +407,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public BanRecord getBan(UUID uuid) throws SQLException {
-        String sql = "SELECT * FROM " + prefix + "bans WHERE uuid=?";
+        String sql = "SELECT * FROM " + tablePrefix() + "bans WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -435,7 +429,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void addWarning(UUID uuid, String playerName, String reason, String operator) throws SQLException {
-        String sql = "INSERT INTO " + prefix + "warnings (uuid, player_name, reason, operator, created_at) VALUES (?,?,?,?,?)";
+        String sql = "INSERT INTO " + tablePrefix() + "warnings (uuid, player_name, reason, operator, created_at) VALUES (?,?,?,?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, playerName);
@@ -455,7 +449,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public int getWarningCount(UUID uuid, long since) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM " + prefix + "warnings WHERE uuid=? AND created_at>=?";
+        String sql = "SELECT COUNT(*) FROM " + tablePrefix() + "warnings WHERE uuid=? AND created_at>=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setLong(2, since);
@@ -474,7 +468,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      */
     public List<WarnRecord> getWarnings(UUID uuid) throws SQLException {
         List<WarnRecord> list = new ArrayList<>();
-        String sql = "SELECT * FROM " + prefix + "warnings WHERE uuid=? ORDER BY created_at DESC";
+        String sql = "SELECT * FROM " + tablePrefix() + "warnings WHERE uuid=? ORDER BY created_at DESC";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -494,7 +488,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void setNickname(UUID uuid, String nickname) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "nicknames (uuid, nickname) VALUES (?,?)";
+        String sql = "REPLACE INTO " + tablePrefix() + "nicknames (uuid, nickname) VALUES (?,?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, nickname);
@@ -509,7 +503,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public void removeNickname(UUID uuid) throws SQLException {
-        String sql = "DELETE FROM " + prefix + "nicknames WHERE uuid=?";
+        String sql = "DELETE FROM " + tablePrefix() + "nicknames WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.executeUpdate();
@@ -524,7 +518,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
      * @throws SQLException 数据库操作失败时抛出
      */
     public String getNickname(UUID uuid) throws SQLException {
-        String sql = "SELECT nickname FROM " + prefix + "nicknames WHERE uuid=?";
+        String sql = "SELECT nickname FROM " + tablePrefix() + "nicknames WHERE uuid=?";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -546,9 +540,9 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
         long now = System.currentTimeMillis();
         try (Connection conn = getConnection()) {
             // 首次加入则插入
-            String insert = mysql
-                ? "INSERT IGNORE INTO " + prefix + "player_data (uuid, last_seen, last_ip, first_join) VALUES (?,?,?,?)"
-                : "INSERT OR IGNORE INTO " + prefix + "player_data (uuid, last_seen, last_ip, first_join) VALUES (?,?,?,?)";
+            String insert = isMysql()
+                ? "INSERT IGNORE INTO " + tablePrefix() + "player_data (uuid, last_seen, last_ip, first_join) VALUES (?,?,?,?)"
+                : "INSERT OR IGNORE INTO " + tablePrefix() + "player_data (uuid, last_seen, last_ip, first_join) VALUES (?,?,?,?)";
             try (PreparedStatement ps = conn.prepareStatement(insert)) {
                 ps.setString(1, uuid.toString());
                 ps.setLong(2, now);
@@ -557,7 +551,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
                 ps.executeUpdate();
             }
             // 更新最后在线时间和 IP
-            String update = "UPDATE " + prefix + "player_data SET last_seen=?, last_ip=? WHERE uuid=?";
+            String update = "UPDATE " + tablePrefix() + "player_data SET last_seen=?, last_ip=? WHERE uuid=?";
             try (PreparedStatement ps = conn.prepareStatement(update)) {
                 ps.setLong(1, now);
                 ps.setString(2, ip);

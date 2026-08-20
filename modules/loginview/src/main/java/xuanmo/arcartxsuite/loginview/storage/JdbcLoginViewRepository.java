@@ -26,12 +26,10 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
     private final StorageConfiguration configuration;
     private final String accountsTable;
     private final String sessionsTable;
-    private final boolean sqlite;
 
     public JdbcLoginViewRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-LoginView", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
-        this.sqlite = !isMysql();
         this.accountsTable = configuration.tablePrefix() + "accounts";
         this.sessionsTable = configuration.tablePrefix() + "sessions";
     }
@@ -51,7 +49,6 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
                                     String tablePrefix, String sqliteFileName, Logger logger) {
         super("AXS-LoginView", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
         this.configuration = null;
-        this.sqlite = !isMysql();
         this.accountsTable = tablePrefix() + "accounts";
         this.sessionsTable = tablePrefix() + "sessions";
     }
@@ -174,7 +171,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     @Override
     public void importAccount(MigratedAuthMeAccount account) throws SQLException {
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT INTO " + accountsTable
                 + " (lower_name, real_name, password_hash, hash_algorithm, email, registration_ip, last_ip, registered_at, last_login_at, migrated, updated_at)"
                 + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)"
@@ -235,7 +232,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
     }
 
     private String integerType() {
-        return sqlite ? "INTEGER" : "TINYINT";
+        return !isMysql() ? "INTEGER" : "TINYINT";
     }
 
     private static String normalize(String name) {
@@ -262,7 +259,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
     @Override
     public void createOrUpdateSession(UUID uuid, String playerName, String ip, long expiresAt) throws SQLException {
         long now = Instant.now().toEpochMilli();
-        String sql = sqlite
+        String sql = (!isMysql())
             ? "INSERT INTO " + sessionsTable
                 + " (uuid, player_name, ip, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
                 + " ON CONFLICT(uuid) DO UPDATE SET player_name = excluded.player_name, ip = excluded.ip,"

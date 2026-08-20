@@ -27,12 +27,10 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
 public final class JdbcEntityTrackerRepository extends AbstractModuleRepository {
 
     private final Logger logger;
-    private final boolean mysql;
 
     public JdbcEntityTrackerRepository(File dataFolder, FileConfiguration config, Logger logger) {
         super("AXS-EntityTracker", dataFolder, parseDescriptor(config), logger);
         this.logger = logger;
-        this.mysql = getDescriptor().isMysql();
     }
 
     /**
@@ -51,7 +49,6 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
                                         String sqliteFileName, Logger logger) {
         super("AXS-EntityTracker", storageManager, moduleId, "", sqliteFileName, logger);
         this.logger = logger;
-        this.mysql = getDescriptor().isMysql();
     }
 
     private static StorageDescriptor parseDescriptor(FileConfiguration config) {
@@ -84,7 +81,7 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
             logger.warning("EntityTracker SQL 初始化脚本未找到");
             return;
         }
-        if (mysql) {
+        if (isMysql()) {
             script = script.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT PRIMARY KEY AUTO_INCREMENT");
             script = script.replace("INSERT OR IGNORE", "INSERT IGNORE");
             script = script.replace("INSERT OR REPLACE", "REPLACE INTO");
@@ -106,13 +103,13 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
             } catch (SQLException e) {
                 String msg = e.getMessage().toLowerCase();
                 boolean ignore = msg.contains("already exists")
-                    || (mysql && msg.contains("duplicate key name"));
+                    || (isMysql() && msg.contains("duplicate key name"));
                 if (!ignore) {
                     logger.warning("EntityTracker SQL 初始化警告: " + e.getMessage());
                 }
             }
         }
-        logger.info("EntityTracker 数据库表初始化完成 (" + (mysql ? "MySQL" : "SQLite") + ")");
+        logger.info("EntityTracker 数据库表初始化完成 (" + (isMysql() ? "MySQL" : "SQLite") + ")");
     }
 
     private String readResource(String path) {
