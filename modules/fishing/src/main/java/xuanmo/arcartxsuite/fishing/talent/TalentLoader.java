@@ -100,7 +100,9 @@ public final class TalentLoader {
                     prerequisites.add(String.valueOf(p));
                 }
             }
-            return new TalentNode(id, treeId, tier, branch, displayName, description, effects, prerequisites);
+            Object rawIcon = map.get("icon");
+            String icon = rawIcon != null ? String.valueOf(rawIcon) : "";
+            return new TalentNode(id, treeId, tier, branch, displayName, description, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析天赋节点失败: " + e.getMessage());
             return null;
@@ -138,8 +140,10 @@ public final class TalentLoader {
                     prerequisites.add(String.valueOf(p));
                 }
             }
+            Object rawIcon = map.get("icon");
+            String icon = rawIcon != null ? String.valueOf(rawIcon) : "";
             // 联动节点 treeId 为空
-            return new TalentNode(id, "", 0, "link", displayName, description, effects, prerequisites);
+            return new TalentNode(id, "", 0, "link", displayName, description, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析联动天赋失败: " + e.getMessage());
             return null;

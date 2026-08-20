@@ -1617,32 +1617,38 @@ public final class FishingService {
     }
 
     private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canUnlock) {
-        String effectType = node.effects().isEmpty() ? "" : node.effects().get(0).effectType();
-        String material = switch (effectType) {
-            case "bar_height" -> "minecraft:iron_ingot";
-            case "bar_damping" -> "minecraft:slime_ball";
-            case "bar_bounce" -> "minecraft:rabbit_foot";
-            case "bar_force" -> "minecraft:redstone";
-            case "fish_speed" -> "minecraft:feather";
-            case "fish_dwell", "flee_cooldown" -> "minecraft:sugar";
-            case "fish_dart" -> "minecraft:arrow";
-            case "fish_noise" -> "minecraft:amethyst_shard";
-            case "fish_edge" -> "minecraft:shield";
-            case "flee_chance" -> "minecraft:iron_sword";
-            case "flee_speed" -> "minecraft:arrow";
-            case "flee_duration" -> "minecraft:string";
-            case "progress_rate" -> "minecraft:emerald";
-            case "progress_drain" -> "minecraft:redstone";
-            case "perfect_window" -> "minecraft:ender_eye";
-            case "start_progress" -> "minecraft:firework_rocket";
-            case "xp_multiplier", "xp_in_bar" -> "minecraft:diamond";
-            case "price_multiplier" -> "minecraft:gold_ingot";
-            case "legendary_chance" -> "minecraft:nether_star";
-            case "treasure_chance" -> "minecraft:chest";
-            case "rare_chance" -> "minecraft:emerald";
-            case "perfect_xp" -> "minecraft:diamond";
-            default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
-        };
+        // 优先使用节点自定义 icon，为空时回退到 effectType 映射
+        String material = node.icon();
+        if (material == null || material.isBlank()) {
+            String effectType = node.effects().isEmpty() ? "" : node.effects().get(0).effectType();
+            material = switch (effectType) {
+                case "bar_height" -> "minecraft:iron_ingot";
+                case "bar_damping" -> "minecraft:slime_ball";
+                case "bar_bounce" -> "minecraft:rabbit_foot";
+                case "bar_force" -> "minecraft:anvil";
+                case "fish_speed" -> "minecraft:feather";
+                case "fish_dwell" -> "minecraft:clock";
+                case "fish_dart" -> "minecraft:arrow";
+                case "fish_noise" -> "minecraft:amethyst_shard";
+                case "fish_edge" -> "minecraft:shield";
+                case "flee_chance" -> "minecraft:iron_sword";
+                case "flee_speed" -> "minecraft:sugar";
+                case "flee_cooldown" -> "minecraft:clock";
+                case "flee_duration" -> "minecraft:string";
+                case "progress_rate" -> "minecraft:emerald";
+                case "progress_drain" -> "minecraft:honey_bottle";
+                case "perfect_window" -> "minecraft:ender_eye";
+                case "start_progress" -> "minecraft:firework_rocket";
+                case "xp_multiplier" -> "minecraft:diamond";
+                case "xp_in_bar" -> "minecraft:glowstone_dust";
+                case "price_multiplier" -> "minecraft:gold_ingot";
+                case "legendary_chance" -> "minecraft:nether_star";
+                case "treasure_chance" -> "minecraft:chest";
+                case "rare_chance" -> "minecraft:lapis_lazuli";
+                case "perfect_xp" -> "minecraft:experience_bottle";
+                default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
+            };
+        }
         String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;
         Material mat = Material.matchMaterial(materialName, true);
         if (mat == null || mat.isAir()) {
