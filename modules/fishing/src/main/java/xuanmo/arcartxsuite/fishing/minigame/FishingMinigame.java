@@ -45,6 +45,7 @@ public final class FishingMinigame {
     private double progress = 0.5;          // [0, 1]
     private long tick = 0;
     private int currentStageIndex = -1;     // 当前行为阶段索引，-1 = 使用默认 behaviors
+    private double barHeightRatioCache = 0.15; // 绿条高度缓存（每 tick 更新一次）
     private boolean wasPerfect = true;      // 是否全程在绿条内
     private BukkitTask tickTask;
 
@@ -136,6 +137,9 @@ public final class FishingMinigame {
         tick++;
         session.decrementRemainingTicks();
 
+        // 缓存绿条高度（本 tick 内不变，避免重复计算）
+        barHeightRatioCache = calculateBarHeightRatio();
+
         // 多阶段行为：根据进度切换鱼的行为模式
         List<FishDefinition.BehaviorStage> stages = session.fish().behaviorStages();
         if (!stages.isEmpty()) {
@@ -156,15 +160,21 @@ public final class FishingMinigame {
         double fishSpeedMultiplier = (1.0 - lvlMod * settings.fishSpeedLevelScale()) * (1.0 - talentBonuses.fishSpeedReduction());
         double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty()) * fishSpeedMultiplier;
         fishVelocity = fishSpeed;
-        fishPosition = clamp(fishPosition + fishSpeed, 0.0, 1.0);
-        if (fishPosition <= 0.0 || fishPosition >= 1.0) {
-            fishVelocity = -fishVelocity * settings.fishEdgeBounce() * (1.0 - talentBonuses.fishEdgeReduction());
-            fishPosition = clamp(fishPosition, 0.0, 1.0);
+        double newFishPosition = fishPosition + fishSpeed;
+        // 鱼边界反弹：先检测碰撞再 clamp，确保反弹速度方向正确
+        if (newFishPosition <= 0.0) {
+            fishPosition = 0.0;
+            fishVelocity = Math.abs(fishVelocity) * settings.fishEdgeBounce() * (1.0 - talentBonuses.fishEdgeReduction());
+        } else if (newFishPosition >= 1.0) {
+            fishPosition = 1.0;
+            fishVelocity = -Math.abs(fishVelocity) * settings.fishEdgeBounce() * (1.0 - talentBonuses.fishEdgeReduction());
+        } else {
+            fishPosition = newFishPosition;
         }
 
         // ── 驱赶机制：鱼偶尔迅速逃离绿条范围 ──
-        // 先算绿条高度和半高，供驱赶判定
-        double barHeightRatioForFlee = calculateBarHeightRatio();
+        // 绿条高度本 tick 内不变，复用上方计算结果（避免重复调用 calculateBarHeightRatio）
+        double barHeightRatioForFlee = barHeightRatioCache;
         double halfBarForFlee = barHeightRatioForFlee / 2.0;
         double barBottomForFlee = barPosition - halfBarForFlee;
         double barTopForFlee = barPosition + halfBarForFlee;
@@ -224,8 +234,8 @@ public final class FishingMinigame {
             nextFleeCheckTick = tick + fleeCheckMin + ThreadLocalRandom.current().nextInt(fleeCheckMax - fleeCheckMin);
         }
 
-        // 计算绿条高度（基于玩家等级）—— 先算高度，碰撞用绿条顶底
-        double barHeightRatio = calculateBarHeightRatio();
+        // 计算绿条高度（基于玩家等级）—— 使用本 tick 缓存的值
+        double barHeightRatio = barHeightRatioCache;
         double halfBar = barHeightRatio / 2.0;
 
         // 更新绿条位置（物理：惯性 + 重力 + 点击力 + 法向力 + 反弹）
@@ -234,30 +244,30 @@ public final class FishingMinigame {
         double forceMultiplier = settings.barForceMultiplier() * (1.0 + talentBonuses.barForceBonus());
         double damping = settings.barDamping() + talentBonuses.barDampingBonus();
 
-        // 法向力：绿条紧贴边界时，边界施加反作用力抵消朝向边界的持续推力，
-        // 防止绿条被"钉"在底部/顶部（现实中地面会托住物体，不会把它推穿）。
-        // 逃离方向的力（如底部+重力上浮）仍然生效，帮助绿条脱离边界。
-        // 仅当绿条紧贴边界（而非在一个区间内）时才触发，避免反复弹跳抽动。
-        boolean atBottom = barPosition <= halfBar;
-        boolean atTop = barPosition >= 1.0 - halfBar;
-        boolean forceIntoBoundary = (atBottom && force < 0) || (atTop && force > 0);
-        if (!forceIntoBoundary) {
-            barVelocity += force * forceMultiplier;
-        }
+        // 施加持续力（重力/点击力）
+        barVelocity += force * forceMultiplier;
         barVelocity *= damping;
         barPosition = barPosition + barVelocity;
 
-        // 边界反弹：碰撞后速度反转并衰减。
-        // 不再强制最小反弹速度——法向力已解决"卡住"问题，
-        // 强制最小反弹会导致绿条在边界附近反复抽动。
+        // 边界碰撞处理：反弹 + 法向力
+        // 法向力：绿条撞到边界后，如果持续力朝向边界，抵消该力（防止被钉住）。
+        // 反弹：碰撞后速度反转并衰减。
         double bounceDamping = settings.barBounceDamping() * (1.0 - talentBonuses.barBounceReduction());
         if (barPosition - halfBar <= 0.0) {
             barPosition = halfBar;
+            // 反弹：速度反转并衰减
             barVelocity = Math.abs(barVelocity) * bounceDamping;
+            // 法向力：如果持续力朝下（按住鼠标），抵消下推力使绿条不被钉住
+            if (force < 0) {
+                barVelocity = Math.max(barVelocity, 0.0); // 确保速度朝上（逃离边界）
+            }
         }
         if (barPosition + halfBar >= 1.0) {
             barPosition = 1.0 - halfBar;
             barVelocity = -Math.abs(barVelocity) * bounceDamping;
+            if (force > 0) {
+                barVelocity = Math.min(barVelocity, 0.0); // 确保速度朝下（逃离边界）
+            }
         }
         barPosition = clamp(barPosition, halfBar, 1.0 - halfBar);
 
@@ -272,10 +282,12 @@ public final class FishingMinigame {
         double fishProgressDrainRate = session.fish().progressDrainRate() != null ? session.fish().progressDrainRate() : settings.progressDrainRate();
 
         double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod * settings.progressRateLevelScale()) * (1.0 + talentBonuses.progressRateBonus());
+        // 进度衰减也受等级修正：等级越高衰减越慢（×(1 - lvlMod × scale)）
+        double progressDrainMultiplier = settings.progressRateMultiplier() * (1.0 - lvlMod * settings.progressRateLevelScale()) * (1.0 - talentBonuses.progressDrainReduction());
         if (fishInside) {
             progress += fishProgressGainRate * progressGainMultiplier;
         } else {
-            progress -= fishProgressDrainRate * settings.progressRateMultiplier() * (1.0 - talentBonuses.progressDrainReduction());
+            progress -= fishProgressDrainRate * progressDrainMultiplier;
             wasPerfect = false;
         }
         progress = clamp(progress, 0.0, 1.0);

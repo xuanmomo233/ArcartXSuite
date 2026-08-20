@@ -65,7 +65,8 @@ fishing:
   # ─── 钓鱼进度（进度满 100% = 钓成功，进度归 0 或超时 = 失败） ────
   # 鱼在绿条内时进度每 tick 上升量（实际再乘 progress-rate-multiplier 和等级/天赋加成）。
   progress-gain-rate: 1.0
-  # 鱼在绿条外时进度每 tick 下降量（实际再乘 progress-rate-multiplier 和天赋减免）。
+  # 鱼在绿条外时进度每 tick 下降量（实际再乘 progress-rate-multiplier 和等级修正和天赋减免）。
+  # 等级越高衰减越慢：衰减 ×（1 - 等级修正×progress-rate-level-scale）。
   progress-drain-rate: 0.5
   # 进度涨跌缩放系数：进度实际变化 = gain/drain-rate × 此系数 × 等级修正 × 天赋加成。越大进度变化越快。
   progress-rate-multiplier: 0.008
