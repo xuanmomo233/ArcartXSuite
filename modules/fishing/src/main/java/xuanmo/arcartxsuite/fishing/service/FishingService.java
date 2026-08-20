@@ -1488,7 +1488,7 @@ public final class FishingService {
                 nodeMap.put("treeId", node.treeId());
                 nodeMap.put("unlocked", seasonData.talents().contains(node.id()));
                 nodeMap.put("canUnlock", talentEngine.canUnlock(seasonData, node.id()));
-                nodeMap.put("iconJson", buildTalentNodeIconJson(node));
+                nodeMap.put("iconJson", buildTalentNodeIconJson(node, seasonData.talents().contains(node.id()), talentEngine.canUnlock(seasonData, node.id())));
                 // 效果描述
                 java.util.List<String> effects = new java.util.ArrayList<>();
                 for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
@@ -1519,7 +1519,7 @@ public final class FishingService {
             linkMap.put("treeId", link.treeId());
             linkMap.put("unlocked", seasonData.talents().contains(link.id()));
             linkMap.put("canUnlock", talentEngine.canUnlock(seasonData, link.id()));
-            linkMap.put("iconJson", buildTalentNodeIconJson(link));
+            linkMap.put("iconJson", buildTalentNodeIconJson(link, seasonData.talents().contains(link.id()), talentEngine.canUnlock(seasonData, link.id())));
             java.util.List<String> linkEffects = new java.util.ArrayList<>();
             for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
                 linkEffects.add(effect.effectType() + ": " + effect.effectValue());
@@ -1616,7 +1616,7 @@ public final class FishingService {
         return itemGenerator.itemToJson(stack);
     }
 
-    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node) {
+    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canUnlock) {
         String effectType = node.effects().isEmpty() ? "" : node.effects().get(0).effectType();
         String material = switch (effectType) {
             case "bar_height" -> "minecraft:iron_ingot";
@@ -1643,7 +1643,35 @@ public final class FishingService {
             case "perfect_xp" -> "minecraft:diamond";
             default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
         };
-        return buildTalentIconJson(material);
+        String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;
+        Material mat = Material.matchMaterial(materialName, true);
+        if (mat == null || mat.isAir()) {
+            return "";
+        }
+        ItemStack stack = new ItemStack(mat, 1);
+        java.util.List<String> lore = new java.util.ArrayList<>();
+        lore.add(net.md_5.bungee.api.ChatColor.of("#B0B8C0") + ChatColor.stripColor(node.description()));
+        if (!node.effects().isEmpty()) {
+            lore.add("");
+            for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
+                lore.add(net.md_5.bungee.api.ChatColor.of("#5BC0EB") + effect.effectType() + ": " + effect.effectValue());
+            }
+        }
+        lore.add("");
+        if (unlocked) {
+            lore.add(net.md_5.bungee.api.ChatColor.of("#2ECC71") + "✔ 已激活");
+        } else if (canUnlock) {
+            lore.add(net.md_5.bungee.api.ChatColor.of("#F1C40F") + "点击激活");
+        } else {
+            lore.add(net.md_5.bungee.api.ChatColor.of("#7F8C8D") + "尚未解锁");
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(net.md_5.bungee.api.ChatColor.of("#F0F4F8") + ChatColor.stripColor(node.displayName()));
+            meta.setLore(lore);
+            stack.setItemMeta(meta);
+        }
+        return itemGenerator.itemToJson(stack);
     }
 
     /**

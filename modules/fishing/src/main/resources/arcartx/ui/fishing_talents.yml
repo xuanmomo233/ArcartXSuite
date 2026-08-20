@@ -928,7 +928,6 @@ controls:
                           shape: ~round_rect
                           radius: 12
                           seticon: "self.setItemIcon(self.parent.entry != none ? self.parent.entry['iconJson'] : var.emptyItemJson)"
-                          tip: "self.parent.entry != none ? (self.parent.entry['name'] + '\\n&7' + self.parent.entry['description'] + (self.parent.entry['effects'] != none && self.parent.entry['effects'].size() > 0 ? '\\n&b' + self.parent.entry['effects'].join('\\n&b') : '') + (self.parent.entry['unlocked'] == true ? '\\n&a✔ 已激活' : (self.parent.entry['canUnlock'] == true ? '\\n&e点击激活' : '\\n&8尚未解锁'))) : ''"
                         effect:
                           stroke:
                             width: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 4"
