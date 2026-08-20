@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.command;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -61,13 +62,35 @@ public final class ArcartXSuiteConfigSubCommand {
             String action = subArgs[0].toLowerCase(Locale.ROOT);
             if (action.equals("diagnose") || action.equals("preview")
                 || action.equals("apply") || action.equals("rollback")) {
-                return filter(ownerIds(), subArgs[1]);
+                List<String> ids = new ArrayList<>(ownerIds());
+                ids.add("all");
+                return filter(ids, subArgs[1]);
             }
         }
         if (subArgs.length == 3 && "apply".equalsIgnoreCase(subArgs[0])) {
             return filter(List.of("--force"), subArgs[2]);
         }
+        if (subArgs.length == 3 && "rollback".equalsIgnoreCase(subArgs[0])) {
+            return filter(List.of("--to"), subArgs[2]);
+        }
+        if (subArgs.length == 4 && "rollback".equalsIgnoreCase(subArgs[0]) && "--to".equalsIgnoreCase(subArgs[2])) {
+            return filter(backupTimestamps(), subArgs[3]);
+        }
         return List.of();
+    }
+
+    private List<String> backupTimestamps() {
+        ConfigDiagnosticEngine engine = plugin.getConfigDiagnosticEngine();
+        if (engine == null || engine.backupRoot() == null || !engine.backupRoot().isDirectory()) {
+            return List.of();
+        }
+        String[] names = engine.backupRoot().list((dir, name) -> new File(dir, name).isDirectory());
+        if (names == null) {
+            return List.of();
+        }
+        List<String> sorted = new ArrayList<>(List.of(names));
+        sorted.sort(java.util.Collections.reverseOrder());
+        return sorted;
     }
 
     // ─── 子命令实现 ────────────────────────────────────────────
@@ -120,7 +143,7 @@ public final class ArcartXSuiteConfigSubCommand {
 
     private boolean handlePreview(CommandSender sender, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config preview <ownerId>");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config preview <ownerId|all>");
             return true;
         }
         ConfigDiagnosisStore store = plugin.getConfigDiagnosisStore();
@@ -128,16 +151,26 @@ public final class ArcartXSuiteConfigSubCommand {
             sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
             return true;
         }
+        if ("all".equalsIgnoreCase(args[0])) {
+            for (var entry : store.all()) {
+                previewSingle(sender, entry.spec().ownerId(), entry.report());
+            }
+            return true;
+        }
         Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
         if (opt.isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.RED + "未找到 " + args[0] + " 的诊断结果。");
             return true;
         }
-        ConfigDiagnosisReport report = opt.get().report();
-        sender.sendMessage(PREFIX + ChatColor.GRAY + "===== " + args[0] + " =====");
+        previewSingle(sender, args[0], opt.get().report());
+        return true;
+    }
+
+    private void previewSingle(CommandSender sender, String ownerId, ConfigDiagnosisReport report) {
+        sender.sendMessage(PREFIX + ChatColor.GRAY + "===== " + ownerId + " =====");
         if (report.issues().isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.GREEN + "无 issue。");
-            return true;
+            return;
         }
         for (ConfigIssue issue : report.issues()) {
             ChatColor color = switch (issue.severity()) {
@@ -156,12 +189,11 @@ public final class ArcartXSuiteConfigSubCommand {
         if (report.proposedFile() != null) {
             sender.sendMessage(PREFIX + ChatColor.GRAY + "Proposal 文件: " + report.proposedFile());
         }
-        return true;
     }
 
     private boolean handleApply(CommandSender sender, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config apply <ownerId> [--force]");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config apply <ownerId|all> [--force]");
             return true;
         }
         boolean force = args.length > 1 && "--force".equalsIgnoreCase(args[1]);
@@ -169,6 +201,28 @@ public final class ArcartXSuiteConfigSubCommand {
         ConfigDiagnosticEngine engine = plugin.getConfigDiagnosticEngine();
         if (store == null || engine == null) {
             sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
+            return true;
+        }
+        if ("all".equalsIgnoreCase(args[0])) {
+            int success = 0, skipped = 0, failed = 0;
+            for (var entry : store.all()) {
+                var result = engine.apply(entry.spec(), entry.report(), force);
+                if (result.success()) {
+                    success++;
+                } else if (result.message().contains("无可应用的 proposal")) {
+                    skipped++;
+                } else {
+                    failed++;
+                    sender.sendMessage(PREFIX + ChatColor.RED + entry.spec().ownerId() + ": " + result.message());
+                }
+            }
+            sender.sendMessage(PREFIX + ChatColor.GREEN + "批量应用完成: "
+                + ChatColor.WHITE + success + " 成功" + ChatColor.GRAY + ", "
+                + ChatColor.YELLOW + skipped + " 跳过" + ChatColor.GRAY + ", "
+                + ChatColor.RED + failed + " 失败");
+            if (success > 0) {
+                plugin.runConfigDiagnosis(null, true);
+            }
             return true;
         }
         Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
@@ -188,7 +242,7 @@ public final class ArcartXSuiteConfigSubCommand {
 
     private boolean handleRollback(CommandSender sender, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config rollback <ownerId> [--to <timestamp>]");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config rollback <ownerId|all> [--to <timestamp>]");
             return true;
         }
         String timestamp = null;
@@ -202,6 +256,25 @@ public final class ArcartXSuiteConfigSubCommand {
         ConfigDiagnosticEngine engine = plugin.getConfigDiagnosticEngine();
         if (store == null || engine == null) {
             sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
+            return true;
+        }
+        if ("all".equalsIgnoreCase(args[0])) {
+            int success = 0, failed = 0;
+            for (var entry : store.all()) {
+                var result = engine.rollback(entry.spec(), timestamp);
+                if (result.success()) {
+                    success++;
+                } else {
+                    failed++;
+                    sender.sendMessage(PREFIX + ChatColor.RED + entry.spec().ownerId() + ": " + result.message());
+                }
+            }
+            sender.sendMessage(PREFIX + ChatColor.GREEN + "批量回滚完成: "
+                + ChatColor.WHITE + success + " 成功" + ChatColor.GRAY + ", "
+                + ChatColor.RED + failed + " 失败");
+            if (success > 0) {
+                plugin.runConfigDiagnosis(null, true);
+            }
             return true;
         }
         Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
@@ -220,10 +293,10 @@ public final class ArcartXSuiteConfigSubCommand {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(PREFIX + ChatColor.GRAY + "智能配置体检命令:");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config status" + ChatColor.GRAY + " - 当前会话诊断概况");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config diagnose [ownerId]" + ChatColor.GRAY + " - 重新跑一次诊断");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config preview <ownerId>" + ChatColor.GRAY + " - 控制台输出 issue 详情");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config apply <ownerId> [--force]" + ChatColor.GRAY + " - 应用 proposal");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config rollback <ownerId> [--to <timestamp>]" + ChatColor.GRAY + " - 还原备份");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config diagnose [ownerId|all]" + ChatColor.GRAY + " - 重新跑一次诊断");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config preview <ownerId|all>" + ChatColor.GRAY + " - 控制台输出 issue 详情");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config apply <ownerId|all> [--force]" + ChatColor.GRAY + " - 应用 proposal");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "  config rollback <ownerId|all> [--to <timestamp>]" + ChatColor.GRAY + " - 还原备份");
     }
 
     private List<String> ownerIds() {
