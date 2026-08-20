@@ -86,9 +86,16 @@ ui:
       var.colGap = 120
       var.treeW = 700
       var.treeGap = 0
-      var.lineW = 7
+      var.lineW = 8
       var.rootY = 80
       var.canvasW = 3580
+      // 联动节点布局：所有联动天赋排在所有树下方一排
+      var.linkY = var.rootY + 4 * var.tierGap + 350 + var.nodeSize + 80
+      var.linkStartX = 200
+      var.linkSpacing = (var.canvasW - 400) / 7
+      var.bus1Rel = -50
+      var.bus2Rel = -25
+      var.sourceBottomY = var.rootY + 2 * var.tierGap + var.nodeSize
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
       var.treeNames['swift'] = '&b迅捷'
@@ -179,36 +186,36 @@ ui:
                   delta = parentOff - colOff
                   if(delta == 0){
                     lineV = node['连线竖直']
-                    lineV.x = var.nodeSize / 2 - var.lineW / 2
-                    lineV.y = -gap + var.nodeSize
+                    lineV.x = (var.nodeSize / 2 - var.lineW / 2).round()
+                    lineV.y = (-gap + var.nodeSize).round()
                     lineV.width = var.lineW
-                    lineV.height = gap - var.nodeSize
+                    lineV.height = (gap - var.nodeSize).round()
                     lineV.visible = true
                   } else {
                     lineLV = node['连线L竖']
                     lineLH = node['连线L横']
                     lineLP = node['连线L父竖']
                     topRel = -gap + var.nodeSize
-                    routeRel = topRel / 2
-                    lineLV.x = var.nodeSize / 2 - var.lineW / 2
+                    routeRel = (topRel / 2).round()
+                    lineLV.x = (var.nodeSize / 2 - var.lineW / 2).round()
                     lineLV.y = routeRel
                     lineLV.width = var.lineW
-                    lineLV.height = -routeRel
+                    lineLV.height = (-routeRel).round()
                     lineLV.visible = true
-                    lineLH.y = routeRel - var.lineW / 2
+                    lineLH.y = (routeRel - var.lineW / 2).round()
                     lineLH.height = var.lineW
                     if(delta < 0){
-                      lineLH.x = var.nodeSize / 2 + delta
-                      lineLH.width = -delta
+                      lineLH.x = (var.nodeSize / 2 + delta).round()
+                      lineLH.width = (-delta).round()
                     } else {
-                      lineLH.x = var.nodeSize / 2
-                      lineLH.width = delta
+                      lineLH.x = (var.nodeSize / 2).round()
+                      lineLH.width = delta.round()
                     }
                     lineLH.visible = true
-                    lineLP.x = var.nodeSize / 2 + delta - var.lineW / 2
-                    lineLP.y = topRel
+                    lineLP.x = (var.nodeSize / 2 + delta - var.lineW / 2).round()
+                    lineLP.y = topRel.round()
                     lineLP.width = var.lineW
-                    lineLP.height = routeRel - topRel
+                    lineLP.height = (routeRel - topRel).round()
                     lineLP.visible = true
                   }
                 }
@@ -238,59 +245,53 @@ ui:
             branch2 = parts2[1].substring(2)
             sourceX1 = 40 + treeIndex1 * var.treeW + var.treeW / 2 + (branch1 == 'a' ? -var.colGap : var.colGap)
             sourceX2 = 40 + treeIndex2 * var.treeW + var.treeW / 2 + (branch2 == 'a' ? -var.colGap : var.colGap)
-            linkCenter = (sourceX1 + sourceX2) / 2
-            linkY = 650
-            if(key == 0){ linkCenter = linkCenter - 80; linkY = 560 }
-            if(key == 1){ linkCenter = linkCenter + 80; linkY = 740 }
-            if(key == 3){ linkCenter = linkCenter - 80; linkY = 560 }
-            if(key == 4){ linkY = 650 }
-            if(key == 5){ linkCenter = linkCenter + 80; linkY = 830 }
-            if(key == 6){ linkY = 830 }
-            if(key == 7){ linkY = 560 }
-            node.x = linkCenter - var.nodeSize / 2
-            node.y = linkY
-            sourceRel1 = sourceX1 - node.x
-            sourceRel2 = sourceX2 - node.x
-            targetRel1 = var.nodeSize / 2 - 10
-            targetRel2 = var.nodeSize / 2 + 10
-            topRel = var.rootY + 2 * var.tierGap + var.nodeSize - linkY
-            route1 = topRel / 2 - 10
-            route2 = topRel / 2 + 10
+            // 所有联动节点均匀排列在所有树下方一排
+            linkCenter = var.linkStartX + key * var.linkSpacing
+            node.x = (linkCenter - var.nodeSize / 2).round()
+            node.y = var.linkY
+            // 连线：源节点底部 → 垂直下降穿过 T4/T5 间隙 → bus 汇线 → 水平 → 垂直接入联动节点
+            sourceRel1 = (sourceX1 - node.x).round()
+            sourceRel2 = (sourceX2 - node.x).round()
+            targetRel1 = (var.nodeSize / 2 - 10).round()
+            targetRel2 = (var.nodeSize / 2 + 10).round()
+            sourceBottomRel = (var.sourceBottomY - var.linkY).round()
             p1v = node['联动1竖']
             p1h = node['联动1横']
             p1in = node['联动入竖']
             p2v = node['联动2竖']
             p2h = node['联动2横']
             p2in = node['联动2入竖']
-            p1v.x = sourceRel1 - var.lineW / 2
-            p1v.y = topRel
+            // 路径1：源1 → bus1 → 联动节点左侧
+            p1v.x = (sourceRel1 - var.lineW / 2).round()
+            p1v.y = sourceBottomRel
             p1v.width = var.lineW
-            p1v.height = route1 - topRel
+            p1v.height = (var.bus1Rel - sourceBottomRel).round()
             p1v.visible = true
-            p1h.x = sourceRel1 < targetRel1 ? sourceRel1 : targetRel1
-            p1h.y = route1 - var.lineW / 2
-            p1h.width = sourceRel1 < targetRel1 ? targetRel1 - sourceRel1 : sourceRel1 - targetRel1
+            p1h.x = (sourceRel1 < targetRel1 ? sourceRel1 : targetRel1).round()
+            p1h.y = (var.bus1Rel - var.lineW / 2).round()
+            p1h.width = (sourceRel1 < targetRel1 ? targetRel1 - sourceRel1 : sourceRel1 - targetRel1).round()
             p1h.height = var.lineW
             p1h.visible = true
-            p1in.x = targetRel1 - var.lineW / 2
-            p1in.y = route1
+            p1in.x = (targetRel1 - var.lineW / 2).round()
+            p1in.y = var.bus1Rel
             p1in.width = var.lineW
-            p1in.height = -route1
+            p1in.height = (-var.bus1Rel).round()
             p1in.visible = true
-            p2v.x = sourceRel2 - var.lineW / 2
-            p2v.y = topRel
+            // 路径2：源2 → bus2 → 联动节点右侧
+            p2v.x = (sourceRel2 - var.lineW / 2).round()
+            p2v.y = sourceBottomRel
             p2v.width = var.lineW
-            p2v.height = route2 - topRel
+            p2v.height = (var.bus2Rel - sourceBottomRel).round()
             p2v.visible = true
-            p2h.x = sourceRel2 < targetRel2 ? sourceRel2 : targetRel2
-            p2h.y = route2 - var.lineW / 2
-            p2h.width = sourceRel2 < targetRel2 ? targetRel2 - sourceRel2 : sourceRel2 - targetRel2
+            p2h.x = (sourceRel2 < targetRel2 ? sourceRel2 : targetRel2).round()
+            p2h.y = (var.bus2Rel - var.lineW / 2).round()
+            p2h.width = (sourceRel2 < targetRel2 ? targetRel2 - sourceRel2 : sourceRel2 - targetRel2).round()
             p2h.height = var.lineW
             p2h.visible = true
-            p2in.x = targetRel2 - var.lineW / 2
-            p2in.y = route2
+            p2in.x = (targetRel2 - var.lineW / 2).round()
+            p2in.y = var.bus2Rel
             p2in.width = var.lineW
-            p2in.height = -route2
+            p2in.height = (-var.bus2Rel).round()
             p2in.visible = true
           }
         }
@@ -750,7 +751,7 @@ controls:
                 type: Canvas
                 attribute:
                   width: "var.canvasW"
-                  height: 1210
+                  height: 1420
                 children:
                   # 树标题模板
                   树标题模板:
@@ -813,7 +814,6 @@ controls:
                       linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,255' : (self.linkTree2 == 'swift' ? '38,145,178,255' : (self.linkTree2 == 'pressure' ? '178,48,48,255' : (self.linkTree2 == 'focus' ? '142,58,178,255' : '184,142,34,255')))"
                       linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : self.linkDim1"
                       linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : self.linkDim2"
-                      tip: "self.entry != none ? (self.entry['name'] + '\\n&7' + self.entry['description'] + (self.entry['unlocked'] == true ? '\\n&a✔ 已激活' : (self.entry['canUnlock'] == true ? '\\n&e点击激活' : '\\n&8尚未解锁'))) : ''"
                     action:
                       clickLeft: |-
                         if(self.entry != none){
@@ -925,11 +925,10 @@ controls:
                           slotType: ~Icon
                           itemScale: 0.75
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,255'"
-                          hover: "self.parent.entry != none && self.parent.entry['canUnlock'] == true ? '34,42,54,255' : '22,28,38,255'"
                           shape: ~round_rect
                           radius: 12
-                          overwriteText: "~"
                           seticon: "self.setItemIcon(self.parent.entry != none ? self.parent.entry['iconJson'] : var.emptyItemJson)"
+                          tip: "self.parent.entry != none ? (self.parent.entry['name'] + '\\n&7' + self.parent.entry['description'] + (self.parent.entry['effects'] != none && self.parent.entry['effects'].size() > 0 ? '\\n&b' + self.parent.entry['effects'].join('\\n&b') : '') + (self.parent.entry['unlocked'] == true ? '\\n&a✔ 已激活' : (self.parent.entry['canUnlock'] == true ? '\\n&e点击激活' : '\\n&8尚未解锁'))) : ''"
                         effect:
                           stroke:
                             width: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 4"
