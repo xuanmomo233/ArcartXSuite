@@ -502,6 +502,14 @@ jobs:
           path: axs-core/build/libs/*-encrypted.jar
           if-no-files-found: error
 
+      - name: Upload ProGuard mapping (core)
+        uses: actions/upload-artifact@v5
+        with:
+          name: axs-core-proguard-mapping
+          path: axs-core/build/libs/*-proguard-mapping.txt
+          if-no-files-found: warn
+          retention-days: 1
+
       - name: Upload encrypted core JAR to cloud (本体 jar 自动上传)
         if: success()
         env:
@@ -915,3 +923,11 @@ jobs:
             fi
             echo "DONE: module $module (primary=$PRIMARY_OK flare=$FLARE_OK)"
           done
+
+      - name: Upload ProGuard mappings (modules)
+        uses: actions/upload-artifact@v5
+        with:
+          name: axs-modules-proguard-mapping
+          path: build/ArcartX-Suite/modules-obf/*-proguard-mapping.txt
+          if-no-files-found: warn
+          retention-days: 1
