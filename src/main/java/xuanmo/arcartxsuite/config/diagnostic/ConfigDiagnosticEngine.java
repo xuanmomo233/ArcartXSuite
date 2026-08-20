@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -55,15 +54,13 @@ public final class ConfigDiagnosticEngine {
     private final MigrationLoader.ResourceOpener resourceOpener;
     private final ClassLoader hostClassLoader;
     private final Logger logger;
-    private final Supplier<Set<String>> discoveredModuleIdsSupplier;
 
     public ConfigDiagnosticEngine(
         File pluginDataFolder,
         Instant sessionStart,
         MigrationLoader.ResourceOpener resourceOpener,
         ClassLoader hostClassLoader,
-        Logger logger,
-        Supplier<Set<String>> discoveredModuleIdsSupplier
+        Logger logger
     ) {
         this.pluginDataFolder = pluginDataFolder;
         this.sessionTimestamp = SESSION_TS.format(sessionStart);
@@ -72,7 +69,6 @@ public final class ConfigDiagnosticEngine {
         this.resourceOpener = resourceOpener;
         this.hostClassLoader = hostClassLoader;
         this.logger = logger;
-        this.discoveredModuleIdsSupplier = discoveredModuleIdsSupplier == null ? () -> Set.of() : discoveredModuleIdsSupplier;
     }
 
     public String sessionTimestamp() {
@@ -187,15 +183,11 @@ public final class ConfigDiagnosticEngine {
         }
 
         // 5. 结构合并 dry-run
-        Set<String> discoveredModuleIds = discoveredModuleIdsSupplier.get();
-        Set<String> presentModuleIds = new java.util.LinkedHashSet<>();
-        ConfigurationSection liveModulesSection = live.getConfigurationSection("modules");
-        if (liveModulesSection != null) {
-            presentModuleIds.addAll(liveModulesSection.getKeys(false));
-        }
-        Set<String> obsoleteModuleIds = new java.util.LinkedHashSet<>(presentModuleIds);
-        obsoleteModuleIds.removeAll(discoveredModuleIds);
-        Map<String, Object> preservedModuleEnables = preserveDiscoveredModuleSections(live, discoveredModuleIds);
+        // modules 节由用户全权管理：官方模块开关缺失时补默认值(INFO)，
+        // 但不报告非官方/未安装/云端内存注入模块的开关为废弃。
+        // 因此 merge 前先保存 modules 节下所有用户键，merge 后恢复，
+        // 且不对 modules.* 路径生成 OBSOLETE_KEY。
+        Map<String, Object> preservedModuleEnables = preserveAllModuleSections(live);
         MergeOutcome outcome = YamlConfigSynchronizer.merge(live, defaults, sync.policy());
         for (String added : outcome.addedPaths()) {
             // jar 默认有但用户没有 → 这是 Jar 新增字段
@@ -211,22 +203,13 @@ public final class ConfigDiagnosticEngine {
             if ("modules".equals(removed)) {
                 continue;
             }
-            if (isDiscoveredModulePath(removed, discoveredModuleIds)) {
+            // modules 节下的所有路径都不报告废弃（用户可自由配置任意模块开关）
+            if (removed.startsWith("modules.")) {
                 continue;
             }
             // 用户有但 jar 默认没有，且不在动态节 → 用户保留的废弃字段
             issues.add(new ConfigIssue(
                 spec.ownerId(), sync.resourcePath(), removed,
-                ConfigIssueKind.OBSOLETE_KEY, ConfigIssueSeverity.WARN,
-                "(已删除)", null,
-                "废弃键已被剪除",
-                ChangeSource.USER_DEPRECATED, null
-            ));
-        }
-        for (String moduleId : obsoleteModuleIds) {
-            String modulePath = "modules." + moduleId;
-            issues.add(new ConfigIssue(
-                spec.ownerId(), sync.resourcePath(), modulePath,
                 ConfigIssueKind.OBSOLETE_KEY, ConfigIssueSeverity.WARN,
                 "(已删除)", null,
                 "废弃键已被剪除",
@@ -410,20 +393,22 @@ public final class ConfigDiagnosticEngine {
             : ChangeSource.USER_MODIFIED;
     }
 
-    private Map<String, Object> preserveDiscoveredModuleSections(YamlConfiguration live, Set<String> discoveredModuleIds) {
+    /**
+     * 保存 modules 节下所有用户键值，防止 merge 时被剪除。
+     * modules 节由用户全权管理，包括官方模块、云端内存注入模块、第三方 jar 模块的开关，
+     * 诊断引擎不对非 jar 默认的模块开关做废弃判断。
+     */
+    private Map<String, Object> preserveAllModuleSections(YamlConfiguration live) {
         Map<String, Object> preserved = new HashMap<>();
-        if (live == null || discoveredModuleIds == null || discoveredModuleIds.isEmpty()) {
+        if (live == null) {
             return preserved;
         }
-        for (String moduleId : discoveredModuleIds) {
-            String modulePath = "modules." + moduleId;
-            ConfigurationSection section = live.getConfigurationSection(modulePath);
-            if (section == null) {
-                continue;
-            }
-            for (Map.Entry<String, Object> entry : section.getValues(true).entrySet()) {
-                preserved.put(modulePath + "." + entry.getKey(), entry.getValue());
-            }
+        ConfigurationSection modulesSection = live.getConfigurationSection("modules");
+        if (modulesSection == null) {
+            return preserved;
+        }
+        for (Map.Entry<String, Object> entry : modulesSection.getValues(true).entrySet()) {
+            preserved.put("modules." + entry.getKey(), entry.getValue());
         }
         return preserved;
     }
@@ -435,19 +420,6 @@ public final class ConfigDiagnosticEngine {
         for (Map.Entry<String, Object> entry : preservedModuleEnables.entrySet()) {
             live.set(entry.getKey(), entry.getValue());
         }
-    }
-
-    private boolean isDiscoveredModulePath(String path, Set<String> discoveredModuleIds) {
-        if (path == null || discoveredModuleIds == null || discoveredModuleIds.isEmpty()) {
-            return false;
-        }
-        for (String moduleId : discoveredModuleIds) {
-            String prefix = "modules." + moduleId;
-            if (path.equals(prefix) || path.startsWith(prefix + ".")) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String describe(Object value) {

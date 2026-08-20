@@ -247,7 +247,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         } else {
             sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " password <set <新密码> [旧密码]|unlock <密码>|clear <当前密码>>" + ChatColor.GRAY + " - 管理统一二级密码");
         }
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " diagnostic" + ChatColor.GRAY + " - 生成诊断包到 diagnostics/ 目录");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " diagnostic" + ChatColor.GRAY + " - 生成运行环境诊断报告(服务器/JVM/插件/模块状态)到 diagnostics/ 目录，供客服排查问题");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " <module> [action]" + ChatColor.GRAY + " - 调用模块命令");
         ModuleRegistry registry = plugin.getModuleRegistry();
         if (registry != null && !registry.externalModuleIds().isEmpty()) {

@@ -362,8 +362,7 @@ public final class SuiteCoreImpl implements SuiteCore {
                 return MohistCompat.getResourceSafe(resourcePath, effective);
             },
             host.getClass().getClassLoader(),
-            getLogger(),
-            () -> moduleRegistry == null ? java.util.Set.of() : moduleRegistry.scanAvailableModuleIds()
+            getLogger()
         );
         configDiagnosisStore = new ConfigDiagnosisStore();
 

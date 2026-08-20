@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.Set;
 import java.util.logging.Logger;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -42,7 +41,7 @@ class ConfigDiagnosticEngineTest {
     }
 
     @Test
-    void discoveredModuleEnableSurvivesDiagnosisWhileUnknownKeyIsPruned() throws Exception {
+    void allModuleEnablesSurviveDiagnosisWithoutObsoleteReport() throws Exception {
         Path pluginData = Files.createDirectories(tempDir.resolve("plugin"));
         Path targetFile = pluginData.resolve("config.yml");
 
@@ -56,8 +55,7 @@ class ConfigDiagnosticEngineTest {
             Instant.parse("2026-07-06T00:00:00Z"),
             (ownerId, resourcePath, loader) -> new ByteArrayInputStream("root: value\n".getBytes(StandardCharsets.UTF_8)),
             getClass().getClassLoader(),
-            Logger.getLogger("ConfigDiagnosticEngineTest"),
-            () -> Set.of("aubade")
+            Logger.getLogger("ConfigDiagnosticEngineTest")
         );
 
         ModuleConfigSpec spec = ModuleConfigSpec.basic("axs-core", new ConfigSyncSpec("config.yml", "config.yml", SyncPolicy.strict()));
@@ -68,18 +66,17 @@ class ConfigDiagnosticEngineTest {
         YamlConfiguration proposed = new YamlConfiguration();
         proposed.load(report.proposedFile().toFile());
 
+        // modules 节由用户全权管理，所有模块开关都保留，不标记废弃
         assertTrue(proposed.isSet("modules.aubade"));
         assertTrue(proposed.isSet("modules.aubade.enabled"));
         assertTrue(proposed.getBoolean("modules.aubade.enabled"));
-        assertFalse(proposed.isSet("modules.bogus.enabled"));
+        assertTrue(proposed.isSet("modules.bogus.enabled"));
+        assertTrue(proposed.getBoolean("modules.bogus.enabled"));
 
+        // modules.* 路径不生成 OBSOLETE_KEY
         assertTrue(report.issues().stream().noneMatch(issue ->
             issue.kind() == ConfigIssueKind.OBSOLETE_KEY
-                && issue.configPath().startsWith("modules.aubade")
-        ));
-        assertTrue(report.issues().stream().anyMatch(issue ->
-            issue.kind() == ConfigIssueKind.OBSOLETE_KEY
-                && issue.configPath().startsWith("modules.bogus")
+                && issue.configPath().startsWith("modules.")
         ));
     }
 }
