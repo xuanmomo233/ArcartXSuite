@@ -1473,6 +1473,9 @@ public final class FishingService {
             treeMap.put("id", treeId);
             treeMap.put("displayName", tree.displayName());
             treeMap.put("description", tree.description());
+            treeMap.put("icon", tree.icon());
+            // 树图标 itemJson（UI 端 Slot Icon 渲染用）
+            treeMap.put("iconJson", buildTalentIconJson(tree.icon()));
             java.util.Map<String, Object> nodesMap = new java.util.LinkedHashMap<>();
             int nodeIdx = 0;
             for (xuanmo.arcartxsuite.fishing.talent.TalentNode node : tree.nodes()) {
@@ -1481,14 +1484,19 @@ public final class FishingService {
                 nodeMap.put("name", node.displayName());
                 nodeMap.put("description", node.description());
                 nodeMap.put("tier", node.tier());
+                nodeMap.put("branch", node.branch());
+                nodeMap.put("treeId", node.treeId());
                 nodeMap.put("unlocked", seasonData.talents().contains(node.id()));
                 nodeMap.put("canUnlock", talentEngine.canUnlock(seasonData, node.id()));
+                nodeMap.put("iconJson", buildTalentNodeIconJson(node));
                 // 效果描述
                 java.util.List<String> effects = new java.util.ArrayList<>();
                 for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
                     effects.add(effect.effectType() + ": " + effect.effectValue());
                 }
                 nodeMap.put("effects", effects);
+                // 前置节点
+                nodeMap.put("prerequisites", new java.util.ArrayList<>(node.prerequisites()));
                 nodesMap.put(Integer.toString(nodeIdx), nodeMap);
                 nodeIdx++;
             }
@@ -1497,6 +1505,37 @@ public final class FishingService {
             treesMap.put(treeId, treeMap);
         }
         payload.put("trees", treesMap);
+
+        // 联动天赋节点（跨树，不属于任何单棵树）
+        java.util.Map<String, Object> linksMap = new java.util.LinkedHashMap<>();
+        int linkIdx = 0;
+        for (xuanmo.arcartxsuite.fishing.talent.TalentNode link : talentEngine.getLinkNodes()) {
+            java.util.Map<String, Object> linkMap = new java.util.LinkedHashMap<>();
+            linkMap.put("id", link.id());
+            linkMap.put("name", link.displayName());
+            linkMap.put("description", link.description());
+            linkMap.put("tier", link.tier());
+            linkMap.put("branch", link.branch());
+            linkMap.put("treeId", link.treeId());
+            linkMap.put("unlocked", seasonData.talents().contains(link.id()));
+            linkMap.put("canUnlock", talentEngine.canUnlock(seasonData, link.id()));
+            linkMap.put("iconJson", buildTalentNodeIconJson(link));
+            java.util.List<String> linkEffects = new java.util.ArrayList<>();
+            for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
+                linkEffects.add(effect.effectType() + ": " + effect.effectValue());
+            }
+            linkMap.put("effects", linkEffects);
+            linkMap.put("prerequisites", new java.util.ArrayList<>(link.prerequisites()));
+            java.util.List<Boolean> prerequisiteStates = new java.util.ArrayList<>();
+            for (String prerequisite : link.prerequisites()) {
+                prerequisiteStates.add(seasonData.talents().contains(prerequisite));
+            }
+            linkMap.put("prerequisiteStates", prerequisiteStates);
+            linksMap.put(Integer.toString(linkIdx), linkMap);
+            linkIdx++;
+        }
+        payload.put("links", linksMap);
+        payload.put("linkCount", linkIdx);
 
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
@@ -1559,6 +1598,52 @@ public final class FishingService {
             stack.setItemMeta(meta);
         }
         return itemGenerator.itemToJson(stack);
+    }
+
+    /**
+     * 根据天赋树图标材质构建 itemJson 字符串（UI 端 Slot Icon 渲染用）。
+     *
+     * @param iconMaterial 材质 ID（如 minecraft:iron_bars）
+     * @return itemJson 字符串，生成失败时返回空字符串
+     */
+    private @NotNull String buildTalentIconJson(@NotNull String iconMaterial) {
+        String materialName = iconMaterial.startsWith("minecraft:") ? iconMaterial.substring("minecraft:".length()) : iconMaterial;
+        Material material = Material.matchMaterial(materialName, true);
+        if (material == null || material.isAir()) {
+            return "";
+        }
+        ItemStack stack = new ItemStack(material, 1);
+        return itemGenerator.itemToJson(stack);
+    }
+
+    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node) {
+        String effectType = node.effects().isEmpty() ? "" : node.effects().get(0).effectType();
+        String material = switch (effectType) {
+            case "bar_height" -> "minecraft:iron_bars";
+            case "bar_damping" -> "minecraft:slime_ball";
+            case "bar_bounce" -> "minecraft:rabbit_foot";
+            case "bar_force" -> "minecraft:piston";
+            case "fish_speed" -> "minecraft:feather";
+            case "fish_dwell", "flee_cooldown" -> "minecraft:clock";
+            case "fish_dart" -> "minecraft:arrow";
+            case "fish_noise" -> "minecraft:sculk_sensor";
+            case "fish_edge" -> "minecraft:shield";
+            case "flee_chance" -> "minecraft:iron_sword";
+            case "flee_speed" -> "minecraft:chain";
+            case "flee_duration" -> "minecraft:cobweb";
+            case "progress_rate" -> "minecraft:recovery_compass";
+            case "progress_drain" -> "minecraft:honey_bottle";
+            case "perfect_window" -> "minecraft:spyglass";
+            case "start_progress" -> "minecraft:firework_rocket";
+            case "xp_multiplier", "xp_in_bar" -> "minecraft:experience_bottle";
+            case "price_multiplier" -> "minecraft:gold_ingot";
+            case "legendary_chance" -> "minecraft:nether_star";
+            case "treasure_chance" -> "minecraft:chest";
+            case "rare_chance" -> "minecraft:emerald";
+            case "perfect_xp" -> "minecraft:enchanted_golden_apple";
+            default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
+        };
+        return buildTalentIconJson(material);
     }
 
     /**

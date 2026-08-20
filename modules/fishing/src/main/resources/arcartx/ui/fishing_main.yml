@@ -1120,6 +1120,7 @@ controls:
                               radius: 8
                               slotType: ~Icon
                               itemScale: 0.7
+                              overwriteText: "~"
                               seticon: "self.setItemIcon(var.recentIconJsons[self.parent.entryKey] != none ? var.recentIconJsons[self.parent.entryKey] : var.emptyItemJson)"
                           # 稀有度色条
                           稀有度色条:

@@ -657,7 +657,7 @@ controls:
               point: ~top_left
               x: 32
               y: 26
-              texts: "var.currentCategory == 'daily' ? '&f&l每日任务' : (var.currentCategory == 'weekly' ? '&f&l每周任务' : '&f&l赛季任务')"
+              texts: "var.currentCategory == 'daily' ? '&f每日任务' : (var.currentCategory == 'weekly' ? '&f每周任务' : '&f赛季任务')"
               fontSize: 40
           页标题说明:
             type: Text

@@ -645,6 +645,7 @@ controls:
                           radius: 10
                           slotType: ~Icon
                           itemScale: 0.85
+                          overwriteText: "~"
                           seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
 
                       # 奖励名称
