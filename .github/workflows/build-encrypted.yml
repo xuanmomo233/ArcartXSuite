@@ -55,7 +55,8 @@ jobs:
         id: changes
         run: |
           # 全部模块清单（用于手动 / 无法 diff 时的全量构建）
-          ALL_MODULES=$(ls -d modules/*/ 2>/dev/null | sed 's#modules/##; s#/##' | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          # 排除 debug 模块（非生产模块，无 encryptModuleAxb 任务）
+          ALL_MODULES=$(ls -d modules/*/ 2>/dev/null | sed 's#modules/##; s#/##' | sort -u | grep -v '^debug$' | jq -R -s -c 'split("\n") | map(select(. != ""))')
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BASE=""
