@@ -81,14 +81,14 @@ ui:
       var.iconDelay = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 树布局参数（参考萨满天赋树：紧凑、连线明显）
-      var.nodeSize = 72
+      var.nodeSize = 96
       var.tierGap = 170
-      var.colGap = 88
-      var.treeW = 520
+      var.colGap = 120
+      var.treeW = 700
       var.treeGap = 0
       var.lineW = 7
       var.rootY = 80
-      var.canvasW = 2680
+      var.canvasW = 3580
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
       var.treeNames['swift'] = '&b迅捷'
@@ -794,6 +794,7 @@ controls:
                     type: Canvas
                     val: 天赋节点模板
                     attribute:
+                      point: ~top_left
                       entryKey: 0.round()
                       treeId: 'steady'
                       isLink: false
@@ -801,15 +802,15 @@ controls:
                       visible: "self.entry != none"
                       width: "var.nodeSize"
                       height: "var.nodeSize"
-                      brightColor: "self.treeId == 'steady' ? '82,214,118,255' : (self.treeId == 'swift' ? '65,198,235,255' : (self.treeId == 'pressure' ? '235,86,86,255' : (self.treeId == 'focus' ? '190,105,235,255' : (self.treeId == 'lucky' ? '245,196,72,255' : '255,138,64,255'))))"
-                      dimColor: "self.treeId == 'steady' ? '48,138,76,215' : (self.treeId == 'swift' ? '38,126,154,215' : (self.treeId == 'pressure' ? '152,52,52,215' : (self.treeId == 'focus' ? '126,62,158,215' : (self.treeId == 'lucky' ? '158,126,38,215' : '168,82,38,215'))))"
+                      brightColor: "self.treeId == 'steady' ? '72,238,112,255' : (self.treeId == 'swift' ? '48,208,248,255' : (self.treeId == 'pressure' ? '248,70,70,255' : (self.treeId == 'focus' ? '212,86,248,255' : (self.treeId == 'lucky' ? '252,198,42,255' : '255,128,42,255'))))"
+                      dimColor: "self.treeId == 'steady' ? '48,156,82,255' : (self.treeId == 'swift' ? '34,138,170,255' : (self.treeId == 'pressure' ? '172,48,48,255' : (self.treeId == 'focus' ? '144,54,180,255' : (self.treeId == 'lucky' ? '180,138,30,255' : '190,76,30,255'))))"
                       lineColor: "self.entry != none && self.entry['unlocked'] == true ? self.brightColor : self.dimColor"
                       linkTree1: 'steady'
                       linkTree2: 'steady'
                       linkBright1: "self.linkTree1 == 'steady' ? '82,255,128,255' : (self.linkTree1 == 'swift' ? '60,220,255,255' : (self.linkTree1 == 'pressure' ? '255,78,78,255' : (self.linkTree1 == 'focus' ? '218,95,255,255' : '255,210,55,255')))"
                       linkBright2: "self.linkTree2 == 'steady' ? '82,255,128,255' : (self.linkTree2 == 'swift' ? '60,220,255,255' : (self.linkTree2 == 'pressure' ? '255,78,78,255' : (self.linkTree2 == 'focus' ? '218,95,255,255' : '255,210,55,255')))"
-                      linkDim1: "self.linkTree1 == 'steady' ? '48,165,82,210' : (self.linkTree1 == 'swift' ? '38,145,178,210' : (self.linkTree1 == 'pressure' ? '178,48,48,210' : (self.linkTree1 == 'focus' ? '142,58,178,210' : '184,142,34,210')))"
-                      linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,210' : (self.linkTree2 == 'swift' ? '38,145,178,210' : (self.linkTree2 == 'pressure' ? '178,48,48,210' : (self.linkTree2 == 'focus' ? '142,58,178,210' : '184,142,34,210')))"
+                      linkDim1: "self.linkTree1 == 'steady' ? '48,165,82,255' : (self.linkTree1 == 'swift' ? '38,145,178,255' : (self.linkTree1 == 'pressure' ? '178,48,48,255' : (self.linkTree1 == 'focus' ? '142,58,178,255' : '184,142,34,255')))"
+                      linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,255' : (self.linkTree2 == 'swift' ? '38,145,178,255' : (self.linkTree2 == 'pressure' ? '178,48,48,255' : (self.linkTree2 == 'focus' ? '142,58,178,255' : '184,142,34,255')))"
                       linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : self.linkDim1"
                       linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : self.linkDim2"
                       tip: "self.entry != none ? (self.entry['name'] + '\\n&7' + self.entry['description'] + (self.entry['unlocked'] == true ? '\\n&a✔ 已激活' : (self.entry['canUnlock'] == true ? '\\n&e点击激活' : '\\n&8尚未解锁'))) : ''"
@@ -914,58 +915,58 @@ controls:
                           normal: "self.parent.linkColor2"
                           visible: false
                           through: true
-                      # 节点底（正方形色块）
-                      节点底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,235'"
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 3"
-                            color: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
-                          neon:
-                            color: "self.parent.brightColor"
-                            size: 5
-                            intensity: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 1 : 0"
-                            animated: false
                       # 节点图标（Slot 显示物品 icon）
                       节点图标:
                         type: Slot
                         attribute:
-                          x: 6
-                          y: 6
-                          width: 60
-                          height: 60
+                          point: ~middle_center
+                          width: 88
+                          height: 88
                           slotType: ~Icon
-                          itemScale: 1.1
-                          normal: ~0,0,0,0
-                          through: true
+                          itemScale: 0.75
+                          normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,255'"
+                          hover: "self.parent.entry != none && self.parent.entry['canUnlock'] == true ? '34,42,54,255' : '22,28,38,255'"
+                          shape: ~round_rect
+                          radius: 12
                           overwriteText: "~"
                           seticon: "self.setItemIcon(self.parent.entry != none ? self.parent.entry['iconJson'] : var.emptyItemJson)"
+                        effect:
+                          stroke:
+                            width: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 4"
+                            color: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
+                          neon:
+                            color: "self.parent.brightColor"
+                            size: 6
+                            intensity: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 1 : 0"
+                            animated: false
+                        action:
+                          clickLeft: |-
+                            if(self.parent.entry != none){
+                              if(self.parent.entry['canUnlock'] == true && self.parent.entry['unlocked'] != true){
+                                Packet.send(var.packetId, 'unlock_talent', self.parent.entry['id'])
+                              }
+                            }
                       # 层级标签（右下角小标签 T1~T5）
                       层级标签:
                         type: Texture
                         attribute:
                           point: ~bottom_right
-                          x: 3
-                          y: 3
-                          width: 22
-                          height: 18
+                          x: -2
+                          y: -2
+                          width: 52
+                          height: 44
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
                           shape: ~round_rect
-                          radius: 4
+                          radius: 8
                           through: true
                         children:
                           层级文字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: 22
+                              width: 52
                               texts: "self.parent.parent.entry != none && self.parent.parent.isLink != true ? '&fT' + type.toNumber(self.parent.parent.entry['tier']).round() : '&f联'"
-                              fontSize: 14
+                              fontSize: 36
                               through: true
 
           # 滚动滑块（纵向）
