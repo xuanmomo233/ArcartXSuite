@@ -115,7 +115,7 @@ public final class FishingMinigame {
         try {
             tickInternal();
         } catch (Throwable t) {
-            service.getPlugin().getLogger().severe("[Fishing] tick 异常，强制清理小游戏: " + t.getClass().getSimpleName() + " - " + t.getMessage());
+            service.getLogger().severe("tick 异常，强制清理小游戏: " + t.getClass().getSimpleName() + " - " + t.getMessage());
             t.printStackTrace();
             if (!finished) {
                 finished = true;
@@ -231,29 +231,33 @@ public final class FishingMinigame {
         // 更新绿条位置（物理：惯性 + 重力 + 点击力 + 法向力 + 反弹）
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
+        double forceMultiplier = settings.barForceMultiplier() * (1.0 + talentBonuses.barForceBonus());
+        double damping = settings.barDamping() + talentBonuses.barDampingBonus();
 
-        // 法向力：绿条已在边界时，边界施加反作用力抵消朝向边界的持续推力，
+        // 法向力：绿条紧贴边界时，边界施加反作用力抵消朝向边界的持续推力，
         // 防止绿条被"钉"在底部/顶部（现实中地面会托住物体，不会把它推穿）。
         // 逃离方向的力（如底部+重力上浮）仍然生效，帮助绿条脱离边界。
-        boolean atBottom = barPosition <= halfBar + 1e-6;
-        boolean atTop = barPosition >= 1.0 - halfBar - 1e-6;
+        // 仅当绿条紧贴边界（而非在一个区间内）时才触发，避免反复弹跳抽动。
+        boolean atBottom = barPosition <= halfBar;
+        boolean atTop = barPosition >= 1.0 - halfBar;
         boolean forceIntoBoundary = (atBottom && force < 0) || (atTop && force > 0);
         if (!forceIntoBoundary) {
-            barVelocity += force * settings.barForceMultiplier() * (1.0 + talentBonuses.barForceBonus());
+            barVelocity += force * forceMultiplier;
         }
-        barVelocity *= settings.barDamping() + talentBonuses.barDampingBonus();
+        barVelocity *= damping;
         barPosition = barPosition + barVelocity;
 
-        // 边界反弹：碰撞后速度反转并衰减，同时保证最小反弹速度使弹起可见。
+        // 边界反弹：碰撞后速度反转并衰减。
+        // 不再强制最小反弹速度——法向力已解决"卡住"问题，
+        // 强制最小反弹会导致绿条在边界附近反复抽动。
         double bounceDamping = settings.barBounceDamping() * (1.0 - talentBonuses.barBounceReduction());
-        double minBounceVel = 0.02; // 最小反弹速度，避免低速撞底后看似"卡住"
         if (barPosition - halfBar <= 0.0) {
             barPosition = halfBar;
-            barVelocity = Math.max(Math.abs(barVelocity) * bounceDamping, minBounceVel);
+            barVelocity = Math.abs(barVelocity) * bounceDamping;
         }
         if (barPosition + halfBar >= 1.0) {
             barPosition = 1.0 - halfBar;
-            barVelocity = -Math.max(Math.abs(barVelocity) * bounceDamping, minBounceVel);
+            barVelocity = -Math.abs(barVelocity) * bounceDamping;
         }
         barPosition = clamp(barPosition, halfBar, 1.0 - halfBar);
 
