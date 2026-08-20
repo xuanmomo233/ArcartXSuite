@@ -34,6 +34,7 @@ public final class StorageManagerImpl implements StorageManager {
     private final StorageDescriptor descriptor;
     private final HikariDataSource globalDataSource;
     private final Map<String, HikariDataSource> sqliteModuleSources = new ConcurrentHashMap<>();
+    private volatile HikariDataSource hostSqliteSource;
 
     /**
      * 从本体 config.yml 的 {@code storage} 节创建数据源管理器。
@@ -192,6 +193,36 @@ public final class StorageManagerImpl implements StorageManager {
         }
     }
 
+    @Override
+    public DataSource getHostDataSource() throws SQLException {
+        if (descriptor.isMysql()) {
+            if (globalDataSource == null || globalDataSource.isClosed()) {
+                throw new SQLException("AXS 全局 MySQL 数据源不可用");
+            }
+            return globalDataSource;
+        }
+        // SQLite 模式：懒创建宿主专用 axs_host.db 连接池
+        HikariDataSource existing = hostSqliteSource;
+        if (existing != null && !existing.isClosed()) {
+            return existing;
+        }
+        synchronized (this) {
+            existing = hostSqliteSource;
+            if (existing != null && !existing.isClosed()) {
+                return existing;
+            }
+            // 宿主专用 SQLite 文件放在 data/host/ 目录下
+            HikariDataSource ds = createSqlitePool("host", "axs_host.db");
+            hostSqliteSource = ds;
+            return ds;
+        }
+    }
+
+    @Override
+    public Connection getHostConnection() throws SQLException {
+        return getHostDataSource().getConnection();
+    }
+
     /**
      * 关闭所有数据源（本体 onDisable 时调用）。
      */
@@ -205,5 +236,9 @@ public final class StorageManagerImpl implements StorageManager {
             }
         }
         sqliteModuleSources.clear();
+        if (hostSqliteSource != null && !hostSqliteSource.isClosed()) {
+            hostSqliteSource.close();
+            hostSqliteSource = null;
+        }
     }
 }

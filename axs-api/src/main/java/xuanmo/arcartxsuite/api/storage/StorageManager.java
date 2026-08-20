@@ -98,4 +98,33 @@ public interface StorageManager {
      * @since 1.4.1
      */
     void closeModuleDataSource(String moduleId);
+
+    /**
+     * 获取宿主本体专用的数据源。
+     * <p>
+     * 用于宿主自身维护的全局表（如 {@code axs_pending_rewards}），与模块数据源隔离。
+     * <p>
+     * MySQL 模式下返回全局共享数据源（与 {@link #getDataSource()} 相同）；
+     * SQLite 模式下返回宿主专用的 {@code axs_host.db} 独立连接池。
+     *
+     * @return 宿主专用数据源
+     * @throws SQLException 数据源不可用或创建失败
+     * @since 1.4.2
+     */
+    DataSource getHostDataSource() throws SQLException;
+
+    /**
+     * 从宿主本体专用数据源获取连接。
+     * <p>
+     * 等价于 {@code getHostDataSource().getConnection()}，但会在数据源不可用时
+     * 抛出带上下文的 {@link SQLException}。
+     * <p>
+     * MySQL 模式下与 {@link #getConnection()} 行为一致（共享全局池）；
+     * SQLite 模式下返回宿主专用 {@code axs_host.db} 的连接。
+     *
+     * @return 数据库连接
+     * @throws SQLException 数据源不可用或获取连接失败
+     * @since 1.4.2
+     */
+    Connection getHostConnection() throws SQLException;
 }

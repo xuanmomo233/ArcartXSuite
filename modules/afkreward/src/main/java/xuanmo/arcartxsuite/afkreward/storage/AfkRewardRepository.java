@@ -81,7 +81,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid TEXT PRIMARY KEY,
                         player_name TEXT NOT NULL DEFAULT '',
@@ -93,7 +93,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                     """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid VARCHAR(36) PRIMARY KEY,
                         player_name VARCHAR(64) NOT NULL DEFAULT '',
@@ -112,7 +112,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid TEXT PRIMARY KEY,
                         player_name TEXT NOT NULL DEFAULT '',
@@ -129,7 +129,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                     """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid VARCHAR(36) PRIMARY KEY,
                         player_name VARCHAR(64) NOT NULL DEFAULT '',
@@ -153,7 +153,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         try (Statement stmt = conn.createStatement()) {
             if (!isMysql()) {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid TEXT NOT NULL,
                         area_name TEXT NOT NULL,
@@ -165,7 +165,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                     """);
             } else {
                 stmt.execute("""
-                    CREATE TABLE IF NOT EXISTS """ + table + """
+                    CREATE TABLE IF NOT EXISTS""" + " " + table + """
                     (
                         player_uuid VARCHAR(36) NOT NULL,
                         area_name VARCHAR(64) NOT NULL,

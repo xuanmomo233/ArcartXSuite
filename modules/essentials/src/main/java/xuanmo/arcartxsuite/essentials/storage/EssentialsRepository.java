@@ -129,7 +129,7 @@ public final class EssentialsRepository extends AbstractModuleRepository impleme
 
         stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tablePrefix() + """
             warnings (
-                id INTEGER PRIMARY KEY """ + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + """
+                id INTEGER PRIMARY KEY""" + " " + (isMysql() ? "AUTO_INCREMENT" : "AUTOINCREMENT") + """
                 , uuid VARCHAR(36) NOT NULL,
                 player_name VARCHAR(32) NOT NULL,
                 reason TEXT, operator VARCHAR(32) NOT NULL,

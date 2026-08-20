@@ -82,7 +82,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     protected void onInitialize(Connection conn) throws SQLException {
         String sql = "CREATE TABLE IF NOT EXISTS " + tableBindings + """
              (
-                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                id INTEGER PRIMARY KEY""" + " " + autoIncrement() + """
                 , qq_id BIGINT NOT NULL,
                 player_uuid VARCHAR(36) NOT NULL,
                 player_name VARCHAR(64) NOT NULL,
@@ -129,7 +129,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         // 兑换流水表
         String redeemSql = "CREATE TABLE IF NOT EXISTS " + tableRedeemLog + """
              (
-                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                id INTEGER PRIMARY KEY""" + " " + autoIncrement() + """
                 , qq_id BIGINT NOT NULL,
                 prize_id VARCHAR(64) NOT NULL,
                 cost INT NOT NULL DEFAULT 0,
@@ -157,7 +157,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         // 红包表
         String redPacketSql = "CREATE TABLE IF NOT EXISTS " + tableRedPackets + """
              (
-                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                id INTEGER PRIMARY KEY""" + " " + autoIncrement() + """
                 , sender_qq BIGINT NOT NULL,
                 group_id BIGINT NOT NULL,
                 total_amount INT NOT NULL DEFAULT 0,
@@ -176,7 +176,7 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         // 红包领取记录表
         String claimSql = "CREATE TABLE IF NOT EXISTS " + tableRedPacketClaims + """
              (
-                id INTEGER PRIMARY KEY """ + autoIncrement() + """
+                id INTEGER PRIMARY KEY""" + " " + autoIncrement() + """
                 , red_packet_id BIGINT NOT NULL,
                 claimer_qq BIGINT NOT NULL,
                 amount INT NOT NULL DEFAULT 0,

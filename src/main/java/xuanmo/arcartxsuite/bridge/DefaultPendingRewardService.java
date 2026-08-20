@@ -69,7 +69,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     public void initialize() {
         StorageDescriptor descriptor = storageManager.getDescriptor();
         boolean isMysql = descriptor != null && descriptor.isMysql();
-        try (Connection conn = storageManager.getConnection();
+        try (Connection conn = storageManager.getHostConnection();
              Statement stmt = conn.createStatement()) {
             if (isMysql) {
                 stmt.executeUpdate(
@@ -117,7 +117,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     @Override
     public void savePending(@NotNull PendingReward reward) {
-        try (Connection conn = storageManager.getConnection();
+        try (Connection conn = storageManager.getHostConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "INSERT INTO axs_pending_rewards "
                  + "(player_uuid, source_module, reward_type, payload, description, created_at, attempts) "
@@ -154,7 +154,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     @Override
     public void markDelivered(long id) {
-        try (Connection conn = storageManager.getConnection();
+        try (Connection conn = storageManager.getHostConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "DELETE FROM axs_pending_rewards WHERE id = ?")) {
             ps.setLong(1, id);
@@ -166,7 +166,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     @Override
     public void incrementAttempts(long id) {
-        try (Connection conn = storageManager.getConnection();
+        try (Connection conn = storageManager.getHostConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "UPDATE axs_pending_rewards SET attempts = attempts + 1 WHERE id = ?")) {
             ps.setLong(1, id);
@@ -252,7 +252,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      */
     private void batchUpdate(List<Long> toDelete, List<Long> toIncrement) {
         if (toDelete.isEmpty() && toIncrement.isEmpty()) return;
-        try (Connection conn = storageManager.getConnection()) {
+        try (Connection conn = storageManager.getHostConnection()) {
             conn.setAutoCommit(false);
             try {
                 if (!toDelete.isEmpty()) {
@@ -507,7 +507,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     private List<PendingReward> loadPendingByCondition(String sql, String... params) {
         List<PendingReward> result = new ArrayList<>();
-        try (Connection conn = storageManager.getConnection();
+        try (Connection conn = storageManager.getHostConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) {
                 ps.setString(i + 1, params[i]);
