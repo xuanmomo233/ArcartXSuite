@@ -16,6 +16,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
@@ -47,6 +49,7 @@ import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
  * @param treasurePools   宝藏池映射（池名 → 宝藏 id 列表）
  * @param ui              UI 配置（小游戏/图鉴界面 id 等）
  * @param commands        命令配置
+ * @param crossServer     跨服通道配置（多服架构下同步捕获记录等）
  * @param debug           是否输出调试日志（钓鱼事件、小游戏状态、发包详情等）
  */
 public record FishingModuleConfiguration(
@@ -63,6 +66,7 @@ public record FishingModuleConfiguration(
     @NotNull Map<String, List<String>> treasurePools,
     @NotNull UiConfiguration ui,
     @NotNull CommandsConfiguration commands,
+    @NotNull CrossServerChannelConfig crossServer,
     boolean debug
 ) {
 
@@ -98,6 +102,7 @@ public record FishingModuleConfiguration(
             Collections.unmodifiableMap(treasurePools),
             UiConfiguration.load(yaml.getConfigurationSection("ui")),
             CommandsConfiguration.load(yaml.getConfigurationSection("commands")),
+            CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server")),
             yaml.getBoolean("debug", false)
         );
     }

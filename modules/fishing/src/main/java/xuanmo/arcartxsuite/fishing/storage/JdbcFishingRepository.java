@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
+import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
@@ -96,12 +97,37 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                 + "command TEXT NOT NULL DEFAULT '',"
                 + "description TEXT NOT NULL DEFAULT '',"
                 + "created_at INTEGER NOT NULL)");
+
+            // 捕获记录表（跨赛季保留，用于 UI 最近捕获记录流）
+            if (!isMysql()) {
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    + "uuid TEXT NOT NULL,"
+                    + "fish_id TEXT NOT NULL,"
+                    + "fish_name TEXT NOT NULL,"
+                    + "rarity TEXT NOT NULL,"
+                    + "size INTEGER NOT NULL DEFAULT 0,"
+                    + "perfect INTEGER NOT NULL DEFAULT 0,"
+                    + "timestamp INTEGER NOT NULL)");
+            } else {
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS axs_fishing_catch_records ("
+                    + "id INTEGER PRIMARY KEY AUTO_INCREMENT,"
+                    + "uuid VARCHAR(36) NOT NULL,"
+                    + "fish_id VARCHAR(64) NOT NULL,"
+                    + "fish_name VARCHAR(128) NOT NULL,"
+                    + "rarity VARCHAR(16) NOT NULL,"
+                    + "size INT NOT NULL DEFAULT 0,"
+                    + "perfect TINYINT NOT NULL DEFAULT 0,"
+                    + "timestamp BIGINT NOT NULL,"
+                    + "INDEX idx_catch_uuid (uuid),"
+                    + "INDEX idx_catch_time (timestamp))");
+            }
         }
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards");
+        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_catch_records");
     }
 
     @Override
@@ -355,6 +381,70 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.warning("删除待发放奖励失败: " + e.getMessage());
+        }
+    }
+
+    // ─── 捕获记录 ────────────────────────────────────────────────
+
+    @Override
+    public void saveCatchRecord(@NotNull FishingCatchRecord record) {
+        String sql = "INSERT INTO axs_fishing_catch_records "
+            + "(uuid, fish_id, fish_name, rarity, size, perfect, timestamp) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, record.playerUuid().toString());
+            ps.setString(2, record.fishId());
+            ps.setString(3, record.fishName());
+            ps.setString(4, record.rarity());
+            ps.setInt(5, record.size());
+            ps.setInt(6, record.perfect() ? 1 : 0);
+            ps.setLong(7, record.timestamp());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("保存捕获记录失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @NotNull
+    public List<FishingCatchRecord> loadCatchRecords(@NotNull UUID uuid, int limit) {
+        List<FishingCatchRecord> result = new ArrayList<>();
+        String sql = "SELECT id, fish_id, fish_name, rarity, size, perfect, timestamp "
+            + "FROM axs_fishing_catch_records WHERE uuid = ? ORDER BY timestamp DESC LIMIT ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            ps.setInt(2, Math.max(1, limit));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new FishingCatchRecord(
+                        rs.getLong("id"),
+                        uuid,
+                        rs.getString("fish_id"),
+                        rs.getString("fish_name"),
+                        rs.getString("rarity"),
+                        rs.getInt("size"),
+                        rs.getInt("perfect") != 0,
+                        rs.getLong("timestamp")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            logger.warning("加载捕获记录失败: " + e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    public void clearCatchRecords(@NotNull UUID uuid) {
+        String sql = "DELETE FROM axs_fishing_catch_records WHERE uuid = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("清除捕获记录失败: " + e.getMessage());
         }
     }
 

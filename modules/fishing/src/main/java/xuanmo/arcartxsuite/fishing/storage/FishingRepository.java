@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
+import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
@@ -53,4 +54,15 @@ public interface FishingRepository {
 
     /**除指定的待发放奖励（发放成功后调用）。 */
     void deletePendingReward(long id);
+
+    // ─── 捕获记录（跨赛季保留，持久化存储） ────────────────────
+
+    /** 保存一条捕获记录。 */
+    void saveCatchRecord(@NotNull FishingCatchRecord record);
+
+    /** 加载玩家最近的 N 条捕获记录（按时间倒序）。 */
+    @NotNull List<FishingCatchRecord> loadCatchRecords(@NotNull UUID uuid, int limit);
+
+    /** 删除玩家所有捕获记录（数据迁移/清理时调用）。 */
+    void clearCatchRecords(@NotNull UUID uuid);
 }

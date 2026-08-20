@@ -341,7 +341,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             packetBridge,
             itemGen,
             logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
+            crossServer);
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));

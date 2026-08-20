@@ -33,6 +33,10 @@ import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
@@ -42,6 +46,7 @@ import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
+import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
@@ -80,6 +85,8 @@ public final class FishingService {
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
     private final Map<UUID, Deque<RecentCatch>> recentCatches = new HashMap<>();
     private final TalentEngine talentEngine;
+    private final @Nullable CrossServerAPI crossServer;
+    private @Nullable CrossServerChannel crossServerChannel;
 
     /** 调试日志：仅当 configuration.debug() 为 true 时输出。 */
     public void debug(@NotNull String message) {
@@ -115,7 +122,8 @@ public final class FishingService {
                           @NotNull RewardDispatcher rewardDispatcher,
                           @NotNull SettlementEngine settlementEngine,
                           @NotNull TaskEngine taskEngine,
-                          @Nullable Supplier<MailDispatchable> mailProvider) {
+                          @Nullable Supplier<MailDispatchable> mailProvider,
+                          @Nullable CrossServerAPI crossServer) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
@@ -129,6 +137,7 @@ public final class FishingService {
         this.settlementEngine = settlementEngine;
         this.taskEngine = taskEngine;
         this.mailProvider = mailProvider;
+        this.crossServer = crossServer;
     }
 
     public void setMessageProvider(@Nullable MessageProvider messageProvider) {
@@ -163,6 +172,7 @@ public final class FishingService {
 
     public void start() throws Exception {
         repository.initialize();
+        startCrossServer();
     }
 
     public void shutdown() {
@@ -173,7 +183,71 @@ public final class FishingService {
         }
         activeMinigames.clear();
         fishingCooldowns.clear();
+        recentCatches.clear();
+        shutdownCrossServer();
         repository.shutdown();
+    }
+
+    // ─── 跨服同步 ────────────────────────────────────────────────
+
+    private void startCrossServer() {
+        if (crossServer == null) return;
+        CrossServerChannelConfig channelConfig = configuration.crossServer();
+        if (!channelConfig.enabled()) return;
+        crossServerChannel = crossServer.openChannel(
+            "fishing",
+            channelConfig,
+            delivery -> handleCrossServerMessage(delivery.payload())
+        );
+        if (crossServerChannel.isActive()) {
+            logger.info("钓鱼跨服同步已启用");
+        }
+    }
+
+    private void shutdownCrossServer() {
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
+        }
+    }
+
+    /** 跨服通道是否处于活跃状态。 */
+    public boolean crossServerActive() {
+        return crossServerChannel != null && crossServerChannel.isActive();
+    }
+
+    private void publishCrossServer(String message) {
+        if (crossServerChannel != null && crossServerChannel.isActive() && message != null && !message.isBlank()) {
+            crossServerChannel.publish(message);
+        }
+    }
+
+    private void handleCrossServerMessage(String message) {
+        if (message == null || message.isBlank()) return;
+        // CATCH:<uuid>:<fishId>:<fishName>:<rarity>:<size>:<perfect>:<timestamp>
+        if (message.startsWith("CATCH:")) {
+            String[] parts = message.split(":", -1);
+            if (parts.length == 8) {
+                try {
+                    UUID uuid = UUID.fromString(parts[1]);
+                    String fishId = parts[2];
+                    String fishName = parts[3];
+                    String rarity = parts[4];
+                    int size = Integer.parseInt(parts[5]);
+                    boolean perfect = "1".equals(parts[6]);
+                    long timestamp = Long.parseLong(parts[7]);
+                    // 持久化到本地数据库
+                    repository.saveCatchRecord(new FishingCatchRecord(
+                        uuid, fishId, fishName, rarity, size, perfect, timestamp
+                    ));
+                    // 清除该玩家的内存缓存，下次打开 UI 时从数据库重新加载
+                    recentCatches.remove(uuid);
+                    debug("跨服同步捕获记录: " + fishName + " (玩家=" + uuid + ")");
+                } catch (Exception e) {
+                    logger.warning("解析跨服捕获记录失败: " + e.getMessage());
+                }
+            }
+        }
     }
 
     public boolean isReplaceVanilla() {
@@ -421,10 +495,15 @@ public final class FishingService {
             }
         }
 
-        // ─── 记录最近捕获（内存缓存，用于主界面展示） ──────────
+        // ─── 记录最近捕获（持久化到数据库，用于主界面展示） ──────
         recordRecentCatch(player.getUniqueId(), new RecentCatch(
             fish.id(), fish.displayName(), fish.rarity().name().toLowerCase(), size, perfect, System.currentTimeMillis()
         ));
+
+        // ─── 跨服同步捕获事件 ────────────────────────────────────
+        publishCrossServer("CATCH:" + player.getUniqueId() + ":" + fish.id() + ":"
+            + fish.displayName() + ":" + fish.rarity().name().toLowerCase() + ":"
+            + size + ":" + (perfect ? 1 : 0) + ":" + System.currentTimeMillis());
 
         // ─── 跨模块事件发射 ──────────────────────────────────────
         emitFishingEvent(player, fish, size, water, session.baitId(), perfect, isFirstCatch, gotTreasure, updatedSeason, updatedPerm);
@@ -1084,6 +1163,12 @@ public final class FishingService {
 
     /** 记录最近捕获到内存缓存（保留最近 MAX_RECENT_CATCHES 条）。 */
     private void recordRecentCatch(@NotNull UUID uuid, @NotNull RecentCatch catchEntry) {
+        // 持久化到数据库
+        repository.saveCatchRecord(new FishingCatchRecord(
+            uuid, catchEntry.fishId(), catchEntry.fishName(), catchEntry.rarity(),
+            catchEntry.size(), catchEntry.perfect(), catchEntry.timestamp()
+        ));
+        // 同时更新内存缓存（避免每次打开 UI 都查库）
         Deque<RecentCatch> deque = recentCatches.computeIfAbsent(uuid, k -> new ArrayDeque<>());
         deque.addFirst(catchEntry);
         while (deque.size() > MAX_RECENT_CATCHES) {
@@ -1091,11 +1176,25 @@ public final class FishingService {
         }
     }
 
-    /** 获取玩家最近捕获记录列表（最新在前）。 */
+    /** 获取玩家最近捕获记录列表（最新在前）。优先用内存缓存，缓存未命中时从数据库加载。 */
     @NotNull
     public List<RecentCatch> getRecentCatches(@NotNull UUID uuid) {
         Deque<RecentCatch> deque = recentCatches.get(uuid);
-        return deque != null ? new ArrayList<>(deque) : List.of();
+        if (deque != null && !deque.isEmpty()) {
+            return new ArrayList<>(deque);
+        }
+        // 缓存未命中，从数据库加载
+        List<FishingCatchRecord> records = repository.loadCatchRecords(uuid, MAX_RECENT_CATCHES);
+        List<RecentCatch> result = new ArrayList<>();
+        for (FishingCatchRecord r : records) {
+            result.add(new RecentCatch(r.fishId(), r.fishName(), r.rarity(), r.size(), r.perfect(), r.timestamp()));
+        }
+        // 回填缓存
+        if (!result.isEmpty()) {
+            Deque<RecentCatch> newDeque = new ArrayDeque<>(result);
+            recentCatches.put(uuid, newDeque);
+        }
+        return result;
     }
 
     /** 打开指定 UI（供 PacketHandler 导航跳转使用）。 */
