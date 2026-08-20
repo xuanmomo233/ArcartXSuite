@@ -114,7 +114,7 @@ public final class QQBotService implements Listener {
         connected = true;
         disconnectWarned = false;
         reconnectFailCount = 0;
-        logger.info(ChatColor.GREEN + "[QQBot] OneBot 已连接 | client=" + (client != null) + " | 群数=" + config.groups().size());
+        logger.info(ChatColor.GREEN + "OneBot 已连接 | client=" + (client != null) + " | 群数=" + config.groups().size());
     }
 
     public void onBotDisconnected(String reason) {
@@ -122,7 +122,7 @@ public final class QQBotService implements Listener {
         if (!disconnectWarned) {
             String wsUrl = config.onebot().wsUrl();
             int interval = config.onebot().reconnectIntervalSeconds();
-            logger.warning(ChatColor.RED + "[QQBot] OneBot 连接断开 — " + reason
+            logger.warning(ChatColor.RED + "OneBot 连接断开 — " + reason
                 + "。请检查 OneBot 实现端(NapCat/Lagrange等)是否已启动、wsUrl(" + wsUrl
                 + ")配置是否正确。将在 " + interval + " 秒后自动重连。");
             disconnectWarned = true;
@@ -135,7 +135,7 @@ public final class QQBotService implements Listener {
         if (reconnectFailCount % RECONNECT_FAIL_LOG_INTERVAL == 0) {
             int interval = config.onebot().reconnectIntervalSeconds();
             long elapsed = (long) reconnectFailCount * interval;
-            logger.warning(ChatColor.RED + "[QQBot] OneBot 仍未连接 — 已连续重连失败 "
+            logger.warning(ChatColor.RED + "OneBot 仍未连接 — 已连续重连失败 "
                 + reconnectFailCount + " 次（约 " + elapsed + " 秒），原因: " + reason
                 + "。启动 OneBot 实现端后可执行 /axs qqbot reload 立即重试。");
         }
@@ -179,14 +179,14 @@ public final class QQBotService implements Listener {
 
     public void handleOneBotEvent(OneBotEvent event) {
         if (config.debug()) {
-            logger.info("[QQBot/Debug] ← OneBot事件: type=" + event.postType()
+            logger.info("[Debug] ← OneBot事件: type=" + event.postType()
                 + (event.isGroupMessage() ? " group=" + event.groupId() + " msg=" + event.rawMessage() : ""));
         }
 
         // 黑名单拦截（配置静态黑名单 + 数据库动态黑名单）
         if (config.blacklist().isConfigBlacklisted(event.userId()) || repository.isBlacklisted(event.userId())) {
             if (config.debug()) {
-                logger.info("[QQBot/Debug] 黑名单QQ " + event.userId() + " 的事件已被拦截");
+                logger.info("[Debug] 黑名单QQ " + event.userId() + " 的事件已被拦截");
             }
             return;
         }
@@ -265,7 +265,7 @@ public final class QQBotService implements Listener {
                 try {
                     listener.onGroupMessage(groupId, event.userId(), dispatchNick, dispatchClean);
                 } catch (Exception ex) {
-                    logger.warning("[QQBot] 群事件监听器异常: " + ex.getMessage());
+                    logger.warning("群事件监听器异常: " + ex.getMessage());
                 }
             }
         }
@@ -276,7 +276,7 @@ public final class QQBotService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
     public void onAsyncPlayerChat(AsyncPlayerChatEvent event) {
         if (config.debug()) {
-            logger.info("[QQBot/Debug] AsyncPlayerChatEvent: player=" + event.getPlayer().getName()
+            logger.info("[Debug] AsyncPlayerChatEvent: player=" + event.getPlayer().getName()
                 + " connected=" + connected + " client=" + (client != null)
                 + " cancelled=" + event.isCancelled());
         }
@@ -297,7 +297,7 @@ public final class QQBotService implements Listener {
                     .replace("{message}", cleanMessage)
                     .replace("{server}", config.serverId());
                 if (config.debug()) {
-                    logger.info("[QQBot/Debug] → QQ群 " + group.groupId() + ": " + formatted);
+                    logger.info("[Debug] → QQ群 " + group.groupId() + ": " + formatted);
                 }
                 client.sendGroupMessage(group.groupId(), formatted);
             }
@@ -438,7 +438,7 @@ public final class QQBotService implements Listener {
                         .replaceAll("\\s+", " ");
                     AxsScheduler.runTask(plugin, () ->
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
-                    logger.info("[QQBot] 禁言同步: QQ " + bannedQq + " → 封禁玩家 " + playerName
+                    logger.info("禁言同步: QQ " + bannedQq + " → 封禁玩家 " + playerName
                         + " (" + durationStr + ")");
                 }
             }
@@ -491,7 +491,7 @@ public final class QQBotService implements Listener {
                 }
                 // 禁言发送者
                 client.setGroupBan(groupId, event.userId(), am.banDurationSeconds());
-                logger.info("[QQBot/AutoMod] 群 " + groupId + " 关键词拦截: QQ=" + event.userId()
+                logger.info("[AutoMod] 群 " + groupId + " 关键词拦截: QQ=" + event.userId()
                     + " 关键词=" + kw + " 禁言=" + am.banDurationSeconds() + "s");
                 return true;
             }

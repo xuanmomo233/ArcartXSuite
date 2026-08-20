@@ -283,7 +283,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         if (files == null || files.length == 0) {
             File target = new File(shopDir, "example_shop.yml");
             exportResource("shops/example_shop.yml", target, false);
-            logger.info("[Market] 已导出示例商店到 " + target.getPath());
+            logger.info("已导出示例商店到 " + target.getPath());
         }
     }
 
@@ -296,7 +296,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         if (files == null || files.length == 0) {
             File target = new File(recycleDir, "default_recycle.yml");
             exportResource("recycle/default_recycle.yml", target, false);
-            logger.info("[Market] 已导出默认回收表到 " + target.getPath());
+            logger.info("已导出默认回收表到 " + target.getPath());
         }
     }
 

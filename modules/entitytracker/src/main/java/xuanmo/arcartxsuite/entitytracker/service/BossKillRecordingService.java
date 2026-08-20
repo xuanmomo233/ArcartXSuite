@@ -127,7 +127,7 @@ public final class BossKillRecordingService implements Listener {
             try {
                 persistRecord(session, settlement, location, List.of());
             } catch (Exception exception) {
-                this.logger.warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+                this.logger.warning("Boss 击杀记录失败: " + exception.getMessage());
             }
         });
     }
@@ -143,7 +143,7 @@ public final class BossKillRecordingService implements Listener {
         try {
             persistRecord(session, settlement, location, drops);
         } catch (Exception exception) {
-            this.logger.warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+            this.logger.warning("Boss 击杀记录失败: " + exception.getMessage());
         }
     }
 
@@ -281,10 +281,10 @@ public final class BossKillRecordingService implements Listener {
             try {
                 int removed = killRecordDao.deleteOlderThanDays(recording.retentionDays());
                 if (removed > 0) {
-                    this.logger.fine("[EntityTracker] 已清理 " + removed + " 条过期击杀记录");
+                    this.logger.fine("已清理 " + removed + " 条过期击杀记录");
                 }
             } catch (SQLException exception) {
-                this.logger.warning("[EntityTracker] 清理击杀记录失败: " + exception.getMessage());
+                this.logger.warning("清理击杀记录失败: " + exception.getMessage());
             }
         });
     }

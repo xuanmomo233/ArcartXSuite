@@ -64,7 +64,7 @@ public class ShopService {
     public void start() {
         loadShops();
         refreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
-        logger.info("[Market-Shop] 系统商店已加载 " + shops.size() + " 个商店");
+        logger.info("[Shop] 系统商店已加载 " + shops.size() + " 个商店");
     }
 
     public void shutdown() {
@@ -99,7 +99,7 @@ public class ShopService {
                     shops.put(shopId, shop);
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Shop] 加载商店文件失败: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Shop] 加载商店文件失败: " + file.getName(), e);
             }
         }
     }
@@ -311,7 +311,7 @@ public class ShopService {
             if (command.startsWith("/")) command = command.substring(1);
             if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)) {
                 logger.warning(
-                    "[Market-Shop] 商品奖励命令派发返回 false: shop-item="
+                    "[Shop] 商品奖励命令派发返回 false: shop-item="
                         + shopItem.key() + ", command=" + command
                 );
             }
@@ -324,7 +324,7 @@ public class ShopService {
         if (bridge != null && bridge.available()) {
             CurrencyTransactionResult result = bridge.deposit(player, amount);
             if (result.success()) return;
-            logger.warning("[Market-Shop] refund failed; queueing pending currency: player=" + player.getName()
+            logger.warning("[Shop] refund failed; queueing pending currency: player=" + player.getName()
                 + " currency=" + currency + " amount=" + amount + " reason=" + reason);
         }
         repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
@@ -392,7 +392,7 @@ public class ShopService {
             try {
                 return valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
             } catch (IllegalArgumentException exception) {
-                logger.warning("[Market-Shop] 商品 " + itemKey + " 的 type 无效，已回落为 item");
+                logger.warning("[Shop] 商品 " + itemKey + " 的 type 无效，已回落为 item");
                 return ITEM;
             }
         }

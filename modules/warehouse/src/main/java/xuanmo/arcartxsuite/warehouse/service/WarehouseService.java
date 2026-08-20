@@ -316,10 +316,10 @@ public final class WarehouseService implements Listener {
                 }
             }
             if (migrated > 0) {
-                logger.info("[Warehouse] 搜索字段迁移完成，共更新 " + migrated + " 条记录");
+                logger.info("搜索字段迁移完成，共更新 " + migrated + " 条记录");
             }
         } catch (Exception exception) {
-            logger.warning("[Warehouse] 搜索字段迁移失败: " + exception.getMessage());
+            logger.warning("搜索字段迁移失败: " + exception.getMessage());
         }
     }
 
@@ -551,7 +551,7 @@ public final class WarehouseService implements Listener {
                 }
             }
         } catch (Exception exception) {
-            this.logger.warning("[Warehouse] 收集展示仓库失败: " + exception.getMessage());
+            this.logger.warning("收集展示仓库失败: " + exception.getMessage());
         }
         if (showcaseEntries.isEmpty()) {
             return ActionResult.failure(message("player.showcase-empty"));
@@ -2811,7 +2811,7 @@ public final class WarehouseService implements Listener {
             try {
                 refreshBoth(online);
             } catch (Exception exception) {
-                this.logger.warning("[Warehouse] 刷新共享仓库 UI 失败: " + exception.getMessage());
+                this.logger.warning("刷新共享仓库 UI 失败: " + exception.getMessage());
             }
         }
     }

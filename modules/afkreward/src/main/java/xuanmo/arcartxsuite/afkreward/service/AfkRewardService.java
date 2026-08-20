@@ -432,7 +432,7 @@ public final class AfkRewardService {
         if (msg != null) player.sendMessage(msg);
 
         if (config.debug()) {
-            logger.info("[AfkReward] " + player.getName() + " 在 " + area.name() + " 获得奖励 (tier=" + matchedTier + ")");
+            logger.info("" + player.getName() + " 在 " + area.name() + " 获得奖励 (tier=" + matchedTier + ")");
         }
     }
 
@@ -692,10 +692,10 @@ public final class AfkRewardService {
                 return loaded;
             } catch (Exception e) {
                 if (attempt == 0) {
-                    logger.warning("[AfkReward] 加载玩家统计失败（将重试一次）: " + e.getMessage());
+                    logger.warning("加载玩家统计失败（将重试一次）: " + e.getMessage());
                     try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
                 } else {
-                    logger.warning("[AfkReward] 加载玩家统计失败（重试仍失败）: " + e.getMessage());
+                    logger.warning("加载玩家统计失败（重试仍失败）: " + e.getMessage());
                     // 不缓存空值，避免 trySave 把空数据写回 DB 覆盖真实数据
                     failedLoads.add(uuid);
                     return new PlayerStats("", "", 0, 0, 0);
@@ -721,10 +721,10 @@ public final class AfkRewardService {
                 return;
             } catch (Exception e) {
                 if (attempt == 0) {
-                    logger.warning("[AfkReward] 预加载玩家统计失败（将重试一次）: " + e.getMessage());
+                    logger.warning("预加载玩家统计失败（将重试一次）: " + e.getMessage());
                     try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
                 } else {
-                    logger.warning("[AfkReward] 预加载玩家统计失败（重试仍失败）: " + e.getMessage());
+                    logger.warning("预加载玩家统计失败（重试仍失败）: " + e.getMessage());
                     // 不缓存空值，避免 trySave 把空数据写回 DB 覆盖真实数据
                     failedLoads.add(uuid);
                     return;
@@ -740,7 +740,7 @@ public final class AfkRewardService {
         try {
             repository.saveStats(uuid, stats);
         } catch (Exception e) {
-            logger.warning("[AfkReward] 保存玩家统计失败: " + e.getMessage());
+            logger.warning("保存玩家统计失败: " + e.getMessage());
         }
     }
 
@@ -819,7 +819,7 @@ public final class AfkRewardService {
         String msg = messages != null ? messages.get("hints.manual.start", areaName) : null;
         if (msg != null) player.sendMessage(msg);
         if (config.debug()) {
-            logger.info("[AfkReward] " + player.getName() + " 开始原地挂机: " + areaName);
+            logger.info("" + player.getName() + " 开始原地挂机: " + areaName);
         }
         return true;
     }
@@ -880,7 +880,7 @@ public final class AfkRewardService {
         try {
             repository.deleteSession(uuid);
         } catch (Exception e) {
-            logger.warning("[AfkReward] 删除 session 失败: " + e.getMessage());
+            logger.warning("删除 session 失败: " + e.getMessage());
         }
 
         // 触发结束联动
@@ -908,7 +908,7 @@ public final class AfkRewardService {
             if (msg != null) player.sendMessage(msg);
         }
         if (config.debug()) {
-            logger.info("[AfkReward] " + player.getName() + " 结束原地挂机: " + state.areaName + " 奖励次数=" + times);
+            logger.info("" + player.getName() + " 结束原地挂机: " + state.areaName + " 奖励次数=" + times);
         }
         refreshLeaderboard();
         return true;
@@ -1060,12 +1060,12 @@ public final class AfkRewardService {
 
                 repository.deleteSession(player.getUniqueId());
                 if (config.debug()) {
-                    logger.info("[AfkReward] 恢复玩家 " + player.getName() + " 的挂机 session，时长="
+                    logger.info("恢复玩家 " + player.getName() + " 的挂机 session，时长="
                         + formatTime(elapsedSec + session.startSeconds()));
                 }
             }
         } catch (Exception e) {
-            logger.warning("[AfkReward] 崩溃恢复失败: " + e.getMessage());
+            logger.warning("崩溃恢复失败: " + e.getMessage());
         }
     }
 
@@ -1082,7 +1082,7 @@ public final class AfkRewardService {
                 stats.todayCount(), stats.totalCount(), stats.todayDate(), stats.totalSeconds()
             ));
         } catch (Exception e) {
-            logger.warning("[AfkReward] 保存 session 失败: " + e.getMessage());
+            logger.warning("保存 session 失败: " + e.getMessage());
         }
     }
 
@@ -1093,7 +1093,7 @@ public final class AfkRewardService {
             leaderboardCache = repository.loadLeaderboard(config.manual().leaderboardSize());
             leaderboardLastUpdate = System.currentTimeMillis();
         } catch (Exception e) {
-            logger.warning("[AfkReward] 刷新排行榜失败: " + e.getMessage());
+            logger.warning("刷新排行榜失败: " + e.getMessage());
         }
     }
 
@@ -1236,10 +1236,10 @@ public final class AfkRewardService {
                     break;
                 } catch (Exception e) {
                     if (attempt == 0) {
-                        logger.warning("[AfkReward] 加载区域统计失败（将重试一次）: " + e.getMessage());
+                        logger.warning("加载区域统计失败（将重试一次）: " + e.getMessage());
                         try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
                     } else {
-                        logger.warning("[AfkReward] 加载区域统计失败（重试仍失败）: " + e.getMessage());
+                        logger.warning("加载区域统计失败（重试仍失败）: " + e.getMessage());
                         // 不缓存空值，避免 saveAreaStats 把空数据写回 DB 覆盖真实数据
                         failedLoads.add(uuid);
                     }
@@ -1265,7 +1265,7 @@ public final class AfkRewardService {
         try {
             repository.saveAreaStats(uuid, areaName, stats.totalSeconds(), stats.todaySeconds(), stats.todayDate());
         } catch (Exception e) {
-            logger.warning("[AfkReward] 保存区域统计失败: " + e.getMessage());
+            logger.warning("保存区域统计失败: " + e.getMessage());
         }
     }
 
@@ -1291,7 +1291,7 @@ public final class AfkRewardService {
             try {
                 sd.dispatchSignal(signal, player, variables);
             } catch (Exception e) {
-                logger.warning("[AfkReward] 信号派发失败 " + signal + ": " + e.getMessage());
+                logger.warning("信号派发失败 " + signal + ": " + e.getMessage());
             }
         }
     }
@@ -1303,7 +1303,7 @@ public final class AfkRewardService {
             try {
                 sp.playGroup(player, groupId);
             } catch (Exception e) {
-                logger.warning("[AfkReward] 字幕播放失败 " + groupId + ": " + e.getMessage());
+                logger.warning("字幕播放失败 " + groupId + ": " + e.getMessage());
             }
         }
     }
@@ -1312,7 +1312,7 @@ public final class AfkRewardService {
         if (presetIds == null || presetIds.isEmpty()) return;
         MailDispatchable md = mailProvider != null ? mailProvider.get() : null;
         if (md == null) {
-            logger.fine("[AfkReward] Mail 模块不可用，跳过邮件派发");
+            logger.fine("Mail 模块不可用，跳过邮件派发");
             return;
         }
         for (String presetId : presetIds) {
@@ -1322,10 +1322,10 @@ public final class AfkRewardService {
                     .sourceModule("afkreward")
                     .build());
                 if (config.debug()) {
-                    logger.info("[AfkReward] 邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + result.success());
+                    logger.info("邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + result.success());
                 }
             } catch (Exception e) {
-                logger.warning("[AfkReward] 邮件派发失败 " + presetId + ": " + e.getMessage());
+                logger.warning("邮件派发失败 " + presetId + ": " + e.getMessage());
             }
         }
     }

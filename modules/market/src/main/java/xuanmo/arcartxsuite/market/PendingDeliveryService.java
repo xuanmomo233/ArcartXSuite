@@ -70,7 +70,7 @@ public class PendingDeliveryService implements Listener {
                 if (delivery.isItem()) {
                     ItemStack item = itemSerializer.deserialize(delivery.itemData());
                     if (item == null) {
-                        logger.warning("[Market] 待发放物品反序列化失败，已丢弃 id=" + delivery.id());
+                        logger.warning("待发放物品反序列化失败，已丢弃 id=" + delivery.id());
                         continue;
                     }
                     Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
@@ -92,7 +92,7 @@ public class PendingDeliveryService implements Listener {
                 }
                 repository.deletePendingDelivery(delivery.id());
             } catch (Exception e) {
-                logger.warning("[Market] 补发记录处理异常 id=" + delivery.id() + ": " + e.getMessage());
+                logger.warning("补发记录处理异常 id=" + delivery.id() + ": " + e.getMessage());
             }
         }
 

@@ -62,7 +62,7 @@ public final class EntityTrackerCrossServerService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            this.logger.info("[EntityTracker] 跨服 Boss 排行通道已启用");
+            this.logger.info("跨服 Boss 排行通道已启用");
         }
     }
 
@@ -110,7 +110,7 @@ public final class EntityTrackerCrossServerService {
                     channel.publish(EntityTrackerCrossServerPayloadCodec.encodeBestDamage(candidate));
                 }
             } catch (SQLException exception) {
-                this.logger.warning("[EntityTracker] 写入 Boss 最高伤害失败: " + exception.getMessage());
+                this.logger.warning("写入 Boss 最高伤害失败: " + exception.getMessage());
             }
         }
     }
@@ -136,7 +136,7 @@ public final class EntityTrackerCrossServerService {
             }
         } catch (IllegalArgumentException ignored) {
         } catch (SQLException exception) {
-            this.logger.warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
+            this.logger.warning("合并跨服 Boss 数据失败: " + exception.getMessage());
         }
     }
 

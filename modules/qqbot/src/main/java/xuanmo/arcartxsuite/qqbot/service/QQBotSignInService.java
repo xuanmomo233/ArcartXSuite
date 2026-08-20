@@ -186,18 +186,18 @@ public final class QQBotSignInService {
                     if (result.success()) {
                         dispatched = true;
                     } else {
-                        logger.warning("[QQBot] 兑换邮件发放失败: " + presetId + " — " + result.message());
+                        logger.warning("兑换邮件发放失败: " + presetId + " — " + result.message());
                     }
                 }
             } catch (Exception e) {
-                logger.warning("[QQBot] 兑换邮件发放异常: " + e.getMessage());
+                logger.warning("兑换邮件发放异常: " + e.getMessage());
             }
         }
 
         if (!dispatched) {
             // 退款
             int refunded = repository.addPoints(qqId, actualCost, "refund", "兑换失败退款 " + prizeId);
-            logger.warning("[QQBot] 兑换 " + prizeId + " 邮件发放失败，已退款 " + actualCost + " 积分给 QQ " + qqId);
+            logger.warning("兑换 " + prizeId + " 邮件发放失败，已退款 " + actualCost + " 积分给 QQ " + qqId);
             return config.messages().redeemMailFailed();
         }
 

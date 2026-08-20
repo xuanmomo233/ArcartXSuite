@@ -1089,7 +1089,7 @@ public final class ChatService implements Listener {
             java.lang.reflect.Method removeMethod = Player.class.getMethod("removeCustomChatCompletions", Collection.class);
             completionAdder = (p, entries) -> { try { addMethod.invoke(p, entries); } catch (Exception ignored) {} };
             completionRemover = (p, entries) -> { try { removeMethod.invoke(p, entries); } catch (Exception ignored) {} };
-            this.logger.info("[Chat] @补全: 已启用 (Paper API)");
+            this.logger.info("@补全: 已启用 (Paper API)");
             return;
         } catch (NoSuchMethodException ignored) {}
 
@@ -1122,9 +1122,9 @@ public final class ChatService implements Listener {
             completionRemover = (p, entries) -> {
                 try { sender.send(p, packetCtor.newInstance(removeAction, List.copyOf(entries))); } catch (Exception ignored) {}
             };
-            this.logger.info("[Chat] @补全: 已启用 (NMS 发包)");
+            this.logger.info("@补全: 已启用 (NMS 发包)");
         } catch (Exception ex) {
-            this.logger.warning("[Chat] @补全: 不可用 (" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ")");
+            this.logger.warning("@补全: 不可用 (" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ")");
         }
     }
 
@@ -1243,7 +1243,7 @@ public final class ChatService implements Listener {
                 }
             } catch (Exception ex) {
                 if (configuration.debug()) {
-                    this.logger.warning("[Chat] @补全更新失败: " + ex.getMessage());
+                    this.logger.warning("@补全更新失败: " + ex.getMessage());
                 }
             }
         }, 5L);
@@ -1267,7 +1267,7 @@ public final class ChatService implements Listener {
                 }
             } catch (Exception ex) {
                 if (configuration.debug()) {
-                    this.logger.warning("[Chat] @补全玩家列表广播失败: " + ex.getMessage());
+                    this.logger.warning("@补全玩家列表广播失败: " + ex.getMessage());
                 }
             }
         }, 5L);

@@ -76,7 +76,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tGlobalStock = prefix + "shop_global_stock";
         tPlayerStock = prefix + "shop_player_stock";
         createTables(conn);
-        logger.info("[Market] " + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
+        logger.info("" + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
@@ -347,7 +347,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             }
             return listing.getId() > 0;
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 插入拍卖物品失败", e);
+            logger.log(Level.SEVERE, "插入拍卖物品失败", e);
             return false;
         }
     }
@@ -364,7 +364,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(4, listing.getId());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 更新拍卖物品失败", e);
+            logger.log(Level.SEVERE, "更新拍卖物品失败", e);
         }
     }
 
@@ -380,7 +380,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setString(3, expect.name());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 拍卖状态 CAS 失败", e);
+            logger.log(Level.SEVERE, "拍卖状态 CAS 失败", e);
             return false;
         }
     }
@@ -400,7 +400,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setDouble(5, amount);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] bid CAS update failed", e);
+            logger.log(Level.SEVERE, "bid CAS update failed", e);
             return false;
         }
     }
@@ -419,7 +419,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 if (rs.next()) return mapListing(rs);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询拍卖物品失败", e);
+            logger.log(Level.SEVERE, "查询拍卖物品失败", e);
         }
         return null;
     }
@@ -446,7 +446,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapListing(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 按分类查询失败", e);
+            logger.log(Level.SEVERE, "按分类查询失败", e);
         }
         return results;
     }
@@ -471,7 +471,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapListing(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 搜索拍卖物品失败", e);
+            logger.log(Level.SEVERE, "搜索拍卖物品失败", e);
         }
         return results;
     }
@@ -512,7 +512,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapListing(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 按卖家查询失败", e);
+            logger.log(Level.SEVERE, "按卖家查询失败", e);
         }
         return results;
     }
@@ -533,7 +533,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 if (rs.next()) return rs.getInt(1);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 统计卖家上架数失败", e);
+            logger.log(Level.SEVERE, "统计卖家上架数失败", e);
         }
         return 0;
     }
@@ -558,7 +558,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(5, bid.timestamp());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 插入竞价失败", e);
+            logger.log(Level.SEVERE, "插入竞价失败", e);
         }
     }
 
@@ -573,7 +573,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) bids.add(mapBid(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询竞价失败", e);
+            logger.log(Level.SEVERE, "查询竞价失败", e);
         }
         return bids;
     }
@@ -588,7 +588,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 if (rs.next()) return mapBid(rs);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询最高竞价失败", e);
+            logger.log(Level.SEVERE, "查询最高竞价失败", e);
         }
         return null;
     }
@@ -614,7 +614,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(10, history.timestamp());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 插入交易历史失败", e);
+            logger.log(Level.SEVERE, "插入交易历史失败", e);
         }
     }
 
@@ -634,7 +634,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapHistory(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询交易历史失败", e);
+            logger.log(Level.SEVERE, "查询交易历史失败", e);
         }
         return results;
     }
@@ -654,7 +654,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 return rs.next() ? rs.getInt(1) : 0;
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] history count failed", e);
+            logger.log(Level.SEVERE, "history count failed", e);
             return 0;
         }
     }
@@ -683,7 +683,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) ids.add(rs.getLong(1));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询收藏失败", e);
+            logger.log(Level.SEVERE, "查询收藏失败", e);
         }
         return ids;
     }
@@ -699,7 +699,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 return rs.next();
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询收藏状态失败", e);
+            logger.log(Level.SEVERE, "查询收藏状态失败", e);
         }
         return false;
     }
@@ -727,7 +727,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 }
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询限购记录失败", e);
+            logger.log(Level.SEVERE, "查询限购记录失败", e);
         }
         return null;
     }
@@ -756,7 +756,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setLong(6, record.resetTime());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 更新限购记录失败", e);
+            logger.log(Level.SEVERE, "更新限购记录失败", e);
         }
     }
 
@@ -788,7 +788,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setInt(4, itemCount);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 更新回收统计失败", e);
+            logger.log(Level.SEVERE, "更新回收统计失败", e);
         }
     }
 
@@ -803,7 +803,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 if (rs.next()) return rs.getDouble(1);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询回收统计失败", e);
+            logger.log(Level.SEVERE, "查询回收统计失败", e);
         }
         return 0.0;
     }
@@ -823,7 +823,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 }
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询全局库存失败", e);
+            logger.log(Level.SEVERE, "查询全局库存失败", e);
         }
         return defaultMax;
     }
@@ -873,7 +873,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 扣减全局库存失败", e);
+            logger.log(Level.SEVERE, "扣减全局库存失败", e);
             return false;
         }
     }
@@ -903,7 +903,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 }
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询玩家库存失败", e);
+            logger.log(Level.SEVERE, "查询玩家库存失败", e);
         }
         return defaultMax;
     }
@@ -957,7 +957,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 扣减玩家库存失败", e);
+            logger.log(Level.SEVERE, "扣减玩家库存失败", e);
             return false;
         }
     }
@@ -1000,7 +1000,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapPending(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询待发放记录失败", e);
+            logger.log(Level.SEVERE, "查询待发放记录失败", e);
         }
         return results;
     }
@@ -1036,7 +1036,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 while (rs.next()) results.add(mapListing(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 查询拍卖列表失败", e);
+            logger.log(Level.SEVERE, "查询拍卖列表失败", e);
         }
         return results;
     }
@@ -1049,7 +1049,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             }
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 执行SQL失败: " + sql, e);
+            logger.log(Level.SEVERE, "执行SQL失败: " + sql, e);
         }
     }
 
@@ -1063,7 +1063,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 if (rs.next()) return rs.getInt(1);
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "[Market] 统计查询失败", e);
+            logger.log(Level.SEVERE, "统计查询失败", e);
         }
         return 0;
     }

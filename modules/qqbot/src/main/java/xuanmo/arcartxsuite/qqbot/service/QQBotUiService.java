@@ -330,7 +330,7 @@ public final class QQBotUiService {
     private void handleExecCommand(Player player, String command) {
         if (command == null || command.isBlank()) return;
         if (config.debug()) {
-            logger.info("[QQBot/Admin UI] " + player.getName() + " 执行命令: " + command);
+            logger.info("[Admin UI] " + player.getName() + " 执行命令: " + command);
         }
         String cmd = command;
         AxsScheduler.runTask(plugin, () -> {

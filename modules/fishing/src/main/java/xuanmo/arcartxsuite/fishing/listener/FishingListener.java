@@ -24,11 +24,9 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
 public final class FishingListener implements Listener {
 
     private final FishingService service;
-    private final java.util.logging.Logger logger;
 
     public FishingListener(@NotNull FishingService service) {
         this.service = service;
-        this.logger = java.util.logging.Logger.getLogger("Fishing");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

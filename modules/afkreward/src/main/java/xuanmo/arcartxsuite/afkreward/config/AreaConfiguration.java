@@ -32,7 +32,7 @@ public final class AreaConfiguration {
 
         File[] files = dir.listFiles((d, name) -> name.startsWith("area-") && name.endsWith(".yml"));
         if (files == null || files.length == 0) {
-            logger.info("[AfkReward] 未在 " + dir.getPath() + " 发现区域配置文件，请先创建 area-*.yml 文件。");
+            logger.info("未在 " + dir.getPath() + " 发现区域配置文件，请先创建 area-*.yml 文件。");
             return Collections.unmodifiableMap(areas);
         }
 
@@ -43,7 +43,7 @@ public final class AreaConfiguration {
             // 提取 ID：area-<id>.yml
             String id = fileName.substring("area-".length(), fileName.length() - ".yml".length());
             if (id.isBlank()) {
-                logger.warning("[AfkReward] 跳过无效区域文件名: " + fileName);
+                logger.warning("跳过无效区域文件名: " + fileName);
                 skipped++;
                 continue;
             }
@@ -52,7 +52,7 @@ public final class AreaConfiguration {
                 AfkArea area = parseArea(id, yaml, logger);
                 if (area != null) {
                     if (!usedNames.add(area.name())) {
-                        logger.warning("[AfkReward] 区域名称重复 '" + area.name()
+                        logger.warning("区域名称重复 '" + area.name()
                             + "'，文件 " + fileName + " 已跳过。");
                         skipped++;
                         continue;
@@ -62,11 +62,11 @@ public final class AreaConfiguration {
                     skipped++;
                 }
             } catch (Exception e) {
-                logger.warning("[AfkReward] 加载区域文件失败 " + fileName + ": " + e.getMessage());
+                logger.warning("加载区域文件失败 " + fileName + ": " + e.getMessage());
                 skipped++;
             }
         }
-        logger.info("[AfkReward] 区域加载完成：成功" + areas.size() + "个，跳过" + skipped + "个。");
+        logger.info("区域加载完成：成功" + areas.size() + "个，跳过" + skipped + "个。");
         return Collections.unmodifiableMap(areas);
     }
 
@@ -79,7 +79,7 @@ public final class AreaConfiguration {
         String world = yaml.getString("world", "");
         String type = yaml.getString("type", id);
         if (world.isBlank()) {
-            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 未配置 world，已跳过。");
+            logger.warning("区域 '" + name + "' (" + id + ") 未配置 world，已跳过。");
             return null;
         }
         boolean manualEnabled = yaml.getBoolean("manual-enabled", true);
@@ -95,18 +95,18 @@ public final class AreaConfiguration {
                     int z = Integer.parseInt(parts[1].trim());
                     points.add(new AfkArea.Point(x, z));
                 } catch (NumberFormatException e) {
-                    logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                    logger.warning("区域 '" + name + "' (" + id
                         + ") 存在非法坐标 '" + pos + "'，已跳过。");
                     return null;
                 }
             } else {
-                logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                logger.warning("区域 '" + name + "' (" + id
                     + ") 存在非法坐标 '" + pos + "'，已跳过。");
                 return null;
             }
         }
         if (points.size() < 3) {
-            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 的坐标点不足 3 个，已跳过。");
+            logger.warning("区域 '" + name + "' (" + id + ") 的坐标点不足 3 个，已跳过。");
             return null;
         }
 
@@ -114,7 +114,7 @@ public final class AreaConfiguration {
         Location teleport = null;
         ConfigurationSection tpSec = yaml.getConfigurationSection("teleport");
         if (tpSec == null) {
-            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 缺少 teleport 配置，已跳过。");
+            logger.warning("区域 '" + name + "' (" + id + ") 缺少 teleport 配置，已跳过。");
             return null;
         }
         {
@@ -128,7 +128,7 @@ public final class AreaConfiguration {
             if (w != null) {
                 teleport = new Location(w, tpx, tpy, tpz, yaw, pitch);
             } else {
-                logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                logger.warning("区域 '" + name + "' (" + id
                     + ") 的 teleport 世界 '" + tpWorld + "' 未加载，已跳过。");
                 return null;
             }

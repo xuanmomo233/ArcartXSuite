@@ -51,7 +51,7 @@ public class RecycleService {
 
     public void start() {
         loadRecycleTables();
-        logger.info("[Market-Recycle] 回收表已加载 " + entries.size() + " 个条目");
+        logger.info("[Recycle] 回收表已加载 " + entries.size() + " 个条目");
     }
 
     public void shutdown() {
@@ -91,7 +91,7 @@ public class RecycleService {
                     ));
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Recycle] 加载回收表文件失败: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Recycle] 加载回收表文件失败: " + file.getName(), e);
             }
         }
     }
@@ -216,7 +216,7 @@ public class RecycleService {
                 default -> null;
             };
         } catch (RuntimeException ex) {
-            logger.log(Level.FINE, "[Market-Recycle] item source identification failed: " + source, ex);
+            logger.log(Level.FINE, "[Recycle] item source identification failed: " + source, ex);
             return null;
         }
     }

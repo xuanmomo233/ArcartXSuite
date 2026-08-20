@@ -76,7 +76,7 @@ public final class DropAllocationService {
                     default -> allocateByRoll(killRecord.getId(), drop, participants, serverName);
                 }
             } catch (SQLException exception) {
-                this.logger.warning("[EntityTracker] 掉落分配失败: " + exception.getMessage());
+                this.logger.warning("掉落分配失败: " + exception.getMessage());
             }
         }
     }
@@ -104,7 +104,7 @@ public final class DropAllocationService {
                     "Boss击杀: " + bossName + " (排名#" + participant.rank() + ")"
                 );
             } catch (SQLException exception) {
-                this.logger.warning("[EntityTracker] DKP 发放失败: " + exception.getMessage());
+                this.logger.warning("DKP 发放失败: " + exception.getMessage());
             }
         }
     }

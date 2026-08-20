@@ -22,15 +22,14 @@ public enum MenuActionType {
     SCRIPT_ARIA,
     NONE;
 
-    private static final Logger LOGGER = Logger.getLogger(MenuActionType.class.getName());
-
     /**
      * 将文本关键字解析为动作类型，未知关键字降级为 {@link #NONE} 并记录警告。
      *
-     * @param raw 原始关键字文本
+     * @param raw    原始关键字文本
+     * @param logger 模块 logger，用于记录未知关键字警告
      * @return 对应的动作类型枚举值
      */
-    public static MenuActionType parse(String raw) {
+    public static MenuActionType parse(String raw, Logger logger) {
         if (raw == null || raw.isBlank()) {
             return NONE;
         }
@@ -47,7 +46,9 @@ public enum MenuActionType {
             case "js" -> SCRIPT_JS;
             case "aria" -> SCRIPT_ARIA;
             default -> {
-                LOGGER.warning("未知 Menu 动作关键字，已降级为 NONE: " + raw);
+                if (logger != null) {
+                    logger.warning("未知 Menu 动作关键字，已降级为 NONE: " + raw);
+                }
                 yield NONE;
             }
         };

@@ -222,10 +222,10 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                         ? MailSendResult.ok()
                         : MailSendResult.failure(result.message());
                 } catch (IOException e) {
-                    logger.warning("[Mail] sendMail 物品序列化失败: " + e.getMessage());
+                    logger.warning("sendMail 物品序列化失败: " + e.getMessage());
                     return MailSendResult.failure("物品序列化失败: " + e.getMessage());
                 } catch (Exception e) {
-                    logger.warning("[Mail] sendMail 发送失败: " + e.getMessage());
+                    logger.warning("sendMail 发送失败: " + e.getMessage());
                     return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
             }
@@ -242,7 +242,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                         ? MailSendResult.ok()
                         : MailSendResult.failure(result.message());
                 } catch (Exception e) {
-                    logger.warning("[Mail] dispatchPreset 发送失败: " + e.getMessage());
+                    logger.warning("dispatchPreset 发送失败: " + e.getMessage());
                     return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
             }

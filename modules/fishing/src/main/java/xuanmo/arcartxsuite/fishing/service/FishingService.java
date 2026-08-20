@@ -84,7 +84,7 @@ public final class FishingService {
     /** 调试日志：仅当 configuration.debug() 为 true 时输出。 */
     public void debug(@NotNull String message) {
         if (configuration.debug()) {
-            logger.info("[Fishing] " + message);
+            logger.info(message);
         }
     }
     private final List<SeasonRewardDefinition> seasonRewards;
@@ -138,6 +138,11 @@ public final class FishingService {
     /** 获取宿主插件实例（供调度器使用）。 */
     public @NotNull JavaPlugin getPlugin() {
         return plugin;
+    }
+
+    /** 获取模块专用 logger（PluginConsoleLogger 实例，自动附带 [fishing] 标签）。 */
+    public @NotNull Logger getLogger() {
+        return logger;
     }
 
     public void setEventBusProvider(@Nullable Supplier<EventBusCapability> provider) {

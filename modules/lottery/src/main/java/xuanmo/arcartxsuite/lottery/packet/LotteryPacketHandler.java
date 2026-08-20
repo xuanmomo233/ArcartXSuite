@@ -106,7 +106,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 sendGachaResult(player, pool, result, count);
             }
         } catch (RuntimeException e) {
-            plugin.getLogger().log(java.util.logging.Level.WARNING, "Lottery pull failed", e);
+            service.getLogger().log(java.util.logging.Level.WARNING, "Lottery pull failed", e);
             service.sendFailureMessage(player);
         } finally {
             inFlight.remove(player.getUniqueId());
@@ -133,7 +133,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 if (result != null && result.item() != null) sendCaseResult(player, result);
             }
         } catch (RuntimeException e) {
-            plugin.getLogger().log(java.util.logging.Level.WARNING, "Lottery case opening failed", e);
+            service.getLogger().log(java.util.logging.Level.WARNING, "Lottery case opening failed", e);
             service.sendFailureMessage(player);
         } finally {
             inFlight.remove(player.getUniqueId());

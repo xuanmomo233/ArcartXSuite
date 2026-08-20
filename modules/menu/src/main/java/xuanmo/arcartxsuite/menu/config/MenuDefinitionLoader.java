@@ -80,7 +80,8 @@ public final class MenuDefinitionLoader {
                     file.getName() + "#" + (index + 1),
                     defaultLayout,
                     defaultColumns,
-                    defaultButtonsPerPage
+                    defaultButtonsPerPage,
+                    logger
                 );
                 if (definitions.containsKey(definition.id())) {
                     logger.warning("Menu ID 重复，后者覆盖前者: " + definition.id() + " (" + file.getName() + ")");

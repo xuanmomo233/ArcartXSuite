@@ -60,7 +60,7 @@ public final class QQBotScheduledMessageService {
         }
         // 每 20 tick（约 1 秒）检查一次
         task = AxsScheduler.runTaskTimer(plugin, this::tick, 20L, 20L);
-        logger.info("[QQBot] 定时消息服务已启用 | 条目数=" + config.scheduledMessages().size());
+        logger.info("定时消息服务已启用 | 条目数=" + config.scheduledMessages().size());
     }
 
     public void stop() {

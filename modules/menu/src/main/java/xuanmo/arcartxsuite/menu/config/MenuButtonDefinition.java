@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.menu.config;
 
 import java.util.List;
+import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
@@ -41,9 +42,10 @@ public record MenuButtonDefinition(
      *
      * @param id      按钮标识
      * @param section 按钮配置节，为 null 时返回默认值
+     * @param logger  模块 logger，用于记录未知动作类型警告
      * @return 解析后的按钮定义
      */
-    public static MenuButtonDefinition load(String id, ConfigurationSection section) {
+    public static MenuButtonDefinition load(String id, ConfigurationSection section, Logger logger) {
         if (section == null) {
             return new MenuButtonDefinition(id, id, 0, "", List.of(), List.of(), "", List.of(), "", null);
         }
@@ -57,7 +59,7 @@ public record MenuButtonDefinition(
             viewConditions,
             useConditions,
             section.getString("deny-message", section.getString("denyMessage", "")),
-            MenuActionDefinition.parseList(section.getStringList("actions")),
+            MenuActionDefinition.parseList(section.getStringList("actions"), logger),
             section.getString("client-action", section.getString("clientAction", "")),
             IconDefinition.load(section.getConfigurationSection("icon"))
         );

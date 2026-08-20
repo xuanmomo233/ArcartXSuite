@@ -68,7 +68,7 @@ public class PrizeDistributor {
     private DistributionResult giveDirectItem(Player player, PoolItem item) {
         ItemStack stack = generateItem(item);
         if (stack == null) {
-            logger.warning("[Lottery] 无法生成物品: " + item.itemId() + " (type=" + item.itemSource() + ")");
+            logger.warning("无法生成物品: " + item.itemId() + " (type=" + item.itemSource() + ")");
             return DistributionResult.failure(null, "物品生成失败");
         }
 
@@ -117,7 +117,7 @@ public class PrizeDistributor {
     private DistributionResult sendMail(Player player, PoolItem item) {
         MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
         if (mail == null) {
-            logger.warning("[Lottery] MailDispatchable 不可用，无法发送邮件奖励");
+            logger.warning("MailDispatchable 不可用，无法发送邮件奖励");
             return DistributionResult.failure(generateItem(item), "邮件能力不可用");
         }
         if (item.mailPresets() != null && !item.mailPresets().isEmpty()) {
@@ -135,7 +135,7 @@ public class PrizeDistributor {
             }
             return DistributionResult.failure(stack, "邮件发送失败");
         }
-        logger.warning("[Lottery] 奖品 " + item.id() + " 配置了 MAIL 但未设置 mail.presets");
+        logger.warning("奖品 " + item.id() + " 配置了 MAIL 但未设置 mail.presets");
         return DistributionResult.failure(generateItem(item), "缺少 mail.presets");
     }
 
@@ -152,7 +152,7 @@ public class PrizeDistributor {
             try {
                 return ItemSerializer.deserialize(java.util.Base64.getDecoder().decode(item.itemJson()));
             } catch (Exception e) {
-                logger.warning("[Lottery] 预序列化物品解析失败: " + e.getMessage());
+                logger.warning("预序列化物品解析失败: " + e.getMessage());
             }
         }
         if (item.itemId() == null || item.itemId().isBlank()) return null;
@@ -188,7 +188,7 @@ public class PrizeDistributor {
             byte[] bytes = ItemSerializer.serialize(stack);
             return java.util.Base64.getEncoder().encodeToString(bytes);
         } catch (Exception e) {
-            logger.warning("[Lottery] 序列化物品失败: " + e.getMessage());
+            logger.warning("序列化物品失败: " + e.getMessage());
             return "";
         }
     }

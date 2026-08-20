@@ -85,7 +85,7 @@ public class AuctionService {
 
     public void start(long intervalTicks) {
         schedulerTask = AxsScheduler.runAsyncTimer(plugin, this::processExpired, intervalTicks, intervalTicks);
-        logger.info("[Market-Auction] 拍卖行服务已启动，到期检查间隔: " + intervalTicks + " ticks");
+        logger.info("[Auction] 拍卖行服务已启动，到期检查间隔: " + intervalTicks + " ticks");
     }
 
     public void shutdown() {
@@ -552,7 +552,7 @@ public class AuctionService {
                 AxsScheduler.runTask(plugin, () -> processExpiredListing(listing));
             }
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "[Market-Auction] 到期处理异常", e);
+            logger.log(Level.SEVERE, "[Auction] 到期处理异常", e);
         }
     }
 
@@ -626,7 +626,7 @@ public class AuctionService {
     private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
         final ItemStack item = itemSerializer.deserialize(listing.getItemData());
         if (item == null) {
-            logger.warning("[Market-Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
+            logger.warning("[Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
             repository.addPendingItem(target, listing.getItemData(), reason);
             return;
         }
@@ -666,7 +666,7 @@ public class AuctionService {
                 .build());
             return result.success();
         } catch (Exception e) {
-            logger.warning("[Market-Auction] 邮件返还物品失败，降级入待发放队列: " + e.getMessage());
+            logger.warning("[Auction] 邮件返还物品失败，降级入待发放队列: " + e.getMessage());
             return false;
         }
     }
@@ -687,7 +687,7 @@ public class AuctionService {
             if (resultHolder[0] != null && resultHolder[0].success()) {
                 return;
             }
-            logger.warning("[Market-Auction] 在线入账失败，转入待发放队列: player="
+            logger.warning("[Auction] 在线入账失败，转入待发放队列: player="
                 + online.getName() + " currency=" + currency + " amount=" + amount);
         }
         repository.addPendingCurrency(target, currency, amount, reason);

@@ -225,7 +225,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             if (running) {
                 obc.start();
             } else if (autoStartSnowLuma) {
-                logger.warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
+                logger.warning("SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
                     "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
             } else {
                 // 用户手动管理 SnowLuma，直接尝试连接
@@ -537,19 +537,19 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
             int port = uri.getPort() > 0 ? uri.getPort() : 80;
             long deadline = System.currentTimeMillis() + timeoutMs;
-            logger.info("[QQBot] 等待 WS 端口 " + host + ":" + port + " 就绪...");
+            logger.info("等待 WS 端口 " + host + ":" + port + " 就绪...");
             while (System.currentTimeMillis() < deadline) {
                 try (java.net.Socket socket = new java.net.Socket()) {
                     socket.connect(new java.net.InetSocketAddress(host, port), 500);
-                    logger.info("[QQBot] WS 端口已就绪");
+                    logger.info("WS 端口已就绪");
                     return;
                 } catch (java.io.IOException ignored) {
                     Thread.sleep(500);
                 }
             }
-            logger.warning("[QQBot] 等待 WS 端口超时 (" + timeoutMs + "ms)，将仍尝试连接");
+            logger.warning("等待 WS 端口超时 (" + timeoutMs + "ms)，将仍尝试连接");
         } catch (Exception e) {
-            logger.warning("[QQBot] 端口检测异常: " + e.getMessage());
+            logger.warning("端口检测异常: " + e.getMessage());
         }
     }
 }

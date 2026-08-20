@@ -163,7 +163,7 @@ public class MarketService {
             recycleService.start();
         }
 
-        logger.info("[Market] 全球市场服务已启动");
+        logger.info("全球市场服务已启动");
     }
 
     public void shutdown() {
@@ -1067,13 +1067,13 @@ public class MarketService {
                                 listingId,
                                 amount,
                                 bidder)) {
-                        logger.fine("[Market] applied remote bid listing=" + listingId);
+                        logger.fine("applied remote bid listing=" + listingId);
                     }
                 } catch (IllegalArgumentException e) {
-                    logger.warning("[Market] invalid remote bid payload: " + message);
+                    logger.warning("invalid remote bid payload: " + message);
                 }
             } else {
-                logger.warning("[Market] remote bid missing bidder; ignored: " + message);
+                logger.warning("remote bid missing bidder; ignored: " + message);
             }
         }
 

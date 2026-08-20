@@ -49,15 +49,15 @@ public final class SnowLumaProcessManager {
         registerShutdownHook();
         if (config.isDocker()) {
             if (isInstalled()) { start(); }
-            else { logger.info("[QQBot/SnowLuma] Docker: 未检测到容器 '" + config.dockerContainerName() + "'，请执行 install"); }
+            else { logger.info("[SnowLuma] Docker: 未检测到容器 '" + config.dockerContainerName() + "'，请执行 install"); }
         } else {
             if (!checkNodeEnvironment()) {
-                logger.warning("[QQBot/SnowLuma] 未检测到 Node.js 环境，SnowLuma 无法自动启动。"
+                logger.warning("[SnowLuma] 未检测到 Node.js 环境，SnowLuma 无法自动启动。"
                     + "请先安装 Node.js 18+（Linux 示例: apt-get install -y nodejs），然后执行 /axs qqbot reload");
                 return;
             }
             if (isInstalled()) { start(); }
-            else { logger.info("[QQBot/SnowLuma] 未检测到安装目录，请执行 install"); }
+            else { logger.info("[SnowLuma] 未检测到安装目录，请执行 install"); }
         }
     }
 
@@ -83,7 +83,7 @@ public final class SnowLumaProcessManager {
                 }
             }
         } catch (Exception e) {
-            if (debugMode.getAsBoolean()) logger.info("[QQBot/SnowLuma] Node.js 检测异常: " + e.getMessage());
+            if (debugMode.getAsBoolean()) logger.info("[SnowLuma] Node.js 检测异常: " + e.getMessage());
         }
         nodeAvailable = false;
         return false;
@@ -106,7 +106,7 @@ public final class SnowLumaProcessManager {
         unregisterShutdownHook();
         if (config.isDocker()) { if (dockerContainerRunning()) stopDocker(); return; }
         if (process != null && process.isAlive()) stopNative();
-        else { String c = killResidue(); if (c != null) logger.info("[QQBot/SnowLuma] 卸载清理残留: " + c); }
+        else { String c = killResidue(); if (c != null) logger.info("[SnowLuma] 卸载清理残留: " + c); }
     }
 
     private void registerShutdownHook() {
@@ -138,7 +138,7 @@ public final class SnowLumaProcessManager {
             boolean ok = p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS);
             if (ok && p.exitValue() == 0) return "SnowLuma Docker 容器已启动，WebUI: http://127.0.0.1:" + config.dockerWebUiPort();
             return "启动失败: " + readAll(p.getInputStream());
-        } catch (Exception e) { logger.log(Level.SEVERE, "[QQBot/SnowLuma] Docker start", e); return "启动失败: " + e.getMessage(); }
+        } catch (Exception e) { logger.log(Level.SEVERE, "[SnowLuma] Docker start", e); return "启动失败: " + e.getMessage(); }
     }
 
     private String stopDocker() {
@@ -151,13 +151,13 @@ public final class SnowLumaProcessManager {
             boolean ok = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
             if (ok && p.exitValue() == 0) return "SnowLuma Docker 容器已停止";
             return "停止失败: " + readAll(p.getInputStream());
-        } catch (Exception e) { logger.log(Level.SEVERE, "[QQBot/SnowLuma] Docker stop", e); return "停止失败: " + e.getMessage(); }
+        } catch (Exception e) { logger.log(Level.SEVERE, "[SnowLuma] Docker stop", e); return "停止失败: " + e.getMessage(); }
     }
 
     private CompletableFuture<String> installDockerAsync() {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                logger.info("[QQBot/SnowLuma] docker pull " + config.dockerImage());
+                logger.info("[SnowLuma] docker pull " + config.dockerImage());
                 ProcessBuilder pull = new ProcessBuilder("docker", "pull", config.dockerImage());
                 pull.redirectErrorStream(true);
                 Process pp = pull.start();
@@ -177,7 +177,7 @@ public final class SnowLumaProcessManager {
                 if (!pr.waitFor(30, java.util.concurrent.TimeUnit.SECONDS) || pr.exitValue() != 0)
                     return "容器创建失败: " + readAll(pr.getInputStream());
                 return "Docker 容器已创建。请通过 noVNC (http://<VPS_IP>:6081) 登录 QQ，然后通过 WebUI 管理。";
-            } catch (Exception e) { logger.log(Level.SEVERE, "[QQBot/SnowLuma] Docker install", e); return "安装失败: " + e.getMessage(); }
+            } catch (Exception e) { logger.log(Level.SEVERE, "[SnowLuma] Docker install", e); return "安装失败: " + e.getMessage(); }
         });
     }
 
@@ -245,7 +245,7 @@ public final class SnowLumaProcessManager {
                 + "• macOS: 运行 'brew install node'\n"
                 + "安装完成后请执行 /axs qqbot reload 重载模块。";
         }
-        String cleanup = killResidue(); if (cleanup!=null) logger.info("[QQBot/SnowLuma] "+cleanup);
+        String cleanup = killResidue(); if (cleanup!=null) logger.info("[SnowLuma] "+cleanup);
         status.set(Status.STARTING);
         try {
             ProcessBuilder pb = buildProcess();
@@ -269,15 +269,15 @@ public final class SnowLumaProcessManager {
             if (fatal.get()!=null) { forceKill(thisPid); status.set(Status.STOPPED); process=null; return "启动失败: "+fatal.get()+"\n检查是否有其他进程占用 5099/3001"; }
             if (!process.isAlive()) { status.set(Status.STOPPED); process=null; return "启动失败: 进程立即退出"; }
             status.set(Status.RUNNING);
-            logger.info("[QQBot/SnowLuma] 已启动 (PID: "+thisPid+")");
+            logger.info("[SnowLuma] 已启动 (PID: "+thisPid+")");
             return "SnowLuma 已启动 (PID: "+thisPid+")，WebUI: http://127.0.0.1:5099";
-        } catch (Exception e) { status.set(Status.STOPPED); logger.log(Level.SEVERE,"[QQBot/SnowLuma] 启动失败",e); return "启动失败: "+e.getMessage(); }
+        } catch (Exception e) { status.set(Status.STOPPED); logger.log(Level.SEVERE,"[SnowLuma] 启动失败",e); return "启动失败: "+e.getMessage(); }
     }
 
     private String stopNative() {
         if (process==null||!process.isAlive()) { String c=killResidue(); status.set(Status.STOPPED); return c!=null?"SnowLuma 已强制停止残留: "+c:"SnowLuma 未在运行"; }
         long pid=process.pid(); forceKill(pid); String c=killResidue(); status.set(Status.STOPPED); process=null;
-        logger.info("[QQBot/SnowLuma] 已停止 (PID: "+pid+")");
+        logger.info("[SnowLuma] 已停止 (PID: "+pid+")");
         String m="SnowLuma 已停止 (PID: "+pid+")"; if (c!=null) m+="，清理残留: "+c; return m;
     }
 
@@ -294,9 +294,9 @@ public final class SnowLumaProcessManager {
             if (pid>0) {
                 if (process!=null && process.isAlive() && process.pid()==pid) continue;
                 if (isSnowLumaOrNodeProcess(pid)) {
-                    logger.warning("[QQBot/SnowLuma] 端口 "+port+" 被 PID "+pid+" 占用，强制终止残留");
+                    logger.warning("[SnowLuma] 端口 "+port+" 被 PID "+pid+" 占用，强制终止残留");
                     forceKill(pid); if (killed.length()>0) killed.append("; "); killed.append("PID ").append(pid).append(" (端口 ").append(port).append(")");
-                } else { logger.warning("[QQBot/SnowLuma] 端口 "+port+" 被 PID "+pid+" 占用，但不是 SnowLuma/Node，请手动处理"); }
+                } else { logger.warning("[SnowLuma] 端口 "+port+" 被 PID "+pid+" 占用，但不是 SnowLuma/Node，请手动处理"); }
             }
         }
         if (killed.length()>0) { try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); } return killed.toString(); }
@@ -315,9 +315,9 @@ public final class SnowLumaProcessManager {
                 for (ProcessHandle child : descendants) {
                     if (child.isAlive()) { try { child.destroyForcibly(); } catch (Exception ignored) {} }
                 }
-                if (!descendants.isEmpty()) logger.info("[QQBot/SnowLuma] 已清理 " + descendants.size() + " 个子进程 (父 PID: " + pid + ")");
+                if (!descendants.isEmpty()) logger.info("[SnowLuma] 已清理 " + descendants.size() + " 个子进程 (父 PID: " + pid + ")");
             }
-        } catch (Exception e) { if (debugMode.getAsBoolean()) logger.info("[QQBot/SnowLuma] 子进程清理异常: " + e.getMessage()); }
+        } catch (Exception e) { if (debugMode.getAsBoolean()) logger.info("[SnowLuma] 子进程清理异常: " + e.getMessage()); }
         String os = System.getProperty("os.name","").toLowerCase();
         if (os.contains("win")) {
             try { new ProcessBuilder("taskkill","/F","/T","/PID",String.valueOf(pid)).redirectErrorStream(true).start().waitFor(10,java.util.concurrent.TimeUnit.SECONDS); }
@@ -382,7 +382,7 @@ public final class SnowLumaProcessManager {
     private CompletableFuture<String> installNativeAsync() {
         if (status.get()==Status.INSTALLING) return CompletableFuture.completedFuture("已在安装中");
         if (status.get()==Status.RUNNING) return CompletableFuture.completedFuture("请先停止再安装");
-        status.set(Status.INSTALLING); logger.info("[QQBot/SnowLuma] 开始从 GitHub 下载...");
+        status.set(Status.INSTALLING); logger.info("[SnowLuma] 开始从 GitHub 下载...");
         return CompletableFuture.supplyAsync(() -> {
             try {
                 HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).followRedirects(HttpClient.Redirect.NORMAL).build();
@@ -390,15 +390,15 @@ public final class SnowLumaProcessManager {
                 HttpResponse<String> apiResp = client.send(apiReq, HttpResponse.BodyHandlers.ofString());
                 String downloadUrl = extractDownloadUrl(apiResp.body());
                 if (downloadUrl==null) { status.set(Status.STOPPED); return "未找到可用的 Release"; }
-                logger.info("[QQBot/SnowLuma] 下载: "+downloadUrl);
+                logger.info("[SnowLuma] 下载: "+downloadUrl);
                 String ext = downloadUrl.toLowerCase().endsWith(".tar.gz") ? ".tar.gz" : ".zip";
                 Path archive = installDir.getParent().resolve("snowluma-download"+ext); Files.createDirectories(installDir);
                 HttpRequest dlReq = HttpRequest.newBuilder().uri(URI.create(downloadUrl)).header("User-Agent","ArcartXSuite-QQBot").GET().build();
                 client.send(dlReq, HttpResponse.BodyHandlers.ofFile(archive));
-                logger.info("[QQBot/SnowLuma] 解压中..."); extractArchive(archive, installDir); Files.deleteIfExists(archive);
+                logger.info("[SnowLuma] 解压中..."); extractArchive(archive, installDir); Files.deleteIfExists(archive);
                 flattenIfNeeded(); status.set(Status.STOPPED);
-                logger.info("[QQBot/SnowLuma] 安装完成"); return "安装完成！执行 start 启动";
-            } catch (Exception e) { status.set(Status.STOPPED); logger.log(Level.SEVERE,"[QQBot/SnowLuma] 安装失败",e); return "安装失败: "+e.getMessage(); }
+                logger.info("[SnowLuma] 安装完成"); return "安装完成！执行 start 启动";
+            } catch (Exception e) { status.set(Status.STOPPED); logger.log(Level.SEVERE,"[SnowLuma] 安装失败",e); return "安装失败: "+e.getMessage(); }
         });
     }
 

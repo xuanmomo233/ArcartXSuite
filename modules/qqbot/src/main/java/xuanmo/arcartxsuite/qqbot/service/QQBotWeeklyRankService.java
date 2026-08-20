@@ -51,7 +51,7 @@ public final class QQBotWeeklyRankService {
         long delayTicks = calculateDelayToNextSunday();
         // 首次调度：等到下周日 23:59
         task = plugin.getServer().getScheduler().runTaskLater(plugin, this::runWeeklyRank, delayTicks);
-        logger.info("[QQBot] 周结算排行榜已调度，下次触发约 " + (delayTicks / 20 / 60) + " 分钟后");
+        logger.info("周结算排行榜已调度，下次触发约 " + (delayTicks / 20 / 60) + " 分钟后");
     }
 
     public void stop() {
@@ -81,7 +81,7 @@ public final class QQBotWeeklyRankService {
                 broadcast.accept(message);
             }
         } catch (Exception e) {
-            logger.warning("[QQBot] 周结算排行榜异常: " + e.getMessage());
+            logger.warning("周结算排行榜异常: " + e.getMessage());
         }
         // 重新调度下周
         long nextDelay = 7 * 24 * 60 * 60 * 20L; // 7 天 ticks

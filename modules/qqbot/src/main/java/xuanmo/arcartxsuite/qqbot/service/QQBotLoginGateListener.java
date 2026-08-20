@@ -59,7 +59,7 @@ public final class QQBotLoginGateListener implements Listener {
         boolean bound = repository.findByPlayerName(name) != null;
 
         if (config.debug()) {
-            logger.info("[QQBot/Gate] " + name + " UUID=" + uuid
+            logger.info("[Gate] " + name + " UUID=" + uuid
                 + " v" + (uuid == null ? "?" : uuid.version())
                 + " type=" + type.id()
                 + " qqBound=" + bound

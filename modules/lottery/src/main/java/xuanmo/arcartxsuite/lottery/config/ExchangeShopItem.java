@@ -28,9 +28,9 @@ public record ExchangeShopItem(
         List<CostConfig.CostEntry> cost;
         ConfigurationSection costSection = section.getConfigurationSection("cost");
         if (costSection != null) {
-            cost = CostConfig.load(costSection, "exchange item " + id).single();
+            cost = CostConfig.load(costSection, "exchange item " + id, logger).single();
         } else {
-            cost = CostConfig.loadDirectList(section.getMapList("cost"), "exchange item " + id);
+            cost = CostConfig.loadDirectList(section.getMapList("cost"), "exchange item " + id, logger);
         }
         ConfigurationSection rewardSection = section.getConfigurationSection("reward");
         if (rewardSection == null) {

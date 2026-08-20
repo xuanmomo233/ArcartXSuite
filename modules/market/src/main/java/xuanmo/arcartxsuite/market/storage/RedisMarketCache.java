@@ -38,9 +38,9 @@ public class RedisMarketCache {
 
         try (Jedis jedis = pool.getResource()) {
             jedis.ping();
-            logger.info("[Market] Redis 连接成功: " + config.host() + ":" + config.port());
+            logger.info("Redis 连接成功: " + config.host() + ":" + config.port());
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "[Market] Redis 连接失败", e);
+            logger.log(Level.SEVERE, "Redis 连接失败", e);
             pool.close();
             pool = null;
         }
@@ -62,7 +62,7 @@ public class RedisMarketCache {
         try (Jedis jedis = pool.getResource()) {
             jedis.setex(key, config.cacheTtlSeconds(), json);
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market] Redis 缓存写入失败", e);
+            logger.log(Level.WARNING, "Redis 缓存写入失败", e);
         }
     }
 
@@ -71,7 +71,7 @@ public class RedisMarketCache {
         try (Jedis jedis = pool.getResource()) {
             return jedis.get(key);
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market] Redis 缓存读取失败", e);
+            logger.log(Level.WARNING, "Redis 缓存读取失败", e);
             return null;
         }
     }
@@ -84,7 +84,7 @@ public class RedisMarketCache {
                 jedis.del(keys.toArray(new String[0]));
             }
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market] Redis 缓存失效失败", e);
+            logger.log(Level.WARNING, "Redis 缓存失效失败", e);
         }
     }
 }

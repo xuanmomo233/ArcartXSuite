@@ -82,7 +82,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         tPoints = prefix + "points";
         tExchange = prefix + "exchange";
         createTables(conn);
-        logger.info("[Lottery] " + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
+        logger.info("" + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
@@ -259,7 +259,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 }
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 加载 Gacha 状态失败: " + e.getMessage());
+            logger.warning("加载 Gacha 状态失败: " + e.getMessage());
         }
         return PlayerGachaState.empty(playerUuid, poolId);
     }
@@ -285,7 +285,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setString(7, state.fateTarget());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 保存 Gacha 状态失败: " + e.getMessage());
+            logger.warning("保存 Gacha 状态失败: " + e.getMessage());
         }
     }
 
@@ -298,7 +298,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setString(2, poolId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 删除 Gacha 状态失败: " + e.getMessage());
+            logger.warning("删除 Gacha 状态失败: " + e.getMessage());
         }
     }
 
@@ -321,7 +321,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 }
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 加载 Case 状态失败: " + e.getMessage());
+            logger.warning("加载 Case 状态失败: " + e.getMessage());
         }
         return PlayerCaseState.empty(playerUuid, poolId);
     }
@@ -344,7 +344,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setLong(4, state.lastOpenTime());
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 保存 Case 状态失败: " + e.getMessage());
+            logger.warning("保存 Case 状态失败: " + e.getMessage());
         }
     }
 
@@ -357,7 +357,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setString(2, poolId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 删除 Case 状态失败: " + e.getMessage());
+            logger.warning("删除 Case 状态失败: " + e.getMessage());
         }
     }
 
@@ -381,7 +381,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 return keys.next() ? keys.getLong(1) : -1L;
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 保存待领取奖励失败: " + e.getMessage());
+            logger.warning("保存待领取奖励失败: " + e.getMessage());
             return -1L;
         }
     }
@@ -404,7 +404,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 }
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 查询待领取奖励失败: " + e.getMessage());
+            logger.warning("查询待领取奖励失败: " + e.getMessage());
         }
         return result;
     }
@@ -418,7 +418,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setLong(2, claimId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 更新待领取奖励失败: " + e.getMessage());
+            logger.warning("更新待领取奖励失败: " + e.getMessage());
         }
     }
 
@@ -439,7 +439,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setBoolean(7, guaranteed);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 记录 Gacha 日志失败: " + e.getMessage());
+            logger.warning("记录 Gacha 日志失败: " + e.getMessage());
         }
     }
 
@@ -456,7 +456,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setString(5, rarity);
             ps.executeUpdate();
         } catch (SQLException e) {
-            logger.warning("[Lottery] 记录 Case 日志失败: " + e.getMessage());
+            logger.warning("记录 Case 日志失败: " + e.getMessage());
         }
     }
 
@@ -483,7 +483,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 }
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 查询 Gacha 历史失败: " + e.getMessage());
+            logger.warning("查询 Gacha 历史失败: " + e.getMessage());
         }
         return result;
     }
@@ -509,7 +509,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 }
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] 查询 Case 历史失败: " + e.getMessage());
+            logger.warning("查询 Case 历史失败: " + e.getMessage());
         }
         return result;
     }
@@ -524,7 +524,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 while (rs.next()) result.put(rs.getString("point_id"), rs.getLong("amount"));
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to read points: " + e.getMessage());
+            logger.warning("Failed to read points: " + e.getMessage());
         }
         return result;
     }
@@ -539,7 +539,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 return rs.next() ? rs.getLong(1) : 0L;
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to read point: " + e.getMessage());
+            logger.warning("Failed to read point: " + e.getMessage());
             return 0L;
         }
     }
@@ -587,7 +587,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             conn.commit();
             return true;
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to change points: " + e.getMessage());
+            logger.warning("Failed to change points: " + e.getMessage());
             return false;
         }
     }
@@ -602,7 +602,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                 return rs.next() ? rs.getInt(1) : 0;
             }
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to read exchange count: " + e.getMessage());
+            logger.warning("Failed to read exchange count: " + e.getMessage());
             return 0;
         }
     }
@@ -620,7 +620,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to increment exchange count: " + e.getMessage());
+            logger.warning("Failed to increment exchange count: " + e.getMessage());
             return false;
         }
     }
@@ -635,7 +635,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
-            logger.warning("[Lottery] Failed to rollback exchange count: " + e.getMessage());
+            logger.warning("Failed to rollback exchange count: " + e.getMessage());
             return false;
         }
     }

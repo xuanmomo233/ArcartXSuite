@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.menu.config;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * 菜单按钮动作定义，描述单个动作的类型和参数值。
@@ -19,35 +20,37 @@ public record MenuActionDefinition(
     /**
      * 将单行文本解析为动作定义，格式为 {@code type:value}。
      *
-     * @param raw 原始文本行
+     * @param raw    原始文本行
+     * @param logger 模块 logger，用于记录未知动作类型警告
      * @return 解析后的动作定义，空行返回 NONE 类型
      */
-    public static MenuActionDefinition parse(String raw) {
+    public static MenuActionDefinition parse(String raw, Logger logger) {
         if (raw == null || raw.isBlank()) {
             return new MenuActionDefinition(MenuActionType.NONE, "");
         }
         String trimmed = raw.trim();
         int separator = trimmed.indexOf(':');
         if (separator <= 0) {
-            return new MenuActionDefinition(MenuActionType.parse(trimmed), "");
+            return new MenuActionDefinition(MenuActionType.parse(trimmed, logger), "");
         }
         String typePart = trimmed.substring(0, separator).trim();
         String valuePart = trimmed.substring(separator + 1).trim();
-        return new MenuActionDefinition(MenuActionType.parse(typePart), valuePart);
+        return new MenuActionDefinition(MenuActionType.parse(typePart, logger), valuePart);
     }
 
     /**
      * 将多行文本批量解析为动作定义列表，过滤掉空行和 NONE 空值条目。
      *
-     * @param lines 原始文本行列表
+     * @param lines  原始文本行列表
+     * @param logger 模块 logger，用于记录未知动作类型警告
      * @return 不可变的动作定义列表
      */
-    public static List<MenuActionDefinition> parseList(List<String> lines) {
+    public static List<MenuActionDefinition> parseList(List<String> lines, Logger logger) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
         return lines.stream()
-            .map(MenuActionDefinition::parse)
+            .map(raw -> parse(raw, logger))
             .filter(action -> action.type() != MenuActionType.NONE || !action.value().isBlank())
             .toList();
     }

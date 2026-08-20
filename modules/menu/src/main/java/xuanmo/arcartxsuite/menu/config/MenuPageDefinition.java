@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
@@ -25,9 +26,10 @@ public record MenuPageDefinition(
      * 从配置节加载页面定义。
      *
      * @param section 页面配置节
+     * @param logger  模块 logger，用于记录未知动作类型警告
      * @return 解析后的页面定义，为 null 时返回默认空页面
      */
-    public static MenuPageDefinition load(ConfigurationSection section) {
+    public static MenuPageDefinition load(ConfigurationSection section, Logger logger) {
         if (section == null) {
             return new MenuPageDefinition("main", "", Map.of());
         }
@@ -37,7 +39,7 @@ public record MenuPageDefinition(
         ConfigurationSection buttonsSection = section.getConfigurationSection("buttons");
         if (buttonsSection != null) {
             for (String buttonId : buttonsSection.getKeys(false)) {
-                buttons.put(buttonId, MenuButtonDefinition.load(buttonId, buttonsSection.getConfigurationSection(buttonId)));
+                buttons.put(buttonId, MenuButtonDefinition.load(buttonId, buttonsSection.getConfigurationSection(buttonId), logger));
             }
         }
         return new MenuPageDefinition(id, title, Map.copyOf(buttons));
@@ -47,9 +49,10 @@ public record MenuPageDefinition(
      * 从原始 Map 列表批量加载页面定义，格式错误的页面会被跳过。
      *
      * @param rawPages 原始页面 Map 列表
+     * @param logger   模块 logger，用于记录未知动作类型警告
      * @return 不可变的页面定义列表
      */
-    public static List<MenuPageDefinition> loadList(List<Map<?, ?>> rawPages) {
+    public static List<MenuPageDefinition> loadList(List<Map<?, ?>> rawPages, Logger logger) {
         if (rawPages == null || rawPages.isEmpty()) {
             return List.of(new MenuPageDefinition("main", "Menu", Map.of()));
         }
@@ -63,7 +66,7 @@ public record MenuPageDefinition(
             org.bukkit.configuration.file.YamlConfiguration config = new org.bukkit.configuration.file.YamlConfiguration();
             try {
                 config.loadFromString(dump);
-                pages.add(load(config));
+                pages.add(load(config, logger));
             } catch (Exception ignored) {
                 // 跳过格式错误的 page
             }

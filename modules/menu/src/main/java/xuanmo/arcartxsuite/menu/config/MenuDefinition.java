@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
@@ -54,7 +55,7 @@ public record MenuDefinition(
         return 0;
     }
 
-    public static MenuDefinition load(YamlConfiguration yaml, String sourceFile, MenuLayoutType defaultLayout, int defaultColumns, int defaultButtonsPerPage) {
+    public static MenuDefinition load(YamlConfiguration yaml, String sourceFile, MenuLayoutType defaultLayout, int defaultColumns, int defaultButtonsPerPage, Logger logger) {
         String id = yaml.getString("id", "");
         if (id.isBlank()) {
             throw new IllegalArgumentException("菜单缺少 id: " + sourceFile);
@@ -66,7 +67,7 @@ public record MenuDefinition(
         ConfigurationSection footerSection = yaml.getConfigurationSection("footer-buttons");
         if (footerSection != null) {
             for (String footerId : footerSection.getKeys(false)) {
-                footerButtons.put(footerId, MenuButtonDefinition.load(footerId, footerSection.getConfigurationSection(footerId)));
+                footerButtons.put(footerId, MenuButtonDefinition.load(footerId, footerSection.getConfigurationSection(footerId), logger));
             }
         }
         List<MenuPageDefinition> pages = new ArrayList<>();
@@ -78,14 +79,14 @@ public record MenuDefinition(
                     if (!pageSection.isSet("id")) {
                         pageSection.set("id", pageKey);
                     }
-                    pages.add(MenuPageDefinition.load(pageSection));
+                    pages.add(MenuPageDefinition.load(pageSection, logger));
                 }
             }
         }
         if (pages.isEmpty()) {
             List<Map<?, ?>> rawPages = yaml.getMapList("pages");
             if (!rawPages.isEmpty()) {
-                pages.addAll(MenuPageDefinition.loadList(rawPages));
+                pages.addAll(MenuPageDefinition.loadList(rawPages, logger));
             }
         }
         if (pages.isEmpty()) {
@@ -103,8 +104,8 @@ public record MenuDefinition(
             yaml.getString("permission", ""),
             yaml.getBoolean("match-esc", false),
             List.copyOf(openRequirements),
-            MenuActionDefinition.parseList(yaml.getStringList("open-actions")),
-            MenuActionDefinition.parseList(yaml.getStringList("close-actions")),
+            MenuActionDefinition.parseList(yaml.getStringList("open-actions"), logger),
+            MenuActionDefinition.parseList(yaml.getStringList("close-actions"), logger),
             List.copyOf(yaml.getStringList("commands")),
             List.copyOf(yaml.getStringList("command-regex")),
             itemBinds,

@@ -49,7 +49,7 @@ public final class WarehouseCrossServerLockService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            this.logger.info("[Warehouse] 跨服共享仓库编辑锁已启用");
+            this.logger.info("跨服共享仓库编辑锁已启用");
         }
     }
 

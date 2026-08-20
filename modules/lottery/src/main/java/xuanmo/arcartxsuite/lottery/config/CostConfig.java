@@ -27,8 +27,6 @@ public record CostConfig(
     @NotNull List<CostEntry> single,
     @NotNull List<CostEntry> ten
 ) {
-    private static final Logger LOGGER = Logger.getLogger("ArcartX-Lottery");
-
     /**
      * 消耗模式枚举。
      */
@@ -40,14 +38,15 @@ public record CostConfig(
      * 从 YAML 配置节加载消耗配置。
      *
      * @param section 配置节，为 {@code null} 时使用默认值
+     * @param logger  日志记录器
      * @return 解析后的 {@link CostConfig} 实例
      * @throws IllegalArgumentException 当 type 非合法枚举值或 amount 非正整数时抛出
      */
-    public static CostConfig load(@Nullable ConfigurationSection section) {
+    public static CostConfig load(@Nullable ConfigurationSection section, Logger logger) {
         if (section == null) {
             return new CostConfig(List.of(), List.of());
         }
-        return new CostConfig(loadEntries(section, "single", "cost.single"), loadEntries(section, "ten", "cost.ten"));
+        return new CostConfig(loadEntries(section, "single", "cost.single", logger), loadEntries(section, "ten", "cost.ten", logger));
     }
 
     /**
@@ -55,13 +54,14 @@ public record CostConfig(
      *
      * @param section cost 配置节点
      * @param ownerId 出错时用于定位的奖池或兑换商品 ID
+     * @param logger  日志记录器
      * @return 解析出的消耗配置
      * @throws IllegalArgumentException cost 配置不合法时抛出
      */
-    public static CostConfig load(@Nullable ConfigurationSection section, String ownerId) {
+    public static CostConfig load(@Nullable ConfigurationSection section, String ownerId, Logger logger) {
         try {
-            return new CostConfig(loadEntries(section, "single", ownerId + ".single"),
-                loadEntries(section, "ten", ownerId + ".ten"));
+            return new CostConfig(loadEntries(section, "single", ownerId + ".single", logger),
+                loadEntries(section, "ten", ownerId + ".ten", logger));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid cost configuration for "
                 + ownerId + ": " + exception.getMessage(), exception);
@@ -72,14 +72,15 @@ public record CostConfig(
      * 解析直接以列表书写的 cost 条目，用于兑换商品配置。
      *
      * @param entries YAML 中的条目列表
+     * @param logger  日志记录器
      * @return 解析出的消耗条目列表
      * @throws IllegalArgumentException cost 条目不合法时抛出
      */
-    public static List<CostEntry> loadDirectList(@Nullable List<Map<?, ?>> entries) {
+    public static List<CostEntry> loadDirectList(@Nullable List<Map<?, ?>> entries, Logger logger) {
         if (entries == null || entries.isEmpty()) return List.of();
         MemoryConfiguration configuration = new MemoryConfiguration();
         configuration.set("single", entries);
-        return loadEntries(configuration, "single", "cost");
+        return loadEntries(configuration, "single", "cost", logger);
     }
 
     /**
@@ -87,35 +88,36 @@ public record CostConfig(
      *
      * @param entries YAML 中的条目列表
      * @param ownerId 出错时用于定位的兑换商品 ID
+     * @param logger  日志记录器
      * @return 解析出的消耗条目列表
      * @throws IllegalArgumentException cost 条目不合法时抛出
      */
-    public static List<CostEntry> loadDirectList(@Nullable List<Map<?, ?>> entries, String ownerId) {
+    public static List<CostEntry> loadDirectList(@Nullable List<Map<?, ?>> entries, String ownerId, Logger logger) {
         try {
             if (entries == null || entries.isEmpty()) return List.of();
             MemoryConfiguration configuration = new MemoryConfiguration();
             configuration.set("single", entries);
-            return loadEntries(configuration, "single", ownerId + ".single");
+            return loadEntries(configuration, "single", ownerId + ".single", logger);
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid cost configuration for "
                 + ownerId + ": " + exception.getMessage(), exception);
         }
     }
 
-    private static List<CostEntry> loadEntries(ConfigurationSection section, String key, String path) {
+    private static List<CostEntry> loadEntries(ConfigurationSection section, String key, String path, Logger logger) {
         ConfigurationSection entriesSection = section.getConfigurationSection(key);
         if (entriesSection != null) {
             List<CostEntry> result = new ArrayList<>();
             for (String childKey : entriesSection.getKeys(false)) {
                 ConfigurationSection entrySection = entriesSection.getConfigurationSection(childKey);
-                if (entrySection != null) result.add(loadEntry(entrySection, path + "." + childKey));
+                if (entrySection != null) result.add(loadEntry(entrySection, path + "." + childKey, logger));
             }
             return result;
         }
         List<Map<?, ?>> maps = section.getMapList(key);
         if (maps.isEmpty()) return Collections.emptyList();
         List<CostEntry> result = new ArrayList<>();
-        for (int index = 0; index < maps.size(); index++) result.add(loadEntry(toSection(maps.get(index)), path + "[" + index + "]"));
+        for (int index = 0; index < maps.size(); index++) result.add(loadEntry(toSection(maps.get(index)), path + "[" + index + "]", logger));
         return result;
     }
 
@@ -162,7 +164,7 @@ public record CostConfig(
         }
     }
 
-    private static CostEntry loadEntry(ConfigurationSection section, String path) {
+    private static CostEntry loadEntry(ConfigurationSection section, String path, Logger logger) {
         String type = section.getString("type", "ITEM");
         String id = section.getString("id", "");
         CostMode mode;
@@ -189,7 +191,7 @@ public record CostConfig(
             if (!id.isBlank()) {
                 throw new IllegalArgumentException(path + ": ITEM cost must not define id; use matcher");
             }
-            matcher = ItemMatcherLoader.load(section.getConfigurationSection("matcher"), LOGGER, path + ".matcher");
+            matcher = ItemMatcherLoader.load(section.getConfigurationSection("matcher"), logger, path + ".matcher");
             if (matcher.emptyMatcher()) {
                 throw new IllegalArgumentException(path + ": ITEM cost requires a non-empty matcher");
             }

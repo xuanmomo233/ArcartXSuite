@@ -62,7 +62,7 @@ public record PoolDefinition(
         String description = section.getString("description", "");
         String upItemDesc = section.getString("up-item-desc", "");
         IconDefinition upItemIcon = IconDefinition.load(section, "up-item-icon");
-        CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"), id);
+        CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"), id, logger);
         if (cost.single().isEmpty() && cost.ten().isEmpty()) {
             logger.warning("Lottery pool has an empty cost (explicitly free): " + id);
         } else if (cost.single().isEmpty()) {

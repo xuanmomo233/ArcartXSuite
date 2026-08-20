@@ -124,7 +124,7 @@ public final class CrossServerRankingCacheService {
                 }
             }
         } catch (SQLException exception) {
-            this.logger.warning("[EntityTracker] 排行缓存刷新失败: " + exception.getMessage());
+            this.logger.warning("排行缓存刷新失败: " + exception.getMessage());
         }
     }
 

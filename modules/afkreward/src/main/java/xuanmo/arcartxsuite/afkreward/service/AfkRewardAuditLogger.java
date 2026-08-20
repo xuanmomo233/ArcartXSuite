@@ -66,7 +66,7 @@ public final class AfkRewardAuditLogger {
                 Files.writeString(path, line, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
             } catch (IOException e) {
-                logger.warning("[AfkReward] 写入审计日志失败: " + e.getMessage());
+                logger.warning("写入审计日志失败: " + e.getMessage());
             }
         }
     }

@@ -627,7 +627,7 @@ public final class QQBotCommandRouter {
                 }
                 reply(event, format);
             } catch (Exception e) {
-                logger.warning("[QQBot] PAPI 查询失败: " + e.getMessage());
+                logger.warning("PAPI 查询失败: " + e.getMessage());
                 reply(event, "查询失败: " + e.getMessage());
             }
         });
@@ -670,7 +670,7 @@ public final class QQBotCommandRouter {
             return;
         }
         if (config.debug()) {
-            logger.info("[QQBot/Admin] QQ=" + qqId + " 执行控制台命令: " + commandLine);
+            logger.info("[Admin] QQ=" + qqId + " 执行控制台命令: " + commandLine);
         }
         String cmd = commandLine;
         AxsScheduler.runTask(plugin, () -> {
@@ -687,7 +687,7 @@ public final class QQBotCommandRouter {
             } catch (Exception e) {
                 reply(event, config.messages().adminCommandFailed()
                     .replace("{command}", cmd) + "\n错误: " + e.getMessage());
-                logger.warning("[QQBot/Admin] 命令执行异常: " + cmd + " → " + e.getMessage());
+                logger.warning("[Admin] 命令执行异常: " + cmd + " → " + e.getMessage());
             }
         });
     }

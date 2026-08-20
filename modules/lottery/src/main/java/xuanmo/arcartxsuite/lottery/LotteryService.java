@@ -105,17 +105,26 @@ public class LotteryService {
     }
 
     /**
+     * 返回模块日志记录器。
+     *
+     * @return 模块 logger
+     */
+    public Logger getLogger() {
+        return logger;
+    }
+
+    /**
      * 启动服务。
      */
     public void start() {
-        logger.info("[Lottery] 服务已启动");
+        logger.info("服务已启动");
     }
 
     /**
      * 关闭服务，释放资源。
      */
     public void shutdown() {
-        logger.info("[Lottery] 服务已关闭");
+        logger.info("服务已关闭");
     }
 
     // ─── 查询 ─────────────────────────────────────────────
@@ -386,12 +395,12 @@ public class LotteryService {
                 sendMessage(player, "common.pending-claim-manual", item.name());
             }
             sendMessage(player, "common.distribution-failed", item.name());
-            logger.severe("[Lottery] 奖励投递失败且无法序列化，需管理员处理: player="
+            logger.severe("奖励投递失败且无法序列化，需管理员处理: player="
                 + player.getName() + ", pool=" + poolId + ", item=" + item.id()
                 + ", reason=" + outcome.failureReason());
         } else {
             sendMessage(player, "common.distribution-failed", item.name());
-            logger.severe("[Lottery] 非物品奖励投递失败，需管理员处理: player="
+            logger.severe("非物品奖励投递失败，需管理员处理: player="
                 + player.getName() + ", pool=" + poolId + ", item=" + item.id()
                 + ", reason=" + outcome.failureReason());
         }
@@ -419,7 +428,7 @@ public class LotteryService {
                 repository.markPendingClaimClaimed(claim.id());
                 claimed++;
             } catch (Exception e) {
-                logger.warning("[Lottery] 待领取奖励解析失败: " + e.getMessage());
+                logger.warning("待领取奖励解析失败: " + e.getMessage());
             }
         }
         if (claimed > 0) {
@@ -630,7 +639,7 @@ public class LotteryService {
         var bridge = currencyManager.bridge(id);
         if (bridge == null || !bridge.available()
                 || !bridge.deposit(player, BigDecimal.valueOf(amount)).success()) {
-            logger.warning("[Lottery] Currency rollback failed for " + id);
+            logger.warning("Currency rollback failed for " + id);
         }
     }
 

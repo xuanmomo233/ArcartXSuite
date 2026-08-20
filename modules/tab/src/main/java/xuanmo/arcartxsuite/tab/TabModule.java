@@ -203,7 +203,7 @@ public final class TabModule extends AbstractAXSModule {
         @org.bukkit.event.EventHandler
         public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
             if (papiDetected.get()) return;
-            logger.info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
+            logger.info("监听到 PAPI 全部扩展加载完成，开始检测");
             performFinalPapiDetection();
         }
     }
@@ -234,12 +234,12 @@ public final class TabModule extends AbstractAXSModule {
             }
 
             if (hasPlayer && hasServer) {
-                logger.info("[tab] PAPI 扩展状态 — player: 已安装，server: 已安装");
+                logger.info("PAPI 扩展状态 — player: 已安装，server: 已安装");
                 papiDetected.set(true);
                 return true;
             }
 
-            logger.info("[tab] PAPI 扩展尚未全部加载，等待加载完成事件");
+            logger.info("PAPI 扩展尚未全部加载，等待加载完成事件");
             return false;
         } catch (Exception e) {
             return false;
@@ -272,18 +272,18 @@ public final class TabModule extends AbstractAXSModule {
                     hasServer = true;
                 }
             }
-            logger.info("[tab] PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
+            logger.info("PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
 
             if (!hasPlayer) {
-                logger.info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
+                logger.info("PAPI player 扩展未安装，已注册内置 fallback");
                 expansionRegistry.register(new TabPlayerFallbackExpansion(plugin));
             }
             if (!hasServer) {
-                logger.info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
+                logger.info("PAPI server 扩展未安装，已注册内置 fallback");
                 expansionRegistry.register(new TabServerFallbackExpansion(plugin));
             }
         } catch (Exception e) {
-            logger.warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
+            logger.warning("PAPI 扩展检测失败: " + e.getMessage());
         }
     }
 
