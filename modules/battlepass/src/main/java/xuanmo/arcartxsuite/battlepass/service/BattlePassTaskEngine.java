@@ -33,12 +33,12 @@ public final class BattlePassTaskEngine {
     private final Plugin plugin;
     private final BattlePassService service;
     private final BattlePassModuleConfiguration configuration;
+    private final Logger logger;
     private final List<String> subscriptionIds = new ArrayList<>();
     private EventBusCapability eventBus;
     private BukkitEventSourceListener bukkitListener;
     private xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener mythicListener;
     private volatile boolean active;
-    private static final Logger LOGGER = Logger.getLogger("ArcartXSuite");
     private final TaskTriggerLimiter triggerLimiter = new TaskTriggerLimiter();
 
     private static final Map<String, String> PAYLOAD_EXPRESSION_KEYS = Map.of(
@@ -58,12 +58,14 @@ public final class BattlePassTaskEngine {
      * @param plugin        插件实例
      * @param service       BattlePassService 实例
      * @param configuration 模块配置
+     * @param logger        模块专用 Logger（由宿主注入，自动携带统一前缀与模块标签）
      */
     public BattlePassTaskEngine(Plugin plugin, BattlePassService service,
-                                 BattlePassModuleConfiguration configuration) {
+                                 BattlePassModuleConfiguration configuration, Logger logger) {
         this.plugin = plugin;
         this.service = service;
         this.configuration = configuration;
+        this.logger = logger;
     }
 
     /**
@@ -76,7 +78,7 @@ public final class BattlePassTaskEngine {
         eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         active = true;
 
-        LOGGER.fine("[battlepass] TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null"));
+        logger.fine("TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null"));
 
         Map<String, List<BiConsumer<Player, Map<String, String>>>> callbacksByEvent =
             new HashMap<>();
@@ -107,13 +109,13 @@ public final class BattlePassTaskEngine {
                 if (subId != null) {
                     subscriptionIds.add(subId);
                     eventBusCount++;
-                    LOGGER.fine("[battlepass] TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
+                    logger.fine("TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
                 }
             } else if (task.bukkitEvent() != null) {
                 // 使用 Bukkit 事件（支持多个事件类）
                 for (String bukkitClass : task.bukkitEvent().eventClasses()) {
                     if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
-                        LOGGER.warning("[battlepass] 不支持的 Bukkit 事件，跳过: task="
+                        logger.warning("不支持的 Bukkit 事件，跳过: task="
                             + task.taskId() + " event=" + bukkitClass);
                         continue;
                     }
@@ -122,8 +124,8 @@ public final class BattlePassTaskEngine {
                         try {
                             handleEvent(player, task, mapPayload(payload, task.bukkitEvent().payloadFields()));
                         } catch (Exception e) {
-                            LOGGER.log(Level.WARNING,
-                                "[battlepass] 任务 " + task.taskId()
+                            logger.log(Level.WARNING,
+                                "任务 " + task.taskId()
                                     + " 处理 Bukkit 事件 " + normalizedClass + " 失败", e);
                         }
                     };
@@ -135,21 +137,21 @@ public final class BattlePassTaskEngine {
                             .add(callback);
                     }
                     bukkitCount++;
-                    LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 事件: event="
+                    logger.info("TaskEngine 使用 Bukkit 事件: event="
                         + bukkitClass + " task=" + task.taskId()
                         + (hasTopic ? " (topic=" + topic + " 无发布者，降级)" : ""));
                 }
             } else if (hasTopic) {
-                LOGGER.warning("[battlepass] TaskEngine 跳过任务（EventBus 无发布者且无 bukkit-event 降级）: task="
+                logger.warning("TaskEngine 跳过任务（EventBus 无发布者且无 bukkit-event 降级）: task="
                     + task.taskId() + " topic=" + topic);
                 skippedCount++;
             } else {
-                LOGGER.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId());
+                logger.warning("TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId());
                 skippedCount++;
             }
         }
 
-        LOGGER.info("[battlepass] TaskEngine.start 完成: eventBus订阅=" + eventBusCount
+        logger.info("TaskEngine.start 完成: eventBus订阅=" + eventBusCount
             + " bukkit事件=" + bukkitCount + " 跳过=" + skippedCount
             + " | 总任务数=" + configuration.tasks().all().size());
 
@@ -177,7 +179,7 @@ public final class BattlePassTaskEngine {
         try {
             return eventBus.hasPublisher(topic);
         } catch (Exception e) {
-            LOGGER.warning("[battlepass] EventBus.hasPublisher 查询异常 topic=" + topic + ": " + e.getMessage());
+            logger.warning("EventBus.hasPublisher 查询异常 topic=" + topic + ": " + e.getMessage());
             return false;
         }
     }
@@ -196,7 +198,7 @@ public final class BattlePassTaskEngine {
         }
         bukkitListener = BukkitEventSourceListener.register(
             plugin,
-            LOGGER,
+            logger,
             dispatchers
         );
     }
@@ -213,9 +215,9 @@ public final class BattlePassTaskEngine {
         mythicListener = xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener
             .registerIfAvailable(plugin, dispatcher);
         if (mythicListener != null) {
-            LOGGER.info("[battlepass] MythicMobs 事件监听器已注册");
+            logger.info("MythicMobs 事件监听器已注册");
         } else {
-            LOGGER.warning("[battlepass] 有任务配置了 MythicMobs 事件，但 MythicMobs 插件未安装，相关任务不会触发");
+            logger.warning("有任务配置了 MythicMobs 事件，但 MythicMobs 插件未安装，相关任务不会触发");
         }
     }
 
@@ -286,7 +288,7 @@ public final class BattlePassTaskEngine {
         String payloadKey = PAYLOAD_EXPRESSION_KEYS.get(expression);
         String value = payload.get(payloadKey != null ? payloadKey : expression);
         if (value == null) {
-            LOGGER.fine("[battlepass] 无法解析 payload 表达式: " + expression);
+            logger.fine("无法解析 payload 表达式: " + expression);
         }
         return value;
     }

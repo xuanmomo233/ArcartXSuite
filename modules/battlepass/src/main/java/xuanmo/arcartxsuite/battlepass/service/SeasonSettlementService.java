@@ -93,10 +93,10 @@ public final class SeasonSettlementService {
     public boolean settle(String seasonId, boolean forced) {
         try {
             if (repository.isSeasonSettled(seasonId)) {
-                logger.info("[battlepass] 赛季 " + seasonId + " 已结算过，跳过");
+                logger.info("赛季 " + seasonId + " 已结算过，跳过");
                 return false;
             }
-            logger.info("[battlepass] 开始结算赛季 " + seasonId
+            logger.info("开始结算赛季 " + seasonId
                 + (forced ? "（管理员手动触发）" : "（自动触发）"));
 
             List<BattlePassRepository.PlayerSeasonSummary> summaries = repository.loadSeasonSummaries(seasonId);
@@ -108,16 +108,16 @@ public final class SeasonSettlementService {
                     if (online) onlineCount++;
                     else offlineCount++;
                 } catch (Exception e) {
-                    logger.warning("[battlepass] 结算玩家 " + summary.playerUuid() + " 失败: " + e.getMessage());
+                    logger.warning("结算玩家 " + summary.playerUuid() + " 失败: " + e.getMessage());
                 }
             }
 
             repository.markSeasonSettled(seasonId);
-            logger.info("[battlepass] 赛季 " + seasonId + " 结算完成"
+            logger.info("赛季 " + seasonId + " 结算完成"
                 + " | 在线发放: " + onlineCount + " | 离线发放: " + offlineCount);
             return true;
         } catch (SQLException e) {
-            logger.log(Level.WARNING, "[battlepass] 赛季结算数据库操作失败: " + seasonId, e);
+            logger.log(Level.WARNING, "赛季结算数据库操作失败: " + seasonId, e);
             return false;
         }
     }
@@ -165,7 +165,7 @@ public final class SeasonSettlementService {
         try {
             claimedRewards = repository.loadClaimedRewards(uuid, seasonId);
         } catch (SQLException e) {
-            logger.warning("[battlepass] 加载玩家领取记录失败 [" + uuid + "]: " + e.getMessage());
+            logger.warning("加载玩家领取记录失败 [" + uuid + "]: " + e.getMessage());
             claimedRewards = new HashSet<>();
         }
 
@@ -187,7 +187,7 @@ public final class SeasonSettlementService {
             try {
                 repository.saveClaimedReward(uuid, seasonId, reward.rewardId());
             } catch (SQLException e) {
-                logger.warning("[battlepass] 标记结算奖励领取记录失败 [" + uuid + "/" + reward.rewardId() + "]: " + e.getMessage());
+                logger.warning("标记结算奖励领取记录失败 [" + uuid + "/" + reward.rewardId() + "]: " + e.getMessage());
             }
         }
         return needsPending;
@@ -207,7 +207,7 @@ public final class SeasonSettlementService {
         try {
             claimedRewards = repository.loadClaimedRewards(uuid, seasonId);
         } catch (SQLException e) {
-            logger.warning("[battlepass] 加载玩家领取记录失败 [" + uuid + "]: " + e.getMessage());
+            logger.warning("加载玩家领取记录失败 [" + uuid + "]: " + e.getMessage());
             claimedRewards = new HashSet<>();
         }
 
@@ -236,7 +236,7 @@ public final class SeasonSettlementService {
             try {
                 repository.saveClaimedReward(uuid, seasonId, settlementKey);
             } catch (SQLException e) {
-                logger.warning("[battlepass] 标记结算奖励发放记录失败 [" + uuid + "/" + settlementKey + "]: " + e.getMessage());
+                logger.warning("标记结算奖励发放记录失败 [" + uuid + "/" + settlementKey + "]: " + e.getMessage());
             }
         }
         return needsPending;
@@ -259,13 +259,13 @@ public final class SeasonSettlementService {
                 List<BattlePassRepository.PlayerSeasonSummary> summaries = repository.loadSeasonSummaries(seasonId);
                 for (BattlePassRepository.PlayerSeasonSummary summary : summaries) {
                     if (summary.playerUuid().equals(uuid)) {
-                        logger.fine("[battlepass] 补发离线玩家 " + player.getName() + " 的赛季结算奖励");
+                        logger.fine("补发离线玩家 " + player.getName() + " 的赛季结算奖励");
                         settlePlayer(summary, seasonId);
                         break;
                     }
                 }
             } catch (SQLException e) {
-                logger.warning("[battlepass] 补发结算奖励失败 [" + uuid + "]: " + e.getMessage());
+                logger.warning("补发结算奖励失败 [" + uuid + "]: " + e.getMessage());
             } finally {
                 settledOfflinePlayers.remove(uuid);
             }

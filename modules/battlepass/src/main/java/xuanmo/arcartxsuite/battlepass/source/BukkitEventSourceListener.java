@@ -138,7 +138,7 @@ public final class BukkitEventSourceListener implements Listener {
             new BukkitEventSourceListener(plugin, logger, callbacks);
         if (callbacks != null && !callbacks.isEmpty()) {
             Bukkit.getPluginManager().registerEvents(listener, plugin);
-            logger.info("[battlepass] 已注册 Bukkit 事件监听器: " + callbacks.keySet());
+            logger.info("已注册 Bukkit 事件监听器: " + callbacks.keySet());
         }
         return listener;
     }
@@ -506,7 +506,7 @@ public final class BukkitEventSourceListener implements Listener {
             callback.accept(player, payload);
         } catch (Exception e) {
             logger.log(Level.WARNING,
-                "[battlepass] Bukkit 事件回调异常: " + eventClass, e);
+                "Bukkit 事件回调异常: " + eventClass, e);
         }
     }
 }

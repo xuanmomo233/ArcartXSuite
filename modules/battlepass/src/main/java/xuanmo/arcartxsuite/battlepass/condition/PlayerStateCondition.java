@@ -36,7 +36,7 @@ public final class PlayerStateCondition implements TaskCondition {
                 "gamemode", "world_environment" -> true;
             default -> {
                 if (logger != null) {
-                    logger.warning("[battlepass] 任务 " + taskId
+                    logger.warning("任务 " + taskId
                         + " 包含未知玩家状态类型，支持类型: " + SUPPORTED_STATE_TYPES
                         + "，条件已忽略: " + this.stateType);
                 }

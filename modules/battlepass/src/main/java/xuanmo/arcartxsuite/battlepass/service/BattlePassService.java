@@ -109,7 +109,7 @@ public final class BattlePassService {
             immutableRewardIndex.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         this.rewardsByLevel = Map.copyOf(immutableRewardIndex);
-        this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration);
+        this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, logger);
         this.settlementService = new SeasonSettlementService(plugin, configuration, repository, this, rewardDispatcher, logger);
     }
 
@@ -144,7 +144,7 @@ public final class BattlePassService {
         try {
             listener.onRefresh(playerUuid, structureChanged);
         } catch (Exception e) {
-            logger.warning("[battlepass] UI 刷新回调失败 [" + playerUuid + "]: " + e.getMessage());
+            logger.warning("UI 刷新回调失败 [" + playerUuid + "]: " + e.getMessage());
         }
     }
 
@@ -790,7 +790,7 @@ failedLoads.remove(playerUuid);
             try {
                 settlementService.checkAndAutoSettle();
             } catch (Exception e) {
-                logger.warning("[battlepass] 赛季自动结算检查失败: " + e.getMessage());
+                logger.warning("赛季自动结算检查失败: " + e.getMessage());
             }
         }
         for (Map.Entry<UUID, BattlePassPlayerProgress> entry : cachedProgress.entrySet()) {

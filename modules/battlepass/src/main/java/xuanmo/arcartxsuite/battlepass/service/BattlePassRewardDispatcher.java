@@ -267,7 +267,7 @@ public final class BattlePassRewardDispatcher {
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
         if (mail == null) {
             // Mail 模块不可用，降级处理
-            logger.fine("[battlepass] Mail 模块不可用，降级发放奖励: " + reward.rewardId());
+            logger.fine("Mail 模块不可用，降级发放奖励: " + reward.rewardId());
             fallbackFromMail(onlinePlayer, reward);
             return;
         }
@@ -282,12 +282,12 @@ public final class BattlePassRewardDispatcher {
                             .sourceModule("battlepass")
                             .build());
                         if (!result.success()) {
-                            logger.warning("[battlepass] 邮件预设发送失败: preset=" + presetId
+                            logger.warning("邮件预设发送失败: preset=" + presetId
                                 + " player=" + playerName + "，降级为直接发放");
                             AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
                         }
                     } catch (Exception e) {
-                        logger.warning("[battlepass] 邮件预设发送异常: " + presetId + " | " + e.getMessage());
+                        logger.warning("邮件预设发送异常: " + presetId + " | " + e.getMessage());
                     }
                 }
             });
@@ -299,13 +299,13 @@ public final class BattlePassRewardDispatcher {
         BattlePassItemDefinition itemDef = reward.item();
         if (itemDef == null) {
             // 无物品附件，降级为执行命令
-            logger.fine("[battlepass] mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
+            logger.fine("mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
             fallbackFromMail(onlinePlayer, reward);
             return;
         }
         ItemStack item = generateItem(itemDef);
         if (item == null) {
-            logger.warning("[battlepass] mail 类型奖励物品生成失败: " + reward.rewardId()
+            logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId()
                 + " source=" + itemDef.source() + " id=" + itemDef.id());
             return;
         }
@@ -317,12 +317,12 @@ public final class BattlePassRewardDispatcher {
                     .sourceModule("battlepass")
                     .build());
                 if (!result.success()) {
-                    logger.warning("[battlepass] 带附件邮件发送失败: player=" + playerName
+                    logger.warning("带附件邮件发送失败: player=" + playerName
                         + "，降级为直接发放物品 — " + result.message());
                     AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
                 }
             } catch (Exception e) {
-                logger.warning("[battlepass] 带附件邮件发送异常: " + e.getMessage());
+                logger.warning("带附件邮件发送异常: " + e.getMessage());
             }
         });
     }
@@ -333,7 +333,7 @@ public final class BattlePassRewardDispatcher {
     private void fallbackFromMail(@Nullable Player player, BattlePassReward reward) {
         if (player == null || !player.isOnline()) {
             // 离线玩家无法降级发放，记录日志
-            logger.fine("[battlepass] 离线玩家无法降级发放 mail 奖励: " + reward.rewardId());
+            logger.fine("离线玩家无法降级发放 mail 奖励: " + reward.rewardId());
             return;
         }
         // 优先尝试发放物品

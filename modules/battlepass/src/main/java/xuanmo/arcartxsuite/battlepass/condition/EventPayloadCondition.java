@@ -158,7 +158,7 @@ public final class EventPayloadCondition implements TaskCondition {
 
     private static void warn(Logger logger, String taskId, String reason) {
         if (logger != null) {
-            logger.warning("[battlepass] 任务 " + taskId + " 的 event_payload 条件无效: " + reason);
+            logger.warning("任务 " + taskId + " 的 event_payload 条件无效: " + reason);
         }
     }
 

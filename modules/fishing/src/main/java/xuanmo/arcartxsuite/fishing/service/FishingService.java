@@ -1561,6 +1561,8 @@ public final class FishingService {
      */
     public void pushTasksData(@NotNull Player player, @NotNull String uiId) {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
+        // 确保玩家任务已分配（模块重载或玩家在线时模块加载会导致缓存为空）
+        taskEngine.assignTasks(player.getUniqueId());
         java.util.List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> allTasks = taskEngine.getAllTasks(player.getUniqueId());
 
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();

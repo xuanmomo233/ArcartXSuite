@@ -561,12 +561,12 @@ public record BattlePassModuleConfiguration(
             long cooldownMs = section.getLong("cooldown-ms", 0L);
             int maxPerDay = section.getInt("max-per-day", 0);
             if (cooldownMs < 0) {
-                if (logger != null) logger.warning("[battlepass] 任务 " + taskId
+                if (logger != null) logger.warning("任务 " + taskId
                     + " 的 limits.cooldown-ms 小于 0，已回退为 0");
                 cooldownMs = 0;
             }
             if (maxPerDay < 0) {
-                if (logger != null) logger.warning("[battlepass] 任务 " + taskId
+                if (logger != null) logger.warning("任务 " + taskId
                     + " 的 limits.max-per-day 小于 0，已回退为 0");
                 maxPerDay = 0;
             }
@@ -596,12 +596,12 @@ public record BattlePassModuleConfiguration(
             private void report(int taskCount) {
                 if (logger == null) return;
                 if (problems.isEmpty()) {
-                    logger.fine("[battlepass] 任务配置校验通过，共加载 " + taskCount + " 个任务");
+                    logger.fine("任务配置校验通过，共加载 " + taskCount + " 个任务");
                     return;
                 }
-                logger.warning("[battlepass] 任务配置校验发现 " + problems.size() + " 处问题:");
+                logger.warning("任务配置校验发现 " + problems.size() + " 处问题:");
                 for (String problem : problems) {
-                    logger.warning("[battlepass]   " + problem);
+                    logger.warning("  " + problem);
                 }
             }
         }

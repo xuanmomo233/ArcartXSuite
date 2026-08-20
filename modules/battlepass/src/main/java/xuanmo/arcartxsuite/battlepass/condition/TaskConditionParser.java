@@ -113,7 +113,7 @@ public final class TaskConditionParser {
             case "any_of", "all_of", "not" ->
                 condition = parseComposite(map, type, logger, taskId, depth);
             default -> {
-                warn(logger, "[battlepass] 任务 " + taskId
+                warn(logger, "任务 " + taskId
                     + " 包含未知条件类型，条件已忽略: " + type);
                 return null;
             }
@@ -128,19 +128,19 @@ public final class TaskConditionParser {
         Map<?, ?> map, Logger logger, String taskId
     ) {
         if (!map.containsKey("key") || value(map, "key", "").isEmpty()) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的 event_payload 条件缺少必填项 key，条件已忽略");
             return null;
         }
         if (!map.containsKey("operator") || value(map, "operator", "").isEmpty()) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的 event_payload 条件缺少必填项 operator，条件已忽略");
             return null;
         }
         String operator = value(map, "operator", "");
         String normalized = normalizeOperator(operator);
         if (!isSupportedOperator(normalized)) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的 event_payload 条件使用未知 operator '" + operator
                 + "'，支持列表: " + EventPayloadCondition.supportedOperators()
                 + "；运行期按 equals 处理");
@@ -161,12 +161,12 @@ public final class TaskConditionParser {
         Map<?, ?> map, Logger logger, String taskId
     ) {
         if (!map.containsKey("state-type") || value(map, "state-type", "").isEmpty()) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的 player_state 条件缺少必填项 state-type，条件已忽略");
             return null;
         }
         if (!map.containsKey("state-id") || value(map, "state-id", "").isEmpty()) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的 player_state 条件缺少必填项 state-id，条件已忽略");
             return null;
         }
@@ -186,14 +186,14 @@ public final class TaskConditionParser {
         int depth
     ) {
         if (depth >= MAX_COMPOSITE_DEPTH) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的组合条件嵌套深度超过 " + MAX_COMPOSITE_DEPTH
                 + " 层，更深层级已忽略");
             return null;
         }
         List<TaskCondition> children = parseChildren(map.get("conditions"), logger, taskId, depth + 1);
         if (children.isEmpty()) {
-            warn(logger, "[battlepass] 任务 " + taskId
+            warn(logger, "任务 " + taskId
                 + " 的组合条件 '" + type + "' 没有可解析的子条件，条件已忽略");
             return null;
         }
