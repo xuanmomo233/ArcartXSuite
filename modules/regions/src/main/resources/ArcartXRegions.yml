@@ -1,5 +1,5 @@
 # 配置版本号（请勿手动修改）
-config-version: 2
+config-version: 3
 # ArcartXSuite Regions - 区域保护模块
 # 重载: /axs regions reload
 

@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.fishing.command.FishingAdminCommand;
 import xuanmo.arcartxsuite.fishing.command.FishingPlayerCommand;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.listener.FishingListener;
+import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
 import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
@@ -87,7 +88,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected int currentConfigVersion() {
-        return 3;
+        return 5;
     }
 
     @Override
@@ -349,6 +350,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
         service.start();
 
+        // 迁移旧的 fishing pending 奖励到统一 PendingRewardService
+        migrateLegacyPendingRewards(repo);
+
         // 启动任务引擎（需要 eventBusProvider 已设置）
         taskEngine.start();
 
@@ -472,6 +476,63 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         File file = new File(dir, fileName);
         if (!file.exists()) return java.util.List.of();
         return TaskLoader.load(YamlConfiguration.loadConfiguration(file), category, logger);
+    }
+
+    /**
+     * 迁移旧的 fishing pending 奖励到统一 PendingRewardService。
+     * <p>
+     * 旧版本使用 axs_fishing_pending_rewards 表存储离线玩家的待发放奖励，
+     * 新版本改用宿主的 PendingRewardService 统一管理。此方法在启动时
+     * 扫描旧表，将未发放的奖励迁移到 PendingRewardService，然后清空旧表。
+     * <p>
+     * 迁移是幂等的：如果旧表为空或不存在，直接返回。
+     */
+    private void migrateLegacyPendingRewards(JdbcFishingRepository repo) {
+        if (pendingRewardService == null) {
+            logger.fine("PendingRewardService 不可用，跳过旧 pending 数据迁移");
+            return;
+        }
+        try {
+            // 获取所有有待发放奖励的玩家 UUID
+            java.util.List<java.util.UUID> playerUuids = repo.loadAllPendingPlayerUuids();
+            if (playerUuids.isEmpty()) {
+                return;
+            }
+            int migrated = 0;
+            for (java.util.UUID uuid : playerUuids) {
+                java.util.List<FishingPendingReward> rewards = repo.loadPendingRewards(uuid);
+                for (FishingPendingReward reward : rewards) {
+                    // 根据奖励类型转换为 PendingRewardService 格式
+                    xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward pending;
+                    String type = reward.rewardType().toUpperCase(java.util.Locale.ROOT);
+                    if ("ITEM".equals(type) && reward.itemData() != null && !reward.itemData().isBlank()) {
+                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.itemSerialized(
+                            uuid, "fishing", reward.itemData(),
+                            reward.description() != null ? reward.description() : "legacy-pending");
+                    } else if ("CURRENCY".equals(type) && reward.currencyId() != null && !reward.currencyId().isBlank()) {
+                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.currency(
+                            uuid, "fishing", reward.currencyId(), reward.amount(),
+                            reward.description() != null ? reward.description() : "legacy-pending");
+                    } else if ("COMMAND".equals(type) && reward.command() != null && !reward.command().isBlank()) {
+                        pending = xuanmo.arcartxsuite.api.item.PendingRewardService.PendingReward.command(
+                            uuid, "fishing", java.util.List.of(reward.command()),
+                            reward.description() != null ? reward.description() : "legacy-pending");
+                    } else {
+                        logger.warning("跳过无法识别的旧 pending 奖励: id=" + reward.id() + " player=" + uuid
+                            + " type=" + type);
+                        continue;
+                    }
+                    pendingRewardService.savePending(pending);
+                    repo.deletePendingReward(reward.id());
+                    migrated++;
+                }
+            }
+            if (migrated > 0) {
+                logger.info("已迁移 " + migrated + " 条旧 fishing pending 奖励到统一 PendingRewardService");
+            }
+        } catch (Exception e) {
+            logger.warning("迁移旧 fishing pending 奖励失败: " + e.getMessage());
+        }
     }
 }
 

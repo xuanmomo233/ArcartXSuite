@@ -3,7 +3,7 @@
 # 重载: /axs afkreward reload
 # 奖励周期、上限、倍率与奖励定义已下放到各个 areas/area-*.yml 文件，
 # 每个区域文件现在可以独立配置完整的奖励规则。
-config-version: 8  # 配置版本号（用于触发 migration 迁移流程）
+config-version: 9  # 配置版本号（用于触发 migration 迁移流程）
 
 debug: false  # 是否开启调试模式（输出详细日志）
 

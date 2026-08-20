@@ -1,5 +1,5 @@
 # 配置文件版本号；迁移系统据此自动升级配置结构。
-config-version: 1
+config-version: 2
 # AXS Mail
 # 作用: 收件箱、写信、附件、领取命令、预设邮件、CDK、跨服刷新、邮件日志和 Mail UI；可被 OnlineRewards 等模块调用预设邮件发奖。
 # 依赖: ArcartX；Vault、PlayerPoints、PlaceholderAPI、Redis 按功能选用。

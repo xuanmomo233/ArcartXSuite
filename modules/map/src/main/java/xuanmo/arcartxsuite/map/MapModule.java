@@ -66,7 +66,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     @Override
     protected int currentConfigVersion() {
         // client 节的 UI 配置字段整体迁移到 ui 节（move 操作，见 migrations/1-2.yml）
-        return 2;
+        return 3;
     }
 
     @Override

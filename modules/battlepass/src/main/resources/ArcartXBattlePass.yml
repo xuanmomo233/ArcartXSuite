@@ -1,7 +1,7 @@
 # ArcartXBattlePass 主配置文件
 # 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
 
-config-version: 5  # 配置版本号，变更时触发迁移
+config-version: 6  # 配置版本号，变更时触发迁移
 
 # 存储配置：支持 sqlite 与 mysql 两种模式
 storage:

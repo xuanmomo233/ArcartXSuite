@@ -1,5 +1,5 @@
 # 配置版本号（请勿手动修改）
-config-version: 1
+config-version: 2
 # AXS EventPacket
 # 作用: 通用触发器和动作链，可由加入/退出、首次加入、PAPI 数值变化、击杀计数或命令信号触发 UI 包、字幕、聊天卡片、任务导航、称号和命令。
 # 依赖: ArcartX；PlaceholderAPI 仅在 placeholder-* / papi-* 触发器中需要。

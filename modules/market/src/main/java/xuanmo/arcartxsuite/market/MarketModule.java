@@ -77,7 +77,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected int currentConfigVersion() {
-        return 3;
+        return 4;
     }
 
     @Override

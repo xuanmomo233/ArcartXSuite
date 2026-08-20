@@ -70,6 +70,10 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             // storage.shared 必须是布尔值

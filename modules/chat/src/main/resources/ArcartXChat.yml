@@ -1,5 +1,5 @@
 # 配置文件版本号；用于自动迁移程序识别当前版本并执行升级。
-config-version: 1
+config-version: 2
 # AXS Chat
 # 作用: 频道聊天、私聊、回复、监听、忽略、禁言、跨服转发、聊天卡片、物品展示和过滤。
 # 依赖: ArcartX；PlaceholderAPI、Redis、数据库按功能选用。

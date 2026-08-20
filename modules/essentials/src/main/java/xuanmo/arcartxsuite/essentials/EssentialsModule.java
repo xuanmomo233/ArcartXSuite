@@ -156,6 +156,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      * @return 校验规则列表
      */
     @Override
+    protected int currentConfigVersion() {
+        return 3;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("storage.shared", ValueType.BOOLEAN)

@@ -94,7 +94,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected int currentConfigVersion() {
-        return 3;
+        return 4;
     }
 
     @Override

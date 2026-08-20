@@ -1,6 +1,7 @@
 # ArcartXSuite ExtraBackpack - 额外背包模块配置
 # 多分类额外背包系统，支持装备/材料/杂物等分类页，每页独立容量与付费扩容。
 # 重载: /axs extrabackpack reload
+config-version: 2
 
 settings:
   # 是否输出调试日志

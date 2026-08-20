@@ -84,7 +84,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     /**

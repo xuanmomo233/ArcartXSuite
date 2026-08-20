@@ -124,6 +124,14 @@ public final class MailPresetLoader {
             }
             String source = mapString(rawItem, "source", "minecraft").trim().toLowerCase(Locale.ROOT);
             String itemId = mapString(rawItem, "id", "");
+            // 向后兼容：旧配置使用 material 字段，新配置使用 source+id
+            if (itemId.isBlank()) {
+                String legacyMaterial = mapString(rawItem, "material", "");
+                if (!legacyMaterial.isBlank()) {
+                    source = "minecraft";
+                    itemId = legacyMaterial;
+                }
+            }
             if (itemId.isBlank()) {
                 logger.warning("邮件预设 '" + presetId + "' 的物品附件缺少 id 字段，已跳过。");
                 continue;

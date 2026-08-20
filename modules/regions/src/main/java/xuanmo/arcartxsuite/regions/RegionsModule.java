@@ -95,6 +95,10 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
      * @return 校验规则列表
      */
     @Override
+    protected int currentConfigVersion() {
+        return 3;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("storage.shared", ValueType.BOOLEAN),

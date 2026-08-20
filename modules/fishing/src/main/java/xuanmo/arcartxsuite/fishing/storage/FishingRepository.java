@@ -49,10 +49,13 @@ public interface FishingRepository {
     /** 加载玩家所有待发放奖励。 */
     @NotNull List<FishingPendingReward> loadPendingRewards(@NotNull UUID uuid);
 
+    /** 加载所有有待发放奖励的玩家 UUID（用于旧数据迁移）。 */
+    @NotNull java.util.List<java.util.UUID> loadAllPendingPlayerUuids();
+
     /** 保存一条待发放奖励。 */
     void savePendingReward(@NotNull FishingPendingReward reward);
 
-    /**除指定的待发放奖励（发放成功后调用）。 */
+    /**删除指定的待发放奖励（发放成功后调用）。 */
     void deletePendingReward(long id);
 
     // ─── 捕获记录（跨赛季保留，持久化存储） ────────────────────

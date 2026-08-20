@@ -48,6 +48,10 @@ public record TitleStorageConfiguration(
     public static TitleStorageConfiguration load(@Nullable ConfigurationSection section) {
         if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
         boolean shared = section.getBoolean("shared", true);
+        // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
+        if (!section.isSet("shared") && "mysql".equalsIgnoreCase(section.getString("mode", "sqlite"))) {
+            shared = false;
+        }
         if (shared) {
             return new TitleStorageConfiguration(true, "sqlite", "titles.db",
                 "127.0.0.1", 3306, "arcartxsuite", "root", "",

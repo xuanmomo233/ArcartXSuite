@@ -172,8 +172,8 @@ public final class DefaultItemRewardDispatcher implements ItemRewardDispatcher {
             }
         }
 
-        // 第三级兜底：PendingRewardService
-        if (!remainingOverflow.isEmpty()) {
+        // 第三级兜底：PendingRewardService（如果未跳过）
+        if (!options.skipPendingOverflow() && !remainingOverflow.isEmpty()) {
             PendingRewardService pendingService = resolvePending();
             if (pendingService != null) {
                 java.util.List<ItemStack> stillRemaining = new java.util.ArrayList<>();

@@ -67,16 +67,19 @@ public interface ItemRewardDispatcher {
         private final @Nullable String overflowMailBody;
         private final @Nullable String overflowMailSenderName;
         private final boolean skipWarehouseOverflow;
+        private final boolean skipPendingOverflow;
 
         private DispatchOptions(@NotNull String sourceModule, @Nullable String sourceDetail,
                                 @Nullable String overflowMailSubject, @Nullable String overflowMailBody,
-                                @Nullable String overflowMailSenderName, boolean skipWarehouseOverflow) {
+                                @Nullable String overflowMailSenderName, boolean skipWarehouseOverflow,
+                                boolean skipPendingOverflow) {
             this.sourceModule = Objects.requireNonNull(sourceModule, "sourceModule");
             this.sourceDetail = sourceDetail;
             this.overflowMailSubject = overflowMailSubject;
             this.overflowMailBody = overflowMailBody;
             this.overflowMailSenderName = overflowMailSenderName;
             this.skipWarehouseOverflow = skipWarehouseOverflow;
+            this.skipPendingOverflow = skipPendingOverflow;
         }
 
         /** 来源模块 ID（如 "battlepass"、"lottery"） */
@@ -106,6 +109,17 @@ public interface ItemRewardDispatcher {
         public boolean skipWarehouseOverflow() { return skipWarehouseOverflow; }
 
         /**
+         * 是否跳过 PendingRewardService 兜底。
+         * <p>
+         * 为 true 时，邮件发送失败后不尝试存入 PendingRewardService，直接掉落地面。
+         * PendingRewardService 补发物品时应设为 true，避免补发失败再次存入 pending 形成循环。
+         * 默认为 false（优先尝试暂存 pending 待下次补发）。
+         *
+         * @since 1.5.0
+         */
+        public boolean skipPendingOverflow() { return skipPendingOverflow; }
+
+        /**
          * 创建构建器。
          *
          * @param sourceModule 来源模块 ID
@@ -123,6 +137,7 @@ public interface ItemRewardDispatcher {
             private @Nullable String overflowMailBody;
             private @Nullable String overflowMailSenderName;
             private boolean skipWarehouseOverflow;
+            private boolean skipPendingOverflow;
 
             private Builder(@NotNull String sourceModule) {
                 this.sourceModule = Objects.requireNonNull(sourceModule, "sourceModule");
@@ -163,9 +178,25 @@ public interface ItemRewardDispatcher {
                 return this;
             }
 
+            /**
+             * 设置是否跳过 PendingRewardService 兜底。
+             * <p>
+             * PendingRewardService 补发物品时应设为 true，避免补发失败再次存入 pending 形成循环。
+             * 默认为 false。
+             *
+             * @param skip 是否跳过 PendingRewardService 兜底
+             * @return 构建器
+             * @since 1.5.0
+             */
+            public @NotNull Builder skipPendingOverflow(boolean skip) {
+                this.skipPendingOverflow = skip;
+                return this;
+            }
+
             public @NotNull DispatchOptions build() {
                 return new DispatchOptions(sourceModule, sourceDetail,
-                    overflowMailSubject, overflowMailBody, overflowMailSenderName, skipWarehouseOverflow);
+                    overflowMailSubject, overflowMailBody, overflowMailSenderName,
+                    skipWarehouseOverflow, skipPendingOverflow);
             }
         }
     }

@@ -81,6 +81,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             // storage.shared 必须是布尔值

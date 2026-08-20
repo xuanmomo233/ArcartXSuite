@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 3
+config-version: 4
 # AXS QQBot QQ群服互联
 # 作用: 通过 OneBot 11 协议连接 QQ 机器人，实现 QQ 群与服务器消息双向同步、
 #       群指令查询玩家数据、QQ-游戏账号绑定、白名单管理。

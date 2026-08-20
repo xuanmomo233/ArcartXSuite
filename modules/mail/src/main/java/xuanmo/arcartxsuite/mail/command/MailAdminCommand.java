@@ -36,8 +36,8 @@ public final class MailAdminCommand implements ModuleCommandHandler {
     private static final List<String> MULTI_TARGETS = List.of("all-online", "all-registered");
     private static final Duration CONFIRM_TTL = Duration.ofSeconds(30);
 
-    /** 待确认的多人邮件派发请求，按发送者名称隔离。 */
-    private final Map<String, PendingDispatch> pendingConfirmations = new LinkedHashMap<>();
+    /** 待确认的多人邮件派发请求，按发送者名称隔离。使用 ConcurrentHashMap 保证线程安全。 */
+    private final Map<String, PendingDispatch> pendingConfirmations = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final Supplier<MailService> serviceProvider;
     private final MessageProvider messages;
@@ -293,13 +293,17 @@ public final class MailAdminCommand implements ModuleCommandHandler {
 
     /** 处理 {@code preset send confirm}：执行上一次待确认的多人派发。 */
     private void handlePresetSendConfirm(CommandSender sender, MailService svc) {
+        // 顺便清理过期的待确认条目，避免内存泄漏
+        Instant now = Instant.now();
+        pendingConfirmations.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+
         String senderKey = sender.getName();
         PendingDispatch pending = pendingConfirmations.remove(senderKey);
         if (pending == null) {
             sender.sendMessage(fullMsg("admin.preset.send-confirm-none"));
             return;
         }
-        if (pending.isExpired(Instant.now())) {
+        if (pending.isExpired(now)) {
             sender.sendMessage(fullMsg("admin.preset.send-confirm-expired"));
             return;
         }

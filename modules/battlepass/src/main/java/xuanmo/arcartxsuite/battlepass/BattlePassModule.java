@@ -71,7 +71,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected int currentConfigVersion() {
-        return 4;
+        return 6;
     }
 
     @Override

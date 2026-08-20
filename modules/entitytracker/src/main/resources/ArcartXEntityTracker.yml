@@ -1,7 +1,7 @@
 # 文件用途: EntityTracker 模块主配置文件，控制 Boss 追踪、攻击目标 HUD、掉落记录/分配、跨服排行等全部功能开关与参数。
 # 重载命令: /axs entitytracker reload
 
-config-version: 2  # 配置文件版本号，用于迁移脚本判断升级路径
+config-version: 4  # 配置文件版本号，用于迁移脚本判断升级路径
 # AXS EntityTracker
 # 作用: 跟踪指定 MythicMob，向 HUD/聊天卡片同步血量、距离、目标、存活时间、实时伤害排行和死亡结算结果；同时显示玩家最近攻击目标 HUD。
 # 新增: Boss掉落记录、掉落分配系统、跨服Boss排行功能

@@ -66,7 +66,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected int currentConfigVersion() {
-        return 6;
+        return 9;
     }
 
     @Override

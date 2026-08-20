@@ -234,6 +234,10 @@ public record EssentialsConfiguration(
 
         static StorageConfiguration load(ConfigurationSection s, Logger logger) {
             boolean shared = s.getBoolean("shared", true);
+            // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
+            if (!s.isSet("shared") && "mysql".equalsIgnoreCase(s.getString("mode", "sqlite"))) {
+                shared = false;
+            }
             if (shared) {
                 return new StorageConfiguration(true, "sqlite", "essentials.db",
                     "127.0.0.1", 3306, "arcartxsuite", "root", "",

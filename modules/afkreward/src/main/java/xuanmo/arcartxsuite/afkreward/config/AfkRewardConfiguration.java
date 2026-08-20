@@ -251,6 +251,10 @@ public record AfkRewardConfiguration(
         // storage
         ConfigurationSection storSec = yaml.getConfigurationSection("storage");
         boolean shared = storSec != null && storSec.getBoolean("shared", true);
+        // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
+        if (storSec != null && !storSec.isSet("shared") && "mysql".equalsIgnoreCase(storSec.getString("mode", "sqlite"))) {
+            shared = false;
+        }
         StorageConfig storage;
         if (shared) {
             storage = new StorageConfig(true, "sqlite", "afkreward.db",

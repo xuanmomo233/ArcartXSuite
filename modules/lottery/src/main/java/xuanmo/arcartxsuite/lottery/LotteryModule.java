@@ -65,7 +65,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected int currentConfigVersion() {
-        return 1;
+        return 3;
     }
 
     @Override

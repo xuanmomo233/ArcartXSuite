@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 
@@ -37,6 +38,9 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
  * 命令通过控制台执行、邮件预设通过 MailDispatchable。
  * <p>
  * 补发失败时递增尝试次数，达到 {@link #MAX_ATTEMPTS} 后自动丢弃避免无限重试。
+ * <p>
+ * 补发物品时设置 {@code skipPendingOverflow(true)}，避免背包满+邮件不可用时
+ * 物品再次存入 pending 形成循环。
  */
 public final class DefaultPendingRewardService implements PendingRewardService, Listener {
 
@@ -58,27 +62,55 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
 
     /**
      * 初始化数据库表。
+     * <p>
+     * 区分 SQLite/MySQL 方言：SQLite 使用 AUTOINCREMENT，MySQL 使用 AUTO_INCREMENT。
+     * SQLite 不支持内联 INDEX 语法，索引单独创建。
      */
     public void initialize() {
+        StorageDescriptor descriptor = storageManager.getDescriptor();
+        boolean isMysql = descriptor != null && descriptor.isMysql();
         try (Connection conn = storageManager.getConnection();
              Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS axs_pending_rewards ("
-                + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
-                + "player_uuid VARCHAR(36) NOT NULL, "
-                + "source_module VARCHAR(64) NOT NULL, "
-                + "reward_type VARCHAR(16) NOT NULL, "
-                + "payload TEXT NOT NULL, "
-                + "description VARCHAR(255), "
-                + "created_at BIGINT NOT NULL, "
-                + "attempts INT NOT NULL DEFAULT 0, "
-                + "INDEX idx_player (player_uuid), "
-                + "INDEX idx_module_player (source_module, player_uuid)"
-                + ")"
-            );
+            if (isMysql) {
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS axs_pending_rewards ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
+                    + "player_uuid VARCHAR(36) NOT NULL, "
+                    + "source_module VARCHAR(64) NOT NULL, "
+                    + "reward_type VARCHAR(16) NOT NULL, "
+                    + "payload TEXT NOT NULL, "
+                    + "description VARCHAR(255), "
+                    + "created_at BIGINT NOT NULL, "
+                    + "attempts INT NOT NULL DEFAULT 0, "
+                    + "INDEX idx_player (player_uuid), "
+                    + "INDEX idx_module_player (source_module, player_uuid)"
+                    + ")"
+                );
+            } else {
+                // SQLite: AUTOINCREMENT 关键字，不支持内联 INDEX
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS axs_pending_rewards ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "player_uuid TEXT NOT NULL, "
+                    + "source_module TEXT NOT NULL, "
+                    + "reward_type TEXT NOT NULL, "
+                    + "payload TEXT NOT NULL, "
+                    + "description TEXT, "
+                    + "created_at INTEGER NOT NULL, "
+                    + "attempts INTEGER NOT NULL DEFAULT 0"
+                    + ")"
+                );
+                // SQLite 索引单独创建（IF NOT EXISTS 避免重复创建报错）
+                tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_player ON axs_pending_rewards(player_uuid)");
+                tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_module_player ON axs_pending_rewards(source_module, player_uuid)");
+            }
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "初始化 axs_pending_rewards 表失败", e);
         }
+    }
+
+    private static void tryExecute(Statement stmt, String sql) {
+        try { stmt.executeUpdate(sql); } catch (SQLException ignored) {}
     }
 
     // ─── PendingRewardService 接口实现 ──────────────────────────
@@ -153,7 +185,16 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         // 延迟 40 tick 补发，确保玩家数据加载完成
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
-            flushPending(player, uuid);
+            // 异步加载 pending 数据，避免主线程 DB 查询
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                List<PendingReward> pendingList = loadPending(uuid);
+                if (pendingList.isEmpty()) return;
+                // 物品发放等操作需在主线程执行
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    flushPending(player, pendingList);
+                });
+            });
         }, 40L);
     }
 
@@ -161,11 +202,13 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
      * 加载并补发指定玩家的所有待发放奖励。
      * <p>
      * 补发结果（markDelivered / incrementAttempts）在单个事务中批量提交，减少 DB 往返。
+     * <p>
+     * 注意：此方法在主线程调用，pendingList 已在异步线程加载完毕。
+     *
+     * @param player      在线玩家
+     * @param pendingList 已加载的待发放奖励列表
      */
-    private void flushPending(Player player, UUID uuid) {
-        List<PendingReward> pendingList = loadPending(uuid);
-        if (pendingList.isEmpty()) return;
-
+    private void flushPending(Player player, List<PendingReward> pendingList) {
         List<Long> toDelete = new ArrayList<>();
         List<Long> toIncrement = new ArrayList<>();
         int successCount = 0;
@@ -193,8 +236,11 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                 failCount++;
             }
         }
-        // 批量提交结果
-        batchUpdate(toDelete, toIncrement);
+        // 批量提交结果（异步执行，避免主线程 DB 操作）
+        List<Long> finalToDelete = toDelete;
+        List<Long> finalToIncrement = toIncrement;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
+            batchUpdate(finalToDelete, finalToIncrement));
         if (successCount > 0) {
             logger.info("待发放奖励补发完成: player=" + player.getName()
                 + " success=" + successCount + " fail=" + failCount);
@@ -256,6 +302,22 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         };
     }
 
+    /**
+     * 构建补发用的 DispatchOptions。
+     * <p>
+     * 关键：设置 skipPendingOverflow(true)，避免补发物品时背包满+邮件不可用
+     * 再次存入 pending 形成循环。补发失败的物品直接掉落地面。
+     */
+    private ItemRewardDispatcher.DispatchOptions buildPendingDispatchOptions(PendingReward pending) {
+        return ItemRewardDispatcher.DispatchOptions.builder(pending.sourceModule())
+            .sourceDetail("pending:" + pending.id())
+            .overflowMailSubject("待发放奖励溢出物品")
+            .overflowMailBody("您的背包已满，待发放奖励物品通过邮件补发。")
+            .overflowMailSenderName(pending.sourceModule())
+            .skipPendingOverflow(true)  // 避免补发循环
+            .build();
+    }
+
     private boolean dispatchItemSerialized(Player player, PendingReward pending) {
         ItemRewardDispatcher dispatcher = registry.itemRewardDispatcher();
         if (dispatcher == null) return false;
@@ -265,13 +327,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
             org.bukkit.inventory.ItemStack item = xuanmo.arcartxsuite.api.util.ItemSerializer.deserialize(
                 java.util.Base64.getDecoder().decode(base64Data));
             if (item == null) return false;
-            ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder(pending.sourceModule())
-                .sourceDetail("pending:" + pending.id())
-                .overflowMailSubject("待发放奖励溢出物品")
-                .overflowMailBody("您的背包已满，待发放奖励物品通过邮件补发。")
-                .overflowMailSenderName(pending.sourceModule())
-                .build();
-            ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, options);
+            ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending));
             return result.success();
         } catch (Exception e) {
             logger.warning("反序列化待发放物品失败: id=" + pending.id() + " | " + e.getMessage());
@@ -292,13 +348,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         org.bukkit.inventory.ItemStack item = registry.generateItem(source, id, amount,
             (nbt != null && !nbt.isEmpty()) ? nbt : null, player);
         if (item == null) return false;
-        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder(pending.sourceModule())
-            .sourceDetail("pending:" + pending.id())
-            .overflowMailSubject("待发放奖励溢出物品")
-            .overflowMailBody("您的背包已满，待发放奖励物品通过邮件补发。")
-            .overflowMailSenderName(pending.sourceModule())
-            .build();
-        ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, options);
+        ItemRewardDispatcher.DispatchResult result = dispatcher.dispatchItem(player, item, buildPendingDispatchOptions(pending));
         return result.success();
     }
 
@@ -347,10 +397,33 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     private static final java.util.regex.Pattern ITEM_STR_PATTERN =
         java.util.regex.Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"");
 
+    // 缓存常用字段的 Pattern，避免每次调用重新编译
+    private static final java.util.regex.Pattern FIELD_SOURCE =
+        compileStringFieldPattern("source");
+    private static final java.util.regex.Pattern FIELD_ID =
+        compileStringFieldPattern("id");
+    private static final java.util.regex.Pattern FIELD_NBT =
+        compileStringFieldPattern("nbt");
+    private static final java.util.regex.Pattern FIELD_DATA =
+        compileStringFieldPattern("data");
+    private static final java.util.regex.Pattern FIELD_CURRENCY_ID =
+        compileStringFieldPattern("currencyId");
+
+    private static java.util.regex.Pattern compileStringFieldPattern(String field) {
+        return java.util.regex.Pattern.compile(
+            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+    }
+
     private static @Nullable String extractJsonField(@NotNull String json, @NotNull String field) {
         // 匹配 "field":"value"
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        java.util.regex.Pattern pattern = switch (field) {
+            case "source" -> FIELD_SOURCE;
+            case "id" -> FIELD_ID;
+            case "nbt" -> FIELD_NBT;
+            case "data" -> FIELD_DATA;
+            case "currencyId" -> FIELD_CURRENCY_ID;
+            default -> compileStringFieldPattern(field);
+        };
         java.util.regex.Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             return unescapeJson(matcher.group(1));
@@ -359,8 +432,9 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     }
 
     private static int extractJsonInt(@NotNull String json, @NotNull String field, int defaultValue) {
+        // 支持负数：-?\d+
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*(\\d+)");
+            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*(-?\\d+)");
         java.util.regex.Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             try {
@@ -372,8 +446,9 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     }
 
     private static double extractJsonDouble(@NotNull String json, @NotNull String field, double defaultValue) {
+        // 支持负数、科学计数法：-?[\d.]+(?:[eE][-+]?\d+)?
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*([\\d.]+)");
+            "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*(-?[\\d.]+(?:[eE][-+]?\\d+)?)");
         java.util.regex.Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             try {

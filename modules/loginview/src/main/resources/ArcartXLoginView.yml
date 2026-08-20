@@ -1,5 +1,5 @@
 # 配置版本号（请勿手动修改）
-config-version: 2
+config-version: 3
 # ArcartXSuite LoginView
 # 密码同步不保存明文：AuthMe 迁移只复制数据库 hash，独立模式登录成功后可重写为 AXS 自己的 PBKDF2 hash。
 

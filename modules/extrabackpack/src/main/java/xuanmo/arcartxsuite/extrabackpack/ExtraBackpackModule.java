@@ -93,6 +93,10 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
      * @return 校验规则列表
      */
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("storage.shared", ValueType.BOOLEAN),

@@ -71,7 +71,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 4;
     }
 
     @Override

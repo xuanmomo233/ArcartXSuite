@@ -960,9 +960,10 @@ public final class ModuleRegistry {
         if (pendingRewardService == null) {
             pendingRewardService = new xuanmo.arcartxsuite.bridge.DefaultPendingRewardService(
                 plugin, LOGGER, storageManager, this);
+            // 仅在首次创建时注册 Listener，避免 reload 时重复注册导致 onPlayerJoin 被多次触发
+            Bukkit.getPluginManager().registerEvents(pendingRewardService, plugin);
         }
         pendingRewardService.initialize();
-        Bukkit.getPluginManager().registerEvents(pendingRewardService, plugin);
         // 注册为 core capability，供 DefaultItemRewardDispatcher 第三级兜底查找
         registerCoreCapability(xuanmo.arcartxsuite.api.item.PendingRewardService.class, pendingRewardService);
 

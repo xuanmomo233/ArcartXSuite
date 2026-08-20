@@ -191,6 +191,10 @@ public record RegionsConfiguration(
 
         var stor = yaml.getConfigurationSection("storage");
         boolean shared = stor != null && stor.getBoolean("shared", true);
+        // 向后兼容：如果 shared 字段不存在但 mode=mysql 存在，视为 shared=false
+        if (stor != null && !stor.isSet("shared") && "mysql".equalsIgnoreCase(stor.getString("mode", "sqlite"))) {
+            shared = false;
+        }
         StorageConfig storage;
         if (shared) {
             storage = new StorageConfig(true, "sqlite", "regions.db",

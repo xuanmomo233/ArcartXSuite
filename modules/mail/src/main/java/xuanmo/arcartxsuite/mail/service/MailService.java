@@ -908,6 +908,15 @@ public final class MailService implements Listener {
         cdkPreviewStates.remove(playerUuid);
         inboxViewers.remove(playerUuid);
         logViewers.remove(playerUuid);
+        // 清理 CDK 限流状态：仅清理未锁定的条目，锁定的保留（锁定期间玩家不能兑换）
+        CdkRateLimitEntry rateLimitEntry = cdkRateLimitMap.get(playerUuid);
+        if (rateLimitEntry != null) {
+            synchronized (rateLimitEntry) {
+                if (rateLimitEntry.lockoutUntil == null || !rateLimitEntry.lockoutUntil.isAfter(Instant.now())) {
+                    cdkRateLimitMap.remove(playerUuid);
+                }
+            }
+        }
     }
 
     @EventHandler

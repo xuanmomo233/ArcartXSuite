@@ -134,6 +134,10 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 3;
+    }
+
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("storage.shared", ValueType.BOOLEAN),

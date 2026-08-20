@@ -80,8 +80,9 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
                                   @org.jetbrains.annotations.Nullable String nbt,
                                   @org.jetbrains.annotations.Nullable Player player) {
         if (source == null || id == null || id.isBlank() || amount < 1) return null;
+        String sourceLower = source.toLowerCase(java.util.Locale.ROOT);
         ItemStack item;
-        switch (source.toLowerCase(java.util.Locale.ROOT)) {
+        switch (sourceLower) {
             case "minecraft", "plain", "vanilla" -> {
                 org.bukkit.Material material = org.bukkit.Material.matchMaterial(id);
                 if (material == null) return null;
@@ -109,8 +110,11 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
                 return null;
             }
         }
-        // 统一 NBT 应用（所有物品来源均支持）
-        return applyNbt(item, nbt);
+        // 仅对 minecraft 源物品应用自定义 NBT，避免破坏外部物品库的内部 NBT 结构
+        if ("minecraft".equals(sourceLower) || "plain".equals(sourceLower) || "vanilla".equals(sourceLower)) {
+            return applyNbt(item, nbt);
+        }
+        return item;
     }
 
     /**

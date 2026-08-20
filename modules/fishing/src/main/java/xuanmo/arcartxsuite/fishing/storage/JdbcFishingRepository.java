@@ -425,6 +425,27 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
     }
 
     @Override
+    public @NotNull java.util.List<java.util.UUID> loadAllPendingPlayerUuids() {
+        java.util.List<java.util.UUID> result = new java.util.ArrayList<>();
+        String sql = "SELECT DISTINCT uuid FROM axs_fishing_pending_rewards";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                try {
+                    result.add(java.util.UUID.fromString(rs.getString("uuid")));
+                } catch (IllegalArgumentException ignored) {
+                    // 跳过格式错误的 UUID
+                }
+            }
+        } catch (SQLException e) {
+            // 旧表可能不存在，静默处理
+            logger.fine("加载所有 pending 玩家 UUID 失败（表可能不存在）: " + e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
     public void savePendingReward(@NotNull FishingPendingReward reward) {
         String sql = "INSERT INTO axs_fishing_pending_rewards "
             + "(uuid, season_id, reward_type, currency_id, amount, item_data, command, description, created_at) "
