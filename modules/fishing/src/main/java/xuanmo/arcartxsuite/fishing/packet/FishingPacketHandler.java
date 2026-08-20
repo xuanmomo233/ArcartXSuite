@@ -68,8 +68,16 @@ public final class FishingPacketHandler implements ClientPacketHandler {
 
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
-        // 导航动作：所有 packetId 共享的跨 UI 跳转（open_main/open_collection/...）
+        // 先验证 packetId 是否属于本模块，避免拦截其他模块（如 battlepass）的同名导航动作
+        boolean isFishingPacket = PACKET_ID.equalsIgnoreCase(packetId)
+            || TALENTS_PACKET_ID.equalsIgnoreCase(packetId)
+            || REWARDS_PACKET_ID.equalsIgnoreCase(packetId)
+            || TASKS_PACKET_ID.equalsIgnoreCase(packetId);
+        if (!isFishingPacket) {
+            return false;
+        }
         String action = data.isEmpty() ? "" : data.get(0).toLowerCase(Locale.ROOT);
+        // 导航动作：fishing 各页面共享的跨 UI 跳转（open_main/open_collection/...）
         if (NAV_ACTIONS.contains(action)) {
             return handleNavigation(player, action);
         }

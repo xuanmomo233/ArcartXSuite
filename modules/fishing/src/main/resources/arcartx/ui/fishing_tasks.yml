@@ -473,7 +473,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -16
-                  texts: "'&f' + var.dailyCount + ' 项'"
+                  texts: "'&f' + var.dailyCount.round() + ' 项'"
                   fontSize: 26
                   through: true
           # 每周任务分类
@@ -527,7 +527,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -16
-                  texts: "'&f' + var.weeklyCount + ' 项'"
+                  texts: "'&f' + var.weeklyCount.round() + ' 项'"
                   fontSize: 26
                   through: true
           # 赛季任务分类
@@ -581,7 +581,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -16
-                  texts: "'&f' + var.seasonCount + ' 项'"
+                  texts: "'&f' + var.seasonCount.round() + ' 项'"
                   fontSize: 26
                   through: true
           # 导航提示
@@ -771,7 +771,7 @@ controls:
                           point: ~top_right
                           x: -24
                           y: 22
-                          texts: "'&f共 &f' + var.dailyCount + ' &f项任务'"
+                          texts: "'&f共 &f' + var.dailyCount.round() + ' &f项任务'"
                           fontSize: 30
                           through: true
                       每日任务列表:
@@ -873,7 +873,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 14
-                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'] + ' 钓鱼经验' : none"
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
                                   fontSize: 28
                                   through: true
                               任务进度:
@@ -882,7 +882,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 48
-                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'] + '&f/' + self.parent.entry['target'] + ' &f(' + self.parent.entry['percent'] + '%)' : none"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
                                   fontSize: 26
                                   through: true
                               # 进度条：Texture + 宽度表达式（percent/100 * barWidth）
@@ -960,7 +960,7 @@ controls:
                           point: ~top_right
                           x: -24
                           y: 22
-                          texts: "'&f共 &f' + var.weeklyCount + ' &f项任务'"
+                          texts: "'&f共 &f' + var.weeklyCount.round() + ' &f项任务'"
                           fontSize: 30
                           through: true
                       每周任务列表:
@@ -1057,7 +1057,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 14
-                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'] + ' 钓鱼经验' : none"
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
                                   fontSize: 28
                                   through: true
                               任务进度:
@@ -1066,7 +1066,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 48
-                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'] + '&f/' + self.parent.entry['target'] + ' &f(' + self.parent.entry['percent'] + '%)' : none"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
                                   fontSize: 26
                                   through: true
                               进度条背景:
@@ -1143,7 +1143,7 @@ controls:
                           point: ~top_right
                           x: -24
                           y: 22
-                          texts: "'&f共 &f' + var.seasonCount + ' &f项任务'"
+                          texts: "'&f共 &f' + var.seasonCount.round() + ' &f项任务'"
                           fontSize: 30
                           through: true
                       赛季任务列表:
@@ -1240,7 +1240,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 14
-                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'] + ' 钓鱼经验' : none"
+                                  texts: "self.parent.entry != none ? '&b+' + self.parent.entry['xpReward'].round() + ' 钓鱼经验' : none"
                                   fontSize: 28
                                   through: true
                               任务进度:
@@ -1249,7 +1249,7 @@ controls:
                                   point: ~top_right
                                   x: -24
                                   y: 48
-                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'] + '&f/' + self.parent.entry['target'] + ' &f(' + self.parent.entry['percent'] + '%)' : none"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['progress'].round() + '&f/' + self.parent.entry['target'].round() + ' &f(' + self.parent.entry['percent'].round() + '%)' : none"
                                   fontSize: 26
                                   through: true
                               进度条背景:

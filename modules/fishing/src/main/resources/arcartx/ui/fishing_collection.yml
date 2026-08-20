@@ -521,7 +521,7 @@ controls:
                   point: ~top_left
                   x: 300
                   y: 46
-                  texts: "'&7图鉴: &f' + var.collectionCount.round() + '/' + var.totalFishTypes.round() + ' &7(' + var.collectionPercent + '%)'"
+                  texts: "'&7图鉴: &f' + var.collectionCount.round() + '/' + var.totalFishTypes.round() + ' &7(' + var.collectionPercent.round() + '%)'"
                   fontSize: 24
               # 图鉴完成度进度条
               进度条背景:
@@ -550,7 +550,7 @@ controls:
                   point: ~middle_left
                   x: 560
                   width: "var.contentW - 640"
-                  texts: "'&f' + var.collectionPercent + '%'"
+                  texts: "'&f' + var.collectionPercent.round() + '%'"
                   fontSize: 24
                   center: true
                   through: true
@@ -701,7 +701,7 @@ controls:
                         width: 2
                         color: "self.entry != none && self.entry['caught'] ? '124,196,142,120' : '50,160,190,80'"
                     children:
-                      # 鱼物品图标
+                      # 鱼物品图标（不开 through：穿透会导致 hover 事件丢失，tooltip 不显示）
                       图标:
                         type: Slot
                         attribute:
@@ -714,7 +714,6 @@ controls:
                           normal: ~18,28,40,180
                           shape: ~round_rect
                           radius: 10
-                          through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey])"
                       # 未捕获遮罩：暗色覆盖+问号
                       未捕获遮罩:

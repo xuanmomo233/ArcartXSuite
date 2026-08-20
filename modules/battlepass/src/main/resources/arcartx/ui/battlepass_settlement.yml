@@ -545,7 +545,7 @@ controls:
             type: Text
             attribute:
               point: ~top_left
-              x: 268
+              x: 176
               y: 32
               texts: "~&f赛季结束时按等级阈值自动发放以下奖励"
               fontSize: 30

@@ -63,6 +63,13 @@ ui:
       var.trees = {}
       var.currentTree = 'steady'
       var.needRebuild = false
+      // 天赋树名称映射（避免 texts 属性使用嵌套三元——客户端 ARIA 对嵌套三元解析异常会显示 "true"）
+      var.treeNames = {}
+      var.treeNames['steady'] = '&b稳健天赋树 &7绿条稳定性与高度'
+      var.treeNames['swift'] = '&b迅捷天赋树 &7降低鱼速与活跃度'
+      var.treeNames['pressure'] = '&b威压天赋树 &7压制鱼逃离行为'
+      var.treeNames['focus'] = '&b专注天赋树 &7进度获取与维持'
+      var.treeNames['lucky'] = '&b幸运天赋树 &7经验售价与稀有鱼'
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -581,7 +588,7 @@ controls:
                   point: ~middle_left
                   x: 24
                   width: 600
-                  texts: "var.currentTree == 'steady' ? '&b稳健天赋树 &7绿条稳定性与高度' : var.currentTree == 'swift' ? '&b迅捷天赋树 &7降低鱼速与活跃度' : var.currentTree == 'pressure' ? '&b威压天赋树 &7压制鱼逃离行为' : var.currentTree == 'focus' ? '&b专注天赋树 &7进度获取与维持' : '&b幸运天赋树 &7经验售价与稀有鱼'"
+                  texts: "var.treeNames[var.currentTree] != none ? var.treeNames[var.currentTree] : '&7未知天赋树'"
                   fontSize: 30
               天赋点显示:
                 type: Text
@@ -589,7 +596,7 @@ controls:
                   point: ~middle_right
                   x: -24
                   width: 400
-                  texts: "'&a可用天赋点: &f' + var.unspentTalentPoints + ' / ' + var.talentPoints"
+                  texts: "'&a可用天赋点: &f' + var.unspentTalentPoints.round() + ' / ' + var.talentPoints.round()"
                   fontSize: 28
 
           # 滚动区：天赋节点列表
@@ -609,20 +616,22 @@ controls:
                   width: "var.contentW - 48"
                   spaceBetween: 12
                 children:
-                  # 天赋节点项模板（索引0，visible: false）
+                  # 天赋节点项模板（索引0，自身充当第 0 个节点）
+                  # visible 用 entry 条件表达式：数据到达后模板与 copy 副本都会显示
+                  # （不能写死 visible: false，否则 copy 继承不可见导致整页空白）
                   # tick 中通过 copy 动态生成，entryKey 绑定 nodes 字典的 key
                   天赋节点项:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: "var.trees[var.currentTree] != none ? var.trees[var.currentTree]['nodes'][self.entryKey] : none"
-                      visible: false
+                      visible: "self.entry != none"
                       width: "var.contentW - 48"
                       height: 110
                     action:
                       clickLeft: |-
                         if(self.entry != none){
-                          if(self.entry['canUnlock'] == 'true' && self.entry['unlocked'] != 'true'){
+                          if(self.entry['canUnlock'] == true && self.entry['unlocked'] != true){
                             Packet.send(var.packetId, 'unlock_talent', self.entry['id'])
                           }
                         }
@@ -632,13 +641,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,210' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,210' : '26,34,46,210') : '26,34,46,210'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == true ? '124,196,142,210' : self.parent.entry['canUnlock'] == true ? '50,170,200,210' : '26,34,46,210') : '26,34,46,210'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,230' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,230' : '50,160,190,120') : '50,160,190,120'"
+                            color: "self.parent.entry != none ? (self.parent.entry['unlocked'] == true ? '124,196,142,230' : self.parent.entry['canUnlock'] == true ? '50,170,200,230' : '50,160,190,120') : '50,160,190,120'"
                       层级标记:
                         type: Texture
                         attribute:
@@ -646,7 +655,7 @@ controls:
                           x: 16
                           width: 6
                           height: 80
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,255' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,255' : '50,160,190,160') : '50,160,190,160'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == true ? '124,196,142,255' : self.parent.entry['canUnlock'] == true ? '50,170,200,255' : '50,160,190,160') : '50,160,190,160'"
                           shape: ~round_rect
                           radius: 3
                           through: true
@@ -682,7 +691,7 @@ controls:
                           y: 76
                           width: "var.contentW - 96"
                           height: 24
-                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '&a✔ 已点亮' : self.parent.entry['canUnlock'] == 'true' ? '&e点击点亮' : '&c不可点亮') : none"
+                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] == true ? '&a✔ 已点亮' : self.parent.entry['canUnlock'] == true ? '&e点击点亮' : '&c不可点亮') : none"
                           fontSize: 20
                           through: true
                       层数标签:
@@ -693,7 +702,7 @@ controls:
                           y: 12
                           width: 60
                           height: 28
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,200' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,200' : '50,160,190,140') : '50,160,190,140'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == true ? '124,196,142,200' : self.parent.entry['canUnlock'] == true ? '50,170,200,200' : '50,160,190,140') : '50,160,190,140'"
                           shape: ~round_rect
                           radius: 8
                           through: true
@@ -703,6 +712,6 @@ controls:
                             attribute:
                               point: ~middle_center
                               width: 60
-                              texts: "self.parent.parent.entry != none ? '&fT' + self.parent.parent.entry['tier'] : none"
+                              texts: "self.parent.parent.entry != none ? '&fT' + self.parent.parent.entry['tier'].round() : none"
                               fontSize: 20
                               through: true

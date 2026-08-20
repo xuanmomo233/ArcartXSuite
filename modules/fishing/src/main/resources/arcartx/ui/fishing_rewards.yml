@@ -13,6 +13,8 @@
 #   - level: 玩家当前钓鱼等级
 #   - claimedRewards: 已领取奖励 ID 列表
 #   - rewards: 奖励映射（key 为序号字符串，含 id/level/type/iconName/iconMaterial/iconAmount/claimable/claimed）
+#     其中 claimable/claimed 为 Java boolean，UI 端用 == true 比较（不是 'true' 字符串）
+#   - iconJson{idx}: 每个奖励的图标 itemJson（Java 端生成的完整物品 JSON，分离模式 flat 字段）
 #   - rewardCount: 奖励条目总数
 #
 # 客户端发送包:
@@ -37,20 +39,16 @@ ui:
       var.claimedRewards = packet['claimedRewards']
       var.rewards = packet['rewards']
       var.rewardCount = packet['rewardCount']
-      // 构建 iconJsons 映射（从 iconMaterial/iconAmount 构造物品 JSON）
+      // 构建 iconJsons 映射（Java 端生成的完整 itemJson，分离模式 flat 字段）
+      // 注意：不要在 UI 端拼接 SNBT（材质名大小写/Count 浮点都会出问题）
       var.iconJsons = {}
       if(var.rewards != none){
         for(key in var.rewards.keys()){
-          entry = var.rewards[key]
-          if(entry != none){
-            material = entry['iconMaterial']
-            amount = entry['iconAmount']
-            if(material != none && material != ''){
-              amt = amount != none ? amount.round() : 1
-              var.iconJsons[key] = '{"id":"minecraft:' + material + '","Count":' + amt + 'b}'
-            } else {
-              var.iconJsons[key] = var.emptyItemJson
-            }
+          json = packet['iconJson' + key]
+          if(json != none && json != ''){
+            var.iconJsons[key] = json
+          } else {
+            var.iconJsons[key] = var.emptyItemJson
           }
         }
       }
@@ -59,7 +57,7 @@ ui:
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           entry = var.rewards[key]
-          if(entry != none && entry['claimable'] == 'true'){
+          if(entry != none && entry['claimable'] == true){
             var.claimableCount = var.claimableCount + 1
           }
         }
@@ -94,16 +92,11 @@ ui:
       var.iconJsons = {}
       if(var.rewards != none){
         for(key in var.rewards.keys()){
-          entry = var.rewards[key]
-          if(entry != none){
-            material = entry['iconMaterial']
-            amount = entry['iconAmount']
-            if(material != none && material != ''){
-              amt = amount != none ? amount.round() : 1
-              var.iconJsons[key] = '{"id":"minecraft:' + material + '","Count":' + amt + 'b}'
-            } else {
-              var.iconJsons[key] = var.emptyItemJson
-            }
+          json = packet['iconJson' + key]
+          if(json != none && json != ''){
+            var.iconJsons[key] = json
+          } else {
+            var.iconJsons[key] = var.emptyItemJson
           }
         }
       }
@@ -111,7 +104,7 @@ ui:
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           entry = var.rewards[key]
-          if(entry != none && entry['claimable'] == 'true'){
+          if(entry != none && entry['claimable'] == true){
             var.claimableCount = var.claimableCount + 1
           }
         }
@@ -601,13 +594,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '36,42,50,180' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '28,52,48,215' : '26,34,46,210')"
+                          normal: "self.parent.entry != none && self.parent.entry['claimed'] == true ? '36,42,50,180' : (self.parent.entry != none && self.parent.entry['claimable'] == true ? '28,52,48,215' : '26,34,46,210')"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 2
-                            color: "self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '80,200,220,230' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '124,196,142,180' : '50,160,190,120')"
+                            color: "self.parent.entry != none && self.parent.entry['claimable'] == true ? '80,200,220,230' : (self.parent.entry != none && self.parent.entry['claimed'] == true ? '124,196,142,180' : '50,160,190,120')"
 
                       # 等级徽章：显示奖励所需等级
                       等级徽章:
@@ -623,13 +616,13 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == 'true' ? '46,120,72,220' : (self.parent.parent.entry != none && self.parent.parent.entry['claimed'] == 'true' ? '50,80,60,200' : '40,48,58,200')"
+                              normal: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '46,120,72,220' : (self.parent.parent.entry != none && self.parent.parent.entry['claimed'] == true ? '50,80,60,200' : '40,48,58,200')"
                               shape: ~round_rect
                               radius: 10
                             effect:
                               stroke:
                                 width: 2
-                                color: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == 'true' ? '80,200,220,200' : '50,160,190,120'"
+                                color: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '80,200,220,200' : '50,160,190,120'"
                           等级文字:
                             type: Text
                             attribute:
@@ -639,7 +632,7 @@ controls:
                               fontSize: 32
                               through: true
 
-                      # 物品图标
+                      # 物品图标（不开 through：穿透会导致 hover 事件丢失，tooltip 不显示）
                       图标:
                         type: Slot
                         attribute:
@@ -650,7 +643,6 @@ controls:
                           normal: ~18,28,40,180
                           shape: ~round_rect
                           radius: 10
-                          through: true
                           slotType: ~Icon
                           itemScale: 0.85
                           seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -685,7 +677,7 @@ controls:
                           x: -16
                           width: 160
                           height: 44
-                          visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
+                          visible: "self.parent.entry != none && self.parent.entry['claimable'] == true"
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'claim_reward', self.parent.entry['id'])
@@ -722,7 +714,7 @@ controls:
                           texts: "~&a✔ &7已领取"
                           fontSize: 28
                           through: true
-                          visible: "self.parent.entry != none && self.parent.entry['claimed'] == 'true'"
+                          visible: "self.parent.entry != none && self.parent.entry['claimed'] == true"
 
                       # 未达标标识：灰色锁定
                       未达标标识:
@@ -732,7 +724,7 @@ controls:
                           x: -16
                           width: 160
                           height: 44
-                          visible: "self.parent.entry != none && self.parent.entry['claimable'] != 'true' && self.parent.entry['claimed'] != 'true'"
+                          visible: "self.parent.entry != none && self.parent.entry['claimable'] != true && self.parent.entry['claimed'] != true"
                         children:
                           未达标底:
                             type: Texture

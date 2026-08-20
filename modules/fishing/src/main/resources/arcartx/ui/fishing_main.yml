@@ -585,7 +585,7 @@ controls:
                   point: ~top_left
                   x: 26
                   y: 54
-                  texts: "'&fLv.' + var.playerLevel"
+                  texts: "'&fLv.' + var.playerLevel.round()"
                   fontSize: 88
               等级上限:
                 type: Text
@@ -593,7 +593,7 @@ controls:
                   point: ~top_left
                   x: 200
                   y: 84
-                  texts: "'&f/ ' + var.maxLevel"
+                  texts: "'&f/ ' + var.maxLevel.round()"
                   fontSize: 44
               经验文本:
                 type: Text
@@ -602,7 +602,7 @@ controls:
                   x: 28
                   y: 172
                   width: "var.cardW - 60"
-                  texts: "'&f经验 &f' + var.currentXp + ' &f/ ' + var.xpForNext"
+                  texts: "'&f经验 &f' + var.currentXp.round() + ' &f/ ' + var.xpForNext.round()"
                   fontSize: 34
               进度百分比:
                 type: Text
@@ -673,7 +673,7 @@ controls:
                   point: ~top_left
                   x: 26
                   y: 60
-                  texts: "'&f' + var.collectionCount + ' &f/ ' + var.totalFishTypes"
+                  texts: "'&f' + var.collectionCount.round() + ' &f/ ' + var.totalFishTypes.round()"
                   fontSize: 72
               图鉴百分比:
                 type: Text
@@ -681,7 +681,7 @@ controls:
                   point: ~top_left
                   x: 28
                   y: 156
-                  texts: "'&e' + var.collectionPercent + '% &f已收集'"
+                  texts: "'&e' + var.collectionPercent.round() + '% &f已收集'"
                   fontSize: 34
               图鉴进度条容器:
                 type: Canvas
@@ -787,7 +787,7 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 38
-                      texts: "'&e' + var.totalCaught + ' &f条'"
+                      texts: "'&e' + var.totalCaught.round() + ' &f条'"
                       fontSize: 36
               # 完美捕获
               完美统计:
@@ -813,7 +813,7 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 38
-                      texts: "'&a' + var.perfectCatches + ' &f次'"
+                      texts: "'&a' + var.perfectCatches.round() + ' &f次'"
                       fontSize: 36
               # 宝藏捕获
               宝藏统计:
@@ -839,7 +839,7 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 38
-                      texts: "'&6' + var.treasureCaught + ' &f个'"
+                      texts: "'&6' + var.treasureCaught.round() + ' &f个'"
                       fontSize: 36
               # 天赋点
               天赋统计:
@@ -865,7 +865,7 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 38
-                      texts: "'&b' + var.unspentTalentPoints + ' &f/ ' + var.totalTalentPoints"
+                      texts: "'&b' + var.unspentTalentPoints.round() + ' &f/ ' + var.totalTalentPoints.round()"
                       fontSize: 36
 
           # 快捷入口
@@ -928,7 +928,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 220
-                      texts: "'&0领取奖励' + (var.claimableRewardCount > 0 ? ' (' + var.claimableRewardCount + ')' : '')"
+                      texts: "'&0领取奖励' + (var.claimableRewardCount > 0 ? ' (' + var.claimableRewardCount.round() + ')' : '')"
                       fontSize: 30
                       through: true
               # 天赋按钮
@@ -962,7 +962,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 220
-                      texts: "'&f天赋树' + (var.unspentTalentPoints > 0 ? ' (&b' + var.unspentTalentPoints + '&f)' : '')"
+                      texts: "'&f天赋树' + (var.unspentTalentPoints > 0 ? ' (&b' + var.unspentTalentPoints.round() + '&f)' : '')"
                       fontSize: 30
                       through: true
               # 任务按钮
@@ -1107,7 +1107,7 @@ controls:
                               stroke:
                                 width: 2
                                 color: ~50,160,190,80
-                          # 鱼物品图标
+                          # 鱼物品图标（不开 through：穿透会导致 hover 事件丢失，tooltip 不显示）
                           鱼图标:
                             type: Slot
                             attribute:
@@ -1118,7 +1118,6 @@ controls:
                               normal: ~18,28,40,180
                               shape: ~round_rect
                               radius: 8
-                              through: true
                               slotType: ~Icon
                               itemScale: 0.7
                               seticon: "self.setItemIcon(var.recentIconJsons[self.parent.entryKey] != none ? var.recentIconJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -1154,7 +1153,7 @@ controls:
                               x: 100
                               y: 44
                               width: "var.contentW - 340"
-                              texts: "self.parent.entry != none ? ('&7尺寸: &f' + self.parent.entry['size'] + ' cm' + (self.parent.entry['perfect'] == 'true' ? ' &a★ 完美' : '')) : none"
+                              texts: "self.parent.entry != none ? ('&7尺寸: &f' + self.parent.entry['size'].round() + ' cm' + (self.parent.entry['perfect'] == true ? ' &a★ 完美' : '')) : none"
                               fontSize: 24
                               through: true
                           # 稀有度标签

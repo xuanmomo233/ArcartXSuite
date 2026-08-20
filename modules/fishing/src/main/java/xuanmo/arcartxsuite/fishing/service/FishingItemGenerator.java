@@ -43,6 +43,19 @@ public final class FishingItemGenerator {
     }
 
     /**
+     * 将 ItemStack 序列化为 itemJson 字符串，供 UI Slot 图标渲染。
+     *
+     * @param stack 物品堆，为 null 时返回空字符串
+     * @return itemJson 字符串
+     */
+    public @NotNull String itemToJson(@Nullable ItemStack stack) {
+        if (stack == null || itemBridgeAPI == null) {
+            return "";
+        }
+        return itemBridgeAPI.itemToJson(stack).orElse("");
+    }
+
+    /**
      * 根据 FishingItemRef 生成 ItemStack。
      *
      * @param ref    物品引用

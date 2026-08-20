@@ -1522,12 +1522,38 @@ public final class FishingService {
             entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.id()));
             entry.put("claimed", seasonData.claimedRewards().contains(reward.id()));
             rewardsMap.put(Integer.toString(idx), entry);
+            // 图标 itemJson：Java 端构建 ItemStack 后序列化，避免 UI 端拼 SNBT 出错
+            // （材质名大小写、Count 浮点等客户端拼接问题）
+            payload.put("iconJson" + idx, buildRewardIconJson(reward));
             idx++;
         }
         payload.put("rewards", rewardsMap);
         payload.put("rewardCount", seasonRewards.size());
 
         packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 根据奖励定义的图标字段（iconMaterial/iconName/iconAmount）构建 itemJson 字符串。
+     * <p>
+     * Java 端生成完整 itemJson，避免 UI 端拼接 SNBT 时出现材质名大小写、
+     * Count 浮点等客户端解析问题。
+     *
+     * @param reward 奖励定义
+     * @return itemJson 字符串，生成失败时返回空字符串（UI 端回退到 air 图标）
+     */
+    private @NotNull String buildRewardIconJson(@NotNull SeasonRewardDefinition reward) {
+        Material material = Material.matchMaterial(reward.iconMaterial(), true);
+        if (material == null || material.isAir()) {
+            return "";
+        }
+        ItemStack stack = new ItemStack(material, Math.max(1, reward.iconAmount()));
+        ItemMeta meta = stack.getItemMeta();
+        if (meta != null && !reward.iconName().isBlank()) {
+            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', reward.iconName()));
+            stack.setItemMeta(meta);
+        }
+        return itemGenerator.itemToJson(stack);
     }
 
     /**
