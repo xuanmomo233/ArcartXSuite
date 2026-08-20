@@ -946,28 +946,22 @@ controls:
                                 Packet.send(var.packetId, 'unlock_talent', self.parent.entry['id'])
                               }
                             }
-                      # 层级标签（右下角小标签 T1~T5）
+                      # 层级标签（右下角正方形小标签 T1~T5/联）
                       层级标签:
                         type: Texture
                         attribute:
                           point: ~bottom_right
-                          x: -2
-                          y: -2
-                          width: 52
-                          height: 44
+                          x: -4
+                          y: -4
+                          width: 40
+                          height: 40
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
                           shape: ~round_rect
                           radius: 8
                           through: true
-                        children:
-                          层级文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              width: 52
-                              texts: "self.parent.parent.entry != none && self.parent.parent.isLink != true ? '&fT' + type.toNumber(self.parent.parent.entry['tier']).round() : '&f联'"
-                              fontSize: 36
-                              through: true
+                          texts: "self.parent.entry != none && self.parent.isLink != true ? '&fT' + type.toNumber(self.parent.entry['tier']).round() : '&f联'"
+                          fontSize: 22
+                          center: true
 
           # 滚动滑块（纵向）
           树滑块:
