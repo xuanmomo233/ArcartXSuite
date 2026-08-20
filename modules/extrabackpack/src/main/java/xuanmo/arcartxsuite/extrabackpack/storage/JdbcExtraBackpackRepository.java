@@ -59,12 +59,13 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
 
     /**
      * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
+     * <p>
+     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor）。
      *
      * @return {@code true} 表示 SQLite
      */
     private boolean isSqlite() {
-        return isSharedMode() ? !isMysql()
-            : isSqlite();
+        return !isMysql();
     }
 
     /**

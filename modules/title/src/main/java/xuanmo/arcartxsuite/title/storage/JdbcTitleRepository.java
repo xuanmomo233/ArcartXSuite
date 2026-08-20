@@ -475,14 +475,14 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     /**
      * 判断当前是否为 SQLite 方言。
      * <p>
-     * 共享模式下通过 {@link #isMysql()} 判断（基于本体全局描述符）；
-     * 自建模式下通过模块配置的 {@code dialect} 判断。
+     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor），
+     * 自建模式构造时已传入 {@link TitleStorageConfiguration#toDescriptor()} 生成的描述符。
      *
      * @return {@code true} 表示当前使用 SQLite 方言
      * @since 1.4.0
      */
     private boolean isSqliteDialect() {
-        return isSharedMode() ? !isMysql() : isSqliteDialect();
+        return !isMysql();
     }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {

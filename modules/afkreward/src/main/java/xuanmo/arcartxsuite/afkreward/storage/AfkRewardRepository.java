@@ -52,21 +52,25 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
 
     /**
      * 返回当前表前缀（兼容共享模式与自建模式）。
+     * <p>
+     * 共享模式与自建模式下均通过 {@link #tablePrefix()} 获取，
+     * 自建模式构造时已从 descriptor 设置表前缀。
      *
      * @return 表前缀
      */
     private String prefix() {
-        return isSharedMode() ? tablePrefix() : prefix();
+        return tablePrefix();
     }
 
     /**
      * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
+     * <p>
+     * 共享模式与自建模式下均通过 {@link #isMysql()} 判断（基于 descriptor）。
      *
      * @return {@code true} 表示 SQLite
      */
     private boolean isSqlite() {
-        return isSharedMode() ? !isMysql()
-            : isSqlite();
+        return !isMysql();
     }
 
     @Override
