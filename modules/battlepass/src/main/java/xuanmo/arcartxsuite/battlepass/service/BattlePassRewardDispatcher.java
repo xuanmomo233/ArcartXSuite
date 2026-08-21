@@ -21,8 +21,9 @@ import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 
 /**
@@ -45,6 +46,7 @@ public final class BattlePassRewardDispatcher {
     private final @Nullable CurrencyBridgeAPI currencyManager;
     private volatile Supplier<MailDispatchable> mailProvider;
     private ItemRewardDispatcher itemRewardDispatcher;
+    private @Nullable IconResolver itemResolver;
 
     /**
      * 构造奖励发放器。
@@ -75,6 +77,18 @@ public final class BattlePassRewardDispatcher {
      */
     public void setItemRewardDispatcher(ItemRewardDispatcher itemRewardDispatcher) {
         this.itemRewardDispatcher = itemRewardDispatcher;
+    }
+
+    /**
+     * 注入奖励物品解析器。
+     * <p>
+     * 注入后 item 类型奖励的物品生成（从 IconDefinition 到 ItemStack）由 BattlePassItemResolver 处理，
+     * 支持外部物品库、自定义 NBT、custom-model-data、glow、skull-texture、color 等属性。
+     *
+     * @param itemResolver 奖励物品解析器
+     */
+    public void setItemResolver(IconResolver itemResolver) {
+        this.itemResolver = itemResolver;
     }
 
     /**
@@ -141,20 +155,18 @@ public final class BattlePassRewardDispatcher {
     }
 
     private void dispatchItem(Player player, BattlePassReward reward) {
-        BattlePassItemDefinition itemDef = reward.item();
+        IconDefinition itemDef = reward.item();
         if (itemDef == null) {
             logger.warning("物品奖励缺少 item 定义: " + reward.rewardId());
             return;
         }
-        if (itemSourceRegistry == null) {
-            logger.warning("物品来源注册表不可用，无法发放物品奖励: " + reward.rewardId());
+        if (itemResolver == null) {
+            logger.warning("物品解析器不可用，无法发放物品奖励: " + reward.rewardId());
             return;
         }
-        ItemStack item = itemSourceRegistry.generateItem(
-            itemDef.source(), itemDef.id(), itemDef.amount(), itemDef.nbt(), player);
+        ItemStack item = itemResolver.resolveItemStack(player, itemDef);
         if (item == null) {
-            logger.warning("物品奖励生成失败: " + reward.rewardId()
-                + " source=" + itemDef.source() + " id=" + itemDef.id());
+            logger.warning("物品奖励生成失败: " + reward.rewardId());
             return;
         }
         ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("battlepass")
@@ -239,22 +251,20 @@ public final class BattlePassRewardDispatcher {
         // 直接模式：发送带物品附件的邮件
         String subject = reward.mailSubject() != null ? reward.mailSubject() : "战令奖励";
         String body = reward.mailBody() != null ? reward.mailBody() : "您收到了战令奖励，请查收附件。";
-        BattlePassItemDefinition itemDef = reward.item();
+        IconDefinition itemDef = reward.item();
         if (itemDef == null) {
             // 无物品附件，降级为执行命令
             logger.fine("mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
             fallbackFromMail(onlinePlayer, reward);
             return;
         }
-        if (itemSourceRegistry == null) {
-            logger.warning("物品来源注册表不可用，无法生成 mail 类型奖励物品: " + reward.rewardId());
+        if (itemResolver == null) {
+            logger.warning("物品解析器不可用，无法生成 mail 类型奖励物品: " + reward.rewardId());
             return;
         }
-        ItemStack item = itemSourceRegistry.generateItem(
-            itemDef.source(), itemDef.id(), itemDef.amount(), itemDef.nbt(), onlinePlayer);
+        ItemStack item = itemResolver.resolveItemStack(onlinePlayer, itemDef);
         if (item == null) {
-            logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId()
-                + " source=" + itemDef.source() + " id=" + itemDef.id());
+            logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId());
             return;
         }
         AxsScheduler.runAsync(plugin, () -> {

@@ -1,4 +1,4 @@
-# 宝藏定义示例：MMOItems 物品对接
+﻿# 宝藏定义示例：MMOItems 物品对接
 # 演示如何通过 MMOItems 物品库生成宝藏物品。
 # 前提：服务器已安装 MMOItems，且存在对应 type:id 的物品。
 # 物品来源说明：
@@ -6,7 +6,7 @@
 #   mmo-type: "GEM_STONE" → MMOItems 物品类型（在 MMOItems 配置中定义的 type）
 #   mmo-id: "AQUAMARINE"  → MMOItems 物品 ID（在该 type 下的具体物品）
 #   amount: 1            → 数量
-# 注意：也可以用 item-id: "GEM_STONE:AQUAMARINE" 的 "type:id" 格式替代 mmo-type/mmo-id。
+# 注意：也可以用 id: "GEM_STONE:AQUAMARINE" 的 "type:id" 格式替代 mmo-type/mmo-id。
 
 id: "mmo_aquamarine"
 display-name: "&9海蓝宝石"

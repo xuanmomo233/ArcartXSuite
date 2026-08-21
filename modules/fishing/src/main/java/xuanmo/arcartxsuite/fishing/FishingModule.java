@@ -27,10 +27,11 @@ import xuanmo.arcartxsuite.fishing.listener.FishingListener;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.RewardLoader;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
-import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
+
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 import xuanmo.arcartxsuite.fishing.settlement.SettlementDefinition;
 import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
@@ -308,9 +309,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             settlements = java.util.List.of();
         }
 
-        FishingItemGenerator itemGen = new FishingItemGenerator(itemSourceRegistry, itemStackBridge);
+        IconResolver iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
         RewardDispatcher rewardDispatcher = new RewardDispatcher(
-            pendingRewardService, itemSourceRegistry, () -> currencyManager,
+            pendingRewardService, itemSourceRegistry, iconResolver, () -> currencyManager,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
             itemRewardDispatcher,
             logger, configuration.season().seasonId());
@@ -336,7 +337,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         service = new FishingService(
             plugin, configuration, repo,
             packetBridge,
-            itemGen,
+            iconResolver,
             logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
             crossServer);

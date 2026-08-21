@@ -1,15 +1,15 @@
-# 宝藏定义示例：Overture 物品对接
+﻿# 宝藏定义示例：Overture 物品对接
 # 演示如何通过 Overture 物品库生成宝藏物品。
 # 前提：服务器已安装 Overture（葱白物品库），且存在对应物品 ID。
 # 物品来源说明：
 #   source: overture     → 调用 Overture API 生成物品（需要玩家上下文）
-#   item-id: "fishing_rod_legendary" → Overture 物品 ID
+#   id: "fishing_rod_legendary" → Overture 物品 ID
 #   amount: 1            → 数量
 
 id: "overture_legendary_rod"
 display-name: "&6传说钓竿碎片"
 item:
   source: "overture"
-  item-id: "fishing_rod_legendary"
+  id: "fishing_rod_legendary"
   amount: 1
 chance: 0.02

@@ -30,6 +30,7 @@ import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
@@ -58,6 +59,7 @@ public final class LootScannerService implements Listener {
     private final PacketBridgeAPI packetBridge;
     private final ItemBridgeAPI itemStackBridge;
     private final VanillaItemNameBridge vanillaItemNameBridge;
+    private final ItemMatcherAPI itemMatcher;
     private final Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier;
     /** 过滤引擎：根据配置决定哪些物品应在面板中显示 */
     private final LootFilterEngine filterEngine;
@@ -89,6 +91,7 @@ public final class LootScannerService implements Listener {
         PacketBridgeAPI packetBridge,
         ItemBridgeAPI itemStackBridge,
         VanillaItemNameBridge vanillaItemNameBridge,
+        ItemMatcherAPI itemMatcher,
         String uiId,
         String interactUiId,
         Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier,
@@ -101,9 +104,10 @@ public final class LootScannerService implements Listener {
         this.packetBridge = packetBridge;
         this.itemStackBridge = itemStackBridge;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.itemMatcher = itemMatcher;
         this.warehouseAutoDepositableSupplier = warehouseAutoDepositableSupplier == null ? () -> null : warehouseAutoDepositableSupplier;
         this.messages = messages;
-        this.filterEngine = new LootFilterEngine(configuration.filter(), vanillaItemNameBridge);
+        this.filterEngine = new LootFilterEngine(configuration.filter(), itemMatcher);
         this.uiId = uiId;
         this.interactUiId = interactUiId;
     }

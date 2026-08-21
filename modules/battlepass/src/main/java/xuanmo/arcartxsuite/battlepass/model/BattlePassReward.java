@@ -9,7 +9,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * <p>
  * 支持四种奖励类型：
  * <ul>
- *   <li>{@code item} — 通过 {@link BattlePassItemDefinition} 生成物品并直接放入玩家背包</li>
+ *   <li>{@code item} — 通过 {@link IconDefinition} 生成物品并直接放入玩家背包</li>
  *   <li>{@code command} — 以控制台身份执行命令列表，支持 {@code {player}} 占位符</li>
  *   <li>{@code currency} — 向玩家发放指定货币</li>
  *   <li>{@code mail} — 通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）</li>
@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param tier      奖励档位（FREE/PREMIUM/DELUXE）
  * @param type      奖励类型（item / command / currency / mail）
  * @param icon      UI 显示图标定义，可为 null
- * @param item      物品定义（type: item/mail 时使用），可为 null
+ * @param item      物品定义（type: item/mail 时使用，使用 IconDefinition 结构化字段），可为 null
  * @param commands  命令列表（type: command 时使用），可为空列表
  * @param currency  货币 ID（type: currency 时使用），可为 null
  * @param currencyAmount 货币数量（type: currency 时使用）
@@ -35,7 +35,7 @@ public record BattlePassReward(
     RewardTier tier,
     String type,
     @Nullable IconDefinition icon,
-    @Nullable BattlePassItemDefinition item,
+    @Nullable IconDefinition item,
     List<String> commands,
     @Nullable String currency,
     double currencyAmount,

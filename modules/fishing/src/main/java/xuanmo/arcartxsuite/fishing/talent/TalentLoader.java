@@ -9,6 +9,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 天赋树配置加载器，从 {@code talents.yml} 解析为 {@link TalentEngine}。
@@ -37,7 +38,10 @@ public final class TalentLoader {
                 if (treeSection == null) continue;
                 String displayName = treeSection.getString("display-name", treeId);
                 String description = treeSection.getString("description", "");
-                String icon = treeSection.getString("icon", "minecraft:stone");
+                IconDefinition icon = IconDefinition.load(treeSection, "icon");
+                if (icon == null) {
+                    icon = IconDefinition.load("minecraft:stone");
+                }
                 List<TalentNode> nodes = new ArrayList<>();
                 List<?> rawNodes = treeSection.getList("nodes");
                 if (rawNodes != null) {
@@ -100,8 +104,7 @@ public final class TalentLoader {
                     prerequisites.add(String.valueOf(p));
                 }
             }
-            Object rawIcon = map.get("icon");
-            String icon = rawIcon != null ? String.valueOf(rawIcon) : "";
+            IconDefinition icon = iconFromMap(map, "icon");
             return new TalentNode(id, treeId, tier, branch, displayName, description, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析天赋节点失败: " + e.getMessage());
@@ -140,13 +143,75 @@ public final class TalentLoader {
                     prerequisites.add(String.valueOf(p));
                 }
             }
-            Object rawIcon = map.get("icon");
-            String icon = rawIcon != null ? String.valueOf(rawIcon) : "";
+            IconDefinition icon = iconFromMap(map, "icon");
             // 联动节点 treeId 为空
             return new TalentNode(id, "", 0, "link", displayName, description, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析联动天赋失败: " + e.getMessage());
             return null;
         }
+    }
+
+    // ─── 通用图标解析 ──────────────────────────────────────
+
+    /**
+     * 从 {@link Map} 解析图标定义（节点/联动级 icon）。
+     * <p>
+     * icon 为块式映射对象（Bukkit 反序列化为 {@code Map<?, ?>}），字段与
+     * {@link IconDefinition#load(ConfigurationSection)} 兼容。
+     * 解析失败或缺失时返回 null（UI 端回退到 effectType 映射）。
+     *
+     * @param map 所属 Map
+     * @param key icon 字段名
+     * @return 解析出的 {@link IconDefinition}，缺失时为 null
+     */
+    private static @Nullable IconDefinition iconFromMap(@NotNull Map<?, ?> map, @NotNull String key) {
+        Object raw = map.get(key);
+        if (!(raw instanceof Map<?, ?> iconMap)) {
+            return null;
+        }
+        String material = strOr(iconMap.get("material"), "");
+        String source = strOr(iconMap.get("source"), "");
+        String sourceId = strOr(iconMap.get("id"), strOr(iconMap.get("item-id"), ""));
+        String mmoType = strOr(iconMap.get("mmo-type"), "");
+        String mmoId = strOr(iconMap.get("mmo-id"), "");
+        String json = strOr(iconMap.get("json"), "");
+        String texture = strOr(iconMap.get("texture"), "");
+        String textureUrl = strOr(iconMap.get("texture-url"), strOr(iconMap.get("url"), ""));
+        String name = strOr(iconMap.get("name"), "");
+        String nbtString = strOr(iconMap.get("nbt"), "");
+        String skullTexture = strOr(iconMap.get("skull-texture"), strOr(iconMap.get("skullTexture"), ""));
+        String color = strOr(iconMap.get("color"), "");
+        int amount = iconMap.get("amount") instanceof Number n ? Math.max(1, n.intValue()) : 1;
+        int customModelData = iconMap.get("custom-model-data") instanceof Number cmd ? cmd.intValue()
+            : iconMap.get("customModelData") instanceof Number cmd2 ? cmd2.intValue() : 0;
+        boolean glow = iconMap.get("glow") instanceof Boolean g && g;
+        List<String> lore = new ArrayList<>();
+        Object rawLore = iconMap.get("lore");
+        if (rawLore instanceof List<?> loreList) {
+            for (Object line : loreList) {
+                lore.add(String.valueOf(line));
+            }
+        }
+        Map<String, String> nbt = new HashMap<>();
+        Object rawNbt = iconMap.get("nbt");
+        // nbt 如果是 Map（配置节），解析为键值对；如果是字符串，已在 nbtString 中处理
+        if (rawNbt instanceof Map<?, ?> nbtMap && nbtString.isBlank()) {
+            for (Map.Entry<?, ?> entry : nbtMap.entrySet()) {
+                nbt.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+            }
+        }
+        IconDefinition icon = new IconDefinition(
+            material, amount, name, lore, customModelData,
+            source, sourceId, mmoType, mmoId, json,
+            texture, textureUrl, nbt, nbtString, glow, skullTexture, color
+        );
+        return icon.hasIcon() ? icon : null;
+    }
+
+    private static String strOr(Object value, String defaultValue) {
+        if (value == null) return defaultValue;
+        String s = String.valueOf(value);
+        return s.isBlank() ? defaultValue : s;
     }
 }

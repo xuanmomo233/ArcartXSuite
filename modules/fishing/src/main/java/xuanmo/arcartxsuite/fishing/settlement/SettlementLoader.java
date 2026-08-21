@@ -1,13 +1,14 @@
 package xuanmo.arcartxsuite.fishing.settlement;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.MemoryConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
 
 /**
@@ -60,37 +61,40 @@ public final class SettlementLoader {
     @SuppressWarnings("unchecked")
     private static SeasonRewardDefinition parseRewardFromMap(String id, Map<?, ?> map) {
         String type = strOr(map.get("type"), "item");
-        String iconMaterial = "STONE";
-        String iconName = "";
-        int iconAmount = 1;
-        String itemSource = null, itemId = null, itemNbt = null;
-        int itemAmount = 0;
+        // Map → MemoryConfiguration，以便复用 IconDefinition.load
+        MemoryConfiguration mem = new MemoryConfiguration();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() != null) {
+                mem.set(String.valueOf(entry.getKey()), entry.getValue());
+            }
+        }
+        IconDefinition icon = IconDefinition.load(mem, "icon");
+        IconDefinition item = null;
+        if ("item".equals(type)) {
+            item = IconDefinition.load(mem, "item");
+        }
+
         String currencyId = null;
         double currencyAmount = 0;
-        List<String> commands = null;
-        List<String> mailPresets = null;
-
-        if ("item".equals(type)) {
-            Object itemObj = map.get("item");
-            if (itemObj instanceof Map<?, ?> itemMap) {
-                itemSource = strOr(itemMap.get("source"), "minecraft");
-                itemId = strOr(itemMap.get("id"), "STONE");
-                itemAmount = itemMap.get("amount") != null ? ((Number) itemMap.get("amount")).intValue() : 1;
-                itemNbt = strOr(itemMap.get("nbt"), "");
-            }
-        } else if ("currency".equals(type)) {
+        if ("currency".equals(type)) {
             Object curObj = map.get("currency");
             if (curObj instanceof Map<?, ?> curMap) {
                 currencyId = strOr(curMap.get("currency-id"), "money");
                 currencyAmount = curMap.get("amount") != null ? ((Number) curMap.get("amount")).doubleValue() : 0;
             }
-        } else if ("command".equals(type)) {
+        }
+
+        List<String> commands = null;
+        if ("command".equals(type)) {
             Object cmdObj = map.get("commands");
             if (cmdObj instanceof List<?> cmdList) {
                 commands = new ArrayList<>();
                 for (Object c : cmdList) commands.add(String.valueOf(c));
             }
-        } else if ("mail".equals(type)) {
+        }
+
+        List<String> mailPresets = null;
+        if ("mail".equals(type)) {
             Object mailObj = map.get("mail");
             if (mailObj instanceof Map<?, ?> mailMap) {
                 Object presetsObj = mailMap.get("presets");
@@ -102,8 +106,8 @@ public final class SettlementLoader {
             if (mailPresets == null) mailPresets = java.util.List.of();
         }
 
-        return new SeasonRewardDefinition(id, 0, type, iconMaterial, iconName, iconAmount,
-            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresets);
+        return new SeasonRewardDefinition(id, 0, type, icon, item,
+            currencyId, currencyAmount, commands, mailPresets);
     }
 
     private static String strOr(Object value, String defaultValue) {

@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.battlepass.condition.TaskConditionParser;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategy;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategyParser;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
-import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
+
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.SeasonSettlementReward;
@@ -187,7 +187,7 @@ public record BattlePassModuleConfiguration(
     private static BattlePassReward parseReward(String rewardId, int level, BattlePassReward.RewardTier tier, ConfigurationSection section) {
         String type = section.getString("type", "command");
         IconDefinition icon = IconDefinition.load(section, "icon");
-        BattlePassItemDefinition item = parseItemDefinition(section.getConfigurationSection("item"));
+        IconDefinition item = IconDefinition.load(section, "item");
         List<String> commands = Collections.unmodifiableList(section.getStringList("commands"));
         String currency = section.getString("currency", "");
         double currencyAmount = section.getDouble("amount", 0);
@@ -204,16 +204,6 @@ public record BattlePassModuleConfiguration(
             mailPresets,
             mailSubject.isBlank() ? null : mailSubject,
             mailBody.isBlank() ? null : mailBody);
-    }
-
-    private static @Nullable BattlePassItemDefinition parseItemDefinition(@Nullable ConfigurationSection section) {
-        if (section == null) return null;
-        String source = section.getString("source", "minecraft");
-        String id = section.getString("id", "");
-        int amount = section.getInt("amount", 1);
-        String nbt = section.getString("nbt", "");
-        if (id.isBlank()) return null;
-        return new BattlePassItemDefinition(source, id, amount, nbt.isBlank() ? null : nbt);
     }
 
     /**

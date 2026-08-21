@@ -10,11 +10,18 @@
 #         material: DIAMOND
 #         name: "&b钻石 x1"
 #         amount: 1   # 图标显示数量（与 item.amount 一致）
-#       item:         # 发放物品奖励
+#       item:         # 发放物品奖励（item 字段使用与 icon 相同的 IconDefinition 结构）
 #         source: minecraft      # 物品来源：minecraft / mythic / neige / overture / mmoitems
 #         id: DIAMOND             # 物品 ID（原版材质名或外部物品库 ID）
 #         amount: 1               # 物品数量
-#         nbt: ""                 # 可选：自定义 NBT（SNBT 字符串）
+#         name: "&b钻石"          # 物品显示名称（替代旧 nbt 中的 display.Name）
+#         lore:                   # 物品描述（列表）
+#           - "<描述行>"
+#         custom-model-data: 0    # 自定义模型数据
+#         glow: false             # 附魔光效
+#         texture: ""             # ArcartX 自定义贴图
+#         texture-url: ""         # 贴图 URL
+#         nbt: ""                 # 整段 SNBT（用于附魔等无结构化替代的场景）
 #     premium:        # 高级档奖励（结构同 free）
 #       type: item
 #       icon:
@@ -49,12 +56,14 @@
 #               mail-body:       邮件正文（直接配置带附件邮件时使用）
 #               item:            邮件附件物品（直接配置带附件邮件时使用）
 #
+# item 字段支持与 icon 相同的全部 IconDefinition 字段（source/id/amount/name/lore/
+# custom-model-data/glow/texture/texture-url/nbt/skull-texture/color/json 等），
 # item.source 支持的物品来源：
 #   minecraft  — 原版物品（id 为材质名，如 DIAMOND）
 #   mythic     — MythicMobs 物品（id 为 MythicMobs 内部物品名）
 #   neige      — NeigeItems 物品（id 为 NeigeItems 物品 ID）
 #   overture   — Overture 物品（id 为 Overture 物品 ID）
-#   mmoitems   — MMOItems 物品（id 为 MMOItems 物品 ID）
+#   mmoitems   — MMOItems 物品（id 为 MMOItems 物品 ID，也可用 mmo-type + mmo-id）
 #
 # icon 配置（完整字段见 menu/market 模块）：
 #   material:          原版材质名（如 DIAMOND）

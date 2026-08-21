@@ -1,12 +1,10 @@
 package xuanmo.arcartxsuite.pickup.config;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.regex.Pattern;
-import org.bukkit.Material;
+import java.util.logging.Logger;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import xuanmo.arcartxsuite.api.item.ItemMatcher;
+import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
 /**
  * Pickup 模块配置模型。
@@ -94,26 +92,29 @@ public record PickupModuleConfiguration(
 
     /**
      * 过滤系统配置（仅扫描模式生效）。
+     * <p>
+     * 各维度通过独立的 {@link ItemMatcher} 实现，由 {@link xuanmo.arcartxsuite.pickup.filter.LootFilterEngine}
+     * 调用 {@link xuanmo.arcartxsuite.api.item.ItemMatcherAPI#matches} 判断。
      *
-     * @param mode               过滤模式（黑名单/白名单）
-     * @param blacklist          材质黑名单
-     * @param whitelist          材质白名单
-     * @param nameBlacklistRegex 物品名称黑名单正则列表
-     * @param loreBlacklistRegex Lore 黑名单正则（任意一行匹配则不显示）
-     * @param loreWhitelistRegex Lore 白名单正则（非空时必须至少一行匹配才显示）
-     * @param nbtBlacklistKeys   NBT 键黑名单（包含指定键则不显示，支持嵌套路径）
-     * @param nbtWhitelistKeys   NBT 键白名单（非空时必须包含至少一个键才显示）
-     * @param minAmount          最小堆叠数量
+     * @param mode                过滤模式（黑名单/白名单），控制材质过滤使用 blacklist 还是 whitelist
+     * @param materialBlacklist   材质黑名单 matcher（mode=BLACKLIST 时，matches 为 true 则不显示）
+     * @param materialWhitelist   材质白名单 matcher（mode=WHITELIST 时，matches 为 false 则不显示）
+     * @param nameBlacklist       名称黑名单 matcher（matches 为 true 则不显示）
+     * @param loreBlacklist       Lore 黑名单 matcher（matches 为 true 则不显示）
+     * @param loreWhitelist       Lore 白名单 matcher（非空时 matches 为 false 则不显示）
+     * @param nbtBlacklist        NBT 键黑名单 matcher（matches 为 true 则不显示）
+     * @param nbtWhitelist        NBT 键白名单 matcher（非空时 matches 为 false 则不显示）
+     * @param minAmount           最小堆叠数量
      */
     public record FilterConfig(
         FilterMode mode,
-        Set<Material> blacklist,
-        Set<Material> whitelist,
-        List<Pattern> nameBlacklistRegex,
-        List<Pattern> loreBlacklistRegex,
-        List<Pattern> loreWhitelistRegex,
-        List<String> nbtBlacklistKeys,
-        List<String> nbtWhitelistKeys,
+        ItemMatcher materialBlacklist,
+        ItemMatcher materialWhitelist,
+        ItemMatcher nameBlacklist,
+        ItemMatcher loreBlacklist,
+        ItemMatcher loreWhitelist,
+        ItemMatcher nbtBlacklist,
+        ItemMatcher nbtWhitelist,
         int minAmount
     ) {
         /** 过滤模式。 */
@@ -126,7 +127,7 @@ public record PickupModuleConfiguration(
     }
 
     /** 从 YAML 配置文件加载完整配置。 */
-    public static PickupModuleConfiguration load(FileConfiguration config) {
+    public static PickupModuleConfiguration load(FileConfiguration config, Logger logger) {
         boolean debug = config.getBoolean("settings.debug", false);
         String modeStr = readString(config, "settings.mode", "notification");
         PickupMode mode = "scanner".equalsIgnoreCase(modeStr) ? PickupMode.SCANNER : PickupMode.NOTIFICATION;
@@ -155,69 +156,46 @@ public record PickupModuleConfiguration(
             readString(config, "scanner.keybind.name", "AXS_INTERACT")
         );
 
-        FilterConfig filter = loadFilter(config);
+        FilterConfig filter = loadFilter(config, logger);
 
         return new PickupModuleConfiguration(debug, mode, ui, notification, scanner, filter);
     }
 
     /** 加载过滤系统配置。 */
-    private static FilterConfig loadFilter(FileConfiguration config) {
+    private static FilterConfig loadFilter(FileConfiguration config, Logger logger) {
+        ConfigurationSection filterSec = config.getConfigurationSection("filter");
         String filterModeStr = readString(config, "filter.mode", "blacklist");
         FilterConfig.FilterMode filterMode = "whitelist".equalsIgnoreCase(filterModeStr)
             ? FilterConfig.FilterMode.WHITELIST
             : FilterConfig.FilterMode.BLACKLIST;
 
-        Set<Material> blacklist = parseMaterials(config.getStringList("filter.blacklist"));
-        Set<Material> whitelist = parseMaterials(config.getStringList("filter.whitelist"));
-
-        List<Pattern> nameBlacklistRegex = parsePatterns(config.getStringList("filter.name-blacklist-regex"));
-        List<Pattern> loreBlacklistRegex = parsePatterns(config.getStringList("filter.lore-blacklist-regex"));
-        List<Pattern> loreWhitelistRegex = parsePatterns(config.getStringList("filter.lore-whitelist-regex"));
-        List<String> nbtBlacklistKeys = parseStringList(config.getStringList("filter.nbt-blacklist-keys"));
-        List<String> nbtWhitelistKeys = parseStringList(config.getStringList("filter.nbt-whitelist-keys"));
+        ItemMatcher materialBlacklist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("material-blacklist"),
+            logger, "filter.material-blacklist");
+        ItemMatcher materialWhitelist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("material-whitelist"),
+            logger, "filter.material-whitelist");
+        ItemMatcher nameBlacklist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("name-blacklist"),
+            logger, "filter.name-blacklist");
+        ItemMatcher loreBlacklist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("lore-blacklist"),
+            logger, "filter.lore-blacklist");
+        ItemMatcher loreWhitelist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("lore-whitelist"),
+            logger, "filter.lore-whitelist");
+        ItemMatcher nbtBlacklist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("nbt-blacklist"),
+            logger, "filter.nbt-blacklist");
+        ItemMatcher nbtWhitelist = ItemMatcherLoader.load(
+            filterSec == null ? null : filterSec.getConfigurationSection("nbt-whitelist"),
+            logger, "filter.nbt-whitelist");
 
         int minAmount = Math.max(1, config.getInt("filter.min-amount", 1));
-        return new FilterConfig(filterMode, blacklist, whitelist,
-            nameBlacklistRegex, loreBlacklistRegex, loreWhitelistRegex,
-            nbtBlacklistKeys, nbtWhitelistKeys, minAmount);
-    }
-
-    /** 将字符串列表解析为正则 Pattern 列表，无效正则静默跳过。 */
-    private static List<Pattern> parsePatterns(List<String> list) {
-        List<Pattern> patterns = new ArrayList<>();
-        for (String regex : list) {
-            if (regex != null && !regex.isBlank()) {
-                try {
-                    patterns.add(Pattern.compile(regex));
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        return patterns;
-    }
-
-    /** 解析非空字符串列表（去除空白项）。 */
-    private static List<String> parseStringList(List<String> list) {
-        List<String> result = new ArrayList<>();
-        for (String item : list) {
-            if (item != null && !item.isBlank()) {
-                result.add(item.trim());
-            }
-        }
-        return result;
-    }
-
-    /** 将字符串列表解析为 Material 集合，无效名称静默跳过。 */
-    private static Set<Material> parseMaterials(List<String> list) {
-        Set<Material> materials = new HashSet<>();
-        for (String name : list) {
-            if (name == null || name.isBlank()) continue;
-            try {
-                materials.add(Material.valueOf(name.trim().toUpperCase()));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        return materials;
+        return new FilterConfig(filterMode,
+            materialBlacklist, materialWhitelist,
+            nameBlacklist, loreBlacklist, loreWhitelist,
+            nbtBlacklist, nbtWhitelist, minAmount);
     }
 
     // 向后兼容：通知模式时的快捷访问（UI 配置已统一到 ui 节）

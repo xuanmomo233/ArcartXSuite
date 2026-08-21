@@ -21,6 +21,7 @@ import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
@@ -54,6 +55,7 @@ public class MarketService {
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
+    private final ItemMatcherAPI itemMatcher;
     private final Logger logger;
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
@@ -94,6 +96,7 @@ public class MarketService {
                          xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
                          xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
+                         ItemMatcherAPI itemMatcher,
                          Logger logger,
                          CrossServerAPI crossServer,
                          MessageProvider messages) {
@@ -108,6 +111,7 @@ public class MarketService {
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.mailSupplier = mailSupplier;
         this.itemRewardDispatcher = itemRewardDispatcher;
+        this.itemMatcher = itemMatcher;
         this.logger = logger;
         this.crossServer = crossServer;
         this.messages = messages;
@@ -150,7 +154,7 @@ public class MarketService {
         // 启动子服务
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
-                repository, redisCache, crossServerPublisher, currencyManager, itemSerializer, logger, vanillaItemNameBridge, itemRewardDispatcher);
+                repository, redisCache, crossServerPublisher, currencyManager, itemSerializer, logger, vanillaItemNameBridge, itemRewardDispatcher, itemMatcher);
             auctionService.start(config.schedulerIntervalTicks());
         }
 

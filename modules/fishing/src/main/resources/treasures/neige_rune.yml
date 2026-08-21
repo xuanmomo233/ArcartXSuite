@@ -1,15 +1,15 @@
-# 宝藏定义示例：NeigeItems 物品对接
+﻿# 宝藏定义示例：NeigeItems 物品对接
 # 演示如何通过 NeigeItems 物品库生成宝藏物品。
 # 前提：服务器已安装 NeigeItems，且存在对应物品 ID。
 # 物品来源说明：
 #   source: neige        → 调用 NeigeItems API 生成物品
-#   item-id: "rune_stone" → NeigeItems 物品 ID
+#   id: "rune_stone" → NeigeItems 物品 ID
 #   amount: 1            → 数量
 
 id: "neige_rune"
 display-name: "&d远古符文石"
 item:
   source: "neige"
-  item-id: "rune_stone"
+  id: "rune_stone"
   amount: 1
 chance: 0.08

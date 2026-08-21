@@ -183,7 +183,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         service = new BattlePassService(plugin, configuration, repo, logger,
             itemSourceRegistry, currencyManager,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
-            itemRewardDispatcher, pendingRewardService);
+            itemRewardDispatcher, pendingRewardService,
+            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry));
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();

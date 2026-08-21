@@ -52,6 +52,8 @@ import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.talent.TalentBonuses;
 import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
@@ -78,7 +80,7 @@ public final class FishingService {
     private final FishingModuleConfiguration configuration;
     private final FishingRepository repository;
     private final PacketBridgeAPI packetBridge;
-    private final FishingItemGenerator itemGenerator;
+    private final IconResolver iconResolver;
     private final Logger logger;
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
@@ -115,7 +117,7 @@ public final class FishingService {
 
     public FishingService(@NotNull JavaPlugin plugin, @NotNull FishingModuleConfiguration configuration,
                           @NotNull FishingRepository repository, @Nullable PacketBridgeAPI packetBridge,
-                          @NotNull FishingItemGenerator itemGenerator,
+                          @NotNull IconResolver iconResolver,
                           @NotNull Logger logger, @NotNull String minigameUiId,
                           @NotNull TalentEngine talentEngine,
                           @NotNull List<SeasonRewardDefinition> seasonRewards,
@@ -128,7 +130,7 @@ public final class FishingService {
         this.configuration = configuration;
         this.repository = repository;
         this.packetBridge = packetBridge;
-        this.itemGenerator = itemGenerator;
+        this.iconResolver = iconResolver;
         this.logger = logger;
         this.minigameUiId = minigameUiId;
         this.talentEngine = talentEngine;
@@ -354,7 +356,7 @@ public final class FishingService {
         TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
 
         FishingMinigame minigame = new FishingMinigame(
-            plugin, packetBridge, configuration.fishing(), this, itemGenerator, session, minigameUiId, bonuses
+            plugin, packetBridge, configuration.fishing(), this, iconResolver, session, minigameUiId, bonuses
         );
         activeMinigames.put(player.getUniqueId(), minigame);
         minigame.start();
@@ -470,7 +472,7 @@ public final class FishingService {
         for (FishDefinition.DropEntry drop : fish.drops()) {
             if (checkDropCondition(drop.condition(), perfect, size, isFirstCatch)) {
                 try {
-                    ItemStack dropStack = itemGenerator.generate(drop.itemRef(), player);
+                    ItemStack dropStack = iconResolver.resolveItemStack(player, drop.itemRef());
                     if (dropStack != null) {
                         dropOrGive(player, dropStack);
                     }
@@ -726,7 +728,7 @@ public final class FishingService {
 
     private void giveFishItem(@NotNull Player player, @NotNull FishDefinition fish, int size, boolean perfect) {
         try {
-            ItemStack stack = itemGenerator.generate(fish.itemRef(), player);
+            ItemStack stack = iconResolver.resolveItemStack(player, fish.itemRef());
             if (stack == null) {
                 stack = new ItemStack(Material.COD);
             }
@@ -773,7 +775,7 @@ public final class FishingService {
 
     private void giveTreasureItem(@NotNull Player player, @NotNull TreasureDefinition treasure) {
         try {
-            ItemStack stack = itemGenerator.generate(treasure.itemRef(), player);
+            ItemStack stack = iconResolver.resolveItemStack(player, treasure.itemRef());
             if (stack == null) return;
             dropOrGive(player, stack);
         } catch (Exception e) {
@@ -802,7 +804,7 @@ public final class FishingService {
 
         // 查找玩家背包中的饵料物品
         for (BaitDefinition bait : configuration.baits()) {
-            ItemStack baitItem = itemGenerator.generate(bait.itemRef(), player);
+            ItemStack baitItem = iconResolver.resolveItemStack(player, bait.itemRef());
             if (baitItem == null) continue;
             int slot = findBaitInInventory(player, baitItem.getType());
             if (slot < 0) continue;
@@ -1260,7 +1262,7 @@ public final class FishingService {
                 .filter(f -> f.id().equals(catchEntry.fishId()))
                 .findFirst().orElse(null);
             if (fishDef != null) {
-                payload.put("recentIconJson" + idx, itemGenerator.generateItemJson(fishDef.itemRef(), player));
+                payload.put("recentIconJson" + idx, iconResolver.resolveItemJson(player, fishDef.itemRef()));
             }
             idx++;
         }
@@ -1305,7 +1307,7 @@ public final class FishingService {
             entry.put("count", caught != null ? caught.caughtCount() : 0);
             fishDict.put(Integer.toString(idx), entry);
             // 鱼物品图标 itemJson（分离模式，UI 端 Slot Icon 通过 fishIconJson{idx} 渲染）
-            payload.put("fishIconJson" + idx, itemGenerator.generateItemJson(fish.itemRef(), player));
+            payload.put("fishIconJson" + idx, iconResolver.resolveItemJson(player, fish.itemRef()));
             idx++;
         }
         payload.put("fishList", fishDict);
@@ -1564,7 +1566,7 @@ public final class FishingService {
             treeMap.put("description", tree.description());
             treeMap.put("icon", tree.icon());
             // 树图标 itemJson（UI 端 Slot Icon 渲染用）
-            treeMap.put("iconJson", buildTalentIconJson(tree.icon()));
+            treeMap.put("iconJson", buildTalentIconJson(tree.icon(), player));
             java.util.Map<String, Object> nodesMap = new java.util.LinkedHashMap<>();
             int nodeIdx = 0;
             for (xuanmo.arcartxsuite.fishing.talent.TalentNode node : tree.nodes()) {
@@ -1577,7 +1579,7 @@ public final class FishingService {
                 nodeMap.put("treeId", node.treeId());
                 nodeMap.put("unlocked", seasonData.talents().contains(node.id()));
                 nodeMap.put("canUnlock", talentEngine.canUnlock(seasonData, node.id()));
-                nodeMap.put("iconJson", buildTalentNodeIconJson(node, seasonData.talents().contains(node.id()), talentEngine.canUnlock(seasonData, node.id())));
+                nodeMap.put("iconJson", buildTalentNodeIconJson(node, seasonData.talents().contains(node.id()), talentEngine.canUnlock(seasonData, node.id()), player));
                 // 效果描述
                 java.util.List<String> effects = new java.util.ArrayList<>();
                 for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
@@ -1608,7 +1610,7 @@ public final class FishingService {
             linkMap.put("treeId", link.treeId());
             linkMap.put("unlocked", seasonData.talents().contains(link.id()));
             linkMap.put("canUnlock", talentEngine.canUnlock(seasonData, link.id()));
-            linkMap.put("iconJson", buildTalentNodeIconJson(link, seasonData.talents().contains(link.id()), talentEngine.canUnlock(seasonData, link.id())));
+            linkMap.put("iconJson", buildTalentNodeIconJson(link, seasonData.talents().contains(link.id()), talentEngine.canUnlock(seasonData, link.id()), player));
             java.util.List<String> linkEffects = new java.util.ArrayList<>();
             for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
                 linkEffects.add(effect.effectType() + ": " + effect.effectValue());
@@ -1649,15 +1651,16 @@ public final class FishingService {
             entry.put("id", reward.rewardId());
             entry.put("level", reward.level());
             entry.put("type", reward.type());
-            entry.put("iconName", reward.iconName());
-            entry.put("iconMaterial", reward.iconMaterial());
-            entry.put("iconAmount", reward.iconAmount());
+            // iconName 供 UI 端文本显示用（从 IconDefinition 提取）
+            xuanmo.arcartxsuite.api.icon.IconDefinition iconDef = reward.icon();
+            entry.put("iconName", iconDef != null && iconDef.name() != null ? iconDef.name() : "");
+            entry.put("iconMaterial", iconDef != null ? iconDef.material() : "");
+            entry.put("iconAmount", iconDef != null ? iconDef.amount() : 1);
             entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId()));
             entry.put("claimed", seasonData.claimedRewards().contains(reward.rewardId()));
             rewardsMap.put(Integer.toString(idx), entry);
-            // 图标 itemJson：Java 端构建 ItemStack 后序列化，避免 UI 端拼 SNBT 出错
-            // （材质名大小写、Count 浮点等客户端拼接问题）
-            payload.put("iconJson" + idx, buildRewardIconJson(reward));
+            // 图标 itemJson：Java 端通过 IconResolver 生成完整 ItemStack 后序列化
+            payload.put("iconJson" + idx, buildRewardIconJson(reward, player));
             idx++;
         }
         payload.put("rewards", rewardsMap);
@@ -1667,50 +1670,58 @@ public final class FishingService {
     }
 
     /**
-     * 根据奖励定义的图标字段（iconMaterial/iconName/iconAmount）构建 itemJson 字符串。
+     * 根据奖励定义的 IconDefinition 构建 itemJson 字符串（UI 端 Slot Icon 渲染用）。
      * <p>
-     * Java 端生成完整 itemJson，避免 UI 端拼接 SNBT 时出现材质名大小写、
-     * Count 浮点等客户端解析问题。
+     * 通过 IconResolver 生成完整 ItemStack（支持外部物品库、自定义 NBT、
+     * custom-model-data、glow、skull-texture、color 等），再序列化为 itemJson。
      *
      * @param reward 奖励定义
+     * @param player 玩家上下文（Overture 等外部物品库需要）
      * @return itemJson 字符串，生成失败时返回空字符串（UI 端回退到 air 图标）
      */
-    private @NotNull String buildRewardIconJson(@NotNull SeasonRewardDefinition reward) {
-        Material material = Material.matchMaterial(reward.iconMaterial(), true);
-        if (material == null || material.isAir()) {
+    private @NotNull String buildRewardIconJson(@NotNull SeasonRewardDefinition reward, @NotNull Player player) {
+        if (reward.icon() == null) {
             return "";
         }
-        ItemStack stack = new ItemStack(material, Math.max(1, reward.iconAmount()));
-        ItemMeta meta = stack.getItemMeta();
-        if (meta != null && !reward.iconName().isBlank()) {
-            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', reward.iconName()));
-            stack.setItemMeta(meta);
-        }
-        return itemGenerator.itemToJson(stack);
+        return iconResolver.resolveItemJson(player, reward.icon());
     }
 
     /**
-     * 根据天赋树图标材质构建 itemJson 字符串（UI 端 Slot Icon 渲染用）。
+     * 根据天赋树图标物品引用构建 itemJson 字符串（UI 端 Slot Icon 渲染用）。
      *
-     * @param iconMaterial 材质 ID（如 minecraft:iron_bars）
+     * @param icon 图标定义，为 null 时返回空字符串
+     * @param player  玩家上下文（Overture 等外部物品库需要）
      * @return itemJson 字符串，生成失败时返回空字符串
      */
-    private @NotNull String buildTalentIconJson(@NotNull String iconMaterial) {
-        String materialName = iconMaterial.startsWith("minecraft:") ? iconMaterial.substring("minecraft:".length()) : iconMaterial;
-        Material material = Material.matchMaterial(materialName, true);
-        if (material == null || material.isAir()) {
+    private @NotNull String buildTalentIconJson(@Nullable IconDefinition icon, @NotNull Player player) {
+        if (icon == null || !icon.hasIcon()) {
             return "";
         }
-        ItemStack stack = new ItemStack(material, 1);
-        return itemGenerator.itemToJson(stack);
+        return iconResolver.resolveItemJson(player, icon);
     }
 
-    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canUnlock) {
-        // 优先使用节点自定义 icon，为空时回退到 effectType 映射
-        String material = node.icon();
-        if (material == null || material.isBlank()) {
+    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canUnlock, @NotNull Player player) {
+        // 优先使用节点自定义 icon（IconDefinition），为空时回退到 effectType 映射
+        IconDefinition iconRef = node.icon();
+        ItemStack stack;
+        if (iconRef != null && iconRef.hasIcon()) {
+            stack = iconResolver.resolveItemStack(player, iconRef);
+            if (stack == null) {
+                // 外部物品库生成失败时，尝试用 sourceId/material 作为原版材质回退
+                String fallbackId = iconRef.sourceId() != null && !iconRef.sourceId().isBlank()
+                    ? iconRef.sourceId() : iconRef.material();
+                if (fallbackId != null && !fallbackId.isBlank()) {
+                    Material fallback = Material.matchMaterial(fallbackId, true);
+                    if (fallback != null && !fallback.isAir()) {
+                        stack = new ItemStack(fallback, 1);
+                    }
+                }
+            }
+            if (stack == null) return "";
+        } else {
+            // 回退到 effectType 默认映射
             String effectType = node.effects().isEmpty() ? "" : node.effects().get(0).effectType();
-            material = switch (effectType) {
+            String material = switch (effectType) {
                 case "bar_height" -> "minecraft:iron_ingot";
                 case "bar_damping" -> "minecraft:slime_ball";
                 case "bar_bounce" -> "minecraft:rabbit_foot";
@@ -1737,13 +1748,14 @@ public final class FishingService {
                 case "perfect_xp" -> "minecraft:experience_bottle";
                 default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
             };
+            String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;
+            Material mat = Material.matchMaterial(materialName, true);
+            if (mat == null || mat.isAir()) {
+                return "";
+            }
+            stack = new ItemStack(mat, 1);
         }
-        String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;
-        Material mat = Material.matchMaterial(materialName, true);
-        if (mat == null || mat.isAir()) {
-            return "";
-        }
-        ItemStack stack = new ItemStack(mat, 1);
+        // 覆盖设置节点显示名和 lore（天赋树 UI 显示天赋信息，不是物品原始信息）
         java.util.List<String> lore = new java.util.ArrayList<>();
         lore.add(net.md_5.bungee.api.ChatColor.of("#B0B8C0") + ChatColor.stripColor(node.description()));
         if (!node.effects().isEmpty()) {
@@ -1766,7 +1778,7 @@ public final class FishingService {
             meta.setLore(lore);
             stack.setItemMeta(meta);
         }
-        return itemGenerator.itemToJson(stack);
+        return iconResolver.itemToJson(stack);
     }
 
     /**

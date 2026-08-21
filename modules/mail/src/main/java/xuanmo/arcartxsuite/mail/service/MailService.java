@@ -135,6 +135,7 @@ public final class MailService implements Listener {
     private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
+    private final xuanmo.arcartxsuite.api.icon.IconResolver iconResolver;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -175,7 +176,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null);
     }
 
     public MailService(
@@ -194,7 +195,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null);
     }
 
     public MailService(
@@ -230,7 +231,8 @@ public final class MailService implements Listener {
             messages,
             null,
             itemSourceRegistry,
-            vanillaItemNameBridge
+            vanillaItemNameBridge,
+            null
         );
     }
 
@@ -250,7 +252,8 @@ public final class MailService implements Listener {
         MessageProvider messages,
         Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
-        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
+        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -268,6 +271,7 @@ public final class MailService implements Listener {
         this.secondaryPasswordSupplier = secondaryPasswordSupplier;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.iconResolver = iconResolver;
     }
 
     private String message(String key, Object... args) {
@@ -1420,7 +1424,7 @@ public final class MailService implements Listener {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
         }
         exportBundledPresetIfMissing(directory);
-        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), itemSourceRegistry, vanillaItemNameBridge));
+        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), itemSourceRegistry, vanillaItemNameBridge, iconResolver));
     }
 
     private void syncPresetCdks() throws Exception {

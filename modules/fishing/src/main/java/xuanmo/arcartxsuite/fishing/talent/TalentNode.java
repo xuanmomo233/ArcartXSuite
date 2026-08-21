@@ -2,6 +2,8 @@ package xuanmo.arcartxsuite.fishing.talent;
 
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 天赋节点定义。
@@ -14,7 +16,7 @@ import org.jetbrains.annotations.NotNull;
  * @param description 描述
  * @param effects     效果列表（联动节点可能有多个效果）
  * @param prerequisites 前置节点 ID 列表
- * @param icon        节点图标物品 ID（空字符串时回退到 effectType 映射）
+ * @param icon        节点图标定义（null 时回退到 effectType 映射）
  */
 public record TalentNode(
     @NotNull String id,
@@ -25,7 +27,7 @@ public record TalentNode(
     @NotNull String description,
     @NotNull List<TalentEffect> effects,
     @NotNull List<String> prerequisites,
-    @NotNull String icon
+    @Nullable IconDefinition icon
 ) {
 
     /**

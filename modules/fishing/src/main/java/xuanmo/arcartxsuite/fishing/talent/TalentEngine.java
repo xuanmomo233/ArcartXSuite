@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 
 /**
@@ -18,7 +19,7 @@ public final class TalentEngine {
 
     private final Map<String, TalentNode> nodesById = new HashMap<>();
     private final Map<String, String> treeDisplayNames = new HashMap<>();
-    private final Map<String, String> treeIcons = new HashMap<>();
+    private final Map<String, IconDefinition> treeIcons = new HashMap<>();
     private final Map<String, TalentTreeDefinition> treesById = new HashMap<>();
     private final java.util.List<TalentNode> linkNodes = new java.util.ArrayList<>();
 
@@ -93,10 +94,10 @@ public final class TalentEngine {
      * 获取树图标。
      *
      * @param treeId 树 ID
-     * @return 图标物品 ID，不存在返回 "minecraft:stone"
+     * @return 图标定义，不存在返回 minecraft:stone 的 IconDefinition
      */
-    public @NotNull String treeIcon(@NotNull String treeId) {
-        return treeIcons.getOrDefault(treeId, "minecraft:stone");
+    public @NotNull IconDefinition treeIcon(@NotNull String treeId) {
+        return treeIcons.getOrDefault(treeId, IconDefinition.load("minecraft:stone"));
     }
 
     /**

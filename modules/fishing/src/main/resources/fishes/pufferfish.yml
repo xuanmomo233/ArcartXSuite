@@ -1,4 +1,4 @@
-# 鱼类定义：河豚
+﻿# 鱼类定义：河豚
 # 河豚是一种不常见的海洋鱼类，夏季午后出现，以突进式行为为主，难度中等
 # 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
 
@@ -17,7 +17,7 @@ time-ranges:                   # 可捕获时间段
     end: "16:00"               # 结束时间（16:00，午后时段）
 item:                          # 捕获后掉落的物品定义
   source: "minecraft"          # 物品来源（minecraft=原版物品）
-  item-id: "pufferfish"        # 原版物品ID（河豚）
+  id: "pufferfish"        # 原版物品ID（河豚）
   amount: 1                    # 物品数量
 difficulty: 55                 # 钓鱼难度（0-100，中等难度）
 behaviors:                     # 小游戏中鱼的行为模式及权重
@@ -63,7 +63,7 @@ drops:
   perfect_bonus:
     item:
       source: "minecraft"
-      item-id: "prismarine_shard"
+      id: "prismarine_shard"
       amount: 2
     weight: 1.0
     condition: "perfect"       # 完美捕获时掉落海晶碎片

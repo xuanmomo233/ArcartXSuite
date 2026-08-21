@@ -9,12 +9,19 @@
 #       material: <图标材质>
 #       name: "<显示名称>"
 #       amount: <图标显示数量>
-#     # type: item 时
+#     # type: item 时（item 字段使用与 icon 相同的 IconDefinition 结构）
 #     item:
 #       source: minecraft / mythic / neige / overture / mmoitems
 #       id: <物品ID>
 #       amount: <数量>
-#       nbt: ""
+#       name: "<物品显示名称>"           # 替代旧 nbt 中的 display.Name
+#       lore:                            # 物品描述（列表）
+#         - "<描述行1>"
+#       custom-model-data: <ID>          # 自定义模型数据
+#       glow: true                       # 附魔光效
+#       texture: "<贴图ID>"              # ArcartX 自定义贴图
+#       texture-url: "<URL>"             # 贴图 URL
+#       nbt: "<SNBT字符串>"              # 整段 SNBT（用于附魔等无结构化替代的场景）
 #     # type: currency 时
 #     currency:
 #       currency-id: <货币ID>
@@ -53,7 +60,7 @@ rewards:
       source: minecraft
       id: FISHING_ROD
       amount: 1
-      nbt: "{display:{Name:'{\"text\":\"§b精制钓竿\"}'}}"
+      name: "&b精制钓竿"
 
   fishing_level_15:
     level: 15

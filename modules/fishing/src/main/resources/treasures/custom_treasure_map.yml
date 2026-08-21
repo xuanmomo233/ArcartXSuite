@@ -1,6 +1,6 @@
-# 宝藏定义示例：JSON 物品 + ArcartX 自定义贴图
+﻿# 宝藏定义示例：JSON 物品 + ArcartX 自定义贴图
 # 演示如何使用原版 JSON 物品定义 + ArcartX 自定义贴图 URL。
-# 优先级：json > source+item-id > 原版 Material 回退。
+# 优先级：json > source+id > 原版 Material 回退。
 # 字段说明：
 #   json:        原版 JSON 物品定义（支持 NBT、附魔、显示名等，优先级最高）
 #   texture:     ArcartX 自定义贴图 NBT key（写入 "icon" tag，ArcartX 客户端渲染自定义图标）
@@ -11,7 +11,7 @@ id: "custom_treasure_map"
 display-name: "&e藏宝图"
 item:
   source: "minecraft"
-  item-id: "map"
+  id: "map"
   json: '{display:{Name:"{\"text\":\"藏宝图\",\"color\":\"gold\",\"italic\":false}"},Enchantments:[{id:"minecraft:unbreaking",lvl:1s}]}'
   texture-url: "https://example.com/textures/treasure_map.png"
   amount: 1

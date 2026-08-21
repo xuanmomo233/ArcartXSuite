@@ -1,13 +1,12 @@
 package xuanmo.arcartxsuite.fishing.reward;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 等级奖励配置加载器，从 {@code rewards.yml} 解析为奖励定义列表。
@@ -46,17 +45,11 @@ public final class RewardLoader {
     private static SeasonRewardDefinition parseReward(String id, ConfigurationSection section) {
         int level = section.getInt("level", 1);
         String type = section.getString("type", "item");
-        String iconMaterial = section.getString("icon.material", "STONE");
-        String iconName = section.getString("icon.name", "");
-        int iconAmount = section.getInt("icon.amount", 1);
+        IconDefinition icon = IconDefinition.load(section, "icon");
 
-        String itemSource = null, itemId = null, itemNbt = null;
-        int itemAmount = 0;
+        IconDefinition item = null;
         if ("item".equals(type)) {
-            itemSource = section.getString("item.source", "minecraft");
-            itemId = section.getString("item.id", "STONE");
-            itemAmount = section.getInt("item.amount", 1);
-            itemNbt = section.getString("item.nbt", "");
+            item = IconDefinition.load(section, "item");
         }
 
         String currencyId = null;
@@ -82,7 +75,7 @@ public final class RewardLoader {
             }
         }
 
-        return new SeasonRewardDefinition(id, level, type, iconMaterial, iconName, iconAmount,
-            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresets);
+        return new SeasonRewardDefinition(id, level, type, icon, item,
+            currencyId, currencyAmount, commands, mailPresets);
     }
 }

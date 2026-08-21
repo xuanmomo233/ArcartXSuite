@@ -65,25 +65,32 @@ filter:
   #   blacklist - 黑名单内的物品不显示
   #   whitelist - 只显示白名单内的物品
   mode: blacklist
-  # 材质黑名单（mode=blacklist 时，这些材质的掉落物不在面板中显示）
-  blacklist:
-    - DIRT
-    - COBBLESTONE
-    - GRAVEL
-    - SAND
-    - NETHERRACK
-    - COBBLED_DEEPSLATE
-  # 材质白名单（mode=whitelist 时，只有这些材质的掉落物才显示）
-  whitelist: []
-  # 物品名称黑名单正则（匹配的不显示，支持颜色代码去色后匹配）
-  name-blacklist-regex: []
-  # Lore 黑名单正则（物品 Lore 中任意一行去色后匹配到则不显示）
-  lore-blacklist-regex: []
-  # Lore 白名单正则（设置后，物品 Lore 中必须至少有一行匹配才显示；留空则不启用）
-  lore-whitelist-regex: []
+  # 材质黑名单（mode=blacklist 时，匹配到的掉落物不在面板中显示）
+  material-blacklist:
+    material-ids:
+      - DIRT
+      - COBBLESTONE
+      - GRAVEL
+      - SAND
+      - NETHERRACK
+      - COBBLED_DEEPSLATE
+  # 材质白名单（mode=whitelist 时，只有匹配到的掉落物才显示）
+  material-whitelist:
+    material-ids: []
+  # 名称黑名单（匹配到的不显示，支持正则）
+  name-blacklist:
+    name-regex: []
+  # Lore 黑名单（物品 Lore 中任意一行匹配到则不显示）
+  lore-blacklist:
+    lore-regex: []
+  # Lore 白名单（配置后，物品 Lore 中必须至少有一行匹配才显示；留空则不启用）
+  lore-whitelist:
+    lore-regex: []
   # NBT 键黑名单（物品 NBT 中包含指定键则不显示，支持嵌套路径如 "custom.trash"）
-  nbt-blacklist-keys: []
-  # NBT 键白名单（设置后，物品 NBT 中必须包含至少一个指定键才显示；留空则不启用）
-  nbt-whitelist-keys: []
+  nbt-blacklist:
+    nbt-keys: []
+  # NBT 键白名单（配置后，物品 NBT 中必须包含至少一个指定键才显示；留空则不启用）
+  nbt-whitelist:
+    nbt-keys: []
   # 最小堆叠数量（低于此数量的掉落物不显示）
   min-amount: 1

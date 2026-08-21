@@ -6,7 +6,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Logger;
-import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import java.util.function.Supplier;
@@ -14,12 +13,15 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 
 /**
  * 任务奖励预览解析器，将任务奖励配置解析为可展示的物品 JSON 与称号信息。
  * <p>
- * 支持原版物品、ItemSource 注册的第三方物品以及称号奖励的预览渲染。
+ * 通过 {@link IconResolver} 统一生成物品（原版材质 + 外部物品库），
+ * 支持称号奖励的预览渲染。
  */
 public final class QuestGpsRewardPreviewResolver {
 
@@ -29,6 +31,7 @@ public final class QuestGpsRewardPreviewResolver {
     private final Function<ItemStack, Optional<String>> itemJsonSerializer;
     private final ItemSourceRegistry itemSourceRegistry;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
+    private final IconResolver iconResolver;
 
     public QuestGpsRewardPreviewResolver(
         JavaPlugin plugin,
@@ -44,6 +47,7 @@ public final class QuestGpsRewardPreviewResolver {
         this.itemJsonSerializer = itemJsonSerializer == null ? item -> Optional.empty() : itemJsonSerializer;
         this.itemSourceRegistry = itemSourceRegistry;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.iconResolver = new IconResolver(null, itemSourceRegistry);
     }
 
     public List<ResolvedRewardPreview> resolve(
@@ -73,35 +77,35 @@ public final class QuestGpsRewardPreviewResolver {
             case "neigeitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateItem("neige", definition.neigeItemId(), definition.amount(), null, null),
+                generateIcon("neige", definition.neigeItemId(), definition),
                 definition,
                 definition.neigeItemId()
             );
             case "mythicmobs", "mythicitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateItem("mythic", definition.mythicItemId(), definition.amount(), null, null),
+                generateIcon("mythic", definition.mythicItemId(), definition),
                 definition,
                 definition.mythicItemId()
             );
             case "overture" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateItem("overture", definition.overtureItemId(), definition.amount(), null, null),
+                generateIcon("overture", definition.overtureItemId(), definition),
                 definition,
                 definition.overtureItemId()
             );
             case "mmoitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateItem("mmoitems", definition.mmoItemType() + ";" + definition.mmoItemId(), definition.amount(), null, null),
+                generateIcon("mmoitems", definition.mmoItemType() + ";" + definition.mmoItemId(), definition),
                 definition,
                 definition.mmoItemType() + ":" + definition.mmoItemId()
             );
             case "material", "itemstack" -> resolveItem(
                 rewardId,
                 type,
-                buildMaterialItem(definition.material(), definition.amount(), definition.displayName(), definition.lore()),
+                generateMaterial(definition.material(), definition),
                 definition,
                 definition.material()
             );
@@ -119,6 +123,36 @@ public final class QuestGpsRewardPreviewResolver {
         };
     }
 
+    /**
+     * 通过 {@link IconResolver} 生成外部物品库物品。
+     */
+    private ItemStack generateIcon(String source, String sourceId,
+                                   QuestGpsModuleConfiguration.RewardPreviewDefinition definition) {
+        if (sourceId == null || sourceId.isBlank()) return null;
+        IconDefinition icon = new IconDefinition(
+            "", Math.max(1, definition.amount()), "", List.of(), 0,
+            source, sourceId, "", "", "",
+            "", "", java.util.Map.of(), "", false, "", ""
+        );
+        return iconResolver.resolveItemStack(null, icon);
+    }
+
+    /**
+     * 通过 {@link IconResolver} 生成原版材质物品（含 displayName/lore）。
+     */
+    private ItemStack generateMaterial(String materialId,
+                                       QuestGpsModuleConfiguration.RewardPreviewDefinition definition) {
+        if (materialId == null || materialId.isBlank()) return null;
+        IconDefinition icon = new IconDefinition(
+            materialId, Math.max(1, definition.amount()),
+            blankTo(definition.displayName(), ""),
+            definition.lore() != null ? definition.lore() : List.of(),
+            0, "", "", "", "", "",
+            "", "", java.util.Map.of(), "", false, "", ""
+        );
+        return iconResolver.resolveItemStack(null, icon);
+    }
+
     private ResolvedRewardPreview resolveItem(
         String rewardId,
         String type,
@@ -128,7 +162,7 @@ public final class QuestGpsRewardPreviewResolver {
     ) {
         ItemStack resolved = itemStack;
         if (resolved == null) {
-            resolved = buildMaterialItem(definition.fallbackMaterial(), definition.amount(), definition.displayName(), definition.lore());
+            resolved = generateMaterial(definition.fallbackMaterial(), definition);
         }
         if (resolved != null && !resolved.getType().isAir()) {
             return fromItemStack(rewardId, type, resolved, definition.displayName(), definition.text());
@@ -192,30 +226,6 @@ public final class QuestGpsRewardPreviewResolver {
             resolveItemName(itemStack),
             Math.max(1, itemStack.getAmount())
         );
-    }
-
-    private ItemStack buildMaterialItem(
-        String materialId,
-        int amount,
-        String displayName,
-        List<String> lore
-    ) {
-        Material material = materialId == null || materialId.isBlank() ? null : Material.matchMaterial(materialId.trim(), true);
-        if (material == null || material.isAir()) {
-            return null;
-        }
-        ItemStack itemStack = new ItemStack(material, Math.max(1, amount));
-        ItemMeta itemMeta = itemStack.getItemMeta();
-        if (itemMeta != null) {
-            if (displayName != null && !displayName.isBlank()) {
-                itemMeta.setDisplayName(displayName);
-            }
-            if (lore != null && !lore.isEmpty()) {
-                itemMeta.setLore(lore);
-            }
-            itemStack.setItemMeta(itemMeta);
-        }
-        return itemStack;
     }
 
     private String resolveItemName(ItemStack itemStack) {

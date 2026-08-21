@@ -16,6 +16,8 @@ import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
@@ -31,6 +33,7 @@ public final class RewardDispatcher {
 
     private final PendingRewardService pendingRewardService;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final IconResolver iconResolver;
     private final Supplier<CurrencyBridgeAPI> currencyProvider;
     private final Supplier<MailDispatchable> mailProvider;
     private final ItemRewardDispatcher itemRewardDispatcher;
@@ -39,6 +42,7 @@ public final class RewardDispatcher {
 
     public RewardDispatcher(@NotNull PendingRewardService pendingRewardService,
                             @NotNull ItemSourceRegistry itemSourceRegistry,
+                            @NotNull IconResolver iconResolver,
                             @Nullable Supplier<CurrencyBridgeAPI> currencyProvider,
                             @Nullable Supplier<MailDispatchable> mailProvider,
                             @NotNull ItemRewardDispatcher itemRewardDispatcher,
@@ -46,6 +50,7 @@ public final class RewardDispatcher {
                             @NotNull String seasonId) {
         this.pendingRewardService = pendingRewardService;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.iconResolver = iconResolver;
         this.currencyProvider = currencyProvider;
         this.mailProvider = mailProvider;
         this.itemRewardDispatcher = itemRewardDispatcher;
@@ -102,7 +107,11 @@ public final class RewardDispatcher {
             case CURRENCY -> dispatchCurrency(player, reward);
             case ITEM -> dispatchItem(player, reward);
             case COMMAND -> dispatchCommand(player, reward);
-            case MAIL -> dispatchViaMail(player, reward, reward.iconName());
+            case MAIL -> {
+                String description = reward.icon() != null && reward.icon().name() != null && !reward.icon().name().isBlank()
+                    ? reward.icon().name() : reward.rewardId();
+                dispatchViaMail(player, reward, description);
+            }
         }
     }
 
@@ -120,10 +129,8 @@ public final class RewardDispatcher {
     }
 
     private void dispatchItem(@NotNull Player player, @NotNull SeasonRewardDefinition reward) {
-        if (reward.id() == null) return;
-        String source = reward.source() != null ? reward.source() : "minecraft";
-        ItemStack item = itemSourceRegistry.generateItem(
-            source, reward.id(), reward.amount(), reward.nbt(), player);
+        if (reward.item() == null) return;
+        ItemStack item = iconResolver.resolveItemStack(player, reward.item());
         if (item == null) return;
         ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("fishing")
             .sourceDetail("season:" + seasonId)
@@ -243,10 +250,17 @@ public final class RewardDispatcher {
         SeasonRewardDefinition.Type type = SeasonRewardDefinition.Type.fromKey(reward.type());
         switch (type) {
             case ITEM -> {
-                String source = reward.source() != null ? reward.source() : "minecraft";
-                String itemId = reward.id() != null ? reward.id() : "";
-                pendingRewardService.savePending(PendingRewardService.PendingReward.item(
-                    uuid, "fishing", source, itemId, reward.amount(), reward.nbt(), description));
+                if (reward.item() != null) {
+                    IconDefinition itemDef = reward.item();
+                    String source = itemDef.source() != null && !itemDef.source().isBlank()
+                        ? itemDef.source() : "minecraft";
+                    String itemId = itemDef.sourceId() != null && !itemDef.sourceId().isBlank()
+                        ? itemDef.sourceId() : (itemDef.material() != null ? itemDef.material() : "");
+                    int amount = itemDef.amount();
+                    String nbt = itemDef.nbtString() != null ? itemDef.nbtString() : "";
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.item(
+                        uuid, "fishing", source, itemId, amount, nbt, description));
+                }
             }
             case CURRENCY -> {
                 if (reward.currencyId() != null) {

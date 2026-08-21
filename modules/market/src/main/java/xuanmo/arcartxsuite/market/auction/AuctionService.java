@@ -27,6 +27,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.AuctionConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.storage.AuctionHistory;
@@ -57,6 +58,7 @@ public class AuctionService {
     private final Logger logger;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
+    private final ItemMatcherAPI itemMatcher;
     private BukkitTask schedulerTask;
 
     public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
@@ -65,7 +67,8 @@ public class AuctionService {
                           CurrencyBridgeAPI currencyManager,
                           AuctionItemSerializer itemSerializer, Logger logger,
                           xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
-                          xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher) {
+                          xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
+                          ItemMatcherAPI itemMatcher) {
         this.plugin = plugin;
         this.config = config;
         this.messages = messages;
@@ -77,6 +80,7 @@ public class AuctionService {
         this.logger = logger;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.itemRewardDispatcher = itemRewardDispatcher;
+        this.itemMatcher = itemMatcher;
     }
 
     public void start(long intervalTicks) {
@@ -696,22 +700,8 @@ public class AuctionService {
 
     private boolean isBlacklisted(ItemStack item) {
         if (item == null) return true;
-        String materialName = item.getType().name();
-        if (config.blacklist().materialIds().contains(materialName)) return true;
-
-        String displayName = getItemDisplayName(item);
-        for (String keyword : config.blacklist().nameContains()) {
-            if (displayName.contains(keyword)) return true;
-        }
-
-        if (item.hasItemMeta() && item.getItemMeta().hasLore()) {
-            String lore = String.join(" ", item.getItemMeta().getLore());
-            for (String keyword : config.blacklist().loreContains()) {
-                if (lore.contains(keyword)) return true;
-            }
-        }
-
-        return false;
+        if (itemMatcher == null) return false;
+        return itemMatcher.matches(config.blacklist(), item);
     }
 
     private String classifyItem(ItemStack item) {

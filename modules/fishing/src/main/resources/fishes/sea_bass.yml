@@ -1,4 +1,4 @@
-# 鱼类定义：海鲈鱼
+﻿# 鱼类定义：海鲈鱼
 # 海鲈鱼是一种常见鱼类，全年可捕获，出现在海洋和河流中，白天活跃，难度最低
 # 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
 
@@ -17,7 +17,7 @@ time-ranges:                   # 可捕获时间段
     end: "20:00"               # 结束时间（20:00，夜间前，白天时段）
 item:                          # 捕获后掉落的物品定义
   source: "minecraft"          # 物品来源（minecraft=原版物品）
-  item-id: "cod"               # 原版物品ID（鳕鱼）
+  id: "cod"               # 原版物品ID（鳕鱼）
   amount: 1                    # 物品数量
 difficulty: 30                 # 钓鱼难度（0-100，最低难度，适合新手）
 behaviors:                     # 小游戏中鱼的行为模式及权重
@@ -40,7 +40,7 @@ drops:
   first_catch_bonus:
     item:
       source: "minecraft"
-      item-id: "bread"
+      id: "bread"
       amount: 3
     weight: 1.0
     condition: "first_catch"   # 首次捕获时额外给面包

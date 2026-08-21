@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.fishing.model;
 
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 鱼饵定义，描述一种鱼饵的展示与属性修正。
@@ -19,7 +20,7 @@ import org.jetbrains.annotations.NotNull;
 public record BaitDefinition(
     @NotNull String id,
     @NotNull String displayName,
-    @NotNull FishingItemRef itemRef,
+    @NotNull IconDefinition itemRef,
     boolean isDefault,
     @NotNull Map<String, Double> fishAttractModifiers,
     double treasureChanceBoost,

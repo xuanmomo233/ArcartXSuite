@@ -173,7 +173,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             currencyManager, crossServer, messages(),
             () -> getCapability(SecondaryPasswordAccess.class),
             itemSourceRegistry,
-            vanillaItemNameBridge
+            vanillaItemNameBridge,
+            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry)
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());

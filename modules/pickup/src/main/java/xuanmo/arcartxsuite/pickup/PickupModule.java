@@ -107,7 +107,7 @@ public final class PickupModule extends AbstractAXSModule {
             throw new IllegalStateException("ArcartXPickup.yml 配置文件缺失");
         }
         configuration = PickupModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile));
+            YamlConfiguration.loadConfiguration(configFile), logger);
     }
 
     @Override
@@ -185,6 +185,7 @@ public final class PickupModule extends AbstractAXSModule {
 
         scannerService = new LootScannerService(
             plugin, logger, configuration, packetGuard, packetBridge, itemStackBridge, vanillaItemNameBridge,
+            itemMatcher,
             uiBinding.runtimeUiId(), interactBinding.runtimeUiId(),
             () -> getCapability(WarehouseAutoDepositable.class),
             messages()

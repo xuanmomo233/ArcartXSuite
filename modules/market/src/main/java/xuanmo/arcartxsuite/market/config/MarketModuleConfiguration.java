@@ -10,6 +10,8 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
+import xuanmo.arcartxsuite.api.item.ItemMatcher;
+import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
 /**
  * Market 模块配置记录，聚合 UI、存储、Redis、跨服、拍卖、商店、回收、消息等子配置。
@@ -101,18 +103,8 @@ public record MarketModuleConfiguration(
             }
         }
 
-        List<String> blacklistNameContains = sec.getStringList("blacklist.name-contains");
-        List<String> blacklistLoreContains = sec.getStringList("blacklist.lore-contains");
-        List<String> blacklistMaterialIds = sec.getStringList("blacklist.material-ids");
-        List<String> blacklistMythicIds = sec.getStringList("blacklist.mythic-item-ids");
-        List<String> blacklistNeigeIds = sec.getStringList("blacklist.neige-item-ids");
-        List<String> blacklistNameRegex = sec.getStringList("blacklist.name-regex");
-        List<String> blacklistLoreRegex = sec.getStringList("blacklist.lore-regex");
-
-        AuctionBlacklist blacklist = new AuctionBlacklist(
-            blacklistMaterialIds, blacklistMythicIds, blacklistNeigeIds,
-            blacklistNameContains, blacklistLoreContains, blacklistNameRegex, blacklistLoreRegex
-        );
+        ItemMatcher blacklist = ItemMatcherLoader.load(
+            sec.getConfigurationSection("blacklist"), logger, "auction.blacklist");
 
         List<CurrencyOption> currencies = new ArrayList<>();
         for (Map<?, ?> raw : sec.getMapList("currencies")) {
@@ -326,7 +318,7 @@ public record MarketModuleConfiguration(
         double transactionTaxRate, String transactionTaxCurrency,
         Map<String, Double> taxDiscount,
         String expiredReturnMethod, String outbidNotify,
-        AuctionBlacklist blacklist,
+        ItemMatcher blacklist,
         Map<String, CategoryDefinition> categories
     ) {
         public static AuctionConfiguration defaults() {
@@ -336,18 +328,8 @@ public record MarketModuleConfiguration(
                 3600L, 604800L, 86400L, 10, 0.05, 10.0,
                 0.0, "money", 0.05, "money",
                 Map.of(), "mail", "chat",
-                AuctionBlacklist.empty(), Map.of()
+                ItemMatcher.empty(), Map.of()
             );
-        }
-    }
-
-    public record AuctionBlacklist(
-        List<String> materialIds, List<String> mythicItemIds, List<String> neigeItemIds,
-        List<String> nameContains, List<String> loreContains,
-        List<String> nameRegex, List<String> loreRegex
-    ) {
-        public static AuctionBlacklist empty() {
-            return new AuctionBlacklist(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
     }
 

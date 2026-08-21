@@ -88,7 +88,8 @@ public final class BattlePassService {
         @Nullable CurrencyBridgeAPI currencyManager,
         @Nullable java.util.function.Supplier<MailDispatchable> mailProvider,
         @Nullable xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
-        xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService
+        xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService,
+        @Nullable xuanmo.arcartxsuite.api.icon.IconResolver iconResolver
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -96,6 +97,7 @@ public final class BattlePassService {
         this.logger = logger;
         this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager, mailProvider);
         this.rewardDispatcher.setItemRewardDispatcher(itemRewardDispatcher);
+        this.rewardDispatcher.setItemResolver(iconResolver);
         Map<String, BattlePassTask> taskIndex = new HashMap<>();
         for (BattlePassTask task : configuration.tasks().all()) {
             taskIndex.putIfAbsent(task.taskId(), task);

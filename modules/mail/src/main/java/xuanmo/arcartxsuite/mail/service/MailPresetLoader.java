@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -20,6 +19,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
@@ -33,13 +34,14 @@ public final class MailPresetLoader {
     }
 
     public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments) throws IOException {
-        return loadPresets(directory, logger, maxAttachments, null, null);
+        return loadPresets(directory, logger, maxAttachments, null, null, null);
     }
 
     /** 加载预设；传入桥接时物品附件的默认描述使用中文名，传入物品来源注册表时支持外部物品库。 */
     public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments,
             @Nullable ItemSourceRegistry itemSourceRegistry,
-            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) throws IOException {
+            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
+            @Nullable IconResolver iconResolver) throws IOException {
         Map<String, MailPresetDefinition> result = new LinkedHashMap<>();
         File[] files = directory.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
         if (files == null) {
@@ -58,7 +60,7 @@ public final class MailPresetLoader {
             String subject = string(presetSection.getString("subject", displayName));
             String body = string(presetSection.getString("body", ""));
             Duration expiresAfter = Duration.ofDays(Math.max(1, presetSection.getLong("expires-after-days", 15L)));
-            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id, itemSourceRegistry, vanillaItemNameBridge);
+            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id, itemSourceRegistry, vanillaItemNameBridge, iconResolver);
             List<String> claimCommands = presetSection.getStringList("claim-commands");
             List<ScriptCondition> claimConditions = new ArrayList<>(
                 ScriptConditionsLoader.loadClaimConditions(presetSection)
@@ -101,7 +103,8 @@ public final class MailPresetLoader {
 
     private static List<MailAttachment> loadAttachments(ConfigurationSection presetSection, Logger logger, int maxAttachments, String presetId,
             @Nullable ItemSourceRegistry itemSourceRegistry,
-            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
+            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
+            @Nullable IconResolver iconResolver) {
         java.util.ArrayList<MailAttachment> attachments = new java.util.ArrayList<>();
 
         for (Map<?, ?> rawCurrency : presetSection.getMapList("currency-attachments")) {
@@ -137,7 +140,7 @@ public final class MailPresetLoader {
                 continue;
             }
             int amount = Math.max(1, parseInt(mapString(rawItem, "amount", "1"), 1));
-            ItemStack itemStack = generateItemStack(source, itemId, amount, rawItem, itemSourceRegistry, logger, presetId);
+            ItemStack itemStack = generateItemStack(source, itemId, amount, rawItem, itemSourceRegistry, iconResolver, logger, presetId);
             if (itemStack == null) {
                 continue;
             }
@@ -161,64 +164,76 @@ public final class MailPresetLoader {
     }
 
     /**
-     * 根据 source + id 生成物品堆；支持 minecraft / mythic / neige / overture / mmoitems 来源。
-     * 物品库桥接不可用时返回 null 并打印警告。
+     * 根据 source + id + 附加属性生成物品堆；通过 {@link IconResolver} 统一生成，
+     * 支持 minecraft / mythic / neige / overture / mmoitems 来源以及 name/lore/nbt/customModelData 等属性。
+     * IconResolver 不可用时回退到 ItemSourceRegistry 直接生成。
      */
     @Nullable
     private static ItemStack generateItemStack(String source, String itemId, int amount, Map<?, ?> rawItem,
-            @Nullable ItemSourceRegistry itemSourceRegistry, Logger logger, String presetId) {
+            @Nullable ItemSourceRegistry itemSourceRegistry,
+            @Nullable IconResolver iconResolver, Logger logger, String presetId) {
         try {
-            ItemStack item = switch (source) {
-                case "minecraft" -> {
-                    Material material = Material.matchMaterial(itemId, true);
-                    if (material == null || material.isAir()) {
-                        logger.warning("邮件预设 '" + presetId + "' 包含非法 minecraft 物品 id: " + itemId + "，已跳过。");
-                        yield null;
-                    }
-                    ItemStack base = new ItemStack(material, amount);
-                    ItemMeta itemMeta = base.getItemMeta();
-                    if (itemMeta != null) {
-                        Object rawName = rawItem.get("name");
-                        if (rawName != null) {
-                            itemMeta.setDisplayName(String.valueOf(rawName));
-                        }
-                        Object rawLore = rawItem.get("lore");
-                        if (rawLore instanceof List<?> loreList && !loreList.isEmpty()) {
-                            itemMeta.setLore(loreList.stream().map(String::valueOf).toList());
-                        }
-                        base.setItemMeta(itemMeta);
-                    }
-                    yield applyItemNbt(base, mapString(rawItem, "nbt", ""));
+            // 优先使用 IconResolver（支持全部 IconDefinition 属性）
+            if (iconResolver != null) {
+                IconDefinition icon = iconFromMap(source, itemId, amount, rawItem);
+                if (icon != null && icon.hasIcon()) {
+                    return iconResolver.resolveItemStack(null, icon);
                 }
-                // 外部物品源统一通过 ItemSourceRegistry.generateItem 生成（player 传 null，预设加载时无玩家上下文）
-                case "mythic", "mythicmobs", "neige", "neigeitems", "overture", "mmoitems", "mmo" -> {
-                    if (itemSourceRegistry == null) {
-                        logger.warning("邮件预设 '" + presetId + "' 的物品附件 source=" + source + " 但 ItemSourceRegistry 不可用，已跳过: " + itemId);
-                        yield null;
-                    }
-                    yield itemSourceRegistry.generateItem(source, itemId, amount, null, null);
-                }
-                default -> {
-                    logger.warning("邮件预设 '" + presetId + "' 的物品附件包含未知 source: " + source + "，已跳过。");
-                    yield null;
-                }
-            };
-            return item;
+            }
+            // 回退：外部物品源直接通过 ItemSourceRegistry 生成
+            if (itemSourceRegistry != null) {
+                ItemStack item = itemSourceRegistry.generateItem(source, itemId, amount, null, null);
+                if (item != null) return item;
+            }
+            // 回退：原版材质
+            Material material = Material.matchMaterial(itemId, true);
+            if (material != null && !material.isAir()) {
+                return new ItemStack(material, amount);
+            }
+            logger.warning("邮件预设 '" + presetId + "' 的物品附件无法生成: " + source + ":" + itemId);
+            return null;
         } catch (Exception exception) {
             logger.warning("邮件预设 '" + presetId + "' 的物品附件生成异常: " + source + ":" + itemId + " | " + exception.getMessage());
             return null;
         }
     }
 
-    /** 应用原版物品的自定义 NBT（SNBT 字符串）。 */
+    /**
+     * 从 Map 构造 {@link IconDefinition}，字段与 {@link IconDefinition#load(ConfigurationSection)} 兼容。
+     */
     @Nullable
-    private static ItemStack applyItemNbt(@Nullable ItemStack item, String nbt) {
-        if (item == null || nbt == null || nbt.isBlank()) return item;
-        try {
-            return Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
-        } catch (Exception ignored) {
-            return item;
+    private static IconDefinition iconFromMap(String source, String itemId, int amount, Map<?, ?> rawItem) {
+        String name = mapString(rawItem, "name", "");
+        int customModelData = rawItem.get("custom-model-data") instanceof Number cmd ? cmd.intValue()
+            : rawItem.get("customModelData") instanceof Number cmd2 ? cmd2.intValue() : 0;
+        List<String> lore = new ArrayList<>();
+        Object rawLore = rawItem.get("lore");
+        if (rawLore instanceof List<?> loreList) {
+            for (Object line : loreList) {
+                lore.add(String.valueOf(line));
+            }
         }
+        // nbt 如果是 Map（配置节），解析为键值对；如果是字符串，作为 nbtString（SNBT）
+        java.util.Map<String, String> nbt = new LinkedHashMap<>();
+        String nbtString = "";
+        Object rawNbt = rawItem.get("nbt");
+        if (rawNbt instanceof Map<?, ?> nbtMap) {
+            for (Map.Entry<?, ?> entry : nbtMap.entrySet()) {
+                nbt.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+            }
+        } else if (rawNbt instanceof String s) {
+            nbtString = s;
+        }
+        // mmoitems 支持 mmo-type/mmo-id 分离配置
+        String mmoType = mapString(rawItem, "mmo-type", "");
+        String mmoId = mapString(rawItem, "mmo-id", "");
+        IconDefinition icon = new IconDefinition(
+            "minecraft".equals(source) ? itemId : "",  // material（原版源时 itemId 即材质名）
+            amount, name, lore, customModelData,
+            source, itemId, mmoType, mmoId, "",
+            "", "", nbt, nbtString, false, "", ""
+        );
+        return icon.hasIcon() ? icon : null;
     }
 
     /**

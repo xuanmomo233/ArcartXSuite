@@ -1,4 +1,4 @@
-# 宝藏定义：失落戒指
+﻿# 宝藏定义：失落戒指
 # 失落戒指是一种较常见的宝藏，钓到后掉落铁锭，出现概率中等
 # 宝藏文件位于 treasures/ 目录，每个文件定义一种宝藏
 
@@ -6,6 +6,6 @@ id: "lost_ring"                # 宝藏唯一标识符
 display-name: "失落戒指"        # 显示名称
 item:                          # 宝藏对应的物品定义
   source: "minecraft"          # 物品来源（minecraft=原版物品）
-  item-id: "iron_ingot"        # 原版物品ID（铁锭）
+  id: "iron_ingot"        # 原版物品ID（铁锭）
   amount: 1                    # 物品数量
 chance: 0.2                    # 该宝藏在宝藏池中的出现概率（20%）

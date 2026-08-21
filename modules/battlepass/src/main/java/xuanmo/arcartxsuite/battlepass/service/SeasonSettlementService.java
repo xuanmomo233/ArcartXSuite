@@ -18,7 +18,6 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
-import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.SeasonSettlementReward;
@@ -249,10 +248,16 @@ public final class SeasonSettlementService {
         switch (type) {
             case "item" -> {
                 if (reward.item() != null) {
+                    xuanmo.arcartxsuite.api.icon.IconDefinition itemDef = reward.item();
+                    String source = itemDef.source() != null && !itemDef.source().isBlank()
+                        ? itemDef.source() : "minecraft";
+                    String itemId = itemDef.sourceId() != null && !itemDef.sourceId().isBlank()
+                        ? itemDef.sourceId() : (itemDef.material() != null ? itemDef.material() : "");
+                    String nbt = itemDef.nbtString() != null ? itemDef.nbtString() : "";
                     pendingRewardService.savePending(PendingRewardService.PendingReward.item(
                         uuid, "battlepass",
-                        reward.item().source(), reward.item().id(),
-                        reward.item().amount(), reward.item().nbt(),
+                        source, itemId,
+                        itemDef.amount(), nbt,
                         description));
                 }
             }

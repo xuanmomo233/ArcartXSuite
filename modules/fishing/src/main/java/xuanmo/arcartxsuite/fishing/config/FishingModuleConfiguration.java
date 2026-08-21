@@ -22,10 +22,10 @@ import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
-import xuanmo.arcartxsuite.fishing.model.FishingItemRef;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
@@ -164,7 +164,7 @@ public record FishingModuleConfiguration(
             timeRanges.add(new FishDefinition.TimeRange("06:00", "20:00"));
         }
 
-        FishingItemRef itemRef = parseItemRef(section, "item", "minecraft:cod");
+        IconDefinition itemRef = parseIcon(section, "item", "minecraft:cod");
         int difficulty = section.getInt("difficulty", 30);
 
         List<FishDefinition.BehaviorEntry> behaviors = parseBehaviors(section);
@@ -229,8 +229,8 @@ public record FishingModuleConfiguration(
             for (String dropKey : dropsSection.getKeys(false)) {
                 ConfigurationSection drop = dropsSection.getConfigurationSection(dropKey);
                 if (drop != null) {
-                    FishingItemRef dropItem = parseItemRef(drop, "item", "minecraft:air");
-                    if (!dropItem.isEmpty()) {
+                    IconDefinition dropItem = parseIcon(drop, "item", "minecraft:air");
+                    if (dropItem != null && dropItem.hasIcon()) {
                         double weight = drop.getDouble("weight", 1.0);
                         String condition = drop.getString("condition", "");
                         drops.add(new FishDefinition.DropEntry(dropItem, weight, condition));
@@ -358,7 +358,7 @@ public record FishingModuleConfiguration(
                     result.add(new TreasureDefinition(
                         section.getString("id", p.getFileName().toString().replace(".yml", "")),
                         section.getString("display-name", ""),
-                        parseItemRef(section, "item", "minecraft:stick"),
+                        parseIcon(section, "item", "minecraft:stick"),
                         section.getDouble("chance", 0.1)
                     ));
                 } catch (Exception e) {
@@ -393,7 +393,7 @@ public record FishingModuleConfiguration(
                     result.add(new BaitDefinition(
                         id,
                         section.getString("display-name", id),
-                        parseItemRef(section, "item", "minecraft:string"),
+                        parseIcon(section, "item", "minecraft:string"),
                         section.getBoolean("default", false),
                         Collections.unmodifiableMap(modifiers),
                         section.getDouble("treasure-chance-boost", 0.0),
@@ -438,30 +438,16 @@ public record FishingModuleConfiguration(
         return result;
     }
 
-    // ─── 通用物品引用解析 ──────────────────────────────────────
+    // ─── 通用图标解析 ──────────────────────────────────────
 
-    private static @NotNull FishingItemRef parseItemRef(@NotNull ConfigurationSection section,
-                                                         @NotNull String key,
-                                                         @NotNull String defaultMaterial) {
-        ConfigurationSection itemSection = section.getConfigurationSection(key);
-        if (itemSection == null) {
-            // 简单字符串格式: item: "minecraft:xxx"
-            String raw = section.getString(key, "");
-            if (!raw.isEmpty()) {
-                return FishingItemRef.fromMaterial(raw, 1);
-            }
-            return FishingItemRef.fromMaterial(defaultMaterial, 1);
+    private static @NotNull IconDefinition parseIcon(@NotNull ConfigurationSection section,
+                                                      @NotNull String key,
+                                                      @NotNull String defaultMaterial) {
+        IconDefinition icon = IconDefinition.load(section, key);
+        if (icon != null && icon.hasIcon()) {
+            return icon;
         }
-        return new FishingItemRef(
-            itemSection.getString("source", "minecraft"),
-            itemSection.getString("item-id", ""),
-            itemSection.getString("mmo-type", ""),
-            itemSection.getString("mmo-id", ""),
-            itemSection.getString("json", ""),
-            itemSection.getString("texture", ""),
-            itemSection.getString("texture-url", ""),
-            Math.max(1, itemSection.getInt("amount", 1))
-        );
+        return IconDefinition.load(defaultMaterial);
     }
 
     // ─── 水域解析 ─────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# AXS 钓鱼天赋树配置
+﻿# AXS 钓鱼天赋树配置
 # 每棵树 5 级（T1→T2二选一→T3→T4二选一→T5），8 个跨树联动天赋。
 # 每 3 级获得 1 点天赋点，100 级 = 33 点。
 # 满天赋加成约 4-5%，给称号和后续玩法留足空间。
@@ -40,7 +40,10 @@ trees:
   steady:
     display-name: "&a稳健"
     description: "提升绿色目标条的稳定性与高度"
-    icon: "minecraft:iron_bars"
+    icon:
+      source: minecraft
+      id: iron_bars
+      amount: 1
     nodes:
       - id: steady-t1
         tier: 1
@@ -49,7 +52,10 @@ trees:
         description: "绿条高度 +1px"
         effect-type: bar_height
         effect-value: 1.0
-        icon: "minecraft:iron_ingot"
+        icon:
+          source: minecraft
+          id: iron_ingot
+          amount: 1
         prerequisites: []
       - id: steady-t2a
         tier: 2
@@ -58,7 +64,10 @@ trees:
         description: "绿条高度 +1px"
         effect-type: bar_height
         effect-value: 1.0
-        icon: "minecraft:iron_ingot"
+        icon:
+          source: minecraft
+          id: iron_ingot
+          amount: 1
         prerequisites: [steady-t1]
       - id: steady-t2b
         tier: 2
@@ -67,7 +76,10 @@ trees:
         description: "绿条阻尼 +2%"
         effect-type: bar_damping
         effect-value: 0.02
-        icon: "minecraft:slime_ball"
+        icon:
+          source: minecraft
+          id: slime_ball
+          amount: 1
         prerequisites: [steady-t1]
       - id: steady-t3a
         tier: 3
@@ -76,7 +88,10 @@ trees:
         description: "绿条高度 +1px"
         effect-type: bar_height
         effect-value: 1.0
-        icon: "minecraft:iron_ingot"
+        icon:
+          source: minecraft
+          id: iron_ingot
+          amount: 1
         prerequisites: [steady-t2a]
       - id: steady-t3b
         tier: 3
@@ -85,7 +100,10 @@ trees:
         description: "绿条反弹 -3%"
         effect-type: bar_bounce
         effect-value: 0.03
-        icon: "minecraft:rabbit_foot"
+        icon:
+          source: minecraft
+          id: rabbit_foot
+          amount: 1
         prerequisites: [steady-t2b]
       - id: steady-t4a
         tier: 4
@@ -94,7 +112,10 @@ trees:
         description: "绿条力系数 +1.5%"
         effect-type: bar_force
         effect-value: 0.015
-        icon: "minecraft:anvil"
+        icon:
+          source: minecraft
+          id: anvil
+          amount: 1
         prerequisites: [steady-t3a]
       - id: steady-t4b
         tier: 4
@@ -103,7 +124,10 @@ trees:
         description: "绿条高度 +1px"
         effect-type: bar_height
         effect-value: 1.0
-        icon: "minecraft:iron_block"
+        icon:
+          source: minecraft
+          id: iron_block
+          amount: 1
         prerequisites: [steady-t3a]
       - id: steady-t4c
         tier: 4
@@ -112,7 +136,10 @@ trees:
         description: "绿条阻尼 +1.5%"
         effect-type: bar_damping
         effect-value: 0.015
-        icon: "minecraft:slime_block"
+        icon:
+          source: minecraft
+          id: slime_block
+          amount: 1
         prerequisites: [steady-t3b]
       - id: steady-t4d
         tier: 4
@@ -121,7 +148,10 @@ trees:
         description: "绿条反弹 -2%"
         effect-type: bar_bounce
         effect-value: 0.02
-        icon: "minecraft:rabbit_hide"
+        icon:
+          source: minecraft
+          id: rabbit_hide
+          amount: 1
         prerequisites: [steady-t3b]
       - id: steady-t5a
         tier: 5
@@ -130,7 +160,10 @@ trees:
         description: "绿条力系数 +0.75%"
         effect-type: bar_force
         effect-value: 0.0075
-        icon: "minecraft:anvil"
+        icon:
+          source: minecraft
+          id: anvil
+          amount: 1
         prerequisites: [steady-t4a]
       - id: steady-t5b
         tier: 5
@@ -139,7 +172,10 @@ trees:
         description: "绿条高度 +0.5px"
         effect-type: bar_height
         effect-value: 0.5
-        icon: "minecraft:iron_block"
+        icon:
+          source: minecraft
+          id: iron_block
+          amount: 1
         prerequisites: [steady-t4b]
       - id: steady-t5c
         tier: 5
@@ -148,7 +184,10 @@ trees:
         description: "绿条阻尼 +0.75%"
         effect-type: bar_damping
         effect-value: 0.0075
-        icon: "minecraft:slime_block"
+        icon:
+          source: minecraft
+          id: slime_block
+          amount: 1
         prerequisites: [steady-t4c]
       - id: steady-t5d
         tier: 5
@@ -157,14 +196,20 @@ trees:
         description: "绿条反弹 -1%"
         effect-type: bar_bounce
         effect-value: 0.01
-        icon: "minecraft:rabbit_hide"
+        icon:
+          source: minecraft
+          id: rabbit_hide
+          amount: 1
         prerequisites: [steady-t4d]
 
   # ─── 树2：迅捷（鱼速度） ──────────────────────────────────
   swift:
     display-name: "&b迅捷"
     description: "降低鱼的速度与活跃度"
-    icon: "minecraft:feather"
+    icon:
+      source: minecraft
+      id: feather
+      amount: 1
     nodes:
       - id: swift-t1
         tier: 1
@@ -173,7 +218,10 @@ trees:
         description: "鱼速度 -0.5%"
         effect-type: fish_speed
         effect-value: 0.005
-        icon: "minecraft:feather"
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
         prerequisites: []
       - id: swift-t2a
         tier: 2
@@ -182,7 +230,10 @@ trees:
         description: "鱼速度 -0.5%"
         effect-type: fish_speed
         effect-value: 0.005
-        icon: "minecraft:feather"
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
         prerequisites: [swift-t1]
       - id: swift-t2b
         tier: 2
@@ -191,7 +242,10 @@ trees:
         description: "鱼停留时间 -5%"
         effect-type: fish_dwell
         effect-value: 0.05
-        icon: "minecraft:clock"
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
         prerequisites: [swift-t1]
       - id: swift-t3a
         tier: 3
@@ -200,7 +254,10 @@ trees:
         description: "鱼速度 -0.5%"
         effect-type: fish_speed
         effect-value: 0.005
-        icon: "minecraft:feather"
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
         prerequisites: [swift-t2a]
       - id: swift-t3b
         tier: 3
@@ -209,7 +266,10 @@ trees:
         description: "鱼停留时间 -5%"
         effect-type: fish_dwell
         effect-value: 0.05
-        icon: "minecraft:clock"
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
         prerequisites: [swift-t2b]
       - id: swift-t4a
         tier: 4
@@ -218,7 +278,10 @@ trees:
         description: "鱼速度 -0.4%"
         effect-type: fish_speed
         effect-value: 0.004
-        icon: "minecraft:feather"
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
         prerequisites: [swift-t3a]
       - id: swift-t4b
         tier: 4
@@ -227,7 +290,10 @@ trees:
         description: "鱼突进概率 -3%"
         effect-type: fish_dart
         effect-value: 0.03
-        icon: "minecraft:arrow"
+        icon:
+          source: minecraft
+          id: arrow
+          amount: 1
         prerequisites: [swift-t3a]
       - id: swift-t4c
         tier: 4
@@ -236,7 +302,10 @@ trees:
         description: "鱼噪声 -3%"
         effect-type: fish_noise
         effect-value: 0.03
-        icon: "minecraft:amethyst_shard"
+        icon:
+          source: minecraft
+          id: amethyst_shard
+          amount: 1
         prerequisites: [swift-t3b]
       - id: swift-t4d
         tier: 4
@@ -245,7 +314,10 @@ trees:
         description: "鱼边缘反弹 -2%"
         effect-type: fish_edge
         effect-value: 0.02
-        icon: "minecraft:shield"
+        icon:
+          source: minecraft
+          id: shield
+          amount: 1
         prerequisites: [swift-t3b]
       - id: swift-t5a
         tier: 5
@@ -254,7 +326,10 @@ trees:
         description: "鱼速度 -0.2%"
         effect-type: fish_speed
         effect-value: 0.002
-        icon: "minecraft:feather"
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
         prerequisites: [swift-t4a]
       - id: swift-t5b
         tier: 5
@@ -263,7 +338,10 @@ trees:
         description: "鱼突进概率 -1.5%"
         effect-type: fish_dart
         effect-value: 0.015
-        icon: "minecraft:arrow"
+        icon:
+          source: minecraft
+          id: arrow
+          amount: 1
         prerequisites: [swift-t4b]
       - id: swift-t5c
         tier: 5
@@ -272,7 +350,10 @@ trees:
         description: "鱼噪声 -1.5%"
         effect-type: fish_noise
         effect-value: 0.015
-        icon: "minecraft:amethyst_shard"
+        icon:
+          source: minecraft
+          id: amethyst_shard
+          amount: 1
         prerequisites: [swift-t4c]
       - id: swift-t5d
         tier: 5
@@ -281,14 +362,20 @@ trees:
         description: "鱼边缘反弹 -1%"
         effect-type: fish_edge
         effect-value: 0.01
-        icon: "minecraft:shield"
+        icon:
+          source: minecraft
+          id: shield
+          amount: 1
         prerequisites: [swift-t4d]
 
   # ─── 树3：威压（逃离） ────────────────────────────────────
   pressure:
     display-name: "&c威压"
     description: "压制鱼的逃离行为"
-    icon: "minecraft:iron_sword"
+    icon:
+      source: minecraft
+      id: iron_sword
+      amount: 1
     nodes:
       - id: pressure-t1
         tier: 1
@@ -297,7 +384,10 @@ trees:
         description: "逃离概率 -0.5%"
         effect-type: flee_chance
         effect-value: 0.005
-        icon: "minecraft:iron_sword"
+        icon:
+          source: minecraft
+          id: iron_sword
+          amount: 1
         prerequisites: []
       - id: pressure-t2a
         tier: 2
@@ -306,7 +396,10 @@ trees:
         description: "逃离概率 -0.5%"
         effect-type: flee_chance
         effect-value: 0.005
-        icon: "minecraft:iron_sword"
+        icon:
+          source: minecraft
+          id: iron_sword
+          amount: 1
         prerequisites: [pressure-t1]
       - id: pressure-t2b
         tier: 2
@@ -315,7 +408,10 @@ trees:
         description: "逃离速度 -1%"
         effect-type: flee_speed
         effect-value: 0.01
-        icon: "minecraft:sugar"
+        icon:
+          source: minecraft
+          id: sugar
+          amount: 1
         prerequisites: [pressure-t1]
       - id: pressure-t3a
         tier: 3
@@ -324,7 +420,10 @@ trees:
         description: "逃离概率 -0.5%"
         effect-type: flee_chance
         effect-value: 0.005
-        icon: "minecraft:iron_sword"
+        icon:
+          source: minecraft
+          id: iron_sword
+          amount: 1
         prerequisites: [pressure-t2a]
       - id: pressure-t3b
         tier: 3
@@ -333,7 +432,10 @@ trees:
         description: "逃离速度 -1%"
         effect-type: flee_speed
         effect-value: 0.01
-        icon: "minecraft:sugar"
+        icon:
+          source: minecraft
+          id: sugar
+          amount: 1
         prerequisites: [pressure-t2b]
       - id: pressure-t4a
         tier: 4
@@ -342,7 +444,10 @@ trees:
         description: "逃离概率 -0.4%"
         effect-type: flee_chance
         effect-value: 0.004
-        icon: "minecraft:iron_sword"
+        icon:
+          source: minecraft
+          id: iron_sword
+          amount: 1
         prerequisites: [pressure-t3a]
       - id: pressure-t4b
         tier: 4
@@ -351,7 +456,10 @@ trees:
         description: "逃离速度 -1.5%"
         effect-type: flee_speed
         effect-value: 0.015
-        icon: "minecraft:sugar"
+        icon:
+          source: minecraft
+          id: sugar
+          amount: 1
         prerequisites: [pressure-t3a]
       - id: pressure-t4c
         tier: 4
@@ -360,7 +468,10 @@ trees:
         description: "逃离冷却 +3%"
         effect-type: flee_cooldown
         effect-value: 0.03
-        icon: "minecraft:clock"
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
         prerequisites: [pressure-t3b]
       - id: pressure-t4d
         tier: 4
@@ -369,7 +480,10 @@ trees:
         description: "逃离持续 -3%"
         effect-type: flee_duration
         effect-value: 0.03
-        icon: "minecraft:string"
+        icon:
+          source: minecraft
+          id: string
+          amount: 1
         prerequisites: [pressure-t3b]
       - id: pressure-t5a
         tier: 5
@@ -378,7 +492,10 @@ trees:
         description: "逃离概率 -0.2%"
         effect-type: flee_chance
         effect-value: 0.002
-        icon: "minecraft:iron_sword"
+        icon:
+          source: minecraft
+          id: iron_sword
+          amount: 1
         prerequisites: [pressure-t4a]
       - id: pressure-t5b
         tier: 5
@@ -387,7 +504,10 @@ trees:
         description: "逃离速度 -0.75%"
         effect-type: flee_speed
         effect-value: 0.0075
-        icon: "minecraft:sugar"
+        icon:
+          source: minecraft
+          id: sugar
+          amount: 1
         prerequisites: [pressure-t4b]
       - id: pressure-t5c
         tier: 5
@@ -396,7 +516,10 @@ trees:
         description: "逃离冷却 +1.5%"
         effect-type: flee_cooldown
         effect-value: 0.015
-        icon: "minecraft:clock"
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
         prerequisites: [pressure-t4c]
       - id: pressure-t5d
         tier: 5
@@ -405,14 +528,20 @@ trees:
         description: "逃离持续 -1.5%"
         effect-type: flee_duration
         effect-value: 0.015
-        icon: "minecraft:string"
+        icon:
+          source: minecraft
+          id: string
+          amount: 1
         prerequisites: [pressure-t4d]
 
   # ─── 树4：专注（进度） ────────────────────────────────────
   focus:
     display-name: "&d专注"
     description: "提升进度获取与维持能力"
-    icon: "minecraft:clock"
+    icon:
+      source: minecraft
+      id: clock
+      amount: 1
     nodes:
       - id: focus-t1
         tier: 1
@@ -421,7 +550,10 @@ trees:
         description: "进度增速 +0.5%"
         effect-type: progress_rate
         effect-value: 0.005
-        icon: "minecraft:emerald"
+        icon:
+          source: minecraft
+          id: emerald
+          amount: 1
         prerequisites: []
       - id: focus-t2a
         tier: 2
@@ -430,7 +562,10 @@ trees:
         description: "进度增速 +0.5%"
         effect-type: progress_rate
         effect-value: 0.005
-        icon: "minecraft:emerald"
+        icon:
+          source: minecraft
+          id: emerald
+          amount: 1
         prerequisites: [focus-t1]
       - id: focus-t2b
         tier: 2
@@ -439,7 +574,10 @@ trees:
         description: "进度下降 -1%"
         effect-type: progress_drain
         effect-value: 0.01
-        icon: "minecraft:honey_bottle"
+        icon:
+          source: minecraft
+          id: honey_bottle
+          amount: 1
         prerequisites: [focus-t1]
       - id: focus-t3a
         tier: 3
@@ -448,7 +586,10 @@ trees:
         description: "进度增速 +0.5%"
         effect-type: progress_rate
         effect-value: 0.005
-        icon: "minecraft:emerald"
+        icon:
+          source: minecraft
+          id: emerald
+          amount: 1
         prerequisites: [focus-t2a]
       - id: focus-t3b
         tier: 3
@@ -457,7 +598,10 @@ trees:
         description: "进度下降 -1%"
         effect-type: progress_drain
         effect-value: 0.01
-        icon: "minecraft:honey_bottle"
+        icon:
+          source: minecraft
+          id: honey_bottle
+          amount: 1
         prerequisites: [focus-t2b]
       - id: focus-t4a
         tier: 4
@@ -466,7 +610,10 @@ trees:
         description: "进度增速 +0.4%"
         effect-type: progress_rate
         effect-value: 0.004
-        icon: "minecraft:emerald"
+        icon:
+          source: minecraft
+          id: emerald
+          amount: 1
         prerequisites: [focus-t3a]
       - id: focus-t4b
         tier: 4
@@ -475,7 +622,10 @@ trees:
         description: "进度下降 -1.5%"
         effect-type: progress_drain
         effect-value: 0.015
-        icon: "minecraft:honey_bottle"
+        icon:
+          source: minecraft
+          id: honey_bottle
+          amount: 1
         prerequisites: [focus-t3a]
       - id: focus-t4c
         tier: 4
@@ -484,7 +634,10 @@ trees:
         description: "完美窗口 +2%"
         effect-type: perfect_window
         effect-value: 0.02
-        icon: "minecraft:ender_eye"
+        icon:
+          source: minecraft
+          id: ender_eye
+          amount: 1
         prerequisites: [focus-t3b]
       - id: focus-t4d
         tier: 4
@@ -493,7 +646,10 @@ trees:
         description: "起始进度 +0.5%"
         effect-type: start_progress
         effect-value: 0.005
-        icon: "minecraft:firework_rocket"
+        icon:
+          source: minecraft
+          id: firework_rocket
+          amount: 1
         prerequisites: [focus-t3b]
       - id: focus-t5a
         tier: 5
@@ -502,7 +658,10 @@ trees:
         description: "进度增速 +0.2%"
         effect-type: progress_rate
         effect-value: 0.002
-        icon: "minecraft:emerald"
+        icon:
+          source: minecraft
+          id: emerald
+          amount: 1
         prerequisites: [focus-t4a]
       - id: focus-t5b
         tier: 5
@@ -511,7 +670,10 @@ trees:
         description: "进度下降 -0.75%"
         effect-type: progress_drain
         effect-value: 0.0075
-        icon: "minecraft:honey_bottle"
+        icon:
+          source: minecraft
+          id: honey_bottle
+          amount: 1
         prerequisites: [focus-t4b]
       - id: focus-t5c
         tier: 5
@@ -520,7 +682,10 @@ trees:
         description: "完美窗口 +1%"
         effect-type: perfect_window
         effect-value: 0.01
-        icon: "minecraft:ender_eye"
+        icon:
+          source: minecraft
+          id: ender_eye
+          amount: 1
         prerequisites: [focus-t4c]
       - id: focus-t5d
         tier: 5
@@ -529,14 +694,20 @@ trees:
         description: "起始进度 +0.25%"
         effect-type: start_progress
         effect-value: 0.0025
-        icon: "minecraft:firework_rocket"
+        icon:
+          source: minecraft
+          id: firework_rocket
+          amount: 1
         prerequisites: [focus-t4d]
 
   # ─── 树5：幸运（奖励） ────────────────────────────────────
   lucky:
     display-name: "&e幸运"
     description: "提升经验、售价与稀有鱼概率"
-    icon: "minecraft:gold_ingot"
+    icon:
+      source: minecraft
+      id: gold_ingot
+      amount: 1
     nodes:
       - id: lucky-t1
         tier: 1
@@ -545,7 +716,10 @@ trees:
         description: "钓鱼经验 +0.8%"
         effect-type: xp_multiplier
         effect-value: 0.008
-        icon: "minecraft:diamond"
+        icon:
+          source: minecraft
+          id: diamond
+          amount: 1
         prerequisites: []
       - id: lucky-t2a
         tier: 2
@@ -554,7 +728,10 @@ trees:
         description: "钓鱼经验 +0.8%"
         effect-type: xp_multiplier
         effect-value: 0.008
-        icon: "minecraft:diamond"
+        icon:
+          source: minecraft
+          id: diamond
+          amount: 1
         prerequisites: [lucky-t1]
       - id: lucky-t2b
         tier: 2
@@ -563,7 +740,10 @@ trees:
         description: "鱼售价 +0.8%"
         effect-type: price_multiplier
         effect-value: 0.008
-        icon: "minecraft:gold_ingot"
+        icon:
+          source: minecraft
+          id: gold_ingot
+          amount: 1
         prerequisites: [lucky-t1]
       - id: lucky-t3a
         tier: 3
@@ -572,7 +752,10 @@ trees:
         description: "钓鱼经验 +0.8%"
         effect-type: xp_multiplier
         effect-value: 0.008
-        icon: "minecraft:diamond"
+        icon:
+          source: minecraft
+          id: diamond
+          amount: 1
         prerequisites: [lucky-t2a]
       - id: lucky-t3b
         tier: 3
@@ -581,7 +764,10 @@ trees:
         description: "鱼售价 +0.8%"
         effect-type: price_multiplier
         effect-value: 0.008
-        icon: "minecraft:gold_ingot"
+        icon:
+          source: minecraft
+          id: gold_ingot
+          amount: 1
         prerequisites: [lucky-t2b]
       - id: lucky-t4a
         tier: 4
@@ -590,7 +776,10 @@ trees:
         description: "钓鱼经验 +0.6%"
         effect-type: xp_multiplier
         effect-value: 0.006
-        icon: "minecraft:diamond"
+        icon:
+          source: minecraft
+          id: diamond
+          amount: 1
         prerequisites: [lucky-t3a]
       - id: lucky-t4b
         tier: 4
@@ -599,7 +788,10 @@ trees:
         description: "鱼售价 +0.6%"
         effect-type: price_multiplier
         effect-value: 0.006
-        icon: "minecraft:gold_ingot"
+        icon:
+          source: minecraft
+          id: gold_ingot
+          amount: 1
         prerequisites: [lucky-t3a]
       - id: lucky-t4c
         tier: 4
@@ -608,7 +800,10 @@ trees:
         description: "传说鱼概率 +1%"
         effect-type: legendary_chance
         effect-value: 0.01
-        icon: "minecraft:nether_star"
+        icon:
+          source: minecraft
+          id: nether_star
+          amount: 1
         prerequisites: [lucky-t3b]
       - id: lucky-t4d
         tier: 4
@@ -617,7 +812,10 @@ trees:
         description: "宝藏概率 +1.5%"
         effect-type: treasure_chance
         effect-value: 0.015
-        icon: "minecraft:chest"
+        icon:
+          source: minecraft
+          id: chest
+          amount: 1
         prerequisites: [lucky-t3b]
       - id: lucky-t5a
         tier: 5
@@ -626,7 +824,10 @@ trees:
         description: "钓鱼经验 +0.3%"
         effect-type: xp_multiplier
         effect-value: 0.003
-        icon: "minecraft:diamond"
+        icon:
+          source: minecraft
+          id: diamond
+          amount: 1
         prerequisites: [lucky-t4a]
       - id: lucky-t5b
         tier: 5
@@ -635,7 +836,10 @@ trees:
         description: "鱼售价 +0.3%"
         effect-type: price_multiplier
         effect-value: 0.003
-        icon: "minecraft:gold_ingot"
+        icon:
+          source: minecraft
+          id: gold_ingot
+          amount: 1
         prerequisites: [lucky-t4b]
       - id: lucky-t5c
         tier: 5
@@ -644,7 +848,10 @@ trees:
         description: "传说鱼概率 +0.5%"
         effect-type: legendary_chance
         effect-value: 0.005
-        icon: "minecraft:nether_star"
+        icon:
+          source: minecraft
+          id: nether_star
+          amount: 1
         prerequisites: [lucky-t4c]
       - id: lucky-t5d
         tier: 5
@@ -653,7 +860,10 @@ trees:
         description: "宝藏概率 +0.75%"
         effect-type: treasure_chance
         effect-value: 0.0075
-        icon: "minecraft:chest"
+        icon:
+          source: minecraft
+          id: chest
+          amount: 1
         prerequisites: [lucky-t4d]
 
 # ─── 跨树联动天赋 ──────────────────────────────────────────
@@ -665,14 +875,20 @@ links:
     description: "绿条内进度 +1%（需稳健T3a + 专注T3a）"
     effect-type: progress_rate
     effect-value: 0.01
-    icon: "minecraft:emerald"
+    icon:
+      source: minecraft
+      id: emerald
+      amount: 1
     prerequisites: [steady-t3a, focus-t3a]
   - id: link-2
     display-name: "&6镇压"
     description: "鱼总速度 -1%（需迅捷T3a + 威压T3b）"
     effect-type: fish_speed
     effect-value: 0.01
-    icon: "minecraft:feather"
+    icon:
+      source: minecraft
+      id: feather
+      amount: 1
     prerequisites: [swift-t3a, pressure-t3b]
   - id: link-3
     display-name: "&6稳固"
@@ -682,40 +898,58 @@ links:
         effect-value: 0.01
       - effect-type: bar_bounce
         effect-value: 0.01
-    icon: "minecraft:slime_ball"
+    icon:
+      source: minecraft
+      id: slime_ball
+      amount: 1
     prerequisites: [steady-t3b, swift-t3a]
   - id: link-4
     display-name: "&6逆流"
     description: "逃离时进度下降减半（需威压T3a + 专注T3b）"
     effect-type: flee_duration
     effect-value: 0.05
-    icon: "minecraft:string"
+    icon:
+      source: minecraft
+      id: string
+      amount: 1
     prerequisites: [pressure-t3a, focus-t3b]
   - id: link-5
     display-name: "&6精髓"
     description: "完美捕获经验 +3%（需专注T3a + 幸运T3a）"
     effect-type: perfect_xp
     effect-value: 0.03
-    icon: "minecraft:experience_bottle"
+    icon:
+      source: minecraft
+      id: experience_bottle
+      amount: 1
     prerequisites: [focus-t3a, lucky-t3a]
   - id: link-6
     display-name: "&6猎手"
     description: "稀有鱼概率 +1.5%（需迅捷T3b + 幸运T3b）"
     effect-type: rare_chance
     effect-value: 0.015
-    icon: "minecraft:lapis_lazuli"
+    icon:
+      source: minecraft
+      id: lapis_lazuli
+      amount: 1
     prerequisites: [swift-t3b, lucky-t3b]
   - id: link-7
     display-name: "&6渊博"
     description: "绿条内经验 +2%（需稳健T3a + 幸运T3a）"
     effect-type: xp_in_bar
     effect-value: 0.02
-    icon: "minecraft:glowstone_dust"
+    icon:
+      source: minecraft
+      id: glowstone_dust
+      amount: 1
     prerequisites: [steady-t3a, lucky-t3a]
   - id: link-8
     display-name: "&6神运"
     description: "传说鱼概率 +1%（需威压T3b + 幸运T3b）"
     effect-type: legendary_chance
     effect-value: 0.01
-    icon: "minecraft:nether_star"
+    icon:
+      source: minecraft
+      id: nether_star
+      amount: 1
     prerequisites: [pressure-t3b, lucky-t3b]
