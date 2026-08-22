@@ -13,12 +13,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
-import org.jetbrains.annotations.Nullable;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 
 /**
  * 挂机奖励模块的数据仓储，继承 {@link AbstractModuleRepository}，
@@ -26,28 +24,9 @@ import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
  */
 public final class AfkRewardRepository extends AbstractModuleRepository {
 
-    private final @Nullable AfkRewardConfiguration.StorageConfig configuration;
-
-    public AfkRewardRepository(File dataFolder, AfkRewardConfiguration.StorageConfig configuration, Logger logger) {
-        super("AXS-AfkReward", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public AfkRewardRepository(StorageManager storageManager, String moduleId,
-                               String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-AfkReward", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
+    public AfkRewardRepository(DataSource dataSource, StorageDescriptor descriptor,
+                               File dataFolder, Logger logger) {
+        super("AXS-AfkReward", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

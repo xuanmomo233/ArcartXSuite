@@ -97,9 +97,12 @@ public final class QQBotPlayerCommand implements TabExecutor {
                     // 自动加白名单
                     if (service.configuration().whitelist().enabled()
                         && service.configuration().whitelist().autoAddOnBind()) {
-                        String wlCmd = service.configuration().whitelist().addCommand()
-                            .replace("{name}", player.getName());
-                        org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                        try {
+                            String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(service.configuration().whitelist().addCommand())
+                                .bindPlayerName("name", player.getName())
+                                .build();
+                            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                        } catch (IllegalArgumentException ignored) {}
                     }
                 } else {
                     String msg = service.configuration().messages().codeInvalid();
@@ -116,9 +119,12 @@ public final class QQBotPlayerCommand implements TabExecutor {
                     // 自动移除白名单
                     if (service.configuration().whitelist().enabled()
                         && service.configuration().whitelist().autoRemoveOnUnbind()) {
-                        String wlCmd = service.configuration().whitelist().removeCommand()
-                            .replace("{name}", player.getName());
-                        org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                        try {
+                            String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(service.configuration().whitelist().removeCommand())
+                                .bindPlayerName("name", player.getName())
+                                .build();
+                            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                        } catch (IllegalArgumentException ignored) {}
                     }
                 } else {
                     player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + result.message());

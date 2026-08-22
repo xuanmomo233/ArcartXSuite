@@ -540,7 +540,6 @@ public final class SnowLumaProcessManager {
 
     private String extractTag(String json) {
         int idx = json.indexOf("\"tag_name\"");
-        if (idx == -1) idx = json.indexOf("\"tag_name\"");
         if (idx == -1) return null;
         int start = json.indexOf("\"", idx + 10) + 1;
         int end = json.indexOf("\"", start);

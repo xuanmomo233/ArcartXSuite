@@ -12,10 +12,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.StorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
 /**
  * LoginView 的 JDBC 仓储实现，继承 {@link AbstractModuleRepository}，
@@ -23,32 +23,12 @@ import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.Storage
  */
 public final class JdbcLoginViewRepository extends AbstractModuleRepository implements LoginViewRepository {
 
-    private final StorageConfiguration configuration;
     private final String accountsTable;
     private final String sessionsTable;
 
-    public JdbcLoginViewRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
-        super("AXS-LoginView", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-        this.accountsTable = configuration.tablePrefix() + "accounts";
-        this.sessionsTable = configuration.tablePrefix() + "sessions";
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcLoginViewRepository(StorageManager storageManager, String moduleId,
-                                    String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-LoginView", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcLoginViewRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                   File dataFolder, Logger logger) {
+        super("AXS-LoginView", dataSource, descriptor, dataFolder, logger);
         this.accountsTable = tablePrefix() + "accounts";
         this.sessionsTable = tablePrefix() + "sessions";
     }

@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.module;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +25,7 @@ public final class SimpleEventBus implements EventBusCapability {
     }
 
     @Override
-    public void publish(@NotNull String topic, @Nullable Player player, @NotNull Map<String, String> payload) {
+    public void publish(@NotNull String topic, @Nullable Player player, @NotNull Object payload) {
         // 自动追踪已发布的主题（运行时检测补充）
         publisherTopics.add(topic);
         BusEvent event = new BusEvent(topic, player, payload, System.currentTimeMillis());

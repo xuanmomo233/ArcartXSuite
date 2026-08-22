@@ -25,6 +25,9 @@ import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
 import xuanmo.arcartxsuite.announcer.service.AnnouncerService;
 import xuanmo.arcartxsuite.announcer.service.SubtitleService;
@@ -52,96 +55,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
-    /**
-     * 返回模块主配置文件名。
-     *
-     * @return 配置文件名 {@code "ArcartXAnnouncer.yml"}
-     */
-    @Override
-    protected String configFileName() {
-        return "ArcartXAnnouncer.yml";
-    }
-
-    /**
-     * 返回模块消息文件名。
-     *
-     * @return 消息文件名 {@code "messages.yml"}
-     */
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
-
-    /**
-     * 主配置版本号：UI 配置抽离到统一 ui 节后 +1。
-     *
-     * @return 当前配置版本号 {@code 2}
-     */
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
-
     private String msg(String key, Object... args) {
         return messages().get("prefix") + messages().get(key, args);
-    }
-
-    /**
-     * 返回主配置的默认同步策略：{@code entries} 节为动态区段，允许用户自由增删公告条目。
-     *
-     * @return 同步策略
-     */
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // entries 由用户自由增删（每个公告条目自定义 id）
-        return SyncPolicy.builder()
-            .dynamicSection("entries")
-            .build();
-    }
-
-    /**
-     * 返回主配置的校验规则列表，覆盖检查间隔、冷却、条目间隔与字号等数值范围。
-     *
-     * @return 校验规则列表
-     */
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.of("settings.check-interval-ticks", ValueType.INT)
-                .withRange(1, 1200),
-            ValidationRule.of("settings.cooldown-ms", ValueType.LONG)
-                .withRange(0, 3600000),
-            ValidationRule.of("settings.between-entry-interval-ms", ValueType.LONG)
-                .withRange(0, 3600000),
-            ValidationRule.of("settings.text-width-font-size", ValueType.INT)
-                .withRange(1, 200)
-        );
-    }
-
-    /**
-     * 返回 UI 资源映射：内置公告 HUD 与字幕 HUD 的源路径到目标路径映射。
-     *
-     * @return UI 资源映射表
-     */
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/announcer_hud.yml", "ui/announcer_hud.yml");
-        mappings.put("arcartx/ui/subtitle_hud.yml", "ui/subtitle_hud.yml");
-        return mappings;
-    }
-
-    /**
-     * 判断是否需要在启用时覆盖已存在的 UI 文件。
-     * <p>
-     * 公告与字幕共用统一开关（{@code ui.overwrite-ui-files}）。
-     *
-     * @return 当配置要求覆盖时返回 {@code true}
-     */
-    @Override
-    protected boolean overwriteUiFiles() {
-        if (configuration == null) return false;
-        return configuration.overwriteUiFile();
     }
 
     /**
@@ -286,11 +201,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
      *
      * @return 数据包处理器，服务未启动时返回不产生副作用的 lambda
      */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     /**
      * 创建客户端初始化回调，在玩家客户端就绪时通知公告与字幕服务。
@@ -493,6 +404,5 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
-
 
 

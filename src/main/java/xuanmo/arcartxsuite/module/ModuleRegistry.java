@@ -81,35 +81,15 @@ public final class ModuleRegistry {
     private final ArcartXWorldTextureService worldTextureBridge;
     private final xuanmo.arcartxsuite.api.storage.StorageManager storageManager;
 
-    // ─── 全局桥接单例 ──────────────────────────────────────────
-    private DefaultItemSourceRegistry itemSourceRegistry;
-    private xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher itemRewardDispatcher;
-    private xuanmo.arcartxsuite.bridge.DefaultPendingRewardService pendingRewardService;
-    private ItemMatcherSupport itemMatcherSupport;
-    private CurrencyBridgeManager currencyBridgeManager;
-    private DefaultAttributeBridgeRegistry attributeBridgeRegistry;
-    private xuanmo.arcartxsuite.bridge.DefaultRondoBridge rondoBridge;
-    private DefaultAriaBridge ariaBridge;
-    private ScriptConditionEvaluator scriptConditionEvaluator;
-    private DefaultVanillaItemNameBridge vanillaItemNameBridge;
-    private AccountTypeServiceImpl accountTypeService;
+    // ─── 拆分组件 ──────────────────────────────────────────────
+    private final CapabilityRegistry capabilityRegistry;
+    private final ClientPacketRouter clientPacketRouter;
+    private GlobalBridgeFactory globalBridgeFactory;
 
     /** 按 id 排列的已加载模块，保持加载顺序 */
     private final LinkedHashMap<String, LoadedModule> modules = new LinkedHashMap<>();
     /** 外部模块注册的命令处理器 */
     private final LinkedHashMap<String, ModuleCommandHandler> commandHandlers = new LinkedHashMap<>();
-    /** 客户端包处理器注册表（按优先级排序） */
-    private final CopyOnWriteArrayList<PrioritizedPacketHandler> packetHandlers = new CopyOnWriteArrayList<>();
-    /** 客户端初始化处理器注册表 */
-    private final CopyOnWriteArrayList<PrioritizedInitializedHandler> initializedHandlers = new CopyOnWriteArrayList<>();
-    /** Capability 全局注册表（类型 -> 实现） */
-    private final java.util.concurrent.ConcurrentHashMap<Class<?>, Object> capabilities = new java.util.concurrent.ConcurrentHashMap<>();
-    /** 模块注册的 Capability 类型（用于按模块卸载） */
-    private final java.util.concurrent.ConcurrentHashMap<String, CopyOnWriteArrayList<Class<?>>> moduleCapabilityTypes = new java.util.concurrent.ConcurrentHashMap<>();
-    /** 多实例 capability：玩家数据清除注册表 */
-    private final CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable> purgeables = new CopyOnWriteArrayList<>();
-    /** 多实例 capability：数据库一键迁移注册表 */
-    private final CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.DatabaseMigratable> migratables = new CopyOnWriteArrayList<>();
 
     public ModuleRegistry(
         JavaPlugin plugin,
@@ -139,6 +119,9 @@ public final class ModuleRegistry {
         this.placeholderResolver = placeholderResolver;
         this.worldTextureBridge = worldTextureBridge;
         this.storageManager = storageManager;
+        this.capabilityRegistry = new CapabilityRegistry();
+        this.clientPacketRouter = new ClientPacketRouter(packetGuard);
+        this.globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
         List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
         if (plugin.getConfig().contains("module-signature-public-key")) {
             LOGGER.warning("[ModuleSignature] Legacy setting module-signature-public-key is no longer supported; use module-signature-public-keys (list). The legacy value will be ignored.");
@@ -310,18 +293,9 @@ public final class ModuleRegistry {
         }
         modules.clear();
         clearAllRegistrations();
-        if (attributeBridgeRegistry != null) {
-            attributeBridgeRegistry.shutdown();
-            attributeBridgeRegistry = null;
-        }
-        ScriptConditionServices.reset();
-        ariaBridge = null;
-        scriptConditionEvaluator = null;
-        if (accountTypeService != null) {
-            org.bukkit.event.HandlerList.unregisterAll(accountTypeService);
-            accountTypeService.clearCache();
-            accountTypeService = null;
-        }
+        // 全局桥接单例的生命周期由 GlobalBridgeFactory 管理，此处仅重置组件引用
+        // 桥接对象在下次 initializeGlobalBridges() 时按需重建
+        globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
     }
 
     /**
@@ -624,6 +598,11 @@ public final class ModuleRegistry {
         return loaded != null && loaded.isEnabled();
     }
 
+    /** 供 GlobalBridgeFactory 的 ModuleAdminCapability 查找模块实例。 */
+    LoadedModule getLoadedModule(String moduleId) {
+        return modules.get(moduleId);
+    }
+
     public int countEnabled() {
         int count = 0;
         for (LoadedModule loaded : modules.values()) {
@@ -881,13 +860,9 @@ public final class ModuleRegistry {
     }
 
     private void clearAllRegistrations() {
-        packetHandlers.clear();
-        initializedHandlers.clear();
+        clientPacketRouter.clearAll();
         commandHandlers.clear();
-        moduleCapabilityTypes.clear();
-        capabilities.clear();
-        purgeables.clear();
-        migratables.clear();
+        capabilityRegistry.clearAll();
     }
 
     private List<String> topologicalSort(Map<String, DiscoveredModule> modules, List<String> cyclicModules) {
@@ -944,198 +919,52 @@ public final class ModuleRegistry {
     // ─── 全局桥接初始化 ──────────────────────────────────────────
 
     private void initializeGlobalBridges() {
-        // 物品来源注册表
-        if (itemSourceRegistry == null) {
-            itemSourceRegistry = new DefaultItemSourceRegistry(plugin);
-        }
-        itemSourceRegistry.initialize();
-
-        // 统一物品奖励发放器（依赖 registry 自身查找 MailDispatchable capability）
-        if (itemRewardDispatcher == null) {
-            itemRewardDispatcher = new xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher(
-                plugin, LOGGER, this);
-        }
-
-        // 统一待发放奖励服务（单张 DB 表 + 上线自动补发）
-        if (pendingRewardService == null) {
-            pendingRewardService = new xuanmo.arcartxsuite.bridge.DefaultPendingRewardService(
-                plugin, LOGGER, storageManager, this);
-            // 仅在首次创建时注册 Listener，避免 reload 时重复注册导致 onPlayerJoin 被多次触发
-            Bukkit.getPluginManager().registerEvents(pendingRewardService, plugin);
-        }
-        pendingRewardService.initialize();
-        // 注册为 core capability，供 DefaultItemRewardDispatcher 第三级兜底查找
-        registerCoreCapability(xuanmo.arcartxsuite.api.item.PendingRewardService.class, pendingRewardService);
-
-        // 原版物品中文名称桥接（纯静态表，无外部依赖）
-        if (vanillaItemNameBridge == null) {
-            vanillaItemNameBridge = new DefaultVanillaItemNameBridge();
-        }
-
-        // 物品匹配器
-        itemMatcherSupport = new ItemMatcherSupport(
-            itemSourceRegistry::mythicItemId,
-            itemSourceRegistry::neigeItemId,
-            itemSourceRegistry::overtureItemId
-        );
-
-        // 全局货币管理器
-        if (currencyBridgeManager == null) {
-            currencyBridgeManager = new CurrencyBridgeManager(plugin, Map.of(), placeholderResolver);
-        }
-        YamlConfiguration rootConfig = loadRootConfig();
-        currencyBridgeManager.registerCurrencies(parseGlobalCurrencies(rootConfig));
-        currencyBridgeManager.initialize();
-
-        // 全局属性桥接注册表
-        if (attributeBridgeRegistry == null) {
-            attributeBridgeRegistry = new DefaultAttributeBridgeRegistry(plugin);
-        }
-        org.bukkit.configuration.ConfigurationSection attrBridges = rootConfig.getConfigurationSection("attribute-bridges");
-        boolean apEnabled = attrBridges == null || attrBridges.getBoolean("attributeplus", true);
-        boolean caEnabled = attrBridges == null || attrBridges.getBoolean("craneattribute", true);
-        boolean mlEnabled = attrBridges == null || attrBridges.getBoolean("mythiclib", true);
-        boolean symEnabled = attrBridges == null || attrBridges.getBoolean("symphony", true);
-        attributeBridgeRegistry.setSourceEnabled(apEnabled, caEnabled, mlEnabled, symEnabled);
-        attributeBridgeRegistry.initialize();
-
-        // Rondo 经济系统桥接
-        if (rondoBridge == null) {
-            rondoBridge = new xuanmo.arcartxsuite.bridge.DefaultRondoBridge();
-        }
-        rondoBridge.initialize();
-
-        if (ariaBridge == null) {
-            ariaBridge = new DefaultAriaBridge(plugin);
-        }
-        ariaBridge.initialize();
-        scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge, placeholderResolver);
-        ScriptConditionServices.install(scriptConditionEvaluator);
-
-        // 全局事件总线
-        xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus;
-        if (!capabilities.containsKey(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)) {
-            eventBus = new SimpleEventBus(xuanmo.arcartxsuite.module.AxsLog.logger());
-            capabilities.put(xuanmo.arcartxsuite.api.capability.EventBusCapability.class, eventBus);
-        } else {
-            eventBus = (xuanmo.arcartxsuite.api.capability.EventBusCapability)
-                capabilities.get(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
-        }
-
-        // 宿主核心注册自身发布的事件主题（模块加载前完成，确保模块启动时即可查询）
-        eventBus.registerPublisher("axs.currency.spent");
-        eventBus.registerPublisher("axs.currency.earned");
-
-        // 将事件总线注入货币管理器，使 withdraw/deposit 成功后分发 axs.currency.spent / axs.currency.earned 事件
-        final xuanmo.arcartxsuite.api.capability.EventBusCapability finalEventBus = eventBus;
-        currencyBridgeManager.setEventBusProvider(() -> finalEventBus);
-
-        // 注册模块管理能力（供 debug 等管理工具使用）
-        capabilities.put(xuanmo.arcartxsuite.api.capability.ModuleAdminCapability.class,
-            new xuanmo.arcartxsuite.api.capability.ModuleAdminCapability() {
-                @Override
-                public java.util.Optional<xuanmo.arcartxsuite.api.AXSModule> findModule(@NotNull String moduleId) {
-                    LoadedModule loaded = modules.get(moduleId);
-                    if (loaded != null && loaded.isEnabled()) {
-                        return java.util.Optional.of(loaded.instance());
-                    }
-                    return java.util.Optional.empty();
-                }
-
-                @Override
-                public @NotNull java.util.List<xuanmo.arcartxsuite.api.ModuleDescriptor> listModules() {
-                    return ModuleRegistry.this.listModules();
-                }
-
-                @Override
-                public void reloadModule(@NotNull String moduleId) throws Exception {
-                    ModuleRegistry.this.reloadModule(moduleId);
-                }
-            });
-
-        // 统一账号识别服务（微软正版 / LittleSkin / 离线）
-        ensureAccountTypeService();
-    }
-
-    private static Map<String, CurrencyDefinition> parseGlobalCurrencies(YamlConfiguration config) {
-        org.bukkit.configuration.ConfigurationSection section = config.getConfigurationSection("currencies");
-        LinkedHashMap<String, CurrencyDefinition> result = new LinkedHashMap<>();
-        if (section == null) {
-            result.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-            result.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-            return result;
-        }
-        for (String rawId : section.getKeys(false)) {
-            org.bukkit.configuration.ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
-                continue;
-            }
-            String id = rawId.trim().toLowerCase(java.util.Locale.ROOT).replace('-', '_');
-            result.put(id, new CurrencyDefinition(
-                id,
-                child.getString("provider", "vault").trim().toLowerCase(java.util.Locale.ROOT),
-                child.getString("display-name", rawId),
-                child.contains("scale")
-                    ? child.getInt("scale", 2)
-                    : child.getInt("precision", 2),
-                child.getString("balance-placeholder", ""),
-                child.getString("withdraw-command", ""),
-                child.getString("deposit-command", ""),
-                child.getString("rounding", "DOWN")
-            ));
-        }
-        result.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-        result.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-        return result;
+        globalBridgeFactory.initialize();
     }
 
     /** 获取全局物品来源注册表 */
     public ItemSourceRegistry itemSourceRegistry() {
-        return itemSourceRegistry;
+        return globalBridgeFactory.itemSourceRegistry();
     }
 
     /** 获取统一物品奖励发放器 */
     public xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher() {
-        return itemRewardDispatcher;
+        return globalBridgeFactory.itemRewardDispatcher();
     }
 
     /** 获取统一待发放奖励服务 */
     public xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService() {
-        return pendingRewardService;
+        return globalBridgeFactory.pendingRewardService();
     }
 
     /** 获取原版物品中文名称桥接 */
     public DefaultVanillaItemNameBridge vanillaItemNameBridge() {
-        return vanillaItemNameBridge;
+        return globalBridgeFactory.vanillaItemNameBridge();
     }
 
     /** 获取全局物品匹配器 */
     public ItemMatcherAPI itemMatcher() {
-        return itemMatcherSupport;
+        return globalBridgeFactory.itemMatcherSupport();
     }
 
     /** 获取全局货币管理器 */
     public CurrencyBridgeManager currencyManager() {
-        return currencyBridgeManager;
+        return globalBridgeFactory.currencyBridgeManager();
     }
 
     /** 获取全局属性桥接注册表 */
     public DefaultAttributeBridgeRegistry attributeBridge() {
-        return attributeBridgeRegistry;
+        return globalBridgeFactory.attributeBridgeRegistry();
     }
 
     /** 获取 Rondo 经济系统桥接 */
     public xuanmo.arcartxsuite.bridge.DefaultRondoBridge rondoBridge() {
-        return rondoBridge;
+        return globalBridgeFactory.rondoBridge();
     }
 
     /** 获取 Aria 脚本桥接 */
     public AriaBridge ariaBridge() {
-        if (ariaBridge == null) {
-            ariaBridge = new DefaultAriaBridge(plugin);
-            ariaBridge.initialize();
-        }
-        return ariaBridge;
+        return globalBridgeFactory.ariaBridge();
     }
 
     /** 获取宿主单例 WorldTexture 桥接（由 BridgeLifecycleManager 统一管理生命周期） */
@@ -1145,45 +974,12 @@ public final class ModuleRegistry {
 
     /** 获取统一条件评估器 */
     public ScriptConditionEvaluator scriptConditionEvaluator() {
-        if (scriptConditionEvaluator == null) {
-            scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge(), placeholderResolver);
-            ScriptConditionServices.install(scriptConditionEvaluator);
-        }
-        return scriptConditionEvaluator;
-    }
-
-    /**
-     * 懒初始化统一账号识别服务（幂等）。
-     * 读取 config.yml 的 {@code account-type} 节并注册 PreLogin 预解析监听器。
-     */
-    private void ensureAccountTypeService() {
-        if (accountTypeService != null) {
-            return;
-        }
-        YamlConfiguration rootConfig = loadRootConfig();
-        org.bukkit.configuration.ConfigurationSection section = rootConfig.getConfigurationSection("account-type");
-        boolean enableLookup = section == null || section.getBoolean("enable-mojang-lookup", true);
-        int timeoutMs = section == null ? 10000 : section.getInt("mojang-timeout-ms", 10000);
-        boolean debug = section != null && section.getBoolean("debug", false);
-        String proxyHost = section == null ? null : section.getString("mojang-proxy-host", null);
-        int proxyPort = section == null ? 0 : section.getInt("mojang-proxy-port", 0);
-        // 仅混合登录模式（yggdrasil-source 含 ?mixed）时启用本地代理权威查询，
-        // 非混合服务器传 0 跳过，避免每次都尝试连接不存在的本地代理。
-        String yggdrasilSource = rootConfig.getString("auth.yggdrasil-source", "");
-        int mixedProxyPort = (yggdrasilSource != null && yggdrasilSource.contains("?mixed"))
-            ? rootConfig.getInt("auth.mixed-proxy-port", 25599)
-            : 0;
-        accountTypeService = new AccountTypeServiceImpl(xuanmo.arcartxsuite.module.AxsLog.logger(), enableLookup, timeoutMs, debug, proxyHost, proxyPort, mixedProxyPort);
-        Bukkit.getPluginManager().registerEvents(accountTypeService, plugin);
-        LOGGER.fine("统一账号识别服务已就绪 | Mojang查询=" + enableLookup
-            + " | 超时=" + timeoutMs + "ms | 混合代理端口=" + mixedProxyPort
-            + " | authlib-injector=" + accountTypeService.isAuthlibInjectorLoaded());
+        return globalBridgeFactory.scriptConditionEvaluator();
     }
 
     /** 获取宿主统一账号识别服务（永不为 null） */
     public AccountTypeService accountTypeService() {
-        ensureAccountTypeService();
-        return accountTypeService;
+        return globalBridgeFactory.accountTypeService();
     }
 
     private YamlConfiguration loadRootConfig() {
@@ -1219,7 +1015,7 @@ public final class ModuleRegistry {
      * 注册客户端包处理器（由 DefaultModuleContext 调用）。
      */
     void registerClientPacketHandler(String moduleId, ClientPacketHandler handler, int priority) {
-        registerClientPacketHandler(moduleId, handler, priority, null, null);
+        clientPacketRouter.registerPacketHandler(moduleId, handler, priority);
     }
 
     void registerClientPacketHandler(
@@ -1229,29 +1025,28 @@ public final class ModuleRegistry {
         String packetId,
         String guardModule
     ) {
-        packetHandlers.add(new PrioritizedPacketHandler(moduleId, handler, priority, packetId, guardModule));
-        packetHandlers.sort(Comparator.comparingInt(PrioritizedPacketHandler::priority));
+        clientPacketRouter.registerPacketHandler(moduleId, handler, priority, packetId, guardModule);
     }
 
     /**
      * 注册客户端初始化处理器（由 DefaultModuleContext 调用）。
      */
     void registerClientInitializedHandler(String moduleId, ClientInitializedHandler handler) {
-        initializedHandlers.add(new PrioritizedInitializedHandler(moduleId, handler));
+        clientPacketRouter.registerInitializedHandler(moduleId, handler);
     }
 
     /**
      * 移除指定模块注册的所有客户端初始化处理器。
      */
     void removeInitializedHandlers(String moduleId) {
-        initializedHandlers.removeIf(ih -> ih.moduleId().equals(moduleId));
+        clientPacketRouter.removeInitializedHandlers(moduleId);
     }
 
     /**
      * 移除指定模块注册的所有客户端包处理器。
      */
     void removePacketHandlers(String moduleId) {
-        packetHandlers.removeIf(ph -> ph.moduleId().equals(moduleId));
+        clientPacketRouter.removePacketHandlers(moduleId);
     }
 
     /**
@@ -1261,39 +1056,14 @@ public final class ModuleRegistry {
      * @return true 表示包已被某个处理器消费
      */
     public boolean routeClientPacket(Player player, String packetId, List<String> data) {
-        String action = data == null || data.isEmpty() || data.get(0) == null
-            ? "refresh"
-            : data.get(0).trim().toLowerCase(Locale.ROOT);
-        for (PrioritizedPacketHandler ph : packetHandlers) {
-            try {
-                if (packetGuard != null
-                    && (ph.packetId() == null || ph.packetId().equalsIgnoreCase(packetId))) {
-                    String guardModule = ph.guardModule() == null ? ph.moduleId() : ph.guardModule();
-                    if (!packetGuard.allow(player, guardModule, action, false)) {
-                        return true;
-                    }
-                }
-                if (ph.handler().handleClientPacket(player, packetId, data)) {
-                    return true;
-                }
-            } catch (Exception exception) {
-                LOGGER.warning("模块 " + ph.moduleId() + " 处理客户端包异常: " + exception.getMessage());
-            }
-        }
-        return false;
+        return clientPacketRouter.routeClientPacket(player, packetId, data);
     }
 
     /**
      * 通知所有已注册的客户端初始化处理器。
      */
     public void routeClientInitialized(Player player) {
-        for (PrioritizedInitializedHandler ih : initializedHandlers) {
-            try {
-                ih.handler().onClientInitialized(player);
-            } catch (Exception exception) {
-                LOGGER.warning("模块 " + ih.moduleId() + " 客户端初始化处理器异常: " + exception.getMessage());
-            }
-        }
+        clientPacketRouter.routeClientInitialized(player);
     }
 
     // ─── Capability 注册表 ────────────────────────────────────
@@ -1301,46 +1071,27 @@ public final class ModuleRegistry {
     /**
      * 注册模块提供的能力实例（由 DefaultModuleContext 调用）。
      */
-    @SuppressWarnings("unchecked")
     <T> void registerCapability(String moduleId, Class<T> capabilityType, T implementation) {
-        capabilities.put(capabilityType, implementation);
-        moduleCapabilityTypes.computeIfAbsent(moduleId, ignored -> new CopyOnWriteArrayList<>()).add(capabilityType);
-        if (implementation instanceof xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable p) {
-            purgeables.removeIf(existing -> existing.moduleId().equalsIgnoreCase(p.moduleId()));
-            purgeables.add(p);
-        }
-        if (implementation instanceof xuanmo.arcartxsuite.api.capability.DatabaseMigratable m) {
-            migratables.removeIf(existing -> existing.moduleId().equalsIgnoreCase(m.moduleId()));
-            migratables.add(m);
-        }
+        capabilityRegistry.register(moduleId, capabilityType, implementation);
     }
 
     /** Registers a capability owned by the core before external modules load. */
     public <T> void registerCoreCapability(Class<T> capabilityType, T implementation) {
-        capabilities.put(capabilityType, implementation);
+        capabilityRegistry.registerCore(capabilityType, implementation);
     }
 
     /**
      * 获取所有支持一键数据迁移的模块 ID。
      */
     public List<String> migratableModuleIds() {
-        List<String> ids = new ArrayList<>();
-        for (var m : migratables) {
-            ids.add(m.moduleId());
-        }
-        return ids;
+        return capabilityRegistry.migratableModuleIds();
     }
 
     /**
      * 获取指定模块的迁移 Capability。
      */
     public Optional<xuanmo.arcartxsuite.api.capability.DatabaseMigratable> getMigratable(String moduleId) {
-        for (var m : migratables) {
-            if (m.moduleId().equalsIgnoreCase(moduleId)) {
-                return Optional.of(m);
-            }
-        }
-        return Optional.empty();
+        return capabilityRegistry.getMigratable(moduleId);
     }
 
     /**
@@ -1349,17 +1100,7 @@ public final class ModuleRegistry {
      * @return 模块ID -> 受影响行数
      */
     public Map<String, Integer> purgePlayerData(java.util.UUID playerUuid) {
-        Map<String, Integer> result = new LinkedHashMap<>();
-        for (var p : purgeables) {
-            try {
-                int rows = p.purgePlayerData(playerUuid);
-                result.put(p.moduleId(), rows);
-            } catch (Exception e) {
-                LOGGER.warning("清除玩家数据失败: module=" + p.moduleId() + " error=" + e.getMessage());
-                result.put(p.moduleId(), -1);
-            }
-        }
-        return result;
+        return capabilityRegistry.purgePlayerData(playerUuid);
     }
 
     /**
@@ -1368,20 +1109,7 @@ public final class ModuleRegistry {
      * @return 模块ID -> 受影响行数（仅一条）；模块不存在时返回空 map
      */
     public Map<String, Integer> purgePlayerData(java.util.UUID playerUuid, String moduleId) {
-        Map<String, Integer> result = new LinkedHashMap<>();
-        for (var p : purgeables) {
-            if (p.moduleId().equalsIgnoreCase(moduleId)) {
-                try {
-                    int rows = p.purgePlayerData(playerUuid);
-                    result.put(p.moduleId(), rows);
-                } catch (Exception e) {
-                    LOGGER.warning("清除玩家数据失败: module=" + p.moduleId() + " error=" + e.getMessage());
-                    result.put(p.moduleId(), -1);
-                }
-                return result;
-            }
-        }
-        return result;
+        return capabilityRegistry.purgePlayerData(playerUuid, moduleId);
     }
 
     /**
@@ -1390,17 +1118,7 @@ public final class ModuleRegistry {
      * @return 模块ID -> 受影响行数
      */
     public Map<String, Integer> purgeAllPlayerData() {
-        Map<String, Integer> result = new LinkedHashMap<>();
-        for (var p : purgeables) {
-            try {
-                int rows = p.purgeAllPlayerData();
-                result.put(p.moduleId(), rows);
-            } catch (Exception e) {
-                LOGGER.warning("清空玩家数据失败: module=" + p.moduleId() + " error=" + e.getMessage());
-                result.put(p.moduleId(), -1);
-            }
-        }
-        return result;
+        return capabilityRegistry.purgeAllPlayerData();
     }
 
     /**
@@ -1409,39 +1127,21 @@ public final class ModuleRegistry {
      * @return 模块ID -> 受影响行数；模块不存在时返回空 map
      */
     public Map<String, Integer> purgeAllPlayerData(String moduleId) {
-        Map<String, Integer> result = new LinkedHashMap<>();
-        for (var p : purgeables) {
-            if (p.moduleId().equalsIgnoreCase(moduleId)) {
-                try {
-                    int rows = p.purgeAllPlayerData();
-                    result.put(p.moduleId(), rows);
-                } catch (Exception e) {
-                    LOGGER.warning("清空玩家数据失败: module=" + p.moduleId() + " error=" + e.getMessage());
-                    result.put(p.moduleId(), -1);
-                }
-                return result;
-            }
-        }
-        return result;
+        return capabilityRegistry.purgeAllPlayerData(moduleId);
     }
 
     /**
      * 获取所有已注册 PlayerDataPurgeable 的模块 ID 列表。
      */
     public List<String> purgeableModuleIds() {
-        List<String> ids = new java.util.ArrayList<>(purgeables.size());
-        for (var p : purgeables) {
-            ids.add(p.moduleId());
-        }
-        return ids;
+        return capabilityRegistry.purgeableModuleIds();
     }
 
     /**
      * 按类型查找能力实例。
      */
-    @SuppressWarnings("unchecked")
     public <T> T getCapability(Class<T> capabilityType) {
-        return (T) capabilities.get(capabilityType);
+        return capabilityRegistry.get(capabilityType);
     }
 
     /**
@@ -1449,29 +1149,7 @@ public final class ModuleRegistry {
      * 清理 purgeables 列表和 capabilities 表中由该模块注册的实例。
      */
     void removeCapabilities(String moduleId) {
-        purgeables.removeIf(p -> p.moduleId().equalsIgnoreCase(moduleId));
-        migratables.removeIf(m -> m.moduleId().equalsIgnoreCase(moduleId));
-        CopyOnWriteArrayList<Class<?>> types = moduleCapabilityTypes.remove(moduleId);
-        if (types != null) {
-            for (Class<?> capabilityType : types) {
-                capabilities.remove(capabilityType);
-            }
-        }
-    }
-
-    /**
-     * 带优先级的客户端包处理器包装。
-     */
-    record PrioritizedPacketHandler(
-        String moduleId,
-        ClientPacketHandler handler,
-        int priority,
-        String packetId,
-        String guardModule
-    ) {
-    }
-
-    record PrioritizedInitializedHandler(String moduleId, ClientInitializedHandler handler) {
+        capabilityRegistry.removeByModule(moduleId);
     }
 
     private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile, byte[] jarBytes, byte[] moduleSeed) {

@@ -20,8 +20,11 @@ import java.util.logging.Logger;
 /**
  * 受保护的 ClassLoader（方案 ②：作为 Bukkit PluginClassLoader 的 parent 注入）。
  *
- * <p>注入后，PluginClassLoader 采用 parent-first 委托，把每个类/资源请求先转交本加载器。
- * 本加载器是插件 JAR 内全部类与资源的唯一权威来源：
+ * <p>注入后，PluginClassLoader 的 parent 指向本加载器。本加载器采用 <b>child-first</b> 委托策略：
+ * 优先从本 JAR 加载类/资源，找不到时才委托给 originalParent（AppClassLoader 系）。
+ * 这确保插件 JAR 内的加密类/明文类由本加载器统一定义，避免 PluginClassLoader 重复 define。
+ *
+ * <p>本加载器是插件 JAR 内全部类与资源的唯一权威来源：
  * <ol>
  *   <li>加密类（{@code ENCRYPTED/<path>.enc}）：native n6 解密 → defineClass；</li>
  *   <li>明文类（JAR 内 {@code <path>.class}，如 ProGuard -keep 的主类/桥接库/被保留的第三方库）：
@@ -31,8 +34,8 @@ import java.util.logging.Logger;
  * </ol>
  * 资源（yml/lang/axb 等）同样优先从本 JAR 提供，保证被本加载器定义的类能 getResource 自身资源。
  *
- * <p>由于本加载器统一供给 JAR 内所有类，PluginClassLoader 在 parent-first 下基本不会再自行
- * define JAR 类（除了 hook 安装前已加载的引导类），从而避免重复定义。
+ * <p><b>注意</b>：child-first 策略意味着如果 JAR 内打包了与 Bukkit API 同名的类（如 shade 了
+ * {@code org.bukkit.xxx}），会优先使用 JAR 内的版本而非服务端版本。构建时需确保不 shade 服务端 API。
  */
 public final class ProtectedClassLoader extends ClassLoader {
 

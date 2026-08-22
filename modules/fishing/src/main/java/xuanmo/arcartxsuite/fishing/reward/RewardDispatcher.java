@@ -145,7 +145,7 @@ public final class RewardDispatcher {
         if (reward.commands() == null) return;
         for (String cmd : reward.commands()) {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
-                cmd.replace("{player}", player.getName()));
+                cmd.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName())));
         }
     }
 

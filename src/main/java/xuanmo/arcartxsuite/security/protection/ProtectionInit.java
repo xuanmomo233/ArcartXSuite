@@ -185,6 +185,10 @@ public final class ProtectionInit {
      * 用 sun.misc.Unsafe 把 target 的 {@code parent} 字段（java.base 的 final 字段，
      * Java 17 普通反射封封无法写）替换为 newParent。这是方案 ② 在「不加 --add-opens /
      * 不改启动脚本」前提下唯一可行的 parent 替换手段，也是最依赖运行时内部实现的一环。
+     *
+     * <p><b>兼容性警告</b>：Unsafe.putObject 在 Java 18+ 受到进一步限制，
+     * Java 21+（Paper 1.21）可能需要切换到 VarHandle 或 --add-opens 方案。
+     * 若此方法返回 false，保护层将无法注入，加密类加载会失败。
      */
     @SuppressWarnings("removal")
     private static boolean installAsParent(ClassLoader target, ClassLoader newParent) {
@@ -254,11 +258,12 @@ public final class ProtectionInit {
             final Object[] holder = new Object[] { sentinel };
 
             // GC 可能在两次读之间移动 sentinel（其压缩 oop 值随之改变），重试数次规避 TOCTOU。
+            // 扫描范围 8~512 字节，覆盖已知 JVM（Java 8~21）的 ClassLoader 对象布局。
             for (int attempt = 0; attempt < 8; attempt++) {
                 if (scale == 4) {
                     int needle = (Integer) getIntM.invoke(unsafe, holder, base);
                     if (needle == 0) continue;
-                    for (long off = 8L; off <= 256L; off += 4L) {
+                    for (long off = 8L; off <= 512L; off += 4L) {
                         if ((Integer) getIntM.invoke(unsafe, probe, off) == needle) {
                             return off;
                         }
@@ -266,7 +271,7 @@ public final class ProtectionInit {
                 } else {
                     long needle = (Long) getLongM.invoke(unsafe, holder, base);
                     if (needle == 0L) continue;
-                    for (long off = 8L; off <= 256L; off += 8L) {
+                    for (long off = 8L; off <= 512L; off += 8L) {
                         if ((Long) getLongM.invoke(unsafe, probe, off) == needle) {
                             return off;
                         }

@@ -2820,10 +2820,11 @@ public final class MailService implements Listener {
     }
 
     private String replacePlayerTokens(String command, Player player) {
+        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
         return safe(command)
-            .replace("<player>", player.getName())
-            .replace("{player}", player.getName())
-            .replace("%player%", player.getName());
+            .replace("<player>", safeName)
+            .replace("{player}", safeName)
+            .replace("%player%", safeName);
     }
 
     private String generateUniqueCdkCode() throws Exception {

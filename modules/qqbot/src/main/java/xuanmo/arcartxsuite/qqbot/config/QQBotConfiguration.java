@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.qqbot.config;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
@@ -26,6 +27,7 @@ public record QQBotConfiguration(
     boolean adminEnabled,
     List<Long> adminQQs,
     String adminCommandPrefix,
+    List<String> adminAllowedCommands,
     String commandPrefix,
     String helpPrefix,
     Map<String, QQBotCustomCommand> customCommands,
@@ -171,6 +173,13 @@ public record QQBotConfiguration(
             if (qq > 0) adminQQs.add(qq);
         }
         String adminCommandPrefix = yaml.getString("admin.command-prefix", "#cmd");
+
+        // 管理员可执行的命令白名单（命令名前缀，不含参数；空列表表示允许全部）
+        List<String> adminAllowedCommands = new ArrayList<>();
+        for (Object obj : yaml.getList("admin.allowed-commands", List.of())) {
+            String s = String.valueOf(obj).trim().toLowerCase(Locale.ROOT);
+            if (!s.isEmpty()) adminAllowedCommands.add(s);
+        }
 
         String commandPrefix = yaml.getString("command-prefix", "#");
         String helpPrefix = yaml.getString("help-prefix", "#帮助");
@@ -394,7 +403,7 @@ public record QQBotConfiguration(
 
         return new QQBotConfiguration(
             debug, serverId, onebot, groups, binding, whitelist,
-            adminEnabled, adminQQs, adminCommandPrefix,
+            adminEnabled, adminQQs, adminCommandPrefix, adminAllowedCommands,
             commandPrefix, helpPrefix, customCommands, storage, messages,
             signin, prizes, monitor, scheduledMessages, broadcast, marketBroadcast,
             welcome, autoReply, announce, moderation, blacklist,

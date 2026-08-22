@@ -6,6 +6,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbModuleConfiguration;
@@ -33,15 +34,11 @@ public final class RgbModule extends AbstractAXSModule {
     }
 
     @Override
-    protected String configFileName() {
-        return "ArcartXRGB.yml";
-    }
-
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // entries 为渐变色条目列表，用户自由增删
-        return SyncPolicy.builder()
-            .dynamicSection("entries")
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXRGB.yml")
+            // entries 为渐变色条目列表，用户自由增删
+            .syncPolicy(SyncPolicy.builder().dynamicSection("entries").build())
             .build();
     }
 

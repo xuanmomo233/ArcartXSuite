@@ -117,6 +117,19 @@ storage:
     database: "arcartxsuite"
     username: "root"
     password: ""
+    # JDBC 连接参数（mode=mysql 时生效）。
+    # use-ssl: 内网自签证书环境可设为 false。
+    use-ssl: true
+    # allow-public-key-retrieval: MySQL 8+ 缓存 RSA 公钥，内网可设为 true 避免握手失败。
+    allow-public-key-retrieval: false
+    # server-timezone: JDBC 驱动时区，需与 MySQL 服务器一致。
+    server-timezone: "UTC"
+    # character-encoding / use-unicode: 字符集控制。
+    character-encoding: "UTF-8"
+    use-unicode: true
+    # 自定义 JDBC 参数（直接拼接到 URL 末尾，优先级最高，可覆盖上述项）。
+    # 示例: "&socketTimeout=30000&autoReconnect=true"
+    jdbc-params: ""
   # MySQL 连接池大小（sqlite 固定为 1，此项无效）。
   pool-size: 8
 
@@ -292,6 +305,15 @@ auth:
   # 本地混合代理监听端口（固定）。start-mixed-auth 脚本与服务器都使用此端口，
   # authlib-injector 在服务器启动时会连接 http://127.0.0.1:<此端口>。必须是未被占用的端口（1-65535）。
   mixed-proxy-port: 25599
+  # 混合代理主机地址。
+  # 【单端服务器】127.0.0.1（默认，混合代理与服务器在同一 JVM 进程组）
+  # 【单机群组服】127.0.0.1（代理端插件与后端子服在同一台机器）
+  # 【跨机群组服】代理端机器的 IP（如 10.0.0.5），需与 proxy-config.yml 的 mixed-proxy-bind-host 一致
+  mixed-proxy-host: "127.0.0.1"
+  # 混合代理 account-source 接口鉴权 token（跨机群组服必配）。
+  # 必须与代理端 proxy-config.yml 的 mixed-proxy-token 完全一致。
+  # 单机模式（127.0.0.1）留空即可。
+  mixed-proxy-token: ""
 
 # ========== 客户端数据包防护（防连点 / 防刷）==========
 # 针对 ArcartX UI 各模块的客户端回包进行速率限制，防止玩家通过连点器 / 宏脚本刷取资源。

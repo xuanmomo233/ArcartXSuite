@@ -14,9 +14,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.StorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
 /**
  * 仓库模块的 JDBC 存储实现。
@@ -28,36 +28,9 @@ import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.Storage
  */
 public final class JdbcWarehouseRepository extends AbstractModuleRepository implements WarehouseRepository {
 
-    private final StorageConfiguration configuration;
-
-    /**
-     * 构造 JDBC 仓库存储。
-     *
-     * @param dataFolder    模块数据目录
-     * @param configuration 存储配置（连接信息、方言等）
-     * @param logger        日志记录器
-     */
-    public JdbcWarehouseRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
-        super("AXS-Warehouse", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
-     * <p>
-     * 仓库模块的表名已内置 {@code warehouse_} 前缀，因此 tablePrefix 传入空字符串。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcWarehouseRepository(StorageManager storageManager, String moduleId,
-                                    String sqliteFileName, Logger logger) {
-        super("AXS-Warehouse", storageManager, moduleId, "", sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcWarehouseRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                   File dataFolder, Logger logger) {
+        super("AXS-Warehouse", dataSource, descriptor, dataFolder, logger);
     }
 
     /**

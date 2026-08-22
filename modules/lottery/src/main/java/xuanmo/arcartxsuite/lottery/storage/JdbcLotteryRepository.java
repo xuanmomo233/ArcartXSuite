@@ -10,11 +10,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration.StorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
 
@@ -27,7 +27,6 @@ import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
  */
 public class JdbcLotteryRepository extends AbstractModuleRepository implements LotteryRepository {
 
-    private final StorageConfiguration config;
     private final Logger logger;
 
     private String tGachaState;
@@ -38,40 +37,15 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     private String tPoints;
     private String tExchange;
 
-    /**
-     * 构造 JDBC 数据仓库。
-     *
-     * @param dataFolder 模块数据目录
-     * @param config     存储配置
-     * @param logger     日志记录器
-     */
-    public JdbcLotteryRepository(File dataFolder, StorageConfiguration config, Logger logger) {
-        super("AXS-Lottery", dataFolder, config.toDescriptor(), logger);
-        this.config = config;
-        this.logger = logger;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcLotteryRepository(StorageManager storageManager, String moduleId,
-                                 String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Lottery", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.config = null;
+    public JdbcLotteryRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                 File dataFolder, Logger logger) {
+        super("AXS-Lottery", dataSource, descriptor, dataFolder, logger);
         this.logger = logger;
     }
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
+        String prefix = tablePrefix();
         tGachaState = prefix + "gacha_state";
         tGachaLog = prefix + "gacha_log";
         tCaseState = prefix + "case_state";

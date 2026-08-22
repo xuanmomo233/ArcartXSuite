@@ -11,12 +11,11 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerStorageConfiguration;
 
 /**
  * EntityTracker 标准 JDBC 数据仓库。
@@ -27,26 +26,9 @@ public final class JdbcEntityTrackerRepository extends AbstractModuleRepository 
 
     private final Logger logger;
 
-    public JdbcEntityTrackerRepository(File dataFolder, EntityTrackerStorageConfiguration config, Logger logger) {
-        super("AXS-EntityTracker", dataFolder, config.toDescriptor(), logger);
-        this.logger = logger;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
-     * <p>
-     * EntityTracker 的表名无前缀，因此 tablePrefix 传入空字符串。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcEntityTrackerRepository(StorageManager storageManager, String moduleId,
-                                        String sqliteFileName, Logger logger) {
-        super("AXS-EntityTracker", storageManager, moduleId, "", sqliteFileName, logger);
+    public JdbcEntityTrackerRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                       File dataFolder, Logger logger) {
+        super("AXS-EntityTracker", dataSource, descriptor, dataFolder, logger);
         this.logger = logger;
     }
 

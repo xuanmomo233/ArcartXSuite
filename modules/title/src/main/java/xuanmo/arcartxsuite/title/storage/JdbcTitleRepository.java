@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.title.config.TitleStorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
 import xuanmo.arcartxsuite.title.model.PlayerTitleState;
 
@@ -28,33 +28,9 @@ import xuanmo.arcartxsuite.title.model.PlayerTitleState;
  */
 public final class JdbcTitleRepository extends AbstractModuleRepository implements TitleRepository {
 
-    private final TitleStorageConfiguration configuration;
-
-    /**
-     * @param dataFolder    插件数据目录
-     * @param configuration 存储配置
-     * @param logger        日志器
-     */
-    public JdbcTitleRepository(File dataFolder, TitleStorageConfiguration configuration, Logger logger) {
-        super("AXS-Title", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志器
-     * @since 1.4.0
-     */
-    public JdbcTitleRepository(StorageManager storageManager, String moduleId,
-                               String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Title", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcTitleRepository(DataSource dataSource, StorageDescriptor descriptor,
+                               File dataFolder, Logger logger) {
+        super("AXS-Title", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

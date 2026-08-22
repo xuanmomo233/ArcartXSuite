@@ -12,11 +12,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.StorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
@@ -36,20 +36,9 @@ import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
  */
 public final class JdbcFishingRepository extends AbstractModuleRepository implements FishingRepository {
 
-    private final StorageConfiguration configuration;
-    private final Logger logger;
-
-    public JdbcFishingRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
-        super("AXS-Fishing", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-        this.logger = logger;
-    }
-
-    public JdbcFishingRepository(StorageManager storageManager, String moduleId,
-                                 String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Fishing", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
-        this.logger = logger;
+    public JdbcFishingRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                 File dataFolder, Logger logger) {
+        super("AXS-Fishing", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

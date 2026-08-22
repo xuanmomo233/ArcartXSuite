@@ -13,15 +13,16 @@ example_encounter_quest:
   # category 仅 category.source=overlay 时必填
   # category: encounter
   required-mainline: []
+  # hooks：任务生命周期事件 → EventPacket 信号桥（信号名可自定义，见 mainline.yml）
   hooks:
     triggered:
-      - "questgps_encounter_triggered"
+      - "questgps_quest_triggered"
     accepted:
-      - "questgps_encounter_accepted"
+      - "questgps_quest_accepted"
     completed:
-      - "questgps_encounter_completed"
+      - "questgps_quest_completed"
     track-changed:
-      - "questgps_encounter_track_changed"
+      - "questgps_quest_track_changed"
   navigation:
     enabled: true
     point:

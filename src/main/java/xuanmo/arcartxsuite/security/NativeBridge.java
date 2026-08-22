@@ -180,7 +180,16 @@ public final class NativeBridge {
         return aesKey;
     }
 
-    /** V2: 解密 .enc 格式 [AXNE][ver:4][iv:12][ct+tag]（AES-256-GCM，128-bit tag）。 */
+    /**
+     * V2: 解密 .enc 格式 [AXNE][ver:4][iv:12][ct+tag]（AES-256-GCM，128-bit tag）。
+     * <p>
+     * <b>安全限制</b>：IV 从文件头读取（CI 加密时固定生成一次），同一 DLL 每次加密的 IV 相同。
+     * GCM 模式下 IV 重复在密钥不变时不会泄露明文（因为密文也只有一个），
+     * 但攻击者若能诱导重新加密（篡改 .enc 触发重新解密），IV 复用 + 密钥不变会破坏 GCM 安全性。
+     * <p>
+     * 彻底修复需要 native 层在每次加密时生成随机 IV 并写入文件头，
+     * 当前 Java 层无法独立完成此改造（加密在 CI 的 encrypt-native.py 中执行）。
+     */
     private static byte[] decryptNativeLib(byte[] encData) throws Exception {
         if (encData.length < 4 + 4 + 12 + 16) {
             throw new IOException("encrypted native too short");

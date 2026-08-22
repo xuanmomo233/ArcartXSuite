@@ -15,9 +15,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.mail.config.MailStorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
@@ -40,29 +40,18 @@ import xuanmo.arcartxsuite.mail.model.MailStatus;
  */
 public final class JdbcMailRepository extends AbstractModuleRepository implements MailRepository {
 
-    private final MailStorageConfiguration configuration;
-
-    public JdbcMailRepository(File dataFolder, MailStorageConfiguration configuration, Logger logger) {
-        super("AXS-Mail", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
     /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
-     * <p>
-     * 邮件模块的表名已内置 {@code mail_} 前缀，因此 tablePrefix 传入空字符串。
+     * 构造邮件 JDBC 仓储。
      *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
+     * @param dataSource 数据源（由 {@link xuanmo.arcartxsuite.api.storage.StorageManager#resolveModuleDataSource} 解析）
+     * @param descriptor 存储描述符（提供方言信息和表前缀）
+     * @param dataFolder 模块数据目录（迁移 SQLite 目标文件时使用）
+     * @param logger     日志记录器
+     * @since 1.5.0
      */
-    public JdbcMailRepository(StorageManager storageManager, String moduleId,
-                              String sqliteFileName, Logger logger) {
-        super("AXS-Mail", storageManager, moduleId, "", sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcMailRepository(DataSource dataSource, StorageDescriptor descriptor,
+                              File dataFolder, Logger logger) {
+        super("AXS-Mail", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

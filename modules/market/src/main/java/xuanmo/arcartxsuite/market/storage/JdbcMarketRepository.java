@@ -11,21 +11,18 @@ import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
-import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.market.shop.ShopLimitRecord;
 
 /**
  * MySQL / SQLite 双模式市场数据仓库。
  */
 public class JdbcMarketRepository extends AbstractModuleRepository implements MarketRepository {
-
-    private final StorageConfiguration config;
-    private final Logger logger;
 
     private String tListings;
     private String tBids;
@@ -36,34 +33,28 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private String tPending;
     private String tGlobalStock;
     private String tPlayerStock;
+    private String tListingsFts;
 
-    public JdbcMarketRepository(StorageConfiguration config, Logger logger, File dataFolder) {
-        super("AXS-Market", dataFolder, config.toDescriptor(), logger);
-        this.config = config;
-        this.logger = logger;
-    }
+    /** 全文索引是否可用（SQLite FTS5 或 MySQL FULLTEXT+ngram），false 时降级到 LIKE */
+    private volatile boolean ftsAvailable = false;
 
     /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     * 构造市场数据仓库。
      *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
+     * @param dataSource 数据源（由 {@link xuanmo.arcartxsuite.api.storage.StorageManager#resolveModuleDataSource} 解析）
+     * @param descriptor 存储描述符（提供方言信息和表前缀）
+     * @param dataFolder 模块数据目录（迁移 SQLite 目标文件时使用）
+     * @param logger     日志记录器
+     * @since 1.5.0
      */
-    public JdbcMarketRepository(StorageManager storageManager, String moduleId,
-                                String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Market", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.config = null;
-        this.logger = logger;
+    public JdbcMarketRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                File dataFolder, Logger logger) {
+        super("AXS-Market", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
+        String prefix = tablePrefix();
         tListings = prefix + "listings";
         tBids = prefix + "bids";
         tHistory = prefix + "history";
@@ -73,20 +64,68 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tPending = prefix + "pending_deliveries";
         tGlobalStock = prefix + "shop_global_stock";
         tPlayerStock = prefix + "shop_player_stock";
+        tListingsFts = prefix + "listings_fts";
         createTables(conn);
-        logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
+        initFullTextIndex(conn);
+        logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix
+            + (ftsAvailable ? "，全文索引: 已启用" : "，全文索引: 不可用（降级 LIKE）"));
     }
 
     @Override
     protected List<String> playerDataTables() {
-        // 市场模块使用多种列名(seller/buyer/player/bidder)，无法统一按单列删除
+        // 市场模块使用多种列名(seller/buyer/player/bidder)，无法统一按单列删除，
+        // 实际删除逻辑见 onPurgePlayerData。
         return List.of();
     }
 
     @Override
+    protected int onPurgePlayerData(UUID playerUuid) throws SQLException {
+        String uuid = playerUuid.toString();
+        int total = 0;
+        try (Connection conn = getConnection()) {
+            boolean originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try {
+                // 拍卖列表：卖家或最高竞拍者
+                total += execUpdate(conn, "DELETE FROM " + tListings + " WHERE seller=? OR highest_bidder=?", uuid, uuid);
+                // 竞价记录：竞拍者
+                total += execUpdate(conn, "DELETE FROM " + tBids + " WHERE bidder=?", uuid);
+                // 交易历史：卖家或买家
+                total += execUpdate(conn, "DELETE FROM " + tHistory + " WHERE seller=? OR buyer=?", uuid, uuid);
+                // 收藏列表
+                total += execUpdate(conn, "DELETE FROM " + tFavorites + " WHERE player=?", uuid);
+                // 商店限购记录
+                total += execUpdate(conn, "DELETE FROM " + tShopLimits + " WHERE player=?", uuid);
+                // 回收统计
+                total += execUpdate(conn, "DELETE FROM " + tRecycleStats + " WHERE player=?", uuid);
+                // 待发放物品/货币
+                total += execUpdate(conn, "DELETE FROM " + tPending + " WHERE player=?", uuid);
+                // 玩家商店库存
+                total += execUpdate(conn, "DELETE FROM " + tPlayerStock + " WHERE player=?", uuid);
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(originalAutoCommit);
+            }
+        }
+        return total;
+    }
+
+    private int execUpdate(Connection conn, String sql, Object... params) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) {
+                ps.setObject(i + 1, params[i]);
+            }
+            return ps.executeUpdate();
+        }
+    }
+
+    @Override
     protected List<String> allTables() {
-        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
-        return List.of(
+        String prefix = tablePrefix();
+        List<String> tables = new ArrayList<>(java.util.List.of(
             prefix + "listings",
             prefix + "bids",
             prefix + "history",
@@ -96,7 +135,12 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             prefix + "pending_deliveries",
             prefix + "shop_global_stock",
             prefix + "shop_player_stock"
-        );
+        ));
+        // SQLite FTS5 虚拟表（迁移时需要一并处理）
+        if (!isMysql() && tListingsFts != null) {
+            tables.add(tListingsFts);
+        }
+        return List.copyOf(tables);
     }
 
     private void createTables(Connection conn) throws SQLException {
@@ -345,6 +389,131 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             """.formatted(tPlayerStock));
     }
 
+    // ─── 全文索引初始化 ────────────────────────────────────
+
+    /**
+     * 初始化全文索引：
+     * <ul>
+     *   <li>SQLite：检测 FTS5 支持 → 建 FTS5 虚拟表（external content 模式）+ 触发器 + 回填旧数据</li>
+     *   <li>MySQL：检测 ngram 分词器 → 加 FULLTEXT INDEX</li>
+     *   <li>不支持时降级到 LIKE，ftsAvailable 保持 false</li>
+     * </ul>
+     * 旧数据安全：原表结构不变，FTS 索引/虚拟表是增量添加，回填是一次性操作。
+     */
+    private void initFullTextIndex(Connection conn) throws SQLException {
+        if (isMysql()) {
+            initFullTextIndexMysql(conn);
+        } else {
+            initFullTextIndexSqlite(conn);
+        }
+    }
+
+    private void initFullTextIndexSqlite(Connection conn) {
+        // 1. 检测 FTS5 是否可用
+        boolean fts5Supported;
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeQuery("SELECT fts5(1)");
+            fts5Supported = true;
+        } catch (SQLException e) {
+            fts5Supported = false;
+            logger.warning("[Market] SQLite 不支持 FTS5，搜索将使用 LIKE 降级模式: " + e.getMessage());
+        }
+        if (!fts5Supported) return;
+
+        try (Statement stmt = conn.createStatement()) {
+            // 2. 检测 FTS 虚拟表是否已存在（避免重复建表和回填）
+            boolean ftsTableExists;
+            try (ResultSet rs = stmt.executeQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='" + tListingsFts + "'")) {
+                ftsTableExists = rs.next();
+            }
+
+            if (!ftsTableExists) {
+                // 3. 建 FTS5 虚拟表（external content 模式，数据不重复存储）
+                stmt.executeUpdate("""
+                    CREATE VIRTUAL TABLE %s USING fts5(
+                        item_display_name, pinyin, initials,
+                        content='%s', content_rowid='id',
+                        tokenize='unicode61'
+                    )
+                    """.formatted(tListingsFts, tListings));
+
+                // 4. 回填旧数据（一次性，把现有 listings 的文本灌入 FTS 表）
+                stmt.executeUpdate("""
+                    INSERT INTO %s(rowid, item_display_name, pinyin, initials)
+                    SELECT id, item_display_name, pinyin, initials FROM %s
+                    """.formatted(tListingsFts, tListings));
+
+                // 5. 建触发器自动同步（INSERT / DELETE / UPDATE）
+                stmt.executeUpdate("""
+                    CREATE TRIGGER IF NOT EXISTS %s_ai AFTER INSERT ON %s BEGIN
+                        INSERT INTO %s(rowid, item_display_name, pinyin, initials)
+                        VALUES (new.id, new.item_display_name, new.pinyin, new.initials);
+                    END
+                    """.formatted(tListingsFts, tListings, tListingsFts));
+
+                stmt.executeUpdate("""
+                    CREATE TRIGGER IF NOT EXISTS %s_ad AFTER DELETE ON %s BEGIN
+                        INSERT INTO %s(%s, rowid, item_display_name, pinyin, initials)
+                        VALUES ('delete', old.id, old.item_display_name, old.pinyin, old.initials);
+                    END
+                    """.formatted(tListingsFts, tListings, tListingsFts, tListingsFts));
+
+                stmt.executeUpdate("""
+                    CREATE TRIGGER IF NOT EXISTS %s_au AFTER UPDATE ON %s BEGIN
+                        INSERT INTO %s(%s, rowid, item_display_name, pinyin, initials)
+                        VALUES ('delete', old.id, old.item_display_name, old.pinyin, old.initials);
+                        INSERT INTO %s(rowid, item_display_name, pinyin, initials)
+                        VALUES (new.id, new.item_display_name, new.pinyin, new.initials);
+                    END
+                    """.formatted(tListingsFts, tListings, tListingsFts, tListingsFts, tListingsFts));
+
+                logger.info("[Market] SQLite FTS5 全文索引已创建并回填旧数据");
+            }
+            ftsAvailable = true;
+        } catch (SQLException e) {
+            logger.warning("[Market] 创建 SQLite FTS5 索引失败，降级到 LIKE: " + e.getMessage());
+            ftsAvailable = false;
+        }
+    }
+
+    private void initFullTextIndexMysql(Connection conn) {
+        // 1. 检测是否已有 FULLTEXT INDEX（避免重复添加导致表重建）
+        boolean hasFullTextIndex = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SHOW INDEX FROM " + tListings + " WHERE Index_type = 'FULLTEXT'")) {
+            hasFullTextIndex = rs.next();
+        } catch (SQLException e) {
+            logger.warning("[Market] 检测 MySQL FULLTEXT 索引失败: " + e.getMessage());
+        }
+        if (hasFullTextIndex) {
+            ftsAvailable = true;
+            return;
+        }
+
+        // 2. 尝试添加 FULLTEXT INDEX（使用 ngram 分词器支持中文）
+        // ngram 分词器将中文按 N-gram 切分，默认 token_size=2，可搜两字及以上
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(
+                "ALTER TABLE " + tListings
+                + " ADD FULLTEXT INDEX idx_fts_search(item_display_name, pinyin, initials) WITH PARSER ngram");
+            ftsAvailable = true;
+            logger.info("[Market] MySQL FULLTEXT 索引已创建（ngram 分词器）");
+        } catch (SQLException e) {
+            // ngram 分词器可能不可用（MySQL < 5.7.6 或未启用），尝试不加 parser
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(
+                    "ALTER TABLE " + tListings
+                    + " ADD FULLTEXT INDEX idx_fts_search(item_display_name, pinyin, initials)");
+                ftsAvailable = true;
+                logger.info("[Market] MySQL FULLTEXT 索引已创建（默认分词器，中文搜索可能不完整）");
+            } catch (SQLException e2) {
+                logger.warning("[Market] 创建 MySQL FULLTEXT 索引失败，降级到 LIKE: " + e2.getMessage());
+                ftsAvailable = false;
+            }
+        }
+    }
+
     @Override
     public void shutdown() {
         super.shutdown();
@@ -487,6 +656,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public List<AuctionListing> searchListings(String keyword, int offset, int limit) {
+        if (ftsAvailable) {
+            return searchListingsFts(keyword, offset, limit);
+        }
+        // 降级：LIKE 全表扫描
         String sql = "SELECT * FROM " + tListings
             + " WHERE status='ACTIVE' AND expires_at > ?"
             + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)"
@@ -510,6 +683,47 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         return results;
     }
 
+    /**
+     * 全文索引搜索：
+     * <ul>
+     *   <li>SQLite FTS5：用 {@code listings_fts MATCH ?} 子查询定位 rowid，再回主表取完整行</li>
+     *   <li>MySQL FULLTEXT：用 {@code MATCH(...) AGAINST(? IN BOOLEAN MODE)} 直接在主表上搜索</li>
+     * </ul>
+     */
+    private List<AuctionListing> searchListingsFts(String keyword, int offset, int limit) {
+        String sql;
+        if (isMysql()) {
+            // MySQL：MATCH ... AGAINST IN BOOLEAN MODE
+            sql = "SELECT * FROM " + tListings
+                + " WHERE status='ACTIVE' AND expires_at > ?"
+                + " AND MATCH(item_display_name, pinyin, initials) AGAINST(? IN BOOLEAN MODE)"
+                + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        } else {
+            // SQLite FTS5：子查询定位 rowid，再回主表
+            sql = "SELECT * FROM " + tListings
+                + " WHERE status='ACTIVE' AND expires_at > ?"
+                + " AND id IN (SELECT rowid FROM " + tListingsFts + " WHERE " + tListingsFts + " MATCH ?)"
+                + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        }
+        List<AuctionListing> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            ps.setString(2, keyword);
+            ps.setInt(3, limit);
+            ps.setInt(4, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(mapListing(rs));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "全文索引搜索失败，降级到 LIKE: " + e.getMessage(), e);
+            // FTS 查询失败时降级到 LIKE（防止索引损坏导致搜索完全不可用）
+            ftsAvailable = false;
+            return searchListings(keyword, offset, limit);
+        }
+        return results;
+    }
+
     @Override
     public List<AuctionListing> getListingsBySeller(
             UUID seller,
@@ -529,11 +743,41 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     public int countSearchListings(String keyword) {
+        if (ftsAvailable) {
+            return countSearchListingsFts(keyword);
+        }
+        // 降级：LIKE 全表扫描
         String sql = "SELECT COUNT(*) FROM " + tListings
             + " WHERE status='ACTIVE' AND expires_at > ?"
             + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)";
         String like = "%" + keyword + "%";
         return countQuery(sql, System.currentTimeMillis(), like, like, like);
+    }
+
+    private int countSearchListingsFts(String keyword) {
+        String sql;
+        if (isMysql()) {
+            sql = "SELECT COUNT(*) FROM " + tListings
+                + " WHERE status='ACTIVE' AND expires_at > ?"
+                + " AND MATCH(item_display_name, pinyin, initials) AGAINST(? IN BOOLEAN MODE)";
+        } else {
+            sql = "SELECT COUNT(*) FROM " + tListings
+                + " WHERE status='ACTIVE' AND expires_at > ?"
+                + " AND id IN (SELECT rowid FROM " + tListingsFts + " WHERE " + tListingsFts + " MATCH ?)";
+        }
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            ps.setString(2, keyword);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "全文索引计数失败，降级到 LIKE: " + e.getMessage(), e);
+            ftsAvailable = false;
+            return countSearchListings(keyword);
+        }
+        return 0;
     }
     @Override
     public List<AuctionListing> getListingsBySeller(UUID seller) {

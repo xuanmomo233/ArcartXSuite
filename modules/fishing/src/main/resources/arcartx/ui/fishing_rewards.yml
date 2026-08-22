@@ -5,7 +5,7 @@
 # 每个条目展示：等级要求、图标、名称、领取状态（可领取/已领取/未达标）
 # 视觉规范（钓鱼青蓝主题）:
 #   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片底 26,34,46,210  卡片描边 50,160,190,180
+#   卡片底 26,34,46,210  卡片描边 80,200,220,240
 #   主色（青蓝）50,170,200  已领取 124,196,142  悬停 80,200,220
 #
 # packetHandler init 包字段:
@@ -166,7 +166,6 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      through: true
       normal: ~Frosted:24;12,22,38,110
   # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
   # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
@@ -199,7 +198,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           标题色块:
             type: Texture
             attribute:
@@ -224,7 +223,7 @@ controls:
               x: 168
               width: 1
               height: 30
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           页名:
             type: Text
             attribute:
@@ -261,7 +260,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               关闭文字:
                 type: Text
                 attribute:
@@ -291,7 +290,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           导航总览:
             type: Canvas
             attribute:
@@ -316,7 +315,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               总览文字:
                 type: Text
                 attribute:
@@ -349,7 +348,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               图鉴文字:
                 type: Text
                 attribute:
@@ -420,7 +419,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               天赋文字:
                 type: Text
                 attribute:
@@ -453,7 +452,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               任务文字:
                 type: Text
                 attribute:
@@ -470,7 +469,7 @@ controls:
               y: 364
               width: 264
               height: 2
-              normal: ~50,160,190,80
+              normal: ~80,200,220,220
           导航提示:
             type: Text
             attribute:
@@ -500,7 +499,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           页标题:
             type: Text
             attribute:
@@ -534,6 +533,22 @@ controls:
                   texts: "~&f暂无赛季奖励数据"
                   fontSize: 36
 
+          # 滚动滑轨：右侧滚动条轨道
+          奖励滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 96
+              width: 12
+              height: "var.viewH - 264"
+              normal: ~15,25,38,220
+              shape: ~round_rect
+              radius: 6
+            effect:
+              stroke:
+                width: 2
+                color: ~80,200,220,240
           # 滚动滑块：右侧滚动条滑块
           奖励滑块:
             type: Texture
@@ -542,12 +557,12 @@ controls:
               point: ~top_right
               x: -16
               y: 96
-              width: 8
-              height: 60
-              normal: ~80,200,220,200
-              maxDragY: "var.viewH - 324"
+              width: 12
+              height: 120
+              normal: ~50,170,200,220
+              maxDragY: "var.viewH - 384"
               shape: ~round_rect
-              radius: 4
+              radius: 6
 
           # 滚动区：可滚动的奖励列表容器
           滚动区:
@@ -600,7 +615,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: "self.parent.entry != none && self.parent.entry['claimable'] == true ? '80,200,220,230' : (self.parent.entry != none && self.parent.entry['claimed'] == true ? '124,196,142,180' : '50,160,190,120')"
+                            color: "self.parent.entry != none && self.parent.entry['claimable'] == true ? '80,200,220,230' : (self.parent.entry != none && self.parent.entry['claimed'] == true ? '124,196,142,240' : '80,200,220,230')"
 
                       # 等级徽章：显示奖励所需等级
                       等级徽章:
@@ -622,7 +637,7 @@ controls:
                             effect:
                               stroke:
                                 width: 2
-                                color: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '80,200,220,200' : '50,160,190,120'"
+                                color: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '80,200,220,200' : '80,200,220,230'"
                           等级文字:
                             type: Text
                             attribute:
@@ -667,7 +682,7 @@ controls:
                           y: 60
                           width: "var.contentW - 500"
                           texts: "self.parent.entry != none ? '&7类型: &b' + (self.parent.entry['type'] == 'currency' ? '货币' : (self.parent.entry['type'] == 'item' ? '物品' : self.parent.entry['type'])) : none"
-                          fontSize: 24
+                          fontSize: 30
                           through: true
 
                       # 领取按钮：可领取时显示（青蓝高亮 + 点击领取）
@@ -738,7 +753,7 @@ controls:
                             effect:
                               stroke:
                                 width: 1
-                                color: ~50,160,190,100
+                                color: ~80,200,220,225
                           未达标文字:
                             type: Text
                             attribute:

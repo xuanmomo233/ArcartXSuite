@@ -19,6 +19,9 @@ import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration;
@@ -59,20 +62,14 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
      *
      * @return {@code "ArcartXExtraBackpack.yml"}
      */
-    @Override
-    protected @Nullable String configFileName() {
-        return "ArcartXExtraBackpack.yml";
-    }
+    
 
     /**
      * 返回模块消息文件名。
      *
      * @return {@code "messages.yml"}
      */
-    @Override
-    protected @Nullable String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     /**
      * 返回默认配置同步策略，将 {@code extra-backpack} 节声明为动态节，
@@ -80,56 +77,30 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
      *
      * @return 同步策略
      */
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("extra-backpack")
-            .build();
-    }
+    
 
     /**
      * 返回主配置的校验规则列表，覆盖存储模式枚举、连接池范围与调试/UI/启用开关类型校验。
      *
      * @return 校验规则列表
      */
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            ValidationRule.of("settings.debug", ValueType.BOOLEAN),
-            ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
-            ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
-            ValidationRule.of("extra-backpack.enabled", ValueType.BOOLEAN)
-        );
-    }
+    
 
     /**
      * 返回 UI 资源映射，将 jar 内 UI 模板导出到模块数据目录。
      *
      * @return 资源路径到目标相对路径的映射
      */
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/extrabackpack.yml", "ui/extrabackpack.yml");
-        return mappings;
-    }
+    
 
     /**
      * 返回是否在启用时覆盖已存在的 UI 文件。
      *
      * @return 配置中 {@code ui.overwrite-ui-files} 的值
      */
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     /**
      * 加载并解析模块主配置文件。
@@ -156,16 +127,17 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor ebDesc;
+        javax.sql.DataSource ebDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repository = new JdbcExtraBackpackRepository(dataFolder, configuration.storage(), logger);
+            ebDesc = configuration.storage().toDescriptor();
+            ebDs = storageManager.resolveModuleDataSource("extrabackpack", null, dataFolder, ebDesc);
         } else {
-            // 新路径：共享本体数据源
-            repository = new JdbcExtraBackpackRepository(
-                storageManager, "extrabackpack",
-                "",
-                configuration.storage().sqliteFileName(), logger);
+            ebDesc = storageManager.getDescriptor().withTablePrefix("");
+            ebDs = storageManager.resolveModuleDataSource("extrabackpack",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repository = new JdbcExtraBackpackRepository(ebDs, ebDesc, dataFolder, logger);
         repository.initialize();
         ExtraBackpackService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
@@ -251,6 +223,7 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             repository.close();
             repository = null;
         }
+        storageManager.closeModuleDataSource("extrabackpack");
     }
 
     /**
@@ -259,43 +232,19 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
      *
      * @return 数据包处理器实例
      */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (service == null) {
-                return false;
-            }
-            SecondaryPasswordAccess passwordAccess = null;
-            if (data != null && !data.isEmpty() && (
-                "vanilla_destroy".equalsIgnoreCase(data.get(0))
-                    || "password_set".equalsIgnoreCase(data.get(0))
-                    || "password_unlock".equalsIgnoreCase(data.get(0))
-                    || "password_clear".equalsIgnoreCase(data.get(0))
-                    || "password_panel_close".equalsIgnoreCase(data.get(0))
-            )) {
-                passwordAccess = getCapability(SecondaryPasswordAccess.class);
-            }
-            return service.handleClientPacket(player, packetId, data, passwordAccess);
-        };
-    }
+    
 
     /**
      * 返回本模块声明的归属数据包 ID，用于数据包归属校验。
      *
      * @return {@code "AXS_BACKPACK"}
      */
-    @Override
-    protected @Nullable String packetOwnershipPacketId() {
-        return "AXS_BACKPACK";
-    }
+    
 
     /**
      * 返回数据包守卫的模块键，用于数据包安全校验。
      *
      * @return {@code "extrabackpack"}
      */
-    @Override
-    protected @Nullable String packetGuardModuleKey() {
-        return "extrabackpack";
-    }
+    
 }

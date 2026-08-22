@@ -684,6 +684,10 @@ controls:
                       normal: ~62,66,74,210
                       shape: ~round_rect
                       radius: 4
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,165
                   进度条填充:
                     type: Texture
                     attribute:

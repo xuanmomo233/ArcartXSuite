@@ -47,8 +47,7 @@ import org.bukkit.entity.Player;
  * QuestGPS 自带的 Chemdah MySQL 数据库实现。
  * <p>
  * 完整复刻 Chemdah 付费版 {@code DatabaseSQL} 的逻辑（表结构、读写流程、SQL DSL 调用），
- * 直接继承免费版 JAR 中已有的 {@link Relational}，从而无需依赖
- * {@code Chemdah-1.1.33-FREE-patched.jar} 即可在免费版上使用 MySQL 存档。
+ * 直接继承免费版 JAR 中已有的 {@link Relational}，在免费版上即可使用 MySQL 存档。
  * <p>
  * 连接参数沿用 Chemdah 自身配置（{@code config.yml} 的 {@code database.source.SQL}），
  * 与付费版行为一致。{@code taboolib.module.database.*} 与 {@code kotlin1822.*} 由 TabooLib

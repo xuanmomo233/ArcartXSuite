@@ -29,6 +29,9 @@ import xuanmo.arcartxsuite.map.model.MapExternalTarget;
 import xuanmo.arcartxsuite.map.service.MapService;
 import xuanmo.arcartxsuite.map.storage.JdbcMapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 
 /**
  * 地图模块主类，继承 {@code AbstractAXSModule} 并实现管理命令接口。
@@ -53,57 +56,19 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXMap.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        // client 节的 UI 配置字段整体迁移到 ui 节（move 操作，见 migrations/1-2.yml）
-        return 3;
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // worlds、anchors、waypoints 为用户自定义世界、锚点与路径点
-        return SyncPolicy.builder()
-            .dynamicSection("worlds")
-            .dynamicSection("anchors")
-            .dynamicSection("waypoints")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared=false 时需要）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            ValidationRule.required("ui.packet-id", ValueType.STRING),
-            ValidationRule.of("navigation.enabled", ValueType.BOOLEAN)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(MapService.MENU_UI_RESOURCE_PATH, MapService.MENU_UI_FILE_PATH);
-        mappings.put(MapService.HUD_UI_RESOURCE_PATH, MapService.HUD_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.client().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -145,18 +110,17 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
-        JdbcMapRepository mapRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor mapDesc;
+        javax.sql.DataSource mapDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            mapRepo = new JdbcMapRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            mapDesc = configuration.storage().toDescriptor();
+            mapDs = storageManager.resolveModuleDataSource("map", null, dataFolder, mapDesc);
         } else {
-            // 新路径：共享本体数据源
-            mapRepo = new JdbcMapRepository(
-                storageManager, "map",
-                "", configuration.storage().sqliteFileName(), logger);
+            mapDesc = storageManager.getDescriptor().withTablePrefix("");
+            mapDs = storageManager.resolveModuleDataSource("map",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcMapRepository mapRepo = new JdbcMapRepository(mapDs, mapDesc, dataFolder, logger);
         service = new MapService(
             plugin, logger, packetGuard, configuration,
             mapRepo,
@@ -233,6 +197,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     protected void stopService() {
         if (service != null) {
             service.shutdown();
+            storageManager.closeModuleDataSource("map");
             service = null;
         }
         configuration = null;
@@ -253,11 +218,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         };
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     /**
      * 获取当前运行中的地图服务实例。

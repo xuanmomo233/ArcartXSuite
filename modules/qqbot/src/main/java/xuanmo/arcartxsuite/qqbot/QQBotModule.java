@@ -21,6 +21,9 @@ import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.qqbot.command.QQBotAdminCommand;
 import xuanmo.arcartxsuite.qqbot.command.QQBotPlayerCommand;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
@@ -64,52 +67,17 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXQQBot.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 4;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("groups")
-            .dynamicSection("custom-commands")
-            .dynamicSection("prizes")
-            .dynamicSection("scheduled-messages")
-            .dynamicSection("auto-reply.rules")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("onebot.ws-url", ValueType.STRING),
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // 签到积分
-            ValidationRule.of("signin.base-points", ValueType.INT).withRange(0, 100000),
-            ValidationRule.of("signin.streak-bonus", ValueType.INT).withRange(0, 100000),
-            ValidationRule.of("signin.max-streak-bonus", ValueType.INT).withRange(0, 1000000),
-            // 监控告警
-            ValidationRule.of("monitor.tps-threshold", ValueType.DOUBLE).withRange(0.0, 20.0),
-            ValidationRule.of("monitor.memory-threshold-percent", ValueType.INT).withRange(1, 100),
-            ValidationRule.of("monitor.check-interval-seconds", ValueType.INT).withRange(5, 86400)
-        );
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -126,21 +94,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         // 1. 初始化存储
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor qqDesc;
+        javax.sql.DataSource qqDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repository = new JdbcQQBotRepository(
-                dataFolder,
-                configuration.storage(),
-                logger
-            );
+            qqDesc = configuration.storage().toDescriptor();
+            qqDs = storageManager.resolveModuleDataSource("qqbot", null, dataFolder, qqDesc);
         } else {
-            // 新路径：共享本体数据源
-            repository = new JdbcQQBotRepository(
-                storageManager, "qqbot",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger
-            );
+            qqDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            qqDs = storageManager.resolveModuleDataSource("qqbot",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repository = new JdbcQQBotRepository(qqDs, qqDesc, dataFolder, logger);
         repository.initialize();
 
         // 2. 初始化绑定服务
@@ -275,9 +240,14 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                     if (result.success()) {
                         // 自动加白名单（保持与原有 /qqbot bind 行为一致）
                         if (configuration.whitelist().enabled() && configuration.whitelist().autoAddOnBind()) {
-                            String wlCmd = configuration.whitelist().addCommand()
-                                .replace("{name}", player.getName());
-                            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                            try {
+                                String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(configuration.whitelist().addCommand())
+                                    .bindPlayerName("name", player.getName())
+                                    .build();
+                                org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
+                            } catch (IllegalArgumentException ignored) {
+                                // 玩家名不合法时跳过白名单添加
+                            }
                         }
                         try { return new BindResult(true, Long.parseLong(result.message()), "绑定成功！QQ: " + result.message()); }
                         catch (NumberFormatException e) { return new BindResult(true, null, "绑定成功！"); }
@@ -416,30 +386,9 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(
-            QQBotUiService.BIND_UI_RESOURCE, QQBotUiService.BIND_UI_FILE,
-            QQBotUiService.NOTIFY_UI_RESOURCE, QQBotUiService.NOTIFY_UI_FILE,
-            QQBotUiService.ADMIN_UI_RESOURCE, QQBotUiService.ADMIN_UI_FILE
-        );
-    }
+    
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (uiService == null || data == null || data.isEmpty()) return false;
-            String action = data.get(0);
-            List<String> params = data.size() > 1 ? data.subList(1, data.size()) : List.of();
-            if ("AXS_qqbot".equals(packetId)) {
-                return uiService.handleBindPacket(player, action, params);
-            }
-            if ("AXS_qqbot_admin".equals(packetId)) {
-                return uiService.handleAdminPacket(player, action, params);
-            }
-            return false;
-        };
-    }
+    
 
     public QQBotUiService getUiService() {
         return uiService;
@@ -487,6 +436,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             repository.close();
             repository = null;
         }
+        storageManager.closeModuleDataSource("qqbot");
         configuration = null;
     }
 
@@ -549,7 +499,5 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 }
-
-
 
 

@@ -14,11 +14,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardScope;
-import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsStorageConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
 /**
@@ -29,35 +29,9 @@ import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
  */
 public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository implements OnlineRewardsRepository {
 
-    private final OnlineRewardsStorageConfiguration configuration;
-
-    /**
-     * 构造 JDBC 存储仓库。
-     *
-     * @param dataFolder    模块数据目录
-     * @param configuration 存储配置
-     * @param logger        日志器
-     */
-    public JdbcOnlineRewardsRepository(File dataFolder, OnlineRewardsStorageConfiguration configuration, Logger logger) {
-        super("AXS-OnlineRewards", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志器
-     * @since 1.4.0
-     */
-    public JdbcOnlineRewardsRepository(StorageManager storageManager, String moduleId,
-                                       String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-OnlineRewards", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcOnlineRewardsRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                       File dataFolder, Logger logger) {
+        super("AXS-OnlineRewards", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

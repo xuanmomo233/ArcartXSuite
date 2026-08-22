@@ -4,6 +4,8 @@ import org.bukkit.configuration.file.YamlConfiguration
 import xuanmo.arcartxsuite.api.AbstractAXSModule
 import xuanmo.arcartxsuite.api.ClientPacketHandler
 import xuanmo.arcartxsuite.api.ModuleDescriptor
+import xuanmo.arcartxsuite.api.PacketHandlerSpec
+import xuanmo.arcartxsuite.api.config.ModuleConfig
 import java.io.File
 import java.util.logging.Level
 
@@ -31,7 +33,9 @@ class DebugModule : AbstractAXSModule() {
             .mainClass(this::class.java.name)
             .build()
 
-    override fun configFileName(): String = "ArcartXDebug.yml"
+    override fun configSpec(): ModuleConfig = ModuleConfig.builder()
+        .configFileName("ArcartXDebug.yml")
+        .build()
 
     override fun loadConfiguration(configFile: File?) {
         if (configFile == null || !configFile.exists()) {
@@ -77,10 +81,8 @@ class DebugModule : AbstractAXSModule() {
         logger.info("Debug Bridge 已停止")
     }
 
-    override fun createPacketHandler(): ClientPacketHandler? {
-        // 将包流捕获器注册为客户端包处理器（基类自动通过 context 注册）
-        return packetCapture
-    }
+    override fun createPacketHandlerSpec(): PacketHandlerSpec =
+        packetCapture?.let { PacketHandlerSpec.of(it) } ?: PacketHandlerSpec.NONE
 
     // ── 供 RPC 路由器访问的 API 暴露 ──────────────────────────
     // AbstractAXSModule 的 API 字段为 protected，仅子类内部可见，

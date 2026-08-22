@@ -236,8 +236,8 @@ public final class RewardActionExecutor {
             if (resolved == null) {
                 // 内建 player 变量兜底
                 resolved = switch (key.toLowerCase(java.util.Locale.ROOT)) {
-                    case "player", "player_name" -> resolvePlayerName(target, variables);
-                    case "player_display_name" -> resolvePlayerDisplayName(target, variables);
+                    case "player", "player_name" -> sanitizeName(resolvePlayerName(target, variables));
+                    case "player_display_name" -> sanitizeName(resolvePlayerDisplayName(target, variables));
                     case "player_uuid" -> target != null ? target.getUniqueId().toString() : "";
                     default -> null;
                 };
@@ -249,6 +249,16 @@ public final class RewardActionExecutor {
     }
 
     // ─── 工具方法 ───────────────────────────────────────
+
+    /** 玩家名净化：合法则原样返回，非法则清空命令分隔符 */
+    private static String sanitizeName(String name) {
+        if (name == null) return "";
+        try {
+            return xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(name);
+        } catch (IllegalArgumentException e) {
+            return xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(name);
+        }
+    }
 
     private static String resolvePlayerName(OfflinePlayer target, Map<String, String> variables) {
         if (target != null && target.getName() != null && !target.getName().isBlank()) {

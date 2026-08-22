@@ -24,15 +24,20 @@ example_mainline_quest:
   # category 仅 category.source=overlay 时必填；chemdah 模式由 meta.type 决定
   # category: mainline
   required-mainline: []                 # 接取前须完成的主线 ID 列表
-  hooks:                                # 各阶段 EventPacket command-signal
+  # hooks：任务生命周期事件 → EventPacket 信号桥（信号名可自定义）
+  # 触发对应阶段时，QuestGPS 会向 EventPacket 规则引擎派发此处声明的信号，
+  # 由 EventPacket 匹配 signal 后执行 actions（发称号/发邮件/派命令等）。
+  # 所有任务共用同一套信号名，EventPacket 规则里可用 {quest_id} 区分具体任务。
+  # 如需按任务类型区分，可改为 questgps_main_* / questgps_side_* 等前缀。
+  hooks:
     triggered:                          # 任务出现在菜单 / 被 offer
-      - "questgps_main_triggered"
+      - "questgps_quest_triggered"
     accepted:                           # Chemdah 接取成功
-      - "questgps_main_accepted"
+      - "questgps_quest_accepted"
     completed:                          # 任务完成
-      - "questgps_main_completed"
+      - "questgps_quest_completed"
     track-changed:                      # 开始/取消导航追踪
-      - "questgps_track_changed"
+      - "questgps_quest_track_changed"
   navigation:                           # hybrid 时 Chemdah tracker 优先，此处作回退坐标
     enabled: true
     point:

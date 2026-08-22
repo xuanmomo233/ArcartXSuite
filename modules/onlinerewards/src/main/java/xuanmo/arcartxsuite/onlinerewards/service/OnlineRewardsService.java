@@ -1772,7 +1772,9 @@ public class OnlineRewardsService implements Listener {
     }
 
     private String renderCommand(String template, Player player, OnlineRewardsSignInResult result) {
-        return renderText(template, player.getName(), result);
+        // 验证玩家名防止命令注入（离线服可注册含特殊字符的玩家名）
+        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+        return renderText(template, safeName, result);
     }
 
     private String renderSignInText(String template, Player player, OnlineRewardsSignInResult result) {
@@ -1900,7 +1902,8 @@ public class OnlineRewardsService implements Listener {
     private void executeServerGoalCommands(Player player, OnlineRewardsServerSignInGoalTarget target) {
         for (String rawCommand : target.commands()) {
             try {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", player.getName()));
+                String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", safeName));
             } catch (Exception e) {
                 logger.warning("[OnlineRewards] 执行全服签到目标命令失败: " + rawCommand + " | " + e.getMessage());
             }

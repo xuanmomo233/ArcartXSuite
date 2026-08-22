@@ -20,6 +20,9 @@ import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.title.command.TitleAdminCommand;
 import xuanmo.arcartxsuite.title.command.TitlePlayerCommand;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
@@ -49,55 +52,19 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXTitle.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // 分组、品质、称号定义均由用户自由增删
-        return SyncPolicy.builder()
-            .dynamicSection("groups")
-            .dynamicSection("qualities")
-            .dynamicSection("titles")
-            .build();
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared: false 时生效）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            // 过期清理周期必须为正
-            ValidationRule.of("settings.expiration-cleanup-interval-ticks", ValueType.INT)
-                .withRange(20, null),
-            // UI ID 不能为空
-            ValidationRule.required("ui.ui-id", ValueType.STRING)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(TITLE_MENU_RESOURCE_PATH, TITLE_MENU_FILE_PATH);
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -150,18 +117,17 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
-        JdbcTitleRepository titleRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor titleDesc;
+        javax.sql.DataSource titleDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            titleRepo = new JdbcTitleRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            titleDesc = configuration.storage().toDescriptor();
+            titleDs = storageManager.resolveModuleDataSource("title", null, dataFolder, titleDesc);
         } else {
-            // 新路径：共享本体数据源
-            titleRepo = new JdbcTitleRepository(
-                storageManager, "title",
-                "", configuration.storage().sqliteFileName(), logger);
+            titleDesc = storageManager.getDescriptor().withTablePrefix("");
+            titleDs = storageManager.resolveModuleDataSource("title",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcTitleRepository titleRepo = new JdbcTitleRepository(titleDs, titleDesc, dataFolder, logger);
         service = new TitleService(
             plugin, logger, configuration,
             titleRepo,
@@ -232,6 +198,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     protected void stopService() {
         if (service != null) {
             service.shutdown();
+            storageManager.closeModuleDataSource("title");
             service = null;
         }
         configuration = null;
@@ -248,11 +215,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return new TitlePlaceholderExpansion(plugin, () -> service, () -> configuration);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     public TitleService getService() {
         return service;

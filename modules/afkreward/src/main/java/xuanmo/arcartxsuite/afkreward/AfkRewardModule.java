@@ -24,6 +24,8 @@ import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.afkreward.config.AreaConfiguration;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 import xuanmo.arcartxsuite.afkreward.listener.AfkRewardListener;
@@ -59,54 +61,19 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXAfkReward.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 9;
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.of("manual.leaderboard-size", ValueType.INT)
-                .withRange(1, 100),
-            ValidationRule.of("anti-abuse.time-limit.on-exceed", ValueType.STRING)
-                .withEnum(java.util.Set.of("STOP", "KICK", "DECAY")),
-            ValidationRule.of("anti-abuse.bot-detection.action", ValueType.STRING)
-                .withEnum(java.util.Set.of("NO_REWARD", "KICK")),
-            ValidationRule.of("anti-abuse.bot-detection.window-seconds", ValueType.INT)
-                .withRange(1, 3600),
-            ValidationRule.of("anti-abuse.bot-detection.min-view-changes", ValueType.INT)
-                .withRange(0, 1000),
-            ValidationRule.of("manual.permission-recheck-seconds", ValueType.INT)
-                .withRange(1, 3600)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder().build();
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(HUD_UI_RESOURCE_PATH, HUD_UI_FILE_PATH);
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -140,19 +107,18 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor afkDesc;
+        javax.sql.DataSource afkDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repository = new AfkRewardRepository(
-                dataFolder, configuration.storage(), logger
-            );
+            afkDesc = configuration.storage().toDescriptor();
+            afkDs = storageManager.resolveModuleDataSource("afkreward", null, dataFolder, afkDesc);
         } else {
-            // 新路径：共享本体数据源
-            repository = new AfkRewardRepository(
-                storageManager, "afkreward",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger
-            );
+            afkDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            afkDs = storageManager.resolveModuleDataSource("afkreward",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repository = new AfkRewardRepository(afkDs, afkDesc, dataFolder, logger);
         repository.initialize();
 
         service = new AfkRewardService(
@@ -230,7 +196,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             service = null;
         }
         if (repository != null) {
-            repository.shutdown();
+            storageManager.closeModuleDataSource("afkreward");
             repository = null;
         }
         listener = null;

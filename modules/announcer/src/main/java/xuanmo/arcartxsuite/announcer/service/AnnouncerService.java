@@ -176,7 +176,7 @@ public final class AnnouncerService implements Listener {
             return true;
         }
 
-        String command = entry.clickCommand().replace("<player>", player.getName());
+        String command = entry.clickCommand().replace("<player>", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
         ConsoleCommandSender console = Bukkit.getConsoleSender();
         boolean dispatched = Bukkit.dispatchCommand(console, command);
         if (configuration.debug()) {

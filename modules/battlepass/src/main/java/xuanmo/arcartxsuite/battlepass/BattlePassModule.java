@@ -21,6 +21,9 @@ import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.battlepass.command.BattlePassAdminCommand;
 import xuanmo.arcartxsuite.battlepass.command.BattlePassPlayerCommand;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
@@ -69,53 +72,19 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             .build();
     }
 
-    @Override
-    protected int currentConfigVersion() {
-        return 6;
-    }
+    
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXBattlePass.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // tasks 节自配置版本 2 起已外部化为 tasks/ 目录下独立文件，
-        // 主配置中 tasks 仅剩 daily-count/weekly-count/tasks-directory 固定字段，不再作为动态节。
-        // messages 由独立 messages.yml 管理，不受主配置 SyncPolicy 管辖，无需声明。
-        return SyncPolicy.strict();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.required("season.season-id", ValueType.STRING),
-            ValidationRule.required("season.max-level", ValueType.INT)
-                .withRange(1, 10000)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(MAIN_UI_RESOURCE_PATH, MAIN_UI_FILE_PATH);
-        mappings.put(TASKS_UI_RESOURCE_PATH, TASKS_UI_FILE_PATH);
-        mappings.put(REWARDS_UI_RESOURCE_PATH, REWARDS_UI_FILE_PATH);
-        mappings.put(SETTLEMENT_UI_RESOURCE_PATH, SETTLEMENT_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -159,15 +128,17 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected void startService() throws Exception {
-        JdbcBattlePassRepository repo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor bpDesc;
+        javax.sql.DataSource bpDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repo = new JdbcBattlePassRepository(dataFolder, configuration.storage(), logger);
+            bpDesc = configuration.storage().toDescriptor();
+            bpDs = storageManager.resolveModuleDataSource("battlepass", null, dataFolder, bpDesc);
         } else {
-            // 新路径：共享本体数据源
-            repo = new JdbcBattlePassRepository(storageManager, "battlepass",
-                configuration.storage().sqliteFileName(), logger);
+            bpDesc = storageManager.getDescriptor().withTablePrefix("");
+            bpDs = storageManager.resolveModuleDataSource("battlepass",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcBattlePassRepository repo = new JdbcBattlePassRepository(bpDs, bpDesc, dataFolder, logger);
         repo.initialize();
         repository = repo;
 
@@ -225,7 +196,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         }
         if (repository != null) {
             try {
-                repository.shutdown();
+                storageManager.closeModuleDataSource("battlepass");
             } catch (Exception e) {
                 logger.warning("BattlePass 仓储关闭失败: " + e.getMessage());
             }
@@ -257,29 +228,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return new BattlePassPlaceholderExpansion(plugin, () -> service);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        if (service == null) return null;
-        String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
-        String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
-        String rewardsUiId = getModuleUiId(REWARDS_UI_FILE_PATH);
-        String settlementUiId = getModuleUiId(SETTLEMENT_UI_FILE_PATH);
-        packetHandler = new BattlePassPacketHandler(
-            plugin,
-            packetBridge,
-            packetGuard,
-            service,
-            mainUiId != null ? mainUiId : configuration.ui().mainId(),
-            tasksUiId != null ? tasksUiId : configuration.ui().tasksId(),
-            rewardsUiId != null ? rewardsUiId : configuration.ui().rewardsId(),
-            settlementUiId != null ? settlementUiId : configuration.ui().settlementId(),
-            itemSourceRegistry,
-            itemStackBridge,
-            this::msg
-        );
-        service.setUiRefreshListener(packetHandler::onServiceRefresh);
-        return packetHandler;
-    }
+    
 
     // ─── ModuleCommandHandler（/axs battlepass）───────────────────
 
@@ -308,7 +257,5 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return prefix + mp.get(key, args);
     }
 }
-
-
 
 

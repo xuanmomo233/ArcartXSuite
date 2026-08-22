@@ -2,7 +2,7 @@
 # 删除主卡片底+关闭 ui.background，让玩家能透过 UI 看到周围环境
 # 核心组件悬浮在游戏画面上：轨道区（鱼图标+绿条）+ 信息面板 + 结果覆盖层
 # 视觉规范:
-#   组件底 26,34,46,200  组件描边 50,160,190,180
+#   组件底 26,34,46,200  组件描边 80,200,220,240
 #   主色（青蓝）50,170,200  绿条 80,220,160  成功 124,196,142  失败 230,100,90
 
 ui:
@@ -106,7 +106,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~50,160,190,120
+                color: ~80,200,220,230
           标题文字:
             type: Text
             attribute:
@@ -170,7 +170,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~50,160,190,150
+                color: ~80,200,220,235
           水深渐变:
             type: Texture
             attribute:
@@ -242,7 +242,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~50,160,190,150
+                color: ~80,200,220,235
           # 鱼名称区
           鱼名称区:
             type: Canvas
@@ -321,7 +321,7 @@ controls:
                 effect:
                   stroke:
                     width: 1
-                    color: ~50,160,190,80
+                    color: ~80,200,220,220
               时间文字:
                 type: Text
                 attribute:
@@ -363,7 +363,7 @@ controls:
                 effect:
                   stroke:
                     width: 1
-                    color: ~50,160,190,100
+                    color: ~80,200,220,225
               进度条填充:
                 type: Texture
                 attribute:
@@ -395,7 +395,7 @@ controls:
                 effect:
                   stroke:
                     width: 1
-                    color: ~50,160,190,80
+                    color: ~80,200,220,220
               提示标题:
                 type: Text
                 attribute:
@@ -412,7 +412,7 @@ controls:
                   x: 20
                   y: 54
                   texts: "~&7按住 &f空格 &7或 &f鼠标 &7控制绿条"
-                  fontSize: 24
+                  fontSize: 30
                   through: true
               提示内容2:
                 type: Text
@@ -421,7 +421,7 @@ controls:
                   x: 20
                   y: 88
                   texts: "~&7让绿条追踪鱼的位置以填满进度"
-                  fontSize: 24
+                  fontSize: 30
                   through: true
 
       # ── 结果覆盖层（成功/失败时显示，居中悬浮）──────────
@@ -443,7 +443,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: "var.state == 'success' ? '124,196,142,200' : '230,100,90,200'"
+                color: "var.state == 'success' ? '124,196,142,245' : '230,100,90,200'"
           结果文字:
             type: Text
             attribute:

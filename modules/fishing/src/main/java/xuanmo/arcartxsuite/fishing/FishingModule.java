@@ -28,6 +28,9 @@ import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.RewardLoader;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
@@ -87,55 +90,19 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             .build();
     }
 
-    @Override
-    protected int currentConfigVersion() {
-        return 5;
-    }
+    
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXFishing.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("fishes")
-            .dynamicSection("treasures")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.required("fishing.replace-vanilla", ValueType.BOOLEAN),
-            ValidationRule.required("fishing.minigame-tick-interval", ValueType.INT)
-                .withRange(1, 20)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(MAIN_UI_RESOURCE, MAIN_UI_FILE);
-        mappings.put(MINIGAME_UI_RESOURCE, MINIGAME_UI_FILE);
-        mappings.put(COLLECTION_UI_RESOURCE, COLLECTION_UI_FILE);
-        mappings.put(TALENTS_UI_RESOURCE, TALENTS_UI_FILE);
-        mappings.put(REWARDS_UI_RESOURCE, REWARDS_UI_FILE);
-        mappings.put(TASKS_UI_RESOURCE, TASKS_UI_FILE);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -211,14 +178,17 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         JdbcFishingRepository repo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor fishDesc;
+        javax.sql.DataSource fishDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repo = new JdbcFishingRepository(dataFolder, configuration.storage(), logger);
+            fishDesc = configuration.storage().toDescriptor();
+            fishDs = storageManager.resolveModuleDataSource("fishing", null, dataFolder, fishDesc);
         } else {
-            // 新路径：共享本体数据源
-            repo = new JdbcFishingRepository(storageManager, "fishing",
-                "", configuration.storage().sqliteFileName(), logger);
+            fishDesc = storageManager.getDescriptor().withTablePrefix("");
+            fishDs = storageManager.resolveModuleDataSource("fishing",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repo = new JdbcFishingRepository(fishDs, fishDesc, dataFolder, logger);
 
         // 注册 UI 并获取 UI ID
         UiBinding binding0 = registerModuleUi(
@@ -391,6 +361,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             service.shutdown();
             service = null;
         }
+        storageManager.closeModuleDataSource("fishing");
         configuration = null;
     }
 
@@ -418,22 +389,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return new FishingPlaceholderExpansion(plugin, () -> service);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        if (service == null) return null;
-        return new FishingPacketHandler(
-            player -> {
-                if (service == null) return null;
-                return service.getActiveMinigame(player.getUniqueId());
-            },
-            () -> service,
-            () -> mainUiId,
-            () -> collectionUiId,
-            () -> talentsUiId,
-            () -> rewardsUiId,
-            () -> tasksUiId
-        );
-    }
+    
 
     // ─── ModuleCommandHandler ─────────────────────────────────
 

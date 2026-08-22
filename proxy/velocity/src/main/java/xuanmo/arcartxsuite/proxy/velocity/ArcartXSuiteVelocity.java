@@ -12,14 +12,15 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.logging.Logger;
 
-import xuanmo.arcartxsuite.proxy.common.auth.YggdrasilAuthenticator;
+import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorDetector;
+import xuanmo.arcartxsuite.proxy.common.auth.AuthlibInjectorManager;
 import xuanmo.arcartxsuite.proxy.common.config.ProxyConfig;
 
 @Plugin(
     id = "arcartxsuite-proxy",
     name = "ArcartXSuite Proxy",
-    version = "1.1.0",
-    description = "ArcartXSuite 代理端伴侣插件：多方认证辅助与后端信息透传",
+    version = "2.0.0",
+    description = "ArcartXSuite 代理端伴侣插件：混合登录管理 + 离线拦截 + 后端信息透传",
     authors = {"xuanmo"}
 )
 public class ArcartXSuiteVelocity {
@@ -29,7 +30,6 @@ public class ArcartXSuiteVelocity {
     private final File dataFolder;
 
     private ProxyConfig config;
-    private YggdrasilAuthenticator authenticator;
     private VelocityAuthListener authListener;
 
     @Inject
@@ -49,11 +49,8 @@ public class ArcartXSuiteVelocity {
         config = new ProxyConfig(logger, dataFolder);
         config.load("proxy-config.yml");
 
-        // 初始化认证器
-        authenticator = new YggdrasilAuthenticator(logger, config.debug());
-
         // 注册事件监听器
-        authListener = new VelocityAuthListener(this, server, config, authenticator, logger);
+        authListener = new VelocityAuthListener(this, server, config, logger);
         server.getEventManager().register(this, authListener);
 
         // 注册命令
@@ -62,8 +59,8 @@ public class ArcartXSuiteVelocity {
             new ProxyCommand(this, config, logger)
         );
 
-        // authlib-injector 检测提示
-        detectAuthlibInjector();
+        // authlib-injector + 混合代理检测
+        detectAuthAndProxy();
 
         logger.info("ArcartXSuite Proxy (Velocity) 加载完成。");
     }
@@ -81,41 +78,46 @@ public class ArcartXSuiteVelocity {
         return config;
     }
 
-    public YggdrasilAuthenticator getAuthenticator() {
-        return authenticator;
+    public File getDataFolder() {
+        return dataFolder;
     }
 
-    /**
-     * 检测代理端是否以 authlib-injector 启动。
-     */
-    private void detectAuthlibInjector() {
-        boolean loaded = false;
-        try {
-            Class.forName("moe.yushi.authlibinjector.AuthlibInjector");
-            loaded = true;
-        } catch (ClassNotFoundException ignored) {
-        }
-        try {
-            for (String arg : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-                if (arg.contains("-javaagent") && arg.toLowerCase().contains("authlib-injector")) {
-                    loaded = true;
-                    break;
-                }
+    private void detectAuthAndProxy() {
+        boolean agentLoaded = AuthlibInjectorDetector.detect();
+
+        if (!config.authEnabled()) {
+            if (agentLoaded) {
+                logger.info("[Auth] 已检测到 authlib-injector，但 auth.enabled=false。");
+                logger.info("[Auth] 若需混合登录，请在 proxy-config.yml 中设置 auth.enabled: true");
             }
-        } catch (Exception ignored) {
+            return;
         }
 
-        if (loaded) {
-            logger.info("[Auth] 已检测到 authlib-injector。");
-            logger.info("[Auth] 注意: 若需正版+外置混合登录，authlib-injector 必须指向支持多源的认证端");
-            logger.info("[Auth]   （MultiLogin 或本地混合代理）；单独指向 littleskin.cn 仅支持外置登录。");
-            logger.info("[Auth]   ?mixed 并非 authlib-injector/LittleSkin 的有效参数，请勿使用。");
-        } else {
+        AuthlibInjectorManager mgr = new AuthlibInjectorManager(
+            logger, dataFolder, config.mixedProxyPort(),
+            config.mixedProxyBindHost(), config.mixedProxyToken(), config.mixedProxyAllowIps(),
+            AuthlibInjectorManager.Platform.VELOCITY);
+
+        if (!agentLoaded) {
             logger.warning("[Auth] 未检测到 authlib-injector！");
-            logger.warning("[Auth] 群组服混合登录（正版 + LittleSkin）推荐方案:");
-            logger.warning("[Auth]   方案A（推荐）: 安装 MultiLogin 插件，配置 OFFICIAL + BLESSING_SKIN 多源");
-            logger.warning("[Auth]   方案B（仅外置）: 启动参数加 -javaagent:authlib-injector.jar=littleskin.cn");
-            logger.warning("[Auth]     并添加 --add-opens java.base/java.lang=ALL-UNNAMED 等参数");
+            logger.warning("[Auth] 请执行 /axsproxy auth setup 生成启动脚本，");
+            logger.warning("[Auth] 然后使用 start-mixed-auth 脚本启动 Velocity。");
+            return;
+        }
+
+        logger.info("[Auth] 已检测到 authlib-injector。");
+
+        if (mgr.isMixedProxyReachable()) {
+            logger.info("[Auth] 本地混合代理已就绪 (端口 " + config.mixedProxyPort() + ")。");
+            logger.info("[Auth] 后端子服可通过此端口查询权威账号类型。");
+        } else {
+            logger.warning("[Auth] 本地混合代理未启动 (端口 " + config.mixedProxyPort() + ")！");
+            logger.warning("[Auth] 请使用 start-mixed-auth 脚本启动 Velocity，");
+            logger.warning("[Auth] 脚本会先启动混合代理再启动 Velocity。");
+        }
+
+        if (config.authAutoCheckVersion()) {
+            mgr.checkVersionAndNotify();
         }
     }
 }

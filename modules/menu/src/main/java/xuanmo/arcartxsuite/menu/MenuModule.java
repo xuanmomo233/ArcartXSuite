@@ -26,6 +26,9 @@ import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.menu.command.MenuAdminCommand;
 import xuanmo.arcartxsuite.menu.command.MenuPlayerCommand;
 import xuanmo.arcartxsuite.menu.config.MenuModuleConfiguration;
@@ -56,41 +59,17 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXMenu.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("ui.packet-id", ValueType.STRING),
-            ValidationRule.required("settings.menus-directory", ValueType.STRING)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(MenuService.PANEL_UI_RESOURCE_PATH, MenuService.PANEL_UI_FILE_PATH);
-        mappings.put(MenuService.ESC_UI_RESOURCE_PATH, MenuService.ESC_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -100,8 +79,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         configuration = MenuModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile),
             MessageProvider.loadYamlWithBundledDefaults(
-                new File(configFile.getParentFile(), messagesFileName()),
-                messagesFileName(),
+                new File(configFile.getParentFile(), configSpec().messagesFileName()),
+                configSpec().messagesFileName(),
                 moduleClassLoader(),
                 logger,
                 resourcePath -> openResource(resourcePath, moduleClassLoader())));
@@ -227,11 +206,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return Map.of("menu", playerCommand);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            packetHandler != null && packetHandler.handleClientPacket(player, packetId, data);
-    }
+    
 
     @Override
     protected List<Listener> createListeners() {

@@ -79,7 +79,9 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
+                // 防止命令注入：清理命令分隔符
+                final String safeCommand = xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(command);
+                AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), safeCommand));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case MESSAGE -> {

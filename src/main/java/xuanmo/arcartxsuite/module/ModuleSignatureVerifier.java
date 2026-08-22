@@ -15,7 +15,10 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
  * 模块数字签名验证器（Ed25519）。
  * <p>
  * 验证 module.yml 中的 {@code signature} 字段是否为作者私钥对以下 payload 的签名：
- * <pre>id + ":" + version + ":" + mainClass</pre>
+ * <pre>id + "\n" + version + "\n" + mainClass + "\n" + depends + "\n" + softDepends + "\n" + externalDepends</pre>
+ * 其中 depends / softDepends / externalDepends 以逗号分隔。
+ * <p>
+ * <b>注意：payload v2 自本版本起包含依赖声明字段，旧版（仅 id:version:mainClass）的签名需重新生成。</b>
  * <p>
  * 公钥通过 {@code config.yml} 的 {@code module-signature-public-keys} 配置注入（支持多个公钥）。
  * 如果公钥未配置，则跳过验证（向后兼容）。
@@ -89,7 +92,19 @@ public final class ModuleSignatureVerifier {
         }
     }
 
+    /**
+     * 构建签名 payload（v2）。
+     * <p>
+     * 使用换行符分隔各字段，依赖列表以逗号连接。
+     * 相比 v1（{@code id:version:mainClass}），v2 额外覆盖 depends / softDepends / externalDepends，
+     * 防止攻击者篡改依赖声明影响加载顺序或导致加载失败。
+     */
     private static String buildPayload(ModuleDescriptor descriptor) {
-        return descriptor.id() + ":" + descriptor.version() + ":" + descriptor.mainClass();
+        return descriptor.id() + "\n"
+            + descriptor.version() + "\n"
+            + descriptor.mainClass() + "\n"
+            + String.join(",", descriptor.depends()) + "\n"
+            + String.join(",", descriptor.softDepends()) + "\n"
+            + String.join(",", descriptor.externalDepends());
     }
 }

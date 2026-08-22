@@ -430,14 +430,18 @@ public final class QQBotService implements Listener {
                 if (binding != null) {
                     String playerName = binding.playerName();
                     String durationStr = formatBanDuration(durationSec);
-                    String cmd = mc.syncBanCommand()
-                        .replace("{name}", playerName)
-                        .replace("{duration}", mc.syncBanUseDuration() ? durationStr : "")
-                        .replace("{reason}", mc.syncBanReason())
-                        .trim()
-                        .replaceAll("\\s+", " ");
-                    AxsScheduler.runTask(plugin, () ->
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+                    try {
+                        String cmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(mc.syncBanCommand())
+                            .bindPlayerName("name", playerName)
+                            .bindRaw("duration", mc.syncBanUseDuration() ? durationStr : "")
+                            .bindQuoted("reason", mc.syncBanReason())
+                            .build();
+                        AxsScheduler.runTask(plugin, () ->
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+                    } catch (IllegalArgumentException e) {
+                        logger.warning("禁言同步跳过: 非法玩家名 " + playerName);
+                        return;
+                    }
                     logger.info("禁言同步: QQ " + bannedQq + " → 封禁玩家 " + playerName
                         + " (" + durationStr + ")");
                 }

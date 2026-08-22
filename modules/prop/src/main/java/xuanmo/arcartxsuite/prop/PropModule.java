@@ -12,6 +12,7 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.prop.command.PropAdminCommand;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
@@ -45,13 +46,11 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected String configFileName() {
-        return "ArcartXProp.yml";
-    }
-
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXProp.yml")
+            .messagesFileName("messages.yml")
+            .build();
     }
 
     @Override

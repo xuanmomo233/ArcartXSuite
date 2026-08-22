@@ -24,6 +24,9 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.regions.command.RegionCommandHandler;
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.listener.RegionProtectionListener;
@@ -74,63 +77,37 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
      *
      * @return 主配置文件名
      */
-    @Override
-    protected String configFileName() {
-        return "ArcartXRegions.yml";
-    }
+    
 
     /**
      * 返回消息配置文件名。
      *
      * @return 消息配置文件名
      */
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     /**
      * 返回主配置的校验规则列表，覆盖存储方言与选区体积限制。
      *
      * @return 校验规则列表
      */
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.of("selection.max-volume", ValueType.INT).withRange(1, 100000000)
-        );
-    }
+    
 
     /**
      * 返回默认配置同步策略，允许 {@code world-rules.disabled-interactions} 按世界名动态新增。
      *
      * @return 同步策略
      */
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // world-rules.disabled-interactions 允许用户按世界名新增交互限制
-        return SyncPolicy.builder()
-            .dynamicSection("world-rules.disabled-interactions")
-            .build();
-    }
+    
 
     /**
      * 返回 UI 资源路径到目标文件路径的映射，用于菜单与管理面板 UI 的释放与加载。
      *
      * @return UI 资源映射
      */
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(RegionsMenuPacketHandler.UI_RESOURCE_PATH, RegionsMenuPacketHandler.UI_FILE_PATH);
-        mappings.put(RegionsAdminPacketHandler.UI_RESOURCE_PATH, RegionsAdminPacketHandler.UI_FILE_PATH);
-        return mappings;
-    }
+    
 
     /**
      * 加载主配置与消息配置，解析为 {@link RegionsConfiguration}。
@@ -148,8 +125,8 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         configuration = RegionsConfiguration.load(
             rawYaml,
             MessageProvider.loadYamlWithBundledDefaults(
-                new File(configFile.getParentFile(), messagesFileName()),
-                messagesFileName(),
+                new File(configFile.getParentFile(), configSpec().messagesFileName()),
+                configSpec().messagesFileName(),
                 moduleClassLoader(),
                 logger,
                 resourcePath -> openResource(resourcePath, moduleClassLoader())),
@@ -171,16 +148,18 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor rgDesc;
+        javax.sql.DataSource rgDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repository = new RegionsRepository(dataFolder, configuration.storage(), logger);
+            rgDesc = configuration.storage().toDescriptor();
+            rgDs = storageManager.resolveModuleDataSource("regions", null, dataFolder, rgDesc);
         } else {
-            // 新路径：共享本体数据源
-            repository = new RegionsRepository(
-                storageManager, "regions",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger);
+            rgDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            rgDs = storageManager.resolveModuleDataSource("regions",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repository = new RegionsRepository(rgDs, rgDesc, dataFolder, logger);
         repository.initialize();
         regionManager = new RegionManager(repository, configuration, logger);
         regionManager.loadAll();
@@ -282,6 +261,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         if (protectionListener != null) { HandlerList.unregisterAll(protectionListener); protectionListener = null; }
         if (selectionListener != null) { HandlerList.unregisterAll(selectionListener); selectionListener = null; }
         if (repository != null) { repository.close(); repository = null; }
+        storageManager.closeModuleDataSource("regions");
         regionManager = null;
         commandHandler = null;
         configuration = null;
@@ -293,14 +273,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
      *
      * @return Packet 处理器，无可用 UI 时仍返回一个空实现
      */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (menuPacketHandler != null && menuPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            if (adminPacketHandler != null && adminPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            return false;
-        };
-    }
+    
 
     /**
      * 返回模块命令 ID。

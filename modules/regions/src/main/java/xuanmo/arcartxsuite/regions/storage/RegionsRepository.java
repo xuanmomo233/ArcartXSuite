@@ -15,9 +15,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.regions.config.RegionsConfiguration.StorageConfig;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
 
@@ -29,35 +29,9 @@ import xuanmo.arcartxsuite.regions.model.RegionFlag;
  */
 public final class RegionsRepository extends AbstractModuleRepository implements AutoCloseable {
 
-    private final Logger logger;
-
-    /**
-     * 构造仓储实例。
-     *
-     * @param dataFolder 模块数据目录
-     * @param config     存储配置
-     * @param logger     日志记录器
-     */
-    public RegionsRepository(File dataFolder, StorageConfig config, Logger logger) {
-        super("AXS-Regions", dataFolder, config.toDescriptor(), logger);
-        this.logger = logger;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public RegionsRepository(StorageManager storageManager, String moduleId,
-                             String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Regions", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.logger = logger;
+    public RegionsRepository(DataSource dataSource, StorageDescriptor descriptor,
+                             File dataFolder, Logger logger) {
+        super("AXS-Regions", dataSource, descriptor, dataFolder, logger);
     }
 
     /**

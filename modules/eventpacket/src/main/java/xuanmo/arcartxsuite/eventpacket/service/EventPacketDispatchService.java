@@ -473,6 +473,8 @@ public final class EventPacketDispatchService {
         if (command.isBlank()) {
             return false;
         }
+        // 防止命令注入：清理命令分隔符（;、|、&&、||、换行符）
+        command = xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(command);
         if (command.startsWith("/")) {
             command = command.substring(1);
         }

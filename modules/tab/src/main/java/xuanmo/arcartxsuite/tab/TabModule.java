@@ -17,6 +17,9 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.tab.command.TabPlayerCommand;
 import xuanmo.arcartxsuite.tab.config.TabDefinition;
 import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
@@ -52,49 +55,17 @@ public final class TabModule extends AbstractAXSModule {
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXTab.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // tabs 定义已外部化到 tabs-directory 目录文件；
-        // 若用户旧配置仍有 tabs: 段，保留为 dynamicSection 避免被引擎清除
-        return SyncPolicy.builder()
-            .dynamicSection("tabs")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // 服务端ID不能为空
-            ValidationRule.required("settings.server-id", ValueType.STRING),
-            ValidationRule.of("settings.stale-snapshot-ms", ValueType.LONG)
-                .withRange(1000, null),
-            ValidationRule.of("cross-server.enabled", ValueType.BOOLEAN)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(
-            TAB_UI_RESOURCE_PATH, TAB_UI_FILE_PATH,
-            TAB_RICH_UI_RESOURCE_PATH, TAB_RICH_UI_FILE_PATH,
-            TAB_ARENA_UI_RESOURCE_PATH, TAB_ARENA_UI_FILE_PATH
-        );
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.overwriteUiFile();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -174,11 +145,7 @@ public final class TabModule extends AbstractAXSModule {
         return Map.of("axstab", (TabExecutor) cmd);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientRefreshPacket(player, packetId, data);
-    }
+    
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
@@ -315,7 +282,5 @@ public final class TabModule extends AbstractAXSModule {
         return bindings;
     }
 }
-
-
 
 

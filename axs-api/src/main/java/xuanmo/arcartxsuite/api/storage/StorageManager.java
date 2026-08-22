@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.api.storage;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import javax.sql.DataSource;
@@ -127,4 +128,38 @@ public interface StorageManager {
      * @since 1.4.2
      */
     Connection getHostConnection() throws SQLException;
+
+    /**
+     * 根据模块配置解析出数据源（共享或自建），统一由 {@link StorageManager} 管理连接池生命周期。
+     * <p>
+     * 这是模块获取数据源的推荐入口，取代旧 {@code AbstractModuleRepository} 的双模式构造。
+     *
+     * <h4>共享模式（overrideDescriptor = null）</h4>
+     * <ul>
+     *   <li>MySQL：返回全局共享连接池（与 {@link #getDataSource()} 相同）。</li>
+     *   <li>SQLite：按 {@code moduleId} + {@code sqliteFileName} 分配独立连接池，
+     *       文件放在本体 {@code data/<moduleId>/} 目录下。</li>
+     * </ul>
+     *
+     * <h4>自建模式（overrideDescriptor != null）</h4>
+     * <ul>
+     *   <li>根据 overrideDescriptor 创建独立 HikariCP 连接池并按 {@code moduleId} 缓存。</li>
+     *   <li>SQLite 文件放在 {@code moduleDataFolder} 目录下（保持旧路径，零迁移）。</li>
+     *   <li>MySQL 使用 overrideDescriptor 中的连接参数。</li>
+     * </ul>
+     *
+     * @param moduleId           模块 ID（用于缓存键和 SQLite 文件名）
+     * @param sqliteFileName     共享模式下 SQLite 文件名（如 {@code "mail.db"}），
+     *                           为 {@code null} 或空时使用 {@code <moduleId>.db}；
+     *                           自建模式下此参数被忽略（使用 overrideDescriptor.sqliteFileName()）
+     * @param moduleDataFolder   模块数据目录（自建 SQLite 模式下文件存放于此）；
+     *                           共享模式下此参数被忽略
+     * @param overrideDescriptor 模块自建存储描述符，{@code null} 表示走共享模式
+     * @return 该模块对应的数据源（永不为 {@code null}）
+     * @throws SQLException 数据源不可用或创建失败
+     * @since 1.5.0
+     */
+    DataSource resolveModuleDataSource(String moduleId, String sqliteFileName,
+                                       File moduleDataFolder,
+                                       StorageDescriptor overrideDescriptor) throws SQLException;
 }

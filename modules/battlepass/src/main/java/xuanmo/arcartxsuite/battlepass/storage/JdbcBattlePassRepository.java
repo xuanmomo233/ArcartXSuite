@@ -15,10 +15,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
@@ -32,29 +31,9 @@ import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
  */
 public final class JdbcBattlePassRepository extends AbstractModuleRepository implements BattlePassRepository {
 
-    /**
-     * 构造 JDBC 战令仓储实例。
-     *
-     * @param dataFolder    模块数据目录
-     * @param configuration 存储配置
-     * @param logger        日志记录器
-     */
-    public JdbcBattlePassRepository(File dataFolder, BattlePassModuleConfiguration.BattlePassStorageConfiguration configuration, Logger logger) {
-        super("AXS-BattlePass", dataFolder, configuration.toDescriptor(), logger);
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param sqliteFileName SQLite 文件名
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcBattlePassRepository(StorageManager storageManager, String moduleId,
-                                    String sqliteFileName, Logger logger) {
-        super("AXS-BattlePass", storageManager, moduleId, "", sqliteFileName, logger);
+    public JdbcBattlePassRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                    File dataFolder, Logger logger) {
+        super("AXS-BattlePass", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

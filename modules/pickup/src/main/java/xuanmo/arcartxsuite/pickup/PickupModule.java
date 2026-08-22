@@ -24,6 +24,9 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.pickup.command.PickupPlayerCommand;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.PickupMode;
@@ -57,49 +60,17 @@ public final class PickupModule extends AbstractAXSModule {
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXPickup.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.of("notification.max-visible", ValueType.INT)
-                .withRange(1, 16),
-            ValidationRule.of("notification.entry-ttl-ms", ValueType.INT)
-                .withRange(500, 30000),
-            ValidationRule.of("scanner.scan-radius", ValueType.DOUBLE)
-                .withRange(1.0, 32.0),
-            ValidationRule.of("scanner.scan-interval-ticks", ValueType.INT)
-                .withRange(1, 100),
-            ValidationRule.of("scanner.max-display", ValueType.INT)
-                .withRange(1, 16)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(LOOT_PANEL_RESOURCE_PATH, LOOT_PANEL_FILE_PATH);
-        mappings.put(LOOT_INTERACT_RESOURCE_PATH, LOOT_INTERACT_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -246,16 +217,7 @@ public final class PickupModule extends AbstractAXSModule {
         };
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (scannerService == null || !"pickup".equalsIgnoreCase(packetId)) {
-                return false;
-            }
-            String action = (data == null || data.isEmpty()) ? "pick" : data.get(0).toLowerCase();
-            return scannerService.handleClientPacket(player, action, data);
-        };
-    }
+    
 
     public PickupService getNotificationService() {
         return notificationService;
@@ -277,7 +239,5 @@ public final class PickupModule extends AbstractAXSModule {
         return target;
     }
 }
-
-
 
 

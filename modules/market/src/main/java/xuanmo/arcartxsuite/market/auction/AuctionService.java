@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,6 +42,9 @@ public class AuctionService {
 
     private static final int AUCTION_BACKPACK_SLOTS = 36;
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
+
+    /** 拼音 token 缓存：displayName → [pinyin, initials]，避免同一物品名重复计算拼音 */
+    private static final ConcurrentHashMap<String, String[]> PINYIN_CACHE = new ConcurrentHashMap<>();
 
     static {
         PINYIN_FORMAT.setCaseType(HanyuPinyinCaseType.LOWERCASE);
@@ -628,33 +632,37 @@ public class AuctionService {
      * 离线则通过邮件发送，邮件不可用时降级入待发放队列。彻底避免物品丢失。
      */
     private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
-        final ItemStack item = itemSerializer.deserialize(listing.getItemData());
-        if (item == null) {
-            logger.warning("[Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
-            repository.addPendingItem(target, listing.getItemData(), reason);
-            return;
-        }
-        Player online = Bukkit.getPlayer(target);
-        if (online != null && online.isOnline()) {
-            runOnMain(() -> {
-                xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
-                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
-                        .sourceDetail("auction-settlement:" + listing.getId())
-                        .overflowMailSubject("拍卖结算物品")
-                        .overflowMailBody("您拍得/流拍的物品已通过邮件发放，请查收。")
-                        .overflowMailSenderName("全球市场")
-                        .build();
-                xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchResult result =
-                    itemRewardDispatcher.dispatchItem(online, item, options);
-                if (!result.success()) {
-                    // ItemRewardDispatcher 发放失败（含邮件+掉落均失败）：转入 pending
-                    repository.addPendingItem(target, listing.getItemData(), reason);
-                }
-            });
-        } else {
-            // 离线玩家：直接入 pending 队列，上线后由 PendingDeliveryService 通过 ItemRewardDispatcher 统一发放
-            repository.addPendingItem(target, listing.getItemData(), reason);
-        }
+        // 物品反序列化（Base64 + ItemStack）是 CPU 密集型操作，放到异步线程执行，避免阻塞主线程
+        AxsScheduler.runAsync(plugin, () -> {
+            final ItemStack item = itemSerializer.deserialize(listing.getItemData());
+            if (item == null) {
+                logger.warning("[Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
+                repository.addPendingItem(target, listing.getItemData(), reason);
+                return;
+            }
+            Player online = Bukkit.getPlayer(target);
+            if (online != null && online.isOnline()) {
+                // 发放物品必须在主线程执行（Bukkit API 要求）
+                AxsScheduler.runTask(plugin, () -> {
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+                        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
+                            .sourceDetail("auction-settlement:" + listing.getId())
+                            .overflowMailSubject("拍卖结算物品")
+                            .overflowMailBody("您拍得/流拍的物品已通过邮件发放，请查收。")
+                            .overflowMailSenderName("全球市场")
+                            .build();
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchResult result =
+                        itemRewardDispatcher.dispatchItem(online, item, options);
+                    if (!result.success()) {
+                        // ItemRewardDispatcher 发放失败（含邮件+掉落均失败）：转入 pending
+                        repository.addPendingItem(target, listing.getItemData(), reason);
+                    }
+                });
+            } else {
+                // 离线玩家：直接入 pending 队列，上线后由 PendingDeliveryService 通过 ItemRewardDispatcher 统一发放
+                repository.addPendingItem(target, listing.getItemData(), reason);
+            }
+        });
     }
 
     /**
@@ -768,6 +776,10 @@ public class AuctionService {
      */
     private static String[] toPinyinTokens(String rawValue) {
         String stripped = ChatColor.stripColor(rawValue == null ? "" : value(rawValue));
+        return PINYIN_CACHE.computeIfAbsent(stripped, AuctionService::computePinyinTokens);
+    }
+
+    private static String[] computePinyinTokens(String stripped) {
         StringBuilder pinyin = new StringBuilder();
         StringBuilder initials = new StringBuilder();
         for (char character : stripped.toCharArray()) {

@@ -11,10 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
-import org.jetbrains.annotations.Nullable;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
 /**
  * 基于 JDBC 的事件包仓储实现。
@@ -25,35 +24,9 @@ import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
  */
 public final class JdbcEventPacketRepository extends AbstractModuleRepository implements EventPacketRepository {
 
-    private final @Nullable EventPacketStorageConfiguration configuration;
-
-    /**
-     * 构造 JDBC 仓储实例。
-     *
-     * @param dataFolder     模块数据目录
-     * @param configuration  存储配置
-     * @param logger         日志记录器
-     */
-    public JdbcEventPacketRepository(File dataFolder, EventPacketStorageConfiguration configuration, Logger logger) {
-        super("AXS-EventPacket", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcEventPacketRepository(StorageManager storageManager, String moduleId,
-                                     String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-EventPacket", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcEventPacketRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                     File dataFolder, Logger logger) {
+        super("AXS-EventPacket", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

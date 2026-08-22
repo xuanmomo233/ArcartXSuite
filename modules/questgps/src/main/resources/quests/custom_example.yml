@@ -24,13 +24,14 @@
 #     - "&7在野外采集 10 株药草。"
 #   presentation:
 #     source: overlay                   # 本任务 UI 全部读 overlay（名称/描述/奖励预览等）
+#   # hooks：任务生命周期事件 → EventPacket 信号桥（信号名可自定义，见 mainline.yml）
 #   hooks:
 #     triggered:
-#       - "questgps_daily_triggered"
+#       - "questgps_quest_triggered"
 #     accepted:
-#       - "questgps_daily_accepted"
+#       - "questgps_quest_accepted"
 #     completed:
-#       - "questgps_daily_completed"
+#       - "questgps_quest_completed"
 #   # 奖励预览（仅 UI 展示，不发奖；发奖仍由 Chemdah agent 执行）
 #   # type: neigeitems | mythicmobs/mythicitems | overture | mmoitems
 #   #       material/itemstack | title | text

@@ -23,6 +23,8 @@ import xuanmo.arcartxsuite.api.capability.CombatEffectTriggerable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerConfiguration;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerService;
 import xuanmo.arcartxsuite.combateffect.deathbuffer.DeathBufferConfiguration;
@@ -66,46 +68,17 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return CONFIG_FILE_NAME;
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return MESSAGES_FILE_NAME;
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 1;
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("kill-effect")
-            .dynamicSection("combo-tracker")
-            .dynamicSection("death-buffer")
-            .dynamicSection("keybind-trigger")
-            .dynamicSection("state-trigger")
-            .dynamicSection("digis-display")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
-        mappings.put("arcartx/ui/combo_effect.yml", "ui/combo_effect.yml");
-        mappings.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return rawConfiguration != null && rawConfiguration.getBoolean("ui.overwrite-ui-files", false);
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -430,9 +403,5 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         return mp.get("prefix") + mp.get(key, args);
     }
 }
-
-
-
-
 
 

@@ -5,7 +5,7 @@
 #       内容区 = 统计栏 + 标签栏（全部/普通/罕见/稀有/传说）+ 5列网格卡片
 # 视觉规范:
 #   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片底 26,34,46,210  卡片描边 50,160,190,180
+#   卡片底 26,34,46,210  卡片描边 80,200,220,240
 #   主色（青蓝）50,170,200  已完成 124,196,142  悬停高亮 80,200,220
 
 ui:
@@ -145,7 +145,6 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      through: true
       normal: ~Frosted:24;12,22,38,110
   # 自适配布局：宽高 = 设计分辨率 1920x1080
   自适应全局布局:
@@ -174,7 +173,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           标题色块:
             type: Texture
             attribute:
@@ -199,7 +198,7 @@ controls:
               x: 168
               width: 1
               height: 30
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           页名:
             type: Text
             attribute:
@@ -229,7 +228,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               关闭文字:
                 type: Text
                 attribute:
@@ -259,7 +258,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           导航总览:
             type: Canvas
             attribute:
@@ -284,7 +283,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               总览文字:
                 type: Text
                 attribute:
@@ -355,7 +354,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               奖励文字:
                 type: Text
                 attribute:
@@ -388,7 +387,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               天赋文字:
                 type: Text
                 attribute:
@@ -421,7 +420,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               任务文字:
                 type: Text
                 attribute:
@@ -438,7 +437,7 @@ controls:
               y: 364
               width: 264
               height: 2
-              normal: ~50,160,190,80
+              normal: ~80,200,220,220
           导航提示:
             type: Text
             attribute:
@@ -468,7 +467,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
 
           # 统计信息栏
           统计栏:
@@ -490,7 +489,7 @@ controls:
                 effect:
                   stroke:
                     width: 2
-                    color: ~50,160,190,120
+                    color: ~80,200,220,230
               等级文本:
                 type: Text
                 attribute:
@@ -506,7 +505,7 @@ controls:
                   x: 24
                   y: 46
                   texts: "'&7经验: &f' + var.currentXp.round()"
-                  fontSize: 24
+                  fontSize: 30
               捕获统计:
                 type: Text
                 attribute:
@@ -522,38 +521,46 @@ controls:
                   x: 300
                   y: 46
                   texts: "'&7图鉴: &f' + var.collectionCount.round() + '/' + var.totalFishTypes.round() + ' &7(' + var.collectionPercent.round() + '%)'"
-                  fontSize: 24
+                  fontSize: 30
               # 图鉴完成度进度条
-              进度条背景:
-                type: Texture
+              进度条容器:
+                type: Canvas
                 attribute:
                   point: ~middle_left
                   x: 560
                   width: "var.contentW - 640"
                   height: 36
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-              进度条填充:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 564
-                  width: "(var.contentW - 648) * var.collectionPercent / 100"
-                  height: 28
-                  normal: ~50,170,200,240
-                  shape: ~round_rect
-                  radius: 8
-              进度百分比:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 560
-                  width: "var.contentW - 640"
-                  texts: "'&f' + var.collectionPercent.round() + '%'"
-                  fontSize: 24
-                  center: true
                   through: true
+                children:
+                  进度条背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,34,46,210
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,200,220,240
+                  进度条填充:
+                    type: Texture
+                    attribute:
+                      point: ~middle_left
+                      x: 4
+                      width: "(var.contentW - 648) * var.collectionPercent / 100"
+                      height: 28
+                      normal: ~50,170,200,240
+                      shape: ~round_rect
+                      radius: 8
+                  进度百分比:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: "var.contentW - 640"
+                      texts: "'&f' + var.collectionPercent.round() + '%'"
+                      fontSize: 30
+                      through: true
 
           # 标签栏：全部/普通/罕见/稀有/传说
           标签栏:
@@ -640,6 +647,22 @@ controls:
                     var.currentTab = 'legendary'
                     var.needRebuild = true
 
+          # 图鉴滑轨：右侧滚动条轨道
+          图鉴滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 186
+              width: 12
+              height: "var.viewH - 350"
+              normal: ~15,25,38,220
+              shape: ~round_rect
+              radius: 6
+            effect:
+              stroke:
+                width: 2
+                color: ~80,200,220,240
           # 图鉴滑块：右侧滚动条滑块
           图鉴滑块:
             type: Texture
@@ -648,10 +671,12 @@ controls:
               point: ~top_right
               x: -16
               y: 186
-              width: 8
-              height: 60
-              normal: ~50,170,200,200
-              maxDragY: "var.viewH - 410"
+              width: 12
+              height: 120
+              normal: ~50,170,200,220
+              maxDragY: "var.viewH - 470"
+              shape: ~round_rect
+              radius: 6
 
           # 滚动区：可滚动的鱼类网格容器
           滚动区:
@@ -699,7 +724,7 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: "self.entry != none && self.entry['caught'] ? '124,196,142,120' : '50,160,190,80'"
+                        color: "self.entry != none && self.entry['caught'] ? '124,196,142,230' : '80,200,220,220'"
                     children:
                       # 鱼物品图标（未捕获时不显示，只显示遮罩+问号）
                       图标:
@@ -719,27 +744,30 @@ controls:
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey])"
                       # 未捕获遮罩：暗色覆盖+问号
                       未捕获遮罩:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           x: 14
                           y: 28
                           width: 100
                           height: 100
-                          normal: ~10,15,25,180
-                          shape: ~round_rect
-                          radius: 10
                           through: true
                           visible: "self.parent.entry != none && !self.parent.entry['caught']"
                         children:
+                          遮罩背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~10,15,25,180
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
                           问号:
                             type: Text
                             attribute:
-                              x: 0
-                              y: 18
+                              point: ~middle_center
                               width: 100
                               texts: "~&7?"
                               fontSize: 56
-                              center: true
                               through: true
                       # 鱼名（稀有度着色）
                       鱼名:
@@ -756,28 +784,28 @@ controls:
                         type: Text
                         attribute:
                           x: 124
-                          y: 52
+                          y: 48
                           width: 180
                           texts: "self.parent.entry != none ? (self.parent.rarityTag + '◆ ' + self.parent.rarityLabel) : none"
-                          fontSize: 24
+                          fontSize: 30
                           through: true
                       # 捕获次数
                       捕获次数:
                         type: Text
                         attribute:
                           x: 124
-                          y: 86
+                          y: 84
                           width: 180
                           texts: "self.parent.entry != none && self.parent.entry['caught'] ? ('&7捕获: &f' + self.parent.entry['count'].round() + ' 次') : '&7未捕获'"
-                          fontSize: 24
+                          fontSize: 30
                           through: true
                       # 最大尺寸
                       最大尺寸:
                         type: Text
                         attribute:
                           x: 124
-                          y: 118
+                          y: 120
                           width: 180
                           texts: "self.parent.entry != none && self.parent.entry['caught'] ? ('&7最大: &f' + self.parent.entry['maxSize'].round()) : none"
-                          fontSize: 22
+                          fontSize: 30
                           through: true

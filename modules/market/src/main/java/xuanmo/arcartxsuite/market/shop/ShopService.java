@@ -305,7 +305,8 @@ public class ShopService {
             int amount
     ) {
         for (String raw : commands) {
-            String command = raw.replace("{player}", player.getName())
+            String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+            String command = raw.replace("{player}", safeName)
                 .replace("{uuid}", player.getUniqueId().toString())
                 .replace("{amount}", Integer.toString(amount));
             if (command.startsWith("/")) command = command.substring(1);

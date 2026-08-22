@@ -486,7 +486,7 @@ public final class FishingService {
         for (FishDefinition.CommandReward cmd : fish.commandRewards()) {
             if (checkDropCondition(cmd.condition(), perfect, size, isFirstCatch)) {
                 String executed = cmd.command()
-                    .replace("{player}", player.getName())
+                    .replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
                     .replace("{fish}", fish.id())
                     .replace("{size}", String.valueOf(size));
                 try {

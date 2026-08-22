@@ -33,6 +33,9 @@ import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsMysqlDatabase;
 import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 
 /**
  * QuestGPS 模块主类。
@@ -60,60 +63,25 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     }
 
     /** @return 主配置文件名 */
-    @Override
-    protected String configFileName() {
-        return "ArcartXQuestGPS.yml";
-    }
+    
 
     /** @return 当前配置文件版本号（用于迁移脚本识别版本） */
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
     /** @return 消息文件名 */
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     /** @return 默认配置同步策略，允许 {@code categories} 段动态新增 */
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // categories 允许用户新增自定义分类（如 daily）
-        return SyncPolicy.builder()
-            .dynamicSection("categories")
-            .build();
-    }
+    
 
     /** @return 主配置文件的校验规则列表 */
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("ui.packet-id", ValueType.STRING),
-            ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("navigation.mode", ValueType.STRING),
-            ValidationRule.of("database.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("discovery.mode", ValueType.STRING),
-            ValidationRule.of("navigation.path-max-iterations", ValueType.INT).withRange(100, 50000),
-            ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
-        );
-    }
+    
 
     /** @return UI 资源文件到目标路径的映射 */
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(QuestGpsService.MENU_UI_RESOURCE_PATH, QuestGpsService.MENU_UI_FILE_PATH);
-        mappings.put(QuestGpsService.GUIDE_UI_RESOURCE_PATH, QuestGpsService.GUIDE_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
     /** @return 是否在启用时覆盖已存在的 UI 文件 */
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     /**
      * 加载并解析主配置文件，初始化任务目录与 MySQL 数据库。
@@ -288,11 +256,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     }
 
     /** @return 客户端数据包处理器，委托给 {@link QuestGpsService#handleClientPacket} */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     /** @return 当前运行中的 {@link QuestGpsService} 实例，未启动时为 {@code null} */
     public QuestGpsService getService() {

@@ -24,6 +24,8 @@ import xuanmo.arcartxsuite.api.capability.ChatMutable;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.chat.command.ChatAdminCommand;
 import xuanmo.arcartxsuite.chat.command.ChatPlayerCommand;
 import xuanmo.arcartxsuite.chat.config.ChatModuleConfiguration;
@@ -61,39 +63,15 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXChat.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // cards 为固定 schema（卡片 ID + 排版参数），不作为动态节
-        // function 下仅 custom-components 为用户自定义组件匹配表，其余为固定字段
-        return SyncPolicy.builder()
-            .dynamicSection("function.custom-components")
-            .build();
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared=false 时需要）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100)
-        );
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -107,12 +85,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         configuration = ChatModuleConfiguration.load(yaml, channelsDirectory, logger);
     }
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(COMPLETION_UI_RESOURCE_PATH, COMPLETION_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
     @Override
     protected List<String> publishedTopics() {
@@ -136,17 +109,17 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
         // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcChatRepository chatRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor chatDesc;
+        javax.sql.DataSource chatDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            chatRepo = new JdbcChatRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            chatDesc = configuration.storage().toDescriptor();
+            chatDs = storageManager.resolveModuleDataSource("chat", null, dataFolder, chatDesc);
         } else {
-            // 新路径：共享本体数据源
-            chatRepo = new JdbcChatRepository(storageManager, "chat",
-                configuration.storage().sqliteFileName(), logger);
+            chatDesc = storageManager.getDescriptor().withTablePrefix("");
+            chatDs = storageManager.resolveModuleDataSource("chat",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcChatRepository chatRepo = new JdbcChatRepository(chatDs, chatDesc, dataFolder, logger);
         repository = chatRepo;
         service = new ChatService(
             plugin, logger,
@@ -232,7 +205,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             service = null;
         }
         if (repository != null) {
-            repository.shutdown();
+            storageManager.closeModuleDataSource("chat");
             repository = null;
         }
         completionUiId = null;

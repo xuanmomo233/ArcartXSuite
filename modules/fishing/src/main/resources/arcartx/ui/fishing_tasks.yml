@@ -7,7 +7,7 @@
 #
 # 视觉规范（钓鱼青蓝主题，统一暗色玻璃 + 左侧导航）:
 #   全屏玻璃 Frosted:24;12,22,38,110   面板玻璃 Frosted:30;255,255,255,100
-#   卡片底 26,34,46,210   卡片描边 50,160,190,180
+#   卡片底 26,34,46,210   卡片描边 80,200,220,240
 #   主色（青蓝）50,170,200   已完成 124,196,142   悬停高亮 80,200,220
 #   文字默认 &f
 #   分区色: 每日 50,170,200 / 每周 150,180,210 / 赛季 186,140,232
@@ -118,7 +118,6 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      through: true
       normal: ~Frosted:24;12,22,38,110
 
   # 自适配布局：宽高 = 设计分辨率 1920x1080，窗口分辨率变化时按比例缩放子控件
@@ -152,7 +151,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           标题色块:
             type: Texture
             attribute:
@@ -177,7 +176,7 @@ controls:
               x: 168
               width: 1
               height: 30
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           页名:
             type: Text
             attribute:
@@ -207,7 +206,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               关闭文字:
                 type: Text
                 attribute:
@@ -237,7 +236,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           # 非当前页：总览
           导航总览:
             type: Canvas
@@ -263,7 +262,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               总览文字:
                 type: Text
                 attribute:
@@ -297,7 +296,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               图鉴文字:
                 type: Text
                 attribute:
@@ -331,7 +330,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               奖励文字:
                 type: Text
                 attribute:
@@ -365,7 +364,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               天赋文字:
                 type: Text
                 attribute:
@@ -420,7 +419,7 @@ controls:
               y: 364
               width: 264
               height: 2
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           # ── 任务分类切换（分隔线下方）──────────────────────
           # 每日任务分类
           导航每日:
@@ -447,7 +446,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "var.currentCategory == 'daily' ? '50,170,200,230' : (self.isHovered() ? '80,200,220,255' : '50,160,190,180')"
+                    color: "var.currentCategory == 'daily' ? '50,170,200,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
               每日高亮条:
                 type: Texture
                 attribute:
@@ -501,7 +500,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "var.currentCategory == 'weekly' ? '150,180,210,230' : (self.isHovered() ? '80,200,220,255' : '50,160,190,180')"
+                    color: "var.currentCategory == 'weekly' ? '150,180,210,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
               每周高亮条:
                 type: Texture
                 attribute:
@@ -555,7 +554,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "var.currentCategory == 'season' ? '186,140,232,230' : (self.isHovered() ? '80,200,220,255' : '50,160,190,180')"
+                    color: "var.currentCategory == 'season' ? '186,140,232,230' : (self.isHovered() ? '80,200,220,255' : '80,200,220,240')"
               赛季高亮条:
                 type: Texture
                 attribute:
@@ -592,7 +591,7 @@ controls:
               x: 20
               y: -80
               texts: "~&fESC 关闭界面"
-              fontSize: 24
+              fontSize: 30
               through: true
           # 刷新按钮
           刷新按钮:
@@ -619,7 +618,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               刷新文字:
                 type: Text
                 attribute:
@@ -649,7 +648,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           # 页标题：根据当前分类动态显示
           页标题:
             type: Text
@@ -683,7 +682,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           任务滑块:
             type: Texture
             val: 任务滑块
@@ -743,7 +742,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~50,160,190,180
+                            color: ~80,200,220,240
                       每日标题条:
                         type: Texture
                         attribute:
@@ -808,7 +807,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,180' : '50,160,190,180')"
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
                               # 状态标记：完成显示绿色勾，进行中显示青蓝圆点
                               状态标记:
                                 type: Canvas
@@ -898,6 +897,10 @@ controls:
                                   shape: ~round_rect
                                   radius: 4
                                   through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
                               进度条填充:
                                 type: Texture
                                 attribute:
@@ -932,7 +935,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~50,160,190,180
+                            color: ~80,200,220,240
                       每周标题条:
                         type: Texture
                         attribute:
@@ -993,7 +996,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,180' : '50,160,190,180')"
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
                               状态标记:
                                 type: Canvas
                                 attribute:
@@ -1081,6 +1084,10 @@ controls:
                                   shape: ~round_rect
                                   radius: 4
                                   through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
                               进度条填充:
                                 type: Texture
                                 attribute:
@@ -1115,7 +1122,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~50,160,190,180
+                            color: ~80,200,220,240
                       赛季标题条:
                         type: Texture
                         attribute:
@@ -1176,7 +1183,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,180' : '50,160,190,180')"
+                                    color: "self.isHovered() ? '80,200,220,255' : (self.parent.entry != none && self.parent.entry['completed'] == true ? '124,196,142,240' : '80,200,220,240')"
                               状态标记:
                                 type: Canvas
                                 attribute:
@@ -1264,6 +1271,10 @@ controls:
                                   shape: ~round_rect
                                   radius: 4
                                   through: true
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,200,220,240
                               进度条填充:
                                 type: Texture
                                 attribute:
@@ -1296,7 +1307,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~50,160,190,180
+                            color: ~80,200,220,240
                       空状态文字:
                         type: Text
                         attribute:

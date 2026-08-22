@@ -58,7 +58,7 @@ public final class ScheduledCommandService {
                 if (processed.contains("{player}")) {
                     // 对每个在线玩家执行一次
                     for (Player player : Bukkit.getOnlinePlayers()) {
-                        String cmd = processed.replace("{player}", player.getName());
+                        String cmd = processed.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                     }
                 } else {

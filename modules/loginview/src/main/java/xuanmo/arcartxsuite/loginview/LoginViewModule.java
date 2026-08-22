@@ -27,6 +27,9 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration;
 import xuanmo.arcartxsuite.loginview.migration.AuthMeMigrationService.MigrationResult;
 import xuanmo.arcartxsuite.loginview.placeholder.LoginViewPlaceholderExpansion;
@@ -83,10 +86,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return ACTIONS;
     }
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     private String msg(String key, Object... args) {
         return messages().get("prefix") + messages().get(key, args);
@@ -128,46 +128,15 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return List.of();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXLoginView.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.required("auth.mode", ValueType.STRING)
-                .withEnum(Set.of("standalone", "authme")),
-            ValidationRule.of("ui.open-delay-ticks", ValueType.INT)
-                .withRange(0, 600),
-            ValidationRule.of("security.max-attempts", ValueType.INT)
-                .withRange(1, 20),
-            ValidationRule.of("security.min-password-length", ValueType.INT)
-                .withRange(1, 64),
-            ValidationRule.of("security.max-password-length", ValueType.INT)
-                .withRange(8, 128),
-            ValidationRule.of("security.session-ttl-minutes", ValueType.INT)
-                .withRange(0, 10080)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(
-            LoginViewService.UI_RESOURCE_PATH, LoginViewService.UI_FILE_PATH,
-            LoginViewService.MENU_UI_RESOURCE_PATH, LoginViewService.MENU_UI_FILE_PATH
-        );
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -178,8 +147,8 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         configuration = LoginViewModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile),
             MessageProvider.loadYamlWithBundledDefaults(
-                new File(configFile.getParentFile(), messagesFileName()),
-                messagesFileName(),
+                new File(configFile.getParentFile(), configSpec().messagesFileName()),
+                configSpec().messagesFileName(),
                 moduleClassLoader(),
                 logger,
                 resourcePath -> openResource(resourcePath, moduleClassLoader())),
@@ -206,18 +175,19 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcLoginViewRepository loginViewRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor lvDesc;
+        javax.sql.DataSource lvDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            loginViewRepo = new JdbcLoginViewRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            lvDesc = configuration.storage().toDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            lvDs = storageManager.resolveModuleDataSource("loginview", null, dataFolder, lvDesc);
         } else {
-            // 新路径：共享本体数据源
-            loginViewRepo = new JdbcLoginViewRepository(storageManager, "loginview",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger);
+            lvDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            lvDs = storageManager.resolveModuleDataSource("loginview",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcLoginViewRepository loginViewRepo = new JdbcLoginViewRepository(lvDs, lvDesc, dataFolder, logger);
         repository = loginViewRepo;
         service = new LoginViewService(
             plugin, logger, configuration, repository, packetBridge, packetGuard,
@@ -264,17 +234,13 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             service = null;
         }
         if (repository != null) {
-            repository.close();
+            storageManager.closeModuleDataSource("loginview");
             repository = null;
         }
         configuration = null;
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     @Override
     protected @Nullable ClientInitializedHandler createInitializedHandler() {
@@ -399,8 +365,8 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
                 configuration = LoginViewModuleConfiguration.load(
                     YamlConfiguration.loadConfiguration(configFile),
                     MessageProvider.loadYamlWithBundledDefaults(
-                        new File(configFile.getParentFile(), messagesFileName()),
-                        messagesFileName(),
+                        new File(configFile.getParentFile(), configSpec().messagesFileName()),
+                        configSpec().messagesFileName(),
                         moduleClassLoader(),
                         logger,
                         resourcePath -> openResource(resourcePath, moduleClassLoader())),

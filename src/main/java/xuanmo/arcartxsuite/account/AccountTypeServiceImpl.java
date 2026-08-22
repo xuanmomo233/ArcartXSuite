@@ -48,15 +48,26 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
     private final boolean debug;
     private final boolean authlibInjectorLoaded;
     private final Proxy proxy;
-    /** 本地混合代理端口（<= 0 表示未启用混合登录，跳过代理权威查询）。 */
+    /** 混合代理主机（默认 127.0.0.1，跨机群组服时为代理端 IP）。 */
+    private final String mixedProxyHost;
+    /** 混合代理端口（<= 0 表示未启用混合登录，跳过代理权威查询）。 */
     private final int mixedProxyPort;
+    /** 混合代理 account-source 接口鉴权 token（null 表示不携带）。 */
+    private final String mixedProxyToken;
 
     /** UUID -> 已确定（含网络查询）的账号类型缓存 */
     private final ConcurrentMap<UUID, AccountType> accountTypeCache = new ConcurrentHashMap<>();
-    /** 玩家名(小写) -> Mojang 官方 UUID（空串表示已确认不存在；网络失败不缓存） */
-    private final ConcurrentMap<String, String> officialUuidCache = new ConcurrentHashMap<>();
+    /** 玩家名(小写) -> (Mojang 官方 UUID, 缓存时间戳)（空串表示已确认不存在；网络失败不缓存） */
+    private final ConcurrentMap<String, CacheEntry<String>> officialUuidCache = new ConcurrentHashMap<>();
+    /** officialUuidCache 的 TTL（毫秒），默认 24 小时，防止玩家改名后缓存脏数据。 */
+    private static final long OFFICIAL_UUID_CACHE_TTL_MS = 24 * 60 * 60 * 1000L;
 
     public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug, String proxyHost, int proxyPort, int mixedProxyPort) {
+        this(logger, enableMojangLookup, mojangTimeoutMs, debug, proxyHost, proxyPort, "127.0.0.1", mixedProxyPort, null);
+    }
+
+    public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug,
+                                  String proxyHost, int proxyPort, String mixedProxyHost, int mixedProxyPort, String mixedProxyToken) {
         this.logger = logger;
         this.enableMojangLookup = enableMojangLookup;
         this.mojangTimeoutMs = Math.max(1000, mojangTimeoutMs);
@@ -65,7 +76,16 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
         this.proxy = (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0)
             ? new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort))
             : Proxy.NO_PROXY;
+        this.mixedProxyHost = (mixedProxyHost == null || mixedProxyHost.isBlank()) ? "127.0.0.1" : mixedProxyHost.trim();
         this.mixedProxyPort = mixedProxyPort;
+        this.mixedProxyToken = (mixedProxyToken == null || mixedProxyToken.isBlank()) ? null : mixedProxyToken.trim();
+    }
+
+    /** 带时间戳的缓存条目，用于 TTL 过期判断。 */
+    private record CacheEntry<T>(T value, long cachedAt) {
+        boolean isExpired(long ttlMs) {
+            return System.currentTimeMillis() - cachedAt > ttlMs;
+        }
     }
 
     @Override
@@ -210,7 +230,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
      *         代理无记录（404）、未启动（连接拒绝）或异常时返回 {@code null}
      */
     private AccountType queryProxyAccountSource(UUID uuid) {
-        String urlStr = "http://127.0.0.1:" + mixedProxyPort + "/axs-internal/account-source?uuid="
+        String urlStr = "http://" + mixedProxyHost + ":" + mixedProxyPort + "/axs-internal/account-source?uuid="
             + uuid.toString().replace("-", "");
         HttpURLConnection conn = null;
         try {
@@ -220,6 +240,9 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
             conn.setConnectTimeout(2000);
             conn.setReadTimeout(2000);
             conn.setRequestProperty("User-Agent", "ArcartXSuite-AccountType");
+            if (mixedProxyToken != null) {
+                conn.setRequestProperty("Authorization", "Bearer " + mixedProxyToken);
+            }
             int code = conn.getResponseCode();
             if (code != 200) {
                 return null;
@@ -276,16 +299,20 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
         if (normalized.isBlank()) {
             return "";
         }
-        String cached = officialUuidCache.get(normalized);
-        if (cached != null) {
-            return cached;
+        CacheEntry<String> cached = officialUuidCache.get(normalized);
+        if (cached != null && !cached.isExpired(OFFICIAL_UUID_CACHE_TTL_MS)) {
+            return cached.value();
+        }
+        if (cached != null && cached.isExpired(OFFICIAL_UUID_CACHE_TTL_MS)) {
+            // 过期条目清除，允许重新查询（玩家可能已改名）
+            officialUuidCache.remove(normalized, cached);
         }
         if (!allowNetwork) {
             return null;
         }
         try {
             String resolved = queryOfficialUuid(name);
-            officialUuidCache.put(normalized, resolved);
+            officialUuidCache.put(normalized, new CacheEntry<>(resolved, System.currentTimeMillis()));
             return resolved;
         } catch (IOException exception) {
             if (debug) {

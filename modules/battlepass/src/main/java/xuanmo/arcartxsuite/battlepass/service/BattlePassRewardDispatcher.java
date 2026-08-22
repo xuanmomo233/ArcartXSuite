@@ -142,7 +142,7 @@ public final class BattlePassRewardDispatcher {
         AxsScheduler.runTask(plugin, () -> {
             for (String raw : commands) {
                 if (raw == null || raw.isBlank()) continue;
-                String command = raw.replace("{player}", player.getName())
+                String command = raw.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
                     .replace("{uuid}", player.getUniqueId().toString());
                 if (command.startsWith("/")) command = command.substring(1);
                 try {

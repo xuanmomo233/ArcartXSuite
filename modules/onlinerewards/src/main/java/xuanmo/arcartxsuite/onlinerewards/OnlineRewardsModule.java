@@ -34,6 +34,9 @@ import xuanmo.arcartxsuite.onlinerewards.placeholder.OnlineRewardsPlaceholderExp
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 import xuanmo.arcartxsuite.onlinerewards.storage.JdbcOnlineRewardsRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 
 /**
  * 在线奖励模块主类。
@@ -59,56 +62,19 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXOnlineRewards.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 4;
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("weekly-rewards")
-            .dynamicSection("monthly-rewards")
-            .dynamicSection("server-sign-in-goal.targets")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared: false 时生效）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            // 离线储蓄上限
-            ValidationRule.of("offline-savings.max-minutes", ValueType.INT)
-                .withRange(0, 1440),
-            // 离线储蓄存储率
-            ValidationRule.of("offline-savings.storage-rate", ValueType.DOUBLE)
-                .withRange(0.0, 1.0)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        return Map.of(OnlineRewardsService.MENU_UI_RESOURCE_PATH, OnlineRewardsService.MENU_UI_FILE_PATH);
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -150,17 +116,17 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
         JdbcOnlineRewardsRepository rewardsRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor orDesc;
+        javax.sql.DataSource orDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            rewardsRepo = new JdbcOnlineRewardsRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            orDesc = configuration.storage().toDescriptor();
+            orDs = storageManager.resolveModuleDataSource("onlinerewards", null, dataFolder, orDesc);
         } else {
-            // 新路径：共享本体数据源
-            rewardsRepo = new JdbcOnlineRewardsRepository(
-                storageManager, "onlinerewards",
-                "", configuration.storage().sqliteFileName(), logger);
+            orDesc = storageManager.getDescriptor().withTablePrefix("");
+            orDs = storageManager.resolveModuleDataSource("onlinerewards",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        rewardsRepo = new JdbcOnlineRewardsRepository(orDs, orDesc, dataFolder, logger);
         service = new OnlineRewardsService(
             plugin, logger, configuration,
             rewardsRepo,
@@ -240,6 +206,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             service.shutdown();
             service = null;
         }
+        storageManager.closeModuleDataSource("onlinerewards");
         configuration = null;
     }
 
@@ -266,11 +233,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         };
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     /**
      * 返回当前在线奖励服务实例。
@@ -299,6 +262,5 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

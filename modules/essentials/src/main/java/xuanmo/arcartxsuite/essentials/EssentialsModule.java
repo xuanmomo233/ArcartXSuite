@@ -30,6 +30,9 @@ import xuanmo.arcartxsuite.api.capability.ChatMutable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.essentials.command.EssentialsCommandDelegate;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import xuanmo.arcartxsuite.essentials.packet.EssentialsAdminPacketHandler;
@@ -135,49 +138,30 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      *
      * @return {@code "ArcartXEssentials.yml"}
      */
-    @Override
-    protected String configFileName() {
-        return "ArcartXEssentials.yml";
-    }
+    
 
     /**
      * 返回消息文件名。
      *
      * @return {@code "messages.yml"}
      */
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     /**
      * 返回主配置的校验规则列表，确保存储方言与 SQLite 文件路径必填。
      *
      * @return 校验规则列表
      */
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN)
-        );
-    }
+    
 
     /**
      * 返回 UI 资源映射（菜单 UI 与管理 UI 的资源路径到文件路径映射）。
      *
      * @return UI 资源映射表
      */
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(EssentialsMenuPacketHandler.UI_RESOURCE_PATH, EssentialsMenuPacketHandler.UI_FILE_PATH);
-        mappings.put(EssentialsAdminPacketHandler.UI_RESOURCE_PATH, EssentialsAdminPacketHandler.UI_FILE_PATH);
-        return mappings;
-    }
+    
 
     /**
      * 加载并解析主配置文件为 {@link EssentialsConfiguration}。
@@ -205,18 +189,18 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor essDesc;
+        javax.sql.DataSource essDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repository = new EssentialsRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            essDesc = configuration.storage().toDescriptor();
+            essDs = storageManager.resolveModuleDataSource("essentials", null, dataFolder, essDesc);
         } else {
-            // 新路径：共享本体数据源
-            repository = new EssentialsRepository(
-                storageManager, "essentials",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger);
+            essDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            essDs = storageManager.resolveModuleDataSource("essentials",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        repository = new EssentialsRepository(essDs, essDesc, dataFolder, logger);
         repository.initialize();
 
         playerService = new PlayerManagementService(plugin, logger, configuration,
@@ -345,6 +329,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         if (teleportService != null) { teleportService.shutdown(); teleportService = null; }
         if (playerService != null) { playerService.shutdown(); playerService = null; }
         if (repository != null) { repository.close(); repository = null; }
+        storageManager.closeModuleDataSource("essentials");
         configuration = null;
         rawYaml = null;
     }
@@ -354,14 +339,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
      *
      * @return 包处理器，桥接不可用时仍返回无操作处理器
      */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (menuPacketHandler != null && menuPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            if (adminPacketHandler != null && adminPacketHandler.handleClientPacket(player, packetId, data)) return true;
-            return false;
-        };
-    }
+    
 
     /**
      * 处理 {@code /essentials} 命令，委派给 {@link EssentialsCommandDelegate}。
@@ -497,7 +475,5 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         }
     }
 }
-
-
 
 

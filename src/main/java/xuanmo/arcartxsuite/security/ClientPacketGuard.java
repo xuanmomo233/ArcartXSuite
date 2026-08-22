@@ -82,7 +82,10 @@ public final class ClientPacketGuard implements PacketGuardAPI {
                 @Override
                 public void punish(String command) {
                     if (!command.isBlank()) {
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("<player>", player.getName()));
+                        String safeName = sanitizePlayerName(player.getName());
+                        if (safeName != null) {
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("<player>", safeName));
+                        }
                     }
                 }
             }
@@ -175,6 +178,28 @@ public final class ClientPacketGuard implements PacketGuardAPI {
 
     private static String normalizeKey(String value) {
         return value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * 校验玩家名是否安全（仅允许字母、数字、下划线），防止命令注入。
+     * <p>
+     * 离线模式下玩家名可包含特殊字符（如 {@code ;}、{@code |}），
+     * 若直接替换到控制台命令中可导致 RCE。此处仅放行正则 {@code [A-Za-z0-9_]+} 的名字。
+     *
+     * @return 安全的玩家名；不安全时返回 null（调用方应跳过惩罚命令执行）
+     */
+    private static String sanitizePlayerName(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9') || c == '_')) {
+                return null;
+            }
+        }
+        return name;
     }
 
     interface FeedbackSink {

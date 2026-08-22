@@ -17,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
@@ -27,7 +28,7 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
 /**
  * 可插拔模块的抽象基类，封装通用生命周期管理。
  * <p>
- * 子类通过覆写声明式方法（{@link #configFileName()}, {@link #uiResourceMappings()} 等）
+ * 子类通过覆写声明式钩子（{@link #configSpec()}, {@link #uiSpec()} 等）
  * 和实现抽象方法（{@link #loadConfiguration}, {@link #startService}, {@link #stopService}）
  * 来定义模块行为。基类自动处理配置导出、UI 绑定、监听器注册、命令绑定、
  * PAPI 注册、客户端包路由注册和 shutdown 清理。
@@ -39,7 +40,14 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
  *     private MyService service;
  *
  *     @Override public ModuleDescriptor descriptor() { ... }
- *     @Override protected String configFileName() { return "ArcartXMy.yml"; }
+ *
+ *     @Override protected ModuleConfig configSpec() {
+ *         return ModuleConfig.builder()
+ *             .configFileName("config.yml")
+ *             .messagesFileName("messages.yml")
+ *             .build();
+ *     }
+ *
  *     @Override protected void loadConfiguration(File f) { config = MyConfig.load(f); }
  *     @Override protected void startService() { service = new MyService(context, config); service.start(); }
  *     @Override protected void stopService() { if (service != null) { service.shutdown(); service = null; } }
@@ -80,134 +88,62 @@ public abstract class AbstractAXSModule implements AXSModule {
 
 
     private boolean ready;
-    private boolean reloading; // reload 期间跳过 UI 注销，避免客户端丢失 HUD
     private final Map<String, UiBinding> uiBindings = new LinkedHashMap<>();
     private MessageProvider messages; // 模块消息提供者，由 messagesFileName() 声明后自动加载
 
     // ── 声明式元数据（子类按需覆写） ──────────────────────────
 
     /**
-     * 默认配置文件名（如 "ArcartXLoginView.yml"）。
-     * 返回 null 表示模块无独立配置文件。
+     * 模块配置规约。合并原 8 个配置钩子（configFileName / messagesFileName /
+     * defaultSyncPolicy / currentConfigVersion / configVersionPath /
+     * migrationFolder / mainConfigValidations / additionalConfigSpecs）为单一对象。
      * <p>
-     * 配置文件从模块 Jar 导出到宿主数据目录（plugins/ArcartXSuite/）。
+     * 默认返回 {@link ModuleConfig#DEFAULT}（无配置文件、无消息文件、strict 同步、版本 1）。
+     * 子类覆写此方法返回自定义配置规约。
+     *
+     * @return 模块配置规约
+     * @since 1.5.0
      */
-    @Nullable
-    protected String configFileName() {
-        return null;
+    @NotNull
+    protected ModuleConfig configSpec() {
+        return ModuleConfig.DEFAULT;
     }
 
     /**
-     * 模块消息文件名（如 {@code "messages.yml"}）。
-     * 返回 null 表示模块不使用外部化消息（仍可硬编码）。
+     * 模块 UI 资源规约。合并原 2 个 UI 钩子（uiResourceMappings / overwriteUiFiles）为单一对象。
      * <p>
-     * 声明后，基类在 {@link #onEnable} 时自动从模块 Jar 导出该文件到
-     * {@code data/<moduleId>/<fileName>}，并加载为 {@link #messages()}。
-     * 用户可编辑该文件自定义所有文本，支持 {@code &} 颜色码和 {@code {0}} 占位符。
-     */
-    @Nullable
-    protected String messagesFileName() {
-        return null;
-    }
-
-    /**
-     * 主配置 yml 的同步策略。默认 {@link SyncPolicy#strict() strict}：
-     * 玩家 yml 中不在内置默认值的键都会被视为废弃。
-     * <p>
-     * 子类若存在用户可自由增删的"动态节点"（如 announcer.entries、warehouse.warehouses），
-     * 应覆写此方法返回 {@code SyncPolicy.builder().dynamicSection("xxx").build()}。
+     * 默认返回 {@link ModuleUiSpec#NONE}（无 UI 资源）。
+     *
+     * @return 模块 UI 规约
+     * @since 1.5.0
      */
     @NotNull
-    protected SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.strict();
+    protected ModuleUiSpec uiSpec() {
+        return ModuleUiSpec.NONE;
     }
 
     /**
-     * 主配置 yml 的内置版本号。默认 1。
-     * <p>
-     * 若有破坏性字段重命名 / 删除，请把版本号 +1，并在模块 jar 内
-     * {@code <migrationFolder>/<from>-<to>.yml} 写迁移规则。
-     */
-    protected int currentConfigVersion() {
-        return 1;
-    }
-
-    /**
-     * 主配置版本号字段路径。默认 {@code "config-version"}。
-     */
-    @NotNull
-    protected String configVersionPath() {
-        return "config-version";
-    }
-
-    /**
-     * 模块 jar 内迁移文件夹路径。默认 {@code "migrations"}。
-     * 返回空字符串表示该模块不参与版本迁移。
-     */
-    @NotNull
-    protected String migrationFolder() {
-        return "migrations";
-    }
-
-    /**
-     * 主配置的校验规则。默认空列表。
-     */
-    @NotNull
-    protected List<ValidationRule> mainConfigValidations() {
-        return List.of();
-    }
-
-    /**
-     * 附属配置规约（如 chat 模块的 chat/channels/*.yml、prop 模块的 prop/key.yml 等）。
-     * 默认空列表。子类按需覆写。
-     */
-    @NotNull
-    protected List<ModuleConfigSpec> additionalConfigSpecs() {
-        return List.of();
-    }
-
-    /**
-     * 默认实现：基于 {@link #configFileName()} 与上面的钩子组合出主 yml 的诊断规约，
-     * 并追加 {@link #additionalConfigSpecs()}。子类一般无需覆写。
+     * 基于 {@link #configSpec()} 组合出诊断规约列表。子类一般无需覆写。
      */
     @Override
     public List<ModuleConfigSpec> configSpecs() {
+        ModuleConfig cfg = configSpec();
         List<ModuleConfigSpec> specs = new ArrayList<>();
-        String fileName = configFileName();
+        String fileName = cfg.configFileName();
         if (fileName != null && !fileName.isBlank()) {
             String moduleId = descriptor().id();
             String targetRelative = "data/" + moduleId + "/config.yml";
             specs.add(new ModuleConfigSpec(
                 moduleId,
-                new ConfigSyncSpec(fileName, targetRelative, defaultSyncPolicy()),
-                currentConfigVersion(),
-                configVersionPath(),
-                migrationFolder(),
-                mainConfigValidations()
+                new ConfigSyncSpec(fileName, targetRelative, cfg.syncPolicy()),
+                cfg.currentVersion(),
+                cfg.versionPath(),
+                cfg.migrationFolder(),
+                cfg.validations()
             ));
         }
-        specs.addAll(additionalConfigSpecs());
+        specs.addAll(cfg.additionalSpecs());
         return List.copyOf(specs);
-    }
-
-    /**
-     * UI 资源映射：模块 Jar 内的资源路径 → 宿主数据目录下的相对输出路径。
-     * <p>
-     * 示例: {@code Map.of("arcartx/ui/login_view.yml", "ui/login_view.yml")}
-     *
-     * @return 资源映射，空 Map 表示无 UI 资源
-     */
-    @NotNull
-    protected Map<String, String> uiResourceMappings() {
-        return Map.of();
-    }
-
-    /**
-     * 是否覆写已有的 UI 文件。默认 false。
-     * 子类可在 {@link #loadConfiguration} 之后根据配置动态返回。
-     */
-    protected boolean overwriteUiFiles() {
-        return false;
     }
 
     /**
@@ -240,33 +176,17 @@ public abstract class AbstractAXSModule implements AXSModule {
     }
 
     /**
-     * 创建客户端自定义包处理器。返回 null 表示不处理客户端回包。
+     * 客户端包处理器规约。合并原 4 个包钩子（createPacketHandler /
+     * packetHandlerPriority / packetOwnershipPacketId / packetGuardModuleKey）为单一对象。
+     * <p>
+     * 默认返回 {@link PacketHandlerSpec#NONE}（不注册包处理器）。
+     *
+     * @return 包处理器规约
+     * @since 1.5.0
      */
-    @Nullable
-    protected ClientPacketHandler createPacketHandler() {
-        return null;
-    }
-
-    /**
-     * 客户端包处理器优先级。数值越小越优先，越大越靠后。
-     * 默认 0。EventPacket 模块建议使用 100。
-     */
-    protected int packetHandlerPriority() {
-        return 0;
-    }
-
-    /**
-     * Packet ID owned by this module for centralized route-layer guarding.
-     */
-    protected @Nullable String packetOwnershipPacketId() {
-        return null;
-    }
-
-    /**
-     * Canonical PacketGuard module key for the owned packet.
-     */
-    protected @Nullable String packetGuardModuleKey() {
-        return null;
+    @NotNull
+    protected PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.NONE;
     }
 
     /**
@@ -403,13 +323,13 @@ public abstract class AbstractAXSModule implements AXSModule {
             }
 
             // 7. 注册客户端包处理器
-            ClientPacketHandler packetHandler = createPacketHandler();
-            if (packetHandler != null) {
+            PacketHandlerSpec packetSpec = createPacketHandlerSpec();
+            if (packetSpec.handler() != null) {
                 context.registerClientPacketHandler(
-                    packetHandler,
-                    packetHandlerPriority(),
-                    packetOwnershipPacketId(),
-                    packetGuardModuleKey()
+                    packetSpec.handler(),
+                    packetSpec.priority(),
+                    packetSpec.ownershipPacketId(),
+                    packetSpec.guardModule()
                 );
             }
 
@@ -459,13 +379,8 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     @Override
     public void onReload() throws Exception {
-        reloading = true;
-        try {
-            onDisable();
-            onEnable(context);
-        } finally {
-            reloading = false;
-        }
+        onDisable();
+        onEnable(context);
     }
 
     @Override
@@ -603,7 +518,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      */
     @Nullable
     private File ensureConfigExists() {
-        String fileName = configFileName();
+        String fileName = configSpec().configFileName();
         if (fileName == null || fileName.isBlank()) {
             return null;
         }
@@ -629,7 +544,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * {@code data/<moduleId>/<fileName>}，用户编辑后 reload 即可生效。
      */
     private void initMessages() {
-        String fileName = messagesFileName();
+        String fileName = configSpec().messagesFileName();
         if (fileName == null || fileName.isBlank()) {
             messages = null;
             return;
@@ -656,11 +571,12 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 导出所有声明的 UI 资源并执行 ArcartX UI 绑定。
      */
     private void exportAndBindUi() throws IOException {
-        Map<String, String> mappings = uiResourceMappings();
+        ModuleUiSpec uiSpec = uiSpec();
+        Map<String, String> mappings = uiSpec.resourceMappings();
         if (mappings.isEmpty()) {
             return;
         }
-        boolean overwrite = overwriteUiFiles();
+        boolean overwrite = uiSpec.overwrite();
         for (Map.Entry<String, String> entry : mappings.entrySet()) {
             String resourcePath = entry.getKey();
             String relativeUiPath = entry.getValue();
@@ -762,7 +678,7 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     private UiBinding doRegisterModuleUi(String resourcePath, String relativeUiPath,
                                           String configuredUiId, boolean registerOnEnable) {
-        boolean overwrite = overwriteUiFiles();
+        boolean overwrite = uiSpec().overwrite();
         File uiFile;
         try {
             uiFile = context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
@@ -789,7 +705,7 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     @Nullable
     private String resolveUiResourcePath(String relativeUiPath) {
-        for (Map.Entry<String, String> entry : uiResourceMappings().entrySet()) {
+        for (Map.Entry<String, String> entry : uiSpec().resourceMappings().entrySet()) {
             if (entry.getValue().equals(relativeUiPath)) {
                 return entry.getKey();
             }

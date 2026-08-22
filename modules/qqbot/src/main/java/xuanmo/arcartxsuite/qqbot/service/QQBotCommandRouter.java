@@ -2,6 +2,8 @@ package xuanmo.arcartxsuite.qqbot.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.lang.management.ManagementFactory;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,26 @@ public final class QQBotCommandRouter {
     private volatile Supplier<EssentialsQueryable> essentialsProvider;
     private volatile Supplier<MailDispatchable> mailProvider;
     private volatile QQBotSignInService signInService;
+
+    // ── 反射缓存：Paper getTPS / NMS recentTps，避免每次调用都反射查找 ──
+    private static final Method GET_TPS_METHOD;
+    private static final Method GET_SERVER_METHOD;
+    private static final Field RECENT_TPS_FIELD;
+    static {
+        Method tps = null;
+        try { tps = Bukkit.class.getMethod("getTPS"); } catch (Exception ignored) {}
+        GET_TPS_METHOD = tps;
+
+        Method getServer = null;
+        Field recentTps = null;
+        try {
+            getServer = Bukkit.getServer().getClass().getMethod("getServer");
+            Object server = getServer.invoke(Bukkit.getServer());
+            recentTps = server.getClass().getField("recentTps");
+        } catch (Exception ignored) {}
+        GET_SERVER_METHOD = getServer;
+        RECENT_TPS_FIELD = recentTps;
+    }
 
     public QQBotCommandRouter(
         JavaPlugin plugin,
@@ -269,9 +291,15 @@ public final class QQBotCommandRouter {
 
             // 解绑后自动移除白名单
             if (config.whitelist().enabled() && config.whitelist().autoRemoveOnUnbind()) {
-                String wlCmd = config.whitelist().removeCommand().replace("{name}", result.message());
-                AxsScheduler.runTask(plugin, () ->
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), wlCmd));
+                try {
+                    String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.whitelist().removeCommand())
+                        .bindPlayerName("name", result.message())
+                        .build();
+                    AxsScheduler.runTask(plugin, () ->
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), wlCmd));
+                } catch (IllegalArgumentException ignored) {
+                    // 玩家名不合法时跳过白名单移除
+                }
             }
         } else {
             reply(event, result.message());
@@ -318,7 +346,15 @@ public final class QQBotCommandRouter {
             }
             playerName = binding.playerName();
         }
-        String cmd = config.whitelist().addCommand().replace("{name}", playerName);
+        String cmd;
+        try {
+            cmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.whitelist().addCommand())
+                .bindPlayerName("name", playerName)
+                .build();
+        } catch (IllegalArgumentException e) {
+            reply(event, "非法玩家名: " + playerName);
+            return;
+        }
         AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistAdded().replace("{name}", playerName));
@@ -344,7 +380,15 @@ public final class QQBotCommandRouter {
             }
             playerName = binding.playerName();
         }
-        String cmd = config.whitelist().removeCommand().replace("{name}", playerName);
+        String cmd;
+        try {
+            cmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.whitelist().removeCommand())
+                .bindPlayerName("name", playerName)
+                .build();
+        } catch (IllegalArgumentException e) {
+            reply(event, "非法玩家名: " + playerName);
+            return;
+        }
         AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistRemoved().replace("{name}", playerName));
@@ -565,11 +609,17 @@ public final class QQBotCommandRouter {
         String[] parts = args.split("\\s+", 2);
         String name = parts[0];
         String reason = parts.length > 1 ? parts[1] : "QQ群管理踢出";
-        String cmd = config.moderation().kickCommand()
-            .replace("{name}", name)
-            .replace("{reason}", reason);
-        AxsScheduler.runTask(plugin, () ->
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+        try {
+            String cmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.moderation().kickCommand())
+                .bindPlayerName("name", name)
+                .bindQuoted("reason", reason)
+                .build();
+            AxsScheduler.runTask(plugin, () ->
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+        } catch (IllegalArgumentException e) {
+            reply(event, "非法玩家名: " + name);
+            return;
+        }
         reply(event, "已踢出玩家: " + name + "（原因: " + reason + "）");
     }
 
@@ -585,11 +635,17 @@ public final class QQBotCommandRouter {
         String[] parts = args.split("\\s+", 2);
         String name = parts[0];
         String reason = parts.length > 1 ? parts[1] : "QQ群管理封禁";
-        String cmd = config.moderation().banCommand()
-            .replace("{name}", name)
-            .replace("{reason}", reason);
-        AxsScheduler.runTask(plugin, () ->
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+        try {
+            String cmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.moderation().banCommand())
+                .bindPlayerName("name", name)
+                .bindQuoted("reason", reason)
+                .build();
+            AxsScheduler.runTask(plugin, () ->
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+        } catch (IllegalArgumentException e) {
+            reply(event, "非法玩家名: " + name);
+            return;
+        }
         reply(event, "已封禁玩家: " + name + "（原因: " + reason + "）");
     }
 
@@ -598,7 +654,9 @@ public final class QQBotCommandRouter {
             reply(event, "用法: " + config.commandPrefix() + cmd.name() + " <命令>");
             return;
         }
-        String command = cmd.command().replace("{args}", args);
+        String command = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(cmd.command())
+            .bindQuoted("args", args)
+            .build();
         AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
         reply(event, config.messages().commandExecuted().replace("{command}", command));
@@ -645,17 +703,19 @@ public final class QQBotCommandRouter {
 
 
     private static double[] getServerTps() {
-        try {
-            // Paper API
-            var method = Bukkit.class.getMethod("getTPS");
-            return (double[]) method.invoke(null);
-        } catch (Exception ignored) {}
-        // Fallback: NMS via reflection
-        try {
-            Object server = Bukkit.getServer().getClass().getMethod("getServer").invoke(Bukkit.getServer());
-            java.lang.reflect.Field tpsField = server.getClass().getField("recentTps");
-            return (double[]) tpsField.get(server);
-        } catch (Exception ignored) {}
+        // Paper API（反射已缓存到 GET_TPS_METHOD）
+        if (GET_TPS_METHOD != null) {
+            try {
+                return (double[]) GET_TPS_METHOD.invoke(null);
+            } catch (Exception ignored) {}
+        }
+        // Fallback: NMS via reflection（Method / Field 已缓存）
+        if (GET_SERVER_METHOD != null && RECENT_TPS_FIELD != null) {
+            try {
+                Object server = GET_SERVER_METHOD.invoke(Bukkit.getServer());
+                return (double[]) RECENT_TPS_FIELD.get(server);
+            } catch (Exception ignored) {}
+        }
         return new double[]{20.0, 20.0, 20.0};
     }
 
@@ -667,6 +727,21 @@ public final class QQBotCommandRouter {
         }
         if (commandLine.isEmpty()) {
             reply(event, "用法: " + config.adminCommandPrefix() + " <服务器命令>");
+            return;
+        }
+        // 安全检查 1：拒绝命令分隔符（防止注入多条命令）
+        if (xuanmo.arcartxsuite.api.command.CommandSanitizer.containsCommandSeparators(commandLine)) {
+            reply(event, "拒绝执行：命令包含非法分隔符");
+            logger.warning("[Admin] QQ=" + qqId + " 尝试执行含分隔符的命令: " + commandLine);
+            return;
+        }
+        // 安全检查 2：命令白名单（若配置了 admin.allowed-commands，只允许白名单内的命令）
+        String cmdName = commandLine.trim().split("\\s+", 2)[0].toLowerCase(java.util.Locale.ROOT);
+        if (cmdName.startsWith("/")) cmdName = cmdName.substring(1);
+        List<String> allowed = config.adminAllowedCommands();
+        if (allowed != null && !allowed.isEmpty() && !allowed.contains(cmdName)) {
+            reply(event, "拒绝执行：命令 " + cmdName + " 不在白名单中");
+            logger.warning("[Admin] QQ=" + qqId + " 尝试执行非白名单命令: " + commandLine);
             return;
         }
         if (config.debug()) {

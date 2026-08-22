@@ -24,7 +24,7 @@ import xuanmo.arcartxsuite.api.storage.StorageManager;
  * <p>
  * <h3>SQLite 模式</h3>
  * 各模块仍使用各自的 {@code <moduleId>.db} 文件，本体按模块名缓存对应的 HikariCP 连接池
- * （maximumPoolSize=1）。数据不合并，旧 {@code .db} 文件零迁移。
+ * （maximumPoolSize=2，支持 WAL 模式下的并发读 + 串行写）。数据不合并，旧 {@code .db} 文件零迁移。
  *
  * @since 1.4.0
  */
@@ -34,7 +34,11 @@ public final class StorageManagerImpl implements StorageManager {
     private final StorageDescriptor descriptor;
     private final HikariDataSource globalDataSource;
     private final Map<String, HikariDataSource> sqliteModuleSources = new ConcurrentHashMap<>();
+    /** 自建模式（override）连接池，按 moduleId 缓存。 */
+    private final Map<String, HikariDataSource> selfManagedSources = new ConcurrentHashMap<>();
     private volatile HikariDataSource hostSqliteSource;
+    /** JDBC 连接参数（从 config.yml 读取，用于构建 MySQL JDBC URL）。 */
+    private final JdbcParams jdbcParams;
 
     /**
      * 从本体 config.yml 的 {@code storage} 节创建数据源管理器。
@@ -46,6 +50,7 @@ public final class StorageManagerImpl implements StorageManager {
     public StorageManagerImpl(FileConfiguration config, File dataFolder) throws SQLException {
         this.dataFolder = dataFolder;
         this.descriptor = readDescriptor(config);
+        this.jdbcParams = JdbcParams.fromConfig(config);
         this.globalDataSource = descriptor.isMysql() ? createMysqlPool(descriptor) : null;
     }
 
@@ -72,9 +77,7 @@ public final class StorageManagerImpl implements StorageManager {
         hc.setMinimumIdle(2);
         hc.setMaximumPoolSize(desc.poolSize());
         hc.setAutoCommit(true);
-        String jdbcUrl = "jdbc:mysql://" + desc.host() + ":" + desc.port()
-            + "/" + desc.database()
-            + "?useSSL=true&characterEncoding=UTF-8&serverTimezone=UTC";
+        String jdbcUrl = jdbcParams.buildUrl(desc.host(), desc.port(), desc.database());
         hc.setJdbcUrl(jdbcUrl);
         hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
         hc.setUsername(desc.username());
@@ -181,12 +184,17 @@ public final class StorageManagerImpl implements StorageManager {
 
     @Override
     public void closeModuleDataSource(String moduleId) {
-        // MySQL 模式：全局共享池，不关闭（由本体 onDisable 统一管理）
+        String key = moduleId != null ? moduleId : "default";
+        // 先关闭自建模式连接池（如果存在）
+        HikariDataSource selfManaged = selfManagedSources.remove(key);
+        if (selfManaged != null && !selfManaged.isClosed()) {
+            selfManaged.close();
+        }
+        // MySQL 共享模式：全局共享池，不关闭（由本体 onDisable 统一管理）
         if (descriptor.isMysql()) {
             return;
         }
-        // SQLite 模式：关闭并移除该模块的独立连接池，释放文件锁
-        String key = moduleId != null ? moduleId : "default";
+        // SQLite 共享模式：关闭并移除该模块的独立连接池，释放文件锁
         HikariDataSource ds = sqliteModuleSources.remove(key);
         if (ds != null && !ds.isClosed()) {
             ds.close();
@@ -223,6 +231,106 @@ public final class StorageManagerImpl implements StorageManager {
         return getHostDataSource().getConnection();
     }
 
+    @Override
+    public DataSource resolveModuleDataSource(String moduleId, String sqliteFileName,
+                                               File moduleDataFolder,
+                                               StorageDescriptor overrideDescriptor) throws SQLException {
+        String key = moduleId != null ? moduleId : "default";
+
+        // ── 自建模式：根据 overrideDescriptor 创建独立连接池 ──
+        if (overrideDescriptor != null) {
+            HikariDataSource existing = selfManagedSources.get(key);
+            if (existing != null && !existing.isClosed()) {
+                return existing;
+            }
+            synchronized (selfManagedSources) {
+                existing = selfManagedSources.get(key);
+                if (existing != null && !existing.isClosed()) {
+                    return existing;
+                }
+                HikariDataSource ds = createSelfManagedPool(key, overrideDescriptor, moduleDataFolder);
+                selfManagedSources.put(key, ds);
+                return ds;
+            }
+        }
+
+        // ── 共享模式 ──
+        if (descriptor.isMysql()) {
+            if (globalDataSource == null || globalDataSource.isClosed()) {
+                throw new SQLException("AXS 全局 MySQL 数据源不可用");
+            }
+            return globalDataSource;
+        }
+        // SQLite 共享：按模块名分配独立连接池
+        return getModuleDataSource(key, sqliteFileName);
+    }
+
+    /**
+     * 创建自建模式连接池（模块配置了独立 storage 覆盖）。
+     * <p>
+     * SQLite 文件放在 moduleDataFolder 下（保持旧路径，零迁移）；
+     * MySQL 使用 overrideDescriptor 中的连接参数。
+     */
+    private HikariDataSource createSelfManagedPool(String moduleId, StorageDescriptor desc, File moduleDataFolder) throws SQLException {
+        HikariConfig hc = new HikariConfig();
+        hc.setPoolName("AXS-" + moduleId);
+        hc.setMinimumIdle(1);
+        hc.setAutoCommit(true);
+
+        if (desc.isMysql()) {
+            if (desc.host() == null || desc.host().isBlank()) {
+                throw new SQLException("MySQL 配置缺失 [AXS-" + moduleId + "]: storage.mysql.host 为空。"
+                    + "请在模块配置中填写 MySQL 连接信息，或将 storage.mode 改回 sqlite 使用共享模式。");
+            }
+            if (desc.database() == null || desc.database().isBlank()) {
+                throw new SQLException("MySQL 配置缺失 [AXS-" + moduleId + "]: storage.mysql.database 为空。"
+                    + "请在模块配置中填写 MySQL 连接信息，或将 storage.mode 改回 sqlite 使用共享模式。");
+            }
+            hc.setMaximumPoolSize(desc.poolSize());
+            String jdbcUrl = jdbcParams.buildUrl(desc.host(), desc.port(), desc.database());
+            hc.setJdbcUrl(jdbcUrl);
+            hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
+            hc.setUsername(desc.username());
+            hc.setPassword(desc.password());
+        } else {
+            if (moduleDataFolder != null && !moduleDataFolder.exists() && !moduleDataFolder.mkdirs()) {
+                throw new SQLException("无法创建数据目录: " + moduleDataFolder.getAbsolutePath());
+            }
+            File sqliteFile = new File(moduleDataFolder, desc.sqliteFileName());
+            File parent = sqliteFile.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                throw new SQLException("无法创建 SQLite 数据目录: " + parent.getAbsolutePath());
+            }
+            hc.setJdbcUrl("jdbc:sqlite:" + sqliteFile.getAbsolutePath());
+            hc.setDriverClassName("org.sqlite.JDBC");
+            hc.setMaximumPoolSize(2);
+            hc.setConnectionTimeout(10000);
+            hc.setConnectionTestQuery("SELECT 1");
+        }
+
+        try {
+            HikariDataSource ds = new HikariDataSource(hc);
+            if (!desc.isMysql()) {
+                // SQLite PRAGMA 优化
+                try (Connection conn = ds.getConnection();
+                     java.sql.Statement stmt = conn.createStatement()) {
+                    stmt.execute("PRAGMA journal_mode=WAL");
+                    stmt.execute("PRAGMA synchronous=NORMAL");
+                    stmt.execute("PRAGMA busy_timeout=5000");
+                }
+            }
+            return ds;
+        } catch (Exception e) {
+            String hint = desc.isMysql()
+                ? "MySQL 连接失败 [AXS-" + moduleId + "]: 请检查模块配置中的 storage.mysql 连接参数"
+                  + "（host=" + desc.host() + ", port=" + desc.port()
+                  + ", database=" + desc.database() + ", username=" + desc.username() + "）。"
+                  + "如果尚未配置 MySQL，请将 storage.mode 改回 sqlite 使用共享模式。"
+                : "SQLite 数据源初始化失败 [AXS-" + moduleId + "]: " + e.getMessage();
+            throw new SQLException(hint + " 原始错误: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * 关闭所有数据源（本体 onDisable 时调用）。
      */
@@ -236,9 +344,72 @@ public final class StorageManagerImpl implements StorageManager {
             }
         }
         sqliteModuleSources.clear();
+        for (HikariDataSource ds : selfManagedSources.values()) {
+            if (!ds.isClosed()) {
+                ds.close();
+            }
+        }
+        selfManagedSources.clear();
         if (hostSqliteSource != null && !hostSqliteSource.isClosed()) {
             hostSqliteSource.close();
             hostSqliteSource = null;
+        }
+    }
+
+    /**
+     * JDBC 连接参数，从 config.yml 的 {@code storage.mysql} 节读取。
+     * <p>
+     * 支持细粒度配置（use-ssl / allow-public-key-retrieval / server-timezone 等）
+     * 以及自定义 {@code jdbc-params} 字符串（直接拼接到 URL 末尾，优先级最高）。
+     */
+    static final class JdbcParams {
+        final boolean useSsl;
+        final boolean allowPublicKeyRetrieval;
+        final String serverTimezone;
+        final String characterEncoding;
+        final boolean useUnicode;
+        final String customParams;
+
+        private JdbcParams(boolean useSsl, boolean allowPublicKeyRetrieval,
+                           String serverTimezone, String characterEncoding,
+                           boolean useUnicode, String customParams) {
+            this.useSsl = useSsl;
+            this.allowPublicKeyRetrieval = allowPublicKeyRetrieval;
+            this.serverTimezone = serverTimezone;
+            this.characterEncoding = characterEncoding;
+            this.useUnicode = useUnicode;
+            this.customParams = customParams;
+        }
+
+        static JdbcParams fromConfig(FileConfiguration config) {
+            String prefix = "storage.mysql.";
+            return new JdbcParams(
+                config.getBoolean(prefix + "use-ssl", true),
+                config.getBoolean(prefix + "allow-public-key-retrieval", false),
+                config.getString(prefix + "server-timezone", "UTC"),
+                config.getString(prefix + "character-encoding", "UTF-8"),
+                config.getBoolean(prefix + "use-unicode", true),
+                config.getString(prefix + "jdbc-params", "")
+            );
+        }
+
+        /** 构建 JDBC URL：基础参数 + 自定义参数（自定义参数追加到末尾，可覆盖基础项）。 */
+        String buildUrl(String host, int port, String database) {
+            StringBuilder url = new StringBuilder();
+            url.append("jdbc:mysql://").append(host).append(":").append(port).append("/").append(database);
+            url.append("?useSSL=").append(useSsl);
+            url.append("&allowPublicKeyRetrieval=").append(allowPublicKeyRetrieval);
+            url.append("&serverTimezone=").append(serverTimezone);
+            url.append("&characterEncoding=").append(characterEncoding);
+            url.append("&useUnicode=").append(useUnicode);
+            if (customParams != null && !customParams.isBlank()) {
+                String trimmed = customParams.trim();
+                if (!trimmed.startsWith("&")) {
+                    url.append("&");
+                }
+                url.append(trimmed);
+            }
+            return url.toString();
         }
     }
 }

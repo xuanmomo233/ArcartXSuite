@@ -58,8 +58,6 @@ public final class SuiteCoreImpl implements SuiteCore {
 
     private static final String AUTHOR_NAME = "墨墨墨 Q";
     private static final String DISPLAY_NAME = "ArcartXSuite";
-    private static final String CONSOLE_PREFIX =
-        ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 
     /** 宿主真实插件实例（Bukkit 注册的 JavaPlugin）。 */
     private JavaPlugin host;
@@ -177,10 +175,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 0. 初始化智能配置诊断系统
         initConfigDiagnostic();
 
-        // 2. ClientPacketGuard
+        // 1. ClientPacketGuard
         reloadClientPacketGuard();
 
-        // 3. Bridges
+        // 2. Bridges
         bridgeLifecycleManager = new BridgeLifecycleManager(host);
         if (!bridgeLifecycleManager.initialize(
             getConfig().getBoolean("tacz-compat.enabled", true),
@@ -191,10 +189,11 @@ public final class SuiteCoreImpl implements SuiteCore {
             return;
         }
 
-        // 4. 全局按键注册
+        // 3. 全局按键注册
         keybindService = new KeybindService(host, bridgeLifecycleManager.propBridge());
         keybindService.initialize(getConfig());
 
+        // 4. 跨服传输
         crossServerService = new CrossServerService(host);
         crossServerService.start();
 
@@ -202,10 +201,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         clientEventLifecycleManager = new ClientEventLifecycleManager(host, () -> moduleRegistry);
         clientEventLifecycleManager.start();
 
-        // 7.5 统一 PAPI 解析器
+        // 6. 统一 PAPI 解析器
         placeholderResolver = new PlaceholderResolverImpl();
 
-        // 7.6 统一数据源管理器（1.4.0+）
+        // 7. 统一数据源管理器（1.4.0+）
         try {
             storageManager = new xuanmo.arcartxsuite.storage.StorageManagerImpl(getConfig(), getDataFolder());
             consoleInfo("统一数据源已初始化 (" + (storageManager.getDescriptor().isMysql() ? "MySQL" : "SQLite") + ")");
@@ -246,7 +245,9 @@ public final class SuiteCoreImpl implements SuiteCore {
                         "")
                     : xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite("secondary-password.db");
             secondaryPasswordService = new SecondaryPasswordService(
-                getDataFolder(), timeoutSeconds, descriptor, getLogger());
+                getDataFolder(), timeoutSeconds,
+                storageManager.resolveModuleDataSource("secondary-password", null, getDataFolder(), descriptor),
+                descriptor, getLogger());
             moduleRegistry.registerCoreCapability(
                 xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class,
                 secondaryPasswordService);
@@ -270,7 +271,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
         }
 
-        // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
+        // 9. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
         // 放在 ModuleRegistry 之后，确保 AccountTypeService 已就绪，实现按玩家类型精准 bypass
         boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
         boolean chatSignBypassOnlyNonPremium = getConfig().getBoolean("chat-sign-bypass.only-for-non-premium", true);
@@ -280,7 +281,7 @@ public final class SuiteCoreImpl implements SuiteCore {
         );
         chatSignBypassService.initialize();
 
-        // 9. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
+        // 10. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
         cloudModuleService = new CloudModuleService(this, moduleRegistry);
         cloudModuleService.syncModules().thenRun(() -> {
             AxsScheduler.runTask(host, () ->
@@ -288,7 +289,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             );
         });
 
-        // 7. 注册主命令
+        // 11. 注册主命令
         PluginCommand command = getCommand("arcartxsuite");
         if (command != null) {
             ArcartXSuiteCommand handler = new ArcartXSuiteCommand(this);
@@ -296,16 +297,16 @@ public final class SuiteCoreImpl implements SuiteCore {
             command.setTabCompleter(handler);
         }
 
-        // 8. 跑一轮全量诊断（只报警，不写盘）
+        // 12. 跑一轮全量诊断（只报警，不写盘）
         runConfigDiagnosis(null, false);
         printConfigDiagnosisSummary();
 
-        // 10. 异步版本检查
+        // 13. 异步版本检查
         versionCheckService = new VersionCheckService(host);
         versionCheckService.checkAsync();
         getServer().getPluginManager().registerEvents(versionCheckService, host);
 
-        // 11. authlib-injector 多方认证管理（默认禁用，按需显式开启）
+        // 14. authlib-injector 多方认证管理（默认禁用，按需显式开启）
         boolean authEnabled = getConfig().getBoolean("auth.enabled", false);
         if (authEnabled) {
             int mixedProxyPort = getConfig().getInt("auth.mixed-proxy-port", 25599);
@@ -682,14 +683,14 @@ public final class SuiteCoreImpl implements SuiteCore {
     }
 
     public void consoleInfo(String message) {
-        Bukkit.getConsoleSender().sendMessage(CONSOLE_PREFIX + "INFO: " + message);
+        getLogger().info(message);
     }
 
     public void consoleWarn(String message) {
-        Bukkit.getConsoleSender().sendMessage(CONSOLE_PREFIX + ChatColor.YELLOW + "WARN: " + message);
+        getLogger().warning(message);
     }
 
     public void consoleError(String message) {
-        Bukkit.getConsoleSender().sendMessage(CONSOLE_PREFIX + ChatColor.RED + "ERROR: " + message);
+        getLogger().severe(message);
     }
 }

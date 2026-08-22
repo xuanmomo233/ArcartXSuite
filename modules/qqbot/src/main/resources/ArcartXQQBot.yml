@@ -119,6 +119,20 @@ admin:
     - 123456789
   # 管理员指令前缀（如 "#cmd say hello" 会在控制台执行 "say hello"）
   command-prefix: "#cmd"
+  # 允许执行的命令白名单（命令名，不含参数；留空表示允许全部命令）
+  # 配置后，管理员只能执行白名单内的命令，防止 RCE 风险
+  allowed-commands:
+    - say
+    - list
+    - whitelist
+    - kick
+    - ban
+    - pardon
+    - op
+    - deop
+    - save-all
+    - stop
+    - reload
 
 # ─── 自定义群指令 ──────────────────────────────────────
 # 指令前缀（群消息以此开头才会被识别为指令）

@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration.StorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
 /**
  * Essentials 模块数据仓储。
@@ -30,35 +30,9 @@ import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration.StorageConf
  */
 public final class EssentialsRepository extends AbstractModuleRepository implements AutoCloseable {
 
-    private final Logger logger;
-
-    /**
-     * 构造数据仓储。
-     *
-     * @param pluginDataFolder 插件数据目录
-     * @param config           存储配置（方言、连接参数、表前缀）
-     * @param logger           日志器
-     */
-    public EssentialsRepository(File pluginDataFolder, StorageConfiguration config, Logger logger) {
-        super("AXS-Essentials", pluginDataFolder, config.toDescriptor(), logger);
-        this.logger = logger;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param tablePrefix    表前缀
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public EssentialsRepository(StorageManager storageManager, String moduleId,
-                                String tablePrefix, String sqliteFileName, Logger logger) {
-        super("AXS-Essentials", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
-        this.logger = logger;
+    public EssentialsRepository(DataSource dataSource, StorageDescriptor descriptor,
+                                File dataFolder, Logger logger) {
+        super("AXS-Essentials", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

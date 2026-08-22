@@ -430,8 +430,8 @@ final class BossDamageSettlementService {
     ) {
         String safeTemplate = template == null ? "" : template;
         BossDamageSettlementPlaceholderContext context = new BossDamageSettlementPlaceholderContext(record, entry);
-        String playerName = resolveTargetName(target, entry);
-        String playerDisplayName = resolveTargetDisplayName(target, entry);
+        String playerName = sanitizeName(resolveTargetName(target, entry));
+        String playerDisplayName = sanitizeName(resolveTargetDisplayName(target, entry));
         String playerUuid = resolveTargetUuid(target, entry);
         Matcher matcher = PLACEHOLDER_PATTERN.matcher(safeTemplate);
         StringBuffer rendered = new StringBuffer();
@@ -450,6 +450,16 @@ final class BossDamageSettlementService {
         }
         matcher.appendTail(rendered);
         return applyPlaceholderApi(target, rendered.toString());
+    }
+
+    /** 玩家名净化：合法则原样返回，非法则清空命令分隔符 */
+    private String sanitizeName(String name) {
+        if (name == null) return "";
+        try {
+            return xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(name);
+        } catch (IllegalArgumentException e) {
+            return xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(name);
+        }
     }
 
     private void cacheSettlement(BossDamageSettlementRecord record) {

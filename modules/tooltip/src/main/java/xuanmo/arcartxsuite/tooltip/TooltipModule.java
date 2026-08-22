@@ -10,6 +10,8 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.capability.TooltipDataCapable;
 import xuanmo.arcartxsuite.tooltip.cache.TooltipDataCache;
 import xuanmo.arcartxsuite.tooltip.command.TooltipAdminCommand;
@@ -48,13 +50,11 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
-    protected String configFileName() {
-        return null; // 本模块无需配置文件
-    }
-
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
+    protected @NotNull ModuleConfig configSpec() {
+        // 本模块无需配置文件，仅需消息文件
+        return ModuleConfig.builder()
+            .messagesFileName("messages.yml")
+            .build();
     }
 
     @Override
@@ -92,24 +92,14 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return new TooltipPacketHandler(cache, parser);
-    }
-
-    @Override
-    protected int packetHandlerPriority() {
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         // 高优先级（数值小先执行），tooltip 数据需要尽快缓存
-        return 50;
-    }
-
-    @Override
-    protected @Nullable String packetOwnershipPacketId() {
-        return TooltipPacketHandler.PACKET_ID;
-    }
-
-    @Override
-    protected @Nullable String packetGuardModuleKey() {
-        return "tooltip";
+        return PacketHandlerSpec.of(
+            new TooltipPacketHandler(cache, parser),
+            50,
+            TooltipPacketHandler.PACKET_ID,
+            "tooltip"
+        );
     }
 
     // ─── ModuleCommandHandler ────────────────────────────────

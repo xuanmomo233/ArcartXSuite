@@ -21,6 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import javax.sql.DataSource;
 
 /** Core-owned persistent secondary-password service. */
 public final class SecondaryPasswordService implements SecondaryPasswordAccess, AutoCloseable {
@@ -32,11 +33,14 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
     private final Repository repository;
     private final long unlockTimeoutMillis;
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
+    /** 按 UUID 加锁的锁对象注册表，替代实例级 synchronized 细化并发粒度。 */
+    private final ConcurrentMap<UUID, Object> playerLocks = new ConcurrentHashMap<>();
 
     public SecondaryPasswordService(java.io.File dataFolder, long unlockTimeoutSeconds,
-                                    StorageDescriptor descriptor, Logger logger) throws SQLException {
+                                    DataSource dataSource, StorageDescriptor descriptor,
+                                    Logger logger) throws SQLException {
         this.unlockTimeoutMillis = Math.max(1L, unlockTimeoutSeconds) * 1000L;
-        this.repository = new Repository(dataFolder, descriptor, logger);
+        this.repository = new Repository(dataSource, descriptor, dataFolder, logger);
         repository.initialize();
     }
 
@@ -44,109 +48,130 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
         return repository.open();
     }
 
+    /** 获取指定玩家的锁对象（按 UUID 粒度加锁，不同玩家互不阻塞）。 */
+    private Object lockFor(UUID uuid) {
+        return playerLocks.computeIfAbsent(uuid, k -> new Object());
+    }
+
     @Override
-    public synchronized boolean isPasswordSet(@NotNull Player player) {
-        try {
-            return load(player.getUniqueId()).isPresent();
-        } catch (SQLException exception) {
-            return false;
+    public boolean isPasswordSet(@NotNull Player player) {
+        synchronized (lockFor(player.getUniqueId())) {
+            try {
+                return load(player.getUniqueId()).isPresent();
+            } catch (SQLException exception) {
+                return false;
+            }
         }
     }
 
     @Override
-    public synchronized boolean isUnlocked(@NotNull Player player) {
+    public boolean isUnlocked(@NotNull Player player) {
         UUID uuid = player.getUniqueId();
-        try {
-            if (load(uuid).isEmpty()) {
+        synchronized (lockFor(uuid)) {
+            try {
+                if (load(uuid).isEmpty()) {
+                    return true;
+                }
+            } catch (SQLException exception) {
+                return false;
+            }
+            long expiry = unlockedUntil.getOrDefault(uuid, 0L);
+            if (expiry > System.currentTimeMillis()) {
                 return true;
             }
-        } catch (SQLException exception) {
+            unlockedUntil.remove(uuid);
             return false;
         }
-        long expiry = unlockedUntil.getOrDefault(uuid, 0L);
-        if (expiry > System.currentTimeMillis()) {
-            return true;
-        }
-        unlockedUntil.remove(uuid);
-        return false;
     }
 
     @Override
-    public synchronized boolean verify(@NotNull Player player, @NotNull String password) {
+    public boolean verify(@NotNull Player player, @NotNull String password) {
+        // 空密码拒绝：与 set() 的空密码检查对称，防止历史空密码记录被"验证"通过
+        if (password == null || password.isBlank()) {
+            return false;
+        }
         UUID uuid = player.getUniqueId();
-        try {
-            Optional<StoredPassword> stored = load(uuid);
-            if (stored.isEmpty()) {
-                return true;
+        synchronized (lockFor(uuid)) {
+            try {
+                Optional<StoredPassword> stored = load(uuid);
+                if (stored.isEmpty()) {
+                    return true;
+                }
+                StoredPassword value = stored.get();
+                byte[] actual = derive(password, Base64.getDecoder().decode(value.salt()));
+                boolean valid = MessageDigest.isEqual(
+                    Base64.getDecoder().decode(value.hash()), actual);
+                if (valid) {
+                    unlockedUntil.put(uuid, System.currentTimeMillis() + unlockTimeoutMillis);
+                }
+                return valid;
+            } catch (Exception exception) {
+                return false;
             }
-            StoredPassword value = stored.get();
-            byte[] actual = derive(password, Base64.getDecoder().decode(value.salt()));
-            boolean valid = MessageDigest.isEqual(
-                Base64.getDecoder().decode(value.hash()), actual);
-            if (valid) {
-                unlockedUntil.put(uuid, System.currentTimeMillis() + unlockTimeoutMillis);
-            }
-            return valid;
-        } catch (Exception exception) {
-            return false;
         }
     }
 
     @Override
-    public synchronized boolean set(@NotNull Player player, @NotNull String oldPassword, @NotNull String newPassword) {
+    public boolean set(@NotNull Player player, @NotNull String oldPassword, @NotNull String newPassword) {
         if (newPassword.isBlank()) {
             return false;
         }
-        try {
-            UUID uuid = player.getUniqueId();
-            Optional<StoredPassword> existing = load(uuid);
-            if (existing.isPresent() && !verify(player, oldPassword)) {
+        UUID uuid = player.getUniqueId();
+        synchronized (lockFor(uuid)) {
+            try {
+                Optional<StoredPassword> existing = load(uuid);
+                if (existing.isPresent() && !verify(player, oldPassword)) {
+                    return false;
+                }
+                byte[] salt = new byte[SALT_BYTES];
+                RANDOM.nextBytes(salt);
+                byte[] hash = derive(newPassword, salt);
+                String upsert = repository.isMysqlDialect()
+                    ? "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
+                        + "ON DUPLICATE KEY UPDATE salt=VALUES(salt),hash=VALUES(hash),updated_at=VALUES(updated_at)"
+                    : "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
+                        + "ON CONFLICT(player_uuid) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,updated_at=excluded.updated_at";
+                try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(upsert)) {
+                    statement.setString(1, uuid.toString());
+                    statement.setString(2, Base64.getEncoder().encodeToString(salt));
+                    statement.setString(3, Base64.getEncoder().encodeToString(hash));
+                    statement.setLong(4, System.currentTimeMillis());
+                    statement.executeUpdate();
+                }
+                unlockedUntil.put(uuid, System.currentTimeMillis() + unlockTimeoutMillis);
+                return true;
+            } catch (Exception exception) {
                 return false;
             }
-            byte[] salt = new byte[SALT_BYTES];
-            RANDOM.nextBytes(salt);
-            byte[] hash = derive(newPassword, salt);
-            String upsert = repository.isMysqlDialect()
-                ? "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
-                    + "ON DUPLICATE KEY UPDATE salt=VALUES(salt),hash=VALUES(hash),updated_at=VALUES(updated_at)"
-                : "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
-                    + "ON CONFLICT(player_uuid) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,updated_at=excluded.updated_at";
-            try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(upsert)) {
-                statement.setString(1, uuid.toString());
-                statement.setString(2, Base64.getEncoder().encodeToString(salt));
-                statement.setString(3, Base64.getEncoder().encodeToString(hash));
-                statement.setLong(4, System.currentTimeMillis());
-                statement.executeUpdate();
-            }
-            unlockedUntil.put(uuid, System.currentTimeMillis() + unlockTimeoutMillis);
-            return true;
-        } catch (Exception exception) {
-            return false;
         }
     }
 
     @Override
-    public synchronized boolean clear(@NotNull Player player, @NotNull String password) {
-        try {
-            UUID uuid = player.getUniqueId();
-            if (load(uuid).isEmpty() || !verify(player, password)) {
+    public boolean clear(@NotNull Player player, @NotNull String password) {
+        UUID uuid = player.getUniqueId();
+        synchronized (lockFor(uuid)) {
+            try {
+                if (load(uuid).isEmpty() || !verify(player, password)) {
+                    return false;
+                }
+                try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM axs_secondary_password WHERE player_uuid=?")) {
+                    statement.setString(1, uuid.toString());
+                    statement.executeUpdate();
+                }
+                unlockedUntil.remove(uuid);
+                return true;
+            } catch (SQLException exception) {
                 return false;
             }
-            try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
-                "DELETE FROM axs_secondary_password WHERE player_uuid=?")) {
-                statement.setString(1, uuid.toString());
-                statement.executeUpdate();
-            }
-            unlockedUntil.remove(uuid);
-            return true;
-        } catch (SQLException exception) {
-            return false;
         }
     }
 
     @Override
-    public synchronized void lock(@NotNull Player player) {
-        unlockedUntil.remove(player.getUniqueId());
+    public void lock(@NotNull Player player) {
+        synchronized (lockFor(player.getUniqueId())) {
+            unlockedUntil.remove(player.getUniqueId());
+        }
     }
 
     public boolean setPassword(@NotNull Player player, @NotNull String oldPassword, @NotNull String newPassword) {
@@ -210,8 +235,9 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
 
     private static final class Repository extends AbstractModuleRepository {
 
-        private Repository(java.io.File dataFolder, StorageDescriptor descriptor, Logger logger) {
-            super("AXS-SecondaryPassword", dataFolder, descriptor, logger);
+        private Repository(DataSource dataSource, StorageDescriptor descriptor,
+                           java.io.File dataFolder, Logger logger) {
+            super("AXS-SecondaryPassword", dataSource, descriptor, dataFolder, logger);
         }
 
         private Connection open() throws SQLException {

@@ -30,6 +30,15 @@ public class ProxyConfig {
     private boolean autoAssignUuid = true;
     private final List<YggdrasilSource> sources = new ArrayList<>();
 
+    // auth 配置节（混合登录）
+    private boolean authEnabled = false;
+    private boolean authAutoCheckVersion = false;
+    private String yggdrasilSource = "https://littleskin.cn/api/yggdrasil?mixed";
+    private int mixedProxyPort = 25599;
+    private String mixedProxyBindHost = "127.0.0.1";
+    private String mixedProxyToken = "";
+    private final java.util.List<String> mixedProxyAllowIps = new java.util.ArrayList<>();
+
     public ProxyConfig(Logger logger, File dataFolder) {
         this.logger = logger;
         this.dataFolder = dataFolder;
@@ -90,6 +99,28 @@ public class ProxyConfig {
         kickOfflineMessage = readString(root, "kick-offline-message", kickOfflineMessage);
         autoAssignUuid = readBoolean(root, "auto-assign-uuid", autoAssignUuid);
 
+        // auth 配置节
+        Object authNode = root.get("auth");
+        if (authNode instanceof Map<?, ?> authMap) {
+            Map<String, Object> auth = (Map<String, Object>) authMap;
+            authEnabled = readBoolean(auth, "enabled", authEnabled);
+            authAutoCheckVersion = readBoolean(auth, "auto-check-version", authAutoCheckVersion);
+            yggdrasilSource = readString(auth, "yggdrasil-source", yggdrasilSource);
+            mixedProxyPort = readInt(auth, "mixed-proxy-port", mixedProxyPort);
+            mixedProxyBindHost = readString(auth, "mixed-proxy-bind-host", mixedProxyBindHost);
+            mixedProxyToken = readString(auth, "mixed-proxy-token", mixedProxyToken);
+            mixedProxyAllowIps.clear();
+            Object allowIpsNode = auth.get("mixed-proxy-allow-ips");
+            if (allowIpsNode instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item != null) {
+                        String ip = String.valueOf(item).trim();
+                        if (!ip.isEmpty()) mixedProxyAllowIps.add(ip);
+                    }
+                }
+            }
+        }
+
         sources.clear();
         Object sourcesNode = root.get("sources");
         if (sourcesNode instanceof List<?> list) {
@@ -135,6 +166,20 @@ public class ProxyConfig {
         return fallback;
     }
 
+    private static int readInt(Map<String, Object> section, String key, int fallback) {
+        Object value = section.get(key);
+        if (value instanceof Number num) {
+            return num.intValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return fallback;
+    }
+
     public boolean debug() {
         return debug;
     }
@@ -165,6 +210,37 @@ public class ProxyConfig {
 
     public void setAutoAssignUuid(boolean autoAssignUuid) {
         this.autoAssignUuid = autoAssignUuid;
+    }
+
+    // ── auth 配置 ──────────────────────────────────────
+
+    public boolean authEnabled() {
+        return authEnabled;
+    }
+
+    public boolean authAutoCheckVersion() {
+        return authAutoCheckVersion;
+    }
+
+    public String yggdrasilSource() {
+        return yggdrasilSource;
+    }
+
+    public int mixedProxyPort() {
+        return mixedProxyPort;
+    }
+
+    public String mixedProxyBindHost() {
+        return mixedProxyBindHost;
+    }
+
+    public String mixedProxyToken() {
+        return mixedProxyToken;
+    }
+
+    @NotNull
+    public java.util.List<String> mixedProxyAllowIps() {
+        return new java.util.ArrayList<>(mixedProxyAllowIps);
     }
 
     @NotNull

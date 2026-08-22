@@ -14,9 +14,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.api.storage.StorageManager;
-import xuanmo.arcartxsuite.chat.config.ChatStorageConfiguration;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
@@ -30,34 +30,9 @@ import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
  */
 public final class JdbcChatRepository extends AbstractModuleRepository implements ChatRepository {
 
-    private final ChatStorageConfiguration configuration;
-
-    /**
-     * @param dataFolder    模块数据目录
-     * @param configuration 存储配置
-     * @param logger        日志记录器
-     */
-    public JdbcChatRepository(File dataFolder, ChatStorageConfiguration configuration, Logger logger) {
-        super("AXS-Chat", dataFolder, configuration.toDescriptor(), logger);
-        this.configuration = configuration;
-    }
-
-    /**
-     * 共享模式构造方法（1.4.0+）。
-     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
-     * <p>
-     * 聊天模块的表名已内置 {@code chat_} 前缀，因此 tablePrefix 传入空字符串。
-     *
-     * @param storageManager 本体数据源管理器
-     * @param moduleId       模块 ID
-     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
-     * @param logger         日志记录器
-     * @since 1.4.0
-     */
-    public JdbcChatRepository(StorageManager storageManager, String moduleId,
-                              String sqliteFileName, Logger logger) {
-        super("AXS-Chat", storageManager, moduleId, "", sqliteFileName, logger);
-        this.configuration = null;
+    public JdbcChatRepository(DataSource dataSource, StorageDescriptor descriptor,
+                              File dataFolder, Logger logger) {
+        super("AXS-Chat", dataSource, descriptor, dataFolder, logger);
     }
 
     @Override

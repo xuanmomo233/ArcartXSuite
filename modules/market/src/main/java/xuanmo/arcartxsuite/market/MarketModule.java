@@ -25,6 +25,9 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.command.MarketAdminCommand;
 import xuanmo.arcartxsuite.market.command.MarketPlayerCommand;
@@ -65,68 +68,19 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXMarket.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 4;
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("auction.categories")
-            .dynamicSection("auction.blacklist")
-            .dynamicSection("auction.tax-discount")
-            .dynamicSection("recycle.price-multiplier")
-            .dynamicSection("messages")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            ValidationRule.of("auction.max-listings-per-player", ValueType.INT)
-                .withRange(1, 1000),
-            ValidationRule.of("auction.min-bid-increment-ratio", ValueType.DOUBLE)
-                .withRange(0.01, 1.0),
-            ValidationRule.of("auction.transaction-tax-rate", ValueType.DOUBLE)
-                .withRange(0.0, 0.99),
-            ValidationRule.of("auction.min-duration-seconds", ValueType.INT)
-                .withRange(60, null),
-            ValidationRule.of("auction.max-duration-seconds", ValueType.INT)
-                .withRange(3600, null),
-            ValidationRule.of("redis.cache-ttl-seconds", ValueType.INT)
-                .withRange(10, 86400)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(SHOP_UI_RESOURCE_PATH, SHOP_UI_FILE_PATH);
-        mappings.put(AUCTION_UI_RESOURCE_PATH, AUCTION_UI_FILE_PATH);
-        mappings.put(AUCTION_SELL_UI_RESOURCE_PATH, AUCTION_SELL_UI_FILE_PATH);
-        mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
-        mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -136,8 +90,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         configuration = MarketModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile),
             MessageProvider.loadYamlWithBundledDefaults(
-                new File(configFile.getParentFile(), messagesFileName()),
-                messagesFileName(),
+                new File(configFile.getParentFile(), configSpec().messagesFileName()),
+                configSpec().messagesFileName(),
                 moduleClassLoader(),
                 logger,
                 resourcePath -> openResource(resourcePath, moduleClassLoader())),
@@ -196,18 +150,22 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         ensureExampleShopExported();
         ensureDefaultRecycleExported();
 
-        // 共享模式：使用本体统一数据源，模块只需提供表前缀
-        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcMarketRepository marketRepo;
+        // 统一通过 StorageManager 解析数据源（共享或自建），连接池生命周期由本体管控
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor marketDesc;
+        javax.sql.DataSource marketDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            marketRepo = new JdbcMarketRepository(configuration.storage(), logger, dataFolder);
+            // 自建模式：模块配置了独立 storage 节
+            marketDesc = configuration.storage().toDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            marketDs = storageManager.resolveModuleDataSource("market", null, dataFolder, marketDesc);
         } else {
-            // 新路径：共享本体数据源
-            marketRepo = new JdbcMarketRepository(storageManager, "market",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger);
+            // 共享模式：使用本体统一数据源
+            marketDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            marketDs = storageManager.resolveModuleDataSource("market",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcMarketRepository marketRepo = new JdbcMarketRepository(marketDs, marketDesc, dataFolder, logger);
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
@@ -304,6 +262,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             service.shutdown();
             service = null;
         }
+        storageManager.closeModuleDataSource("market");
         configuration = null;
     }
 
@@ -318,24 +277,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return new MarketPlaceholderExpansion(plugin, () -> service);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            MarketService current = service;
-            if (current == null || !current.ownsPacket(packetId)) {
-                return false;
-            }
-            // 市场交易涉及背包与经济操作，统一切到主线程串行执行，
-            // 消除并发竞态（重复购买/限购绕过）与异步线程操作 Bukkit API 的风险。
-            if (org.bukkit.Bukkit.isPrimaryThread()) {
-                current.handleClientPacket(player, packetId, data);
-            } else {
-                AxsScheduler.runTask(plugin,
-                    () -> current.handleClientPacket(player, packetId, data));
-            }
-            return true;
-        };
-    }
+    
 
     // ClientPacketHandler.data 是 List<String>，MarketService 内部解析为 Map
 
@@ -357,6 +299,5 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

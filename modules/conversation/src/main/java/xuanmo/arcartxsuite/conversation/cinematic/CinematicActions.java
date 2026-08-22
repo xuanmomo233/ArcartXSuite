@@ -356,7 +356,7 @@ public final class CinematicActions {
 
         @Override
         public void execute(Player player, CinematicActionContext ctx) {
-            String resolved = command.replace("{player}", player.getName());
+            String resolved = command.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
             if (asConsole) {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), resolved);
             } else {

@@ -147,7 +147,7 @@ command_signal_accept_mainline:
 quest_completed_title_reward:
   enabled: false
   trigger: command-signal
-  signal: "questgps_main_completed"
+  signal: "questgps_quest_completed"
   repeatable: false
   actions:
     - type: title.give           # 发放称号

@@ -637,7 +637,8 @@ public final class PropService implements Listener {
     }
 
     private static String replacePlayerToken(String text, Player player) {
-        return (text == null ? "" : text).replace("{player}", player.getName());
+        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+        return (text == null ? "" : text).replace("{player}", safeName);
     }
 
     private static void applyHealthDelta(Player player, double delta) {

@@ -5,7 +5,7 @@
 #       内容区 = 等级大卡 + 图鉴卡 + 统计卡 + 快捷入口 + 最近捕获记录流
 # 视觉规范:
 #   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片底 26,34,46,210  卡片描边 50,160,190,180
+#   卡片底 26,34,46,210  卡片描边 80,200,220,240
 #   主色（青蓝）50,170,200  已完成 124,196,142  悬停高亮 80,200,220
 
 ui:
@@ -209,7 +209,6 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      through: true
       normal: ~Frosted:24;12,22,38,110
   # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
   自适应全局布局:
@@ -238,7 +237,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           标题色块:
             type: Texture
             attribute:
@@ -263,7 +262,7 @@ controls:
               x: 168
               width: 1
               height: 30
-              normal: ~50,160,190,120
+              normal: ~80,200,220,230
           赛季名:
             type: Text
             attribute:
@@ -293,7 +292,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               关闭文字:
                 type: Text
                 attribute:
@@ -323,7 +322,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           # 当前页：总览
           导航总览:
             type: Canvas
@@ -386,7 +385,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               图鉴文字:
                 type: Text
                 attribute:
@@ -419,7 +418,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               奖励文字:
                 type: Text
                 attribute:
@@ -452,7 +451,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               天赋文字:
                 type: Text
                 attribute:
@@ -485,7 +484,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
               任务文字:
                 type: Text
                 attribute:
@@ -502,7 +501,7 @@ controls:
               y: 364
               width: 264
               height: 2
-              normal: ~50,160,190,80
+              normal: ~80,200,220,220
           导航提示:
             type: Text
             attribute:
@@ -532,7 +531,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~50,160,190,180
+                color: ~80,200,220,240
           页标题:
             type: Text
             attribute:
@@ -570,7 +569,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~50,160,190,180
+                    color: ~80,200,220,240
               等级标签:
                 type: Text
                 attribute:
@@ -628,6 +627,10 @@ controls:
                       normal: ~26,34,46,210
                       shape: ~round_rect
                       radius: 4
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,200,220,240
                   进度条填充:
                     type: Texture
                     attribute:
@@ -658,7 +661,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~50,160,190,180
+                    color: ~80,200,220,240
               图鉴卡标题:
                 type: Text
                 attribute:
@@ -699,6 +702,10 @@ controls:
                       normal: ~26,34,46,210
                       shape: ~round_rect
                       radius: 4
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,200,220,240
                   图鉴进度条填充:
                     type: Texture
                     attribute:
@@ -762,7 +769,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~50,160,190,180
+                    color: ~80,200,220,240
               # 累计捕获
               捕获统计:
                 type: Canvas
@@ -888,7 +895,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~50,160,190,180
+                    color: ~80,200,220,240
               快捷标题:
                 type: Text
                 attribute:
@@ -956,7 +963,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                        color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
                   天赋按钮文字:
                     type: Text
                     attribute:
@@ -990,7 +997,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+                        color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
                   任务按钮文字:
                     type: Text
                     attribute:
@@ -1020,7 +1027,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~50,160,190,180
+                    color: ~80,200,220,240
               最近标题:
                 type: Text
                 attribute:
@@ -1047,6 +1054,22 @@ controls:
                   texts: "~&7暂无捕获记录，去钓鱼吧！"
                   fontSize: 32
                   visible: var.recentCount == 0
+              # 滚动滑轨
+              最近滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 64
+                  width: 12
+                  height: "var.viewH - 964"
+                  normal: ~15,25,38,220
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,200,220,240
               # 滚动滑块
               最近滑块:
                 type: Texture
@@ -1055,10 +1078,12 @@ controls:
                   point: ~top_right
                   x: -12
                   y: 64
-                  width: 8
+                  width: 12
                   height: 60
-                  normal: ~50,170,200,200
-                  maxDragY: "var.viewH - 940"
+                  normal: ~50,170,200,220
+                  maxDragY: "var.viewH - 1024"
+                  shape: ~round_rect
+                  radius: 6
               # 滚动区
               滚动区:
                 type: Scroll
@@ -1067,7 +1092,7 @@ controls:
                   x: 24
                   y: 64
                   width: "var.contentW - 120"
-                  height: "var.viewH - 940"
+                  height: "var.viewH - 964"
                   moveY: "self.parent['最近滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -1106,7 +1131,7 @@ controls:
                             effect:
                               stroke:
                                 width: 2
-                                color: ~50,160,190,80
+                                color: ~80,200,220,220
                           # 鱼物品图标（不开 through：穿透会导致 hover 事件丢失，tooltip 不显示）
                           鱼图标:
                             type: Slot
@@ -1155,7 +1180,7 @@ controls:
                               y: 44
                               width: "var.contentW - 340"
                               texts: "self.parent.entry != none ? ('&7尺寸: &f' + self.parent.entry['size'].round() + ' cm' + (self.parent.entry['perfect'] == true ? ' &a★ 完美' : '')) : none"
-                              fontSize: 24
+                              fontSize: 30
                               through: true
                           # 稀有度标签
                           稀有度标签:

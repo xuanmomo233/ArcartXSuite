@@ -24,6 +24,9 @@ import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
 import xuanmo.arcartxsuite.api.capability.InteractionState;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 
 /**
  * Conversation 模块的主入口，基于 Chemdah 对话引擎为 ArcartX 客户端提供 NPC 对话能力。
@@ -56,48 +59,17 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXConversation.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("ui.packet-id", ValueType.STRING),
-            ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
-            ValidationRule.of("interaction.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("interaction.scan-range", ValueType.DOUBLE).withRange(1.0, 128.0),
-            ValidationRule.of("interaction.scan-period-ticks", ValueType.INT).withRange(1, 200),
-            ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L),
-            ValidationRule.of("cinematic.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("ui.letterbox-ui-id", ValueType.STRING)
-        );
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(DIALOG_UI_RESOURCE_PATH, DIALOG_UI_FILE_PATH);
-        mappings.put(SELECTOR_UI_RESOURCE_PATH, SELECTOR_UI_FILE_PATH);
-        mappings.put(LETTERBOX_UI_RESOURCE_PATH, LETTERBOX_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -148,7 +120,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
         // 电影序列服务
         CinematicConfiguration cinematicConfig = CinematicConfiguration.load(
-            YamlConfiguration.loadConfiguration(new File(dataFolder, configFileName())));
+            YamlConfiguration.loadConfiguration(new File(dataFolder, configSpec().configFileName())));
         java.util.List<String> letterboxRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.cinematic().letterboxUiIds()) {
             UiBinding letterboxBinding = registerModuleUi(
@@ -213,11 +185,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         configuration = null;
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
     @Override
     protected @Nullable ClientInitializedHandler createInitializedHandler() {
@@ -309,6 +277,5 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

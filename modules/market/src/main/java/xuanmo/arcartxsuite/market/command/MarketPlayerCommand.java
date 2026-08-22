@@ -62,7 +62,7 @@ public class MarketPlayerCommand implements TabExecutor {
             case "help" -> sendHelp(player);
             case "shop" -> {
                 if (args.length > 1) {
-                    service.openShopUi(player, args[1]);
+                    service.openShopUi(player);
                 } else {
                     service.openShopListUi(player);
                 }

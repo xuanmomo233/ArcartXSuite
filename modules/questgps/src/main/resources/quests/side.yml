@@ -14,15 +14,16 @@ example_side_quest:
   # category: side
   required-mainline:                    # 须先完成的主线 Chemdah ID
     - "example_mainline_quest"
+  # hooks：任务生命周期事件 → EventPacket 信号桥（信号名可自定义，见 mainline.yml）
   hooks:
     triggered:
-      - "questgps_side_triggered"
+      - "questgps_quest_triggered"
     accepted:
-      - "questgps_side_accepted"
+      - "questgps_quest_accepted"
     completed:
-      - "questgps_side_completed"
+      - "questgps_quest_completed"
     track-changed:
-      - "questgps_side_track_changed"
+      - "questgps_quest_track_changed"
   navigation:
     enabled: true
     point:

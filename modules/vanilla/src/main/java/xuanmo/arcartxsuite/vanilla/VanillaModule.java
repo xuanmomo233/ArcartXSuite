@@ -17,6 +17,9 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.vanilla.config.VanillaConfiguration;
 import xuanmo.arcartxsuite.vanilla.listener.InventoryOpenListener;
 import xuanmo.arcartxsuite.vanilla.service.VanillaService;
@@ -48,51 +51,17 @@ public final class VanillaModule extends AbstractAXSModule {
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXVanilla.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.strict();
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.of("ui.crafting-ui-id", ValueType.STRING),
-            ValidationRule.of("ui.furnace-ui-id", ValueType.STRING),
-            ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
-            ValidationRule.of("crafting.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("furnace.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("furnace.push-interval-ticks", ValueType.INT)
-                .withRange(1, 100)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        if (configuration == null || configuration.crafting().enabled()) {
-            mappings.put(CRAFTING_RESOURCE_PATH, CRAFTING_FILE_PATH);
-        }
-        if (configuration == null || configuration.furnace().enabled()) {
-            mappings.put(FURNACE_RESOURCE_PATH, FURNACE_FILE_PATH);
-        }
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        if (configuration == null) return false;
-        return configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -157,9 +126,5 @@ public final class VanillaModule extends AbstractAXSModule {
         return List.of();
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 }

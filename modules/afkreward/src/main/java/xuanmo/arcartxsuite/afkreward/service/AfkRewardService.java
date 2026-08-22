@@ -617,7 +617,9 @@ public final class AfkRewardService {
                                              PlayerAfkState state, AfkArea area) {
         String value = String.format(java.util.Locale.ROOT, "%.2f",
             computeMultiplier(player, state, area));
-        return command.replace("%player_name%", player.getName())
+        // 验证玩家名防止命令注入
+        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+        return command.replace("%player_name%", safeName)
             .replace("%axsafk_multiplier%", value)
             .replace("%axsafkreward_multiplier%", value);
     }

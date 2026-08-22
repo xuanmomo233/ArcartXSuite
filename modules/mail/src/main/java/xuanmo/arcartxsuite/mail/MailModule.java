@@ -15,12 +15,15 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.bukkit.command.CommandSender;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
 import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
@@ -35,7 +38,6 @@ import xuanmo.arcartxsuite.mail.placeholder.MailPlaceholderExpansion;
 import xuanmo.arcartxsuite.mail.service.MailService;
 import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 
 /**
  * 邮件模块主类，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
@@ -63,57 +65,37 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected String configFileName() {
-        return "ArcartXMail.yml";
-    }
-
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
-
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // currencies、presets 包含用户自定义货币与邮件模板预设
-        return SyncPolicy.builder()
-            .dynamicSection("presets")
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXMail.yml")
+            .messagesFileName("messages.yml")
+            // currencies、presets 包含用户自定义货币与邮件模板预设
+            .syncPolicy(SyncPolicy.builder().dynamicSection("presets").build())
+            .currentVersion(2)
+            .validations(List.of(
+                // storage.shared 必须是布尔值
+                ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                // pool-size 范围 1-100（仅在 shared=false 时需要）
+                ValidationRule.of("storage.pool-size", ValueType.INT)
+                    .withRange(1, 100),
+                // 玩家发送附件上限至少为 1
+                ValidationRule.of("player-send.max-attachments", ValueType.INT)
+                    .withRange(1, 64),
+                // 保留天数必须为正
+                ValidationRule.of("retention.completed-days", ValueType.INT)
+                    .withRange(1, null)
+            ))
             .build();
     }
 
     @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
-
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared=false 时需要）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            // 玩家发送附件上限至少为 1
-            ValidationRule.of("player-send.max-attachments", ValueType.INT)
-                .withRange(1, 64),
-            // 保留天数必须为正
-            ValidationRule.of("retention.completed-days", ValueType.INT)
-                .withRange(1, null)
-        );
-    }
-
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
+    protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put("arcartx/ui/mail_inbox.yml", "ui/mail_inbox.yml");
         mappings.put("arcartx/ui/mail_compose.yml", "ui/mail_compose.yml");
         mappings.put("arcartx/ui/mail_logs.yml", "ui/mail_logs.yml");
         mappings.put("arcartx/ui/mail_admin.yml", "ui/mail_admin.yml");
-        return mappings;
-    }
-
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 
     @Override
@@ -152,19 +134,20 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             }
         };
 
-        // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
-        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcMailRepository mailRepo;
+        // 统一通过 StorageManager 解析数据源（共享或自建），连接池生命周期由本体管控
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor mailDesc;
+        javax.sql.DataSource mailDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            mailRepo = new JdbcMailRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            // 自建模式：模块配置了独立 storage 节
+            mailDesc = configuration.storage().toDescriptor();
+            mailDs = storageManager.resolveModuleDataSource("mail", null, dataFolder, mailDesc);
         } else {
-            // 新路径：共享本体数据源
-            mailRepo = new JdbcMailRepository(storageManager, "mail",
-                configuration.storage().sqliteFileName(), logger);
+            // 共享模式：使用本体统一数据源
+            mailDesc = storageManager.getDescriptor().withTablePrefix("");
+            mailDs = storageManager.resolveModuleDataSource("mail",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcMailRepository mailRepo = new JdbcMailRepository(mailDs, mailDesc, dataFolder, logger);
         repository = mailRepo;
         service = new MailService(
             plugin, logger, dataFolder, configuration,
@@ -301,7 +284,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             service = null;
         }
         if (repository != null) {
-            repository.shutdown();
+            storageManager.closeModuleDataSource("mail");
             repository = null;
         }
         configuration = null;
@@ -319,19 +302,13 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
-
-    @Override
-    protected @Nullable String packetOwnershipPacketId() {
-        return "AXS_MAIL";
-    }
-
-    @Override
-    protected @Nullable String packetGuardModuleKey() {
-        return "mail";
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) -> service != null && service.handleClientPacket(player, packetId, data),
+            0,
+            "AXS_MAIL",
+            "mail"
+        );
     }
 
     private void ensureMailNotifyCardDefaults() {

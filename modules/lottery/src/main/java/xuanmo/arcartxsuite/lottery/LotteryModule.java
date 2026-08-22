@@ -28,6 +28,9 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.lottery.command.LotteryAdminCommand;
 import xuanmo.arcartxsuite.lottery.command.LotteryPlayerCommand;
 import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration;
@@ -63,49 +66,19 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             .build();
     }
 
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXLottery.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("messages")
-            .dynamicSection("shared-pity-groups")
-            .build();
-    }
+    
 
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            ValidationRule.required("pools-directory", ValueType.STRING)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(GACHA_UI_RESOURCE, GACHA_UI_FILE);
-        mappings.put(CASE_UI_RESOURCE, CASE_UI_FILE);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -140,16 +113,19 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcLotteryRepository repo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor lotteryDesc;
+        javax.sql.DataSource lotteryDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            repo = new JdbcLotteryRepository(dataFolder, configuration.storage(), logger);
+            lotteryDesc = configuration.storage().toDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            lotteryDs = storageManager.resolveModuleDataSource("lottery", null, dataFolder, lotteryDesc);
         } else {
-            // 新路径：共享本体数据源
-            repo = new JdbcLotteryRepository(storageManager, "lottery",
-                configuration.storage().tablePrefix(),
-                configuration.storage().sqliteFileName(), logger);
+            lotteryDesc = storageManager.getDescriptor()
+                .withTablePrefix(configuration.storage().tablePrefix());
+            lotteryDs = storageManager.resolveModuleDataSource("lottery",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcLotteryRepository repo = new JdbcLotteryRepository(lotteryDs, lotteryDesc, dataFolder, logger);
         repo.initialize();
         repository = repo;
 
@@ -228,7 +204,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             service = null;
         }
         if (repository != null) {
-            repository.shutdown();
+            storageManager.closeModuleDataSource("lottery");
             repository = null;
         }
         configuration = null;
@@ -247,20 +223,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return new LotteryPlaceholderExpansion(plugin, () -> service);
     }
 
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
-            return null;
-        }
-        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
-            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
-        UiBinding gachaBinding = getUiBinding(GACHA_UI_FILE);
-        UiBinding caseBinding = getUiBinding(CASE_UI_FILE);
-        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : "AXS:lottery_gacha";
-        String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : "AXS:lottery_case";
-        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, caseUiId);
-        return packetHandler;
-    }
+    
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────
 

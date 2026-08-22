@@ -228,8 +228,10 @@ public class MarketService {
     }
 
     public void searchAuction(Player player, String keyword) {
-        // 通过 packet 推送搜索结果到客户端 UI
-        openAuctionUi(player);
+        // 打开拍卖 UI 并立即用 keyword 触发服务端搜索，把结果推送给客户端
+        packetBridge.openUi(player, config.ui().auctionId());
+        issueActionToken(player, config.ui().auctionId());
+        handleAuctionListPacket(player, List.of("auction_list", "0", "all", keyword == null ? "" : keyword));
     }
 
     // ─── 系统商店操作 ────────────────────────────────────────
@@ -285,7 +287,8 @@ public class MarketService {
         issueActionToken(player, config.ui().shopId());
     }
 
-    public void openShopUi(Player player, String shopId) {
+    // 当前所有商店共用一个 UI ID；未来若支持多商店，可在此按 shopId 查找对应 UI
+    public void openShopUi(Player player) {
         packetBridge.openUi(player, config.ui().shopId());
         issueActionToken(player, config.ui().shopId());
     }

@@ -25,6 +25,9 @@ import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.ModuleUiSpec;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.warehouse.command.WarehouseAdminCommand;
 import xuanmo.arcartxsuite.warehouse.command.WarehousePlayerCommand;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration;
@@ -74,81 +77,34 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXWarehouse.yml";
-    }
+    
 
     /**
      * 配置版本号：UI 配置字段名统一为 xxx-ui-id 格式（id→ui-id, manage-id→manage-ui-id, bank-id→bank-ui-id）。
      */
-    @Override
-    protected int currentConfigVersion() {
-        return 3;
-    }
+    
 
     /**
      * 消息文件名称，位于模块配置目录下。
      * 通过 {@link #messages()} 获取的 {@link MessageProvider} 支持 {@code &} 颜色码和 {@code {0}} 占位符。
      */
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
     /**
      * 声明动态配置节：这些节由用户自由增删，ConfigDiagnosticEngine 不会覆盖其结构。
      * 包括仓库定义、分类、货币、定期产品、共享仓库和排序方案。
      */
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // 仓库类型、分类、共享仓、排序方案均由用户自定义
-        return SyncPolicy.builder()
-            .dynamicSection("warehouses")
-            .dynamicSection("categories")
-            .dynamicSection("bank.currencies")
-            .dynamicSection("bank.deposit-products")
-            .dynamicSection("shared")
-            .dynamicSection("sort-profiles")
-            .build();
-    }
+    
 
     /**
      * 配置校验规则。字段类型/范围/枚举不匹配时，诊断引擎会提示并可通过 {@code /axs config apply warehouse} 修复。
      */
-    @Override
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared: false 时生效）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            // flush-interval-ticks 必须为正
-            ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
-                .withRange(1, null),
-            // 二级密码长度限制
-            ValidationRule.required("security.min-length", ValueType.INT)
-                .withRange(1, 32),
-            ValidationRule.required("security.max-length", ValueType.INT)
-                .withRange(4, 64)
-        );
-    }
+    
 
-    @Override
-    protected @NotNull Map<String, String> uiResourceMappings() {
-        Map<String, String> mappings = new LinkedHashMap<>();
-        mappings.put(STORAGE_UI_RESOURCE_PATH, STORAGE_UI_FILE_PATH);
-        mappings.put(MANAGE_UI_RESOURCE_PATH, MANAGE_UI_FILE_PATH);
-        mappings.put(BANK_UI_RESOURCE_PATH, BANK_UI_FILE_PATH);
-        return mappings;
-    }
+    
 
-    @Override
-    protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFiles();
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -188,17 +144,17 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
         // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
-        JdbcWarehouseRepository warehouseRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor whDesc;
+        javax.sql.DataSource whDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            warehouseRepo = new JdbcWarehouseRepository(
-                dataFolder,
-                configuration.storage(), logger);
+            whDesc = configuration.storage().toDescriptor();
+            whDs = storageManager.resolveModuleDataSource("warehouse", null, dataFolder, whDesc);
         } else {
-            // 新路径：共享本体数据源
-            warehouseRepo = new JdbcWarehouseRepository(storageManager, "warehouse",
-                configuration.storage().sqliteFileName(), logger);
+            whDesc = storageManager.getDescriptor().withTablePrefix("");
+            whDs = storageManager.resolveModuleDataSource("warehouse",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(whDs, whDesc, dataFolder, logger);
         repository = warehouseRepo;
         service = new WarehouseService(
             plugin, logger, packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,
@@ -260,7 +216,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             service = null;
         }
         if (repository != null) {
-            repository.shutdown();
+            storageManager.closeModuleDataSource("warehouse");
             repository = null;
         }
         configuration = null;
@@ -286,21 +242,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     /**
      * 注册客户端包处理器，处理包 ID 为 {@code AXS_WAREHOUSE} 的客户端操作请求。
      */
-    @Override
-    protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
-    }
+    
 
-    @Override
-    protected @Nullable String packetOwnershipPacketId() {
-        return configuration == null ? null : configuration.ui().packetId();
-    }
+    
 
-    @Override
-    protected @Nullable String packetGuardModuleKey() {
-        return "warehouse";
-    }
+    
 
     public WarehouseService getService() {
         return service;

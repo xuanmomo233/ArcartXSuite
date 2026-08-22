@@ -105,7 +105,7 @@ public class PrizeDistributor {
 
     private void dispatchCommand(Player player, PoolItem item, String command) {
         if (command == null || command.isBlank()) return;
-        String processed = command.replace("{player}", player.getName())
+        String processed = command.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
             .replace("{uuid}", player.getUniqueId().toString())
             .replace("{amount}", Integer.toString(item.amount()))
             .replace("{item}", item.name());

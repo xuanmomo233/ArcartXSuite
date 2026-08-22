@@ -86,7 +86,7 @@ public final class JvmAntiDebug {
             int nativeThreats = 0;
             boolean nativeAvailable = NativeBridge.isAvailable();
 
-            // ???? native ???????
+            // 合并 native 层检测结果（Frida/硬件断点/IAT-Hook 等）
             if (nativeAvailable) {
                 nativeThreats = NativeBridge.n8();
             }
@@ -101,7 +101,7 @@ public final class JvmAntiDebug {
                 responseHandler.onThreatDetected(threats);
             }
         } catch (Exception ignored) {
-            // ??????????????
+            // 检测过程中发生异常时静默忽略，避免检测自身崩溃导致保护层误降级
         }
     }
 
@@ -231,7 +231,23 @@ public final class JvmAntiDebug {
         try {
             String pid = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
             Path attachFile = Paths.get(System.getProperty("java.io.tmpdir"), ".attach_pid" + pid);
-            return Files.exists(attachFile);
+            if (!Files.exists(attachFile)) {
+                return false;
+            }
+            // Spark/async-profiler 等 legit profiler 通过 Attach API attach 后，
+            // JVM 会在 attach 完成后删除 .attach_pid 文件。仅在文件存在且创建时间在最近 10 秒内
+            // 才视为活跃 attach（正在 attach 中），避免误杀已完成 attach 的 legit profiler。
+            try {
+                long lastModified = Files.getLastModifiedTime(attachFile).toMillis();
+                long ageMs = System.currentTimeMillis() - lastModified;
+                if (ageMs > 10_000L) {
+                    // 文件残留但已过期（attach 早已完成），不视为威胁
+                    return false;
+                }
+            } catch (Exception ignored) {
+                // 无法读取时间戳时保守判断为活跃
+            }
+            return true;
         } catch (Exception ignored) {}
         return false;
     }

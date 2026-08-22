@@ -22,6 +22,7 @@ public final class BridgeLifecycleManager {
     private final ArcartXItemStackBridge itemStackBridge;
     private final ArcartXPropBridge propBridge;
     private final ArcartXWorldTextureService worldTextureBridge;
+    // 非 final：tacz 是可选桥接，tryInitialize 可能返回 null，在 initialize() 中赋值。
     private TaczCombatBridge taczCombatBridge;
 
     public BridgeLifecycleManager(JavaPlugin plugin) {

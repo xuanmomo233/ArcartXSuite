@@ -27,6 +27,8 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 
 /**
@@ -67,38 +69,15 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             .build();
     }
 
-    @Override
-    protected String configFileName() {
-        return "ArcartXEventPacket.yml";
-    }
+    
 
-    @Override
-    protected String messagesFileName() {
-        return "messages.yml";
-    }
+    
 
-    @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // scheduled-commands 允许用户新增自定义定时任务
-        return SyncPolicy.builder()
-            .dynamicSection("scheduled-commands")
-            .build();
-    }
+    
 
-    @Override
-    protected int currentConfigVersion() {
-        return 2;
-    }
+    
 
-    protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of(
-            // storage.shared 必须是布尔值
-            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
-            // pool-size 范围 1-100（仅在 shared=false 时需要）
-            ValidationRule.of("storage.pool-size", ValueType.INT)
-                .withRange(1, 100)
-        );
-    }
+    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -148,20 +127,17 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
         JdbcEventPacketRepository jdbcRepo;
+        xuanmo.arcartxsuite.api.storage.StorageDescriptor epDesc;
+        javax.sql.DataSource epDs;
         if (configuration.storage().hasOverride()) {
-            // 旧路径：模块自建连接池
-            jdbcRepo = new JdbcEventPacketRepository(
-                dataFolder,
-                configuration.storage(), logger
-            );
+            epDesc = configuration.storage().toDescriptor();
+            epDs = storageManager.resolveModuleDataSource("eventpacket", null, dataFolder, epDesc);
         } else {
-            // 新路径：共享本体数据源
-            jdbcRepo = new JdbcEventPacketRepository(
-                storageManager, "eventpacket",
-                "",
-                configuration.storage().sqliteFileName(), logger
-            );
+            epDesc = storageManager.getDescriptor().withTablePrefix("");
+            epDs = storageManager.resolveModuleDataSource("eventpacket",
+                configuration.storage().sqliteFileName(), dataFolder, null);
         }
+        jdbcRepo = new JdbcEventPacketRepository(epDs, epDesc, dataFolder, logger);
         jdbcRepo.initialize();
         repository = jdbcRepo;
 
@@ -315,33 +291,10 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             repository = null;
         }
         configuration = null;
+        storageManager.closeModuleDataSource("eventpacket");
     }
 
-    @Override
     @Nullable
-    protected ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) -> {
-            if (dispatchService == null || configuration == null) {
-                return false;
-            }
-            String configuredPacketId = configuration.clientPacketId();
-            if (configuredPacketId.isBlank() || !configuredPacketId.equalsIgnoreCase(packetId)) {
-                return false;
-            }
-            String presetId = data == null || data.isEmpty() ? "" : data.get(0);
-            if (presetId.isBlank()) {
-                return false;
-            }
-            List<String> args = data == null || data.size() <= 1 ? List.of() : data.subList(1, data.size());
-            return dispatchService.dispatchClientPacket(packetId, presetId, player, args);
-        };
-    }
-
-    @Override
-    protected int packetHandlerPriority() {
-        return 100;
-    }
-
     public EventPacketDispatchService getDispatchService() {
         return dispatchService;
     }
