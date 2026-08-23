@@ -23,6 +23,8 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.fishing.command.FishingAdminCommand;
 import xuanmo.arcartxsuite.fishing.command.FishingPlayerCommand;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
+import xuanmo.arcartxsuite.fishing.config.FatigueConfig;
+import xuanmo.arcartxsuite.fishing.fatigue.FatigueEngine;
 import xuanmo.arcartxsuite.fishing.listener.FishingListener;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
@@ -159,7 +161,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private void ensureDefinitionDefaults() {
         ensureDefinitionDir("fishes", new String[]{
             "fishes/catfish.yml", "fishes/legendary_carp.yml", "fishes/pufferfish.yml",
-            "fishes/salmon.yml", "fishes/sea_bass.yml", "fishes/tuna.yml"
+            "fishes/salmon.yml", "fishes/sea_bass.yml", "fishes/tuna.yml",
+            "fishes/fatigue_ghost_fish.yml", "fishes/fatigue_shadow_carp.yml", "fishes/fatigue_abyssal_eel.yml"
         });
         ensureDefinitionDir("baits", new String[]{
             "baits/bread.yml", "baits/corn.yml", "baits/worm.yml"
@@ -341,11 +344,28 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             3, 3, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
             () -> service, logger);
 
+        // 加载疲惫值配置
+        FatigueConfig fatigueConfig;
+        File fatigueFile = new File(dataFolder, "fatigue.yml");
+        if (!fatigueFile.exists()) {
+            exportResource("fatigue.yml", fatigueFile);
+        }
+        if (fatigueFile.exists()) {
+            fatigueConfig = FatigueConfig.load(YamlConfiguration.loadConfiguration(fatigueFile));
+        } else {
+            fatigueConfig = FatigueConfig.disabled();
+        }
+
+        // 创建疲惫值引擎
+        FatigueEngine fatigueEngine = new FatigueEngine(
+            plugin, fatigueConfig, repo, logger, configuration.season().seasonId(),
+            iconResolver, () -> currencyManager);
+
         service = new FishingService(
             plugin, configuration, repo,
             packetBridge,
             iconResolver,
-            logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
+            logger, minigameUiId, talentEngine, fatigueEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
             crossServer,
             ariaBridge);
@@ -358,6 +378,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         service.setTitleProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
         service.start();
+
+        // 启动疲惫值定时恢复任务
+        fatigueEngine.start();
 
         // 迁移旧的 fishing pending 奖励到统一 PendingRewardService
         migrateLegacyPendingRewards(repo);
@@ -407,6 +430,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected void stopService() {
         if (service != null) {
+            // 关闭疲惫值定时任务
+            FatigueEngine fatigueEngine = service.fatigueEngine();
+            if (fatigueEngine != null) fatigueEngine.shutdown();
             service.shutdown();
             service = null;
         }

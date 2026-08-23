@@ -41,16 +41,25 @@ public final class FishBehaviorEngine implements FishBehavior {
 
     /**
      * 切换行为类型（多阶段行为用），重置内部状态。
+     * <p>
+     * M10: 完整重置所有行为相关状态，包括 dartTarget/dartSpeed/wander 参数，
+     * 防止切回 DART 时跳到旧目标位置。
      */
     public void switchBehavior(FishBehaviorType newType) {
         this.activeType = newType;
-        // 重置状态
+        // 重置所有状态
         lastDartTick = 0;
+        dartTarget = 0.5;
+        dartSpeed = 0.02;
         sinkerPhase = 0;
         floaterPhase = 0;
         nextModeSwitchTick = 0;
         currentMode = 0;
         stayUntilTick = 0;
+        // 重新随机化游荡参数，让切换后的行为节奏不同
+        wanderFreq1 = 0.02 + ThreadLocalRandom.current().nextDouble() * 0.04;
+        wanderFreq2 = 0.05 + ThreadLocalRandom.current().nextDouble() * 0.06;
+        wanderAmp = 0.004 + ThreadLocalRandom.current().nextDouble() * 0.006;
     }
 
     @Override

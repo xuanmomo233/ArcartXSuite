@@ -1,0 +1,84 @@
+# AXS 钓鱼模块 — 疲惫值系统配置
+# 疲惫值范围 [0, 100]，玩家每钓一条鱼 +1，每在线休息一分钟 -1。
+# 疲惫值影响钓鱼效率（gain/drain/鱼速度/逃离/绿条高度等全部参数）。
+#
+# 效率分段：
+#   0-29:   疲惫值低，钓鱼效率提升（gain↑, drain↓, 鱼速↓, 逃离↓, 绿条↑）
+#   30-59:  疲惫值中等，效率影响微小（接近 1.0）
+#   60-89:  疲惫值高，效率降低（gain↓, drain↑, 鱼速↑, 逃离↑, 绿条↓），但不至于钓不上
+#   90-100: 疲惫值极高，效率显著降低，但有概率出现特殊鱼类
+#
+# 效率系数 = efficiencyMultiplier(fatigue)，最终参数 = 基础值 × 效率系数
+#   gain 最终值 = gain × efficiencyMultiplier
+#   drain 最终值 = drain / efficiencyMultiplier
+#   鱼速度最终值 = 鱼速度 / efficiencyMultiplier
+#   逃离概率最终值 = 逃离概率 / efficiencyMultiplier
+#   绿条高度最终值 = 绿条高度 × efficiencyMultiplier
+# 效率系数 > 1 = 提升，< 1 = 降低
+
+config-version: 1
+
+# ─── 基础参数 ──────────────────────────────────────────
+# 是否启用疲惫值系统
+enabled: true
+# 疲惫值上限
+max-fatigue: 100
+# 每钓一条鱼增加的疲惫值
+fatigue-per-catch: 1
+# 每在线休息一分钟减少的疲惫值（在线即休息，不区分是否钓鱼）
+rest-decrease-per-minute: 1
+# 定时任务检查间隔（ticks），1200 = 60秒（1分钟）
+rest-check-interval-ticks: 1200
+
+# ─── 效率分段（每段的效率系数） ────────────────────────
+# 系数 = 该疲惫值对应的效率倍率
+#   > 1.0: 钓鱼效率提升（更容易）
+#   < 1.0: 钓鱼效率降低（更困难）
+# 使用线性插值在分段点之间平滑过渡
+efficiency-tiers:
+  # 疲惫值 0-29: 效率提升段
+  - max-fatigue: 29
+    multiplier: 1.15
+    description: "精力充沛，钓鱼效率提升15%"
+  # 疲惫值 30-59: 微小影响段
+  - max-fatigue: 59
+    multiplier: 1.0
+    description: "略有疲惫，效率无明显影响"
+  # 疲惫值 60-89: 效率降低段
+  - max-fatigue: 89
+    multiplier: 0.85
+    description: "疲惫不堪，钓鱼效率降低15%"
+  # 疲惫值 90-100: 显著降低段
+  - max-fatigue: 100
+    multiplier: 0.7
+    description: "极度疲惫，钓鱼效率降低30%，但可能遇到特殊鱼类"
+
+# ─── 特殊鱼类（疲惫值 > 90 时有概率出现） ──────────────
+# 疲惫值 > 90 时，每次钓鱼有 special-fish-chance 概率从 special-fishes 中选一条替换正常鱼
+# 特殊鱼使用 fishes/ 目录下的鱼定义 ID 引用
+special-fish-chance: 0.15
+special-fishes:
+  - fish-id: "fatigue_ghost_fish"
+    weight: 1.0
+  - fish-id: "fatigue_shadow_carp"
+    weight: 0.8
+  - fish-id: "fatigue_abyssal_eel"
+    weight: 0.5
+
+# ─── 首次疲惫值达到 100 的奖励 ─────────────────────────
+# 玩家首次疲惫值达到 100 时发放一次性奖励（赛季内仅一次）
+# 奖励类型：currency（货币）/ item（物品）/ command（命令）
+first-max-fatigue-reward:
+  enabled: true
+  # 奖励列表（同时发放所有）
+  rewards:
+    - type: "currency"
+      currency-id: "coin"
+      amount: 1000
+      description: "疲惫值首次达到100奖励：1000金币"
+    - type: "command"
+      command: "give {player} diamond 3"
+      description: "疲惫值首次达到100奖励：3颗钻石"
+    - type: "item"
+      item: "minecraft:nether_star"
+      description: "疲惫值首次达到100奖励：下界之星"

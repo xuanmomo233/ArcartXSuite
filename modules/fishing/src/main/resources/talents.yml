@@ -1,7 +1,10 @@
 ﻿# AXS 钓鱼天赋树配置
-# 每棵树 5 级（T1→T2二选一→T3→T4二选一→T5），8 个跨树联动天赋。
-# 每 3 级获得 1 点天赋点，100 级 = 33 点。
-# 满天赋加成约 4-5%，给称号和后续玩法留足空间。
+# 每棵树 5 层（T1→T2二选一→T3→T4二选一→T5），8 个跨树联动天赋。
+# 每 1 级获得 1 点天赋点，100 级 = 100 点。
+# 普通节点支持 6 级升级（levels 列表指定每级效果值），联动节点固定 1 级但数值更大、效果更多。
+# 前置等级要求（倒序递减）：T2 需 T1 满 6 级，T3 需 T2 >= 5，T4 需 T3 >= 4，T5 需 T4 >= 3。
+# 满天赋（154总等级）需 154 点，100 点只能达到约 65% 满天赋，玩家需大量取舍。
+# 联动节点数值约为普通节点满级的 1.5 倍，且多数拥有 2-3 个效果。
 #
 # 节点 ID 命名规则：{tree}-{tier}{branch}，如 steady-t1, steady-t2a
 # 联动节点 ID 命名规则：link-{编号}，如 link-1
@@ -35,6 +38,17 @@
 #   xp_in_bar        — 绿条内经验加成（百分比，0-1）
 #   perfect_xp       — 完美捕获经验加成（百分比，0-1）
 
+# 前置等级要求：每个 tier 的节点首次点亮时，前置节点需达到的最低等级。
+# key = 目标 tier（2~5）或 "link"（联动节点），value = 前置节点最低等级。
+# T2 需 T1 满 6 级，T3 需 T2 >= 5，T4 需 T3 >= 4，T5 需 T4 >= 3（倒序递减）。
+# 联动节点需前置 T3 >= 3 级。
+prerequisite-levels:
+  2: 6
+  3: 5
+  4: 4
+  5: 3
+  link: 3
+
 trees:
   # ─── 树1：稳健（绿条） ──────────────────────────────────────
   steady:
@@ -49,9 +63,9 @@ trees:
         tier: 1
         branch: root
         display-name: "&a稳健根基"
-        description: "绿条高度 +1px"
+        description: "绿条高度 +3.6px"
         effect-type: bar_height
-        effect-value: 1.0
+        levels: [0.2, 0.4, 0.6, 0.8, 0.9, 0.7]
         icon:
           source: minecraft
           id: iron_ingot
@@ -61,9 +75,9 @@ trees:
         tier: 2
         branch: a
         display-name: "&a大绿条"
-        description: "绿条高度 +1px"
+        description: "绿条高度 +3.6px"
         effect-type: bar_height
-        effect-value: 1.0
+        levels: [0.2, 0.4, 0.6, 0.8, 0.9, 0.7]
         icon:
           source: minecraft
           id: iron_ingot
@@ -73,9 +87,9 @@ trees:
         tier: 2
         branch: b
         display-name: "&a稳绿条"
-        description: "绿条阻尼 +2%"
+        description: "绿条阻尼 +3.8%"
         effect-type: bar_damping
-        effect-value: 0.02
+        levels: [0.0023, 0.0038, 0.0065, 0.0084, 0.0095, 0.0076]
         icon:
           source: minecraft
           id: slime_ball
@@ -85,9 +99,9 @@ trees:
         tier: 3
         branch: a
         display-name: "&a延续大"
-        description: "绿条高度 +1px"
+        description: "绿条高度 +3.6px"
         effect-type: bar_height
-        effect-value: 1.0
+        levels: [0.2, 0.4, 0.6, 0.8, 0.9, 0.7]
         icon:
           source: minecraft
           id: iron_ingot
@@ -97,9 +111,9 @@ trees:
         tier: 3
         branch: b
         display-name: "&a延续稳"
-        description: "绿条反弹 -3%"
+        description: "绿条反弹 -6.0%"
         effect-type: bar_bounce
-        effect-value: 0.03
+        levels: [0.0036, 0.0060, 0.0102, 0.0132, 0.0150, 0.0120]
         icon:
           source: minecraft
           id: rabbit_foot
@@ -109,9 +123,9 @@ trees:
         tier: 4
         branch: a
         display-name: "&a精准"
-        description: "绿条力系数 +1.5%"
+        description: "绿条力系数 +3.3%"
         effect-type: bar_force
-        effect-value: 0.015
+        levels: [0.0020, 0.0033, 0.0056, 0.0073, 0.0083, 0.0066]
         icon:
           source: minecraft
           id: anvil
@@ -121,9 +135,9 @@ trees:
         tier: 4
         branch: b
         display-name: "&a厚实"
-        description: "绿条高度 +1px"
+        description: "绿条高度 +3.6px"
         effect-type: bar_height
-        effect-value: 1.0
+        levels: [0.2, 0.4, 0.6, 0.8, 0.9, 0.7]
         icon:
           source: minecraft
           id: iron_block
@@ -133,9 +147,9 @@ trees:
         tier: 4
         branch: c
         display-name: "&a柔和"
-        description: "绿条阻尼 +1.5%"
+        description: "绿条阻尼 +2.9%"
         effect-type: bar_damping
-        effect-value: 0.015
+        levels: [0.0017, 0.0029, 0.0049, 0.0063, 0.0072, 0.0057]
         icon:
           source: minecraft
           id: slime_block
@@ -145,9 +159,9 @@ trees:
         tier: 4
         branch: d
         display-name: "&a抗冲"
-        description: "绿条反弹 -2%"
+        description: "绿条反弹 -4.0%"
         effect-type: bar_bounce
-        effect-value: 0.02
+        levels: [0.0024, 0.0040, 0.0068, 0.0088, 0.0100, 0.0080]
         icon:
           source: minecraft
           id: rabbit_hide
@@ -157,9 +171,9 @@ trees:
         tier: 5
         branch: a
         display-name: "&a精准大师"
-        description: "绿条力系数 +0.75%"
+        description: "绿条力系数 +1.7%"
         effect-type: bar_force
-        effect-value: 0.0075
+        levels: [0.0010, 0.0017, 0.0028, 0.0036, 0.0041, 0.0033]
         icon:
           source: minecraft
           id: anvil
@@ -169,9 +183,9 @@ trees:
         tier: 5
         branch: b
         display-name: "&a厚实大师"
-        description: "绿条高度 +0.5px"
+        description: "绿条高度 +1.9px"
         effect-type: bar_height
-        effect-value: 0.5
+        levels: [0.1, 0.2, 0.3, 0.4, 0.5, 0.4]
         icon:
           source: minecraft
           id: iron_block
@@ -181,9 +195,9 @@ trees:
         tier: 5
         branch: c
         display-name: "&a柔和大师"
-        description: "绿条阻尼 +0.75%"
+        description: "绿条阻尼 +1.4%"
         effect-type: bar_damping
-        effect-value: 0.0075
+        levels: [0.0009, 0.0014, 0.0024, 0.0031, 0.0036, 0.0028]
         icon:
           source: minecraft
           id: slime_block
@@ -195,7 +209,7 @@ trees:
         display-name: "&a抗冲大师"
         description: "绿条反弹 -1%"
         effect-type: bar_bounce
-        effect-value: 0.01
+        levels: [0.0012, 0.0020, 0.0034, 0.0044, 0.0050, 0.0040]
         icon:
           source: minecraft
           id: rabbit_hide
@@ -215,9 +229,9 @@ trees:
         tier: 1
         branch: root
         display-name: "&b迅捷根基"
-        description: "鱼速度 -0.5%"
+        description: "鱼速度 -2.0%"
         effect-type: fish_speed
-        effect-value: 0.005
+        levels: [0.0012, 0.0020, 0.0033, 0.0043, 0.0049, 0.0039]
         icon:
           source: minecraft
           id: feather
@@ -227,9 +241,9 @@ trees:
         tier: 2
         branch: a
         display-name: "&b减速"
-        description: "鱼速度 -0.5%"
+        description: "鱼速度 -2.0%"
         effect-type: fish_speed
-        effect-value: 0.005
+        levels: [0.0012, 0.0020, 0.0033, 0.0043, 0.0049, 0.0039]
         icon:
           source: minecraft
           id: feather
@@ -239,9 +253,9 @@ trees:
         tier: 2
         branch: b
         display-name: "&b停留"
-        description: "鱼停留时间 -5%"
+        description: "鱼停留时间 -7.5%"
         effect-type: fish_dwell
-        effect-value: 0.05
+        levels: [0.0045, 0.0075, 0.0127, 0.0165, 0.0187, 0.0150]
         icon:
           source: minecraft
           id: clock
@@ -251,9 +265,9 @@ trees:
         tier: 3
         branch: a
         display-name: "&b延续减速"
-        description: "鱼速度 -0.5%"
+        description: "鱼速度 -2.0%"
         effect-type: fish_speed
-        effect-value: 0.005
+        levels: [0.0012, 0.0020, 0.0033, 0.0043, 0.0049, 0.0039]
         icon:
           source: minecraft
           id: feather
@@ -263,9 +277,9 @@ trees:
         tier: 3
         branch: b
         display-name: "&b延续停留"
-        description: "鱼停留时间 -5%"
+        description: "鱼停留时间 -7.5%"
         effect-type: fish_dwell
-        effect-value: 0.05
+        levels: [0.0045, 0.0075, 0.0127, 0.0165, 0.0187, 0.0150]
         icon:
           source: minecraft
           id: clock
@@ -275,9 +289,9 @@ trees:
         tier: 4
         branch: a
         display-name: "&b压制速度"
-        description: "鱼速度 -0.4%"
+        description: "鱼速度 -1.6%"
         effect-type: fish_speed
-        effect-value: 0.004
+        levels: [0.0009, 0.0016, 0.0026, 0.0034, 0.0039, 0.0031]
         icon:
           source: minecraft
           id: feather
@@ -287,9 +301,9 @@ trees:
         tier: 4
         branch: b
         display-name: "&b压制突进"
-        description: "鱼突进概率 -3%"
+        description: "鱼突进概率 -6.0%"
         effect-type: fish_dart
-        effect-value: 0.03
+        levels: [0.0036, 0.0060, 0.0102, 0.0132, 0.0150, 0.0120]
         icon:
           source: minecraft
           id: arrow
@@ -299,9 +313,9 @@ trees:
         tier: 4
         branch: c
         display-name: "&b压制噪声"
-        description: "鱼噪声 -3%"
+        description: "鱼噪声 -6.0%"
         effect-type: fish_noise
-        effect-value: 0.03
+        levels: [0.0036, 0.0060, 0.0102, 0.0132, 0.0150, 0.0120]
         icon:
           source: minecraft
           id: amethyst_shard
@@ -311,9 +325,9 @@ trees:
         tier: 4
         branch: d
         display-name: "&b压制反弹"
-        description: "鱼边缘反弹 -2%"
+        description: "鱼边缘反弹 -3.4%"
         effect-type: fish_edge
-        effect-value: 0.02
+        levels: [0.0020, 0.0034, 0.0058, 0.0075, 0.0085, 0.0068]
         icon:
           source: minecraft
           id: shield
@@ -323,9 +337,9 @@ trees:
         tier: 5
         branch: a
         display-name: "&b压制速度大师"
-        description: "鱼速度 -0.2%"
+        description: "鱼速度 -0.8%"
         effect-type: fish_speed
-        effect-value: 0.002
+        levels: [0.0005, 0.0008, 0.0013, 0.0017, 0.0019, 0.0015]
         icon:
           source: minecraft
           id: feather
@@ -335,9 +349,9 @@ trees:
         tier: 5
         branch: b
         display-name: "&b压制突进大师"
-        description: "鱼突进概率 -1.5%"
+        description: "鱼突进概率 -3.0%"
         effect-type: fish_dart
-        effect-value: 0.015
+        levels: [0.0018, 0.0030, 0.0051, 0.0066, 0.0075, 0.0060]
         icon:
           source: minecraft
           id: arrow
@@ -347,9 +361,9 @@ trees:
         tier: 5
         branch: c
         display-name: "&b压制噪声大师"
-        description: "鱼噪声 -1.5%"
+        description: "鱼噪声 -3.0%"
         effect-type: fish_noise
-        effect-value: 0.015
+        levels: [0.0018, 0.0030, 0.0051, 0.0066, 0.0075, 0.0060]
         icon:
           source: minecraft
           id: amethyst_shard
@@ -361,7 +375,7 @@ trees:
         display-name: "&b压制反弹大师"
         description: "鱼边缘反弹 -1%"
         effect-type: fish_edge
-        effect-value: 0.01
+        levels: [0.0010, 0.0017, 0.0029, 0.0038, 0.0043, 0.0034]
         icon:
           source: minecraft
           id: shield
@@ -381,9 +395,9 @@ trees:
         tier: 1
         branch: root
         display-name: "&c威压根基"
-        description: "逃离概率 -0.5%"
+        description: "逃离概率 -1.9%"
         effect-type: flee_chance
-        effect-value: 0.005
+        levels: [0.0011, 0.0019, 0.0032, 0.0042, 0.0047, 0.0038]
         icon:
           source: minecraft
           id: iron_sword
@@ -393,9 +407,9 @@ trees:
         tier: 2
         branch: a
         display-name: "&c压制概率"
-        description: "逃离概率 -0.5%"
+        description: "逃离概率 -1.9%"
         effect-type: flee_chance
-        effect-value: 0.005
+        levels: [0.0011, 0.0019, 0.0032, 0.0042, 0.0047, 0.0038]
         icon:
           source: minecraft
           id: iron_sword
@@ -405,9 +419,9 @@ trees:
         tier: 2
         branch: b
         display-name: "&c压制速度"
-        description: "逃离速度 -1%"
+        description: "逃离速度 -3.5%"
         effect-type: flee_speed
-        effect-value: 0.01
+        levels: [0.0021, 0.0035, 0.0060, 0.0077, 0.0088, 0.0070]
         icon:
           source: minecraft
           id: sugar
@@ -417,9 +431,9 @@ trees:
         tier: 3
         branch: a
         display-name: "&c延续概率"
-        description: "逃离概率 -0.5%"
+        description: "逃离概率 -1.9%"
         effect-type: flee_chance
-        effect-value: 0.005
+        levels: [0.0011, 0.0019, 0.0032, 0.0042, 0.0047, 0.0038]
         icon:
           source: minecraft
           id: iron_sword
@@ -429,9 +443,9 @@ trees:
         tier: 3
         branch: b
         display-name: "&c延续速度"
-        description: "逃离速度 -1%"
+        description: "逃离速度 -3.5%"
         effect-type: flee_speed
-        effect-value: 0.01
+        levels: [0.0021, 0.0035, 0.0060, 0.0077, 0.0088, 0.0070]
         icon:
           source: minecraft
           id: sugar
@@ -441,9 +455,9 @@ trees:
         tier: 4
         branch: a
         display-name: "&c深度压制概率"
-        description: "逃离概率 -0.4%"
+        description: "逃离概率 -1.5%"
         effect-type: flee_chance
-        effect-value: 0.004
+        levels: [0.0009, 0.0015, 0.0026, 0.0033, 0.0038, 0.0030]
         icon:
           source: minecraft
           id: iron_sword
@@ -453,9 +467,9 @@ trees:
         tier: 4
         branch: b
         display-name: "&c深度压制速度"
-        description: "逃离速度 -1.5%"
+        description: "逃离速度 -5.3%"
         effect-type: flee_speed
-        effect-value: 0.015
+        levels: [0.0032, 0.0053, 0.0089, 0.0116, 0.0131, 0.0105]
         icon:
           source: minecraft
           id: sugar
@@ -465,9 +479,9 @@ trees:
         tier: 4
         branch: c
         display-name: "&c延长冷却"
-        description: "逃离冷却 +3%"
+        description: "逃离冷却 +6.6%"
         effect-type: flee_cooldown
-        effect-value: 0.03
+        levels: [0.0040, 0.0066, 0.0112, 0.0145, 0.0165, 0.0132]
         icon:
           source: minecraft
           id: clock
@@ -477,9 +491,9 @@ trees:
         tier: 4
         branch: d
         display-name: "&c缩短持续"
-        description: "逃离持续 -3%"
+        description: "逃离持续 -6.3%"
         effect-type: flee_duration
-        effect-value: 0.03
+        levels: [0.0038, 0.0063, 0.0107, 0.0139, 0.0158, 0.0126]
         icon:
           source: minecraft
           id: string
@@ -489,9 +503,9 @@ trees:
         tier: 5
         branch: a
         display-name: "&c深度压制概率大师"
-        description: "逃离概率 -0.2%"
+        description: "逃离概率 -0.8%"
         effect-type: flee_chance
-        effect-value: 0.002
+        levels: [0.0005, 0.0008, 0.0013, 0.0017, 0.0019, 0.0015]
         icon:
           source: minecraft
           id: iron_sword
@@ -501,9 +515,9 @@ trees:
         tier: 5
         branch: b
         display-name: "&c深度压制速度大师"
-        description: "逃离速度 -0.75%"
+        description: "逃离速度 -2.6%"
         effect-type: flee_speed
-        effect-value: 0.0075
+        levels: [0.0016, 0.0026, 0.0045, 0.0058, 0.0066, 0.0053]
         icon:
           source: minecraft
           id: sugar
@@ -513,9 +527,9 @@ trees:
         tier: 5
         branch: c
         display-name: "&c延长冷却大师"
-        description: "逃离冷却 +1.5%"
+        description: "逃离冷却 +3.3%"
         effect-type: flee_cooldown
-        effect-value: 0.015
+        levels: [0.0020, 0.0033, 0.0056, 0.0073, 0.0083, 0.0066]
         icon:
           source: minecraft
           id: clock
@@ -527,7 +541,7 @@ trees:
         display-name: "&c缩短持续大师"
         description: "逃离持续 -1.5%"
         effect-type: flee_duration
-        effect-value: 0.015
+        levels: [0.0019, 0.0032, 0.0054, 0.0069, 0.0079, 0.0063]
         icon:
           source: minecraft
           id: string
@@ -537,7 +551,7 @@ trees:
   # ─── 树4：专注（进度） ────────────────────────────────────
   focus:
     display-name: "&d专注"
-    description: "提升进度获取与维持能力"
+    description: "提升钓鱼进度增速与稳定性"
     icon:
       source: minecraft
       id: clock
@@ -547,9 +561,9 @@ trees:
         tier: 1
         branch: root
         display-name: "&d专注根基"
-        description: "进度增速 +0.5%"
+        description: "进度增速 +6.5%"
         effect-type: progress_rate
-        effect-value: 0.005
+        levels: [0.0039, 0.0065, 0.0110, 0.0142, 0.0161, 0.0129]
         icon:
           source: minecraft
           id: emerald
@@ -559,9 +573,9 @@ trees:
         tier: 2
         branch: a
         display-name: "&d加速进度"
-        description: "进度增速 +0.5%"
+        description: "进度增速 +6.5%"
         effect-type: progress_rate
-        effect-value: 0.005
+        levels: [0.0039, 0.0065, 0.0110, 0.0142, 0.0161, 0.0129]
         icon:
           source: minecraft
           id: emerald
@@ -571,9 +585,9 @@ trees:
         tier: 2
         branch: b
         display-name: "&d维持进度"
-        description: "进度下降 -1%"
+        description: "进度下降 -4.7%"
         effect-type: progress_drain
-        effect-value: 0.01
+        levels: [0.0028, 0.0047, 0.0080, 0.0103, 0.0118, 0.0094]
         icon:
           source: minecraft
           id: honey_bottle
@@ -583,9 +597,9 @@ trees:
         tier: 3
         branch: a
         display-name: "&d延续加速"
-        description: "进度增速 +0.5%"
+        description: "进度增速 +6.5%"
         effect-type: progress_rate
-        effect-value: 0.005
+        levels: [0.0039, 0.0065, 0.0110, 0.0142, 0.0161, 0.0129]
         icon:
           source: minecraft
           id: emerald
@@ -595,9 +609,9 @@ trees:
         tier: 3
         branch: b
         display-name: "&d延续维持"
-        description: "进度下降 -1%"
+        description: "进度下降 -4.7%"
         effect-type: progress_drain
-        effect-value: 0.01
+        levels: [0.0028, 0.0047, 0.0080, 0.0103, 0.0118, 0.0094]
         icon:
           source: minecraft
           id: honey_bottle
@@ -607,9 +621,9 @@ trees:
         tier: 4
         branch: a
         display-name: "&d深度加速"
-        description: "进度增速 +0.4%"
+        description: "进度增速 +5.2%"
         effect-type: progress_rate
-        effect-value: 0.004
+        levels: [0.0031, 0.0052, 0.0088, 0.0114, 0.0129, 0.0103]
         icon:
           source: minecraft
           id: emerald
@@ -619,9 +633,9 @@ trees:
         tier: 4
         branch: b
         display-name: "&d深度维持"
-        description: "进度下降 -1.5%"
+        description: "进度下降 -7.0%"
         effect-type: progress_drain
-        effect-value: 0.015
+        levels: [0.0042, 0.0070, 0.0120, 0.0155, 0.0176, 0.0141]
         icon:
           source: minecraft
           id: honey_bottle
@@ -631,9 +645,9 @@ trees:
         tier: 4
         branch: c
         display-name: "&d完美窗口"
-        description: "完美窗口 +2%"
+        description: "完美窗口 +4.0%"
         effect-type: perfect_window
-        effect-value: 0.02
+        levels: [0.0024, 0.0040, 0.0068, 0.0088, 0.0100, 0.0080]
         icon:
           source: minecraft
           id: ender_eye
@@ -643,9 +657,9 @@ trees:
         tier: 4
         branch: d
         display-name: "&d起步加速"
-        description: "起始进度 +0.5%"
+        description: "起始进度 +1.4%"
         effect-type: start_progress
-        effect-value: 0.005
+        levels: [0.0008, 0.0014, 0.0023, 0.0030, 0.0034, 0.0027]
         icon:
           source: minecraft
           id: firework_rocket
@@ -655,9 +669,9 @@ trees:
         tier: 5
         branch: a
         display-name: "&d深度加速大师"
-        description: "进度增速 +0.2%"
+        description: "进度增速 +2.6%"
         effect-type: progress_rate
-        effect-value: 0.002
+        levels: [0.0016, 0.0026, 0.0044, 0.0057, 0.0065, 0.0052]
         icon:
           source: minecraft
           id: emerald
@@ -667,9 +681,9 @@ trees:
         tier: 5
         branch: b
         display-name: "&d深度维持大师"
-        description: "进度下降 -0.75%"
+        description: "进度下降 -3.5%"
         effect-type: progress_drain
-        effect-value: 0.0075
+        levels: [0.0021, 0.0035, 0.0060, 0.0077, 0.0088, 0.0070]
         icon:
           source: minecraft
           id: honey_bottle
@@ -679,9 +693,9 @@ trees:
         tier: 5
         branch: c
         display-name: "&d完美窗口大师"
-        description: "完美窗口 +1%"
+        description: "完美窗口 +2.0%"
         effect-type: perfect_window
-        effect-value: 0.01
+        levels: [0.0012, 0.0020, 0.0034, 0.0044, 0.0050, 0.0040]
         icon:
           source: minecraft
           id: ender_eye
@@ -693,7 +707,7 @@ trees:
         display-name: "&d起步加速大师"
         description: "起始进度 +0.25%"
         effect-type: start_progress
-        effect-value: 0.0025
+        levels: [0.0004, 0.0007, 0.0011, 0.0015, 0.0017, 0.0013]
         icon:
           source: minecraft
           id: firework_rocket
@@ -703,7 +717,7 @@ trees:
   # ─── 树5：幸运（奖励） ────────────────────────────────────
   lucky:
     display-name: "&e幸运"
-    description: "提升经验、售价与稀有鱼概率"
+    description: "提升钓鱼奖励与运气"
     icon:
       source: minecraft
       id: gold_ingot
@@ -713,9 +727,9 @@ trees:
         tier: 1
         branch: root
         display-name: "&e幸运根基"
-        description: "钓鱼经验 +0.8%"
+        description: "钓鱼经验 +2.4%"
         effect-type: xp_multiplier
-        effect-value: 0.008
+        levels: [0.0014, 0.0024, 0.0041, 0.0053, 0.0060, 0.0048]
         icon:
           source: minecraft
           id: diamond
@@ -725,9 +739,9 @@ trees:
         tier: 2
         branch: a
         display-name: "&e经验加成"
-        description: "钓鱼经验 +0.8%"
+        description: "钓鱼经验 +2.4%"
         effect-type: xp_multiplier
-        effect-value: 0.008
+        levels: [0.0014, 0.0024, 0.0041, 0.0053, 0.0060, 0.0048]
         icon:
           source: minecraft
           id: diamond
@@ -737,9 +751,9 @@ trees:
         tier: 2
         branch: b
         display-name: "&e售价加成"
-        description: "鱼售价 +0.8%"
+        description: "鱼售价 +2.5%"
         effect-type: price_multiplier
-        effect-value: 0.008
+        levels: [0.0015, 0.0026, 0.0043, 0.0056, 0.0064, 0.0051]
         icon:
           source: minecraft
           id: gold_ingot
@@ -749,9 +763,9 @@ trees:
         tier: 3
         branch: a
         display-name: "&e延续经验"
-        description: "钓鱼经验 +0.8%"
+        description: "钓鱼经验 +2.4%"
         effect-type: xp_multiplier
-        effect-value: 0.008
+        levels: [0.0014, 0.0024, 0.0041, 0.0053, 0.0060, 0.0048]
         icon:
           source: minecraft
           id: diamond
@@ -761,9 +775,9 @@ trees:
         tier: 3
         branch: b
         display-name: "&e延续售价"
-        description: "鱼售价 +0.8%"
+        description: "鱼售价 +2.5%"
         effect-type: price_multiplier
-        effect-value: 0.008
+        levels: [0.0015, 0.0026, 0.0043, 0.0056, 0.0064, 0.0051]
         icon:
           source: minecraft
           id: gold_ingot
@@ -773,9 +787,9 @@ trees:
         tier: 4
         branch: a
         display-name: "&e深度经验"
-        description: "钓鱼经验 +0.6%"
+        description: "钓鱼经验 +1.8%"
         effect-type: xp_multiplier
-        effect-value: 0.006
+        levels: [0.0011, 0.0018, 0.0031, 0.0040, 0.0045, 0.0036]
         icon:
           source: minecraft
           id: diamond
@@ -785,9 +799,9 @@ trees:
         tier: 4
         branch: b
         display-name: "&e深度售价"
-        description: "鱼售价 +0.6%"
+        description: "鱼售价 +1.9%"
         effect-type: price_multiplier
-        effect-value: 0.006
+        levels: [0.0012, 0.0019, 0.0033, 0.0042, 0.0048, 0.0038]
         icon:
           source: minecraft
           id: gold_ingot
@@ -797,9 +811,9 @@ trees:
         tier: 4
         branch: c
         display-name: "&e传说之力"
-        description: "传说鱼概率 +1%"
+        description: "传说鱼概率 +2.4%"
         effect-type: legendary_chance
-        effect-value: 0.01
+        levels: [0.0014, 0.0024, 0.0041, 0.0053, 0.0060, 0.0048]
         icon:
           source: minecraft
           id: nether_star
@@ -809,9 +823,9 @@ trees:
         tier: 4
         branch: d
         display-name: "&e宝藏之力"
-        description: "宝藏概率 +1.5%"
+        description: "宝藏概率 +4.0%"
         effect-type: treasure_chance
-        effect-value: 0.015
+        levels: [0.0024, 0.0040, 0.0069, 0.0089, 0.0101, 0.0081]
         icon:
           source: minecraft
           id: chest
@@ -821,9 +835,9 @@ trees:
         tier: 5
         branch: a
         display-name: "&e深度经验大师"
-        description: "钓鱼经验 +0.3%"
+        description: "钓鱼经验 +0.9%"
         effect-type: xp_multiplier
-        effect-value: 0.003
+        levels: [0.0005, 0.0009, 0.0015, 0.0020, 0.0022, 0.0018]
         icon:
           source: minecraft
           id: diamond
@@ -833,9 +847,9 @@ trees:
         tier: 5
         branch: b
         display-name: "&e深度售价大师"
-        description: "鱼售价 +0.3%"
+        description: "鱼售价 +1.0%"
         effect-type: price_multiplier
-        effect-value: 0.003
+        levels: [0.0006, 0.0010, 0.0016, 0.0021, 0.0024, 0.0019]
         icon:
           source: minecraft
           id: gold_ingot
@@ -845,9 +859,9 @@ trees:
         tier: 5
         branch: c
         display-name: "&e传说之力大师"
-        description: "传说鱼概率 +0.5%"
+        description: "传说鱼概率 +1.2%"
         effect-type: legendary_chance
-        effect-value: 0.005
+        levels: [0.0007, 0.0012, 0.0020, 0.0026, 0.0030, 0.0024]
         icon:
           source: minecraft
           id: nether_star
@@ -857,9 +871,9 @@ trees:
         tier: 5
         branch: d
         display-name: "&e宝藏之力大师"
-        description: "宝藏概率 +0.75%"
+        description: "宝藏概率 +2.0%"
         effect-type: treasure_chance
-        effect-value: 0.0075
+        levels: [0.0012, 0.0020, 0.0035, 0.0045, 0.0051, 0.0041]
         icon:
           source: minecraft
           id: chest
@@ -872,9 +886,12 @@ trees:
 links:
   - id: link-1
     display-name: "&6稳进"
-    description: "绿条内进度 +1%（需稳健T3a + 专注T3a）"
-    effect-type: progress_rate
-    effect-value: 0.01
+    description: "进度增速 +19.4%，起始进度 +6.0%（需稳健T3a + 专注T3a）"
+    effects:
+      - effect-type: progress_rate
+        effect-value: 0.1935
+      - effect-type: start_progress
+        effect-value: 0.0600
     icon:
       source: minecraft
       id: emerald
@@ -882,9 +899,12 @@ links:
     prerequisites: [steady-t3a, focus-t3a]
   - id: link-2
     display-name: "&6镇压"
-    description: "鱼总速度 -1%（需迅捷T3a + 威压T3b）"
-    effect-type: fish_speed
-    effect-value: 0.01
+    description: "鱼速度 -5.9%，鱼突进概率 -3.0%（需迅捷T3a + 威压T3b）"
+    effects:
+      - effect-type: fish_speed
+        effect-value: 0.0585
+      - effect-type: fish_dart
+        effect-value: 0.0300
     icon:
       source: minecraft
       id: feather
@@ -892,12 +912,14 @@ links:
     prerequisites: [swift-t3a, pressure-t3b]
   - id: link-3
     display-name: "&6稳固"
-    description: "绿条阻尼 +1%，反弹 -1%（需稳健T3b + 迅捷T3a）"
+    description: "绿条阻尼 +2.9%，绿条反弹 -3.0%，绿条力系数 +2.0%（需稳健T3b + 迅捷T3a）"
     effects:
       - effect-type: bar_damping
-        effect-value: 0.01
+        effect-value: 0.0285
       - effect-type: bar_bounce
-        effect-value: 0.01
+        effect-value: 0.0300
+      - effect-type: bar_force
+        effect-value: 0.0200
     icon:
       source: minecraft
       id: slime_ball
@@ -905,9 +927,12 @@ links:
     prerequisites: [steady-t3b, swift-t3a]
   - id: link-4
     display-name: "&6逆流"
-    description: "逃离时进度下降减半（需威压T3a + 专注T3b）"
-    effect-type: flee_duration
-    effect-value: 0.05
+    description: "逃离持续 -15.8%，逃离速度 -4.5%（需威压T3a + 专注T3b）"
+    effects:
+      - effect-type: flee_duration
+        effect-value: 0.1575
+      - effect-type: flee_speed
+        effect-value: 0.0450
     icon:
       source: minecraft
       id: string
@@ -915,9 +940,12 @@ links:
     prerequisites: [pressure-t3a, focus-t3b]
   - id: link-5
     display-name: "&6精髓"
-    description: "完美捕获经验 +3%（需专注T3a + 幸运T3a）"
-    effect-type: perfect_xp
-    effect-value: 0.03
+    description: "完美捕获经验 +12.2%，绿条内经验 +7.5%（需专注T3a + 幸运T3a）"
+    effects:
+      - effect-type: perfect_xp
+        effect-value: 0.1215
+      - effect-type: xp_in_bar
+        effect-value: 0.0750
     icon:
       source: minecraft
       id: experience_bottle
@@ -925,9 +953,12 @@ links:
     prerequisites: [focus-t3a, lucky-t3a]
   - id: link-6
     display-name: "&6猎手"
-    description: "稀有鱼概率 +1.5%（需迅捷T3b + 幸运T3b）"
-    effect-type: rare_chance
-    effect-value: 0.015
+    description: "稀有鱼概率 +4.5%，宝藏概率 +3.0%（需迅捷T3b + 幸运T3b）"
+    effects:
+      - effect-type: rare_chance
+        effect-value: 0.0450
+      - effect-type: treasure_chance
+        effect-value: 0.0300
     icon:
       source: minecraft
       id: lapis_lazuli
@@ -935,9 +966,12 @@ links:
     prerequisites: [swift-t3b, lucky-t3b]
   - id: link-7
     display-name: "&6渊博"
-    description: "绿条内经验 +2%（需稳健T3a + 幸运T3a）"
-    effect-type: xp_in_bar
-    effect-value: 0.02
+    description: "绿条内经验 +7.5%，钓鱼经验 +6.0%（需稳健T3a + 幸运T3a）"
+    effects:
+      - effect-type: xp_in_bar
+        effect-value: 0.0750
+      - effect-type: xp_multiplier
+        effect-value: 0.0600
     icon:
       source: minecraft
       id: glowstone_dust
@@ -945,9 +979,12 @@ links:
     prerequisites: [steady-t3a, lucky-t3a]
   - id: link-8
     display-name: "&6神运"
-    description: "传说鱼概率 +1%（需威压T3b + 幸运T3b）"
-    effect-type: legendary_chance
-    effect-value: 0.01
+    description: "传说鱼概率 +3.6%，稀有鱼概率 +3.0%（需威压T3b + 幸运T3b）"
+    effects:
+      - effect-type: legendary_chance
+        effect-value: 0.0360
+      - effect-type: rare_chance
+        effect-value: 0.0300
     icon:
       source: minecraft
       id: nether_star

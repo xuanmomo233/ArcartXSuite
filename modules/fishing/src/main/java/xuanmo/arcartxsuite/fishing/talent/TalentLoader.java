@@ -67,7 +67,34 @@ public final class TalentLoader {
             }
         }
 
-        return new TalentEngine(trees, links);
+        // 读取前置等级要求映射（每个 tier 可独立配置）
+        Map<String, Integer> prerequisiteLevels = new HashMap<>();
+        // 兼容旧格式：prerequisite-level（全局统一）
+        if (yaml.contains("prerequisite-level")) {
+            int globalLevel = yaml.getInt("prerequisite-level", 3);
+            prerequisiteLevels.put("2", globalLevel);
+            prerequisiteLevels.put("3", globalLevel);
+            prerequisiteLevels.put("4", globalLevel);
+            prerequisiteLevels.put("5", globalLevel);
+            prerequisiteLevels.put("link", globalLevel);
+        }
+        // 新格式：prerequisite-levels 映射（覆盖旧格式）
+        ConfigurationSection prereqSection = yaml.getConfigurationSection("prerequisite-levels");
+        if (prereqSection != null) {
+            for (String key : prereqSection.getKeys(false)) {
+                prerequisiteLevels.put(key, prereqSection.getInt(key, 1));
+            }
+        }
+        if (prerequisiteLevels.isEmpty()) {
+            // 默认值：所有 tier 统一要求 3 级
+            prerequisiteLevels.put("2", 3);
+            prerequisiteLevels.put("3", 3);
+            prerequisiteLevels.put("4", 3);
+            prerequisiteLevels.put("5", 3);
+            prerequisiteLevels.put("link", 3);
+        }
+
+        return new TalentEngine(trees, links, prerequisiteLevels);
     }
 
     @SuppressWarnings("unchecked")
@@ -78,25 +105,48 @@ public final class TalentLoader {
             String branch = String.valueOf(map.get("branch"));
             String displayName = String.valueOf(map.get("display-name"));
             String description = String.valueOf(map.get("description"));
+
+            // 解析 effect-type 和 levels（多级）或 effect-value（单级兼容）
+            String effectType = null;
+            List<Double> levelValues = new ArrayList<>();
             List<TalentEffect> effects = new ArrayList<>();
-            // 单效果（effect-type + effect-value）或多效果（effects 列表）
+
             if (map.containsKey("effect-type")) {
-                String effectType = String.valueOf(map.get("effect-type"));
-                double effectValue = ((Number) map.get("effect-value")).doubleValue();
-                effects.add(new TalentEffect(effectType, effectValue));
+                effectType = String.valueOf(map.get("effect-type"));
             }
+
+            // 优先解析 levels 列表（多级节点）
+            if (map.containsKey("levels")) {
+                Object rawLevels = map.get("levels");
+                if (rawLevels instanceof List<?> levelList) {
+                    for (Object lv : levelList) {
+                        if (lv instanceof Number n) {
+                            levelValues.add(n.doubleValue());
+                        }
+                    }
+                }
+            }
+
+            // 兼容旧格式：effect-value（单级）
+            if (levelValues.isEmpty() && map.containsKey("effect-value")) {
+                double effectValue = ((Number) map.get("effect-value")).doubleValue();
+                levelValues.add(effectValue);
+            }
+
+            // 多效果（effects 列表，仅联动节点使用）
             if (map.containsKey("effects")) {
                 Object rawEffects = map.get("effects");
                 if (rawEffects instanceof List<?> effectList) {
                     for (Object e : effectList) {
                         if (e instanceof Map<?, ?> em) {
-                            String effectType = String.valueOf(em.get("effect-type"));
-                            double effectValue = ((Number) em.get("effect-value")).doubleValue();
-                            effects.add(new TalentEffect(effectType, effectValue));
+                            String et = String.valueOf(em.get("effect-type"));
+                            double ev = ((Number) em.get("effect-value")).doubleValue();
+                            effects.add(new TalentEffect(et, ev));
                         }
                     }
                 }
             }
+
             List<String> prerequisites = new ArrayList<>();
             Object rawPrereq = map.get("prerequisites");
             if (rawPrereq instanceof List<?> prereqList) {
@@ -105,7 +155,8 @@ public final class TalentLoader {
                 }
             }
             IconDefinition icon = iconFromMap(map, "icon");
-            return new TalentNode(id, treeId, tier, branch, displayName, description, effects, prerequisites, icon);
+            return new TalentNode(id, treeId, tier, branch, displayName, description,
+                effectType, levelValues, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析天赋节点失败: " + e.getMessage());
             return null;
@@ -118,24 +169,34 @@ public final class TalentLoader {
             String id = String.valueOf(map.get("id"));
             String displayName = String.valueOf(map.get("display-name"));
             String description = String.valueOf(map.get("description"));
+
+            // 联动节点固定 1 级
+            String effectType = null;
+            List<Double> levelValues = new ArrayList<>();
             List<TalentEffect> effects = new ArrayList<>();
+
             if (map.containsKey("effect-type")) {
-                String effectType = String.valueOf(map.get("effect-type"));
-                double effectValue = ((Number) map.get("effect-value")).doubleValue();
-                effects.add(new TalentEffect(effectType, effectValue));
+                effectType = String.valueOf(map.get("effect-type"));
+                if (map.containsKey("effect-value")) {
+                    double effectValue = ((Number) map.get("effect-value")).doubleValue();
+                    levelValues.add(effectValue);
+                }
             }
+
+            // 多效果联动（如 link-3）
             if (map.containsKey("effects")) {
                 Object rawEffects = map.get("effects");
                 if (rawEffects instanceof List<?> effectList) {
                     for (Object e : effectList) {
                         if (e instanceof Map<?, ?> em) {
-                            String effectType = String.valueOf(em.get("effect-type"));
-                            double effectValue = ((Number) em.get("effect-value")).doubleValue();
-                            effects.add(new TalentEffect(effectType, effectValue));
+                            String et = String.valueOf(em.get("effect-type"));
+                            double ev = ((Number) em.get("effect-value")).doubleValue();
+                            effects.add(new TalentEffect(et, ev));
                         }
                     }
                 }
             }
+
             List<String> prerequisites = new ArrayList<>();
             Object rawPrereq = map.get("prerequisites");
             if (rawPrereq instanceof List<?> prereqList) {
@@ -144,8 +205,10 @@ public final class TalentLoader {
                 }
             }
             IconDefinition icon = iconFromMap(map, "icon");
-            // 联动节点 treeId 为空
-            return new TalentNode(id, "", 0, "link", displayName, description, effects, prerequisites, icon);
+            // 联动节点 treeId 为空，固定 1 级
+            if (levelValues.isEmpty()) levelValues.add(0.0);
+            return new TalentNode(id, "", 0, "link", displayName, description,
+                effectType, levelValues, effects, prerequisites, icon);
         } catch (Exception e) {
             logger.warning("解析联动天赋失败: " + e.getMessage());
             return null;

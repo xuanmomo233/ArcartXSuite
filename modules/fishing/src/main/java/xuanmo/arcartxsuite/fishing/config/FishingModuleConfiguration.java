@@ -238,8 +238,17 @@ public record FishingModuleConfiguration(
         }
 
         // ─── 小游戏机制（可选） ──────────────────────────
-        Double progressDrainRate = section.contains("progress-drain-rate") ? section.getDouble("progress-drain-rate") : null;
-        Double progressGainRate = section.contains("progress-gain-rate") ? section.getDouble("progress-gain-rate") : null;
+        // 鱼级别覆盖全局曲线的 base-rate（formula 沿用全局）
+        Double progressDrainRate = null;
+        ConfigurationSection fishDrainSection = section.getConfigurationSection("progress-drain");
+        if (fishDrainSection != null && fishDrainSection.contains("base-rate")) {
+            progressDrainRate = fishDrainSection.getDouble("base-rate");
+        }
+        Double progressGainRate = null;
+        ConfigurationSection fishGainSection = section.getConfigurationSection("progress-gain");
+        if (fishGainSection != null && fishGainSection.contains("base-rate")) {
+            progressGainRate = fishGainSection.getDouble("base-rate");
+        }
 
         FishDefinition.FleeParams fleeParams = null;
         ConfigurationSection fleeSection = section.getConfigurationSection("flee-params");
@@ -708,9 +717,12 @@ public record FishingModuleConfiguration(
         double barDamping,
         int catchDurationTicks,
         int fishingCooldownTicks,
-        double progressDrainRate,
-        double progressGainRate,
-        double progressRateMultiplier,
+        @NotNull xuanmo.arcartxsuite.fishing.minigame.ProgressCurve gainCurve,
+        @NotNull xuanmo.arcartxsuite.fishing.minigame.ProgressCurve drainCurve,
+        int streakThreshold,
+        double streakBonusPerStep,
+        double streakMaxBonus,
+        double catchDurationDifficultyScale,
         int baseGreenBarHeight,
         int heightPerLevel,
         double difficultyBarShrink,
@@ -723,7 +735,8 @@ public record FishingModuleConfiguration(
         double fishSpeedLevelScale,
         double fleeChanceLevelScale,
         double fleeSpeedLevelScale,
-        double progressRateLevelScale,
+        double progressGainLevelScale,
+        double progressDrainLevelScale,
         double fleeBaseChance,
         double fleeChancePerDifficulty,
         double fleeBaseSpeed,
@@ -745,11 +758,14 @@ public record FishingModuleConfiguration(
                 section.getDouble("bar-click-force", -0.6),
                 section.getDouble("bar-force-multiplier", 0.03),
                 section.getDouble("bar-damping", 0.85),
-                section.getInt("catch-duration-ticks", 600),
+                section.getInt("catch-duration-ticks", 400),
                 section.getInt("fishing-cooldown-ticks", 100),
-                section.getDouble("progress-drain-rate", 0.5),
-                section.getDouble("progress-gain-rate", 1.0),
-                section.getDouble("progress-rate-multiplier", 0.008),
+                loadProgressCurve(section, "progress-gain", xuanmo.arcartxsuite.fishing.minigame.ProgressCurve.defaultGain()),
+                loadProgressCurve(section, "progress-drain", xuanmo.arcartxsuite.fishing.minigame.ProgressCurve.defaultDrain()),
+                section.getInt("streak-threshold", 20),
+                section.getDouble("streak-bonus-per-step", 0.1),
+                section.getDouble("streak-max-bonus", 0.5),
+                section.getDouble("catch-duration-difficulty-scale", 0.5),
                 section.getInt("base-green-bar-height", 96),
                 section.getInt("height-per-level", 2),
                 section.getDouble("difficulty-bar-shrink", 0.3),
@@ -762,7 +778,8 @@ public record FishingModuleConfiguration(
                 section.getDouble("fish-speed-level-scale", 1.0),
                 section.getDouble("flee-chance-level-scale", 1.0),
                 section.getDouble("flee-speed-level-scale", 1.0),
-                section.getDouble("progress-rate-level-scale", 1.0),
+                section.getDouble("progress-gain-level-scale", 0.3),
+                section.getDouble("progress-drain-level-scale", 0.5),
                 section.getDouble("flee-base-chance", 0.25),
                 section.getDouble("flee-chance-per-difficulty", 0.25),
                 section.getDouble("flee-base-speed", 0.04),
@@ -774,6 +791,32 @@ public record FishingModuleConfiguration(
                 section.getInt("flee-cooldown-min", 30),
                 section.getInt("flee-cooldown-max", 70)
             );
+        }
+
+        /**
+         * 从 yml 加载进度曲线配置。
+         * <p>
+         * 配置格式：
+         * <pre>{@code
+         * progress-gain:
+         *   base-rate: 0.01
+         *   formula: "base_rate * (1 + progress * 0.5)"
+         * }</pre>
+         * 鱼级别覆盖同样使用 progress-gain / progress-drain 配置节（可仅写 base-rate，formula 沿用全局）。
+         */
+        private static @NotNull xuanmo.arcartxsuite.fishing.minigame.ProgressCurve loadProgressCurve(
+                ConfigurationSection parent, @NotNull String prefix,
+                @NotNull xuanmo.arcartxsuite.fishing.minigame.ProgressCurve fallback) {
+            ConfigurationSection curveSection = parent.getConfigurationSection(prefix);
+            if (curveSection != null) {
+                double baseRate = curveSection.getDouble("base-rate", fallback.baseRate());
+                String formula = curveSection.contains("formula") ? curveSection.getString("formula") : null;
+                if (formula == null || formula.isBlank()) {
+                    formula = fallback.formula(); // 沿用全局公式（鱼级别仅覆盖 base-rate 时）
+                }
+                return new xuanmo.arcartxsuite.fishing.minigame.ProgressCurve(baseRate, formula);
+            }
+            return fallback;
         }
     }
 

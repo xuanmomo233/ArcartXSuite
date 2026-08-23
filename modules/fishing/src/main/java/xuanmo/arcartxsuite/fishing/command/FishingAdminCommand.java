@@ -51,7 +51,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "fishing"; }
 
     @Override public List<String> actions() {
-        return List.of("help", "stats", "givexp", "reset", "settlement", "resetseason", "water");
+        return List.of("help", "stats", "givexp", "reset", "settlement", "resetseason", "water", "fatigue");
     }
 
     @Override
@@ -82,6 +82,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             case "settlement" -> handleSettlement(sender, service);
             case "resetseason" -> handleResetSeason(sender, service);
             case "water" -> handleWater(sender, args);
+            case "fatigue" -> handleFatigue(sender, args, service);
             default -> showHelp(sender, label);
         }
         return true;
@@ -180,6 +181,65 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         sender.sendMessage("§e" + cmd + " water delete <id> §7— 删除指定水域");
         sender.sendMessage("§e" + cmd + " water list §7— 列出所有水域");
         sender.sendMessage("§e" + cmd + " water reload §7— 重载水域配置");
+        sender.sendMessage("§e" + cmd + " fatigue set <player> <value> §7— 设置玩家疲惫值");
+        sender.sendMessage("§e" + cmd + " fatigue reset <player> §7— 重置玩家疲惫值为0");
+        sender.sendMessage("§e" + cmd + " fatigue view <player> §7— 查看玩家疲惫值");
+    }
+
+    // ─── 疲惫值管理 ────────────────────────────────────────────
+
+    private void handleFatigue(@NotNull CommandSender sender, @NotNull String[] args,
+                                @NotNull xuanmo.arcartxsuite.fishing.service.FishingService service) {
+        if (args.length < 3) {
+            sender.sendMessage("§e/axs fishing fatigue <set|reset|view> <player> [value]");
+            return;
+        }
+        String subAction = args[2].toLowerCase();
+        if (subAction.equals("view")) {
+            if (args.length < 4) {
+                sender.sendMessage("§c用法: /axs fishing fatigue view <player>");
+                return;
+            }
+            org.bukkit.entity.Player target = org.bukkit.Bukkit.getPlayerExact(args[3]);
+            if (target == null) {
+                sender.sendMessage("§c玩家不在线或不存在: " + args[3]);
+                return;
+            }
+            int fatigue = service.getFatigue(target.getUniqueId());
+            double eff = service.getFatigueEfficiency(target.getUniqueId());
+            sender.sendMessage("§6" + target.getName() + " 的疲惫值: §e" + fatigue + "/100");
+            sender.sendMessage("§6当前钓鱼效率: §e" + String.format("%.0f%%", eff * 100));
+            return;
+        }
+        if (args.length < 4) {
+            sender.sendMessage("§c用法: /axs fishing fatigue " + subAction + " <player> [value]");
+            return;
+        }
+        org.bukkit.entity.Player target = org.bukkit.Bukkit.getPlayerExact(args[3]);
+        if (target == null) {
+            sender.sendMessage("§c玩家不在线或不存在: " + args[3]);
+            return;
+        }
+        switch (subAction) {
+            case "set" -> {
+                if (args.length < 5) {
+                    sender.sendMessage("§c用法: /axs fishing fatigue set <player> <value>");
+                    return;
+                }
+                try {
+                    int value = Math.max(0, Math.min(100, Integer.parseInt(args[4])));
+                    service.setFatigue(target.getUniqueId(), value);
+                    sender.sendMessage("§a已将 " + target.getName() + " 的疲惫值设为 " + value);
+                } catch (NumberFormatException e) {
+                    sender.sendMessage("§c值必须是 0-100 的整数");
+                }
+            }
+            case "reset" -> {
+                service.setFatigue(target.getUniqueId(), 0);
+                sender.sendMessage("§a已重置 " + target.getName() + " 的疲惫值为 0");
+            }
+            default -> sender.sendMessage("§e/axs fishing fatigue <set|reset|view> <player> [value]");
+        }
     }
 
     // ─── 水域管理 ──────────────────────────────────────────────

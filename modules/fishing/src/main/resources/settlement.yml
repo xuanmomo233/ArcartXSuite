@@ -19,19 +19,19 @@
 #         commands:
 #           - "say {player} 赛季结算奖励！"
 #
-# ARIA 表达式可用变量（绑定到求值上下文）：
-#   level           — 玩家赛季最终等级
-#   total_caught    — 玩家累计捕获总数（永久数据）
-#   perfect_catches — 玩家累计完美捕获次数（永久数据）
-#   treasure_caught — 玩家累计宝藏捕获次数（永久数据）
-#   collection_count — 玩家图鉴已收集鱼种数
-#   season_id       — 赛季 ID
+# ARIA 表达式可用变量（绑定到 ARIA global. 命名空间，需用 global. 前缀访问）：
+#   global.level           — 玩家赛季最终等级
+#   global.total_caught    — 玩家累计捕获总数（永久数据）
+#   global.perfect_catches — 玩家累计完美捕获次数（永久数据）
+#   global.treasure_caught — 玩家累计宝藏捕获次数（永久数据）
+#   global.collection_count — 玩家图鉴已收集鱼种数
+#   global.season_id       — 赛季 ID
 #
 # 示例表达式：
-#   level >= 30                    — 等级达到30
-#   level >= 50 && total_caught >= 100  — 等级50且捕获100
-#   perfect_catches >= 50          — 完美捕获50次
-#   collection_count >= 20         — 图鉴收集20种鱼
+#   global.level >= 30                    — 等级达到30
+#   global.level >= 50 && global.total_caught >= 100  — 等级50且捕获100
+#   global.perfect_catches >= 50          — 完美捕获50次
+#   global.collection_count >= 20         — 图鉴收集20种鱼
 
 # 奖励发放说明：
 #   item 类型 — 统一通过 ItemRewardDispatcher 发放（放入背包→背包满转邮件→无邮件则掉落）
@@ -41,7 +41,7 @@
 settlements:
   # 等级达标奖励
   level_30:
-    condition: "level >= 30"
+    condition: "global.level >= 30"
     description: "&a赛季等级达到30级"
     rewards:
       - type: currency
@@ -55,7 +55,7 @@ settlements:
           amount: 5
 
   level_50:
-    condition: "level >= 50"
+    condition: "global.level >= 50"
     description: "&a赛季等级达到50级"
     rewards:
       - type: currency
@@ -69,7 +69,7 @@ settlements:
           amount: 3
 
   level_75:
-    condition: "level >= 75"
+    condition: "global.level >= 75"
     description: "&a赛季等级达到75级"
     rewards:
       - type: currency
@@ -83,7 +83,7 @@ settlements:
           amount: 10
 
   level_100:
-    condition: "level >= 100"
+    condition: "global.level >= 100"
     description: "&a赛季等级达到满级100级"
     rewards:
       - type: currency
@@ -98,7 +98,7 @@ settlements:
 
   # 捕获成就奖励
   perfect_master:
-    condition: "perfect_catches >= 100"
+    condition: "global.perfect_catches >= 100"
     description: "&d累计完美捕获100次"
     rewards:
       - type: currency
@@ -107,7 +107,7 @@ settlements:
           amount: 5000
 
   collection_master:
-    condition: "collection_count >= 30"
+    condition: "global.collection_count >= 30"
     description: "&b图鉴收集30种鱼"
     rewards:
       - type: currency

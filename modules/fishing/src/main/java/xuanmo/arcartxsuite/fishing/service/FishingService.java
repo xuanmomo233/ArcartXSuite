@@ -57,6 +57,7 @@ import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.talent.TalentBonuses;
 import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
+import xuanmo.arcartxsuite.fishing.fatigue.FatigueEngine;
 import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
 import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
@@ -87,6 +88,7 @@ public final class FishingService {
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
     private final Map<UUID, Deque<RecentCatch>> recentCatches = new HashMap<>();
     private final TalentEngine talentEngine;
+    private final @Nullable FatigueEngine fatigueEngine;
     private final @Nullable CrossServerAPI crossServer;
     private @Nullable CrossServerChannel crossServerChannel;
     private final @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
@@ -121,6 +123,7 @@ public final class FishingService {
                           @NotNull IconResolver iconResolver,
                           @NotNull Logger logger, @NotNull String minigameUiId,
                           @NotNull TalentEngine talentEngine,
+                          @Nullable FatigueEngine fatigueEngine,
                           @NotNull List<SeasonRewardDefinition> seasonRewards,
                           @NotNull RewardDispatcher rewardDispatcher,
                           @NotNull SettlementEngine settlementEngine,
@@ -136,6 +139,7 @@ public final class FishingService {
         this.logger = logger;
         this.minigameUiId = minigameUiId;
         this.talentEngine = talentEngine;
+        this.fatigueEngine = fatigueEngine;
         this.seasonRewards = seasonRewards;
         this.rewardDispatcher = rewardDispatcher;
         this.settlementEngine = settlementEngine;
@@ -178,6 +182,11 @@ public final class FishingService {
     public void start() throws Exception {
         repository.initialize();
         startCrossServer();
+        // M6: 定期清理过期的钓鱼冷却条目（每5分钟清理一次）
+        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            long now = System.currentTimeMillis();
+            fishingCooldowns.entrySet().removeIf(e -> e.getValue() < now);
+        }, 6000L, 6000L); // 6000 ticks = 5分钟
     }
 
     public void shutdown() {
@@ -239,8 +248,17 @@ public final class FishingService {
                     String fishName = parts[3];
                     String rarity = parts[4];
                     int size = Integer.parseInt(parts[5]);
+                    // M11: 输入验证 — size 非负、timestamp 合理
+                    if (size < 0) {
+                        logger.warning("跨服捕获记录 size 异常: " + size + " (玩家=" + uuid + ")");
+                        return;
+                    }
                     boolean perfect = "1".equals(parts[6]);
                     long timestamp = Long.parseLong(parts[7]);
+                    if (timestamp < 0 || timestamp > System.currentTimeMillis() + 86_400_000L) {
+                        logger.warning("跨服捕获记录 timestamp 异常: " + timestamp + " (玩家=" + uuid + ")");
+                        return;
+                    }
                     // 持久化到本地数据库
                     repository.saveCatchRecord(new FishingCatchRecord(
                         uuid, fishId, fishName, rarity, size, perfect, timestamp
@@ -290,6 +308,11 @@ public final class FishingService {
         // 解析水域
         WaterArea water = resolveWater(player);
         if (water == null) water = configuration.defaultWater();
+        // L4: 默认水域仍为 null 时无法继续
+        if (water == null) {
+            logger.warning("startMinigame 失败: 无法解析水域且默认水域为空");
+            return false;
+        }
 
         // 权限检查
         if (water.requirePermission() != null && !water.requirePermission().isBlank() && !player.hasPermission(water.requirePermission())) {
@@ -357,9 +380,16 @@ public final class FishingService {
             return false;
         }
 
+        // 疲惫值特殊鱼替换：疲惫值 > 90 时有概率出现特殊鱼
+        int fatigue = seasonData.fatigue();
+        if (fatigueEngine != null) {
+            fish = fatigueEngine.applySpecialFish(fatigue, fish, configuration::findFish);
+        }
+
         debug("startMinigame: player=" + player.getName() + " water=" + water.id()
             + " fish=" + fish.id() + " difficulty=" + fish.difficulty()
-            + " bait=" + (baitId != null ? baitId : "none"));
+            + " bait=" + (baitId != null ? baitId : "none")
+            + " fatigue=" + fatigue);
 
         // 应用水域难度公式（ARIA 求值，变量 global.level = 玩家钓鱼等级）
         double waterDifficultyModifier = evaluateDifficultyFormula(water.difficultyFormula(), playerLevel);
@@ -368,17 +398,27 @@ public final class FishingService {
 
         int caughtSize = fish.randomSize();
 
+        // 动态超时：基础超时 × (1 + 难度/100 × 难度系数) + 鱼竿加成
+        // 低难度鱼超时短（要求快速完成），高难度鱼超时长（给更多尝试机会）
+        xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.FishingSettings cfg = configuration.fishing();
+        double difficultyFactor = 1.0 + (adjustedDifficulty / 100.0) * cfg.catchDurationDifficultyScale();
+        long durationTicks = (long) (cfg.catchDurationTicks() * difficultyFactor) + rod.catchDurationBonus();
+
         FishingSession session = new FishingSession(
             player, fish, caughtSize, playerLevel,
-            configuration.fishing().catchDurationTicks() + rod.catchDurationBonus(), water, adjustedDifficulty,
+            durationTicks, water, adjustedDifficulty,
             baitId, rod.greenBarHeightBonus(), rod.expMultiplier(), rod.treasureChanceBonus()
         );
 
         // 计算天赋加成（开局一次性计算）
         TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
 
+        // 计算疲惫效率系数（开局一次性计算）
+        double fatigueMultiplier = fatigueEngine != null ? fatigueEngine.efficiencyMultiplier(fatigue) : 1.0;
+
         FishingMinigame minigame = new FishingMinigame(
-            plugin, packetBridge, configuration.fishing(), this, iconResolver, session, minigameUiId, bonuses
+            plugin, packetBridge, configuration.fishing(), this, iconResolver, session, minigameUiId, bonuses,
+            fatigueMultiplier, ariaBridge
         );
         activeMinigames.put(player.getUniqueId(), minigame);
         minigame.start();
@@ -463,25 +503,38 @@ public final class FishingService {
             configuration.season().xpCurve(), configuration.season().maxLevel());
         FishingPermanentData updatedPerm = permData.withCaught(perfect, gotTreasure);
 
+        // 疲惫值增加（钓鱼成功后 +fatiguePerCatch），并检查首次达到100奖励
+        // C5: FatigueEngine.onFishCaught 仅计算不保存，统一由此处保存，避免重复写入
+        if (fatigueEngine != null) {
+            updatedSeason = fatigueEngine.onFishCaught(player, updatedSeason);
+        }
         repository.saveSeasonData(updatedSeason);
         repository.savePermanentData(updatedPerm);
 
         // ─── 货币奖励（单个 + 多货币列表） ───────────────────────
         CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
         if (fish.currencyReward() != null && currencyApi != null) {
-            var reward = fish.currencyReward();
-            double amount = perfect ? reward.amount() * configuration.fishing().perfectBonusMultiplier() : reward.amount();
-            var bridge = currencyApi.bridge(reward.currencyId());
-            if (bridge != null && bridge.available()) {
-                bridge.deposit(player, BigDecimal.valueOf(amount));
+            try {
+                var reward = fish.currencyReward();
+                double amount = perfect ? reward.amount() * configuration.fishing().perfectBonusMultiplier() : reward.amount();
+                var bridge = currencyApi.bridge(reward.currencyId());
+                if (bridge != null && bridge.available()) {
+                    bridge.deposit(player, BigDecimal.valueOf(amount));
+                }
+            } catch (Exception e) {
+                logger.warning("给予货币奖励失败: " + e.getMessage());
             }
         }
         if (!fish.currencyRewards().isEmpty() && currencyApi != null) {
             for (FishDefinition.CurrencyReward cr : fish.currencyRewards()) {
-                double amount = perfect ? cr.amount() * configuration.fishing().perfectBonusMultiplier() : cr.amount();
-                var bridge = currencyApi.bridge(cr.currencyId());
-                if (bridge != null && bridge.available()) {
-                    bridge.deposit(player, BigDecimal.valueOf(amount));
+                try {
+                    double amount = perfect ? cr.amount() * configuration.fishing().perfectBonusMultiplier() : cr.amount();
+                    var bridge = currencyApi.bridge(cr.currencyId());
+                    if (bridge != null && bridge.available()) {
+                        bridge.deposit(player, BigDecimal.valueOf(amount));
+                    }
+                } catch (Exception e) {
+                    logger.warning("给予多货币奖励失败 [currency=" + cr.currencyId() + "]: " + e.getMessage());
                 }
             }
         }
@@ -707,6 +760,11 @@ public final class FishingService {
             }
             weights.put(fish, weight);
             totalWeight += weight;
+        }
+
+        // C4: totalWeight=0 时回退到均匀随机选择，防止除零导致恒返回第一个
+        if (totalWeight <= 0) {
+            return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
         }
 
         double roll = ThreadLocalRandom.current().nextDouble() * totalWeight;
@@ -956,7 +1014,14 @@ public final class FishingService {
             cond = cond.trim().toLowerCase();
             if (cond.equals("perfect") && !perfect) return false;
             if (cond.equals("first_catch") && !firstCatch) return false;
-            if (cond.startsWith("size:") && size < Integer.parseInt(cond.substring(5))) return false;
+            // L2: size 条件解析异常保护
+            if (cond.startsWith("size:")) {
+                try {
+                    if (size < Integer.parseInt(cond.substring(5))) return false;
+                } catch (NumberFormatException e) {
+                    logger.warning("无效的 size 条件: " + cond);
+                }
+            }
         }
         return true;
     }
@@ -1066,16 +1131,16 @@ public final class FishingService {
     }
 
     /**
-     * 点亮一个天赋节点。
+     * 升级一个天赋节点（点亮或提升等级）。
      *
      * @param uuid   玩家 UUID
      * @param nodeId 节点 ID
-     * @return {@code true} 表示点亮成功
+     * @return {@code true} 表示升级成功
      */
-    public boolean unlockTalent(@NotNull UUID uuid, @NotNull String nodeId) {
+    public boolean levelUpTalent(@NotNull UUID uuid, @NotNull String nodeId) {
         FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
-        if (!talentEngine.canUnlock(data, nodeId)) return false;
-        FishingSeasonData updated = talentEngine.unlock(data, nodeId);
+        if (!talentEngine.canLevelUp(data, nodeId)) return false;
+        FishingSeasonData updated = talentEngine.levelUp(data, nodeId);
         repository.saveSeasonData(updated);
         return true;
     }
@@ -1179,6 +1244,54 @@ public final class FishingService {
     public void onPlayerQuit(@NotNull UUID uuid) {
         recentCatches.remove(uuid);
         fishingCooldowns.remove(uuid);
+    }
+
+    // ─── 疲惫值 ────────────────────────────────────────────────
+
+    /**
+     * 获取玩家当前疲惫值。
+     *
+     * @param uuid 玩家 UUID
+     * @return 疲惫值 [0, maxFatigue]，疲惫值系统未启用时返回 0
+     */
+    public int getFatigue(@NotNull UUID uuid) {
+        if (fatigueEngine == null) return 0;
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        return data.fatigue();
+    }
+
+    /**
+     * 获取疲惫效率系数（供 UI 显示）。
+     *
+     * @param uuid 玩家 UUID
+     * @return 效率系数（>1 提升，<1 降低，=1 无影响）
+     */
+    public double getFatigueEfficiency(@NotNull UUID uuid) {
+        if (fatigueEngine == null) return 1.0;
+        return fatigueEngine.efficiencyMultiplier(getFatigue(uuid));
+    }
+
+    /**
+     * 获取疲惫值引擎（供模块内部使用）。
+     */
+    public @Nullable FatigueEngine fatigueEngine() {
+        return fatigueEngine;
+    }
+
+    /**
+     * 设置玩家疲惫值（管理员命令使用）。
+     *
+     * @param uuid  玩家 UUID
+     * @param value 疲惫值（0-100，自动 clamp）
+     */
+    public void setFatigue(@NotNull UUID uuid, int value) {
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        int clamped = Math.max(0, Math.min(100, value));
+        FishingSeasonData updated = new FishingSeasonData(
+            data.uuid(), data.seasonId(), data.level(), data.currentXp(),
+            data.talentPoints(), data.unspentTalentPoints(), data.talents(),
+            data.claimedRewards(), clamped, data.claimedMaxFatigueReward());
+        repository.saveSeasonData(updated);
     }
 
     // ─── 任务查询 ──────────────────────────────────────────────
@@ -1604,7 +1717,8 @@ public final class FishingService {
         payload.put("level", seasonData.level());
         payload.put("talentPoints", seasonData.talentPoints());
         payload.put("unspentTalentPoints", seasonData.unspentTalentPoints());
-        payload.put("unlockedTalents", new java.util.ArrayList<>(seasonData.talents()));
+        // 已点亮天赋：节点 ID → 当前等级
+        payload.put("unlockedTalents", new java.util.HashMap<>(seasonData.talents()));
 
         // 天赋树定义（按树分组）
         java.util.Map<String, Object> treesMap = new java.util.LinkedHashMap<>();
@@ -1628,11 +1742,17 @@ public final class FishingService {
                 nodeMap.put("tier", node.tier());
                 nodeMap.put("branch", node.branch());
                 nodeMap.put("treeId", node.treeId());
-                nodeMap.put("unlocked", seasonData.talents().contains(node.id()));
-                nodeMap.put("canUnlock", talentEngine.canUnlock(seasonData, node.id()));
-                nodeMap.put("iconJson", buildTalentNodeIconJson(node, seasonData.talents().contains(node.id()), talentEngine.canUnlock(seasonData, node.id()), player));
-                // 效果描述
+                int currentLevel = seasonData.talents().getOrDefault(node.id(), 0);
+                nodeMap.put("unlocked", currentLevel > 0);
+                nodeMap.put("level", currentLevel);
+                nodeMap.put("maxLevel", node.maxLevel());
+                nodeMap.put("canLevelUp", talentEngine.canLevelUp(seasonData, node.id()));
+                nodeMap.put("iconJson", buildTalentNodeIconJson(node, currentLevel > 0, talentEngine.canLevelUp(seasonData, node.id()), player));
+                // 效果描述（当前等级的效果值）
                 java.util.List<String> effects = new java.util.ArrayList<>();
+                if (node.effectType() != null) {
+                    effects.add(node.effectType() + ": " + node.valueAtLevel(currentLevel));
+                }
                 for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
                     effects.add(effect.effectType() + ": " + effect.effectValue());
                 }
@@ -1659,10 +1779,16 @@ public final class FishingService {
             linkMap.put("tier", link.tier());
             linkMap.put("branch", link.branch());
             linkMap.put("treeId", link.treeId());
-            linkMap.put("unlocked", seasonData.talents().contains(link.id()));
-            linkMap.put("canUnlock", talentEngine.canUnlock(seasonData, link.id()));
-            linkMap.put("iconJson", buildTalentNodeIconJson(link, seasonData.talents().contains(link.id()), talentEngine.canUnlock(seasonData, link.id()), player));
+            int linkLevel = seasonData.talents().getOrDefault(link.id(), 0);
+            linkMap.put("unlocked", linkLevel > 0);
+            linkMap.put("level", linkLevel);
+            linkMap.put("maxLevel", link.maxLevel());
+            linkMap.put("canLevelUp", talentEngine.canLevelUp(seasonData, link.id()));
+            linkMap.put("iconJson", buildTalentNodeIconJson(link, linkLevel > 0, talentEngine.canLevelUp(seasonData, link.id()), player));
             java.util.List<String> linkEffects = new java.util.ArrayList<>();
+            if (link.effectType() != null) {
+                linkEffects.add(link.effectType() + ": " + link.valueAtLevel(linkLevel));
+            }
             for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
                 linkEffects.add(effect.effectType() + ": " + effect.effectValue());
             }
@@ -1670,7 +1796,7 @@ public final class FishingService {
             linkMap.put("prerequisites", new java.util.ArrayList<>(link.prerequisites()));
             java.util.List<Boolean> prerequisiteStates = new java.util.ArrayList<>();
             for (String prerequisite : link.prerequisites()) {
-                prerequisiteStates.add(seasonData.talents().contains(prerequisite));
+                prerequisiteStates.add(seasonData.talents().getOrDefault(prerequisite, 0) > 0);
             }
             linkMap.put("prerequisiteStates", prerequisiteStates);
             linksMap.put(Integer.toString(linkIdx), linkMap);
@@ -1751,7 +1877,7 @@ public final class FishingService {
         return iconResolver.resolveItemJson(player, icon);
     }
 
-    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canUnlock, @NotNull Player player) {
+    private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canLevelUp, @NotNull Player player) {
         // 优先使用节点自定义 icon（IconDefinition），为空时回退到 effectType 映射
         IconDefinition iconRef = node.icon();
         ItemStack stack;
@@ -1818,7 +1944,7 @@ public final class FishingService {
         lore.add("");
         if (unlocked) {
             lore.add(net.md_5.bungee.api.ChatColor.of("#2ECC71") + "✔ 已激活");
-        } else if (canUnlock) {
+        } else if (canLevelUp) {
             lore.add(net.md_5.bungee.api.ChatColor.of("#F1C40F") + "点击激活");
         } else {
             lore.add(net.md_5.bungee.api.ChatColor.of("#7F8C8D") + "尚未解锁");
@@ -1886,13 +2012,13 @@ public final class FishingService {
      */
     public void handleUiAction(@NotNull Player player, @NotNull String action, @NotNull java.util.List<String> data) {
         switch (action.toLowerCase()) {
-            case "unlock_talent" -> {
+            case "level_up_talent" -> {
                 if (data.size() > 1) {
                     String nodeId = data.get(1);
-                    if (unlockTalent(player.getUniqueId(), nodeId)) {
-                        player.sendMessage("§a天赋点亮成功: " + nodeId);
+                    if (levelUpTalent(player.getUniqueId(), nodeId)) {
+                        player.sendMessage("§a天赋升级成功: " + nodeId);
                     } else {
-                        player.sendMessage("§c无法点亮天赋: " + nodeId);
+                        player.sendMessage("§c无法升级天赋: " + nodeId);
                     }
                 }
             }

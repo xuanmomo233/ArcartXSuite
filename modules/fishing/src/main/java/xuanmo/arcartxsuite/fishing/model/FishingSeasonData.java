@@ -13,15 +13,20 @@ import xuanmo.arcartxsuite.api.script.XpCurve;
  * <p>
  * 经验模型为"当前级内经验"：升级时扣减当前级所需经验，剩余经验进入下一级。
  * 天赋点与天赋树点亮状态也属于赛季数据，随赛季重置。
+ * <p>
+ * 天赋节点支持多级升级，{@link #talents()} 为节点 ID → 当前等级的映射。
+ * 疲惫值也属于赛季数据，随赛季重置。
  *
  * @param uuid               玩家 UUID
  * @param seasonId           赛季 ID
  * @param level              当前赛季等级
  * @param currentXp          当前级内已积累经验（升级时扣减）
- * @param talentPoints       总获得天赋点（等级÷3 累计）
+ * @param talentPoints       总获得天赋点（每级 1 点累计）
  * @param unspentTalentPoints 未分配天赋点
- * @param talents            已点亮天赋节点 ID 集合
+ * @param talents            已点亮天赋节点 ID → 当前等级（1-based）
  * @param claimedRewards     已领取的等级奖励 ID 集合
+ * @param fatigue            疲惫值 [0, 100]，每钓一条鱼 +1，每在线休息一分钟 -1
+ * @param claimedMaxFatigueReward 是否已领取过首次疲惫值达到 100 的奖励
  */
 public record FishingSeasonData(
     @NotNull UUID uuid,
@@ -30,19 +35,21 @@ public record FishingSeasonData(
     int currentXp,
     int talentPoints,
     int unspentTalentPoints,
-    @NotNull Set<String> talents,
-    @NotNull Set<String> claimedRewards
+    @NotNull Map<String, Integer> talents,
+    @NotNull Set<String> claimedRewards,
+    int fatigue,
+    boolean claimedMaxFatigueReward
 ) {
 
     public FishingSeasonData {
-        if (talents == null) talents = new HashSet<>();
+        if (talents == null) talents = new HashMap<>();
         if (claimedRewards == null) claimedRewards = new HashSet<>();
-        talents = new HashSet<>(talents);
+        talents = new HashMap<>(talents);
         claimedRewards = new HashSet<>(claimedRewards);
     }
 
     public static @NotNull FishingSeasonData empty(@NotNull UUID uuid, @NotNull String seasonId) {
-        return new FishingSeasonData(uuid, seasonId, 1, 0, 0, 0, new HashSet<>(), new HashSet<>());
+        return new FishingSeasonData(uuid, seasonId, 1, 0, 0, 0, new HashMap<>(), new HashSet<>(), 0, false);
     }
 
     /**
@@ -67,15 +74,11 @@ public record FishingSeasonData(
         int required = xpCurve.xpRequiredForLevelOr(level + 1, Integer.MAX_VALUE);
         int remaining = Math.max(0, currentXp - required);
         int newLevel = level + 1;
-        // 每3级获得1点天赋点
-        int newTalentPoints = talentPoints;
-        int newUnspent = unspentTalentPoints;
-        if (newLevel % 3 == 0) {
-            newTalentPoints = talentPoints + 1;
-            newUnspent = unspentTalentPoints + 1;
-        }
+        // 每级获得1点天赋点
+        int newTalentPoints = talentPoints + 1;
+        int newUnspent = unspentTalentPoints + 1;
         return new FishingSeasonData(uuid, seasonId, newLevel, remaining,
-            newTalentPoints, newUnspent, talents, claimedRewards);
+            newTalentPoints, newUnspent, talents, claimedRewards, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -102,11 +105,9 @@ public record FishingSeasonData(
             if (newXp < required) break;
             newXp -= required;
             newLevel++;
-            // 每3级获得1点天赋点
-            if (newLevel % 3 == 0) {
-                newTalentPoints++;
-                newUnspent++;
-            }
+            // 每级获得1点天赋点
+            newTalentPoints++;
+            newUnspent++;
         }
         // 满级后截断到当前级上限 - 1，防止经验无限累加
         if (newLevel >= maxLevel) {
@@ -114,21 +115,24 @@ public record FishingSeasonData(
             newXp = Math.min(newXp, Math.max(0, cap - 1));
         }
         return new FishingSeasonData(uuid, seasonId, newLevel, newXp,
-            newTalentPoints, newUnspent, talents, claimedRewards);
+            newTalentPoints, newUnspent, talents, claimedRewards, fatigue, claimedMaxFatigueReward);
     }
 
     /**
-     * 点亮一个天赋节点（消耗1点未分配天赋点）。
+     * 升级一个天赋节点（消耗1点未分配天赋点，等级+1）。
      *
-     * @param nodeId 天赋节点 ID
-     * @return 更新后的新实例，天赋点不足时返回原实例
+     * @param nodeId   天赋节点 ID
+     * @param maxLevel 该节点的最大等级
+     * @return 更新后的新实例，天赋点不足或已满级时返回原实例
      */
-    public @NotNull FishingSeasonData withTalentUnlocked(@NotNull String nodeId) {
-        if (unspentTalentPoints <= 0 || talents.contains(nodeId)) return this;
-        Set<String> newTalents = new HashSet<>(talents);
-        newTalents.add(nodeId);
+    public @NotNull FishingSeasonData withTalentLeveledUp(@NotNull String nodeId, int maxLevel) {
+        if (unspentTalentPoints <= 0) return this;
+        int currentLevel = talents.getOrDefault(nodeId, 0);
+        if (currentLevel >= maxLevel) return this;
+        Map<String, Integer> newTalents = new HashMap<>(talents);
+        newTalents.put(nodeId, currentLevel + 1);
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints - 1, newTalents, claimedRewards);
+            talentPoints, unspentTalentPoints - 1, newTalents, claimedRewards, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -137,8 +141,10 @@ public record FishingSeasonData(
      * @return 更新后的新实例
      */
     public @NotNull FishingSeasonData withTalentsReset() {
+        // 已分配的天赋点 = 每个节点的等级之和
+        int spentPoints = talents.values().stream().mapToInt(Integer::intValue).sum();
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, talentPoints, new HashSet<>(), claimedRewards);
+            talentPoints, talentPoints, new HashMap<>(), claimedRewards, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -151,7 +157,7 @@ public record FishingSeasonData(
         Set<String> newClaimed = new HashSet<>(claimedRewards);
         newClaimed.add(rewardId);
         return new FishingSeasonData(uuid, seasonId, level, currentXp,
-            talentPoints, unspentTalentPoints, talents, newClaimed);
+            talentPoints, unspentTalentPoints, talents, newClaimed, fatigue, claimedMaxFatigueReward);
     }
 
     /**
@@ -162,5 +168,40 @@ public record FishingSeasonData(
      */
     public int xpForNextLevel(@NotNull XpCurve xpCurve) {
         return xpCurve.xpRequiredForLevelOr(level + 1, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 增加疲惫值（钓鱼成功时调用），上限 maxFatigue。
+     *
+     * @param amount       增加量
+     * @param maxFatigue   疲惫值上限
+     * @return 更新后的新实例
+     */
+    public @NotNull FishingSeasonData withFatigueAdded(int amount, int maxFatigue) {
+        int newFatigue = Math.min(maxFatigue, fatigue + amount);
+        return new FishingSeasonData(uuid, seasonId, level, currentXp,
+            talentPoints, unspentTalentPoints, talents, claimedRewards, newFatigue, claimedMaxFatigueReward);
+    }
+
+    /**
+     * 减少疲惫值（休息恢复时调用），下限 0。
+     *
+     * @param amount 减少量
+     * @return 更新后的新实例
+     */
+    public @NotNull FishingSeasonData withFatigueReduced(int amount) {
+        int newFatigue = Math.max(0, fatigue - amount);
+        return new FishingSeasonData(uuid, seasonId, level, currentXp,
+            talentPoints, unspentTalentPoints, talents, claimedRewards, newFatigue, claimedMaxFatigueReward);
+    }
+
+    /**
+     * 标记已领取首次疲惫值达到 100 的奖励。
+     *
+     * @return 更新后的新实例
+     */
+    public @NotNull FishingSeasonData withMaxFatigueRewardClaimed() {
+        return new FishingSeasonData(uuid, seasonId, level, currentXp,
+            talentPoints, unspentTalentPoints, talents, claimedRewards, fatigue, true);
     }
 }

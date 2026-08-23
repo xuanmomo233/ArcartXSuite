@@ -1,0 +1,28 @@
+id: fatigue_shadow_carp
+display-name: "暗影鲤"
+rarity: EPIC
+min-size: 2
+max-size: 20
+base-price: 300
+base-xp: 60
+seasons: [spring, summer, fall, winter]
+weathers: [clear, rain]
+time-ranges:
+  default:
+    start: "00:00"
+    end: "24:00"
+item:
+  source: "minecraft"
+  identifier: "minecraft:cod"
+  amount: 1
+difficulty: 65
+behaviors:
+  smooth:
+    type: SMOOTH
+    weight: 0.6
+  darting:
+    type: DARTING
+    weight: 0.4
+description: "疲惫深渊中浮现的暗影之鲤，游动轨迹难以捉摸"
+icon-texture-url: ""
+record-weight: 1.5

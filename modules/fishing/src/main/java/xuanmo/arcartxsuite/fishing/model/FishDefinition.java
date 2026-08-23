@@ -70,7 +70,8 @@ public record FishDefinition(
 
     public int calculatePrice(int caughtSize) {
         double factor = sizeFactor(caughtSize);
-        return (int) (basePrice * factor);
+        // L5: 防止 basePrice 配置为负时返回负数
+        return Math.max(0, (int) (basePrice * factor));
     }
 
     public @NotNull FishBehaviorType randomBehavior() {

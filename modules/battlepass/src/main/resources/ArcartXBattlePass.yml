@@ -42,8 +42,9 @@ season:
   # 系统按 level 升序选取最大的且不超过目标等级的断点公式求值。
   # 首个断点的 level 必须为 1；断点 level 必须严格递增。
   # 当前曲线：线性×S曲线因子模型
-  #   xp = 5.0 * level * (1 + 5.0 * smoothstep(0,100,level)^1.5)
-  #   smoothstep(0,100,level) = (level/100)^2 * (3 - 2*(level/100))
+  #   xp = 5.0 * level * (1 + 5.0 * math.pow(smoothstep, 1.5))
+  #   smoothstep = (level/100)^2 * (3 - 2*(level/100))   （内联展开，ARIA 无 smoothstep 内置函数）
+  #   幂运算用 math.pow（ARIA 中 ^ 是位异或，不是幂）
   # 特征：前期近似线性（快速升级给正反馈），中后期 S曲线因子平滑加速（挑战感递增），
   #       全程无拐点突变。满级(100)累计约 101,520 xp。
   # 节奏（FREE 日产约 564 xp）：Lv25 约 3 天、Lv50 约 19 天、Lv75 约 72 天、Lv100 约 180 天。

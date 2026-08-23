@@ -49,8 +49,12 @@ fishing:
   # ─── 小游戏节奏 ────────────────────────────────────────────────
   # 小游戏 tick 刷新间隔（ticks），20 ticks = 1 秒。值越小动画越平滑，CPU 占用越高。
   minigame-tick-interval: 1
-  # 单次小游戏最长持续时间（ticks），超时视为失败。钓竿的 catch-duration-bonus 会叠加到此值上。
-  catch-duration-ticks: 600
+  # 单次小游戏基础超时（ticks），超时视为失败。实际超时按鱼难度动态调整：
+  #   实际超时 = catch-duration-ticks ×（1 + 鱼难度/100 × catch-duration-difficulty-scale）+ 鱼竿 catch-duration-bonus
+  # 低难度鱼超时短（要求快速完成），高难度鱼超时长（给更多尝试机会）。
+  catch-duration-ticks: 400
+  # 难度对超时的缩放系数：难度 100 时超时增加此比例。0.5 = 难度 100 时超时为基础的 1.5 倍。
+  catch-duration-difficulty-scale: 0.5
   # 钓鱼冷却时间（ticks）：小游戏结束后多少 ticks 内无法再次触发钓鱼。20 ticks = 1 秒，默认 100 = 5 秒。
   fishing-cooldown-ticks: 100
 
@@ -82,16 +86,53 @@ fishing:
 
   # ─── 鱼物理（鱼自动移动，玩家需用绿条追踪鱼） ────────────────
   # 鱼撞到轨道顶部/底部时的反弹力度（0-1）：碰撞后速度 = 原速度 × 此值。越接近 1 反弹越远，越接近 0 越像撞墙停下。
-  fish-edge-bounce: 0.5
+  fish-edge-bounce: 1.5
 
-  # ─── 钓鱼进度（进度满 100% = 钓成功，进度归 0 或超时 = 失败） ────
-  # 鱼在绿条内时进度每 tick 上升量（实际再乘 progress-rate-multiplier 和等级/天赋加成）。
-  progress-gain-rate: 1.0
-  # 鱼在绿条外时进度每 tick 下降量（实际再乘 progress-rate-multiplier 和等级修正和天赋减免）。
-  # 等级越高衰减越慢：衰减 ×（1 - 等级修正×progress-rate-level-scale）。
-  progress-drain-rate: 0.5
-  # 进度涨跌缩放系数：进度实际变化 = gain/drain-rate × 此系数 × 等级修正 × 天赋加成。越大进度变化越快。
-  progress-rate-multiplier: 0.008
+  # ─── 钓鱼进度（进度从 0% 开始，满 100% = 钓成功，超时 = 失败） ────
+  # 进度从 0 开始，玩家需持续命中绿条积累进度到 100% 才成功。离开绿条进度会下降但不会因归零失败。
+  #
+  # 进度增长/衰减使用 ARIA 表达式自定义函数，gain 和 drain 各自独立配置。
+  # 表达式可访问以下变量（绑定到 ARIA global. 命名空间，需用 global. 前缀访问）：
+  #   global.progress   — 当前进度值 [0, 1]。gain 用当前进度，drain 用 (1 - progress)（对称处理）。
+  #   global.base_rate  — 基础速率（即下方 base-rate 配置值），方便整体缩放。
+  #   global.level      — 玩家钓鱼等级（整数）。
+  #   global.difficulty — 鱼调整后难度（1~100）。
+  #
+  # 表达式返回值 = 本 tick 的基础进度变化量，再乘以等级修正、天赋加成、streak 加成（仅 gain）。
+  # Aria 不可用时回退为线性（返回 base_rate）。
+  #
+  # 注意：drain 的返回值应大于 gain × 预期命中率，否则几乎不会失败。
+
+  # 进度上升曲线（鱼在绿条内时进度增长）
+  # S 曲线模型：用 cos 函数实现连续平滑加速，无分段突变
+  #   gain = base_rate × (0.6 + 0.8 × (0.5 − 0.5 × cos(progress × π)))
+  #   progress=0   → 0.6× base_rate（起步慢，给玩家适应时间）
+  #   progress=0.5 → 1.0× base_rate（中段标准速率）
+  #   progress=1   → 1.4× base_rate（末段冲刺，加速收尾）
+  progress-gain:
+    base-rate: 0.01
+    formula: "global.base_rate * (0.6 + 0.8 * (0.5 - 0.5 * math.cos(global.progress * math.PI())))"
+  # 进度下降曲线（鱼在绿条外时进度衰减）
+  # U 型曲线模型：低进度和高进度时 drain 都大，中进度稍缓和。
+  # 公式中的 progress 变量 = (1 - 实际进度)（对称处理，见 ProgressCurve.evaluate）。
+  #   drain = base_rate × (1 + difficulty/90) × (0.5 + 0.25×p + 0.35×(1−p)²)
+  #   p = 1 − progress（低进度 p=1，高进度 p=0）
+  #   低进度(0%)：drain = base × 2.11 × 0.85 = 1.79× base（起步难，需高命中率）
+  #   中进度(50%)：drain = base × 2.11 × 0.588 = 1.24× base（中段稍缓和）
+  #   高进度(100%)：drain = base × 2.11 × 0.85 = 1.79× base（收尾也难，防"快成功就稳了"）
+  # 难度影响：difficulty/90（比原 /200 更陡，难度100时 drain ×2.11）
+  progress-drain:
+    base-rate: 0.025
+    formula: "global.base_rate * (1 + global.difficulty / 90) * (0.5 + 0.25 * global.progress + 0.35 * (1 - global.progress) * (1 - global.progress))"
+
+  # ─── 连续命中加成（streak：持续追踪鱼的奖励） ────────────────
+  # 连续在绿条内每达到 streak-threshold ticks，gain 系数递增 streak-bonus-per-step。
+  # 离开绿条则 streak 计数重置为 0。鼓励玩家持续追踪鱼，而非频繁脱靶。
+  # 每 streak-threshold ticks 增加的 gain 系数（0.1 = +10% gain）。
+  streak-threshold: 20
+  streak-bonus-per-step: 0.1
+  # streak 加成上限（0.5 = 最多 +50% gain），防止无限叠加。
+  streak-max-bonus: 0.5
 
   # ─── 奖励 ────────────────────────────────────────────────
   # 钓起宝藏（treasures/ 目录定义）的基础概率（0.0 ~ 1.0），最终概率 = 此值 + 饵料加成 + 钓竿加成。
@@ -103,7 +144,7 @@ fishing:
   # 钓鱼等级上限，用于将玩家等级归一化到 [0,1] 参与等级修正计算。与 season.max-level 独立。
   max-level: 100
   # 等级修正基础系数：满级时等级修正的最大值。例如 0.5 = 满级时 lvlMod = 0.5。
-  # 以下 4 个独立 scale 分别控制 lvlMod 对各参数的影响程度，默认 1.0 = 完全应用 lvlMod。
+  # 以下各 scale 分别控制 lvlMod 对各参数的影响程度，默认 1.0 = 完全应用 lvlMod。
   # 设为 0.5 = 该参数只受一半 lvlMod 影响；设为 0 = 该参数不受等级影响。
   level-modifier-scale: 0.5
   # 鱼移动速度的等级修正系数：鱼速度 ×（1 - lvlMod × 此值）。满级时鱼速度最多减慢 level-modifier-scale × 此值。
@@ -112,8 +153,12 @@ fishing:
   flee-chance-level-scale: 1.0
   # 逃离速度的等级修正系数：逃离速度 ×（1 - lvlMod × 此值）。满级时逃离速度最多减慢 level-modifier-scale × 此值。
   flee-speed-level-scale: 1.0
-  # 进度增速的等级修正系数：进度增速 ×（1 + lvlMod × 此值）。满级时进度增速最多加快 level-modifier-scale × 此值。
-  progress-rate-level-scale: 1.0
+  # 进度上升的等级修正系数：gain ×（1 + lvlMod × 此值）。满级时进度上升最多加快 level-modifier-scale × 此值。
+  # 建议设较低值（如 0.3），避免高等级进度增长过快。
+  progress-gain-level-scale: 0.3
+  # 进度下降的等级修正系数：drain ×（1 - lvlMod × 此值）。满级时进度下降最多减慢 level-modifier-scale × 此值。
+  # 可独立于 gain-level-scale 调节，例如设 0.5 让高等级衰减明显减慢但增速只轻微加快。
+  progress-drain-level-scale: 0.5
 
   # ─── 驱赶机制（鱼在绿条内时偶尔迅速逃离，增加操作难度） ────────
   # 逃离触发条件：鱼在绿条内 + 到达检查时间 + 随机骰 < 逃离概率。
@@ -149,8 +194,9 @@ season:
   # 首个断点的 level 必须为 1；断点 level 必须严格递增。
   #
   # 当前曲线：线性 × S曲线增长因子模型
-  #   xpForNextLevel = baseXp × level × (1 + a × smoothstep(0, maxLevel, level)^k)
-  #   smoothstep(0, 100, level) = (level/100)^2 × (3 - 2 × (level/100))
+  #   xpForNextLevel = baseXp × level × (1 + a × smoothstep^k)
+  #   smoothstep = (level/100)^2 × (3 - 2 × (level/100))   （内联展开，ARIA 无 smoothstep 内置函数）
+  #   幂运算用 math.pow（ARIA 中 ^ 是位异或，不是幂）
   #   参数: baseXp=50, a=2, k=1.5
   #
   # 特征：前期近似线性（快速升级给正反馈），中后期 S曲线因子平滑加速（挑战感递增），
@@ -163,26 +209,6 @@ season:
       formula: "50 * global.level * (1 + 2.0 * math.pow(math.pow(global.level / 100, 2) * (3 - 2 * global.level / 100), 1.5))"
   start-date: "2026-01-01"
   end-date: "2030-12-31"
-
-# ─── 水域定义 ────────────────────────────────────────
-# 水域配置已移至 waters/ 目录，每个水域一个 water-<id>.yml 文件。
-# 默认水域为 water-default.yml（无多边形边界，匹配所有未命中指定水域的位置）。
-# 指定水域为 water-<id>.yml（含多边形 pos 边界，玩家在多边形内时使用该水域）。
-#
-# 每个水域文件包含：
-#   id（从文件名提取）、display-name、world、enabled、pos（多边形顶点）、
-#   fishes（鱼ID列表）、treasures（宝藏ID列表）、
-#   difficulty-formula（ARIA难度公式，变量 global.level = 玩家等级）、
-#   min-player-level、max-player-level、bait-multipliers、require-permission。
-#
-# 可用 /axs fishing water create <id> 命令配合选区工具创建多边形水域。
-# 详见 waters/water-default.yml 和 waters/water-dragon_lake.yml 示例。
-
-# ─── 饵料定义 ────────────────────────────────────────
-# 饵料不通过本文件配置，请在 baits/ 目录下为每个饵料创建独立 YAML 文件。
-# 每个饵料文件支持的字段见 baits/worm.yml 示例：
-#   id、display-name、item、default、fish-attract-modifiers、
-#   treasure-chance-boost、max-durability-bonus。
 
 # ─── UI 注册 ────────────────────────────────────────
 # 这些 UI 文件位于 arcartx/ui/ 目录，由模块在启动时注册到 ArcartX。

@@ -12,17 +12,17 @@
 #
 # Java 端 pushTalentsData 发送字段:
 #   packetId, seasonId, level, talentPoints, unspentTalentPoints,
-#   unlockedTalents (List<String>),
+#   unlockedTalents (Map<nodeId, level:int>),
 #   trees (Map<treeId, {id, displayName, description, icon, iconJson,
 #     nodeCount, nodes: Map<idx, {id, name, description, tier, branch, treeId,
-#       unlocked, canUnlock, effects, prerequisites}>}>),
+#       unlocked, level, maxLevel, canLevelUp, effects, prerequisites}>}>),
 #   links (Map<idx, {id, name, description, tier, branch, treeId,
-#     unlocked, canUnlock, effects, prerequisites}>),
+#     unlocked, level, maxLevel, canLevelUp, effects, prerequisites}>),
 #   linkCount
 #
 # 客户端回包:
-#   Packet.send(packetId, 'unlock_talent', nodeId)  — 点亮指定节点
-#   Packet.send(packetId, 'reset_talents')          — 重置天赋树
+#   Packet.send(packetId, 'level_up_talent', nodeId)  — 升级指定节点
+#   Packet.send(packetId, 'reset_talents')             — 重置天赋树
 
 ui:
   isHud: false
@@ -42,7 +42,7 @@ ui:
       var.talentPoints = packet['talentPoints']
       var.unspentTalentPoints = packet['unspentTalentPoints']
       var.unlockedTalents = packet['unlockedTalents']
-      if(var.unlockedTalents == none){ var.unlockedTalents = [] }
+      if(var.unlockedTalents == none){ var.unlockedTalents = {} }
       var.trees = packet['trees']
       if(var.trees == none){ var.trees = {} }
       var.links = packet['links']
@@ -57,7 +57,7 @@ ui:
       var.talentPoints = packet['talentPoints']
       var.unspentTalentPoints = packet['unspentTalentPoints']
       var.unlockedTalents = packet['unlockedTalents']
-      if(var.unlockedTalents == none){ var.unlockedTalents = [] }
+      if(var.unlockedTalents == none){ var.unlockedTalents = {} }
       var.trees = packet['trees']
       if(var.trees == none){ var.trees = {} }
       var.links = packet['links']
@@ -73,7 +73,7 @@ ui:
       var.playerLevel = 1
       var.talentPoints = 0
       var.unspentTalentPoints = 0
-      var.unlockedTalents = []
+      var.unlockedTalents = {}
       var.trees = {}
       var.links = {}
       var.linkCount = 0
@@ -813,11 +813,15 @@ controls:
                       linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,255' : (self.linkTree2 == 'swift' ? '38,145,178,255' : (self.linkTree2 == 'pressure' ? '178,48,48,255' : (self.linkTree2 == 'focus' ? '142,58,178,255' : '184,142,34,255')))"
                       linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : self.linkDim1"
                       linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : self.linkDim2"
+                      # 节点等级状态：0=未点亮, 1~maxLevel-1=部分升级, maxLevel=满级
+                      nodeLevel: "self.entry != none && self.entry['level'] != none ? type.toNumber(self.entry['level']).round() : 0"
+                      nodeMaxLevel: "self.entry != none && self.entry['maxLevel'] != none ? type.toNumber(self.entry['maxLevel']).round() : 1"
+                      isMaxed: "self.nodeLevel >= self.nodeMaxLevel"
                     action:
                       clickLeft: |-
                         if(self.entry != none){
-                          if(self.entry['canUnlock'] == true && self.entry['unlocked'] != true){
-                            Packet.send(var.packetId, 'unlock_talent', self.entry['id'])
+                          if(self.entry['canLevelUp'] == true){
+                            Packet.send(var.packetId, 'level_up_talent', self.entry['id'])
                           }
                         }
                     children:
@@ -939,10 +943,37 @@ controls:
                         action:
                           clickLeft: |-
                             if(self.parent.entry != none){
-                              if(self.parent.entry['canUnlock'] == true && self.parent.entry['unlocked'] != true){
-                                Packet.send(var.packetId, 'unlock_talent', self.parent.entry['id'])
+                              if(self.parent.entry['canLevelUp'] == true){
+                                Packet.send(var.packetId, 'level_up_talent', self.parent.entry['id'])
                               }
                             }
+                      # 等级标签（右下角显示 当前等级/最大等级）
+                      等级标签:
+                        type: Canvas
+                        attribute:
+                          point: ~bottom_right
+                          x: -2
+                          y: -2
+                          width: 36
+                          height: 20
+                          visible: "self.parent.entry != none && self.parent.entry['unlocked'] == true && self.parent.nodeMaxLevel > 1"
+                        children:
+                          等级标签底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.parent.isMaxed ? '40,80,40,220' : '20,30,45,220'"
+                              shape: ~round_rect
+                              radius: 4
+                          等级文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 36
+                              texts: "self.parent.parent.nodeLevel + '/' + self.parent.parent.nodeMaxLevel"
+                              fontSize: 18
+                              through: true
           # 滚动滑轨（纵向）
           树滑轨:
             type: Texture

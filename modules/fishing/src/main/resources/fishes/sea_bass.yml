@@ -25,10 +25,13 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
   - type: dart                 # 突进型：鱼快速跳跃移动
     weight: 0.4                # 权重0.4（次要行为）
 
-# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# ─── 小游戏机制（可选，覆盖全局曲线的 base-rate） ──────────
 # 海鲈鱼是最简单的鱼，进度衰减最慢，几乎不会逃离
-progress-drain-rate: 0.2       # 鱼在绿条外时进度下降很慢（全局默认0.5）
-progress-gain-rate: 1.2        # 鱼在绿条内时进度上升较快（全局默认1.0）
+# 仅覆盖 base-rate，formula 沿用全局曲线公式（全局默认 gain=0.01, drain=0.02）
+progress-drain:
+  base-rate: 0.008             # 鱼在绿条外时进度下降很慢（全局默认0.02）
+progress-gain:
+  base-rate: 0.012             # 鱼在绿条内时进度上升较快（全局默认0.01）
 flee-params:
   base-chance: 0.10            # 逃离概率很低（全局默认0.25）
   base-speed: 0.02             # 逃离速度很慢（全局默认0.04）

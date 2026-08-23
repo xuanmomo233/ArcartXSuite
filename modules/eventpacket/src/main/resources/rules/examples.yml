@@ -390,13 +390,14 @@ js_low_health_alert:
       group-id: "low_health_warning"
 
 # Aria 脚本触发器：玩家 Y 坐标高于 200 时触发高空成就
+# ARIA 表达式中 player 门面注入到 global. 命名空间，需用 global.player 访问
 aria_high_altitude:
   enabled: false
   trigger: script-aria
   repeatable: true
   cooldown: "1m"
   script: |
-    playerY = player.getLocation().getY()
+    playerY = global.player.getLocation().getY()
     playerY > 200
   actions:
     - type: subtitle.play

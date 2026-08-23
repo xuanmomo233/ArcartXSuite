@@ -28,7 +28,7 @@ public final class FishingSession {
     private final double rodTreasureChanceBonus;
     private final AtomicBoolean pressing = new AtomicBoolean(false);
     private volatile boolean active = true;
-    private volatile long remainingTicks;
+    private final java.util.concurrent.atomic.AtomicLong remainingTicks;
 
     public FishingSession(@NotNull Player player, @NotNull FishDefinition fish, int caughtSize,
                           int playerLevel, long durationTicks, @Nullable WaterArea water, int adjustedDifficulty,
@@ -44,7 +44,7 @@ public final class FishingSession {
         this.greenBarHeightBonus = greenBarHeightBonus;
         this.expMultiplier = expMultiplier;
         this.rodTreasureChanceBonus = rodTreasureChanceBonus;
-        this.remainingTicks = durationTicks;
+        this.remainingTicks = new java.util.concurrent.atomic.AtomicLong(durationTicks);
     }
 
     public @NotNull UUID playerUuid() {
@@ -104,10 +104,10 @@ public final class FishingSession {
     }
 
     public long remainingTicks() {
-        return remainingTicks;
+        return remainingTicks.get();
     }
 
     public void decrementRemainingTicks() {
-        this.remainingTicks--;
+        remainingTicks.decrementAndGet();
     }
 }

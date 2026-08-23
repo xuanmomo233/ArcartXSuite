@@ -10,10 +10,13 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 
 /**
- * 天赋树引擎，负责天赋定义加载、点亮校验、联动解锁与效果聚合计算。
+ * 天赋树引擎，负责天赋定义加载、升级校验、联动解锁与效果聚合计算。
  * <p>
  * 关联模块：{@code fishing}。从 {@code talents.yml} 加载天赋树定义，
- * 提供 {@link #canUnlock}、{@link #unlock}、{@link #computeBonuses} 等核心方法。
+ * 提供 {@link #canLevelUp}、{@link #levelUp}、{@link #computeBonuses} 等核心方法。
+ * <p>
+ * 天赋节点支持多级升级：每次升级消耗 1 点天赋点，节点等级 +1，直到达到 maxLevel。
+ * 联动节点固定 1 级，前置条件满足后一次性解锁。
  */
 public final class TalentEngine {
 
@@ -22,9 +25,17 @@ public final class TalentEngine {
     private final Map<String, IconDefinition> treeIcons = new HashMap<>();
     private final Map<String, TalentTreeDefinition> treesById = new HashMap<>();
     private final java.util.List<TalentNode> linkNodes = new java.util.ArrayList<>();
+    private final Map<String, Integer> prerequisiteLevels;
 
     public TalentEngine(@NotNull Map<String, TalentTreeDefinition> trees,
                         @NotNull java.util.List<TalentNode> links) {
+        this(trees, links, Map.of("2", 3, "3", 3, "4", 3, "5", 3, "link", 3));
+    }
+
+    public TalentEngine(@NotNull Map<String, TalentTreeDefinition> trees,
+                        @NotNull java.util.List<TalentNode> links,
+                        @NotNull Map<String, Integer> prerequisiteLevels) {
+        this.prerequisiteLevels = new HashMap<>(prerequisiteLevels);
         // 注册树节点
         for (Map.Entry<String, TalentTreeDefinition> entry : trees.entrySet()) {
             String treeId = entry.getKey();
@@ -59,6 +70,29 @@ public final class TalentEngine {
      */
     public @NotNull java.util.List<TalentNode> getLinkNodes() {
         return java.util.Collections.unmodifiableList(linkNodes);
+    }
+
+    /**
+     * 获取前置等级要求映射（目标 tier/link → 前置节点最低等级）。
+     *
+     * @return 不可变的前置等级映射
+     */
+    public @NotNull Map<String, Integer> prerequisiteLevels() {
+        return java.util.Collections.unmodifiableMap(prerequisiteLevels);
+    }
+
+    /**
+     * 获取指定节点的前置等级要求。
+     * <p>
+     * 普通节点按 tier 查找（key = tier 数字字符串），联动节点按 "link" 查找。
+     * 未配置时默认 1（只需前置节点点亮即可）。
+     *
+     * @param node 目标节点
+     * @return 前置节点需达到的最低等级
+     */
+    public int prerequisiteLevelFor(@NotNull TalentNode node) {
+        String key = node.isLink() ? "link" : String.valueOf(node.tier());
+        return prerequisiteLevels.getOrDefault(key, 1);
     }
 
     /**
@@ -101,42 +135,47 @@ public final class TalentEngine {
     }
 
     /**
-     * 判断玩家是否可以点亮指定节点。
+     * 判断玩家是否可以升级指定节点（点亮或提升等级）。
      * <p>
      * 条件：
      * <ol>
      *   <li>节点存在</li>
      *   <li>玩家有未分配天赋点</li>
-     *   <li>节点尚未点亮</li>
-     *   <li>所有前置节点均已点亮</li>
+     *   <li>节点当前等级 &lt; maxLevel</li>
+     *   <li>首次点亮时（当前等级为 0），所有前置节点等级 ≥ 该 tier 的前置等级要求</li>
      * </ol>
      *
      * @param data   玩家赛季数据
      * @param nodeId 节点 ID
-     * @return {@code true} 表示可以点亮
+     * @return {@code true} 表示可以升级
      */
-    public boolean canUnlock(@NotNull FishingSeasonData data, @NotNull String nodeId) {
+    public boolean canLevelUp(@NotNull FishingSeasonData data, @NotNull String nodeId) {
         TalentNode node = nodesById.get(nodeId);
         if (node == null) return false;
         if (data.unspentTalentPoints() <= 0) return false;
-        if (data.talents().contains(nodeId)) return false;
-        // 检查前置
-        for (String prereq : node.prerequisites()) {
-            if (!data.talents().contains(prereq)) return false;
+        int currentLevel = data.talents().getOrDefault(nodeId, 0);
+        if (currentLevel >= node.maxLevel()) return false;
+        // 首次点亮时检查前置等级要求；已点亮节点的后续升级不需要再检查
+        if (currentLevel == 0) {
+            int requiredLevel = prerequisiteLevelFor(node);
+            for (String prereq : node.prerequisites()) {
+                if (data.talents().getOrDefault(prereq, 0) < requiredLevel) return false;
+            }
         }
         return true;
     }
 
     /**
-     * 点亮一个天赋节点（不保存到数据库，调用方负责持久化）。
+     * 升级一个天赋节点（消耗1点天赋点，等级+1）。
      *
      * @param data   玩家赛季数据
      * @param nodeId 节点 ID
-     * @return 更新后的赛季数据，无法点亮时返回原数据
+     * @return 更新后的赛季数据，无法升级时返回原数据
      */
-    public @NotNull FishingSeasonData unlock(@NotNull FishingSeasonData data, @NotNull String nodeId) {
-        if (!canUnlock(data, nodeId)) return data;
-        return data.withTalentUnlocked(nodeId);
+    public @NotNull FishingSeasonData levelUp(@NotNull FishingSeasonData data, @NotNull String nodeId) {
+        if (!canLevelUp(data, nodeId)) return data;
+        TalentNode node = nodesById.get(nodeId);
+        return data.withTalentLeveledUp(nodeId, node.maxLevel());
     }
 
     /**
@@ -152,16 +191,28 @@ public final class TalentEngine {
     /**
      * 聚合计算玩家所有已点亮天赋的效果加成。
      * <p>
-     * 相同效果类型的效果值相加，最终返回效果类型 → 总加成值的映射。
+     * 根据每个节点的当前等级取对应的 levelValue，相同效果类型的值相加。
+     * 联动节点的多效果（effects 列表）也一并聚合。
      *
      * @param data 玩家赛季数据
-     * @return 效果加成映射
+     * @return 效果加成映射（效果类型 → 总加成值）
      */
     public @NotNull Map<String, Double> computeBonuses(@NotNull FishingSeasonData data) {
         Map<String, Double> bonuses = new HashMap<>();
-        for (String nodeId : data.talents()) {
+        for (Map.Entry<String, Integer> entry : data.talents().entrySet()) {
+            String nodeId = entry.getKey();
+            int level = entry.getValue();
+            if (level <= 0) continue;
             TalentNode node = nodesById.get(nodeId);
             if (node == null) continue;
+
+            // 单效果节点：取当前等级对应的 levelValue
+            if (node.effectType() != null && !node.levelValues().isEmpty()) {
+                double value = node.valueAtLevel(level);
+                bonuses.merge(node.effectType(), value, Double::sum);
+            }
+
+            // 多效果节点（联动 link-3）：固定效果值（1 级）
             for (TalentEffect effect : node.effects()) {
                 bonuses.merge(effect.effectType(), effect.effectValue(), Double::sum);
             }

@@ -1,0 +1,28 @@
+id: fatigue_abyssal_eel
+display-name: "深渊鳗"
+rarity: RARE
+min-size: 1
+max-size: 12
+base-price: 200
+base-xp: 40
+seasons: [spring, summer, fall, winter]
+weathers: [clear, rain]
+time-ranges:
+  default:
+    start: "00:00"
+    end: "24:00"
+item:
+  source: "minecraft"
+  identifier: "minecraft:cod"
+  amount: 1
+difficulty: 55
+behaviors:
+  smooth:
+    type: SMOOTH
+    weight: 0.7
+  erratic:
+    type: ERRATIC
+    weight: 0.3
+description: "疲惫至极时从深渊浮现的神秘鳗鱼"
+icon-texture-url: ""
+record-weight: 1.0

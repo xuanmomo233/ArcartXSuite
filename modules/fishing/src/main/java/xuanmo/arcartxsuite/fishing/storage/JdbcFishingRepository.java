@@ -7,8 +7,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -56,9 +58,14 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         unspent_talent_points INTEGER NOT NULL DEFAULT 0,
                         talents TEXT NOT NULL DEFAULT '',
                         claimed_rewards TEXT NOT NULL DEFAULT '',
+                        fatigue INTEGER NOT NULL DEFAULT 0,
+                        claimed_max_fatigue_reward INTEGER NOT NULL DEFAULT 0,
                         updated_at INTEGER NOT NULL,
                         PRIMARY KEY (uuid, season_id))
                     """);
+                // 兼容旧表：若列不存在则添加（ALTER TABLE 忽略异常）
+                tryExecute(conn, "ALTER TABLE axs_fishing_season ADD COLUMN fatigue INTEGER NOT NULL DEFAULT 0");
+                tryExecute(conn, "ALTER TABLE axs_fishing_season ADD COLUMN claimed_max_fatigue_reward INTEGER NOT NULL DEFAULT 0");
 
                 stmt.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS axs_fishing_permanent (
@@ -116,9 +123,14 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         unspent_talent_points INT NOT NULL DEFAULT 0,
                         talents TEXT NOT NULL,
                         claimed_rewards TEXT NOT NULL,
+                        fatigue INT NOT NULL DEFAULT 0,
+                        claimed_max_fatigue_reward INT NOT NULL DEFAULT 0,
                         updated_at BIGINT NOT NULL,
                         PRIMARY KEY (uuid, season_id))
                     """);
+                // 兼容旧表：若列不存在则添加（ALTER TABLE 忽略异常）
+                tryExecute(conn, "ALTER TABLE axs_fishing_season ADD COLUMN fatigue INT NOT NULL DEFAULT 0");
+                tryExecute(conn, "ALTER TABLE axs_fishing_season ADD COLUMN claimed_max_fatigue_reward INT NOT NULL DEFAULT 0");
 
                 stmt.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS axs_fishing_permanent (
@@ -189,10 +201,14 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     public @NotNull FishingSeasonData loadSeasonData(@NotNull UUID uuid, @NotNull String seasonId) {
-        String sql = "SELECT level, current_xp, talent_points, unspent_talent_points, talents, claimed_rewards "
+        // C7: 先尝试查询含新列的 SQL，若旧表无新列则回退到不含新列的 SQL
+        String sqlWithNewCols = "SELECT level, current_xp, talent_points, unspent_talent_points, talents, claimed_rewards, "
+            + "fatigue, claimed_max_fatigue_reward "
+            + "FROM axs_fishing_season WHERE uuid = ? AND season_id = ?";
+        String sqlLegacy = "SELECT level, current_xp, talent_points, unspent_talent_points, talents, claimed_rewards "
             + "FROM axs_fishing_season WHERE uuid = ? AND season_id = ?";
         try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sqlWithNewCols)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, seasonId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -203,13 +219,37 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         rs.getInt("current_xp"),
                         rs.getInt("talent_points"),
                         rs.getInt("unspent_talent_points"),
-                        parseStringSet(rs.getString("talents")),
-                        parseStringSet(rs.getString("claimed_rewards"))
+                        parseTalentMap(rs.getString("talents")),
+                        parseStringSet(rs.getString("claimed_rewards")),
+                        rs.getInt("fatigue"),
+                        rs.getBoolean("claimed_max_fatigue_reward")
                     );
                 }
             }
         } catch (SQLException e) {
-            logger.warning("加载赛季数据失败 [" + seasonId + "]: " + e.getMessage());
+            // 旧表可能无 fatigue/claimed_max_fatigue_reward 列，回退到不含新列的查询
+            logger.fine("含新列查询失败，尝试旧表查询: " + e.getMessage());
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sqlLegacy)) {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, seasonId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return new FishingSeasonData(
+                            uuid, seasonId,
+                            rs.getInt("level"),
+                            rs.getInt("current_xp"),
+                            rs.getInt("talent_points"),
+                            rs.getInt("unspent_talent_points"),
+                            parseTalentMap(rs.getString("talents")),
+                            parseStringSet(rs.getString("claimed_rewards")),
+                            0, false // 旧表无疲惫值，默认 0 和 false
+                        );
+                    }
+                }
+            } catch (SQLException e2) {
+                logger.warning("加载赛季数据失败 [" + seasonId + "]: " + e2.getMessage());
+            }
         }
         return FishingSeasonData.empty(uuid, seasonId);
     }
@@ -218,17 +258,21 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
     public void saveSeasonData(@NotNull FishingSeasonData data) {
         String sql = !isMysql()
             ? "INSERT INTO axs_fishing_season (uuid, season_id, level, current_xp, "
-            + "talent_points, unspent_talent_points, talents, claimed_rewards, updated_at) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            + "talent_points, unspent_talent_points, talents, claimed_rewards, fatigue, claimed_max_fatigue_reward, updated_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             + "ON CONFLICT(uuid, season_id) DO UPDATE SET level=excluded.level, current_xp=excluded.current_xp, "
             + "talent_points=excluded.talent_points, unspent_talent_points=excluded.unspent_talent_points, "
-            + "talents=excluded.talents, claimed_rewards=excluded.claimed_rewards, updated_at=excluded.updated_at"
+            + "talents=excluded.talents, claimed_rewards=excluded.claimed_rewards, "
+            + "fatigue=excluded.fatigue, claimed_max_fatigue_reward=excluded.claimed_max_fatigue_reward, "
+            + "updated_at=excluded.updated_at"
             : "INSERT INTO axs_fishing_season (uuid, season_id, level, current_xp, "
-            + "talent_points, unspent_talent_points, talents, claimed_rewards, updated_at) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            + "talent_points, unspent_talent_points, talents, claimed_rewards, fatigue, claimed_max_fatigue_reward, updated_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             + "ON DUPLICATE KEY UPDATE level=VALUES(level), current_xp=VALUES(current_xp), "
             + "talent_points=VALUES(talent_points), unspent_talent_points=VALUES(unspent_talent_points), "
-            + "talents=VALUES(talents), claimed_rewards=VALUES(claimed_rewards), updated_at=VALUES(updated_at)";
+            + "talents=VALUES(talents), claimed_rewards=VALUES(claimed_rewards), "
+            + "fatigue=VALUES(fatigue), claimed_max_fatigue_reward=VALUES(claimed_max_fatigue_reward), "
+            + "updated_at=VALUES(updated_at)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, data.uuid().toString());
@@ -237,9 +281,11 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
             ps.setInt(4, data.currentXp());
             ps.setInt(5, data.talentPoints());
             ps.setInt(6, data.unspentTalentPoints());
-            ps.setString(7, serializeStringSet(data.talents()));
+            ps.setString(7, serializeTalentMap(data.talents()));
             ps.setString(8, serializeStringSet(data.claimedRewards()));
-            ps.setLong(9, System.currentTimeMillis());
+            ps.setInt(9, data.fatigue());
+            ps.setBoolean(10, data.claimedMaxFatigueReward());
+            ps.setLong(11, System.currentTimeMillis());
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.warning("保存赛季数据失败: " + e.getMessage());
@@ -547,5 +593,48 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
     private static String serializeStringSet(Set<String> set) {
         if (set == null || set.isEmpty()) return "";
         return String.join(",", set);
+    }
+
+    /**
+     * 解析天赋节点 ID → 等级的映射。
+     * 存储格式：{@code "node1:2,node2:1,node3:5"}（ID:等级，逗号分隔）。
+     * 兼容旧格式（无冒号视为 1 级）。
+     */
+    private static Map<String, Integer> parseTalentMap(String csv) {
+        Map<String, Integer> map = new HashMap<>();
+        if (csv == null || csv.isBlank()) return map;
+        for (String s : csv.split(",")) {
+            String trimmed = s.trim();
+            if (trimmed.isEmpty()) continue;
+            int colonIdx = trimmed.indexOf(':');
+            if (colonIdx > 0) {
+                String id = trimmed.substring(0, colonIdx);
+                try {
+                    int level = Integer.parseInt(trimmed.substring(colonIdx + 1));
+                    map.put(id, level);
+                } catch (NumberFormatException e) {
+                    map.put(id, 1); // 解析失败回退为 1 级
+                }
+            } else {
+                // 兼容旧格式：无冒号视为 1 级
+                map.put(trimmed, 1);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 序列化天赋节点 ID → 等级的映射为 CSV 字符串。
+     */
+    private static String serializeTalentMap(java.util.Map<String, Integer> map) {
+        if (map == null || map.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, Integer> entry : map.entrySet()) {
+            if (!first) sb.append(",");
+            sb.append(entry.getKey()).append(":").append(entry.getValue());
+            first = false;
+        }
+        return sb.toString();
     }
 }

@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -36,18 +37,22 @@ public final class FishingMinigame {
     private final FishBehaviorEngine fishEngine;
     private final String uiId;
     private final xuanmo.arcartxsuite.fishing.talent.TalentBonuses talentBonuses;
+    private final double fatigueMultiplier; // 疲惫效率系数（>1 提升，<1 降低，=1 无影响）
+    private final @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
 
     // 物理状态
     private double fishPosition = 0.5;      // [0, 1]
     private double fishVelocity = 0.0;
     private double barPosition = 0.5;       // 绿条中心 [0, 1]
     private double barVelocity = 0.0;
-    private double progress = 0.5;          // [0, 1]
+    private double progress = 0.0;          // [0, 1]，从 0 开始，需持续命中绿条积累到 1.0
     private long tick = 0;
     private int currentStageIndex = -1;     // 当前行为阶段索引，-1 = 使用默认 behaviors
     private double barHeightRatioCache = 0.15; // 绿条高度缓存（每 tick 更新一次）
-    private boolean wasPerfect = true;      // 是否全程在绿条内
+    private boolean wasPerfect = true;      // 是否全程在绿条内（需至少 tick 一次才有效）
+    private int consecutiveInsideTicks = 0; // 连续在绿条内的 tick 数（用于 streak 加成）
     private BukkitTask tickTask;
+    private final AtomicBoolean cleanedUp = new AtomicBoolean(false); // cleanup 幂等保护
 
     // 驱赶机制：鱼偶尔迅速逃离绿条范围
     private long nextFleeCheckTick = 0;     // 下次驱赶检查的 tick
@@ -63,7 +68,9 @@ public final class FishingMinigame {
                            @NotNull FishingSettings settings, @NotNull FishingService service,
                            @NotNull IconResolver iconResolver,
                            @NotNull FishingSession session, @NotNull String uiId,
-                           @NotNull xuanmo.arcartxsuite.fishing.talent.TalentBonuses talentBonuses) {
+                           @NotNull xuanmo.arcartxsuite.fishing.talent.TalentBonuses talentBonuses,
+                           double fatigueMultiplier,
+                           @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
         this.settings = settings;
@@ -72,6 +79,8 @@ public final class FishingMinigame {
         this.session = session;
         this.uiId = uiId;
         this.talentBonuses = talentBonuses;
+        this.fatigueMultiplier = Math.max(0.1, fatigueMultiplier); // 防止除零和过度缩减
+        this.ariaBridge = ariaBridge;
         this.fishEngine = new FishBehaviorEngine(session.fish().randomBehavior(), session.adjustedDifficulty());
     }
 
@@ -104,6 +113,7 @@ public final class FishingMinigame {
      * 玩家主动放弃钓鱼，直接以失败结束小游戏。
      */
     public void giveUp(@NotNull Player player) {
+        // 使用 finished 的 CAS 防止与 tick 竞态（giveUp 可能从事件线程调用）
         if (finished) return;
         finished = true;
         double barHeightRatio = calculateBarHeightRatio();
@@ -156,9 +166,15 @@ public final class FishingMinigame {
         }
 
         // 更新鱼位置（等级越高鱼越慢，使用加权混合等级修正模型）
+        // 疲惫效率系数：效率高时鱼速度降低（除以 multiplier）
         double lvlMod = levelModifier();
         double fishSpeedMultiplier = (1.0 - lvlMod * settings.fishSpeedLevelScale()) * (1.0 - talentBonuses.fishSpeedReduction());
-        double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty()) * fishSpeedMultiplier;
+        double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty())
+            * fishSpeedMultiplier / fatigueMultiplier;
+        // M1: NaN/Infinity 恢复，防止配置错误或数值溢出导致游戏永久失效
+        if (Double.isNaN(fishSpeed) || Double.isInfinite(fishSpeed)) {
+            fishSpeed = 0.0;
+        }
         fishVelocity = fishSpeed;
         double newFishPosition = fishPosition + fishSpeed;
         // 鱼边界反弹：先检测碰撞再 clamp，确保反弹速度方向正确
@@ -194,10 +210,11 @@ public final class FishingMinigame {
         int fleeCooldownMax = fp != null && fp.cooldownMax() != null ? fp.cooldownMax() : settings.fleeCooldownMax();
 
         if (fleeing) {
-            // 正在逃离：施加逃离速度（天赋降低逃离速度）
+            // 正在逃离：施加逃离速度（天赋降低逃离速度，疲惫效率高时逃离速度降低）
             if (tick < fleeUntilTick) {
                 double fleeSpeed = (fleeBaseSpeed + (session.fish().difficulty() / 100.0) * fleeSpeedPerDiff)
-                    * (1.0 - lvlMod * settings.fleeSpeedLevelScale()) * (1.0 - talentBonuses.fleeSpeedReduction());
+                    * (1.0 - lvlMod * settings.fleeSpeedLevelScale()) * (1.0 - talentBonuses.fleeSpeedReduction())
+                    / fatigueMultiplier;
                 fishVelocity = fleeDirection * fleeSpeed;
                 fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
                 if (fishPosition <= 0.02 || fishPosition >= 0.98) {
@@ -207,16 +224,16 @@ public final class FishingMinigame {
                 fleeing = false;
             }
             // 逃离期间重置下次检查时间（天赋延长冷却）
-            int cooldownMin = (int) (fleeCooldownMin * (1.0 + talentBonuses.fleeCooldownBonus()));
-            int cooldownMax = (int) (fleeCooldownMax * (1.0 + talentBonuses.fleeCooldownBonus()));
-            if (cooldownMax <= cooldownMin) cooldownMax = cooldownMin + 1;
+            int cooldownMin = Math.max(1, (int) (fleeCooldownMin * (1.0 + talentBonuses.fleeCooldownBonus())));
+            int cooldownMax = Math.max(cooldownMin + 1, (int) (fleeCooldownMax * (1.0 + talentBonuses.fleeCooldownBonus())));
             nextFleeCheckTick = tick + cooldownMin + ThreadLocalRandom.current().nextInt(cooldownMax - cooldownMin);
         } else if (tick >= nextFleeCheckTick) {
             // 检查是否触发驱赶：鱼在绿条内时有概率逃离
             // 难度越高，逃离概率越大；玩家等级越高，逃离概率越低（等级修正模型）
-            // 天赋降低逃离概率
+            // 天赋降低逃离概率，疲惫效率高时逃离概率降低
             double fleeChance = (fleeBaseChance + (session.fish().difficulty() / 100.0) * fleeChancePerDiff)
-                * (1.0 - lvlMod * settings.fleeChanceLevelScale()) * (1.0 - talentBonuses.fleeChanceReduction());
+                * (1.0 - lvlMod * settings.fleeChanceLevelScale()) * (1.0 - talentBonuses.fleeChanceReduction())
+                / fatigueMultiplier;
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
                 // 逃离方向：朝远离绿条中心的方向
@@ -225,9 +242,8 @@ public final class FishingMinigame {
                 if (fleeDirection < 0 && fishPosition < 0.15) fleeDirection = 1.0;
                 if (fleeDirection > 0 && fishPosition > 0.85) fleeDirection = -1.0;
                 // 天赋缩短逃离持续时间
-                int adjMinDur = (int) (fleeMinDur * (1.0 - talentBonuses.fleeDurationReduction()));
-                int adjMaxDur = (int) (fleeMaxDur * (1.0 - talentBonuses.fleeDurationReduction()));
-                if (adjMaxDur <= adjMinDur) adjMaxDur = adjMinDur + 1;
+                int adjMinDur = Math.max(1, (int) (fleeMinDur * (1.0 - talentBonuses.fleeDurationReduction())));
+                int adjMaxDur = Math.max(adjMinDur + 1, (int) (fleeMaxDur * (1.0 - talentBonuses.fleeDurationReduction())));
                 fleeUntilTick = tick + adjMinDur + ThreadLocalRandom.current().nextInt(adjMaxDur - adjMinDur);
             }
             if (fleeCheckMax <= fleeCheckMin) fleeCheckMax = fleeCheckMin + 1;
@@ -270,38 +286,84 @@ public final class FishingMinigame {
             }
         }
         barPosition = clamp(barPosition, halfBar, 1.0 - halfBar);
+        // M1: NaN/Infinity 恢复
+        if (Double.isNaN(barPosition) || Double.isInfinite(barPosition)) {
+            barPosition = 0.5; barVelocity = 0.0;
+        }
+        if (Double.isNaN(fishPosition) || Double.isInfinite(fishPosition)) {
+            fishPosition = 0.5; fishVelocity = 0.0;
+        }
 
         // 检查鱼是否在绿条内
         double barBottom = barPosition - halfBar;
         double barTop = barPosition + halfBar;
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
-        // 进度变化：等级越高进度增长越快（等级修正模型），天赋加成增速/减少下降
-        // 鱼独立进度速率（可选覆盖全局配置）
-        double fishProgressGainRate = session.fish().progressGainRate() != null ? session.fish().progressGainRate() : settings.progressGainRate();
-        double fishProgressDrainRate = session.fish().progressDrainRate() != null ? session.fish().progressDrainRate() : settings.progressDrainRate();
+        // ── 进度计算（曲线模型） ────────────────────────────────
+        // 进度从 0 开始，需持续命中绿条积累到 1.0 才成功。
+        // gain 和 drain 各自使用独立的 ProgressCurve（linear/accelerating/sin-wave/power），
+        //   曲线值随当前进度变化，产生非线性的进度增长/衰减节奏。
+        // 连续命中加成（streak）：连续在绿条内每达到 streak-threshold ticks，gain 系数递增 streak-bonus-per-step，
+        //   最高叠加到 streak-max-bonus。离开绿条则 streak 重置为 0。
+        // 等级修正：gain 随等级加快，drain 随等级减慢，各自独立缩放。
+        // 天赋加成：gain 增速加成，drain 减免。
+        // 鱼独立 baseRate 覆盖（可选）：鱼 yml 中的 progress-gain-rate/drain-rate 覆盖全局曲线的 baseRate。
+        ProgressCurve gainCurve = settings.gainCurve();
+        ProgressCurve drainCurve = settings.drainCurve();
+        if (session.fish().progressGainRate() != null) {
+            gainCurve = new ProgressCurve(session.fish().progressGainRate(), gainCurve.formula());
+        }
+        if (session.fish().progressDrainRate() != null) {
+            drainCurve = new ProgressCurve(session.fish().progressDrainRate(), drainCurve.formula());
+        }
 
-        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod * settings.progressRateLevelScale()) * (1.0 + talentBonuses.progressRateBonus());
-        // 进度衰减也受等级修正：等级越高衰减越慢（×(1 - lvlMod × scale)）
-        double progressDrainMultiplier = settings.progressRateMultiplier() * (1.0 - lvlMod * settings.progressRateLevelScale()) * (1.0 - talentBonuses.progressDrainReduction());
+        // ── 进度计算（曲线模型） ────────────────────────────────
+        // 等级修正：gain 随等级加快，drain 随等级减慢，各自独立缩放
+        double gainLevelFactor = 1.0 + lvlMod * settings.progressGainLevelScale();
+        double drainLevelFactor = 1.0 - lvlMod * settings.progressDrainLevelScale();
+        // 天赋加成
+        double gainTalentFactor = 1.0 + talentBonuses.progressRateBonus();
+        double drainTalentFactor = 1.0 - talentBonuses.progressDrainReduction();
+        // 疲惫效率系数：效率高时 gain↑、drain↓
+        double gainFatigueFactor = fatigueMultiplier;
+        double drainFatigueFactor = 1.0 / fatigueMultiplier;
+
         if (fishInside) {
-            progress += fishProgressGainRate * progressGainMultiplier;
+            // 连续命中 streak 加成
+            consecutiveInsideTicks++;
+            int streakThreshold = Math.max(1, settings.streakThreshold());
+            int streakSteps = consecutiveInsideTicks / streakThreshold;
+            double streakBonus = Math.max(0, Math.min(streakSteps * settings.streakBonusPerStep(), settings.streakMaxBonus()));
+            double curveValue = gainCurve.evaluate(progress, true, ariaBridge,
+                session.playerLevel(), session.adjustedDifficulty());
+            double delta = curveValue * gainLevelFactor * gainTalentFactor * gainFatigueFactor * (1.0 + streakBonus);
+            if (Double.isNaN(delta) || Double.isInfinite(delta)) delta = 0.0;
+            progress += delta;
         } else {
-            progress -= fishProgressDrainRate * progressDrainMultiplier;
+            consecutiveInsideTicks = 0;
             wasPerfect = false;
+            double curveValue = drainCurve.evaluate(progress, false, ariaBridge,
+                session.playerLevel(), session.adjustedDifficulty());
+            double delta = curveValue * drainLevelFactor * drainTalentFactor * drainFatigueFactor;
+            if (Double.isNaN(delta) || Double.isInfinite(delta)) delta = 0.0;
+            progress -= delta;
         }
         progress = clamp(progress, 0.0, 1.0);
+        // L1: NaN 兜底（clamp 无法修复 NaN）
+        if (Double.isNaN(progress)) progress = 0.0;
 
         // 发送更新包
         sendUpdatePacket(player, fishInside, barHeightRatio);
 
-        // 检查结束条件
+        // 检查结束条件：进度满 1.0 = 成功；超时 = 失败
+        // 注意：进度从 0 开始，不会因 progress <= 0 失败（0 是下限，clamp 保证不会为负）
         if (progress >= 1.0) {
             success = true;
             finished = true;
             finishWithResult(player, true, fishInside, barHeightRatio);
-            service.onMinigameComplete(session, true, wasPerfect);
-        } else if (progress <= 0.0 || session.remainingTicks() <= 0) {
+            // M4: 完美捕获需至少 tick 过一次，防止未开始就结束时误判
+            service.onMinigameComplete(session, true, wasPerfect && tick > 0);
+        } else if (session.remainingTicks() <= 0) {
             success = false;
             finished = true;
             finishWithResult(player, false, fishInside, barHeightRatio);
@@ -356,10 +418,13 @@ public final class FishingMinigame {
 
     private double calculateBarHeightRatio() {
         // 绿条像素高度 = 基础高度 + 玩家等级加成 + 鱼竿加成 + 天赋加成
+        // 疲惫效率系数：效率高时绿条高度增加（× multiplier）
         int barHeightPx = settings.baseGreenBarHeight()
             + session.playerLevel() * settings.heightPerLevel()
             + session.greenBarHeightBonus()
             + (int) talentBonuses.barHeightBonus();
+        // 应用疲惫效率系数到绿条高度
+        barHeightPx = (int) (barHeightPx * fatigueMultiplier);
         // 转换为 [0,1] 比例，轨道实际高度 644 像素
         double ratio = barHeightPx / 644.0;
         // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 difficultyBarShrink
@@ -451,6 +516,8 @@ public final class FishingMinigame {
     }
 
     public void cleanup() {
+        // 幂等保护：cleanup 可能从 tickInternal、giveUp、异常处理多处调用
+        if (!cleanedUp.compareAndSet(false, true)) return;
         session.setActive(false);
         if (tickTask != null && !tickTask.isCancelled()) {
             tickTask.cancel();

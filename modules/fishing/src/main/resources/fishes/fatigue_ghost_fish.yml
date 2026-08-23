@@ -1,0 +1,28 @@
+id: fatigue_ghost_fish
+display-name: "幽灵鱼"
+rarity: LEGENDARY
+min-size: 1
+max-size: 15
+base-price: 500
+base-xp: 100
+seasons: [spring, summer, fall, winter]
+weathers: [clear, rain]
+time-ranges:
+  default:
+    start: "00:00"
+    end: "24:00"
+item:
+  source: "minecraft"
+  identifier: "minecraft:cod"
+  amount: 1
+difficulty: 75
+behaviors:
+  smooth:
+    type: SMOOTH
+    weight: 0.5
+  erratic:
+    type: ERRATIC
+    weight: 0.5
+description: "极度疲惫时出现的幽灵之鱼，据说只有在精疲力竭时才能看到它的身影"
+icon-texture-url: ""
+record-weight: 2.0

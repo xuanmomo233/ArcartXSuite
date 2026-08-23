@@ -98,6 +98,11 @@ public final class FishingPlaceholderExpansion extends PlaceholderExpansion {
                 long completed = tasks.stream().filter(xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance::completed).count();
                 yield completed + "/" + tasks.size();
             }
+            case "fatigue" -> String.valueOf(service.getFatigue(uuid));
+            case "fatigue_efficiency" -> {
+                double eff = service.getFatigueEfficiency(uuid);
+                yield String.format("%.0f%%", eff * 100);
+            }
             default -> null;
         };
     }

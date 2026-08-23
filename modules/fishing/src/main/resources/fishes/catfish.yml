@@ -25,10 +25,13 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
   - type: smooth               # 平滑型：鱼缓慢平稳移动
     weight: 0.3                # 权重0.3（次要行为）
 
-# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# ─── 小游戏机制（可选，覆盖全局曲线的 base-rate） ──────────
 # 鲶鱼是稀有鱼，难度较高，进度衰减快，逃离频繁
-progress-drain-rate: 0.7       # 鱼在绿条外时进度下降快（全局默认0.5）
-progress-gain-rate: 0.9        # 鱼在绿条内时进度上升稍慢（全局默认1.0）
+# 仅覆盖 base-rate，formula 沿用全局曲线公式（全局默认 gain=0.01, drain=0.02）
+progress-drain:
+  base-rate: 0.028             # 鱼在绿条外时进度下降快（全局默认0.02）
+progress-gain:
+  base-rate: 0.009             # 鱼在绿条内时进度上升稍慢（全局默认0.01）
 flee-params:
   base-chance: 0.35            # 逃离概率高（全局默认0.25）
   chance-per-difficulty: 0.30  # 每点难度逃离概率增长更多（全局默认0.25）
