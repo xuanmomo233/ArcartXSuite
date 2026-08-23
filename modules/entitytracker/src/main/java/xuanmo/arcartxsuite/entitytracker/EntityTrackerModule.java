@@ -85,24 +85,58 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("entitytracker")
             .name("EntityTracker")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXEntityTracker.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("boss")
+                    .dynamicSection("attack-target")
+                .build())
+            .currentVersion(4)
+            .validations(List.of(
+                    // Boss追踪刷新间隔
+                    ValidationRule.of("boss.update-interval-ticks", ValueType.INT)
+                        .withRange(1, null),
+                    // 目标HUD刷新间隔
+                    ValidationRule.of("attack-target.refresh-interval-ticks", ValueType.INT)
+                        .withRange(1, null)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(BOSS_UI_RESOURCE_PATH, BOSS_UI_FILE_PATH);
+        mappings.put(TARGET_UI_RESOURCE_PATH, TARGET_UI_FILE_PATH);
+        mappings.put(REWARD_MANAGER_UI_RESOURCE_PATH, REWARD_MANAGER_UI_FILE_PATH);
+        mappings.put(REWARD_EDITOR_UI_RESOURCE_PATH, REWARD_EDITOR_UI_FILE_PATH);
+        mappings.put(REWARD_HISTORY_UI_RESOURCE_PATH, REWARD_HISTORY_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFile());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        if (rewardService == null) return PacketHandlerSpec.NONE;
+        String managerUiId = getModuleUiId(REWARD_MANAGER_UI_FILE_PATH);
+        String editorUiId = getModuleUiId(REWARD_EDITOR_UI_FILE_PATH);
+        String historyUiId = getModuleUiId(REWARD_HISTORY_UI_FILE_PATH);
+        rewardPacketHandler = new xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler(
+            plugin, packetBridge, packetGuard,
+            rewardService, rewardScheduler,
+            () -> configuration,
+            managerUiId, editorUiId, historyUiId,
+            dataFolder, logger
+        );
+        return PacketHandlerSpec.of(rewardPacketHandler, 0, "AXS_ENTITY_TRACKER_REWARD", "entitytracker");
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -349,12 +383,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         targetConfiguration = null;
     }
 
-    
-
-    
-
-    
-
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
         return new EntityTrackerPlaceholderExpansion(
@@ -526,5 +554,4 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

@@ -56,25 +56,50 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("onlinerewards")
             .name("OnlineRewards")
-            .version("1.4.0")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .externalDepends(List.of("PlaceholderAPI"))
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXOnlineRewards.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("weekly-rewards")
+                    .dynamicSection("monthly-rewards")
+                    .dynamicSection("server-sign-in-goal.targets")
+                .build())
+            .currentVersion(4)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared: false 时生效）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100),
+                    // 离线储蓄上限
+                    ValidationRule.of("offline-savings.max-minutes", ValueType.INT)
+                        .withRange(0, 1440),
+                    // 离线储蓄存储率
+                    ValidationRule.of("offline-savings.storage-rate", ValueType.DOUBLE)
+                        .withRange(0.0, 1.0)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        return new ModuleUiSpec(Map.of(OnlineRewardsService.MENU_UI_RESOURCE_PATH, OnlineRewardsService.MENU_UI_FILE_PATH), configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -154,6 +179,10 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         service.setItemSourceRegistry(itemSourceRegistry);
         service.setItemRewardDispatcher(itemRewardDispatcher);
         service.start();
+        // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
+        for (String uiId : service.registeredUiIds()) {
+            recordExternalUi(uiId, uiId);
+        }
 
         registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {
             @Override public boolean hasSignedToday(@NotNull java.util.UUID playerUuid) { return service.hasSignedTodayPublic(playerUuid); }
@@ -233,8 +262,6 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         };
     }
 
-    
-
     /**
      * 返回当前在线奖励服务实例。
      *
@@ -262,5 +289,4 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

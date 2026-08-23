@@ -350,29 +350,29 @@ client-packet-guard:
       mode: "silent"
       actions:
         equip:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
         unequip:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
         unequip_group:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
         unequip_all:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
         hide:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
         unhide:
-          window-ms: 1500
-          max-hits: 1
-          mode: "notify"
+          window-ms: 800
+          max-hits: 2
+          mode: "silent"
     mail:
       window-ms: 1000
       max-hits: 4
@@ -381,19 +381,19 @@ client-packet-guard:
         compose-send:
           window-ms: 5000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         claimall:
           window-ms: 5000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         deleteall:
           window-ms: 5000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         cdk:
           window-ms: 3000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
     questgps:
       window-ms: 500
       max-hits: 4
@@ -415,19 +415,19 @@ client-packet-guard:
         unlock_anchor:
           window-ms: 3000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         teleport_anchor:
           window-ms: 3000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         create_waypoint:
           window-ms: 2000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
         delete_waypoint:
           window-ms: 2000
           max-hits: 1
-          mode: "notify"
+          mode: "silent"
     announcer:
       actions:
         click:

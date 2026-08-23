@@ -41,7 +41,7 @@ import xuanmo.arcartxsuite.battlepass.storage.JdbcBattlePassRepository;
  */
 public final class BattlePassModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final String MODULE_VERSION = "1.4.0";
+    private static final String MODULE_VERSION = "1.4.4";
 
     private static final String MAIN_UI_RESOURCE_PATH = "arcartx/ui/battlepass_main.yml";
     private static final String MAIN_UI_FILE_PATH = "ui/battlepass_main.yml";
@@ -72,19 +72,55 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXBattlePass.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.strict())
+            .currentVersion(6)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.required("season.season-id", ValueType.STRING),
+                    ValidationRule.required("season.max-level", ValueType.INT)
+                        .withRange(1, 10000)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(MAIN_UI_RESOURCE_PATH, MAIN_UI_FILE_PATH);
+        mappings.put(TASKS_UI_RESOURCE_PATH, TASKS_UI_FILE_PATH);
+        mappings.put(REWARDS_UI_RESOURCE_PATH, REWARDS_UI_FILE_PATH);
+        mappings.put(SETTLEMENT_UI_RESOURCE_PATH, SETTLEMENT_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        if (service == null) return PacketHandlerSpec.NONE;
+        String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
+        String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
+        String rewardsUiId = getModuleUiId(REWARDS_UI_FILE_PATH);
+        String settlementUiId = getModuleUiId(SETTLEMENT_UI_FILE_PATH);
+        packetHandler = new BattlePassPacketHandler(
+            plugin,
+            packetBridge,
+            packetGuard,
+            service,
+            mainUiId != null ? mainUiId : configuration.ui().mainId(),
+            tasksUiId != null ? tasksUiId : configuration.ui().tasksId(),
+            rewardsUiId != null ? rewardsUiId : configuration.ui().rewardsId(),
+            settlementUiId != null ? settlementUiId : configuration.ui().settlementId(),
+            itemSourceRegistry,
+            itemStackBridge,
+            this::msg
+        );
+        service.setUiRefreshListener(packetHandler::onServiceRefresh);
+        return PacketHandlerSpec.of(packetHandler, 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -228,8 +264,6 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return new BattlePassPlaceholderExpansion(plugin, () -> service);
     }
 
-    
-
     // ─── ModuleCommandHandler（/axs battlepass）───────────────────
 
     @Override public String commandId() { return "battlepass"; }
@@ -257,5 +291,4 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return prefix + mp.get(key, args);
     }
 }
-
 

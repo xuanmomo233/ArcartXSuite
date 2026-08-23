@@ -301,6 +301,15 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         }
     }
 
+    /**
+     * 返回已注册到 ArcartX 的 UI ID 列表（供 Module 记录到基类生命周期管理）。
+     *
+     * @return 已注册的 UI ID 列表，未注册时返回空列表
+     */
+    public java.util.List<String> registeredUiIds() {
+        return !registeredUiId.isBlank() ? java.util.List.of(registeredUiId) : java.util.List.of();
+    }
+
     private void bindUi() throws Exception {
         File uiFile = uiResourceExporter.export(UI_RESOURCE_PATH, UI_FILE_PATH, configuration.ui().overwriteUiFiles());
         if (packetBridge == null || !configuration.ui().registerUiOnEnable()) {
@@ -640,7 +649,8 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
                 ? "" : safe(data.get(data.size() - 1));
             if (tokenized && (suppliedToken.isBlank()
                 || !suppliedToken.equals(actionTokens.get(player.getUniqueId())))) {
-                sendMessage(player, false, message("extra-backpack.action-token-invalid"));
+                // token 检查失败（并发冲突/token 轮换在途/模块重载后 token 丢失）静默丢弃，
+                // 不再提示"操作令牌无效"——这些场景对正常玩家都是误报，UI 防抖会阻止重复点击。
                 return true;
             }
             try {

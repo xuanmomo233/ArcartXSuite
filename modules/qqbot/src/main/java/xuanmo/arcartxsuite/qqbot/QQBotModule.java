@@ -61,23 +61,64 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("qqbot")
             .name("QQBot")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .softDepends(List.of("chat"))
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXQQBot.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("groups")
+                    .dynamicSection("custom-commands")
+                    .dynamicSection("prizes")
+                    .dynamicSection("scheduled-messages")
+                    .dynamicSection("auto-reply.rules")
+                .build())
+            .currentVersion(4)
+            .validations(List.of(
+                    ValidationRule.required("onebot.ws-url", ValueType.STRING),
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // 签到积分
+                    ValidationRule.of("signin.base-points", ValueType.INT).withRange(0, 100000),
+                    ValidationRule.of("signin.streak-bonus", ValueType.INT).withRange(0, 100000),
+                    ValidationRule.of("signin.max-streak-bonus", ValueType.INT).withRange(0, 1000000),
+                    // 监控告警
+                    ValidationRule.of("monitor.tps-threshold", ValueType.DOUBLE).withRange(0.0, 20.0),
+                    ValidationRule.of("monitor.memory-threshold-percent", ValueType.INT).withRange(1, 100),
+                    ValidationRule.of("monitor.check-interval-seconds", ValueType.INT).withRange(5, 86400)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        return new ModuleUiSpec(Map.of(
+            QQBotUiService.BIND_UI_RESOURCE, QQBotUiService.BIND_UI_FILE,
+            QQBotUiService.NOTIFY_UI_RESOURCE, QQBotUiService.NOTIFY_UI_FILE,
+            QQBotUiService.ADMIN_UI_RESOURCE, QQBotUiService.ADMIN_UI_FILE
+        ), configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (uiService == null || data == null || data.isEmpty()) return false;
+            String action = data.get(0);
+            List<String> params = data.size() > 1 ? data.subList(1, data.size()) : List.of();
+            if ("AXS_qqbot".equals(packetId)) {
+                return uiService.handleBindPacket(player, action, params);
+            }
+            if ("AXS_qqbot_admin".equals(packetId)) {
+                return uiService.handleAdminPacket(player, action, params);
+            }
+            return false;
+        }, 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -386,10 +427,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 
-    
-
-    
-
     public QQBotUiService getUiService() {
         return uiService;
     }
@@ -499,5 +536,4 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 }
-
 

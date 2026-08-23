@@ -44,7 +44,7 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("tooltip")
             .name("Tooltip")
-            .version("1.0.0")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }

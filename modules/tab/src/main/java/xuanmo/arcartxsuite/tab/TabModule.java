@@ -50,22 +50,43 @@ public final class TabModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("tab")
             .name("Tab")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXTab.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                .dynamicSection("tabs")
+                .build())
+            .validations(List.of(
+                // 服务端ID不能为空
+                ValidationRule.required("settings.server-id", ValueType.STRING),
+                ValidationRule.of("settings.stale-snapshot-ms", ValueType.LONG)
+                    .withRange(1000, null),
+                ValidationRule.of("cross-server.enabled", ValueType.BOOLEAN)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(TAB_UI_RESOURCE_PATH, TAB_UI_FILE_PATH);
+        mappings.put(TAB_RICH_UI_RESOURCE_PATH, TAB_RICH_UI_FILE_PATH);
+        mappings.put(TAB_ARENA_UI_RESOURCE_PATH, TAB_ARENA_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFile());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) ->
+            service != null && service.handleClientRefreshPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -144,8 +165,6 @@ public final class TabModule extends AbstractAXSModule {
         TabPlayerCommand cmd = new TabPlayerCommand(() -> service, () -> snapshotStore, messages());
         return Map.of("axstab", (TabExecutor) cmd);
     }
-
-    
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
@@ -282,5 +301,4 @@ public final class TabModule extends AbstractAXSModule {
         return bindings;
     }
 }
-
 

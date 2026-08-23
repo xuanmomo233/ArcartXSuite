@@ -16,9 +16,21 @@ ui:
   show: true
   screenScale: true
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     load: |-
       var.sessionId = none
       var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       var.baseFee = '0'
       var.vaultTaxRate = '0'
       var.allowVault = true
@@ -96,6 +108,8 @@ ui:
           }
         }
       }
+      // init 包到达，重置防抖标志，恢复按钮可点击
+      var.actionBusy = false
     # packetHandler: update
     # 包字段:
     #   - base_fee: 基础邮费金额
@@ -121,6 +135,8 @@ ui:
       var.attachmentCount = packet['attachment_count']
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.totalFeeCurrency = packet['total_fee_currency']
+      // update 包到达，重置防抖标志，恢复按钮可点击
+      var.actionBusy = false
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
@@ -531,9 +547,11 @@ controls:
                 attribute:
                   width: 180
                   height: 48
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
-                     Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
+                    var.actionBusy = true
+                    Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
                 children:
                   发送背景:
                     type: Texture

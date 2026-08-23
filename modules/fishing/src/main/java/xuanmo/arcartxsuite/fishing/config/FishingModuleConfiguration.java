@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +30,13 @@ import xuanmo.arcartxsuite.fishing.model.FishRarity;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
-import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
+import xuanmo.arcartxsuite.api.util.PointInPolygon;
 
 /**
- * 钓鱼模块的完整配置快照，由主 yml 与附属目录（fishes/treasures/baits/rods）加载而成。
+ * 钓鱼模块的完整配置快照，由主 yml 与附属目录（fishes/treasures/baits/rods/waters）加载而成。
  * <p>
  * 关联模块：{@code fishing}。包含存储、钓鱼设置、鱼/宝藏/鱼饵/鱼竿定义、
- * 水域、奖池、UI 与命令配置等全部运行时所需的不可变数据。
+ * 水域、UI 与命令配置等全部运行时所需的不可变数据。
  *
  * @param storage         存储配置（SQLite/MySQL 连接参数）
  * @param fishing         钓鱼基础设置（是否替换原版、小游戏 tick 间隔等）
@@ -43,10 +44,8 @@ import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
  * @param treasures       宝藏定义列表
  * @param baits           鱼饵定义列表
  * @param rods            鱼竿定义列表
- * @param specifiedWaters 显式声明的水域列表
- * @param defaultWater    默认水域（未命中任何指定水域时使用）
- * @param fishPools       鱼池映射（池名 → 鱼种 id 列表）
- * @param treasurePools   宝藏池映射（池名 → 宝藏 id 列表）
+ * @param specifiedWaters 显式声明的水域列表（从 waters/ 目录加载，不含默认水域）
+ * @param defaultWater    默认水域（water-default.yml，未命中任何指定水域时使用）
  * @param ui              UI 配置（小游戏/图鉴界面 id 等）
  * @param commands        命令配置
  * @param crossServer     跨服通道配置（多服架构下同步捕获记录等）
@@ -62,13 +61,65 @@ public record FishingModuleConfiguration(
     @NotNull List<RodDefinition> rods,
     @NotNull List<WaterArea> specifiedWaters,
     @NotNull WaterArea defaultWater,
-    @NotNull Map<String, List<String>> fishPools,
-    @NotNull Map<String, List<String>> treasurePools,
     @NotNull UiConfiguration ui,
     @NotNull CommandsConfiguration commands,
     @NotNull CrossServerChannelConfig crossServer,
     boolean debug
 ) {
+
+    // ─── 索引 Map（懒加载，供 O(1) 查找） ────────────────────────
+    // record 不允许实例字段，用 ThreadLocal 持有懒加载缓存
+    private static final java.util.concurrent.ConcurrentHashMap<FishingModuleConfiguration, IndexHolder> INDEX_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final class IndexHolder {
+        final Map<String, FishDefinition> fishIndex;
+        final Map<String, BaitDefinition> baitIndex;
+        final Map<String, RodDefinition> rodIndex;
+        final Map<String, TreasureDefinition> treasureIndex;
+
+        IndexHolder(FishingModuleConfiguration cfg) {
+            Map<String, FishDefinition> fi = new HashMap<>();
+            for (FishDefinition f : cfg.fishes) fi.put(f.id(), f);
+            this.fishIndex = Collections.unmodifiableMap(fi);
+
+            Map<String, BaitDefinition> bi = new HashMap<>();
+            for (BaitDefinition b : cfg.baits) bi.put(b.id(), b);
+            this.baitIndex = Collections.unmodifiableMap(bi);
+
+            Map<String, RodDefinition> ri = new HashMap<>();
+            for (RodDefinition r : cfg.rods) ri.put(r.id(), r);
+            this.rodIndex = Collections.unmodifiableMap(ri);
+
+            Map<String, TreasureDefinition> ti = new HashMap<>();
+            for (TreasureDefinition t : cfg.treasures) ti.put(t.id(), t);
+            this.treasureIndex = Collections.unmodifiableMap(ti);
+        }
+    }
+
+    private IndexHolder indexHolder() {
+        return INDEX_CACHE.computeIfAbsent(this, IndexHolder::new);
+    }
+
+    /** 按 ID 查找鱼种定义（O(1)）。 */
+    public @Nullable FishDefinition findFish(@NotNull String id) {
+        return indexHolder().fishIndex.get(id);
+    }
+
+    /** 按 ID 查找饵料定义（O(1)）。 */
+    public @Nullable BaitDefinition findBait(@NotNull String id) {
+        return indexHolder().baitIndex.get(id);
+    }
+
+    /** 按 ID 查找鱼竿定义（O(1)）。 */
+    public @Nullable RodDefinition findRod(@NotNull String id) {
+        return indexHolder().rodIndex.get(id);
+    }
+
+    /** 按 ID 查找宝藏定义（O(1)）。 */
+    public @Nullable TreasureDefinition findTreasure(@NotNull String id) {
+        return indexHolder().treasureIndex.get(id);
+    }
 
     public static FishingModuleConfiguration load(FileConfiguration yaml, File dataFolder, Logger logger) {
         return load(yaml, dataFolder, logger, null);
@@ -81,12 +132,20 @@ public record FishingModuleConfiguration(
         List<BaitDefinition> baits = loadBaitsFromDir(new File(dataFolder, "baits"), logger);
         List<RodDefinition> rods = loadRodsFromDir(new File(dataFolder, "rods"), logger);
 
-        ConfigurationSection watersSection = yaml.getConfigurationSection("waters");
-        List<WaterArea> specified = loadSpecifiedWaters(watersSection);
-        WaterArea defaultWater = loadDefaultWater(watersSection);
-
-        Map<String, List<String>> fishPools = loadPools(yaml.getConfigurationSection("fish-pools"));
-        Map<String, List<String>> treasurePools = loadPools(yaml.getConfigurationSection("treasure-pools"));
+        // 从 waters/ 目录加载水域文件
+        WaterArea[] waterAreas = loadWatersFromDir(new File(dataFolder, "waters"), logger);
+        List<WaterArea> specified = new ArrayList<>();
+        WaterArea defaultWater = null;
+        for (WaterArea wa : waterAreas) {
+            if (wa.isDefault()) {
+                defaultWater = wa;
+            } else if (wa.enabled()) {
+                specified.add(wa);
+            }
+        }
+        if (defaultWater == null) {
+            defaultWater = createFallbackDefaultWater();
+        }
 
         return new FishingModuleConfiguration(
             StorageConfiguration.load(yaml.getConfigurationSection("storage")),
@@ -98,8 +157,6 @@ public record FishingModuleConfiguration(
             Collections.unmodifiableList(rods),
             Collections.unmodifiableList(specified),
             defaultWater,
-            Collections.unmodifiableMap(fishPools),
-            Collections.unmodifiableMap(treasurePools),
             UiConfiguration.load(yaml.getConfigurationSection("ui")),
             CommandsConfiguration.load(yaml.getConfigurationSection("commands")),
             CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server")),
@@ -144,8 +201,6 @@ public record FishingModuleConfiguration(
         if (seasons.isEmpty()) seasons = List.of("spring", "summer", "fall", "winter");
         List<String> weathers = section.getStringList("weathers");
         if (weathers.isEmpty()) weathers = List.of("clear", "rain");
-        List<String> waterTypes = section.getStringList("water-types");
-        if (waterTypes.isEmpty()) waterTypes = List.of("river", "ocean", "lake");
 
         List<FishDefinition.TimeRange> timeRanges = new ArrayList<>();
         ConfigurationSection trSection = section.getConfigurationSection("time-ranges");
@@ -313,7 +368,7 @@ public record FishingModuleConfiguration(
         return FishDefinition.builder()
             .id(id).displayName(displayName).rarity(rarity)
             .minSize(minSize).maxSize(maxSize).basePrice(basePrice).baseXp(baseXp)
-            .seasons(seasons).weathers(weathers).waterTypes(waterTypes)
+            .seasons(seasons).weathers(weathers)
             .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviors(behaviors)
             .currencyReward(currencyReward)
             .progressDrainRate(progressDrainRate).progressGainRate(progressGainRate)
@@ -450,112 +505,103 @@ public record FishingModuleConfiguration(
         return IconDefinition.load(defaultMaterial);
     }
 
-    // ─── 水域解析 ─────────────────────────────────────────────
+    // ─── 水域解析（从 waters/ 目录加载） ────────────────────────
 
-    private static List<WaterArea> loadSpecifiedWaters(ConfigurationSection watersSection) {
+    /**
+     * 从 waters/ 目录加载所有水域文件（water-*.yml）。
+     * <p>
+     * 文件名格式：{@code water-<id>.yml}，其中 {@code water-default.yml} 为默认水域。
+     * 返回数组中包含所有已加载的水域（含默认水域），调用方负责分类。
+     *
+     * @param watersDir waters/ 目录
+     * @param logger    日志
+     * @return 水域数组（可能为空）
+     */
+    private static WaterArea[] loadWatersFromDir(@NotNull File watersDir, @NotNull Logger logger) {
         List<WaterArea> result = new ArrayList<>();
-        if (watersSection == null) return result;
-        ConfigurationSection specified = watersSection.getConfigurationSection("specified");
-        if (specified == null) return result;
-        for (String key : specified.getKeys(false)) {
-            ConfigurationSection ws = specified.getConfigurationSection(key);
-            if (ws == null) continue;
+        if (!watersDir.isDirectory()) return result.toArray(new WaterArea[0]);
+
+        File[] files = watersDir.listFiles((dir, name) ->
+            name.startsWith("water-") && name.endsWith(".yml"));
+        if (files == null) return result.toArray(new WaterArea[0]);
+
+        for (File file : files) {
             try {
-                result.add(parseWaterArea(ws));
+                YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+                WaterArea area = parseWaterAreaFromFile(file, yaml);
+                if (area != null) {
+                    result.add(area);
+                }
             } catch (Exception e) {
-                // skip malformed water area
+                logger.warning("加载水域文件失败: " + file.getName() + " - " + e.getMessage());
             }
         }
-        return result;
+        return result.toArray(new WaterArea[0]);
     }
 
-    private static WaterArea loadDefaultWater(ConfigurationSection watersSection) {
-        if (watersSection != null) {
-            ConfigurationSection def = watersSection.getConfigurationSection("default");
-            if (def != null) {
-                try {
-                    return parseWaterArea(def);
-                } catch (Exception ignored) {}
-            }
-        }
-        return new WaterArea("default", "&7普通水域", AreaType.DEFAULT, null,
-            null, 0, null, null, "default", "default", 1.0,
-            Map.of(), null);
-    }
+    private static @Nullable WaterArea parseWaterAreaFromFile(@NotNull File file,
+                                                               @NotNull YamlConfiguration yaml) {
+        // 从文件名提取 ID：water-dragon_lake.yml → dragon_lake
+        String fileName = file.getName();
+        String id = fileName.substring("water-".length(), fileName.length() - ".yml".length());
 
-    private static WaterArea parseWaterArea(ConfigurationSection section) {
-        String name = section.getString("name", "unknown");
-        String displayName = section.getString("display-name", name);
-        String typeStr = section.getString("type", "default").toUpperCase();
-        AreaType type;
-        try {
-            type = AreaType.valueOf(typeStr);
-        } catch (IllegalArgumentException e) {
-            type = AreaType.DEFAULT;
-        }
-        String world = section.getString("world", null);
+        String displayName = yaml.getString("display-name", id);
+        String world = yaml.getString("world", null);
         if (world != null && world.isEmpty()) world = null;
+        boolean enabled = yaml.getBoolean("enabled", true);
 
-        double[] center = null;
-        List<?> centerList = section.getList("center");
-        if (centerList != null && centerList.size() >= 3) {
-            center = new double[]{
-                ((Number) centerList.get(0)).doubleValue(),
-                ((Number) centerList.get(1)).doubleValue(),
-                ((Number) centerList.get(2)).doubleValue()
-            };
-        }
-        double radius = section.getDouble("radius", 0);
-
-        double[] min = null, max = null;
-        List<?> minList = section.getList("min");
-        if (minList != null && minList.size() >= 3) {
-            min = new double[]{
-                ((Number) minList.get(0)).doubleValue(),
-                ((Number) minList.get(1)).doubleValue(),
-                ((Number) minList.get(2)).doubleValue()
-            };
-        }
-        List<?> maxList = section.getList("max");
-        if (maxList != null && maxList.size() >= 3) {
-            max = new double[]{
-                ((Number) maxList.get(0)).doubleValue(),
-                ((Number) maxList.get(1)).doubleValue(),
-                ((Number) maxList.get(2)).doubleValue()
-            };
+        // 多边形顶点
+        List<PointInPolygon.Vertex> vertices = new ArrayList<>();
+        List<String> posList = yaml.getStringList("pos");
+        for (String pos : posList) {
+            String[] parts = pos.split(",");
+            if (parts.length >= 2) {
+                try {
+                    int x = Integer.parseInt(parts[0].trim());
+                    int z = Integer.parseInt(parts[1].trim());
+                    vertices.add(new PointInPolygon.Vertex(x, z));
+                } catch (NumberFormatException ignored) {}
+            }
         }
 
-        String fishPool = section.getString("fish-pool", "default");
-        String treasurePool = section.getString("treasure-pool", "default");
-        double diffMod = section.getDouble("difficulty-modifier", 1.0);
+        // 鱼类和宝藏列表（直接写 ID）
+        List<String> fishes = yaml.getStringList("fishes");
+        List<String> treasures = yaml.getStringList("treasures");
 
+        // 难度公式
+        String difficultyFormula = yaml.getString("difficulty-formula", "1.0");
+
+        // 等级限制
+        int minPlayerLevel = yaml.getInt("min-player-level", 0);
+        int maxPlayerLevel = yaml.getInt("max-player-level", 0);
+
+        // 饵料倍率
         Map<String, Double> baitMultipliers = new LinkedHashMap<>();
-        ConfigurationSection baitSection = section.getConfigurationSection("bait-multipliers");
+        ConfigurationSection baitSection = yaml.getConfigurationSection("bait-multipliers");
         if (baitSection != null) {
             for (String bk : baitSection.getKeys(false)) {
                 baitMultipliers.put(bk, baitSection.getDouble(bk, 1.0));
             }
         }
 
-        String requirePermission = section.getString("require-permission", null);
+        // 权限
+        String requirePermission = yaml.getString("require-permission", null);
         if (requirePermission != null && requirePermission.isEmpty()) requirePermission = null;
 
-        return new WaterArea(name, displayName, type, world, center, radius, min, max,
-            fishPool, treasurePool, diffMod, Collections.unmodifiableMap(baitMultipliers), requirePermission);
+        return new WaterArea(id, displayName, world, enabled,
+            Collections.unmodifiableList(vertices),
+            Collections.unmodifiableList(fishes),
+            Collections.unmodifiableList(treasures),
+            difficultyFormula, minPlayerLevel, maxPlayerLevel,
+            Collections.unmodifiableMap(baitMultipliers), requirePermission);
     }
 
-    // ─── 池解析 ───────────────────────────────────────────────
-
-    private static Map<String, List<String>> loadPools(ConfigurationSection section) {
-        Map<String, List<String>> result = new LinkedHashMap<>();
-        if (section == null) return result;
-        for (String key : section.getKeys(false)) {
-            List<String> ids = section.getStringList(key);
-            if (!ids.isEmpty()) {
-                result.put(key, Collections.unmodifiableList(ids));
-            }
-        }
-        return result;
+    /**
+     * 创建兜底默认水域（当 waters/ 目录不存在或无 water-default.yml 时使用）。
+     */
+    private static WaterArea createFallbackDefaultWater() {
+        return new WaterArea("default", "&7普通水域", null, true,
+            List.of(), List.of(), List.of(), "1.0", 0, 0, Map.of(), null);
     }
 
     /**

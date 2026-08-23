@@ -31,12 +31,6 @@ import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.PacketHandlerSpec;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 
-/**
- * EventPacket 模块主类，基于事件触发条件向客户端/跨服推送数据包。
- * <p>
- * 支持占位符触发、定时触发与事件触发，可联动邮件、聊天卡片、QQ Bot、
- * 任务导航、称号、字幕等多个能力。
- */
 import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.listener.ChemdahEventBridge;
 import xuanmo.arcartxsuite.eventpacket.listener.PlayerEventPacketListener;
@@ -64,20 +58,48 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("eventpacket")
             .name("EventPacket")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXEventPacket.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("scheduled-commands")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared=false 时需要）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100)
+            ))
+            .build();
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (dispatchService == null || configuration == null) {
+                return false;
+            }
+            String configuredPacketId = configuration.clientPacketId();
+            if (configuredPacketId.isBlank() || !configuredPacketId.equalsIgnoreCase(packetId)) {
+                return false;
+            }
+            String presetId = data == null || data.isEmpty() ? "" : data.get(0);
+            if (presetId.isBlank()) {
+                return false;
+            }
+            List<String> args = data == null || data.size() <= 1 ? List.of() : data.subList(1, data.size());
+            return dispatchService.dispatchClientPacket(packetId, presetId, player, args);
+        }, 100, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {

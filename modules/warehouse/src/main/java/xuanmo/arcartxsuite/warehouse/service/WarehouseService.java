@@ -282,10 +282,48 @@ public final class WarehouseService implements Listener {
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         AxsScheduler.runAsync(plugin, this::migrateSearchText);
+        // 模块重载后，向所有 UI 仍开着的在线玩家重新签发 token 并推送 update 包，
+        // 避免重载导致 token 丢失后玩家操作被静默丢弃。
+        AxsScheduler.runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
     }
 
     /**
-     * 异步迁移旧数据：检测 searchText 不含中文的槽位，
+     * 模块重载后，向所有 UI 仍开着的在线玩家重新签发 action token 并推送 update 包。
+     * <p>
+     * 重载会清空 token map，但客户端 UI 可能仍开着（var.actionToken 是旧值）。
+     * 此方法在 start() 后延迟 1 秒执行，为仍打开的 UI 重新 issue token 并推送 update，
+     * 使客户端 var.actionToken 与服务端同步。
+     */
+    private void reissueTokensForOpenUis() {
+        if (packetBridge == null) {
+            return;
+        }
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            try {
+                boolean anyOpen = false;
+                if (!storageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, storageRuntimeUiId)) {
+                    issueActionToken(player, storageRuntimeUiId);
+                    anyOpen = true;
+                }
+                if (!manageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, manageRuntimeUiId)) {
+                    issueActionToken(player, manageRuntimeUiId);
+                    anyOpen = true;
+                }
+                if (!bankRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, bankRuntimeUiId)) {
+                    issueActionToken(player, bankRuntimeUiId);
+                    anyOpen = true;
+                }
+                if (anyOpen) {
+                    refreshBoth(player);
+                    debug("reissue-tokens player=" + player.getName() + " (reload recovery)");
+                }
+            } catch (Exception exception) {
+                debug("reissue-tokens-failed player=" + player.getName() + " error=" + exception.getMessage());
+            }
+        }
+    }
+
+    /**
      * 反序列化 itemData 重新计算 searchText/pinyin/initials 并 UPDATE。
      */
     private void migrateSearchText() {
@@ -394,6 +432,19 @@ public final class WarehouseService implements Listener {
 
     public String runtimeUiId() {
         return storageRuntimeUiId;
+    }
+
+    /**
+     * 返回已注册到 ArcartX 的 UI ID 列表（供 Module 记录到基类生命周期管理）。
+     *
+     * @return 已注册的 UI ID 列表，未注册的条目自动跳过
+     */
+    public java.util.List<String> registeredUiIds() {
+        java.util.List<String> ids = new java.util.ArrayList<>(3);
+        if (!storageRegisteredUiId.isBlank()) ids.add(storageRegisteredUiId);
+        if (!manageRegisteredUiId.isBlank()) ids.add(manageRegisteredUiId);
+        if (!bankRegisteredUiId.isBlank()) ids.add(bankRegisteredUiId);
+        return java.util.List.copyOf(ids);
     }
 
     /**
@@ -614,7 +665,9 @@ public final class WarehouseService implements Listener {
         }
         TokenLease tokenLease = beginActionToken(player, action, data);
         if (requiresActionToken(action) && tokenLease == null) {
-            sendMessage(player, false, message("player.action-token-invalid"));
+            // token 检查失败（并发冲突/token 轮换在途/模块重载后 token 丢失）静默丢弃，
+            // 不再提示"操作令牌无效"——这些场景对正常玩家都是误报，UI 防抖会阻止重复点击。
+            debug("token-check-failed player=" + player.getName() + " action=" + action + " (silent drop)");
             return true;
         }
         try {
@@ -638,7 +691,22 @@ public final class WarehouseService implements Listener {
                 case "open", "storage" -> openStorage(player);
                 case "manage" -> openManage(player);
                 case "bank" -> openBank(player);
-                case "refresh" -> refreshBoth(player);
+                case "refresh" -> {
+                    // 刷新时重新签发 action token，使客户端 var.actionToken 与服务端同步，
+                    // 作为玩家遇到 token 失效时的手动恢复手段。
+                    if (packetBridge != null) {
+                        if (!storageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, storageRuntimeUiId)) {
+                            issueActionToken(player, storageRuntimeUiId);
+                        }
+                        if (!manageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, manageRuntimeUiId)) {
+                            issueActionToken(player, manageRuntimeUiId);
+                        }
+                        if (!bankRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, bankRuntimeUiId)) {
+                            issueActionToken(player, bankRuntimeUiId);
+                        }
+                    }
+                    refreshBoth(player);
+                }
                 case "showcase" -> {
                     ActionResult result = showcase(player);
                     if (!result.success()) {
@@ -1717,6 +1785,12 @@ public final class WarehouseService implements Listener {
                 sendMessage(player, true, message("player.deposit-notify", state.autoPickupNotify() ? message("player.enabled") : message("player.disabled")));
             }
         }
+        // 持久化到数据库，玩家重上线后保持设置
+        try {
+            repository.savePlayerSettings(player.getUniqueId(), state.autoPickup(), state.autoPickupMythic(), state.autoPickupNotify(), System.currentTimeMillis());
+        } catch (Exception exception) {
+            debug("save-player-settings-failed player=" + player.getName() + " error=" + exception.getMessage());
+        }
         markActionCommitted(player);
         refreshBoth(player);
     }
@@ -2635,12 +2709,25 @@ public final class WarehouseService implements Listener {
     }
 
     private ViewState state(Player player) {
-        return viewStates.computeIfAbsent(player.getUniqueId(), ignored -> ViewState.initial(player,
-            configuration.pickup().autoStoreOnPickup(),
-            configuration.pickup().autoStoreMythicLoot(),
-            configuration.pickup().notifyOnAutoStore(),
-            configuration.bankCurrencies().stream().findFirst().orElse("money"),
-            configuration.search().defaultSortId()));
+        return viewStates.computeIfAbsent(player.getUniqueId(), ignored -> {
+            // 优先从数据库加载玩家个人设置，没有记录时回退到 config.yml 全局默认值
+            boolean autoPickup = configuration.pickup().autoStoreOnPickup();
+            boolean autoMythic = configuration.pickup().autoStoreMythicLoot();
+            boolean autoNotify = configuration.pickup().notifyOnAutoStore();
+            try {
+                var settings = repository.loadPlayerSettings(player.getUniqueId());
+                if (settings.isPresent()) {
+                    autoPickup = settings.get().autoPickup();
+                    autoMythic = settings.get().autoMythic();
+                    autoNotify = settings.get().autoNotify();
+                }
+            } catch (Exception exception) {
+                debug("load-player-settings-failed player=" + player.getName() + " error=" + exception.getMessage());
+            }
+            return ViewState.initial(player, autoPickup, autoMythic, autoNotify,
+                configuration.bankCurrencies().stream().findFirst().orElse("money"),
+                configuration.search().defaultSortId());
+        });
     }
 
     private List<WarehouseRecord> personalRecords(UUID playerUuid) throws Exception {

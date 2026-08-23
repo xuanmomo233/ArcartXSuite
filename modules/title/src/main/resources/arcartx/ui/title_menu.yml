@@ -12,6 +12,16 @@ ui:
   through: false
   screenScale: true
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     load: |-
       var.titles = {}
       var.groups = {}
@@ -64,6 +74,8 @@ ui:
       var.qualityScrollRatio = 0
       var.detailScrollRatio = 0
       var.rightScrollRatio = 0
+      var.actionBusy = false
+      var.actionBusySeconds = 0
   packetHandler:
     # packetHandler: init
     # 首次接收后端数据包时执行，初始化所有界面变量。
@@ -233,6 +245,8 @@ ui:
       var.qualityScrollRatio = 0
       var.detailScrollRatio = 0
       var.rightScrollRatio = 0
+      // init 包到达，重置防抖标志，恢复按钮可点击
+      var.actionBusy = false
     # packetHandler: update
     # 后端推送更新时执行，字段与 init 完全相同，用于刷新界面变量。
     # 包字段: 同 init（titles/groups/qualities/sets/equipped_by_group/filter_modes/selected_* 等全部字段）
@@ -356,6 +370,8 @@ ui:
           }
         }
       }
+      // update 包到达，重置防抖标志，恢复按钮可点击
+      var.actionBusy = false
 controls:
   自适应全局布局:
     type: Adaptive
@@ -1091,12 +1107,14 @@ controls:
                   shape: ~round_rect
                   radius: 14
                   visible: var.selectedCanEquip
+                  enable: "!var.actionBusy"
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
                 children:
                   装备按钮文字:
@@ -1117,12 +1135,14 @@ controls:
                   shape: ~round_rect
                   radius: 14
                   visible: var.selectedIsEquipped
+                  enable: "!var.actionBusy"
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
                 children:
                   卸下本组按钮文字:
@@ -1151,12 +1171,14 @@ controls:
                   normal: ~150,150,150,255
                   shape: ~round_rect
                   radius: 14
+                  enable: "!var.actionBusy"
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unequip_all')
                 children:
                   全部卸下按钮文字:
@@ -1177,12 +1199,14 @@ controls:
                   shape: ~round_rect
                   radius: 14
                   visible: var.selectedOwned && !var.selectedHidden
+                  enable: "!var.actionBusy"
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
                 children:
                   隐藏按钮文字:
@@ -1203,12 +1227,14 @@ controls:
                   shape: ~round_rect
                   radius: 14
                   visible: var.selectedOwned && var.selectedHidden
+                  enable: "!var.actionBusy"
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
                 children:
                   取消隐藏按钮文字:

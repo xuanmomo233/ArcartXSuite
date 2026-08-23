@@ -57,31 +57,46 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("questgps")
             .name("QuestGPS")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    /** @return 主配置文件名 */
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXQuestGPS.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("categories")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.required("ui.packet-id", ValueType.STRING),
+                    ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.mode", ValueType.STRING),
+                    ValidationRule.of("database.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("discovery.mode", ValueType.STRING),
+                    ValidationRule.of("navigation.path-max-iterations", ValueType.INT).withRange(100, 50000),
+                    ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
+            ))
+            .build();
+    }
 
-    /** @return 当前配置文件版本号（用于迁移脚本识别版本） */
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(QuestGpsService.MENU_UI_RESOURCE_PATH, QuestGpsService.MENU_UI_FILE_PATH);
+        mappings.put(QuestGpsService.GUIDE_UI_RESOURCE_PATH, QuestGpsService.GUIDE_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    /** @return 消息文件名 */
-    
-
-    /** @return 默认配置同步策略，允许 {@code categories} 段动态新增 */
-    
-
-    /** @return 主配置文件的校验规则列表 */
-    
-
-    /** @return UI 资源文件到目标路径的映射 */
-    
-
-    /** @return 是否在启用时覆盖已存在的 UI 文件 */
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     /**
      * 加载并解析主配置文件，初始化任务目录与 MySQL 数据库。
@@ -255,9 +270,6 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return Map.of("questgps", (TabExecutor) cmd);
     }
 
-    /** @return 客户端数据包处理器，委托给 {@link QuestGpsService#handleClientPacket} */
-    
-
     /** @return 当前运行中的 {@link QuestGpsService} 实例，未启动时为 {@code null} */
     public QuestGpsService getService() {
         return service;
@@ -289,5 +301,4 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

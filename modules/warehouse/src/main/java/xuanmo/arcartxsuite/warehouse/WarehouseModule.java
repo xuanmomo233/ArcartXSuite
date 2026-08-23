@@ -72,39 +72,62 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("warehouse")
             .name("Warehouse")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXWarehouse.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("warehouses")
+                    .dynamicSection("categories")
+                    .dynamicSection("bank.currencies")
+                    .dynamicSection("bank.deposit-products")
+                    .dynamicSection("shared")
+                    .dynamicSection("sort-profiles")
+                .build())
+            .currentVersion(3)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared: false 时生效）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100),
+                    // flush-interval-ticks 必须为正
+                    ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
+                        .withRange(1, null),
+                    // 二级密码长度限制
+                    ValidationRule.required("security.min-length", ValueType.INT)
+                        .withRange(1, 32),
+                    ValidationRule.required("security.max-length", ValueType.INT)
+                        .withRange(4, 64)
+            ))
+            .build();
+    }
 
-    /**
-     * 配置版本号：UI 配置字段名统一为 xxx-ui-id 格式（id→ui-id, manage-id→manage-ui-id, bank-id→bank-ui-id）。
-     */
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(STORAGE_UI_RESOURCE_PATH, STORAGE_UI_FILE_PATH);
+        mappings.put(MANAGE_UI_RESOURCE_PATH, MANAGE_UI_FILE_PATH);
+        mappings.put(BANK_UI_RESOURCE_PATH, BANK_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    /**
-     * 消息文件名称，位于模块配置目录下。
-     * 通过 {@link #messages()} 获取的 {@link MessageProvider} 支持 {@code &} 颜色码和 {@code {0}} 占位符。
-     */
-
-    
-
-    /**
-     * 声明动态配置节：这些节由用户自由增删，ConfigDiagnosticEngine 不会覆盖其结构。
-     * 包括仓库定义、分类、货币、定期产品、共享仓库和排序方案。
-     */
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, configuration == null ? null : configuration.ui().packetId(), "warehouse");
+    }
 
     /**
      * 配置校验规则。字段类型/范围/枚举不匹配时，诊断引擎会提示并可通过 {@code /axs config apply warehouse} 修复。
      */
-    
-
-    
-
-    
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -168,6 +191,10 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setPickupInterceptorProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.PickupInterceptor.class));
         service.start();
+        // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
+        for (String uiId : service.registeredUiIds()) {
+            recordExternalUi(uiId, uiId);
+        }
 
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 
@@ -242,11 +269,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     /**
      * 注册客户端包处理器，处理包 ID 为 {@code AXS_WAREHOUSE} 的客户端操作请求。
      */
-    
-
-    
-
-    
 
     public WarehouseService getService() {
         return service;

@@ -1,0 +1,43 @@
+# 默认水域配置
+# 未命中任何指定水域（water-*.yml）时使用此水域。
+# 此文件无 pos 多边形边界，匹配所有位置。
+
+# 显示名称（支持颜色代码）
+display-name: "&7普通水域"
+
+# 所在世界（留空 = 不限世界）
+world: ""
+
+# 是否启用
+enabled: true
+
+# 无 pos 节 = 默认水域（匹配所有未命中指定水域的位置）
+
+# 鱼类列表（直接引用 fishes/ 目录下的鱼种 ID）
+fishes:
+  - "sea_bass"
+  - "salmon"
+
+# 宝藏列表（直接引用 treasures/ 目录下的宝藏 ID）
+treasures:
+  - "old_boot"
+  - "lost_ring"
+
+# 难度修正公式（ARIA 表达式，变量 global.level = 玩家钓鱼等级）
+# 1.0 = 不修正；随等级提升可写如 "1.0 + 0.005 * global.level"
+difficulty-formula: "1.0"
+
+# 最低钓鱼等级（低于此等级无法在此水域钓鱼，0 = 不限）
+min-player-level: 0
+
+# 最高钓鱼等级（高于此等级无法在此水域钓鱼，防高等级刷低级鱼，0 = 不限）
+max-player-level: 0
+
+# 饵料在该水域的额外倍率
+bait-multipliers:
+  worm: 1.0
+  bread: 1.0
+  corn: 1.0
+
+# 进入此水域钓鱼所需权限（留空 = 无限制）
+require-permission: ""

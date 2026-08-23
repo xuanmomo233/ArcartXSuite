@@ -1,6 +1,6 @@
 id: questgps
 name: QuestGPS
-version: 1.3.2
+version: 1.4.4
 main: xuanmo.arcartxsuite.questgps.QuestGpsModule
 api-version: 1.0
 

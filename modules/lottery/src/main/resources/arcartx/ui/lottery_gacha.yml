@@ -89,6 +89,7 @@ ui:
           r['图标'].seticon()
         }
       }
+      var.actionBusy = false
     # packetHandler: update
     # 包字段与 init 相同，用于切换卡池、抽奖结束后刷新数据。
     # 额外职责: 若处于等待态但本次没有结果包（抽奖失败），解除等待态回到主面板。
@@ -141,6 +142,7 @@ ui:
         val.等待层.visible = false
         val.主面板.visible = true
       }
+      var.actionBusy = false
     # packetHandler: result（单抽结果）
     # 包字段:
     #   - resultCount: 结果数量
@@ -248,6 +250,16 @@ ui:
       }
       val.兑换面板.visible = true
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     # load 事件: 初始化星级配色、稀有度配色与界面状态变量
     load: |-
       var.starColors = {}
@@ -262,6 +274,9 @@ ui:
       var.pointBalanceRows = {}
       var.exchangeRows = {}
       var.exchangeCount = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # open 事件: 每次打开界面复位所有层
     open: |-
       var.pulling = false
@@ -652,8 +667,11 @@ controls:
                           hover: ~48,58,88,245
                           shape: ~round_rect
                           radius: 12
+                          enable: "!var.actionBusy && var.actionToken != ''"
                         action:
-                          click: "Packet.send(var.packetId, 'switch_pool', self.entryKey, var.actionToken)"
+                          click: |-
+                            var.actionBusy = true
+                            Packet.send(var.packetId, 'switch_pool', self.entryKey, var.actionToken)
                         effect:
                           stroke:
                             width: 1
@@ -1945,6 +1963,7 @@ controls:
                       hover: ~250,226,168,255
                       shape: ~round_rect
                       radius: 36
+                      enable: "!var.actionBusy && var.actionToken != ''"
                     action:
                       # 只发请求并进入等待态，结果由 result 包驱动
                       click: |-
@@ -1953,6 +1972,7 @@ controls:
                           var.resultPending = false
                           val.主面板.visible = false
                           val.等待层.visible = true
+                          var.actionBusy = true
                           Packet.send(var.packetId, 'pull', 1, var.actionToken)
                         }
                     effect:
@@ -2071,6 +2091,7 @@ controls:
                       hover: ~250,226,168,255
                       shape: ~round_rect
                       radius: 36
+                      enable: "!var.actionBusy && var.actionToken != ''"
                     action:
                       click: |-
                         if(var.pulling != true){
@@ -2078,6 +2099,7 @@ controls:
                           var.resultPending = false
                           val.主面板.visible = false
                           val.等待层.visible = true
+                          var.actionBusy = true
                           Packet.send(var.packetId, 'pull', 10, var.actionToken)
                         }
                     effect:
@@ -2430,6 +2452,7 @@ controls:
               y: 320
               width: 200
               height: 64
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               click: |-
                 if(var.pulling != true){
@@ -2437,6 +2460,7 @@ controls:
                   var.resultPending = false
                   val.单抽结果层.visible = false
                   val.等待层.visible = true
+                  var.actionBusy = true
                   Packet.send(var.packetId, 'pull', 1, var.actionToken)
                 }
             children:
@@ -2674,6 +2698,7 @@ controls:
               width: 200
               height: 64
               visible: "var.tenAvailable != false"
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               click: |-
                 if(var.pulling != true){
@@ -2681,6 +2706,7 @@ controls:
                   var.resultPending = false
                   val.十连结果层.visible = false
                   val.等待层.visible = true
+                  var.actionBusy = true
                   Packet.send(var.packetId, 'pull', 10, var.actionToken)
                 }
             children:
@@ -3365,6 +3391,7 @@ controls:
                           texts: "var.exchangeRows != none && var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '&f兑换' : '&7已达上限'"
                           center: true
                           fontSize: 34
+                          enable: "!var.actionBusy && var.actionToken != ''"
                         effect:
                           stroke:
                             width: 2
@@ -3372,6 +3399,7 @@ controls:
                         action:
                           click: |-
                             if(var.exchangeRows != none && var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] != none && var.exchangeRows[self.entryKey]['canExchange'] == true){
+                              var.actionBusy = true
                               Packet.send(var.packetId, 'exchange_buy', var.exchangeRows[self.entryKey]['id'], var.actionToken)
                             }
           兑换空态:

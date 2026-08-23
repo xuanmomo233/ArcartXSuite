@@ -85,24 +85,58 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("fishing")
             .name("Fishing")
-            .version("1.1.0")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXFishing.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("fishes")
+                    .dynamicSection("treasures")
+                .build())
+            .currentVersion(5)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.required("fishing.replace-vanilla", ValueType.BOOLEAN),
+                    ValidationRule.required("fishing.minigame-tick-interval", ValueType.INT)
+                        .withRange(1, 20)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(MAIN_UI_RESOURCE, MAIN_UI_FILE);
+        mappings.put(MINIGAME_UI_RESOURCE, MINIGAME_UI_FILE);
+        mappings.put(COLLECTION_UI_RESOURCE, COLLECTION_UI_FILE);
+        mappings.put(TALENTS_UI_RESOURCE, TALENTS_UI_FILE);
+        mappings.put(REWARDS_UI_RESOURCE, REWARDS_UI_FILE);
+        mappings.put(TASKS_UI_RESOURCE, TASKS_UI_FILE);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        if (service == null) return PacketHandlerSpec.NONE;
+        return PacketHandlerSpec.of(new FishingPacketHandler(
+            player -> {
+                if (service == null) return null;
+                return service.getActiveMinigame(player.getUniqueId());
+            },
+            () -> service,
+            () -> mainUiId,
+            () -> collectionUiId,
+            () -> talentsUiId,
+            () -> rewardsUiId,
+            () -> tasksUiId
+        ), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -137,6 +171,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             "treasures/ancient_coin.yml", "treasures/custom_treasure_map.yml", "treasures/lost_ring.yml",
             "treasures/mmo_aquamarine.yml", "treasures/mythic_gem.yml", "treasures/neige_rune.yml",
             "treasures/old_boot.yml", "treasures/overture_legendary_rod.yml"
+        });
+        ensureDefinitionDir("waters", new String[]{
+            "waters/water-default.yml", "waters/water-dragon_lake.yml", "waters/water-jade_river.yml"
         });
     }
 
@@ -310,7 +347,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             iconResolver,
             logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
-            crossServer);
+            crossServer,
+            ariaBridge);
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
@@ -350,7 +388,18 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
-        adminCommand = new FishingAdminCommand(() -> service, this::msg);
+        adminCommand = new FishingAdminCommand(() -> service, this::msg,
+            () -> getCapability(xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability.class),
+            dataFolder,
+            () -> {
+                // 重新加载配置（包括水域文件）
+                File configFile = new File(dataFolder, "ArcartXFishing.yml");
+                try {
+                    loadConfiguration(configFile);
+                } catch (Exception e) {
+                    throw new RuntimeException("重载钓鱼配置失败: " + e.getMessage(), e);
+                }
+            });
         logger.fine("Fishing 模块已载入 | 鱼种=" + configuration.fishes().size()
             + " | 替换原版=" + configuration.fishing().replaceVanilla());
     }
@@ -388,8 +437,6 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     protected @Nullable Object createPlaceholderExpansion() {
         return new FishingPlaceholderExpansion(plugin, () -> service);
     }
-
-    
 
     // ─── ModuleCommandHandler ─────────────────────────────────
 

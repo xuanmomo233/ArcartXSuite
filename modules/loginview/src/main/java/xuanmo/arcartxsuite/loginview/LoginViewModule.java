@@ -61,9 +61,48 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("loginview")
             .name("LoginView")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
+    }
+
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXLoginView.yml")
+            .messagesFileName("messages.yml")
+            .currentVersion(3)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.required("auth.mode", ValueType.STRING)
+                        .withEnum(Set.of("standalone", "authme")),
+                    ValidationRule.of("ui.open-delay-ticks", ValueType.INT)
+                        .withRange(0, 600),
+                    ValidationRule.of("security.max-attempts", ValueType.INT)
+                        .withRange(1, 20),
+                    ValidationRule.of("security.min-password-length", ValueType.INT)
+                        .withRange(1, 64),
+                    ValidationRule.of("security.max-password-length", ValueType.INT)
+                        .withRange(8, 128),
+                    ValidationRule.of("security.session-ttl-minutes", ValueType.INT)
+                        .withRange(0, 10080)
+            ))
+            .build();
+    }
+
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        return new ModuleUiSpec(Map.of(
+            LoginViewService.UI_RESOURCE_PATH, LoginViewService.UI_FILE_PATH,
+            LoginViewService.MENU_UI_RESOURCE_PATH, LoginViewService.MENU_UI_FILE_PATH
+        ), configuration != null && configuration.ui().overwriteUiFiles());
+    }
+
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
     }
 
     /**
@@ -85,8 +124,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     public List<String> actions() {
         return ACTIONS;
     }
-
-    
 
     private String msg(String key, Object... args) {
         return messages().get("prefix") + messages().get(key, args);
@@ -128,16 +165,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return List.of();
     }
 
-    
-
-    
-
-    
-
-    
-
-    
-
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
@@ -171,7 +198,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         if (uiBinding.registeredUiId() == null) {
             throw new IllegalStateException("LoginView UI 注册失败");
         }
-
 
         // 共享模式：使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
@@ -239,8 +265,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         }
         configuration = null;
     }
-
-    
 
     @Override
     protected @Nullable ClientInitializedHandler createInitializedHandler() {

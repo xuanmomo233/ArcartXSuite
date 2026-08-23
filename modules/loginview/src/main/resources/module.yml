@@ -1,6 +1,6 @@
 id: loginview
 name: LoginView
-version: 1.3.2
+version: 1.4.4
 main: xuanmo.arcartxsuite.loginview.LoginViewModule
 api-version: 1.0
 

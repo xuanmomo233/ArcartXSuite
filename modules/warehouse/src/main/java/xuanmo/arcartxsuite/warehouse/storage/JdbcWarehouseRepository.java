@@ -1186,6 +1186,43 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    @Override
+    public java.util.Optional<WarehouseRepository.PlayerSettingsRecord> loadPlayerSettings(UUID playerUuid) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT auto_pickup, auto_mythic, auto_notify, updated_at FROM warehouse_player_settings WHERE player_uuid = ?"
+             )) {
+            statement.setString(1, playerUuid.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return java.util.Optional.of(new WarehouseRepository.PlayerSettingsRecord(
+                        playerUuid,
+                        resultSet.getBoolean("auto_pickup"),
+                        resultSet.getBoolean("auto_mythic"),
+                        resultSet.getBoolean("auto_notify"),
+                        resultSet.getLong("updated_at")
+                    ));
+                }
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    @Override
+    public void savePlayerSettings(UUID playerUuid, boolean autoPickup, boolean autoMythic, boolean autoNotify, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 upsertSql("warehouse_player_settings", List.of("player_uuid"), List.of("auto_pickup", "auto_mythic", "auto_notify", "updated_at"))
+             )) {
+            statement.setString(1, playerUuid.toString());
+            statement.setBoolean(2, autoPickup);
+            statement.setBoolean(3, autoMythic);
+            statement.setBoolean(4, autoNotify);
+            statement.setLong(5, updatedAt);
+            statement.executeUpdate();
+        }
+    }
+
     /**
      * 关闭存储，释放连接池等资源。
      */
@@ -1301,6 +1338,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     to_uuid VARCHAR(36) NOT NULL,
                     created_at BIGINT NOT NULL,
                     expires_at BIGINT NOT NULL
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_player_settings (
+                    player_uuid VARCHAR(36) PRIMARY KEY,
+                    auto_pickup BOOLEAN NOT NULL DEFAULT FALSE,
+                    auto_mythic BOOLEAN NOT NULL DEFAULT FALSE,
+                    auto_notify BOOLEAN NOT NULL DEFAULT FALSE,
+                    updated_at BIGINT NOT NULL
                 )
                 """);
         }

@@ -59,7 +59,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("mail")
             .name("Mail")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
@@ -160,6 +160,10 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry)
         );
         service.start();
+        // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
+        for (String uiId : service.registeredUiIds()) {
+            recordExternalUi(uiId, uiId);
+        }
         adminCommand = new MailAdminCommand(() -> service, messages());
 
         // 注册 MailDispatchable capability，供其他模块调用

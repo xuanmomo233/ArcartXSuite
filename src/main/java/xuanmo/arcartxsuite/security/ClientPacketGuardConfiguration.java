@@ -184,18 +184,18 @@ public record ClientPacketGuardConfiguration(
     private static LinkedHashMap<String, Map<String, ClientPacketGuardRule>> hardcodedActionRules() {
         LinkedHashMap<String, Map<String, ClientPacketGuardRule>> rules = new LinkedHashMap<>();
         rules.put("title", actionRules(
-            actionRule("equip", 1500L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("unequip", 1500L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("unequip_group", 1500L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("unequip_all", 1500L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("hide", 1500L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("unhide", 1500L, 1, ClientPacketGuardMode.NOTIFY)
+            actionRule("equip", 800L, 2, ClientPacketGuardMode.SILENT),
+            actionRule("unequip", 800L, 2, ClientPacketGuardMode.SILENT),
+            actionRule("unequip_group", 800L, 2, ClientPacketGuardMode.SILENT),
+            actionRule("unequip_all", 800L, 2, ClientPacketGuardMode.SILENT),
+            actionRule("hide", 800L, 2, ClientPacketGuardMode.SILENT),
+            actionRule("unhide", 800L, 2, ClientPacketGuardMode.SILENT)
         ));
         rules.put("mail", actionRules(
-            actionRule("compose-send", 5000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("claimall", 5000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("deleteall", 5000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("cdk", 3000L, 1, ClientPacketGuardMode.NOTIFY)
+            actionRule("compose-send", 5000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("claimall", 5000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("deleteall", 5000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("cdk", 3000L, 1, ClientPacketGuardMode.SILENT)
         ));
         rules.put("questgps", actionRules(
             actionRule("switch_category", 200L, 8, ClientPacketGuardMode.NOTIFY),
@@ -209,10 +209,10 @@ public record ClientPacketGuardConfiguration(
             actionRule("abandon_quest", 2000L, 1, ClientPacketGuardMode.NOTIFY)
         ));
         rules.put("map", actionRules(
-            actionRule("unlock_anchor", 3000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("teleport_anchor", 3000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("create_waypoint", 2000L, 1, ClientPacketGuardMode.NOTIFY),
-            actionRule("delete_waypoint", 2000L, 1, ClientPacketGuardMode.NOTIFY)
+            actionRule("unlock_anchor", 3000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("teleport_anchor", 3000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("create_waypoint", 2000L, 1, ClientPacketGuardMode.SILENT),
+            actionRule("delete_waypoint", 2000L, 1, ClientPacketGuardMode.SILENT)
         ));
         rules.put("announcer", actionRules(actionRule("click", 3000L, 2, ClientPacketGuardMode.NOTIFY)));
         rules.put("eventpacket", actionRules(actionRule("client-packet", 3000L, 2, ClientPacketGuardMode.NOTIFY)));

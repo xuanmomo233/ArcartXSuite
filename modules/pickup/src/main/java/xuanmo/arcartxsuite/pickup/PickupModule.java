@@ -55,22 +55,50 @@ public final class PickupModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("pickup")
             .name("Pickup")
-            .version("1.2.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXPickup.yml")
+            .messagesFileName("messages.yml")
+            .currentVersion(3)
+            .validations(List.of(
+                    ValidationRule.of("notification.max-visible", ValueType.INT)
+                        .withRange(1, 16),
+                    ValidationRule.of("notification.entry-ttl-ms", ValueType.INT)
+                        .withRange(500, 30000),
+                    ValidationRule.of("scanner.scan-radius", ValueType.DOUBLE)
+                        .withRange(1.0, 32.0),
+                    ValidationRule.of("scanner.scan-interval-ticks", ValueType.INT)
+                        .withRange(1, 100),
+                    ValidationRule.of("scanner.max-display", ValueType.INT)
+                        .withRange(1, 16)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(LOOT_PANEL_RESOURCE_PATH, LOOT_PANEL_FILE_PATH);
+        mappings.put(LOOT_INTERACT_RESOURCE_PATH, LOOT_INTERACT_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (scannerService == null || !"pickup".equalsIgnoreCase(packetId)) {
+                return false;
+            }
+            String action = (data == null || data.isEmpty()) ? "pick" : data.get(0).toLowerCase();
+            return scannerService.handleClientPacket(player, action, data);
+        }, 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -217,8 +245,6 @@ public final class PickupModule extends AbstractAXSModule {
         };
     }
 
-    
-
     public PickupService getNotificationService() {
         return notificationService;
     }
@@ -239,5 +265,4 @@ public final class PickupModule extends AbstractAXSModule {
         return target;
     }
 }
-
 

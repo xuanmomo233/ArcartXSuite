@@ -58,20 +58,36 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("chat")
             .name("Chat")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXChat.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("function.custom-components")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared=false 时需要）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100)
+            ))
+            .build();
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(COMPLETION_UI_RESOURCE_PATH, COMPLETION_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, false);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -84,8 +100,6 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         ensureChannelDefaults(channelsRelative);
         configuration = ChatModuleConfiguration.load(yaml, channelsDirectory, logger);
     }
-
-    
 
     @Override
     protected List<String> publishedTopics() {
@@ -300,5 +314,4 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         }
     }
 }
-
 

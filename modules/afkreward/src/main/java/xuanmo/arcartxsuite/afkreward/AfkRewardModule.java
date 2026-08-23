@@ -55,25 +55,41 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("afkreward")
             .name("AfkReward")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .externalDepends(List.of("PlaceholderAPI"))
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXAfkReward.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder().build())
+            .currentVersion(9)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.of("manual.leaderboard-size", ValueType.INT)
+                        .withRange(1, 100),
+                    ValidationRule.of("anti-abuse.time-limit.on-exceed", ValueType.STRING)
+                        .withEnum(java.util.Set.of("STOP", "KICK", "DECAY")),
+                    ValidationRule.of("anti-abuse.bot-detection.action", ValueType.STRING)
+                        .withEnum(java.util.Set.of("NO_REWARD", "KICK")),
+                    ValidationRule.of("anti-abuse.bot-detection.window-seconds", ValueType.INT)
+                        .withRange(1, 3600),
+                    ValidationRule.of("anti-abuse.bot-detection.min-view-changes", ValueType.INT)
+                        .withRange(0, 1000),
+                    ValidationRule.of("manual.permission-recheck-seconds", ValueType.INT)
+                        .withRange(1, 3600)
+            ))
+            .build();
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        return new ModuleUiSpec(Map.of(HUD_UI_RESOURCE_PATH, HUD_UI_FILE_PATH), configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -245,6 +261,5 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     public AfkRewardService getService() {
         return service;
     }
-
 
 }

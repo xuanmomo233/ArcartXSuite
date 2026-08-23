@@ -76,6 +76,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
     private SecondaryPasswordService secondaryPasswordService;
+    private xuanmo.arcartxsuite.selection.DefaultPolygonSelectionManager polygonSelectionManager;
     private xuanmo.arcartxsuite.storage.StorageManagerImpl storageManager;
     private BridgeLifecycleManager bridgeLifecycleManager;
     private ClientEventLifecycleManager clientEventLifecycleManager;
@@ -254,6 +255,17 @@ public final class SuiteCoreImpl implements SuiteCore {
         } catch (Exception exception) {
             consoleError("统一二级密码服务初始化失败: " + exception.getMessage());
         }
+
+        // 8.5 多边形选区管理器（核心 capability，供 fishing/afkreward 等模块使用）
+        polygonSelectionManager = new xuanmo.arcartxsuite.selection.DefaultPolygonSelectionManager();
+        String selectionWand = getConfig().getString("selection.wand-item", "STICK");
+        polygonSelectionManager.setWandMaterial(selectionWand);
+        getServer().getPluginManager().registerEvents(
+            (org.bukkit.event.Listener) polygonSelectionManager, host);
+        moduleRegistry.registerCoreCapability(
+            xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability.class,
+            (xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability) () -> polygonSelectionManager);
+
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(
             "模块加载完成: 发现 " + summary.discoveredCount()
@@ -500,6 +512,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         if (secondaryPasswordService != null) {
             secondaryPasswordService.close();
             secondaryPasswordService = null;
+        }
+        if (polygonSelectionManager != null) {
+            polygonSelectionManager.clearAll();
+            polygonSelectionManager = null;
         }
         if (crossServerService != null) {
             crossServerService.shutdown();

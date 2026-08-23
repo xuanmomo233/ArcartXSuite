@@ -53,23 +53,39 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("menu")
             .name("Menu")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .externalSoftDepends(List.of("PlaceholderAPI"))
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXMenu.yml")
+            .messagesFileName("messages.yml")
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.required("ui.packet-id", ValueType.STRING),
+                    ValidationRule.required("settings.menus-directory", ValueType.STRING)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(MenuService.PANEL_UI_RESOURCE_PATH, MenuService.PANEL_UI_FILE_PATH);
+        mappings.put(MenuService.ESC_UI_RESOURCE_PATH, MenuService.ESC_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    packetHandler != null && packetHandler.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -158,7 +174,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         logger.info("Menu 模块已启动，菜单数量=" + service.menus().size());
     }
 
-
     private void registerCustomMenuUis(String panelRuntimeUiId, String escRuntimeUiId) {
         if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
             return;
@@ -205,8 +220,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         MenuPlayerCommand playerCommand = new MenuPlayerCommand(() -> this.service, messages());
         return Map.of("menu", playerCommand);
     }
-
-    
 
     @Override
     protected List<Listener> createListeners() {

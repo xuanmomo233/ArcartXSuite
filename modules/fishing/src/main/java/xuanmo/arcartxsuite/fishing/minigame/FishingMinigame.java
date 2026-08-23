@@ -364,9 +364,14 @@ public final class FishingMinigame {
         double ratio = barHeightPx / 644.0;
         // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 difficultyBarShrink
         double difficultyShrink = 1.0 - (session.adjustedDifficulty() / 100.0) * settings.difficultyBarShrink();
-        ratio *= difficultyShrink;
-        // 限制在合理范围 [0.08, 0.9]
-        return Math.max(0.08, Math.min(ratio, 0.9));
+        double shrunkRatio = ratio * difficultyShrink;
+        // 动态下限：difficultyBarShrink 越大，下限越低，让 shrink 系数始终有可见削减空间。
+        //   - 0.02 为绝对底线（约 13 像素），防止绿条完全消失导致无法钓鱼
+        //   - ratio × (1 - difficultyBarShrink) × 0.3 为动态部分：shrink 小时下限高（保可玩性），
+        //     shrink 大时下限低（让激进 shrink 生效）
+        double dynamicFloor = Math.max(0.02, ratio * (1.0 - settings.difficultyBarShrink()) * 0.3);
+        // 限制在合理范围 [dynamicFloor, 0.9]
+        return Math.max(dynamicFloor, Math.min(shrunkRatio, 0.9));
     }
 
     /**

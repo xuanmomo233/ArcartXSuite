@@ -50,9 +50,46 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("announcer")
             .name("Announcer")
-            .version("1.2.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
+    }
+
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXAnnouncer.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("entries")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.of("settings.check-interval-ticks", ValueType.INT)
+                        .withRange(1, 1200),
+                    ValidationRule.of("settings.cooldown-ms", ValueType.LONG)
+                        .withRange(0, 3600000),
+                    ValidationRule.of("settings.between-entry-interval-ms", ValueType.LONG)
+                        .withRange(0, 3600000),
+                    ValidationRule.of("settings.text-width-font-size", ValueType.INT)
+                        .withRange(1, 200)
+            ))
+            .build();
+    }
+
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put("arcartx/ui/announcer_hud.yml", "ui/announcer_hud.yml");
+        mappings.put("arcartx/ui/subtitle_hud.yml", "ui/subtitle_hud.yml");
+        return new ModuleUiSpec(mappings, configuration.overwriteUiFile());
+    }
+
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
     }
 
     private String msg(String key, Object... args) {
@@ -129,7 +166,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             }
         }
 
-
         // 跨服广播
         service = new AnnouncerService(
             plugin, logger, configuration, packetBridge, clientBridge, packetGuard,
@@ -195,13 +231,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         }
         configuration = null;
     }
-
-    /**
-     * 创建客户端数据包处理器，将包转发给 {@link AnnouncerService}。
-     *
-     * @return 数据包处理器，服务未启动时返回不产生副作用的 lambda
-     */
-    
 
     /**
      * 创建客户端初始化回调，在玩家客户端就绪时通知公告与字幕服务。
@@ -404,5 +433,4 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
-
 

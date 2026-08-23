@@ -47,24 +47,48 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("title")
             .name("Title")
-            .version("1.0.3-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXTitle.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("groups")
+                    .dynamicSection("qualities")
+                    .dynamicSection("titles")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared: false 时生效）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100),
+                    // 过期清理周期必须为正
+                    ValidationRule.of("settings.expiration-cleanup-interval-ticks", ValueType.INT)
+                        .withRange(20, null),
+                    // UI ID 不能为空
+                    ValidationRule.required("ui.ui-id", ValueType.STRING)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        return new ModuleUiSpec(Map.of(TITLE_MENU_RESOURCE_PATH, TITLE_MENU_FILE_PATH), configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -139,6 +163,10 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             messages()
         );
         service.start();
+        // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
+        for (String uiId : service.registeredUiIds()) {
+            recordExternalUi(uiId, uiId);
+        }
         adminCommand = new TitleAdminCommand(() -> service, messages());
 
         // 注册跨模块称号授予能力（EventPacket 等模块通过 capability 调用）
@@ -215,8 +243,6 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return new TitlePlaceholderExpansion(plugin, () -> service, () -> configuration);
     }
 
-    
-
     public TitleService getService() {
         return service;
     }
@@ -234,5 +260,4 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

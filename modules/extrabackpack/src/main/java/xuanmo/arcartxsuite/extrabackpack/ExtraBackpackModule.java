@@ -52,55 +52,58 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("extrabackpack")
             .name("ExtraBackpack")
-            .version("1.0.0")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    /**
-     * 返回模块主配置文件名。
-     *
-     * @return {@code "ArcartXExtraBackpack.yml"}
-     */
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXExtraBackpack.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("extra-backpack")
+                .build())
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100),
+                    ValidationRule.of("settings.debug", ValueType.BOOLEAN),
+                    ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
+                    ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
+                    ValidationRule.of("extra-backpack.enabled", ValueType.BOOLEAN)
+            ))
+            .build();
+    }
 
-    /**
-     * 返回模块消息文件名。
-     *
-     * @return {@code "messages.yml"}
-     */
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put("arcartx/ui/extrabackpack.yml", "ui/extrabackpack.yml");
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    /**
-     * 返回默认配置同步策略，将 {@code extra-backpack} 节声明为动态节，
-     * 允许用户自由增删分类而不被同步器清理。
-     *
-     * @return 同步策略
-     */
-    
-
-    /**
-     * 返回主配置的校验规则列表，覆盖存储模式枚举、连接池范围与调试/UI/启用开关类型校验。
-     *
-     * @return 校验规则列表
-     */
-    
-
-    
-
-    /**
-     * 返回 UI 资源映射，将 jar 内 UI 模板导出到模块数据目录。
-     *
-     * @return 资源路径到目标相对路径的映射
-     */
-    
-
-    /**
-     * 返回是否在启用时覆盖已存在的 UI 文件。
-     *
-     * @return 配置中 {@code ui.overwrite-ui-files} 的值
-     */
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (service == null) {
+                return false;
+            }
+            SecondaryPasswordAccess passwordAccess = null;
+            if (data != null && !data.isEmpty() && (
+                "vanilla_destroy".equalsIgnoreCase(data.get(0))
+                    || "password_set".equalsIgnoreCase(data.get(0))
+                    || "password_unlock".equalsIgnoreCase(data.get(0))
+                    || "password_clear".equalsIgnoreCase(data.get(0))
+                    || "password_panel_close".equalsIgnoreCase(data.get(0))
+            )) {
+                passwordAccess = getCapability(SecondaryPasswordAccess.class);
+            }
+            return service.handleClientPacket(player, packetId, data, passwordAccess);
+        }, 0, "AXS_BACKPACK", "extrabackpack");
+    }
 
     /**
      * 加载并解析模块主配置文件。
@@ -160,6 +163,10 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             vanillaItemNameBridge
         );
         service.start();
+        // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
+        for (String uiId : service.registeredUiIds()) {
+            recordExternalUi(uiId, uiId);
+        }
         registerCapability(ExtraBackpackAccess.class, service);
 
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
@@ -226,25 +233,4 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
         storageManager.closeModuleDataSource("extrabackpack");
     }
 
-    /**
-     * 创建客户端数据包处理器，将背包操作数据包转发给 {@link ExtraBackpackService}，
-     * 对涉及销毁/密码操作的数据包额外注入 {@link SecondaryPasswordAccess} 能力。
-     *
-     * @return 数据包处理器实例
-     */
-    
-
-    /**
-     * 返回本模块声明的归属数据包 ID，用于数据包归属校验。
-     *
-     * @return {@code "AXS_BACKPACK"}
-     */
-    
-
-    /**
-     * 返回数据包守卫的模块键，用于数据包安全校验。
-     *
-     * @return {@code "extrabackpack"}
-     */
-    
-}
+    }

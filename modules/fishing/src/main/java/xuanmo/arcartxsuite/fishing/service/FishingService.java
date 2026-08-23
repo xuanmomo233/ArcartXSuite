@@ -89,6 +89,7 @@ public final class FishingService {
     private final TalentEngine talentEngine;
     private final @Nullable CrossServerAPI crossServer;
     private @Nullable CrossServerChannel crossServerChannel;
+    private final @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
 
     /** 调试日志：仅当 configuration.debug() 为 true 时输出。 */
     public void debug(@NotNull String message) {
@@ -125,7 +126,8 @@ public final class FishingService {
                           @NotNull SettlementEngine settlementEngine,
                           @NotNull TaskEngine taskEngine,
                           @Nullable Supplier<MailDispatchable> mailProvider,
-                          @Nullable CrossServerAPI crossServer) {
+                          @Nullable CrossServerAPI crossServer,
+                          @Nullable xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
@@ -140,6 +142,7 @@ public final class FishingService {
         this.taskEngine = taskEngine;
         this.mailProvider = mailProvider;
         this.crossServer = crossServer;
+        this.ariaBridge = ariaBridge;
     }
 
     public void setMessageProvider(@Nullable MessageProvider messageProvider) {
@@ -294,6 +297,27 @@ public final class FishingService {
             return false;
         }
 
+        // 一次性加载赛季数据，后续复用（避免重复 DB 查询）
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(),
+            configuration.season().seasonId());
+        int playerLevel = seasonData.level();
+
+        // 水域等级限制
+        if (water.minPlayerLevel() > 0 && playerLevel < water.minPlayerLevel()) {
+            String msg = getMessage("fishing_water_level_low", String.valueOf(water.minPlayerLevel()));
+            if (msg != null && !msg.isEmpty()) player.sendMessage(msg);
+            debug("startMinigame 跳过: 水域等级不足 " + player.getName()
+                + " level=" + playerLevel + " required=" + water.minPlayerLevel() + " water=" + water.id());
+            return false;
+        }
+        if (water.maxPlayerLevel() > 0 && playerLevel > water.maxPlayerLevel()) {
+            String msg = getMessage("fishing_water_level_high", String.valueOf(water.maxPlayerLevel()));
+            if (msg != null && !msg.isEmpty()) player.sendMessage(msg);
+            debug("startMinigame 跳过: 水域等级超出 " + player.getName()
+                + " level=" + playerLevel + " max=" + water.maxPlayerLevel() + " water=" + water.id());
+            return false;
+        }
+
         // 检测饵料
         BaitDefinition bait = detectBait(player);
         String baitId = bait != null ? bait.id() : null;
@@ -303,8 +327,6 @@ public final class FishingService {
 
         // 鱼竿等级限制校验（maxPlayerLevel = 0 表示无上限）
         if (!rod.id().equals(RodDefinition.DEFAULT.id())) {
-            int playerLevel = repository.loadSeasonData(player.getUniqueId(),
-                configuration.season().seasonId()).level();
             if (playerLevel < rod.minPlayerLevel()) {
                 String msg = getMessage("fishing_rod_level_low", String.valueOf(rod.minPlayerLevel()));
                 if (msg != null && !msg.isEmpty()) player.sendMessage(msg);
@@ -321,35 +343,35 @@ public final class FishingService {
             }
         }
 
-        // 获取该水域的鱼池
+        // 获取该水域的鱼池（直接从水域配置的 fishes 列表获取）
         List<FishDefinition> pool = getFishPool(water);
         if (pool.isEmpty()) {
             // 没有符合条件的鱼，走原版
-            logger.warning("startMinigame 失败: 鱼池为空, water=" + water.name() + " pool=" + water.fishPool());
+            logger.warning("startMinigame 失败: 鱼池为空, water=" + water.id() + " fishes=" + water.fishes());
             return false;
         }
 
-        FishDefinition fish = selectFishFromPool(player, pool, baitId);
+        FishDefinition fish = selectFishFromPool(player, water, pool, baitId);
         if (fish == null) {
             logger.warning("startMinigame 失败: selectFishFromPool 返回 null");
             return false;
         }
 
-        debug("startMinigame: player=" + player.getName() + " water=" + water.name()
+        debug("startMinigame: player=" + player.getName() + " water=" + water.id()
             + " fish=" + fish.id() + " difficulty=" + fish.difficulty()
             + " bait=" + (baitId != null ? baitId : "none"));
 
-        // 应用水域难度修改器
-        int adjustedDifficulty = (int) (fish.difficulty() * water.difficultyModifier());
+        // 应用水域难度公式（ARIA 求值，变量 global.level = 玩家钓鱼等级）
+        double waterDifficultyModifier = evaluateDifficultyFormula(water.difficultyFormula(), playerLevel);
+        int adjustedDifficulty = (int) (fish.difficulty() * waterDifficultyModifier);
         adjustedDifficulty = Math.max(1, Math.min(100, adjustedDifficulty));
 
         int caughtSize = fish.randomSize();
-        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
 
         FishingSession session = new FishingSession(
-            player, fish, caughtSize, seasonData.level(),
+            player, fish, caughtSize, playerLevel,
             configuration.fishing().catchDurationTicks() + rod.catchDurationBonus(), water, adjustedDifficulty,
-            baitId, rod.greenBarHeightBonus(), rod.expMultiplier()
+            baitId, rod.greenBarHeightBonus(), rod.expMultiplier(), rod.treasureChanceBonus()
         );
 
         // 计算天赋加成（开局一次性计算）
@@ -421,17 +443,13 @@ public final class FishingService {
         double treasureChance = configuration.fishing().treasureChance();
         // 应用饵料宝藏加成
         if (session.baitId() != null) {
-            BaitDefinition bait = configuration.baits().stream()
-                .filter(b -> b.id().equals(session.baitId()))
-                .findFirst()
-                .orElse(null);
+            BaitDefinition bait = findBait(session.baitId());
             if (bait != null) {
                 treasureChance += bait.treasureChanceBoost();
             }
         }
-        // 应用钓竿宝藏加成
-        RodDefinition rod = detectRod(player);
-        treasureChance += rod.treasureChanceBonus();
+        // 应用钓竿宝藏加成（使用 session 创建时记录的值，避免玩家中途换竿导致不一致）
+        treasureChance += session.rodTreasureChanceBonus();
         treasureChance = Math.min(1.0, Math.max(0.0, treasureChance));
         if (water != null && ThreadLocalRandom.current().nextDouble() < treasureChance) {
             TreasureDefinition treasure = selectTreasureFromPool(water);
@@ -572,6 +590,21 @@ public final class FishingService {
 
     // ─── 水域与池方法 ────────────────────────────────────────────────
 
+    /** 按 ID 查找饵料定义（O(1) 索引）。 */
+    private @Nullable BaitDefinition findBait(@NotNull String id) {
+        return configuration.findBait(id);
+    }
+
+    /** 按 ID 查找鱼竿定义（O(1) 索引）。 */
+    private @Nullable RodDefinition findRod(@NotNull String id) {
+        return configuration.findRod(id);
+    }
+
+    /** 按 ID 查找鱼种定义（O(1) 索引）。 */
+    private @Nullable FishDefinition findFish(@NotNull String id) {
+        return configuration.findFish(id);
+    }
+
     private @Nullable WaterArea resolveWater(@NotNull Player player) {
         for (WaterArea area : configuration.specifiedWaters()) {
             if (area.contains(player.getLocation())) {
@@ -581,32 +614,63 @@ public final class FishingService {
         return null;
     }
 
+    /**
+     * 求值水域难度公式。
+     * <p>
+     * 使用 ARIA 表达式求值，变量 {@code global.level} 绑定为玩家钓鱼等级。
+     * Aria 不可用时回退为固定 1.0 系数。
+     *
+     * @param formula 难度公式（ARIA 表达式）
+     * @param level   玩家钓鱼等级
+     * @return 难度修正系数
+     */
+    private double evaluateDifficultyFormula(@NotNull String formula, int level) {
+        if (formula == null || formula.isBlank() || "1.0".equals(formula.trim())) return 1.0;
+        if (ariaBridge == null || !ariaBridge.available()) {
+            logger.warning("Aria 桥不可用，水域难度公式无法求值，回退为 1.0: " + formula);
+            return 1.0;
+        }
+        try {
+            Object result = ariaBridge.eval(formula, Map.of("level", level));
+            if (result instanceof Number n) return n.doubleValue();
+            return 1.0;
+        } catch (Exception e) {
+            logger.warning("水域难度公式求值失败，回退为 1.0: " + formula + " - " + e.getMessage());
+            return 1.0;
+        }
+    }
+
     private @NotNull List<FishDefinition> getFishPool(@NotNull WaterArea water) {
-        List<String> ids = configuration.fishPools().get(water.fishPool());
+        List<String> ids = water.fishes();
         if (ids == null || ids.isEmpty()) return List.of();
-        return configuration.fishes().stream()
-            .filter(f -> ids.contains(f.id()))
-            .toList();
+        List<FishDefinition> result = new ArrayList<>();
+        for (String id : ids) {
+            FishDefinition fish = findFish(id);
+            if (fish != null) result.add(fish);
+        }
+        return result;
     }
 
     private @Nullable FishDefinition selectFishFromPool(@NotNull Player player,
+                                                           @NotNull WaterArea water,
                                                            @NotNull List<FishDefinition> pool,
                                                            @Nullable String baitId) {
         if (pool.isEmpty()) return null;
 
         String currentSeason = getCurrentSeason();
         String currentWeather = getCurrentWeather(player.getWorld());
-        String waterType = detectWaterType(player);
         String currentTime = getCurrentTimeString(player.getWorld());
+        // 提前提取，避免在 stream filter 中对每条鱼重复查 DB / 调用 Bukkit API
+        int playerLevel = getPlayerSeasonLevel(player);
+        String playerBiome = getPlayerBiome(player).toLowerCase();
 
         List<FishDefinition> candidates = pool.stream()
             .filter(f -> f.seasons().contains(currentSeason))
             .filter(f -> f.weathers().contains(currentWeather))
-            .filter(f -> f.waterTypes().contains(waterType))
             .filter(f -> isInTimeRange(currentTime, f.timeRanges()))
-            .filter(f -> f.minPlayerLevel() <= getPlayerSeasonLevel(player))
+            .filter(f -> f.minPlayerLevel() <= playerLevel)
             .filter(f -> f.requirePermission() == null || player.hasPermission(f.requirePermission()))
-            .filter(f -> f.biomes().isEmpty() || f.biomes().contains(getPlayerBiome(player).toLowerCase()))
+            .filter(f -> f.biomes().isEmpty() || f.biomes().contains(playerBiome))
             .toList();
 
         if (candidates.isEmpty()) {
@@ -621,10 +685,9 @@ public final class FishingService {
         // 应用饵料吸引权重
         double totalWeight = 0;
         Map<FishDefinition, Double> weights = new java.util.LinkedHashMap<>();
-        BaitDefinition bait = baitId != null ? configuration.baits().stream()
-            .filter(b -> b.id().equals(baitId))
-            .findFirst()
-            .orElse(null) : null;
+        BaitDefinition bait = baitId != null ? findBait(baitId) : null;
+        // 水域级饵料倍率
+        Map<String, Double> waterBaitMultipliers = water.baitMultipliers();
         for (FishDefinition fish : candidates) {
             double weight = fish.rarity().weightMultiplier();
             if (bait != null) {
@@ -635,6 +698,11 @@ public final class FishingService {
                         weight *= pref.multiplier();
                         break;
                     }
+                }
+                // 水域级饵料倍率（管理员可针对特定水域配置特定饵料的额外倍率）
+                Double waterMul = waterBaitMultipliers.get(bait.id());
+                if (waterMul != null) {
+                    weight *= waterMul;
                 }
             }
             weights.put(fish, weight);
@@ -653,17 +721,24 @@ public final class FishingService {
     }
 
     private @Nullable TreasureDefinition selectTreasureFromPool(@NotNull WaterArea water) {
-        List<String> ids = configuration.treasurePools().get(water.treasurePool());
+        List<String> ids = water.treasures();
         if (ids == null || ids.isEmpty()) return null;
-        List<TreasureDefinition> pool = configuration.treasures().stream()
-            .filter(t -> ids.contains(t.id()))
-            .toList();
-        if (pool.isEmpty()) return null;
-        double roll = ThreadLocalRandom.current().nextDouble();
-        for (TreasureDefinition t : pool) {
-            if (roll < t.chance()) return t;
+        List<TreasureDefinition> pool = new ArrayList<>();
+        for (String id : ids) {
+            TreasureDefinition t = configuration.findTreasure(id);
+            if (t != null) pool.add(t);
         }
-        return null;
+        if (pool.isEmpty()) return null;
+        // 加权随机选择：chance 作为权重，归一化后按概率抽取
+        double totalWeight = pool.stream().mapToDouble(TreasureDefinition::chance).sum();
+        if (totalWeight <= 0) return null;
+        double roll = ThreadLocalRandom.current().nextDouble() * totalWeight;
+        double cumulative = 0;
+        for (TreasureDefinition t : pool) {
+            cumulative += t.chance();
+            if (roll < cumulative) return t;
+        }
+        return pool.get(pool.size() - 1);
     }
 
     private @Nullable BaitDefinition detectBait(@NotNull Player player) {
@@ -676,17 +751,14 @@ public final class FishingService {
         // 通过 PDC 标签检测饵料 ID
         String baitId = getBaitIdFromRod(rod);
         if (baitId != null) {
-            return configuration.baits().stream()
-                .filter(b -> b.id().equals(baitId))
-                .findFirst()
-                .orElse(null);
+            return findBait(baitId);
         }
 
         // 返回默认饵料
-        return configuration.baits().stream()
-            .filter(BaitDefinition::isDefault)
-            .findFirst()
-            .orElse(null);
+        for (BaitDefinition bait : configuration.baits()) {
+            if (bait.isDefault()) return bait;
+        }
+        return null;
     }
 
     @Nullable
@@ -720,10 +792,8 @@ public final class FishingService {
         }
         String rodId = getRodIdFromRod(rod);
         if (rodId == null) return RodDefinition.DEFAULT;
-        return configuration.rods().stream()
-            .filter(r -> r.id().equals(rodId))
-            .findFirst()
-            .orElse(RodDefinition.DEFAULT);
+        RodDefinition def = findRod(rodId);
+        return def != null ? def : RodDefinition.DEFAULT;
     }
 
     private void giveFishItem(@NotNull Player player, @NotNull FishDefinition fish, int size, boolean perfect) {
@@ -838,11 +908,8 @@ public final class FishingService {
     public int getRodDurabilityBonus(@NotNull ItemStack rod) {
         String baitId = getBaitIdFromRod(rod);
         if (baitId == null) return 0;
-        return configuration.baits().stream()
-            .filter(b -> b.id().equals(baitId))
-            .findFirst()
-            .map(BaitDefinition::maxDurabilityBonus)
-            .orElse(0);
+        BaitDefinition bait = findBait(baitId);
+        return bait != null ? bait.maxDurabilityBonus() : 0;
     }
 
     private int findBaitInInventory(@NotNull Player player, @NotNull Material baitMaterial) {
@@ -896,26 +963,6 @@ public final class FishingService {
 
     private String getCurrentWeather(@NotNull World world) {
         return world.hasStorm() || world.isThundering() ? "rain" : "clear";
-    }
-
-    private String detectWaterType(@NotNull Player player) {
-        Biome biome = player.getWorld().getBiome(player.getLocation().getBlockX(), player.getLocation().getBlockY(), player.getLocation().getBlockZ());
-        String biomeName = biome.name().toLowerCase();
-        if (biomeName.contains("ocean") || biomeName.contains("beach") || biomeName.contains("deep")) {
-            return "ocean";
-        }
-        if (biomeName.contains("river")) {
-            return "river";
-        }
-        // 大面积水
-        if (isLargeWaterBody(player)) {
-            return "lake";
-        }
-        return "pond";
-    }
-
-    private boolean isLargeWaterBody(@NotNull Player player) {
-        return false; // 简化实现，后续可通过扫描附近水域扩展
     }
 
     private String getCurrentTimeString(@NotNull World world) {
@@ -1122,6 +1169,18 @@ public final class FishingService {
         }
     }
 
+    /**
+     * 玩家退出时清理内存缓存，防止内存泄漏。
+     * <p>
+     * 清理 recentCatches 和 fishingCooldowns 中该玩家的条目。
+     *
+     * @param uuid 玩家 UUID
+     */
+    public void onPlayerQuit(@NotNull UUID uuid) {
+        recentCatches.remove(uuid);
+        fishingCooldowns.remove(uuid);
+    }
+
     // ─── 任务查询 ──────────────────────────────────────────────
 
     public @NotNull TaskEngine getTaskEngine() {
@@ -1258,9 +1317,7 @@ public final class FishingService {
             entry.put("timestamp", catchEntry.timestamp());
             recentMap.put(Integer.toString(idx), entry);
             // 鱼物品图标 JSON（分离模式）
-            FishDefinition fishDef = configuration.fishes().stream()
-                .filter(f -> f.id().equals(catchEntry.fishId()))
-                .findFirst().orElse(null);
+            FishDefinition fishDef = findFish(catchEntry.fishId());
             if (fishDef != null) {
                 payload.put("recentIconJson" + idx, iconResolver.resolveItemJson(player, fishDef.itemRef()));
             }
@@ -1329,7 +1386,7 @@ public final class FishingService {
             payload.put("fish_id", fish.id());
             payload.put("fish_rarity", fish.rarity().name());
             payload.put("fish_size", String.valueOf(size));
-            payload.put("water_area", water != null ? water.name() : "default");
+            payload.put("water_area", water != null ? water.id() : "default");
             payload.put("bait_id", baitId != null ? baitId : "");
             payload.put("is_perfect", String.valueOf(perfect));
             payload.put("player_level", String.valueOf(seasonData.level()));
@@ -1345,7 +1402,7 @@ public final class FishingService {
             }
             if (gotTreasure) {
                 Map<String, String> treasurePayload = new LinkedHashMap<>();
-                treasurePayload.put("water_area", water != null ? water.name() : "default");
+                treasurePayload.put("water_area", water != null ? water.id() : "default");
                 eventBus.publish("axs.fishing.treasure", player, treasurePayload);
             }
         }
@@ -1358,7 +1415,7 @@ public final class FishingService {
             vars.put("fish_name", fish.displayName());
             vars.put("fish_rarity", fish.rarity().name());
             vars.put("fish_size", String.valueOf(size));
-            vars.put("water_area", water != null ? water.name() : "default");
+            vars.put("water_area", water != null ? water.id() : "default");
             vars.put("is_perfect", String.valueOf(perfect));
             signal.dispatchSignal("fishing_success", player, vars);
 
@@ -1437,10 +1494,7 @@ public final class FishingService {
             return getMessage("sell_not_fish", "") != null ? getMessage("sell_not_fish", "") : "&c手中物品不是钓鱼产物。";
         }
 
-        FishDefinition fish = configuration.fishes().stream()
-            .filter(f -> f.id().equals(fishId))
-            .findFirst()
-            .orElse(null);
+        FishDefinition fish = findFish(fishId);
         if (fish == null) {
             return "&c未知鱼种，无法出售。";
         }
@@ -1479,10 +1533,7 @@ public final class FishingService {
             String fishId = getFishIdFromItem(item);
             if (fishId == null) continue;
 
-            FishDefinition fish = configuration.fishes().stream()
-                .filter(f -> f.id().equals(fishId))
-                .findFirst()
-                .orElse(null);
+            FishDefinition fish = findFish(fishId);
             if (fish == null) continue;
 
             int size = getFishSizeFromItem(item);

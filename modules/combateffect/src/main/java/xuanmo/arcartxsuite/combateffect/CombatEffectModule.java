@@ -63,22 +63,36 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("combateffect")
             .name("CombatEffect")
-            .version("1.0.2-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName(CONFIG_FILE_NAME)
+            .messagesFileName(MESSAGES_FILE_NAME)
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("kill-effect")
+                    .dynamicSection("combo-tracker")
+                    .dynamicSection("death-buffer")
+                    .dynamicSection("keybind-trigger")
+                    .dynamicSection("state-trigger")
+                    .dynamicSection("digis-display")
+                .build())
+            .currentVersion(1)
+            .build();
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
+        mappings.put("arcartx/ui/combo_effect.yml", "ui/combo_effect.yml");
+        mappings.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
+        return new ModuleUiSpec(mappings, rawConfiguration != null && rawConfiguration.getBoolean("ui.overwrite-ui-files", false));
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -114,7 +128,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     @Override
     protected void startService() throws Exception {
 
-        // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
+        // 注册 UI（由基类根据 uiSpec() 自动导出并注册）
         registerModuleUi("ui/combat_kill_effect.yml", "combat_kill_effect", true);
         registerModuleUi("ui/combo_effect.yml", "combo_effect", true);
         registerModuleUi("ui/death_buffer.yml", "death_buffer", true);
@@ -403,5 +417,4 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         return mp.get("prefix") + mp.get(key, args);
     }
 }
-
 

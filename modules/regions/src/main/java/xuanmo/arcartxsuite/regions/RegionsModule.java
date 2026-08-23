@@ -67,47 +67,43 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("regions")
             .name("Regions")
-            .version("1.0.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    /**
-     * 返回主配置文件名。
-     *
-     * @return 主配置文件名
-     */
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXRegions.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("world-rules.disabled-interactions")
+                .build())
+            .currentVersion(3)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.of("selection.max-volume", ValueType.INT).withRange(1, 100000000)
+            ))
+            .build();
+    }
 
-    /**
-     * 返回消息配置文件名。
-     *
-     * @return 消息配置文件名
-     */
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(RegionsMenuPacketHandler.UI_RESOURCE_PATH, RegionsMenuPacketHandler.UI_FILE_PATH);
+        mappings.put(RegionsAdminPacketHandler.UI_RESOURCE_PATH, RegionsAdminPacketHandler.UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, false);
+    }
 
-    /**
-     * 返回主配置的校验规则列表，覆盖存储方言与选区体积限制。
-     *
-     * @return 校验规则列表
-     */
-    
-
-    
-
-    /**
-     * 返回默认配置同步策略，允许 {@code world-rules.disabled-interactions} 按世界名动态新增。
-     *
-     * @return 同步策略
-     */
-    
-
-    /**
-     * 返回 UI 资源路径到目标文件路径的映射，用于菜单与管理面板 UI 的释放与加载。
-     *
-     * @return UI 资源映射
-     */
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (menuPacketHandler != null && menuPacketHandler.handleClientPacket(player, packetId, data)) return true;
+            if (adminPacketHandler != null && adminPacketHandler.handleClientPacket(player, packetId, data)) return true;
+            return false;
+        }, 0, null, null);
+    }
 
     /**
      * 加载主配置与消息配置，解析为 {@link RegionsConfiguration}。
@@ -269,13 +265,6 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     }
 
     /**
-     * 创建客户端 Packet 处理器，将数据包分发给菜单与管理面板 Packet Handler。
-     *
-     * @return Packet 处理器，无可用 UI 时仍返回一个空实现
-     */
-    
-
-    /**
      * 返回模块命令 ID。
      *
      * @return 命令 ID {@code "regions"}
@@ -361,5 +350,4 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         return regionManager;
     }
 }
-
 

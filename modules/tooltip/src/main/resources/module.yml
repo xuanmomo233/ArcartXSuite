@@ -1,6 +1,6 @@
 id: tooltip
 name: Tooltip
-version: 1.0.0
+version: 1.4.4
 main: xuanmo.arcartxsuite.tooltip.TooltipModule
 api-version: 1.0
 

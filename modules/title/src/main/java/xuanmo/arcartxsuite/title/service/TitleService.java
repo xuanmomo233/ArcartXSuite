@@ -611,6 +611,15 @@ public class TitleService {
         return runtimeUiId == null ? "" : runtimeUiId;
     }
 
+    /**
+     * 返回已注册到 ArcartX 的 UI ID 列表（供 Module 记录到基类生命周期管理）。
+     *
+     * @return 已注册的 UI ID 列表，未注册时返回空列表
+     */
+    public java.util.List<String> registeredUiIds() {
+        return registeredUiId != null ? java.util.List.of(registeredUiId) : java.util.List.of();
+    }
+
     private void setHidden(Player player, String titleId, boolean hidden, boolean notify) {
         if (player == null || !player.isOnline()) {
             return;

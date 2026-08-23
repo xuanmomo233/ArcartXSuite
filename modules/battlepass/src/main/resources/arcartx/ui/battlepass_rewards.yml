@@ -76,7 +76,18 @@ ui:
           e['典藏档卡片']['物品图标'].seticon()
         }
       }
+      var.actionBusy = false
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     load: |-
       var.packetId = 'AXS_BATTLEPASS'
       var.levels = {}
@@ -87,6 +98,8 @@ ui:
       var.currentLevel = 0
       var.claimableCount = 0
       var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
@@ -720,8 +733,10 @@ controls:
                               width: 190
                               height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
+                              enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
                             children:
                               领取背景:
@@ -832,8 +847,10 @@ controls:
                               width: 190
                               height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
+                              enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
                             children:
                               领取背景:
@@ -944,8 +961,10 @@ controls:
                               width: 190
                               height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
+                              enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
                             children:
                               领取背景:
@@ -995,8 +1014,10 @@ controls:
                   x: -8
                   width: 240
                   height: 48
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'claim_all', var.actionToken)
                 children:
                   一键领取背景:

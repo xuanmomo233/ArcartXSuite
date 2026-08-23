@@ -1,6 +1,6 @@
 id: map
 name: Map
-version: 1.3.2
+version: 1.4.4
 main: xuanmo.arcartxsuite.map.MapModule
 api-version: 1.0
 

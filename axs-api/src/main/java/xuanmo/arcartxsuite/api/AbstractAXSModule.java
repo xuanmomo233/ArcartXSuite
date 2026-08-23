@@ -89,7 +89,7 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     private boolean ready;
     private final Map<String, UiBinding> uiBindings = new LinkedHashMap<>();
-    private MessageProvider messages; // 模块消息提供者，由 messagesFileName() 声明后自动加载
+    private MessageProvider messages; // 模块消息提供者，由 configSpec().messagesFileName() 声明后自动加载
 
     // ── 声明式元数据（子类按需覆写） ──────────────────────────
 
@@ -203,7 +203,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 加载配置。在配置文件已确保存在之后调用。
      * 子类在此方法中解析配置文件并缓存配置对象。
      *
-     * @param configFile 配置文件（如果 {@link #configFileName()} 返回 null 则此参数为 null）
+     * @param configFile 配置文件（如果 {@link #configSpec()} 的 configFileName 为 null 则此参数为 null）
      * @throws Exception 配置加载失败时抛出
      */
     protected abstract void loadConfiguration(@Nullable File configFile) throws Exception;
@@ -409,7 +409,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     }
 
     /**
-     * 获取模块消息提供者。仅当 {@link #messagesFileName()} 返回非空时可用。
+     * 获取模块消息提供者。仅当 {@link #configSpec()} 的 messagesFileName 非空时可用。
      * <p>
      * 用于替代硬编码文本：{@code messages().get("key", arg0, arg1)}。
      *
@@ -617,10 +617,28 @@ public abstract class AbstractAXSModule implements AXSModule {
         uiBindings.put(relativeUiPath, binding);
     }
 
+    /**
+     * 记录由模块 Service 手动注册到 ArcartX 的 UI，纳入基类生命周期管理。
+     * <p>
+     * 适用于 Service 类内部自行调用 {@code packetBridge.registerOrReloadUi} 注册 UI 的场景。
+     * 调用此方法后，基类在 {@link #onDisable()} 时会自动注销该 UI（与 Service 自身的
+     * shutdown 注销幂等重复，确保兜底）。可多次调用以记录多个 UI。
+     * <p>
+     * 与 {@link #registerModuleUi} 不同，此方法不导出资源文件、不调用
+     * {@link PacketBridgeAPI#registerOrReloadUi}，仅记录已注册的 UI ID。
+     *
+     * @param runtimeUiId    运行时 UI ID（用于 openUi/sendPacket）
+     * @param registeredUiId 实际注册到 ArcartX 的 UI ID（注销时使用），null 表示未注册
+     * @since 1.5.0
+     */
+    protected void recordExternalUi(@NotNull String runtimeUiId, @Nullable String registeredUiId) {
+        uiBindings.put("external:" + runtimeUiId, new UiBinding(runtimeUiId, registeredUiId));
+    }
+
     // ── 统一 UI 注册 API（供子类与第三方模块使用）────────────────────
 
     /**
-     * 注册模块 UI（基于 {@link #uiResourceMappings()} 中的映射）。
+     * 注册模块 UI（基于 {@link #uiSpec()} 中声明的 resourceMappings）。
      * <p>
      * 自动导出资源文件并使用 {@link PacketBridgeAPI#registerOrReloadUi} 注册/热重载，
      * 解决 reload 时手动修改的 UI 文件不生效的问题。
@@ -629,7 +647,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * @param configuredUiId   配置中的 UI ID（可为 null，自动从文件名推导）
      * @param registerOnEnable 是否注册到 ArcartX 引擎
      * @return UI 绑定结果
-     * @throws IllegalStateException 若 relativeUiPath 未在 uiResourceMappings() 中声明
+     * @throws IllegalStateException 若 relativeUiPath 未在 uiSpec() 中声明
      */
     @NotNull
     protected final UiBinding registerModuleUi(@NotNull String relativeUiPath,
@@ -638,7 +656,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         String resourcePath = resolveUiResourcePath(relativeUiPath);
         if (resourcePath == null) {
             throw new IllegalStateException(
-                "relativeUiPath '" + relativeUiPath + "' 未在 uiResourceMappings() 中声明"
+                "relativeUiPath '" + relativeUiPath + "' 未在 uiSpec() 中声明"
             );
         }
         return doRegisterModuleUi(resourcePath, relativeUiPath, configuredUiId, registerOnEnable);
@@ -648,7 +666,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 注册模块 UI（显式指定 jar 内资源路径）。
      * <p>
      * 适用于动态生成的 UI 文件（如运行时通过模板写入的文件），
-     * 这些文件不需要在 {@link #uiResourceMappings()} 中声明。
+     * 这些文件不需要在 {@link #uiSpec()} 中声明。
      *
      * @param resourcePath     jar 内资源路径（如 {@code "arcartx/ui/custom.yml"}）
      * @param relativeUiPath   导出到数据目录的相对路径
@@ -667,7 +685,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     /**
      * 获取已注册 UI 的 runtime ID。
      *
-     * @param relativeUiPath {@link #uiResourceMappings()} 中声明的相对路径
+     * @param relativeUiPath {@link #uiSpec()} 中声明的相对路径
      * @return runtime UI ID，未注册时返回 null
      */
     @Nullable

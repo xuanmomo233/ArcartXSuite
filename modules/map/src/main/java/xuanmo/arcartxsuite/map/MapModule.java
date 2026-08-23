@@ -51,24 +51,48 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXMap.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("worlds")
+                    .dynamicSection("anchors")
+                    .dynamicSection("waypoints")
+                .build())
+            .currentVersion(3)
+            .validations(List.of(
+                    // storage.shared 必须是布尔值
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pool-size 范围 1-100（仅在 shared=false 时需要）
+                    ValidationRule.of("storage.pool-size", ValueType.INT)
+                        .withRange(1, 100),
+                    ValidationRule.required("ui.packet-id", ValueType.STRING),
+                    ValidationRule.of("navigation.enabled", ValueType.BOOLEAN)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(MapService.MENU_UI_RESOURCE_PATH, MapService.MENU_UI_FILE_PATH);
+        mappings.put(MapService.HUD_UI_RESOURCE_PATH, MapService.HUD_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.client().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -218,8 +242,6 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         };
     }
 
-    
-
     /**
      * 获取当前运行中的地图服务实例。
      *
@@ -238,5 +260,4 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

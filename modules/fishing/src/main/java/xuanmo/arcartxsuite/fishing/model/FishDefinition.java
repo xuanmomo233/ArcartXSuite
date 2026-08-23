@@ -19,7 +19,6 @@ public record FishDefinition(
     int baseXp,
     @NotNull List<String> seasons,
     @NotNull List<String> weathers,
-    @NotNull List<String> waterTypes,
     @NotNull List<TimeRange> timeRanges,
     @NotNull IconDefinition itemRef,
     int difficulty,
@@ -181,7 +180,6 @@ public record FishDefinition(
         private int baseXp = 5;
         private List<String> seasons = List.of();
         private List<String> weathers = List.of();
-        private List<String> waterTypes = List.of();
         private List<TimeRange> timeRanges = List.of();
         private IconDefinition itemRef = IconDefinition.load("minecraft:cod");
         private int difficulty = 10;
@@ -221,7 +219,6 @@ public record FishDefinition(
         public Builder baseXp(int baseXp) { this.baseXp = baseXp; return this; }
         public Builder seasons(List<String> seasons) { this.seasons = List.copyOf(seasons); return this; }
         public Builder weathers(List<String> weathers) { this.weathers = List.copyOf(weathers); return this; }
-        public Builder waterTypes(List<String> waterTypes) { this.waterTypes = List.copyOf(waterTypes); return this; }
         public Builder timeRanges(List<TimeRange> timeRanges) { this.timeRanges = List.copyOf(timeRanges); return this; }
         public Builder itemRef(IconDefinition itemRef) { this.itemRef = itemRef; return this; }
         public Builder difficulty(int difficulty) { this.difficulty = difficulty; return this; }
@@ -247,7 +244,7 @@ public record FishDefinition(
         public FishDefinition build() {
             return new FishDefinition(
                 id, displayName, rarity, minSize, maxSize, basePrice, baseXp,
-                seasons, weathers, waterTypes, timeRanges, itemRef, difficulty, behaviors, currencyReward,
+                seasons, weathers, timeRanges, itemRef, difficulty, behaviors, currencyReward,
                 progressDrainRate, progressGainRate, fleeParams, behaviorStages,
                 drops, commandRewards, currencyRewards,
                 minPlayerLevel, requirePermission, baitPreferences, biomes, depthRange,

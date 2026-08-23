@@ -293,9 +293,10 @@ public final class ModuleRegistry {
         }
         modules.clear();
         clearAllRegistrations();
-        // 全局桥接单例的生命周期由 GlobalBridgeFactory 管理，此处仅重置组件引用
-        // 桥接对象在下次 initializeGlobalBridges() 时按需重建
+        // 全局桥接单例的生命周期由 GlobalBridgeFactory 管理，此处重建并立即初始化，
+        // 保证卸载后桥接对象始终就绪，支持「卸载全部 → 重新加载」场景。
         globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
+        globalBridgeFactory.initialize();
     }
 
     /**

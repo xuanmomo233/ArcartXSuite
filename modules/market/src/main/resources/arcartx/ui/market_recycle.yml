@@ -71,6 +71,7 @@ ui:
         e = val.收益列表['收益项'].copy('收益项' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同，用于刷新回收列表数据
     # 包字段: 同 init（packetId/multiplier/recyclables/recycleItemJson{key}/maxRecycleCount/
@@ -117,7 +118,18 @@ ui:
         e = val.收益列表['收益项'].copy('收益项' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     # action: open
     # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求回收预览数据
     # 发送数据包: Packet.send(packetId, 'recycle_preview')
@@ -131,6 +143,9 @@ ui:
       var.earningsTitle = '可回收总价值:'
       var.earningsTexts = {}
       var.maxEarningsCount = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       Packet.send(var.packetId, 'recycle_preview')
 
 controls:
@@ -355,8 +370,10 @@ controls:
                               y: 6
                               width: 120
                               height: 52
+                              enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'] + '', var.actionToken)
                             children:
                               回收背景:
@@ -417,8 +434,10 @@ controls:
               y: 750
               width: 240
               height: 56
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
+                var.actionBusy = true
                 Packet.send(var.packetId, 'recycle_all', var.actionToken)
             children:
               一键回收背景:

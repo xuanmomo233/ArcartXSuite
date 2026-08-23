@@ -138,9 +138,24 @@ ui:
           icon.seticon()
         }
       }
+      // update 包到达，重置防抖标志，恢复按钮可点击
+      var.actionBusy = false
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     load: |-
       var.packetId = 'AXS_BACKPACK'
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       var.activeCategory = none
       var.categories = {}
       var.categoryCount = 0
@@ -422,8 +437,10 @@ controls:
                   width: 150
                   height: 46
                   visible: var.canBuySlots
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
                 children:
                   购买槽位背景:
@@ -682,8 +699,10 @@ controls:
                   y: 160
                   width: 160
                   height: 50
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'vanilla_destroy', var.vanillaOptions['slot'], 'true', var.actionToken)
                     var.destroyConfirm = false
                 children:
@@ -796,11 +815,14 @@ controls:
                   y: 205
                   width: 180
                   height: 48
+                  enable: "!var.actionBusy || var.passwordPanel['mode'] == 'unlock'"
                 action:
                   clickLeft: |-
                     if(var.passwordPanel['mode'] == 'set'){
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'password_set', var.passwordCurrent, var.passwordNew, var.actionToken)
                     }else if(var.passwordPanel['mode'] == 'clear'){
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'password_clear', var.passwordCurrent, var.actionToken)
                     }else{
                       Packet.send(var.packetId, 'password_unlock', var.passwordCurrent)
@@ -860,8 +882,10 @@ controls:
                   width: 180
                   height: 34
                   visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     Packet.send(var.packetId, 'password_clear', var.passwordCurrent, var.actionToken)
                 children:
                   清除密码背景:

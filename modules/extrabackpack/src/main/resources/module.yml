@@ -1,6 +1,6 @@
 id: extrabackpack
 name: ExtraBackpack
-version: 1.0.0
+version: 1.4.4
 main: xuanmo.arcartxsuite.extrabackpack.ExtraBackpackModule
 api-version: 1.0
 

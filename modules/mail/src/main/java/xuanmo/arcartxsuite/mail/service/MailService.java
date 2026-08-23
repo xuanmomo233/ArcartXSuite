@@ -355,6 +355,20 @@ public final class MailService implements Listener {
         repository.close();
     }
 
+    /**
+     * 返回已注册到 ArcartX 的 UI ID 列表（供 Module 记录到基类生命周期管理）。
+     *
+     * @return 已注册的 UI ID 列表，未注册的条目自动跳过
+     */
+    public java.util.List<String> registeredUiIds() {
+        java.util.List<String> ids = new java.util.ArrayList<>(4);
+        if (registeredInboxUiId != null) ids.add(registeredInboxUiId);
+        if (registeredComposeUiId != null) ids.add(registeredComposeUiId);
+        if (registeredLogsUiId != null) ids.add(registeredLogsUiId);
+        if (registeredAdminUiId != null) ids.add(registeredAdminUiId);
+        return java.util.List.copyOf(ids);
+    }
+
     public String inboxUiId() {
         return inboxUiId;
     }
@@ -1793,7 +1807,9 @@ public final class MailService implements Listener {
             if (session.tokenInFlight
                 || suppliedToken.isBlank()
                 || !suppliedToken.equals(session.actionToken())) {
-                return MailOperationResult.failure(message("player.compose-token-invalid"));
+                // token 检查失败（并发冲突/token 轮换在途）静默丢弃，
+                // 不再提示"写信操作令牌无效"——这些场景对正常玩家都是误报，UI 防抖会阻止重复点击。
+                return MailOperationResult.failure("");
             }
             session.tokenInFlight = true;
             MailOperationResult result = handleComposeSendInternal(player, data);

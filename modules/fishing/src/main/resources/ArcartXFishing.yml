@@ -72,10 +72,12 @@ fishing:
 
   # ─── 绿条高度（绿条越大越容易覆盖鱼，钓鱼越简单） ────────────────
   # 绿条基础高度（像素），轨道总高 644 像素。玩家等级和钓竿会增加绿条高度。
-  base-green-bar-height: 96
+  base-green-bar-height: 50
   # 玩家每提升 1 级钓鱼等级，绿条增加的高度（像素）。等级越高绿条越大越容易钓。
-  height-per-level: 4
+  height-per-level: 1
   # 难度对绿条高度的缩减比例（0-1）：难度 100 时绿条高度 ×（1 - 此值）。0 = 不缩减，1 = 完全消失。
+  # 注意：绿条有动态下限保护，此值越大下限越低，削减效果越明显；此值小时下限较高以保证可玩性。
+  # 绝对底线约为轨道高度的 2%（约 13 像素），极端高难度+低等级时绿条不会比这更小。
   difficulty-bar-shrink: 0.3
 
   # ─── 鱼物理（鱼自动移动，玩家需用绿条追踪鱼） ────────────────
@@ -163,82 +165,18 @@ season:
   end-date: "2030-12-31"
 
 # ─── 水域定义 ────────────────────────────────────────
-# 指定地点: 玩家在指定坐标/区域内钓鱼
-# 默认水域: 未匹配任何指定地点时使用
-waters:
-  # 指定地点水域列表
-  specified:
-    - name: "dragon_lake"     # 水域唯一标识名
-      display-name: "&b龙泉湖"  # 水域显示名称（支持颜色代码）
-      type: circle            # 水域形状类型（circle=圆形区域）
-      world: "world"          # 所在世界名称
-      center: [100, 64, 200]  # 圆形水域中心坐标 [x, y, z]
-      radius: 50              # 圆形水域半径（方块）
-      fish-pool: "lake"       # 引用的鱼类池ID（对应 fish-pools 定义）
-      treasure-pool: "common" # 引用的宝藏池ID（对应 treasure-pools 定义）
-      difficulty-modifier: 1.2 # 难度修正系数（1.2=难度提升20%）
-      bait-multipliers:       # 饵料在该水域的额外倍率
-        worm: 1.5             # 蚯蚓在此水域倍率1.5
-        corn: 2.0             # 玉米粒在此水域倍率2.0
-      require-permission: ""  # 进入此水域钓鱼所需权限（空=无限制）
-
-    - name: "jade_river"     # 水域唯一标识名
-      display-name: "&a翡翠河"  # 水域显示名称（支持颜色代码）
-      type: rectangle         # 水域形状类型（rectangle=矩形区域）
-      world: "world"          # 所在世界名称
-      min: [500, 60, 300]     # 矩形水域最小坐标 [x, y, z]
-      max: [700, 80, 400]     # 矩形水域最大坐标 [x, y, z]
-      fish-pool: "river"      # 引用的鱼类池ID
-      treasure-pool: "common" # 引用的宝藏池ID
-      difficulty-modifier: 0.9 # 难度修正系数（0.9=难度降低10%）
-      bait-multipliers:       # 饵料在该水域的额外倍率
-        worm: 1.0             # 蚯蚓在此水域倍率1.0
-        bread: 1.3            # 面包屑在此水域倍率1.3
-      require-permission: ""  # 进入此水域钓鱼所需权限（空=无限制）
-
-  # 默认水域（兜底）
-  default:
-    name: "default"           # 默认水域标识名
-    display-name: "&7普通水域"  # 默认水域显示名称
-    fish-pool: "default"      # 引用的鱼类池ID
-    treasure-pool: "default"  # 引用的宝藏池ID
-    difficulty-modifier: 1.0  # 难度修正系数（1.0=标准难度）
-    bait-multipliers:         # 饵料在该水域的额外倍率
-      worm: 1.0               # 蚯蚓倍率1.0
-      bread: 1.0              # 面包屑倍率1.0
-      corn: 1.0               # 玉米粒倍率1.0
-
-# ─── 鱼类池 ────────────────────────────────────────
-# 引用 fishes/ 目录下的鱼种 ID
-fish-pools:
-  default:                    # 默认鱼类池（普通水域使用）
-    - "sea_bass"              # 海鲈鱼
-    - "salmon"                # 鲑鱼
-  lake:                       # 湖泊鱼类池
-    - "sea_bass"              # 海鲈鱼
-    - "catfish"               # 鲶鱼
-    - "legendary_carp"        # 传说鲤鱼
-  river:                      # 河流鱼类池
-    - "salmon"                # 鲑鱼
-    - "catfish"               # 鲶鱼
-  ocean:                      # 海洋鱼类池
-    - "tuna"                  # 金枪鱼
-    - "pufferfish"            # 河豚
-    - "sea_bass"              # 海鲈鱼
-
-# ─── 宝藏池 ────────────────────────────────────────
-# 引用 treasures/ 目录下的宝藏 ID
-treasure-pools:
-  default:                    # 默认宝藏池（普通水域使用）
-    - "old_boot"              # 旧靴子
-    - "lost_ring"             # 失落戒指
-  common:                     # 普通宝藏池
-    - "old_boot"              # 旧靴子
-    - "lost_ring"             # 失落戒指
-    - "ancient_coin"          # 古币
-  rare:                       # 稀有宝藏池
-    - "ancient_coin"          # 古币
-    - "lost_ring"             # 失落戒指
+# 水域配置已移至 waters/ 目录，每个水域一个 water-<id>.yml 文件。
+# 默认水域为 water-default.yml（无多边形边界，匹配所有未命中指定水域的位置）。
+# 指定水域为 water-<id>.yml（含多边形 pos 边界，玩家在多边形内时使用该水域）。
+#
+# 每个水域文件包含：
+#   id（从文件名提取）、display-name、world、enabled、pos（多边形顶点）、
+#   fishes（鱼ID列表）、treasures（宝藏ID列表）、
+#   difficulty-formula（ARIA难度公式，变量 global.level = 玩家等级）、
+#   min-player-level、max-player-level、bait-multipliers、require-permission。
+#
+# 可用 /axs fishing water create <id> 命令配合选区工具创建多边形水域。
+# 详见 waters/water-default.yml 和 waters/water-dragon_lake.yml 示例。
 
 # ─── 饵料定义 ────────────────────────────────────────
 # 饵料不通过本文件配置，请在 baits/ 目录下为每个饵料创建独立 YAML 文件。

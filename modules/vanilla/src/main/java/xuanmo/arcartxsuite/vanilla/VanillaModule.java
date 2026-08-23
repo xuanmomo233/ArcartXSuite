@@ -46,22 +46,47 @@ public final class VanillaModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("vanilla")
             .name("VanillaUI")
-            .version("1.2.0")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXVanilla.yml")
+            .syncPolicy(SyncPolicy.strict())
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.of("ui.crafting-ui-id", ValueType.STRING),
+                    ValidationRule.of("ui.furnace-ui-id", ValueType.STRING),
+                    ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
+                    ValidationRule.of("crafting.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("furnace.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("furnace.push-interval-ticks", ValueType.INT)
+                        .withRange(1, 100)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        if (configuration == null || configuration.crafting().enabled()) {
+            mappings.put(CRAFTING_RESOURCE_PATH, CRAFTING_FILE_PATH);
+        }
+        if (configuration == null || configuration.furnace().enabled()) {
+            mappings.put(FURNACE_RESOURCE_PATH, FURNACE_FILE_PATH);
+        }
+        return new ModuleUiSpec(mappings, configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -126,5 +151,4 @@ public final class VanillaModule extends AbstractAXSModule {
         return List.of();
     }
 
-    
 }

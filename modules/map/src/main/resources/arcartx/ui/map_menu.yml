@@ -83,6 +83,7 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      var.actionToken = packet['action_token']
       while(val.world_entry.childrenCount() > 1){
         val.world_entry.get(1).remove()
       }
@@ -115,6 +116,7 @@ ui:
         e = val.external_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
     # packetHandler: update
     # 包字段: 同 init（实时刷新地图菜单数据）
     update: |-
@@ -151,6 +153,7 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      var.actionToken = packet['action_token']
       while(val.world_entry.childrenCount() > 1){
         val.world_entry.get(1).remove()
       }
@@ -183,7 +186,18 @@ ui:
         e = val.external_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     open: |-
       var.packetId = 'AXS_MAP'
       var.selectedWorldId = none
@@ -218,6 +232,9 @@ ui:
       var.maxAnchorCount = 0
       var.maxWaypointCount = 0
       var.maxExternalCount = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
 
 controls:
   自适应全局布局:
@@ -692,10 +709,12 @@ controls:
               y: 800
               width: 104
               height: 34
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
                 if (var.detailCanUnlock) {
-                         Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, packet['action_token'])
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
                 }
             children:
               解锁按钮背景:
@@ -723,10 +742,12 @@ controls:
               y: 800
               width: 104
               height: 34
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
                 if (var.detailCanTeleport) {
-                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, packet['action_token'])
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
                 }
             children:
               传送按钮背景:
@@ -791,10 +812,12 @@ controls:
               y: 800
               width: 72
               height: 34
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
                 if (var.detailCanDeleteWaypoint) {
-                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, packet['action_token'])
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, var.actionToken)
                 }
             children:
               删除按钮背景:
@@ -822,10 +845,12 @@ controls:
               y: 800
               width: 72
               height: 34
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
                 if (var.canCreateWaypoint) {
-                  Packet.send(var.packetId, 'create_waypoint', packet['action_token'])
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'create_waypoint', var.actionToken)
                 }
             children:
               创建按钮背景:

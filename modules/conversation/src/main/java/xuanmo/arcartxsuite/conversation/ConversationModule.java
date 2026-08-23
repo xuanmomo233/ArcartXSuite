@@ -54,22 +54,45 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("conversation")
             .name("Conversation")
-            .version("1.1.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXConversation.yml")
+            .messagesFileName("messages.yml")
+            .currentVersion(2)
+            .validations(List.of(
+                    ValidationRule.required("ui.packet-id", ValueType.STRING),
+                    ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
+                    ValidationRule.of("interaction.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("interaction.scan-range", ValueType.DOUBLE).withRange(1.0, 128.0),
+                    ValidationRule.of("interaction.scan-period-ticks", ValueType.INT).withRange(1, 200),
+                    ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L),
+                    ValidationRule.of("cinematic.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("ui.letterbox-ui-id", ValueType.STRING)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(DIALOG_UI_RESOURCE_PATH, DIALOG_UI_FILE_PATH);
+        mappings.put(SELECTOR_UI_RESOURCE_PATH, SELECTOR_UI_FILE_PATH);
+        mappings.put(LETTERBOX_UI_RESOURCE_PATH, LETTERBOX_UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of(
+            (player, packetId, data) ->
+                    service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -185,8 +208,6 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         configuration = null;
     }
 
-    
-
     @Override
     protected @Nullable ClientInitializedHandler createInitializedHandler() {
         return player -> {
@@ -277,5 +298,4 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

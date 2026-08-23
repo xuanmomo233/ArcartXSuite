@@ -13,6 +13,16 @@ ui:
   level: 8
   screenScale: true
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     load: |-
       var.packetId = 'AXS_MARKET'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -30,6 +40,9 @@ ui:
       var.selectedItemJson = none
       var.currencies = {}
       var.maxCurrencyCount = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     open: "Packet.send(var.packetId, 'auction_sell_open')"
   packetHandler:
     init: |-
@@ -50,6 +63,7 @@ ui:
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
     update: |-
       var.currencies = packet['currencies']
       var.maxCurrencyCount = packet['maxCurrencyCount']
@@ -67,6 +81,7 @@ ui:
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key
       }
+      var.actionBusy = false
   defaultOpen: false
 controls:
   自适应总布局:
@@ -721,10 +736,12 @@ controls:
                   y: 150
                   width: 266
                   height: 56
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
                     if(var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''){
                       msg = var.selectedMessage == none ? '' : var.selectedMessage
+                      var.actionBusy = true
                       Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, msg, var.selectedDuration.round(), var.selectedCurrency, var.actionToken)
                     }
                 children:

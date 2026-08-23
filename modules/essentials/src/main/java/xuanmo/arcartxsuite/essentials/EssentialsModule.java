@@ -98,9 +98,38 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("essentials")
             .name("Essentials")
-            .version("1.0.0-beta")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
+    }
+
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXEssentials.yml")
+            .messagesFileName("messages.yml")
+            .currentVersion(3)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN)
+            ))
+            .build();
+    }
+
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(EssentialsMenuPacketHandler.UI_RESOURCE_PATH, EssentialsMenuPacketHandler.UI_FILE_PATH);
+        mappings.put(EssentialsAdminPacketHandler.UI_RESOURCE_PATH, EssentialsAdminPacketHandler.UI_FILE_PATH);
+        return new ModuleUiSpec(mappings, false);
+    }
+
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        return PacketHandlerSpec.of((player, packetId, data) -> {
+            if (menuPacketHandler != null && menuPacketHandler.handleClientPacket(player, packetId, data)) return true;
+            if (adminPacketHandler != null && adminPacketHandler.handleClientPacket(player, packetId, data)) return true;
+            return false;
+        }, 0, null, null);
     }
 
     /**
@@ -132,36 +161,6 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     public List<String> actions() {
         return ACTIONS;
     }
-
-    /**
-     * 返回主配置文件名。
-     *
-     * @return {@code "ArcartXEssentials.yml"}
-     */
-    
-
-    /**
-     * 返回消息文件名。
-     *
-     * @return {@code "messages.yml"}
-     */
-    
-
-    /**
-     * 返回主配置的校验规则列表，确保存储方言与 SQLite 文件路径必填。
-     *
-     * @return 校验规则列表
-     */
-    
-
-    
-
-    /**
-     * 返回 UI 资源映射（菜单 UI 与管理 UI 的资源路径到文件路径映射）。
-     *
-     * @return UI 资源映射表
-     */
-    
 
     /**
      * 加载并解析主配置文件为 {@link EssentialsConfiguration}。
@@ -335,13 +334,6 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     }
 
     /**
-     * 创建客户端包处理器，将包路由到菜单或管理 UI 的 Packet Handler。
-     *
-     * @return 包处理器，桥接不可用时仍返回无操作处理器
-     */
-    
-
-    /**
      * 处理 {@code /essentials} 命令，委派给 {@link EssentialsCommandDelegate}。
      *
      * @param sender 命令发送者
@@ -475,5 +467,4 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         }
     }
 }
-
 

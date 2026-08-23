@@ -20,7 +20,7 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
  * <p>
  * 所有字段均为不可变，通过 {@link #load(FileConfiguration, Logger, CurrencyBridgeAPI)} 从 Bukkit YAML 解析。
  * 动态节（warehouses / categories / bank.currencies / deposit-products / shared / sort-profiles）
- * 在 {@link xuanmo.arcartxsuite.warehouse.WarehouseModule#defaultSyncPolicy()} 中声明，不会被 ConfigDiagnosticEngine 覆盖。
+ * 在 {@link xuanmo.arcartxsuite.warehouse.WarehouseModule#configSpec()} 的 syncPolicy 中声明，不会被 ConfigDiagnosticEngine 覆盖。
  */
 public record WarehouseModuleConfiguration(
     boolean debug,

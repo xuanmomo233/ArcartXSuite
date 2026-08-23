@@ -61,24 +61,50 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("lottery")
             .name("Lottery")
-            .version("1.3.3")
+            .version("1.4.4")
             .mainClass(getClass().getName())
             .build();
     }
 
-    
+    @Override
+    protected @NotNull ModuleConfig configSpec() {
+        return ModuleConfig.builder()
+            .configFileName("ArcartXLottery.yml")
+            .messagesFileName("messages.yml")
+            .syncPolicy(SyncPolicy.builder()
+                    .dynamicSection("messages")
+                    .dynamicSection("shared-pity-groups")
+                .build())
+            .currentVersion(3)
+            .validations(List.of(
+                    ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    ValidationRule.required("pools-directory", ValueType.STRING)
+            ))
+            .build();
+    }
 
-    
+    @Override
+    protected @NotNull ModuleUiSpec uiSpec() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(GACHA_UI_RESOURCE, GACHA_UI_FILE);
+        mappings.put(CASE_UI_RESOURCE, CASE_UI_FILE);
+        return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFiles());
+    }
 
-    
-
-    
-
-    
-
-    
-
-    
+    @Override
+    protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
+        if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
+            return PacketHandlerSpec.NONE;
+        }
+        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
+            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
+        UiBinding gachaBinding = getUiBinding(GACHA_UI_FILE);
+        UiBinding caseBinding = getUiBinding(CASE_UI_FILE);
+        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : "AXS:lottery_gacha";
+        String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : "AXS:lottery_case";
+        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, caseUiId);
+        return PacketHandlerSpec.of(packetHandler, 0, null, null);
+    }
 
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
@@ -222,8 +248,6 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     protected @Nullable Object createPlaceholderExpansion() {
         return new LotteryPlaceholderExpansion(plugin, () -> service);
     }
-
-    
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────
 

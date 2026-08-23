@@ -91,6 +91,7 @@ ui:
           e['商品图标'].seticon()
         }
       }
+      var.actionBusy = false
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同，用于刷新商店列表和商品数据
     # 包字段: 同 init（packetId/shopId/shopName/shops/shopTexts/items/
@@ -155,7 +156,18 @@ ui:
           e['商品图标'].seticon()
         }
       }
+      var.actionBusy = false
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     # action: open
     # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求商店列表
     # 发送数据包: Packet.send(packetId, 'shop_list', 商店ID)
@@ -174,6 +186,9 @@ ui:
       var.maxShopCount = 0
       var.maxItemCount = 0
       var.quantity = 1
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       Packet.send(var.packetId, 'shop_list', none)
 
 controls:
@@ -602,8 +617,10 @@ controls:
                               width: 120
                               height: 40
                               visible: "self.parent.entry != none && var.shopId != none"
+                              enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], var.quantity, var.actionToken)
                             children:
                               购买背景:

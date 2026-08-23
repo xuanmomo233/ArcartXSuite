@@ -129,6 +129,7 @@ ui:
           r['图标'].seticon()
         }
       }
+      var.actionBusy = false
     # packetHandler: update
     # 包字段与 init 完全相同，用于切换奖池、抽奖结束后刷新界面数据。
     # 额外职责: 若处于等待态但本次没有结果包（抽奖失败），解除等待态并回到主面板。
@@ -237,6 +238,7 @@ ui:
         val.开箱动画层.visible = false
         val.主面板.visible = true
       }
+      var.actionBusy = false
     # packetHandler: result（单抽结果，服务端仅在确实抽到物品时下发）
     # 包字段:
     #   - resultCount: 结果数量
@@ -335,6 +337,16 @@ ui:
       var.detailRows = packet['detailRows'] != none ? packet['detailRows'] : {}
       val.详情面板.visible = true
   action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
     # load 事件: 初始化稀有度颜色表与界面状态变量
     load: |-
       var.rarityColors = {}
@@ -378,6 +390,9 @@ ui:
       var.动画带轮次 = 0
       var.动画带基数 = 0
       var.十连卡片轮次 = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
     # open 事件: 每次打开界面复位所有层
     open: |-
       var.rolling = false
@@ -728,6 +743,7 @@ controls:
                   y: 0
                   width: 100
                   height: 50
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
@@ -745,6 +761,7 @@ controls:
                       val.开箱滚动条.moveX = 0.0005
                       val.主面板.visible = false
                       val.开箱动画层.visible = true
+                      var.actionBusy = true
                       Packet.send(var.packetId, 'open_case', var.actionToken)
                     }
                 children:
@@ -774,6 +791,7 @@ controls:
                   width: 100
                   height: 50
                   visible: "var.tenAvailable != false"
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
@@ -791,6 +809,7 @@ controls:
                       val.开箱滚动条.moveX = 0.0005
                       val.主面板.visible = false
                       val.开箱动画层.visible = true
+                      var.actionBusy = true
                       Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
                     }
                 children:
@@ -846,8 +865,11 @@ controls:
                   width: 150
                   height: 80
                   visible: "var.currentPoolIndex != none && var.currentPoolIndex > 0"
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
-                  click: "Packet.send(var.packetId, 'switch_pool', var.currentPoolIndex - 1, var.actionToken)"
+                  click: |-
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'switch_pool', var.currentPoolIndex - 1, var.actionToken)
                 children:
                   上一页背景:
                     type: Texture
@@ -875,8 +897,11 @@ controls:
                   width: 150
                   height: 80
                   visible: "var.currentPoolIndex != none && var.poolList != none && var.currentPoolIndex < var.poolList.size() - 1"
+                  enable: "!var.actionBusy && var.actionToken != ''"
                 action:
-                  click: "Packet.send(var.packetId, 'switch_pool', (var.currentPoolIndex != none ? var.currentPoolIndex : 0) + 1, var.actionToken)"
+                  click: |-
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'switch_pool', (var.currentPoolIndex != none ? var.currentPoolIndex : 0) + 1, var.actionToken)
                 children:
                   下一页背景:
                     type: Texture
@@ -1279,6 +1304,7 @@ controls:
               y: 260
               width: 200
               height: 64
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
@@ -1296,6 +1322,7 @@ controls:
                   val.开箱滚动条.moveX = 0.0005
                   val.单抽结果层.visible = false
                   val.开箱动画层.visible = true
+                  var.actionBusy = true
                   Packet.send(var.packetId, 'open_case', var.actionToken)
                 }
             children:
@@ -1453,6 +1480,7 @@ controls:
               width: 200
               height: 64
               visible: "var.tenAvailable != false"
+              enable: "!var.actionBusy && var.actionToken != ''"
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
@@ -1470,6 +1498,7 @@ controls:
                   val.开箱滚动条.moveX = 0.0005
                   val.十连结果层.visible = false
                   val.开箱动画层.visible = true
+                  var.actionBusy = true
                   Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
                 }
             children:

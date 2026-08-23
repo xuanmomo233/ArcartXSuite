@@ -25,13 +25,15 @@ public final class FishingSession {
     private final String baitId;
     private final int greenBarHeightBonus;
     private final double expMultiplier;
+    private final double rodTreasureChanceBonus;
     private final AtomicBoolean pressing = new AtomicBoolean(false);
     private volatile boolean active = true;
     private volatile long remainingTicks;
 
     public FishingSession(@NotNull Player player, @NotNull FishDefinition fish, int caughtSize,
                           int playerLevel, long durationTicks, @Nullable WaterArea water, int adjustedDifficulty,
-                          @Nullable String baitId, int greenBarHeightBonus, double expMultiplier) {
+                          @Nullable String baitId, int greenBarHeightBonus, double expMultiplier,
+                          double rodTreasureChanceBonus) {
         this.playerUuid = player.getUniqueId();
         this.fish = fish;
         this.caughtSize = caughtSize;
@@ -41,6 +43,7 @@ public final class FishingSession {
         this.baitId = baitId;
         this.greenBarHeightBonus = greenBarHeightBonus;
         this.expMultiplier = expMultiplier;
+        this.rodTreasureChanceBonus = rodTreasureChanceBonus;
         this.remainingTicks = durationTicks;
     }
 
@@ -78,6 +81,10 @@ public final class FishingSession {
 
     public double expMultiplier() {
         return expMultiplier;
+    }
+
+    public double rodTreasureChanceBonus() {
+        return rodTreasureChanceBonus;
     }
 
     public boolean isPressing() {

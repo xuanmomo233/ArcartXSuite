@@ -67,6 +67,8 @@ public final class FishingListener implements Listener {
                 minigame.cleanup();
             }
         }
+        // 清理内存缓存，防止内存泄漏
+        service.onPlayerQuit(event.getPlayer().getUniqueId());
     }
 
     @EventHandler

@@ -276,6 +276,15 @@ public class OnlineRewardsService implements Listener {
     }
 
     /**
+     * 返回已注册到 ArcartX 的 UI ID 列表（供 Module 记录到基类生命周期管理）。
+     *
+     * @return 已注册的 UI ID 列表，未注册时返回空列表
+     */
+    public java.util.List<String> registeredUiIds() {
+        return registeredMenuUiIds;
+    }
+
+    /**
      * 返回跨服通道是否处于活跃状态。
      *
      * @return 跨服启用返回 {@code true}

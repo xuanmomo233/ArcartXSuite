@@ -98,6 +98,12 @@ public interface WarehouseRepository {
 
     void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException;
 
+    /** 加载玩家个人设置（自动入库/怪物战利品/入库通知）。 */
+    Optional<PlayerSettingsRecord> loadPlayerSettings(UUID playerUuid) throws SQLException;
+
+    /** 保存或更新玩家个人设置。 */
+    void savePlayerSettings(UUID playerUuid, boolean autoPickup, boolean autoMythic, boolean autoNotify, long updatedAt) throws SQLException;
+
     void close();
 
     record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt) {
@@ -154,6 +160,9 @@ public interface WarehouseRepository {
     }
 
     record SharedMemberRecord(String sharedId, UUID playerUuid, String role, long updatedAt) {
+    }
+
+    record PlayerSettingsRecord(UUID playerUuid, boolean autoPickup, boolean autoMythic, boolean autoNotify, long updatedAt) {
     }
 
 }
