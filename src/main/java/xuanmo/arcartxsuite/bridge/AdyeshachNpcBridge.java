@@ -19,7 +19,6 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
@@ -219,10 +218,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     @Override
     public void unregisterVisibleHandler() {
         if (adyeshachVisibleListener != null) {
-            try {
-                HandlerList.unregisterAll(adyeshachVisibleListener);
-            } catch (RuntimeException ignored) {
-            }
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(adyeshachVisibleListener, "AdyeshachNpcBridge");
             adyeshachVisibleListener = null;
         }
         adyeshachVisibleHandler = null;

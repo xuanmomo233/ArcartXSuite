@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
@@ -102,10 +101,7 @@ final class AttributeDamageDispatcher {
 
     /** 清理所有 Bukkit 监听器 */
     void shutdown() {
-        for (Listener listener : registeredListeners) {
-            HandlerList.unregisterAll(listener);
-        }
-        registeredListeners.clear();
+        xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(registeredListeners, "AttributeDamageDispatcher");
         healListeners.clear();
         listeners.clear();
     }

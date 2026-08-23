@@ -55,7 +55,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
 
     public boolean initialize() {
         if (lifecycleListener != null) {
-            org.bukkit.event.HandlerList.unregisterAll(lifecycleListener);
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(lifecycleListener, "ArcartXPacketBridge");
             lifecycleListener = null;
         }
         available = false;
@@ -108,7 +108,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         closeCallbackRegisteredUiIds.clear();
         callbackKeepAlive.clear();
         if (lifecycleListener != null) {
-            org.bukkit.event.HandlerList.unregisterAll(lifecycleListener);
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(lifecycleListener, "ArcartXPacketBridge");
             lifecycleListener = null;
         }
     }

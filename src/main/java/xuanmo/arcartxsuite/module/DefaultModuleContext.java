@@ -12,7 +12,6 @@ import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabExecutor;
-import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
@@ -348,10 +347,7 @@ final class DefaultModuleContext implements ModuleContext {
 
     @Override
     public void unregisterListeners() {
-        for (Listener listener : registeredListeners) {
-            HandlerList.unregisterAll(listener);
-        }
-        registeredListeners.clear();
+        xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(registeredListeners, "Module[" + moduleId + "]");
     }
 
     @Override

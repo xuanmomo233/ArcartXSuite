@@ -13,7 +13,6 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.event.client.ClientKeyPressEvent;
@@ -110,7 +109,7 @@ public final class KeybindService implements Listener {
 
     private void unregisterClientKeyPressListener() {
         if (listenerRegistered) {
-            HandlerList.unregisterAll(this);
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(this, "KeybindService");
             listenerRegistered = false;
         }
     }
