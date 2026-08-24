@@ -155,9 +155,7 @@ public final class ConversationService implements Listener {
         }
 
         String action = data == null || data.isEmpty() ? "" : safeString(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "conversation", action, configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         String token = data != null && data.size() > 1 ? safeString(data.get(1)) : "";
         String targetId = data != null && data.size() > 2 ? safeString(data.get(2)) : "";
         boolean tokenValid = token.equals(currentToken());

@@ -39,9 +39,7 @@ public final class MapUiPacketHandler {
             return false;
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (!target.allowClientPacket(player, action)) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         boolean tokenized = switch (action) {
             case "unlock_anchor", "teleport_anchor", "create_waypoint", "delete_waypoint" -> true;
             default -> false;

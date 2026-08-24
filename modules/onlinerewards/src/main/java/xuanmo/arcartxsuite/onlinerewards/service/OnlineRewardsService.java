@@ -365,10 +365,7 @@ public class OnlineRewardsService implements Listener {
         }
 
         String action = data == null || data.isEmpty() ? "refresh" : data.get(0).trim().toLowerCase();
-        if (packetGuard != null && !packetGuard.allow(player, "onlinerewards", action, configuration.debug())) {
-            return true;
-        }
-
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         switch (action) {
             case "open" -> openMenu(player);
             case "calendar_prev" -> {

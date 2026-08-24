@@ -250,10 +250,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             return true;
         }
 
-        if (packetGuard != null && !packetGuard.allow(player, "tab", "refresh", configuration.debug())) {
-            return true;
-        }
-
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         requestForcedViewerRefresh(player, matchedDefinitionIds, "client-packet:" + matchedDefinitionIds.get(0));
         return true;
     }
@@ -283,9 +280,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             } else {
                 continue;
             }
-            if (packetGuard != null && !packetGuard.allow(player, "tab", "page", configuration.debug())) {
-                return true;
-            }
+            // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
             if (!clientRefreshGuard.allow(player, definition, configuration.debug())) {
                 return true;
             }

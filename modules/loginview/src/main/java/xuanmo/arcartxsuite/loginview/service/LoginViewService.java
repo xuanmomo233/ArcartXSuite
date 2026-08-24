@@ -178,9 +178,7 @@ public final class LoginViewService implements Listener {
             return false;
         }
         String action = data.isEmpty() ? "" : data.get(0).trim().toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "loginview", action, configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         switch (action) {
             case "login" -> handleLogin(player, value(data, 1), Boolean.parseBoolean(value(data, 2)));
             case "register" -> handleRegister(player, value(data, 1), value(data, 2), Boolean.parseBoolean(value(data, 3)));

@@ -271,10 +271,7 @@ public final class LootScannerService implements Listener {
         if (!active || player == null || !player.isOnline()) {
             return false;
         }
-        String guardAction = guardAction(action);
-        if (packetGuard != null && !packetGuard.allow(player, "pickup", guardAction, configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         switch (action) {
             case "pick" -> handlePick(player, -1);
             case "open_menu" -> menuOpenPlayers.add(player.getUniqueId());

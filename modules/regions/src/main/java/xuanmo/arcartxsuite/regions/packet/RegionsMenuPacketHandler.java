@@ -49,7 +49,7 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
-        if (packetGuard != null && !packetGuard.allow(player, "regions", "menu", false)) return true;
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         switch (action) {

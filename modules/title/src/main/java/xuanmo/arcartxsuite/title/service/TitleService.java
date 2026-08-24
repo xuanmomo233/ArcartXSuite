@@ -304,9 +304,7 @@ public class TitleService {
         }
 
         String action = data == null || data.isEmpty() ? "refresh" : data.get(0).trim().toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "title", action, configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查，避免双重计数导致限流阈值减半。
         switch (action) {
             case "open" -> openMenu(player);
             case "select" -> {

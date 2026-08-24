@@ -53,7 +53,7 @@ public final class RegionsAdminPacketHandler implements ClientPacketHandler {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
         if (!player.hasPermission("axs.regions.admin")) return true;
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "regions", action, false)) return true;
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         switch (action) {
             case "navigate" -> pushData(player, hasValue(data, 1) ? data.get(1) : "regions", null);

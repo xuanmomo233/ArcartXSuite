@@ -26,9 +26,7 @@ final class QuestGpsUiPacketHandler {
             return false;
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (!service.allowClientPacket(player, action)) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         switch (action) {
             case "refresh" -> service.refreshMenu(player);
             case "switch_category" -> service.switchCategory(player, QuestGpsCategory.parse(data.size() > 1 ? data.get(1) : "", service.categoryRegistry()));

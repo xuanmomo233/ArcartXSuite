@@ -165,9 +165,7 @@ public final class AnnouncerService implements Listener {
         if (player == null || packetId == null || !CLICK_PACKET_ID.equalsIgnoreCase(packetId)) {
             return false;
         }
-        if (packetGuard != null && !packetGuard.allow(player, "announcer", "click", configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         AnnouncerEntry entry = data == null || data.isEmpty()
             ? null

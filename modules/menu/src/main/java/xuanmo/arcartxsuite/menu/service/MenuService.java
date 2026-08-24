@@ -394,9 +394,7 @@ public final class MenuService {
             }
             return true;
         }
-        if (packetGuard != null && !packetGuard.allow(player, "menu", "click", false)) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         actionExecutor.executeAll(player, button.actions());
         if (sessions.containsKey(player.getUniqueId())) {
             refreshMenu(player);

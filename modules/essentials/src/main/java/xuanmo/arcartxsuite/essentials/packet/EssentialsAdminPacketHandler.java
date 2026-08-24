@@ -61,7 +61,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
         if (!player.hasPermission("axs.essentials.admin")) return true;
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "essentials", action, false)) return true;
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         switch (action) {
             case "refresh" -> pushAdminData(player, hasValue(data, 1) ? data.get(1) : "players");

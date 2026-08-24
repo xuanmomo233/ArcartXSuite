@@ -64,7 +64,7 @@ public final class EssentialsMenuPacketHandler implements ClientPacketHandler {
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "essentials", action, false)) return true;
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
         switch (action) {
             case "navigate" -> {

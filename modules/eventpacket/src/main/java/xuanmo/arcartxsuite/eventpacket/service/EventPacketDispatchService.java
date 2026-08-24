@@ -125,9 +125,7 @@ public final class EventPacketDispatchService {
         if (configuration == null || packetId == null || presetId == null || subject == null) {
             return false;
         }
-        if (packetGuard != null && !packetGuard.allow(subject, "eventpacket", "client-packet", configuration.debug())) {
-            return true;
-        }
+        // PacketGuard 已由 ClientPacketRouter 在路由层统一调用（客户端包路径）；管理命令 bypass=true 本就意图绕过限流。
         EventPacketRule rule = configuration.findClientPacketRule(packetId, presetId);
         if (rule == null) {
             return false;
