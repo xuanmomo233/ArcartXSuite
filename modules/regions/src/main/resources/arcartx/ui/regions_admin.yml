@@ -41,12 +41,31 @@ ui:
       var.selVolume = packet['selVolume']
       var.selFlags = packet['selFlags']
       var.selMembers = packet['selMembers']
+      # 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
+      var.regionList = []
+      if(var.regions != null){
+        for(key in var.regions.keys()){
+          var.regionList.add(var.regions[key])
+        }
+      }
+      var.memberList = []
+      if(var.selMembers != null){
+        for(key in var.selMembers.keys()){
+          var.memberList.add(var.selMembers[key])
+        }
+      }
+      var.flagList = []
+      if(var.selFlags != null){
+        for(key in var.selFlags.keys()){
+          var.flagList.add(var.selFlags[key])
+        }
+      }
 
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~middle_center
       width: 1920
       height: 1080
     children:
@@ -87,7 +106,7 @@ controls:
                   x: 24
                   y: 8
                   fontSize: 38
-                  texts: "~&6🛡 区域管理"
+                  texts: "~&6区域管理"
               区域数量:
                 type: Text
                 attribute:
@@ -107,47 +126,58 @@ controls:
               normal: ~30,30,38,255
             children:
               导航区域入口:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 10
                   y: 16
                   width: 140
                   height: 40
-                  normal: "var.page == 'regions' ? '180,130,40,200' : '45,45,55,180'"
-                  shape: ~round_rect
-                  radius: 8
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'regions')
                 children:
+                  导航区域背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'regions' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航区域文字:
                     type: Text
                     attribute:
-                      x: 70
-                      y: 8
+                      point: ~middle_center
+                      width: 140
                       through: true
-                      center: true
                       fontSize: 28
                       texts: "~&f区域列表"
 
               导航编辑入口:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 10
                   y: 66
                   width: 140
                   height: 40
-                  normal: "var.page == 'edit' ? '180,130,40,200' : '45,45,55,180'"
-                  shape: ~round_rect
-                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'edit')
                 children:
+                  导航编辑背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'edit' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航编辑文字:
                     type: Text
                     attribute:
-                      x: 70
-                      y: 8
+                      point: ~middle_center
+                      width: 140
                       through: true
-                      center: true
                       fontSize: 28
                       texts: "~&f编辑"
 
@@ -169,8 +199,7 @@ controls:
                   y: 16
                   width: 840
                   height: 590
-                  visible: |-
-                    var.page == 'regions'
+                  visible: "var.page == 'regions'"
                 children:
                   区域列表标题:
                     type: Text
@@ -214,11 +243,18 @@ controls:
                           y: 0
                           width: 840
                           spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(1, 50)){
+                              row = self['区域行'].copy('区域行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           区域行:
                             type: Texture
                             attribute:
-                              entry: var.regions[self.key]
+                              entryKey: 0.round()
+                              entry: "var.regionList != null ? var.regionList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 820
                               height: 50
@@ -240,7 +276,7 @@ controls:
                                   x: 260
                                   y: 14
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['world']}"
                               区域优先级文字:
                                 type: Text
@@ -248,7 +284,7 @@ controls:
                                   x: 440
                                   y: 14
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&7P:{self.parent.entry['priority']}"
                               区域体积文字:
                                 type: Text
@@ -256,53 +292,61 @@ controls:
                                   x: 530
                                   y: 14
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['volume']}格"
                               编辑按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 650
                                   y: 8
                                   width: 70
                                   height: 34
-                                  normal: ~60,140,220,200
-                                  shape: ~round_rect
-                                  radius: 6
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'select_region', self.parent.entry['id'])
                                 children:
+                                  编辑按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '80,160,240,230' : '60,140,220,200'"
+                                      shape: ~round_rect
+                                      radius: 6
                                   编辑按钮文字:
                                     type: Text
                                     attribute:
-                                      x: 35
-                                      y: 5
+                                      point: ~middle_center
+                                      width: 70
                                       through: true
-                                      center: true
-                                      fontSize: 22
+                                      fontSize: 26
                                       texts: "~&f编辑"
                               删除按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 730
                                   y: 8
                                   width: 70
                                   height: 34
-                                  normal: ~200,60,60,200
-                                  shape: ~round_rect
-                                  radius: 6
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'delete_region', self.parent.entry['id'])
                                 children:
+                                  删除按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '220,80,80,230' : '200,60,60,200'"
+                                      shape: ~round_rect
+                                      radius: 6
                                   删除按钮文字:
                                     type: Text
                                     attribute:
-                                      x: 35
-                                      y: 5
+                                      point: ~middle_center
+                                      width: 70
                                       through: true
-                                      center: true
-                                      fontSize: 22
+                                      fontSize: 26
                                       texts: "~&f删除"
 
               # ─── 区域编辑视图 ───
@@ -313,8 +357,7 @@ controls:
                   y: 16
                   width: 840
                   height: 590
-                  visible: |-
-                    var.page == 'edit'
+                  visible: "var.page == 'edit'"
                 children:
                   编辑标题:
                     type: Text
@@ -381,11 +424,18 @@ controls:
                           y: 0
                           width: 400
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 30)){
+                              row = self['成员行'].copy('成员行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           成员行:
                             type: Texture
                             attribute:
-                              entry: var.selMembers[self.key]
+                              entryKey: 0.round()
+                              entry: "var.memberList != null ? var.memberList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 380
                               height: 34
@@ -399,7 +449,7 @@ controls:
                                   x: 12
                                   y: 5
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~&f{self.parent.entry['name']}"
                               成员身份文字:
                                 type: Text
@@ -407,30 +457,34 @@ controls:
                                   x: 180
                                   y: 6
                                   through: true
-                                  fontSize: 20
+                                  fontSize: 26
                                   texts: "~{self.parent.entry['role'] == 'owner' ? '&6所有者' : '&b成员'}"
                               移除成员按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 310
                                   y: 3
                                   width: 60
                                   height: 28
-                                  normal: ~180,50,50,180
-                                  shape: ~round_rect
-                                  radius: 4
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_member', var.selId, self.parent.entry['uuid'])
                                 children:
-                                  移除成员按钮文字:
+                                  移除成员背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '200,70,70,210' : '180,50,50,180'"
+                                      shape: ~round_rect
+                                      radius: 4
+                                  移除成员文字:
                                     type: Text
                                     attribute:
-                                      x: 30
-                                      y: 3
+                                      point: ~middle_center
+                                      width: 60
                                       through: true
-                                      center: true
-                                      fontSize: 20
+                                      fontSize: 26
                                       texts: "~&f移除"
 
                   # 标志列表
@@ -476,11 +530,18 @@ controls:
                           y: 0
                           width: 840
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 40)){
+                              row = self['标志行'].copy('标志行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           标志行:
                             type: Texture
                             attribute:
-                              entry: var.selFlags[self.key]
+                              entryKey: 0.round()
+                              entry: "var.flagList != null ? var.flagList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 820
                               height: 38
@@ -494,7 +555,7 @@ controls:
                                   x: 12
                                   y: 7
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&b{self.parent.entry['key']}"
                               标志描述文字:
                                 type: Text
@@ -502,7 +563,7 @@ controls:
                                   x: 200
                                   y: 8
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['desc']}"
                               标志状态文字:
                                 type: Text
@@ -510,98 +571,114 @@ controls:
                                   x: 520
                                   y: 8
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : self.parent.entry['state'] == 'deny' ? '&c拒绝' : '&8未设置'}"
                               允许按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 620
                                   y: 4
                                   width: 56
                                   height: 30
-                                  normal: ~40,140,60,180
-                                  shape: ~round_rect
-                                  radius: 4
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'allow')
                                 children:
+                                  允许按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '60,160,80,220' : '40,140,60,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   允许按钮文字:
                                     type: Text
                                     attribute:
-                                      x: 28
-                                      y: 4
+                                      point: ~middle_center
+                                      width: 56
                                       through: true
-                                      center: true
-                                      fontSize: 20
+                                      fontSize: 26
                                       texts: "~&f允许"
                               拒绝按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 684
                                   y: 4
                                   width: 56
                                   height: 30
-                                  normal: ~180,50,50,180
-                                  shape: ~round_rect
-                                  radius: 4
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'deny')
                                 children:
+                                  拒绝按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '200,70,70,220' : '180,50,50,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   拒绝按钮文字:
                                     type: Text
                                     attribute:
-                                      x: 28
-                                      y: 4
+                                      point: ~middle_center
+                                      width: 56
                                       through: true
-                                      center: true
-                                      fontSize: 20
+                                      fontSize: 26
                                       texts: "~&f拒绝"
                               清除标志按钮:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 748
                                   y: 4
                                   width: 56
                                   height: 30
-                                  normal: ~60,60,70,180
-                                  shape: ~round_rect
-                                  radius: 4
                                 action:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_flag', var.selId, self.parent.entry['key'])
                                 children:
+                                  清除按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.isHovered() ? '80,80,95,210' : '60,60,70,180'"
+                                      shape: ~round_rect
+                                      radius: 4
                                   清除按钮文字:
                                     type: Text
                                     attribute:
-                                      x: 28
-                                      y: 4
+                                      point: ~middle_center
+                                      width: 56
                                       through: true
-                                      center: true
-                                      fontSize: 20
+                                      fontSize: 26
                                       texts: "~&7清除"
 
                   返回按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       x: 720
                       y: 0
                       width: 100
                       height: 36
-                      normal: ~60,60,70,200
-                      shape: ~round_rect
-                      radius: 8
                     action:
                       click: |-
                         Packet.send(var.packetId, 'navigate', 'regions')
                     children:
+                      返回按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '80,80,95,230' : '60,60,70,200'"
+                          shape: ~round_rect
+                          radius: 8
                       返回按钮文字:
                         type: Text
                         attribute:
-                          x: 50
-                          y: 5
+                          point: ~middle_center
+                          width: 100
                           through: true
-                          center: true
                           fontSize: 26
                           texts: "~&f← 返回"

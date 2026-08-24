@@ -50,9 +50,12 @@ reward:
   # 奖励说明
   describe: "泡澡的人越多，获取的铜币和经验越多"
   # 发奖后发送的邮件预设（需 Mail 模块）
+  # 预设需在 Mail 模块的 presets 目录中存在（见 Mail 模块的 mail/presets/ 资源），
+  # 否则每次发奖都会打印 "预设邮件派发失败" 警告。
+  # 启用方式：在 Mail 模块创建对应预设后，取消下方注释并填入预设 ID。
   mail:
-    presets:
-      - "afk_reward_mail"
+    presets: []
+    # - "afk_reward_mail"
 
   # 奖励档位从高到低排列
   # 各档位对应权限 axs.afkreward.start.<id>.<档位名>，玩家拥有对应权限则执行该档位命令

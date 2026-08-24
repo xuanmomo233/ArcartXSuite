@@ -61,11 +61,14 @@ manual:
   subtitle-on-reward: ""
   # 结束挂机时播放的字幕组 ID
   subtitle-on-end: ""
-  # 结束挂机时发送的邮件预设
+  # 结束挂机时发送的邮件预设（需 Mail 模块）
+  # 预设需在 Mail 模块的 presets 目录中存在（见 Mail 模块的 mail/presets/ 资源），
+  # 否则结束挂机时会打印 "预设邮件派发失败" 警告。
+  # 启用方式：在 Mail 模块创建对应预设后，取消下方注释并填入预设 ID。
   end-mail:
     mail:
-      presets:
-        - "afk_end_mail"
+      presets: []
+      # - "afk_end_mail"
 
   # MANUAL 挂机期间的独立行为保护开关，默认全部开启。
   protections:

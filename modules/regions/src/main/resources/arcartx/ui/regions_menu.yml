@@ -55,12 +55,43 @@ ui:
       var.flags = packet['flags']
       var.owners = packet['owners']
       var.members = packet['members']
+      # 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
+      var.curFlagList = []
+      if(var.currentFlags != null){
+        for(key in var.currentFlags.keys()){
+          var.curFlagList.add(var.currentFlags[key])
+        }
+      }
+      var.myRegionList = []
+      if(var.myRegions != null){
+        for(key in var.myRegions.keys()){
+          var.myRegionList.add(var.myRegions[key])
+        }
+      }
+      var.ownerList = []
+      if(var.owners != null){
+        for(key in var.owners.keys()){
+          var.ownerList.add(var.owners[key])
+        }
+      }
+      var.memberList = []
+      if(var.members != null){
+        for(key in var.members.keys()){
+          var.memberList.add(var.members[key])
+        }
+      }
+      var.detailFlagList = []
+      if(var.flags != null){
+        for(key in var.flags.keys()){
+          var.detailFlagList.add(var.flags[key])
+        }
+      }
 
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~middle_center
       width: 1920
       height: 1080
     children:
@@ -101,7 +132,7 @@ controls:
                   x: 24
                   y: 8
                   fontSize: 38
-                  texts: "~&a🌍 区域信息"
+                  texts: "~&a区域信息"
 
           # ═══ 左侧导航 ═══
           导航栏:
@@ -114,50 +145,58 @@ controls:
               normal: ~30,30,38,255
             children:
               导航当前区域入口:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 10
                   y: 16
                   width: 130
                   height: 40
-                  normal: "var.page == 'current' ? '40,160,100,200' : '45,45,55,180'"
-                  shape: ~round_rect
-                  radius: 8
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'current')
                 children:
+                  导航当前区域背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'current' ? '40,160,100,200' : (self.isHovered() ? '60,70,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航当前区域文字:
                     type: Text
                     attribute:
-                      x: 65
-                      y: 8
+                      point: ~middle_center
+                      width: 130
                       through: true
-                      center: true
                       fontSize: 28
                       texts: "~&f当前"
 
               导航我的区域入口:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 10
                   y: 66
                   width: 130
                   height: 40
-                  normal: "var.page == 'my' || var.page == 'detail' ? '40,160,100,200' : '45,45,55,180'"
-                  shape: ~round_rect
-                  radius: 8
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'my')
                 children:
+                  导航我的区域背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'my' || var.page == 'detail' ? '40,160,100,200' : (self.isHovered() ? '60,70,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
                   导航我的区域文字:
                     type: Text
                     attribute:
-                      x: 65
-                      y: 8
+                      point: ~middle_center
+                      width: 130
                       through: true
-                      center: true
                       fontSize: 28
                       texts: "~&f我的"
 
@@ -179,8 +218,7 @@ controls:
                   y: 16
                   width: 670
                   height: 490
-                  visible: |-
-                    var.page == 'current'
+                  visible: "var.page == 'current'"
                 children:
                   当前区域标题:
                     type: Text
@@ -259,11 +297,18 @@ controls:
                           y: 0
                           width: 670
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 40)){
+                              row = self['标志行'].copy('标志行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           标志行:
                             type: Texture
                             attribute:
-                              entry: var.currentFlags[self.key]
+                              entryKey: 0.round()
+                              entry: "var.curFlagList != null ? var.curFlagList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 650
                               height: 36
@@ -277,7 +322,7 @@ controls:
                                   x: 12
                                   y: 6
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&b{self.parent.entry['name']}"
                               标志描述文字:
                                 type: Text
@@ -285,7 +330,7 @@ controls:
                                   x: 200
                                   y: 7
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['desc']}"
                               标志状态文字:
                                 type: Text
@@ -293,7 +338,7 @@ controls:
                                   x: 560
                                   y: 7
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
 
               # ─── 我的区域列表 ───
@@ -304,8 +349,7 @@ controls:
                   y: 16
                   width: 670
                   height: 490
-                  visible: |-
-                    var.page == 'my'
+                  visible: "var.page == 'my'"
                 children:
                   我的区域标题:
                     type: Text
@@ -349,15 +393,22 @@ controls:
                           y: 0
                           width: 670
                           spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(1, 40)){
+                              row = self['我的区域行'].copy('我的区域行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           我的区域行:
                             type: Texture
                             attribute:
-                              entry: var.myRegions[self.key]
+                              entryKey: 0.round()
+                              entry: "var.myRegionList != null ? var.myRegionList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 650
                               height: 50
-                              normal: ~40,40,50,180
+                              normal: "self.isHovered() ? '55,55,68,210' : '40,40,50,180'"
                               shape: ~round_rect
                               radius: 6
                             action:
@@ -378,7 +429,7 @@ controls:
                                   x: 300
                                   y: 14
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['world']}"
                               我的区域身份文字:
                                 type: Text
@@ -386,7 +437,7 @@ controls:
                                   x: 520
                                   y: 14
                                   through: true
-                                  fontSize: 24
+                                  fontSize: 26
                                   texts: "~{self.parent.entry['isOwner'] == 'true' ? '&6所有者' : '&b成员'}"
 
               # ─── 区域详情 ───
@@ -397,8 +448,7 @@ controls:
                   y: 16
                   width: 670
                   height: 490
-                  visible: |-
-                    var.page == 'detail'
+                  visible: "var.page == 'detail'"
                 children:
                   详情标题:
                     type: Text
@@ -470,15 +520,22 @@ controls:
                           y: 0
                           width: 300
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 20)){
+                              row = self['所有者项目'].copy('所有者项目' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           所有者项目:
                             type: Text
                             attribute:
-                              entry: var.owners[self.key]
+                              entryKey: 0.round()
+                              entry: "var.ownerList != null ? var.ownerList[self.entryKey] : none"
                               visible: self.entry != none
                               x: 8
                               y: 2
-                              fontSize: 24
+                              fontSize: 26
                               texts: "~&f{self.entry}"
                   成员文字:
                     type: Text
@@ -522,15 +579,22 @@ controls:
                           y: 0
                           width: 300
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 20)){
+                              row = self['成员项目'].copy('成员项目' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           成员项目:
                             type: Text
                             attribute:
-                              entry: var.members[self.key]
+                              entryKey: 0.round()
+                              entry: "var.memberList != null ? var.memberList[self.entryKey] : none"
                               visible: self.entry != none
                               x: 8
                               y: 2
-                              fontSize: 24
+                              fontSize: 26
                               texts: "~&f{self.entry}"
                   详情标志文字:
                     type: Text
@@ -574,11 +638,18 @@ controls:
                           y: 0
                           width: 670
                           spaceBetween: 4
+                        action:
+                          create: |-
+                            for(i in range(1, 40)){
+                              row = self['详情标志行'].copy('详情标志行' + i.round)
+                              row.entryKey = i.round
+                            }
                         children:
                           详情标志行:
                             type: Texture
                             attribute:
-                              entry: var.flags[self.key]
+                              entryKey: 0.round()
+                              entry: "var.detailFlagList != null ? var.detailFlagList[self.entryKey] : none"
                               visible: self.entry != none
                               width: 650
                               height: 32
@@ -592,7 +663,7 @@ controls:
                                   x: 12
                                   y: 5
                                   through: true
-                                  fontSize: 22
+                                  fontSize: 26
                                   texts: "~&b{self.parent.entry['name']}"
                               详情标志描述文字:
                                 type: Text
@@ -600,7 +671,7 @@ controls:
                                   x: 200
                                   y: 6
                                   through: true
-                                  fontSize: 20
+                                  fontSize: 26
                                   texts: "~&7{self.parent.entry['desc']}"
                               详情标志状态文字:
                                 type: Text
@@ -608,28 +679,32 @@ controls:
                                   x: 560
                                   y: 6
                                   through: true
-                                  fontSize: 20
+                                  fontSize: 26
                                   texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
                   返回按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       x: 560
                       y: 0
                       width: 100
                       height: 36
-                      normal: ~60,60,70,200
-                      shape: ~round_rect
-                      radius: 8
                     action:
                       click: |-
                         Packet.send(var.packetId, 'navigate', 'my')
                     children:
+                      返回按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '80,80,95,230' : '60,60,70,200'"
+                          shape: ~round_rect
+                          radius: 8
                       返回按钮文字:
                         type: Text
                         attribute:
-                          x: 50
-                          y: 5
+                          point: ~middle_center
+                          width: 100
                           through: true
-                          center: true
                           fontSize: 26
                           texts: "~&f← 返回"

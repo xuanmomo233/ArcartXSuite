@@ -3,16 +3,16 @@
 # 详细文档见 docs/modules/tab.md
 
 enabled: true  # 是否启用此 Tab 定义（默认开启，作为基础在线玩家列表）
-# 单 UI 发包（简写格式）：
-ui-id: "tab"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab.yml）
-packet-handler: "tab"  # UI 端接收包的 handler 名称
-# 多 UI 发包（新格式）：同一个 payload 可同时发给多个 UI，每个 UI 可自定义 handler：
+# UI 发包目标（同一个 payload 可同时发给多个 UI，每个 UI 可自定义 handler）：
+ui-targets:
+  - ui-id: "tab"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab.yml）
+    packet-handler: "tab"  # UI 端接收包的 handler 名称
+# 多 UI 示例（按需追加更多目标）：
 # ui-targets:
 #   - ui-id: "tab"
 #     packet-handler: "tab"
 #   - ui-id: "tab-hud"
 #     packet-handler: "overlay"
-# 注意：ui-targets 优先级高于 ui-id + packet-handler；两者不要同时写。
 # Tab 仍以服务端周期 diff 同步为主；下面的客户端回包刷新保留为兼容入口，默认启用。
 # 客户端 Packet.send("TAB", "update") 会请求一次 viewer 级强制重发，但仍受限流保护。
 # 如果你不需要这个兼容入口，可把 client-refresh-packet-id 留空关闭。
@@ -25,33 +25,21 @@ client-refresh-guard:  # 客户端回包频率限制（防止恶意高频刷新�
   mode: "silent"  # 超限模式: silent 静默丢弃 / notify 提示玩家
   notify-message: "&cTAB 刷新过快，请稍后再试。"  # 超限提示消息（mode=notify 时生效）
   notify-cooldown-ms: 3000  # 超限提示消息冷却时间（毫秒）
-# Tab 默认只遍历当前在线玩家，然后按照 sort-mode 排序后发一个列表给 UI。
-# 当前支持的排序模式只有：
-# sort-mode: "name"                   按玩家名排序
-# sort-mode: "prem"                   按权限组排序，顺序由 sort-prem-group 决定
-# sort-mode: "papi"                   按 PlaceholderAPI 变量排序，排序值由 sort-papi-key 决定
+# Tab 默认只遍历当前在线玩家，然后按照 sort-keys 排序后发一个列表给 UI。
+# 排序键模式（sort-keys 每个元素的 mode）：
+#   name  按玩家名排序
+#   prem  按权限组排序，顺序由 prem-group 决定
+#   papi  按 PlaceholderAPI 变量排序，排序值由 key 决定
 #
 # 其他可选字段：
 # max-entries: -1                     -1 表示不限制条目数
-# sort-descending: false              是否倒序
-# sort-papi-key: "%player_money%"     当 sort-mode=papi 时，使用这个 Placeholder 作为排序依据
-# sort-papi-numeric: false            当 sort-mode=papi 时，是否把 Placeholder 值按数字排序
-# sort-prem-group: []                 当 sort-mode=prem 时，权限组优先级列表，未列出的组视为 default
 # omit-blank-values: false            pack 渲染结果为空字符串时是否跳过该条
 max-entries: -1  # 最大条目数，-1 表示不限制
-sort-mode: "name"  # 排序模式: name 按玩家名 / prem 按权限组 / papi 按 PAPI 变量
-sort-descending: false  # 是否倒序排序
-sort-papi-key: "%player_money%"  # sort-mode=papi 时使用的 PAPI 排序键
-sort-papi-numeric: false  # sort-mode=papi 时是否按数字排序
-sort-prem-group:  # sort-mode=prem 时的权限组优先级列表（从高到低）
-  - "admin"
-  - "vip3"
-  - "vip2"
-  - "vip1"
-  - "default"
+sort-keys:  # 多键复合排序（按列表顺序优先级递减）
+  - { mode: name }  # 当前只按玩家名排序；如需多键见下方示例
 omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该玩家
 
-# 多键复合排序（推荐）。如果填写了 sort-keys，则上面的 sort-mode/sort-papi-*/sort-prem-group/sort-descending 失效。
+# 多键复合排序示例（上方 sort-keys 当前只有单键 name，可按需扩展为多键）。
 # 每个 key 字段：
 #   mode: name / prem / papi
 #   key (papi 模式): PlaceholderAPI 表达式
@@ -76,7 +64,7 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 #     - { papi: "%player_gamemode%", equals: "SPECTATOR" }
 
 # 置顶 / 置底：命中 top 的玩家排在所有 middle 之前；命中 bottom 的排在最后。
-# 三个分桶各自再用 sort-keys / sort-mode 内部排序。
+# 三个分桶各自再用 sort-keys 内部排序。
 # pinned:
 #   top:
 #     - { permission: "axs.tab.pin-top" }
@@ -135,7 +123,7 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 #   "%player_uuid%":
 #     name: "%axstitle_tab_adventure_prefix%%player_name%%axstitle_tab_adventure_suffix%"
 #     health: "%player_health%"
-# 如果 pack / sort-papi-key 依赖 PlaceholderAPI 动态变量，仍由服务端周期扫描兜底。
+# 如果 pack / sort-keys 的 papi key 依赖 PlaceholderAPI 动态变量，仍由服务端周期扫描兜底。
 # 聊天栏前后缀可按分组接入，例如 %axstitle_chat_adventure_prefix% 与 %axstitle_chat_adventure_suffix%
 #
 # 玩家头像（PlayerSkin 纹理表达式）：
@@ -145,4 +133,4 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 #   name: "%axstitle_tab_adventure_prefix%%player_name%"
 #   uuid: "{player_uuid}"
 #   health: "%player_health%"
-pack: "%axstitle_tab_adventure_prefix%%player_name%%axstitle_tab_adventure_suffix%%player_health%"  # 字符串形态 pack，按每个在线玩家渲染后组成根列表发给 UI
+pack: "%axstitle_display% %player_name%"  # 字符串形态 pack，按每个在线玩家渲染后组成根列表发给 UI

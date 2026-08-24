@@ -1,5 +1,10 @@
 # AXS 资源说明
-# 用途: OnlineRewards 模块默认菜单，三栏现代风格布局（参考 title_menu 风格）。
+# 用途: OnlineRewards 模块默认菜单，battlepass 玻璃风格三段式布局。
+# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（签到/进度/奖励）+ 内容区
+# 视觉规范:
+#   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
+#   卡片 62,66,74,210  描边 255,255,255,230
+#   主色（天青蓝）90,150,250  已签到 124,196,142  过期 210,120,120  进行中 232,180,90
 # 前置依赖: ArcartX；OnlineRewards 模块启用后会自动注册或导出。
 # 关联文件: ArcartXOnlineRewards.yml
 # 重载命令: /axs onlinereward reload
@@ -137,6 +142,14 @@ ui:
         e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
         e.entryKey = key
       }
+      while(val.选中奖励堆叠.childrenCount() > 1){
+        val.选中奖励堆叠.get(1).remove()
+      }
+      for(i in range(1, var.maxSelectedRewardCount - 1)){
+        key = i.round()
+        e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
+        e.entryKey = key
+      }
       var.actionBusy = false
     # packetHandler: update
     # 包字段: 同 init（实时刷新菜单数据）
@@ -223,6 +236,14 @@ ui:
         e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
         e.entryKey = key
       }
+      while(val.选中奖励堆叠.childrenCount() > 1){
+        val.选中奖励堆叠.get(1).remove()
+      }
+      for(i in range(1, var.maxSelectedRewardCount - 1)){
+        key = i.round()
+        e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
+        e.entryKey = key
+      }
       var.actionBusy = false
   action:
     seconds: |-
@@ -236,6 +257,7 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
+      var.currentPage = 'signin'
       var.maxRewardCount = 0
       var.maxPeriodicCount = 0
       var.maxSigninRewardCount = 0
@@ -249,6 +271,18 @@ ui:
       var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
+      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
+      // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
+      // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
+      // contentW = 内容区宽度（左 372 右 48 边距），cardW = 内容区内并排两张卡的单张宽度
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.cardW = (var.contentW - 96) / 2
     open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'
       var.dailyTimeText = '0分钟'
@@ -286,790 +320,1334 @@ ui:
       var.serverSignInGoalNext = 0
       var.calendarSignedCount = 0
       var.calendarRate = 0
+      Packet.send(var.packetId, 'refresh')
+    # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.cardW = (var.contentW - 96) / 2
+
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
+  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;30,32,38,110
+  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
+  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边；
+  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配，顶栏与内容区同步铺满
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      主面板:
-        type: Texture
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
+      顶栏:
+        type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1680
-          height: 980
-          normal: ~95,95,95,220
-          shape: ~round_rect
-          radius: 28
-        effect:
-          stroke:
-            width: 2
-            color: ~80,180,255,180
-          shadow:
-            xOffset: 2
-            yOffset: 2
-            blur: 5
-            color: ~255,255,255,75
-          ripple:
-            duration: 1200
-            color: ~255,255,255,110
-            width: 0.05
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~62,66,74,210
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~90,150,250,255
+              shape: ~round_rect
+              radius: 3
           标题:
             type: Text
             attribute:
-              x: 40
-              y: 30
-              texts: "~&f在线奖励中心"
-              fontSize: 81
-          刷新按钮:
+              point: ~middle_left
+              x: 68
+              texts: "~&f在线奖励"
+              fontSize: 48
+          标题竖线:
             type: Texture
             attribute:
-              x: 1480
-              y: 30
-              width: 120
+              point: ~middle_left
+              x: 220
+              width: 1
+              height: 30
+              normal: ~62,66,74,210
+          签到状态:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 240
+              texts: "var.signInStatusText"
+              fontSize: 36
+          # 右侧：刷新按钮 + 关闭
+          刷新按钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -104
+              width: 64
               height: 40
-              normal: ~255,255,255,150
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            children:
-              刷新文本:
-                type: Text
-                attribute:
-                  x: 60
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: "~&0刷新"
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'refresh')
-
-          # ========== 左栏：签到日历 ==========
-          左栏背景:
-            type: Texture
+            children:
+              刷新底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
+              刷新文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 64
+                  texts: "~&f刷新"
+                  fontSize: 30
+                  through: true
+          关闭按钮:
+            type: Canvas
             attribute:
-              x: 40
-              y: 110
-              width: 460
-              height: 830
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          左栏标题:
-            type: Text
-            attribute:
-              x: 56
-              y: 128
-              texts: "~&0每日签到"
-              fontSize: 49
-          左栏签到统计:
-            type: Text
-            attribute:
-              x: 56
-              y: 178
-              texts: "'&0连续: &0' + var.signInStreak.round(0) + '   &0累计: &0' + var.signInTotal.round(0) + '   &0补签卡: &0' + var.makeupCardCount.round(0)"
-              fontSize: 36
-          签到按钮:
-            type: Texture
-            attribute:
-              x: 56
-              y: 220
-              width: 180
+              point: ~middle_right
+              x: -40
+              width: 40
               height: 40
-              normal: "var.selectedActionEnabled ? '100,200,130,230' : '145,145,145,255'"
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
+                  through: true
+
+      # ── 左侧导航 ───────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
-              radius: 12
-              enable: "!var.actionBusy && var.actionToken != ''"
+              radius: 14
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
-            children:
-              签到按钮文本:
-                type: Text
-                attribute:
-                  x: 90
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: "'&0' + var.selectedActionText"
+                width: 3
+                color: ~255,255,255,230
+          # 导航：签到
+          导航签到:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
             action:
               clickLeft: |-
-                if(var.selectedAction == 'signin'){
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'signin', var.actionToken)
-                }elif(var.selectedAction == 'makeup'){
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'makeup', var.selectedDateText, var.actionToken)
-                }
-
-          日历标题:
+                var.currentPage = 'signin'
+            children:
+              签到底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.currentPage == 'signin' ? '90,150,250,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "var.currentPage == 'signin' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+              签到高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~90,150,250,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.currentPage == 'signin'"
+              签到导航文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentPage == 'signin' ? '&0签到' : '&f签到'"
+                  fontSize: 36
+                  through: true
+          # 导航：进度
+          导航进度:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                var.currentPage = 'progress'
+            children:
+              进度底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentPage == 'progress' ? '90,150,250,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.currentPage == 'progress' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+              进度高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~90,150,250,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.currentPage == 'progress'"
+              进度导航文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentPage == 'progress' ? '&0进度' : '&f进度'"
+                  fontSize: 36
+                  through: true
+          # 导航：奖励
+          导航奖励:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                var.currentPage = 'rewards'
+            children:
+              奖励底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentPage == 'rewards' ? '90,150,250,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.currentPage == 'rewards' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+              奖励高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~90,150,250,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.currentPage == 'rewards'"
+              奖励导航文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.currentPage == 'rewards' ? '&0奖励' : '&f奖励'"
+                  fontSize: 36
+                  through: true
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 232
+              width: 264
+              height: 2
+              normal: ~255,255,255,230
+          签到统计区标题:
             type: Text
             attribute:
-              x: 56
-              y: 276
-              texts: "'&0签到日历 &0| &0' + var.calendarMonthText"
-              fontSize: 36
-          上月按钮:
-            type: Canvas
+              point: ~top_left
+              x: 20
+              y: 248
+              texts: "~&f签到概况"
+              fontSize: 30
+          连续签到:
+            type: Text
             attribute:
-              x: 312
-              y: 278
-              width: 44
-              height: 30
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'calendar_prev')
-            children:
-              上月背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~145,145,145,255
-                  shape: ~round_rect
-                  radius: 8
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              上月文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 44
-                  texts: "~&0<"
-                  fontSize: 36
-                  through: true
-          本月按钮:
-            type: Canvas
+              point: ~top_left
+              x: 20
+              y: 282
+              texts: "'&f连续 &e' + var.signInStreak.round(0) + ' &f天'"
+              fontSize: 30
+          累计签到:
+            type: Text
             attribute:
-              x: 364
-              y: 278
-              width: 60
-              height: 30
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'calendar_today')
-            children:
-              本月背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~145,145,145,255
-                  shape: ~round_rect
-                  radius: 8
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              本月文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 60
-                  texts: "~&0本月"
-                  fontSize: 28
-                  through: true
-          下月按钮:
-            type: Canvas
+              point: ~top_left
+              x: 20
+              y: 316
+              texts: "'&f累计 &e' + var.signInTotal.round(0) + ' &f天'"
+              fontSize: 30
+          补签卡数:
+            type: Text
             attribute:
-              x: 434
-              y: 278
-              width: 44
-              height: 30
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'calendar_next')
-            children:
-              下月背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~145,145,145,255
-                  shape: ~round_rect
-                  radius: 8
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              下月文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 44
-                  texts: "~&0>"
-                  fontSize: 36
-                  through: true
+              point: ~top_left
+              x: 20
+              y: 350
+              texts: "'&f补签卡 &e' + var.makeupCardCount.round(0) + ' &f张'"
+              fontSize: 30
+          导航提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -20
+              texts: "~&fESC 关闭界面"
+              fontSize: 28
 
-          日历网格:
-            type: HGrid
-            val: 日历网格
+      # ── 内容区 ──────────────────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
             attribute:
-              x: 56
-              y: 320
-              width: 420
-              height: 280
-              column: 7
-              spaceBetweenX: 6
-              spaceBetweenY: 6
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+
+          # ════════ 签到页 ════════
+          签到页:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.currentPage == 'signin'"
             children:
-              日历模板:
+              # ── 左半：签到日历卡片 ──
+              签到日历卡片:
                 type: Canvas
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.calendarRows[self.entryKey]
-                  width: 52
-                  height: 38
-                  visible: self.entry != none
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
+                  point: ~top_left
+                  x: 32
+                  y: 24
+                  width: "var.cardW"
+                  height: "var.viewH - 192"
                 children:
-                  日历背景:
+                  日历卡底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      through: true
-                      normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
+                      normal: ~62,66,74,210
                       shape: ~round_rect
-                      radius: 8
+                      radius: 12
                     effect:
                       stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  日历文字:
+                        width: 3
+                        color: ~255,255,255,230
+                  日历卡标题:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      width: 52
-                      texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
-                      fontSize: 36
-                      through: true
-                  日历选中:
+                      point: ~top_left
+                      x: 28
+                      y: 24
+                      texts: "~&f每日签到"
+                      fontSize: 40
+                  日历月份标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 76
+                      texts: "'&f签到日历 &7| &f' + var.calendarMonthText"
+                      fontSize: 34
+                  # 月份切换按钮
+                  上月按钮:
                     type: Canvas
                     attribute:
-                      through: true
-                      width: 52
-                      height: 38
-                      entry: self.parent.entry
-                      visible: "self.parent.entry != none && self.parent.entry['date'] == var.selectedDateText"
+                      point: ~top_left
+                      x: "var.cardW - 168"
+                      y: 78
+                      width: 40
+                      height: 32
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'calendar_prev')
                     children:
-                      日历选中背景:
+                      上月背景:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
+                          normal: ~62,66,74,210
                           shape: ~round_rect
                           radius: 8
                         effect:
                           stroke:
                             width: 2
-                            color: ~0,0,0,255
-                      日历选中文字:
+                            color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
+                      上月文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 52
-                          texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
-                          fontSize: 36
+                          width: 40
+                          texts: "~&f<"
+                          fontSize: 32
                           through: true
-                  日历今:
+                  本月按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "var.cardW - 124"
+                      y: 78
+                      width: 56
+                      height: 32
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'calendar_today')
+                    children:
+                      本月背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~62,66,74,210
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
+                      本月文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 56
+                          texts: "~&f本月"
+                          fontSize: 28
+                          through: true
+                  下月按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "var.cardW - 64"
+                      y: 78
+                      width: 40
+                      height: 32
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'calendar_next')
+                    children:
+                      下月背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~62,66,74,210
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
+                      下月文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 40
+                          texts: "~&f>"
+                          fontSize: 32
+                          through: true
+                  # 日历网格
+                  日历网格:
+                    type: HGrid
+                    val: 日历网格
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 124
+                      width: "var.cardW - 56"
+                      height: 380
+                      column: 7
+                      spaceBetweenX: 6
+                      spaceBetweenY: 6
+                    children:
+                      日历模板:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.calendarRows[self.entryKey]
+                          width: 76
+                          height: 56
+                          visible: self.entry != none
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'preview_day', self.entry['date'])
+                        children:
+                          日历背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '124,196,142,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : (self.parent.entry['status'] == 'future' ? '62,66,74,210' : '90,150,250,230')))"
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['date'] == var.selectedDateText ? '120,180,255,255' : '255,255,255,230')"
+                          日历文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 76
+                              texts: "self.parent.entry == none ? none : ('&f' + self.parent.entry['label'])"
+                              fontSize: 32
+                              through: true
+                          日历今:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -4
+                              y: 4
+                              through: true
+                              visible: "self.parent.entry != none && self.parent.entry['today']"
+                              texts: "~&e今"
+                              fontSize: 20
+                  # 本月签到统计
+                  统计分隔线:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 524
+                      width: "var.cardW - 56"
+                      height: 2
+                      normal: ~255,255,255,230
+                  统计标题:
                     type: Text
                     attribute:
-                      through: true
-                      x: 38
-                      y: 22
-                      visible: "self.parent.entry != none && self.parent.entry['today']"
-                      texts: "~&6今"
-                      fontSize: 22
+                      point: ~top_left
+                      x: 28
+                      y: 540
+                      texts: "~&f本月签到统计"
+                      fontSize: 34
+                  已签到统计:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 580
+                      texts: "'&f已签到 &a' + var.calendarSignedCount + ' &f/ &7' + var.calendarCount.round(0) + ' &f天'"
+                      fontSize: 30
+                  签到进度:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 614
+                      texts: "'&f签到进度 &a' + var.calendarRate + '%'"
+                      fontSize: 30
 
-          统计标题:
-            type: Text
-            attribute:
-              x: 56
-              y: 616
-              texts: "~&0本月签到统计"
-              fontSize: 49
-          已签到统计:
-            type: Text
-            attribute:
-              x: 56
-              y: 670
-              texts: "'&0已签到: &0' + var.calendarSignedCount + ' &0/ &0' + var.calendarCount.round(0) + ' &0天'"
-              fontSize: 36
-          签到进度:
-            type: Text
-            attribute:
-              x: 56
-              y: 708
-              texts: "'&0签到进度: &0' + var.calendarRate + '%'"
-              fontSize: 36
-
-          # ========== 中栏：在线进度 ==========
-          中栏背景:
-            type: Texture
-            attribute:
-              x: 520
-              y: 110
-              width: 560
-              height: 830
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          中栏标题:
-            type: Text
-            attribute:
-              x: 540
-              y: 128
-              texts: "~&0在线时长统计"
-              fontSize: 49
-          今日在线:
-            type: Text
-            attribute:
-              x: 540
-              y: 178
-              texts: "'&0今日在线  &0' + var.dailyTimeText"
-              fontSize: 36
-          本周在线:
-            type: Text
-            attribute:
-              x: 540
-              y: 216
-              texts: "'&0本周在线  &0' + var.weeklyTimeText"
-              fontSize: 36
-          本月在线:
-            type: Text
-            attribute:
-              x: 540
-              y: 254
-              texts: "'&0本月在线  &0' + var.monthlyTimeText"
-              fontSize: 36
-          总计在线:
-            type: Text
-            attribute:
-              x: 540
-              y: 292
-              texts: "'&0总计在线  &0' + var.totalTimeText"
-              fontSize: 36
-          离线储蓄:
-            type: Text
-            attribute:
-              x: 540
-              y: 330
-              visible: "var.offlineSavingsText != '0分钟'"
-              texts: "'&0离线储蓄  &0' + var.offlineSavingsText"
-              fontSize: 36
-
-          中栏分隔线1:
-            type: Texture
-            attribute:
-              x: 540
-              y: 380
-              width: 520
-              height: 2
-              normal: ~0,0,0,100
-              shape: ~round_rect
-              radius: 1
-
-          阶段标题:
-            type: Text
-            attribute:
-              x: 540
-              y: 460
-              texts: "~&0阶段进度"
-              fontSize: 49
-          阶段名称:
-            type: Text
-            attribute:
-              x: 540
-              y: 510
-              texts: "'&0' + var.progressTitle + ' &0| &0' + var.progressPercentText + '%'"
-              fontSize: 36
-          阶段比例:
-            type: Text
-            attribute:
-              x: 1030
-              y: 510
-              texts: "'&0' + var.rewardStageText"
-              fontSize: 36
-          阶段轨道:
-            type: Texture
-            attribute:
-              x: 540
-              y: 554
-              width: 520
-              height: 16
-              normal: ~145,145,145,255
-              shape: ~round_rect
-              radius: 2
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          阶段填充:
-            type: progress
-            attribute:
-              x: 540
-              y: 554
-              width: 520
-              height: 16
-              texture: ~80,180,255,255
-              progress: var.progress
-              shape: ~round_rect
-              radius: 2
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-
-          中栏分隔线2:
-            type: Texture
-            attribute:
-              x: 540
-              y: 600
-              width: 520
-              height: 2
-              normal: ~0,0,0,100
-              shape: ~round_rect
-              radius: 1
-              visible: var.serverSignInGoalEnabled
-
-          目标标题:
-            type: Text
-            attribute:
-              x: 540
-              y: 620
-              texts: "~&0全服签到目标"
-              fontSize: 49
-              visible: var.serverSignInGoalEnabled
-          目标文本:
-            type: Text
-            attribute:
-              x: 540
-              y: 668
-              texts: "'&0今日已签到 &0' + var.serverSignInGoalCurrent.round(0) + ' &0人  下一目标 &0' + var.serverSignInGoalNext.round(0) + ' &0人'"
-              fontSize: 36
-              visible: var.serverSignInGoalEnabled
-          目标轨道:
-            type: Texture
-            attribute:
-              x: 540
-              y: 712
-              width: 520
-              height: 16
-              normal: ~145,145,145,255
-              shape: ~round_rect
-              radius: 2
-              visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          目标填充:
-            type: progress
-            attribute:
-              x: 540
-              y: 712
-              width: 520
-              height: 16
-              texture: ~100,200,130,255
-              progress: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext).min(1) : 0"
-              shape: ~round_rect
-              radius: 2
-              visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-
-          完成提示:
-            type: Text
-            attribute:
-              x: 540
-              y: 760
-              visible: var.completed
-              texts: "~&0今日在线阶段奖励已全部完成！"
-              fontSize: 36
-
-          # ========== 右栏：奖励列表 ==========
-          右栏背景:
-            type: Texture
-            attribute:
-              x: 1100
-              y: 110
-              width: 540
-              height: 830
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-
-          阶段奖励标题:
-            type: Text
-            attribute:
-              x: 1120
-              y: 128
-              texts: "~&0在线阶段奖励"
-              fontSize: 49
-          阶段滑块:
-            type: Texture
-            val: 阶段滑块
-            attribute:
-              x: 1620
-              y: 176
-              width: 4
-              height: 40
-              normal: ~120,120,120,200
-              maxDragY: 210
-          阶段滚动区域:
-            type: Scroll
-            attribute:
-              x: 1120
-              y: 176
-              width: 510
-              height: 250
-              moveY: "self.parent['阶段滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['阶段滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['阶段滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              阶段堆叠:
-                val: 阶段堆叠
-                type: VStack
+              # ── 右半：选中日期预览卡片 ──
+              选中日期卡片:
+                type: Canvas
                 attribute:
-                  width: 510
-                  spaceBetween: 8
+                  point: ~top_left
+                  x: "64 + var.cardW"
+                  y: 24
+                  width: "var.cardW"
+                  height: "var.viewH - 192"
                 children:
-                  阶段奖励项:
+                  选中卡底:
                     type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.rewardRows[self.entryKey]
-                      width: 500
-                      height: 64
-                      normal: "self.entry != none && self.entry['current'] ? '120,190,255,230' : (self.entry != none && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
-                      shape: ~round_rect
-                      radius: 14
-                      visible: self.entry != none
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    children:
-                      奖励项名称:
-                        type: Text
-                        attribute:
-                          x: 14
-                          y: 6
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
-                          fontSize: 36
-                      奖励项信息:
-                        type: Text
-                        attribute:
-                          x: 14
-                          y: 34
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : none"
-                          fontSize: 28
-                      奖励项状态:
-                        type: Text
-                        attribute:
-                          x: 380
-                          y: 18
-                          texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : none"
-                          fontSize: 36
-
-          周期奖励标题:
-            type: Text
-            attribute:
-              x: 1120
-              y: 438
-              texts: "~&0周/月周期奖励"
-              fontSize: 49
-          周期奖励空提示:
-            type: Text
-            attribute:
-              x: 1120
-              y: 486
-              visible: "var.periodicRewardRows.size() == 0"
-              texts: "~&0暂无周期奖励"
-              fontSize: 36
-          周期滑块:
-            type: Texture
-            val: 周期滑块
-            attribute:
-              x: 1620
-              y: 486
-              width: 4
-              height: 40
-              normal: ~120,120,120,200
-              maxDragY: 140
-          周期滚动区域:
-            type: Scroll
-            attribute:
-              x: 1120
-              y: 486
-              width: 510
-              height: 180
-              moveY: "self.parent['周期滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['周期滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['周期滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              周期堆叠:
-                val: 周期堆叠
-                type: VStack
-                attribute:
-                  width: 510
-                  spaceBetween: 6
-                children:
-                  周期奖励项:
-                    type: Texture
-                    attribute:
-                      entryKey: 0.round()
-                      entry: var.periodicRewardRows[self.entryKey]
-                      width: 500
-                      height: 52
-                      normal: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '120,190,255,230' : (self.entry != none && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
                       shape: ~round_rect
                       radius: 12
-                      visible: self.entry != none
                     effect:
                       stroke:
-                        width: 2
-                        color: ~0,0,0,255
+                        width: 3
+                        color: ~255,255,255,230
+                  选中卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 24
+                      texts: "~&f选中日期"
+                      fontSize: 40
+                  选中日期文本:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 70
+                      texts: "'&f' + var.selectedDateText"
+                      fontSize: 34
+                  # 签到/补签操作按钮
+                  操作按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 112
+                      width: 280
+                      height: 56
+                      enable: "!var.actionBusy && var.selectedActionEnabled && var.actionToken != ''"
+                    action:
+                      clickLeft: |-
+                        if(var.selectedAction == 'signin'){
+                          var.actionBusy = true
+                          Packet.send(var.packetId, 'signin', var.actionToken)
+                        }elif(var.selectedAction == 'makeup'){
+                          var.actionBusy = true
+                          Packet.send(var.packetId, 'makeup', var.selectedDateText, var.actionToken)
+                        }
                     children:
-                      周期奖励名称:
+                      操作按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.selectedActionEnabled ? '90,150,250,235' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "var.selectedActionEnabled ? (self.isHovered() ? '120,180,255,255' : '90,150,250,230') : '255,255,255,230'"
+                      操作按钮文字:
                         type: Text
                         attribute:
-                          x: 12
-                          y: 4
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] + ' &0(' + self.parent.entry['periodLabel'] + ')' : none"
-                          fontSize: 28
-                      周期奖励信息:
-                        type: Text
+                          point: ~middle_center
+                          width: 280
+                          texts: "var.selectedActionEnabled ? '&0' + var.selectedActionText : '&7' + var.selectedActionText"
+                          fontSize: 34
+                          through: true
+                  # 选中日期奖励列表
+                  选中奖励标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 188
+                      texts: "~&f当日奖励预览"
+                      fontSize: 34
+                  选中奖励空提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 228
+                      visible: "var.selectedRewardRows.size() == 0"
+                      texts: "~&7该日期暂无奖励预览"
+                      fontSize: 30
+                  选中奖励滑块:
+                    type: Texture
+                    val: 选中奖励滑块
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 228
+                      width: 4
+                      height: 40
+                      normal: ~120,120,120,200
+                      maxDragY: "var.viewH - 446"
+                  选中奖励滚动区:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 228
+                      width: "var.cardW - 56"
+                      height: "var.viewH - 446"
+                      moveY: "self.parent['选中奖励滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['选中奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['选中奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      选中奖励堆叠:
+                        val: 选中奖励堆叠
+                        type: VStack
                         attribute:
-                          x: 12
-                          y: 26
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : none"
-                          fontSize: 24
-                      周期奖励状态:
-                        type: Text
-                        attribute:
-                          x: 420
-                          y: 14
-                          texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : none"
-                          fontSize: 28
+                          width: "var.cardW - 56"
+                          spaceBetween: 8
+                        children:
+                          选中奖励项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.selectedRewardRows[self.entryKey]
+                              width: "var.cardW - 56"
+                              height: 64
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                              visible: self.entry != none
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                            children:
+                              选中奖励名称:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 8
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['title'] : none"
+                                  fontSize: 30
+                              选中奖励条件:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 36
+                                  texts: "self.parent.entry != none ? '&7' + self.parent.entry['trigger'] : none"
+                                  fontSize: 26
 
-          签到奖励标题:
-            type: Text
+          # ════════ 进度页 ════════
+          进度页:
+            type: Canvas
             attribute:
-              x: 1120
-              y: 678
-              texts: "~&0签到奖励"
-              fontSize: 49
-          签到奖励空提示:
-            type: Text
-            attribute:
-              x: 1120
-              y: 726
-              visible: "var.signInRewardRows.size() == 0"
-              texts: "~&0暂无签到奖励"
-              fontSize: 36
-          签到滑块:
-            type: Texture
-            val: 签到滑块
-            attribute:
-              x: 1620
-              y: 726
-              width: 4
-              height: 40
-              normal: ~120,120,120,200
-              maxDragY: 150
-          签到滚动区域:
-            type: Scroll
-            attribute:
-              x: 1120
-              y: 726
-              width: 510
-              height: 190
-              moveY: "self.parent['签到滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['签到滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['签到滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+              point: ~stretch_all
+              visible: "var.currentPage == 'progress'"
             children:
-              签到堆叠:
-                val: 签到堆叠
-                type: VStack
+              # ── 在线时长统计卡片 ──
+              在线时长卡片:
+                type: Canvas
                 attribute:
-                  width: 510
-                  spaceBetween: 6
+                  point: ~top_left
+                  x: 32
+                  y: 24
+                  width: "var.contentW - 64"
+                  height: 280
                 children:
-                  签到奖励项:
+                  时长卡底:
                     type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.signInRewardRows[self.entryKey]
-                      width: 500
-                      height: 48
-                      normal: ~145,145,145,255
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
                       shape: ~round_rect
-                      radius: 10
-                      visible: self.entry != none
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  时长卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 24
+                      texts: "~&f在线时长统计"
+                      fontSize: 40
+                  今日在线:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 80
+                      texts: "'&f今日在线   &e' + var.dailyTimeText"
+                      fontSize: 34
+                  本周在线:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 120
+                      texts: "'&f本周在线   &e' + var.weeklyTimeText"
+                      fontSize: 34
+                  本月在线:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 160
+                      texts: "'&f本月在线   &e' + var.monthlyTimeText"
+                      fontSize: 34
+                  总计在线:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 200
+                      texts: "'&f总计在线   &e' + var.totalTimeText"
+                      fontSize: 34
+                  离线储蓄:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 240
+                      visible: "var.offlineSavingsText != '0分钟'"
+                      texts: "'&f离线储蓄   &e' + var.offlineSavingsText"
+                      fontSize: 34
+
+              # ── 阶段进度卡片 ──
+              阶段进度卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 320
+                  width: "var.contentW - 64"
+                  height: 200
+                children:
+                  阶段卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  阶段卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 24
+                      texts: "~&f阶段进度"
+                      fontSize: 40
+                  阶段名称:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 72
+                      texts: "'&f' + var.progressTitle + ' &7| &e' + var.progressPercentText + '%'"
+                      fontSize: 34
+                  阶段比例:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -28
+                      y: 72
+                      texts: "'&f' + var.rewardStageText"
+                      fontSize: 34
+                  阶段进度条背景:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 116
+                      width: "var.contentW - 120"
+                      height: 16
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 8
                     effect:
                       stroke:
                         width: 2
-                        color: ~0,0,0,255
+                        color: ~255,255,255,230
+                  阶段进度条填充:
+                    type: Progress
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 116
+                      width: "var.contentW - 120"
+                      height: 16
+                      texture: ~90,150,250,255
+                      progress: var.progress
+                      shape: ~round_rect
+                      radius: 8
+                  完成提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 146
+                      visible: var.completed
+                      texts: "~&a今日在线阶段奖励已全部完成！"
+                      fontSize: 30
+
+              # ── 全服签到目标卡片（条件显示）──
+              全服目标卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 544
+                  width: "var.contentW - 64"
+                  height: 112
+                  visible: var.serverSignInGoalEnabled
+                children:
+                  目标卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  目标卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 18
+                      texts: "~&f全服签到目标"
+                      fontSize: 34
+                  目标文本:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 56
+                      texts: "'&f今日已签到 &e' + var.serverSignInGoalCurrent.round(0) + ' &f人  下一目标 &e' + var.serverSignInGoalNext.round(0) + ' &f人'"
+                      fontSize: 30
+                  目标进度条背景:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 92
+                      width: "var.contentW - 120"
+                      height: 12
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,230
+                  目标进度条填充:
+                    type: Progress
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 92
+                      width: "var.contentW - 120"
+                      height: 12
+                      texture: ~124,196,142,255
+                      progress: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext).min(1) : 0"
+                      shape: ~round_rect
+                      radius: 6
+
+          # ════════ 奖励页 ════════
+          奖励页:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.currentPage == 'rewards'"
+            children:
+              # ── 阶段奖励卡片 ──
+              阶段奖励卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 24
+                  width: "var.contentW - 64"
+                  height: 290
+                children:
+                  阶段奖卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  阶段奖卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 20
+                      texts: "~&f在线阶段奖励"
+                      fontSize: 36
+                  阶段奖滑块:
+                    type: Texture
+                    val: 阶段奖滑块
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 64
+                      width: 4
+                      height: 40
+                      normal: ~120,120,120,200
+                      maxDragY: 200
+                  阶段奖滚动区:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 64
+                      width: "var.contentW - 120"
+                      height: 202
+                      moveY: "self.parent['阶段奖滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['阶段奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['阶段奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
-                      签到奖励名称:
-                        type: Text
+                      阶段奖堆叠:
+                        val: 阶段堆叠
+                        type: VStack
                         attribute:
-                          x: 12
-                          y: 4
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['title'] : none"
-                          fontSize: 28
-                      签到奖励条件:
-                        type: Text
+                          width: "var.contentW - 120"
+                          spaceBetween: 8
+                        children:
+                          阶段奖励项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.rewardRows[self.entryKey]
+                              width: "var.contentW - 120"
+                              height: 64
+                              normal: "self.entry != none && self.entry['current'] ? '90,150,250,210' : (self.entry != none && self.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                              shape: ~round_rect
+                              radius: 10
+                              visible: self.entry != none
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.entry != none && self.entry['current'] ? '120,180,255,255' : (self.entry != none && self.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                            children:
+                              阶段奖项名称:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 16
+                                  y: 8
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                                  fontSize: 30
+                              阶段奖项信息:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 16
+                                  y: 36
+                                  texts: "self.parent.entry != none ? '&7' + self.parent.entry['thresholdText'] + '   &f' + self.parent.entry['rewardText'] : none"
+                                  fontSize: 26
+                              阶段奖项状态:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -16
+                                  texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : none"
+                                  fontSize: 30
+
+              # ── 周期奖励卡片 ──
+              周期奖励卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 338
+                  width: "var.contentW - 64"
+                  height: 250
+                children:
+                  周期奖卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  周期奖卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 20
+                      texts: "~&f周/月周期奖励"
+                      fontSize: 36
+                  周期奖空提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 64
+                      visible: "var.periodicRewardRows.size() == 0"
+                      texts: "~&7暂无周期奖励"
+                      fontSize: 30
+                  周期奖滑块:
+                    type: Texture
+                    val: 周期奖滑块
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 64
+                      width: 4
+                      height: 40
+                      normal: ~120,120,120,200
+                      maxDragY: 160
+                  周期奖滚动区:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 64
+                      width: "var.contentW - 120"
+                      height: 162
+                      moveY: "self.parent['周期奖滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['周期奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['周期奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      周期奖堆叠:
+                        val: 周期堆叠
+                        type: VStack
                         attribute:
-                          x: 12
-                          y: 26
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['trigger'] + '   &0' + self.parent.entry['rewardText'] : none"
-                          fontSize: 24
+                          width: "var.contentW - 120"
+                          spaceBetween: 6
+                        children:
+                          周期奖励项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.periodicRewardRows[self.entryKey]
+                              width: "var.contentW - 120"
+                              height: 52
+                              normal: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '90,150,250,210' : (self.entry != none && self.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                              shape: ~round_rect
+                              radius: 10
+                              visible: self.entry != none
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '120,180,255,255' : (self.entry != none && self.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                            children:
+                              周期奖项名称:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 4
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &7(' + self.parent.entry['periodLabel'] + ')' : none"
+                                  fontSize: 28
+                              周期奖项信息:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 28
+                                  texts: "self.parent.entry != none ? '&7' + self.parent.entry['thresholdText'] + '   &f' + self.parent.entry['rewardText'] : none"
+                                  fontSize: 24
+                              周期奖项状态:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -14
+                                  texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : none"
+                                  fontSize: 28
+
+              # ── 签到奖励卡片 ──
+              签到奖励卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 612
+                  width: "var.contentW - 64"
+                  height: "var.viewH - 748"
+                children:
+                  签到奖卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  签到奖卡标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 20
+                      texts: "~&f签到奖励"
+                      fontSize: 36
+                  签到奖空提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 64
+                      visible: "var.signInRewardRows.size() == 0"
+                      texts: "~&7暂无签到奖励"
+                      fontSize: 30
+                  签到奖滑块:
+                    type: Texture
+                    val: 签到奖滑块
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 64
+                      width: 4
+                      height: 40
+                      normal: ~120,120,120,200
+                      maxDragY: "var.viewH - 824"
+                  签到奖滚动区:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 64
+                      width: "var.contentW - 120"
+                      height: "var.viewH - 824"
+                      moveY: "self.parent['签到奖滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['签到奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['签到奖滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      签到奖堆叠:
+                        val: 签到堆叠
+                        type: VStack
+                        attribute:
+                          width: "var.contentW - 120"
+                          spaceBetween: 6
+                        children:
+                          签到奖励项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.signInRewardRows[self.entryKey]
+                              width: "var.contentW - 120"
+                              height: 52
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                              visible: self.entry != none
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                            children:
+                              签到奖项名称:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 4
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['title'] : none"
+                                  fontSize: 28
+                              签到奖项条件:
+                                type: Text
+                                attribute:
+                                  point: ~top_left
+                                  x: 14
+                                  y: 28
+                                  texts: "self.parent.entry != none ? '&7' + self.parent.entry['trigger'] + '   &f' + self.parent.entry['rewardText'] : none"
+                                  fontSize: 24

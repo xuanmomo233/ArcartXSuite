@@ -104,6 +104,8 @@ ui:
         var.resultVisible = (resultItem == none || resultItem.getType() == 'null' || resultItem.getCount() == 0)
       }
     open: |-
+      var.fade = Lerp(0, 1, 300)
+      var.slide = Lerp(15, 0, 300)
       Packet.send('vanilla_furnace', 'request_recipe_book')
   packetHandler:
     # packetHandler: furnace_state
@@ -162,7 +164,29 @@ controls:
           width: 223
           height: 235
           visible: true
+          alpha: "var.fade != none ? var.fade.get() : 1"
+          y: "var.slide != none ? var.slide.get() : 0"
         children:
+          标题文字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -105
+              texts:
+                - ~&f熔炉
+              fontSize: 18
+              through: true
+          标题下划线:
+            type: Texture
+            attribute:
+              point: ~middle_center
+              y: -93
+              width: 180
+              height: 2
+              normal: ~255,255,255,200
+              shape: ~round_rect
+              radius: 1
+              through: true
           面板底:
             type: Texture
             attribute:
@@ -171,7 +195,7 @@ controls:
               y: 0
               width: 223
               height: 235
-              normal: ~95,95,95,230
+              normal: ~Frosted:25;95,95,95,235
               shape: ~round_rect
               radius: 12
               visible: true
@@ -205,11 +229,15 @@ controls:
                   normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
-                  radius: 4
+                  radius: 6
                 effect:
                   stroke:
                     width: 1
                     color: ~0,0,0,180
+                  ripple:
+                    duration: 1200
+                    color: ~255,255,255,100
+                    width: 0.05
               配方书文字:
                 type: Text
                 attribute:
@@ -228,17 +256,17 @@ controls:
               height: 21
               slotType: ~Container
               id: 0
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
+              normal: ~Frosted:0;95,95,95,255
+              hover: ~Frosted:0;255,255,255,255
               shape: ~round_rect
-              radius: 4
+              radius: 6
               point: ~middle_center
               itemScale: 0.7
               visible: true
             effect:
               stroke:
-                width: 1
-                color: ~0,0,0,120
+                width: 2
+                color: ~0,0,0,255
           预览输入槽:
             type: Slot
             val: 预览输入槽
@@ -249,7 +277,7 @@ controls:
               height: 21
               slotType: ~Icon
               seticon: self.setItemIcon(var.previewGrid[0])
-              normal: ~40,40,40,100
+              normal: ~Frosted:0;40,40,40,180
               itemScale: 0.7
               point: ~middle_center
               alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.previewVisible ? 1 : 0"
@@ -264,17 +292,17 @@ controls:
               height: 21
               slotType: ~Container
               id: 1
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
+              normal: ~Frosted:0;95,95,95,255
+              hover: ~Frosted:0;255,255,255,255
               shape: ~round_rect
-              radius: 4
+              radius: 6
               point: ~middle_center
               itemScale: 0.7
               visible: true
             effect:
               stroke:
-                width: 1
-                color: ~0,0,0,120
+                width: 2
+                color: ~0,0,0,255
           # 燃料进度条：用 Texture + 动态宽度纯色块模拟（原 Progress+贴图）
           进度条底:
             type: Texture
@@ -283,7 +311,7 @@ controls:
               y: -48
               width: 46
               height: 7
-              normal: ~60,60,60,220
+              normal: ~Frosted:0;60,60,60,220
               shape: ~round_rect
               radius: 3
               point: ~middle_center
@@ -308,7 +336,7 @@ controls:
               y: -47
               width: 23
               height: 13
-              normal: ~60,60,60,220
+              normal: ~Frosted:0;60,60,60,220
               shape: ~round_rect
               radius: 3
               point: ~middle_center
@@ -335,17 +363,17 @@ controls:
               height: 23
               slotType: ~Container
               id: 2
-              normal: ~255,255,255,180
-              hover: ~Frosted:0;255,255,255,240
+              normal: ~Frosted:0;120,190,255,200
+              hover: ~Frosted:0;255,255,255,255
               shape: ~round_rect
-              radius: 5
+              radius: 8
               point: ~middle_center
               itemScale: 0.7
               visible: true
             effect:
               stroke:
-                width: 1
-                color: ~0,0,0,120
+                width: 2
+                color: ~0,0,0,255
           预览输出槽:
             type: Slot
             val: 预览输出槽
@@ -356,7 +384,7 @@ controls:
               height: 23
               slotType: ~Icon
               seticon: self.setItemIcon(var.air)
-              normal: ~40,40,40,100
+              normal: ~Frosted:0;40,40,40,180
               point: ~middle_center
               itemScale: 0.7
               alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.resultVisible ? 1 : 0"
@@ -377,7 +405,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~middle_right
-                  normal: ~80,80,80,235
+                  normal: ~Frosted:25;80,80,80,235
                   width: 223
                   height: 235
                   scale: 0.8
@@ -398,7 +426,7 @@ controls:
                   height: 10
                   emptyText: ~搜索配方...
                   fontSize: 10
-                  background: ~60,60,60,220
+                  background: ~Frosted:0;60,60,60,220
                   point: ~middle_right
                   visible: true
                 action:
@@ -416,7 +444,7 @@ controls:
                   slotType: ~Icon
                   normal: "var.showAll ? '120,190,255,230' : '255,255,255,150'"
                   shape: ~round_rect
-                  radius: 4
+                  radius: 6
                   itemScale: 0.6
                   point: ~middle_right
                   visible: true
@@ -428,6 +456,10 @@ controls:
                   stroke:
                     width: 1
                     color: ~0,0,0,180
+                  ripple:
+                    duration: 1200
+                    color: ~255,255,255,100
+                    width: 0.05
               分类栏:
                 type: VStack
                 val: 分类栏
@@ -447,7 +479,7 @@ controls:
                       slotType: ~Icon
                       normal: "var.currentCategory == 'all' ? '120,190,255,230' : '255,255,255,150'"
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       itemScale: 0.7
                       visible: true
                     action:
@@ -458,6 +490,10 @@ controls:
                       stroke:
                         width: 1
                         color: ~0,0,0,180
+                      ripple:
+                        duration: 1200
+                        color: ~255,255,255,100
+                        width: 0.05
                   分类_食品:
                     type: Slot
                     attribute:
@@ -466,7 +502,7 @@ controls:
                       slotType: ~Icon
                       normal: "var.currentCategory == 'food' ? '120,190,255,230' : '255,255,255,150'"
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       itemScale: 0.7
                       visible: true
                     action:
@@ -477,6 +513,10 @@ controls:
                       stroke:
                         width: 1
                         color: ~0,0,0,180
+                      ripple:
+                        duration: 1200
+                        color: ~255,255,255,100
+                        width: 0.05
                   分类_建筑:
                     type: Slot
                     attribute:
@@ -485,7 +525,7 @@ controls:
                       slotType: ~Icon
                       normal: "var.currentCategory == 'building' ? '120,190,255,230' : '255,255,255,150'"
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       itemScale: 0.7
                       visible: true
                     action:
@@ -496,6 +536,10 @@ controls:
                       stroke:
                         width: 1
                         color: ~0,0,0,180
+                      ripple:
+                        duration: 1200
+                        color: ~255,255,255,100
+                        width: 0.05
                   分类_杂项:
                     type: Slot
                     attribute:
@@ -504,7 +548,7 @@ controls:
                       slotType: ~Icon
                       normal: "var.currentCategory == 'misc' ? '120,190,255,230' : '255,255,255,150'"
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       itemScale: 0.7
                       visible: true
                     action:
@@ -515,6 +559,10 @@ controls:
                       stroke:
                         width: 1
                         color: ~0,0,0,180
+                      ripple:
+                        duration: 1200
+                        color: ~255,255,255,100
+                        width: 0.05
               配方滚动区:
                 type: Scroll
                 attribute:
@@ -555,7 +603,7 @@ controls:
                           normal: "var.recipeCanCraft[self.entryKey] == 1 ? '120,190,255,230' : '255,180,180,170'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
-                          radius: 4
+                          radius: 6
                           seticon: self.setItemIcon(var.recipeJsons[self.entryKey])
                           itemScale: 0.7
                         action:
@@ -590,6 +638,10 @@ controls:
                           stroke:
                             width: 1
                             color: ~0,0,0,180
+                          ripple:
+                            duration: 1200
+                            color: ~255,255,255,100
+                            width: 0.05
               滚动条轨道:
                 type: Texture
                 attribute:
@@ -597,7 +649,7 @@ controls:
                   y: 8
                   width: 5
                   height: 129
-                  normal: ~60,60,60,200
+                  normal: ~Frosted:0;60,60,60,200
                   shape: ~round_rect
                   radius: 2
                   point: ~middle_right
@@ -610,7 +662,7 @@ controls:
                   y: -46.5
                   width: 5
                   height: 20
-                  normal: ~180,180,180,220
+                  normal: ~Frosted:0;180,180,180,220
                   shape: ~round_rect
                   radius: 2
                   point: ~middle_right
@@ -652,10 +704,10 @@ controls:
                   背包原型:
                     type: Slot
                     attribute:
-                      normal: ~255,255,255,150
-                      hover: ~Frosted:0;255,255,255,240
+                      normal: ~Frosted:0;95,95,95,255
+                      hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       slotType: ~Backpack
                       width: 19
                       id: 3
@@ -664,8 +716,8 @@ controls:
                       visible: true
                     effect:
                       stroke:
-                        width: 1
-                        color: ~0,0,0,120
+                        width: 2
+                        color: ~0,0,0,255
               快捷栏:
                 type: HGrid
                 attribute:
@@ -687,10 +739,10 @@ controls:
                   快捷原型:
                     type: Slot
                     attribute:
-                      normal: ~255,255,255,150
-                      hover: ~Frosted:0;255,255,255,240
+                      normal: ~Frosted:0;95,95,95,255
+                      hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 4
+                      radius: 6
                       slotType: ~Backpack
                       width: 19
                       id: 30
@@ -699,5 +751,5 @@ controls:
                       visible: true
                     effect:
                       stroke:
-                        width: 1
-                        color: ~0,0,0,120
+                        width: 2
+                        color: ~0,0,0,255
