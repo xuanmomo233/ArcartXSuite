@@ -203,7 +203,7 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                     service.pushTalentsData(player, uiId);
                 }
             }
-            case "unlock_talent", "reset_talents" -> {
+            case "level_up_talent", "reset_talents" -> {
                 service.handleUiAction(player, action, data);
                 // 操作后刷新数据
                 String uiId = talentsUiIdSupplier != null ? talentsUiIdSupplier.get() : null;

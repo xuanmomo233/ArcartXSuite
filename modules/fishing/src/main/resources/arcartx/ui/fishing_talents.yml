@@ -143,8 +143,8 @@ ui:
       // R 键重置缩放和滚动位置
       if(self.currentKeyPress == 'R' || self.currentKeyPress == 'r'){
         var.zoomScale = 1.0
-        val.树横滑块.setDragXRatio(0)
-        val.树滑块.setDragYRatio(0)
+        val.横向滑块.setDragXRatio(0)
+        val.竖向滑块.setDragYRatio(0)
         var.needRebuild = true
       }
     releaseLeft: |-
@@ -168,13 +168,13 @@ ui:
             newSX = var.dragStartSX - dx / scrollRangeX
             if(newSX < 0){ newSX = 0 }
             if(newSX > 1){ newSX = 1 }
-            val.树横滑块.setDragXRatio(newSX)
+            val.横向滑块.setDragXRatio(newSX)
           }
           if(scrollRangeY > 0){
             newSY = var.dragStartSY - dy / scrollRangeY
             if(newSY < 0){ newSY = 0 }
             if(newSY > 1){ newSY = 1 }
-            val.树滑块.setDragYRatio(newSY)
+            val.竖向滑块.setDragYRatio(newSY)
           }
         }
       }
@@ -277,8 +277,54 @@ ui:
             }
           }
         }
+        // 联动天赋：按源节点中间位置排列 + 防重叠
+        linkIdealX = {}
+        linkOrder = []
         for(i in range(0, var.linkCount - 1)){
           key = i.round()
+          entry = var.links[key]
+          if(entry != none){
+            prereq1 = entry['prerequisites'][0]
+            prereq2 = entry['prerequisites'][1]
+            parts1 = prereq1.split('-')
+            parts2 = prereq2.split('-')
+            tree1 = parts1[0]
+            tree2 = parts2[0]
+            branch1 = parts1[1].substring(2)
+            branch2 = parts2[1].substring(2)
+            treeIndex1 = tree1 == 'steady' ? 0 : (tree1 == 'swift' ? 1 : (tree1 == 'pressure' ? 2 : (tree1 == 'focus' ? 3 : 4)))
+            treeIndex2 = tree2 == 'steady' ? 0 : (tree2 == 'swift' ? 1 : (tree2 == 'pressure' ? 2 : (tree2 == 'focus' ? 3 : 4)))
+            sourceX1 = 40 + treeIndex1 * var.treeW + var.treeW / 2 + (branch1 == 'a' ? -var.colGap : var.colGap)
+            sourceX2 = 40 + treeIndex2 * var.treeW + var.treeW / 2 + (branch2 == 'a' ? -var.colGap : var.colGap)
+            linkIdealX[key] = (sourceX1 + sourceX2) / 2
+            linkOrder.add(key)
+          }
+        }
+        // 按理想 x 从小到大排序（冒泡排序，联动节点数量少）
+        linkCount = linkOrder.size()
+        for(i in range(0, linkCount - 2)){
+          for(j in range(0, linkCount - 2 - i)){
+            jIdx = j.round()
+            if(linkIdealX[linkOrder[jIdx]] > linkIdealX[linkOrder[jIdx + 1]]){
+              tmp = linkOrder[jIdx]
+              linkOrder[jIdx] = linkOrder[jIdx + 1]
+              linkOrder[jIdx + 1] = tmp
+            }
+          }
+        }
+        // 防重叠：从左到右确保最小间距
+        minLinkGap = var.nodeSize + 80
+        for(i in range(1, linkCount - 1)){
+          iIdx = i.round()
+          key = linkOrder[iIdx]
+          prevKey = linkOrder[iIdx - 1]
+          if(linkIdealX[key] - linkIdealX[prevKey] < minLinkGap){
+            linkIdealX[key] = linkIdealX[prevKey] + minLinkGap
+          }
+        }
+        // 创建联动节点
+        for(i in range(0, linkCount - 1)){
+          key = linkOrder[i.round()]
           entry = var.links[key]
           if(entry != none){
             node = val.天赋节点模板.copy('联动_' + key)
@@ -299,8 +345,8 @@ ui:
             branch2 = parts2[1].substring(2)
             sourceX1 = 40 + treeIndex1 * var.treeW + var.treeW / 2 + (branch1 == 'a' ? -var.colGap : var.colGap)
             sourceX2 = 40 + treeIndex2 * var.treeW + var.treeW / 2 + (branch2 == 'a' ? -var.colGap : var.colGap)
-            // 所有联动节点均匀排列在所有树下方一排
-            linkCenter = var.linkStartX + key * var.linkSpacing
+            // 联动节点 x = 防重叠后的理想位置（源节点中间）
+            linkCenter = linkIdealX[key]
             nodeBaseX = linkCenter - var.nodeSize / 2
             node.x = (nodeBaseX * z).round()
             node.y = (var.linkY * z).round()
@@ -801,15 +847,15 @@ controls:
               y: 76
               width: "var.contentW - 48"
               height: "var.viewH - 236"
-              moveX: "self.parent['树横滑块'].getDragXRatio()"
-              moveY: "self.parent['树滑块'].getDragYRatio()"
+              moveX: "self.parent['横向滑块'].getDragXRatio()"
+              moveY: "self.parent['竖向滑块'].getDragYRatio()"
             action:
               clickLeft: |-
                 var.isDragging = true
                 var.dragStartMX = Mouse.x()
                 var.dragStartMY = Mouse.y()
-                var.dragStartSX = val.树横滑块.getDragXRatio()
-                var.dragStartSY = val.树滑块.getDragYRatio()
+                var.dragStartSX = val.横向滑块.getDragXRatio()
+                var.dragStartSY = val.竖向滑块.getDragYRatio()
                 var.dragMoved = false
               releaseLeft: |-
                 var.isDragging = false
@@ -828,8 +874,8 @@ controls:
                   newRangeX = var.canvasW * newZoom - viewW
                   oldRangeY = var.canvasH * oldZoom - viewH
                   newRangeY = var.canvasH * newZoom - viewH
-                  oldSX = val.树横滑块.getDragXRatio()
-                  oldSY = val.树滑块.getDragYRatio()
+                  oldSX = val.横向滑块.getDragXRatio()
+                  oldSY = val.竖向滑块.getDragYRatio()
                   if(newRangeX > 0){
                     newSX = oldRangeX > 0 ? oldSX * oldRangeX / newRangeX : 0
                     if(newSX < 0){ newSX = 0 }
@@ -847,8 +893,8 @@ controls:
                   var.zoomScale = newZoom
                   var.needRebuild = true
                   // 重建后设置滑块位置
-                  val.树横滑块.setDragXRatio(newSX)
-                  val.树滑块.setDragYRatio(newSY)
+                  val.横向滑块.setDragXRatio(newSX)
+                  val.竖向滑块.setDragYRatio(newSY)
                 }
             children:
               树画布:
@@ -875,24 +921,6 @@ controls:
                           width: "(200 * var.zoomScale).round()"
                           texts: "var.treeNames[self.parent.treeId] != none ? var.treeNames[self.parent.treeId] : '&7未知'"
                           fontSize: "(34 * var.zoomScale).round()"
-                          through: true
-                  # 联动标题模板
-                  联动标题模板:
-                    type: Canvas
-                    val: 联动标题模板
-                    attribute:
-                      width: 260
-                      height: 28
-                      visible: false
-                    children:
-                      联动标题文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 0
-                          width: 260
-                          texts: "~&6◆ 跨树联动天赋"
-                          fontSize: 30
                           through: true
                   # 天赋节点模板（正方形 Slot + 连线 + Tooltip）
                   # tick 中 copy 后设置 entryKey/treeId/treeX/isLink
@@ -1091,18 +1119,18 @@ controls:
               fontSize: 20
               shadow: true
           # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不显示，仅用于程序化控制滚动位置）
-          树滑块:
+          竖向滑块:
             type: Texture
-            val: 树滑块
+            val: 竖向滑块
             attribute:
               visible: false
               width: 12
               height: 120
               normal: ~50,170,200,220
               maxDragY: "var.canvasH * var.zoomScale - (var.viewH - 236)"
-          树横滑块:
+          横向滑块:
             type: Texture
-            val: 树横滑块
+            val: 横向滑块
             attribute:
               visible: false
               width: 160
