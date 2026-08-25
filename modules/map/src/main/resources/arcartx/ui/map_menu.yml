@@ -1,9 +1,16 @@
 # AXS 资源说明
 # 用途: Map 模块默认全屏地图 GUI。
-# 前置依赖: ArcartX；Map 模块启用后会自动注册或导出。
+# 前置依赖: ArcartX + Arcart-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
 # 关联文件: ArcartXMap.yml、ui/map_hud.yml
 # 重载命令: /axs map reload
+#
+# 地图渲染由 Arcart-Suite-Map 客户端 mod 负责：
+#   - UI 的 tick 触发器每帧通过 Aria use() 调用 mod 的 MapRenderer.setRegion()，
+#     把地图渲染区的屏幕坐标传给 mod
+#   - packet init/update 时通过 use() 调用 mod 的 clearMarkers()/addMarker()，
+#     把锚点/路径点/外部目标的世界坐标传给 mod
+#   - mod 在 ArcartXLayerRenderEvent 事件中往指定区域渲染地图画面、玩家箭头、标点图标
 
 ui:
   isHud: false
@@ -20,9 +27,9 @@ ui:
     #   - selectedWorldId: 当前选中的世界 ID
     #   - selectedWorldName: 当前选中的世界名称
     #   - worldRows: 世界列表行数据
-    #   - anchorRows: 锚点列表行数据
-    #   - waypointRows: 路径点列表行数据
-    #   - externalTargetRows: 外部目标列表行数据
+    #   - anchorRows: 锚点列表行数据（含 x/y/z 世界坐标）
+    #   - waypointRows: 路径点列表行数据（含 x/y/z 世界坐标）
+    #   - externalTargetRows: 外部目标列表行数据（含 x/y/z 世界坐标）
     #   - waypointLimit: 路径点上限
     #   - waypointCount: 当前路径点数量
     #   - canCreateWaypoint: 是否允许创建路径点
@@ -117,6 +124,9 @@ ui:
         e.entryKey = key
       }
       var.actionBusy = false
+      var.actionBusySeconds = 0
+      // 同步标点数据到客户端 mod
+      call_syncMarkers()
     # packetHandler: update
     # 包字段: 同 init（实时刷新地图菜单数据）
     update: |-
@@ -187,16 +197,98 @@ ui:
         e.entryKey = key
       }
       var.actionBusy = false
+      // 同步标点数据到客户端 mod
+      call_syncMarkers()
   action:
-    seconds: |-
-      if(var.actionBusy){
-        var.actionBusySeconds = var.actionBusySeconds + 1
-        if(var.actionBusySeconds >= 3){
-          var.actionBusy = false
-          var.actionBusySeconds = 0
+    # 视口换算：把窗口实际宽高折算回设计坐标系（按避坑指南 §16）
+    load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      var.scale = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / var.scale
+      var.viewH = Screen.getHeight() / var.scale
+      var.offX = (var.viewW - 1920) / 2
+      // 加载客户端 mod 的 MapRenderer 实例
+      var.mapMod = none
+      var.mapRenderer = none
+      try {
+        var.mapMod = use('xuanmo.arcartsuitemap.ArcartSuiteMapMod')
+        var.mapRenderer = var.mapMod.getMapRenderer()
+      } catch(e) {
+        // mod 未安装，地图渲染区将保持空白
+      }
+      // 同步标点的函数定义
+      var.syncMarkers = -> {
+        if(var.mapRenderer == none) { return }
+        var.mapRenderer.clearMarkers()
+        // 锚点
+        if(var.anchorRows != none) {
+          for(key in var.anchorRows.keys()) {
+            row = var.anchorRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'anchor', row['displayName'], row['x'], row['z'], row['selected'], row['tracked'], row['unlocked'])
+            }
+          }
         }
-      }else{
-        var.actionBusySeconds = 0
+        // 路径点
+        if(var.waypointRows != none) {
+          for(key in var.waypointRows.keys()) {
+            row = var.waypointRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'waypoint', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
+            }
+          }
+        }
+        // 外部目标
+        if(var.externalTargetRows != none) {
+          for(key in var.externalTargetRows.keys()) {
+            row = var.externalTargetRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'external', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
+            }
+          }
+        }
+      }
+      // 调用同步标点的快捷函数
+      var.call_syncMarkers = -> {
+        if(var.syncMarkers != none) { var.syncMarkers() }
+      }
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      var.scale = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / var.scale
+      var.viewH = Screen.getHeight() / var.scale
+      var.offX = (var.viewW - 1920) / 2
+    # tick：每帧计算地图渲染区的屏幕坐标，传给客户端 mod
+    tick: |-
+      if(var.mapRenderer != none) {
+        // Adaptive ~top_center：水平居中，顶部对齐
+        // 主面板 ~middle_center 在 Adaptive 里，宽 1520 高 900
+        // 主面板左上角在设计坐标系中 = (200, 90)
+        // 地图区域在主面板里: x=24, y=280, w=900, h=596
+        // 地图区域左上角在设计坐标系中 = (224, 370)
+        mapX = (var.offX + 224) * var.scale
+        mapY = 370 * var.scale
+        mapW = 900 * var.scale
+        mapH = 596 * var.scale
+        var.mapRenderer.setRegion(mapX, mapY, mapW, mapH, var.scale)
+        // 设置当前世界 ID（mod 据此判断是否需要重新渲染纹理）
+        var.mapRenderer.setWorldId(var.selectedWorldId)
+        // 设置玩家位置与朝向（mod 据此定位玩家箭头和地图中心）
+        // 使用 Aria use() 获取 Minecraft 客户端玩家数据
+        try {
+          mc = use('net.minecraft.client.MinecraftClient')
+          player = mc.field_1729  // MinecraftClient.instance (INSTANCE field)
+          if(player != none) {
+            p = player.field_1724  // MinecraftClient.player
+            if(p != none) {
+              var.mapRenderer.setPlayerPose(p.getX(), p.getZ(), p.getYaw())
+            }
+          }
+        } catch(e2) {
+          // 获取玩家数据失败，mod 将使用上次的位置
+        }
       }
     open: |-
       var.packetId = 'AXS_MAP'
@@ -235,12 +327,27 @@ ui:
       var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
+    close: |-
+      // 通知 mod 停止渲染
+      if(var.mapRenderer != none) {
+        var.mapRenderer.deactivate()
+      }
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
 
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
@@ -255,7 +362,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~85,85,90,220
+              normal: ~28,30,38,235
               shape: ~round_rect
               radius: 28
           边框:
@@ -271,18 +378,19 @@ controls:
               point: ~top_left
               x: 36
               y: 24
-              texts: "'&0地图总览 &8/ &7' + var.selectedWorldName"
+              texts: "'&f地图总览 &8/ &7' + var.selectedWorldName"
               fontSize: 30
-              shadow: false
+              shadow: true
           追踪文字:
             type: Text
             attribute:
               point: ~top_left
               x: 36
               y: 62
-              texts: "'&7' + var.trackingText"
-              fontSize: 16
-              shadow: false
+              texts: "'&b' + var.trackingText"
+              fontSize: 18
+              shadow: true
+          # ─── 世界列表 ───
           世界列表面板:
             type: Texture
             attribute:
@@ -291,7 +399,7 @@ controls:
               y: 110
               width: 360
               height: 150
-              normal: ~255,255,255,120
+              normal: ~255,255,255,25
               shape: ~round_rect
               radius: 18
           世界列表标题:
@@ -300,9 +408,9 @@ controls:
               point: ~top_left
               x: 42
               y: 128
-              texts: "'&0世界列表'"
-              fontSize: 20
-              shadow: false
+              texts: "'&f世界列表'"
+              fontSize: 22
+              shadow: true
           世界滑块:
             type: Texture
             val: 世界滑块
@@ -356,7 +464,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
                           shape: ~round_rect
                           radius: 16
                       地图项目文字:
@@ -365,38 +474,48 @@ controls:
                           point: ~middle_center
                           width: 148
                           texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
-                          fontSize: 18
-                          shadow: false
+                          fontSize: 20
+                          shadow: true
                           through: true
-          地图面板:
-            type: Texture
+          # ─── 地图渲染区（由 Arcart-Suite-Map mod 渲染） ───
+          地图渲染区:
+            type: Canvas
             attribute:
               point: ~top_left
               x: 24
               y: 280
               width: 900
               height: 596
-              normal: ~85,85,90,220
-              shape: ~round_rect
-              radius: 22
-          地图标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 44
-              y: 300
-              texts: "'&0全屏地图区'"
-              fontSize: 22
-              shadow: false
-          地图提示:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 44
-              y: 334
-              texts: "'&7由 packet snapshot 驱动世界切换、选中态与按钮状态。'"
-              fontSize: 15
-              shadow: false
+            # 这个 Canvas 不带背景色，mod 会直接往这个区域渲染地图画面
+            # Canvas 的 through 不设为 true，以便接收鼠标交互（滚轮缩放/拖拽平移）
+            children:
+              地图区域边框:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,30
+                  shape: ~round_rect
+                  radius: 22
+              地图区域背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~20,22,28,255
+                  shape: ~round_rect
+                  radius: 22
+              地图加载提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 900
+                  texts: "'&7地图加载中...'"
+                  fontSize: 24
+                  shadow: true
+                  through: true
+                  visible: "var.mapRenderer == none"
+          # ─── 锚点列表 ───
           锚点面板:
             type: Texture
             attribute:
@@ -405,7 +524,7 @@ controls:
               y: 110
               width: 548
               height: 250
-              normal: ~255,255,255,120
+              normal: ~255,255,255,25
               shape: ~round_rect
               radius: 18
           锚点标题:
@@ -414,9 +533,9 @@ controls:
               point: ~top_left
               x: 972
               y: 126
-              texts: "'&0锚点列表'"
-              fontSize: 20
-              shadow: false
+              texts: "'&f锚点列表'"
+              fontSize: 22
+              shadow: true
           锚点滑块:
             type: Texture
             val: 锚点滑块
@@ -470,18 +589,31 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
                           shape: ~round_rect
                           radius: 14
+                      地图项目状态:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 20
+                          y: 18
+                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a● 已解锁' : '&c● 未解锁') : none"
+                          fontSize: 18
+                          shadow: true
+                          through: true
                       地图项目文字:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          width: 500
-                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : none"
-                          fontSize: 14
-                          shadow: false
+                          point: ~top_left
+                          x: 20
+                          y: 42
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['displayName'] : none"
+                          fontSize: 16
+                          shadow: true
                           through: true
+          # ─── 路径点列表 ───
           路径点面板:
             type: Texture
             attribute:
@@ -490,7 +622,7 @@ controls:
               y: 374
               width: 548
               height: 142
-              normal: ~255,255,255,120
+              normal: ~255,255,255,25
               shape: ~round_rect
               radius: 18
           路径点标题:
@@ -499,9 +631,9 @@ controls:
               point: ~top_left
               x: 972
               y: 390
-              texts: "'&0路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
-              fontSize: 20
-              shadow: false
+              texts: "'&f路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
+              fontSize: 22
+              shadow: true
           路径点滑块:
             type: Texture
             val: 路径点滑块
@@ -555,18 +687,21 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
                           shape: ~round_rect
                           radius: 14
                       地图项目文字:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          width: 500
-                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-                          fontSize: 16
-                          shadow: false
+                          point: ~middle_left
+                          x: 20
+                          width: 460
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &8(' + self.parent.entry['x'].round() + ', ' + self.parent.entry['z'].round() + ')' : none"
+                          fontSize: 18
+                          shadow: true
                           through: true
+          # ─── 外部目标列表 ───
           外部面板:
             type: Texture
             attribute:
@@ -575,7 +710,7 @@ controls:
               y: 530
               width: 548
               height: 130
-              normal: ~255,255,255,120
+              normal: ~255,255,255,25
               shape: ~round_rect
               radius: 18
           外部标题:
@@ -584,9 +719,9 @@ controls:
               point: ~top_left
               x: 972
               y: 546
-              texts: "'&0任务目标'"
-              fontSize: 20
-              shadow: false
+              texts: "'&f任务目标'"
+              fontSize: 22
+              shadow: true
           外部滑块:
             type: Texture
             val: 外部滑块
@@ -640,18 +775,21 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
                           shape: ~round_rect
                           radius: 14
                       地图项目文字:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          width: 500
-                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-                          fontSize: 16
-                          shadow: false
+                          point: ~middle_left
+                          x: 20
+                          width: 460
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                          fontSize: 18
+                          shadow: true
                           through: true
+          # ─── 详情面板 ───
           详情面板:
             type: Texture
             attribute:
@@ -660,7 +798,7 @@ controls:
               y: 674
               width: 548
               height: 202
-              normal: ~255,255,255,120
+              normal: ~255,255,255,25
               shape: ~round_rect
               radius: 18
           详情标题:
@@ -670,8 +808,8 @@ controls:
               x: 972
               y: 692
               texts: "var.detailTitle"
-              fontSize: 22
-              shadow: false
+              fontSize: 24
+              shadow: true
           详情描述:
             type: Text
             attribute:
@@ -679,17 +817,17 @@ controls:
               x: 972
               y: 724
               texts: "var.detailDescription"
-              fontSize: 14
-              shadow: false
+              fontSize: 16
+              shadow: true
           解锁费用文字:
             type: Text
             attribute:
               point: ~top_left
               x: 972
               y: 750
-              texts: "'&7解锁: &0' + var.detailUnlockCostText"
-              fontSize: 13
-              shadow: false
+              texts: "'&7解锁: &f' + var.detailUnlockCostText"
+              fontSize: 15
+              shadow: true
               visible: "var.detailSelectedType == 'anchor'"
           传送费用文字:
             type: Text
@@ -697,10 +835,11 @@ controls:
               point: ~top_left
               x: 972
               y: 768
-              texts: "'&7传送: &0' + var.detailTeleportCostText"
-              fontSize: 13
-              shadow: false
+              texts: "'&7传送: &f' + var.detailTeleportCostText"
+              fontSize: 15
+              shadow: true
               visible: "var.detailSelectedType == 'anchor'"
+          # ─── 按钮组 ───
           解锁按钮:
             type: Canvas
             attribute:
@@ -708,7 +847,7 @@ controls:
               x: 972
               y: 800
               width: 104
-              height: 34
+              height: 36
               enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
@@ -722,7 +861,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.detailCanUnlock ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "var.detailCanUnlock ? '82,196,26,255' : '60,60,66,255'"
+                  hover: "var.detailCanUnlock ? '102,216,46,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               解锁按钮文字:
@@ -730,9 +870,9 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: ~&0解锁
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f解锁
+                  fontSize: 18
+                  shadow: true
                   through: true
           传送按钮:
             type: Canvas
@@ -741,7 +881,7 @@ controls:
               x: 1088
               y: 800
               width: 104
-              height: 34
+              height: 36
               enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
@@ -755,7 +895,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.detailCanTeleport ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "var.detailCanTeleport ? '74,144,226,255' : '60,60,66,255'"
+                  hover: "var.detailCanTeleport ? '94,164,246,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               传送按钮文字:
@@ -763,9 +904,9 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: ~&0传送
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f传送
+                  fontSize: 18
+                  shadow: true
                   through: true
           追踪按钮:
             type: Canvas
@@ -774,7 +915,7 @@ controls:
               x: 1204
               y: 800
               width: 104
-              height: 34
+              height: 36
             action:
               clickLeft: |-
                 if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
@@ -792,7 +933,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '236,180,24,255' : '60,60,66,255'"
+                  hover: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '246,200,44,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               追踪按钮文字:
@@ -800,9 +942,9 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: ~&0导航
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f导航
+                  fontSize: 18
+                  shadow: true
                   through: true
           删除按钮:
             type: Canvas
@@ -811,7 +953,7 @@ controls:
               x: 1320
               y: 800
               width: 72
-              height: 34
+              height: 36
               enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
@@ -825,7 +967,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.detailCanDeleteWaypoint ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
+                  hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               删除按钮文字:
@@ -833,9 +976,9 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: ~&0删除
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f删除
+                  fontSize: 18
+                  shadow: true
                   through: true
           创建按钮:
             type: Canvas
@@ -844,7 +987,7 @@ controls:
               x: 1404
               y: 800
               width: 72
-              height: 34
+              height: 36
               enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
@@ -858,7 +1001,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.canCreateWaypoint ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
+                  hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               创建按钮文字:
@@ -866,9 +1010,9 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: ~&0新建
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f新建
+                  fontSize: 18
+                  shadow: true
                   through: true
           清除按钮:
             type: Canvas
@@ -877,7 +1021,7 @@ controls:
               x: 1404
               y: 24
               width: 72
-              height: 34
+              height: 36
             action:
               clickLeft: |-
                 if (var.clearTrackVisible) {
@@ -889,7 +1033,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.clearTrackVisible ? '225,225,230,255' : '110,110,115,255'"
+                  normal: "var.clearTrackVisible ? '220,80,80,255' : '60,60,66,255'"
+                  hover: "var.clearTrackVisible ? '240,100,100,255' : '60,60,66,255'"
                   shape: ~round_rect
                   radius: 12
               清除按钮文字:
@@ -897,7 +1042,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: ~&0清除
-                  fontSize: 16
-                  shadow: false
+                  texts: ~&f清除
+                  fontSize: 18
+                  shadow: true
                   through: true

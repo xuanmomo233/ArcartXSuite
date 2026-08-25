@@ -1,15 +1,20 @@
 # AXS 资源说明
 # 用途: Map 模块默认小地图 HUD。
-# 前置依赖: ArcartX；Map 模块启用后会自动注册或导出。
+# 前置依赖: ArcartX + Arcart-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
 # 关联文件: ArcartXMap.yml、ui/map_menu.yml
 # 重载命令: /axs map reload
+#
+# 小地图渲染由 Arcart-Suite-Map 客户端 mod 负责：
+#   - UI 的 tick 触发器每帧通过 Aria use() 调用 mod 的 MapRenderer.setRegion()，
+#     把小地图渲染区的屏幕坐标传给 mod
+#   - mod 在 ArcartXLayerRenderEvent 事件中往指定区域渲染地图画面、玩家箭头
 
 ui:
   isHud: true
   background: false
   closeDied: true
-  through: false
+  through: true
   screenScale: true
   show: true
   packetHandler:
@@ -69,12 +74,49 @@ ui:
       var.clippedPlayerZ = 0
       var.playerYaw = 0
       var.trackingText = '当前未导航'
+      // 加载客户端 mod 的 MapRenderer 实例
+      var.mapMod = none
+      var.mapRenderer = none
+      try {
+        var.mapMod = use('xuanmo.arcartsuitemap.ArcartSuiteMapMod')
+        var.mapRenderer = var.mapMod.getMapRenderer()
+      } catch(e) {
+        // mod 未安装，小地图将保持空白
+      }
+    # tick：每帧计算小地图渲染区的屏幕坐标，传给客户端 mod
+    tick: |-
+      if(var.mapRenderer != none && var.visible) {
+        // Adaptive ~top_right：右上角对齐
+        // 小地图面板在设计坐标系中：右上角 (1920-28, 24)，宽 250 高 250
+        // 左上角在设计坐标系中 = (1642, 24)
+        // 地图渲染区在面板里: x=18, y=48, w=214, h=160
+        // 地图渲染区左上角在设计坐标系中 = (1660, 72)
+        sx = Screen.getWidth() / 1920
+        sy = Screen.getHeight() / 1080
+        s = sx < sy ? sx : sy
+        // Adaptive ~top_right：UI 原点 X = Screen.getWidth() - 1920*s
+        mapX = Screen.getWidth() - 1920 * s + 1660 * s
+        mapY = 72 * s
+        mapW = 214 * s
+        mapH = 160 * s
+        var.mapRenderer.setRegion(mapX, mapY, mapW, mapH, s)
+        var.mapRenderer.setWorldId(var.worldId)
+        // 设置玩家位置与朝向
+        var.mapRenderer.setPlayerPose(var.clippedPlayerX, var.clippedPlayerZ, var.playerYaw)
+      } else if(var.mapRenderer != none && !var.visible) {
+        // 不可见时停止渲染
+        var.mapRenderer.deactivate()
+      }
+    close: |-
+      if(var.mapRenderer != none) {
+        var.mapRenderer.deactivate()
+      }
 
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_right
       width: 1920
       height: 1080
     children:
@@ -86,54 +128,82 @@ controls:
           y: 24
           width: 250
           height: 250
+          visible: var.visible
+        action:
+          clickLeft: |-
+            Packet.send(var.packetId, 'open_menu')
         children:
           背景:
             type: Texture
             attribute:
-              point: ~top_right
-              width: 250
-              height: 250
-              normal: ~255,255,255,120
+              point: ~stretch_all
+              through: true
+              normal: ~28,30,38,200
               shape: ~round_rect
               radius: 26
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_menu')
+          边框:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~255,255,255,30
+              shape: ~round_rect
+              radius: 26
           标题:
             type: Text
             attribute:
               point: ~top_left
               x: 18
               y: 16
-              texts: "'&0小地图 &8/ &7' + var.worldId"
+              texts: "'&f小地图 &8/ &7' + var.worldId"
               fontSize: 18
-              shadow: false
-          地图遮罩:
-            type: Texture
+              shadow: true
+              through: true
+          # 小地图渲染区（由 mod 渲染地图画面）
+          地图渲染区:
+            type: Canvas
             attribute:
               point: ~top_left
               x: 18
               y: 48
               width: 214
               height: 160
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 18
+            children:
+              地图区域背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~20,22,28,255
+                  shape: ~round_rect
+                  radius: 18
+              地图加载提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 214
+                  texts: "'&7加载中...'"
+                  fontSize: 16
+                  shadow: true
+                  through: true
+                  visible: "var.mapRenderer == none"
           坐标:
             type: Text
             attribute:
               point: ~top_left
               x: 20
               y: 218
-              texts: "'&7PX: &0' + var.clippedPlayerX + '  &7PZ: &0' + var.clippedPlayerZ"
-              fontSize: 13
-              shadow: false
+              texts: "'&7X: &f' + var.clippedPlayerX + '  &7Z: &f' + var.clippedPlayerZ"
+              fontSize: 14
+              shadow: true
+              through: true
           导航信息:
             type: Text
             attribute:
               point: ~top_left
               x: 20
               y: 236
-              texts: "'&7' + var.trackingText"
-              fontSize: 12
-              shadow: false
+              texts: "'&b' + var.trackingText"
+              fontSize: 13
+              shadow: true
+              through: true

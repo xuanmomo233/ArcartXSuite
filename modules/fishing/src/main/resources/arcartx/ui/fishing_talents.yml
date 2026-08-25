@@ -98,16 +98,14 @@ ui:
       var.bus2Rel = -25
       var.sourceBottomY = var.rootY + 2 * var.tierGap + var.nodeSize
       // 拖拽滚动状态
-      var.scrollX = 0
-      var.scrollY = 0
       var.isDragging = false
       var.dragStartMX = 0
       var.dragStartMY = 0
       var.dragStartSX = 0
       var.dragStartSY = 0
-      // 缩放状态：zoomMode 'map'=整体地图式缩放(尺寸*z)  'node'=节点缩放+位置重算(scale=z)
+      var.dragMoved = false
+      // 缩放状态：整体地图式缩放（尺寸和位置都按 zoomScale 缩放）
       var.zoomScale = 1.0
-      var.zoomMode = 'map'
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
       var.treeNames['swift'] = '&b迅捷'
@@ -142,16 +140,11 @@ ui:
       var.s = s
       var.needRebuild = true
     keyPress: |-
-      // M 键切换缩放模式：map(整体地图式) ↔ node(节点缩放+位置重算)
-      if(self.currentKeyPress == 'M' || self.currentKeyPress == 'm'){
-        var.zoomMode = var.zoomMode == 'map' ? 'node' : 'map'
-        var.needRebuild = true
-      }
       // R 键重置缩放和滚动位置
       if(self.currentKeyPress == 'R' || self.currentKeyPress == 'r'){
         var.zoomScale = 1.0
-        var.scrollX = 0
-        var.scrollY = 0
+        val.树横滑块.setDragXRatio(0)
+        val.树滑块.setDragYRatio(0)
         var.needRebuild = true
       }
     releaseLeft: |-
@@ -159,29 +152,37 @@ ui:
       var.isDragging = false
     # tick: 数据变化时重建完整天赋网络
     tick: |-
-      // 拖拽中：根据鼠标位移更新滚动位置
+      // 拖拽中：位移超过阈值才滚动（避免点击天赋节点时误触发拖拽）
       if(var.isDragging){
         dx = (Mouse.x() - var.dragStartMX) / var.s
         dy = (Mouse.y() - var.dragStartMY) / var.s
-        scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
-        scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 236)
-        if(scrollRangeX > 0){
-          var.scrollX = var.dragStartSX - dx / scrollRangeX
-          if(var.scrollX < 0){ var.scrollX = 0 }
-          if(var.scrollX > 1){ var.scrollX = 1 }
+        if(!var.dragMoved){
+          if(dx * dx + dy * dy > 25){
+            var.dragMoved = true
+          }
         }
-        if(scrollRangeY > 0){
-          var.scrollY = var.dragStartSY - dy / scrollRangeY
-          if(var.scrollY < 0){ var.scrollY = 0 }
-          if(var.scrollY > 1){ var.scrollY = 1 }
+        if(var.dragMoved){
+          scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
+          scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 236)
+          if(scrollRangeX > 0){
+            newSX = var.dragStartSX - dx / scrollRangeX
+            if(newSX < 0){ newSX = 0 }
+            if(newSX > 1){ newSX = 1 }
+            val.树横滑块.setDragXRatio(newSX)
+          }
+          if(scrollRangeY > 0){
+            newSY = var.dragStartSY - dy / scrollRangeY
+            if(newSY < 0){ newSY = 0 }
+            if(newSY > 1){ newSY = 1 }
+            val.树滑块.setDragYRatio(newSY)
+          }
         }
       }
       if(var.needRebuild){
         var.needRebuild = false
         var.iconDelay = 2
-        // z=位置缩放系数(始终*zoomScale)  sz=尺寸缩放系数(map模式*zoomScale, node模式*1)
+        // z=缩放系数（位置和尺寸都按此缩放）
         z = var.zoomScale
-        sz = var.zoomMode == 'map' ? z : 1.0
         while(val.树画布.childrenCount() > 3){
           val.树画布.get(3).remove()
         }
@@ -193,8 +194,8 @@ ui:
           if(treeData != none){
             treeX = 40 + treeIndex * var.treeW
             titleCtrl = val.树标题模板.copy('树标题_' + treeIndex)
-            // 标题x = 中心 - 宽度/2；map模式宽度=200*z，node模式宽度=200
-            titleCtrl.x = ((treeX + var.treeW / 2) * z - 100 * sz).round()
+            // 标题x = 中心 - 宽度/2
+            titleCtrl.x = ((treeX + var.treeW / 2 - 100) * z).round()
             titleCtrl.y = 0
             titleCtrl.treeId = treeKey
             titleCtrl.visible = true
@@ -225,18 +226,8 @@ ui:
                 if(tier >= 4){ nodeY = nodeY + 350 }
                 node.x = ((treeX + var.treeW / 2 + colOff - var.nodeSize / 2) * z).round()
                 node.y = (nodeY * z).round()
-                // 节点尺寸：map模式*sz，node模式不变+设scale
-                node.width = (var.nodeSize * sz).round()
-                node.height = (var.nodeSize * sz).round()
-                if(var.zoomMode == 'node'){
-                  node.scale = z
-                  if(node['节点图标'] != none){ node['节点图标'].scale = z }
-                  if(node['等级标签'] != none){
-                    node['等级标签'].scale = z
-                    if(node['等级标签']['等级标签底'] != none){ node['等级标签']['等级标签底'].scale = z }
-                    if(node['等级标签']['等级文字'] != none){ node['等级标签']['等级文字'].scale = z }
-                  }
-                }
+                node.width = (var.nodeSize * z).round()
+                node.height = (var.nodeSize * z).round()
                 if(tier > 1){
                   parentOff = 0
                   if(tier == 3){ parentOff = colOff }
@@ -249,10 +240,10 @@ ui:
                   delta = parentOff - colOff
                   if(delta == 0){
                     lineV = node['连线竖直']
-                    lineV.x = ((var.nodeSize / 2 - var.lineW / 2) * sz).round()
-                    lineV.y = ((-gap + var.nodeSize) * z + var.nodeSize * (sz - z)).round()
-                    lineV.width = (var.lineW * sz).round()
-                    lineV.height = (gap * z - var.nodeSize * sz).round()
+                    lineV.x = ((var.nodeSize / 2 - var.lineW / 2) * z).round()
+                    lineV.y = ((-gap + var.nodeSize) * z).round()
+                    lineV.width = (var.lineW * z).round()
+                    lineV.height = ((gap - var.nodeSize) * z).round()
                     lineV.visible = true
                   } else {
                     lineLV = node['连线L竖']
@@ -260,24 +251,24 @@ ui:
                     lineLP = node['连线L父竖']
                     topRel = -gap + var.nodeSize
                     routeRel = (topRel / 2).round()
-                    lineLV.x = ((var.nodeSize / 2 - var.lineW / 2) * sz).round()
-                    lineLV.y = (routeRel * z + var.nodeSize * (sz - z) / 2).round()
-                    lineLV.width = (var.lineW * sz).round()
+                    lineLV.x = ((var.nodeSize / 2 - var.lineW / 2) * z).round()
+                    lineLV.y = (routeRel * z).round()
+                    lineLV.width = (var.lineW * z).round()
                     lineLV.height = ((-routeRel) * z).round()
                     lineLV.visible = true
-                    lineLH.y = ((routeRel - var.lineW / 2) * z + var.nodeSize * (sz - z) / 2).round()
-                    lineLH.height = (var.lineW * sz).round()
+                    lineLH.y = ((routeRel - var.lineW / 2) * z).round()
+                    lineLH.height = (var.lineW * z).round()
                     if(delta < 0){
-                      lineLH.x = ((var.nodeSize / 2 + delta) * z + var.nodeSize * (sz - z) / 2).round()
+                      lineLH.x = ((var.nodeSize / 2 + delta) * z).round()
                       lineLH.width = ((-delta) * z).round()
                     } else {
-                      lineLH.x = ((var.nodeSize / 2) * z + var.nodeSize * (sz - z) / 2).round()
+                      lineLH.x = ((var.nodeSize / 2) * z).round()
                       lineLH.width = (delta * z).round()
                     }
                     lineLH.visible = true
-                    lineLP.x = ((var.nodeSize / 2 + delta - var.lineW / 2) * z + var.nodeSize * (sz - z) / 2).round()
-                    lineLP.y = (topRel * z + var.nodeSize * (sz - z)).round()
-                    lineLP.width = (var.lineW * sz).round()
+                    lineLP.x = ((var.nodeSize / 2 + delta - var.lineW / 2) * z).round()
+                    lineLP.y = (topRel * z).round()
+                    lineLP.width = (var.lineW * z).round()
                     lineLP.height = ((routeRel - topRel) * z).round()
                     lineLP.visible = true
                   }
@@ -313,22 +304,13 @@ ui:
             nodeBaseX = linkCenter - var.nodeSize / 2
             node.x = (nodeBaseX * z).round()
             node.y = (var.linkY * z).round()
-            node.width = (var.nodeSize * sz).round()
-            node.height = (var.nodeSize * sz).round()
-            if(var.zoomMode == 'node'){
-              node.scale = z
-              if(node['节点图标'] != none){ node['节点图标'].scale = z }
-              if(node['等级标签'] != none){
-                node['等级标签'].scale = z
-                if(node['等级标签']['等级标签底'] != none){ node['等级标签']['等级标签底'].scale = z }
-                if(node['等级标签']['等级文字'] != none){ node['等级标签']['等级文字'].scale = z }
-              }
-            }
+            node.width = (var.nodeSize * z).round()
+            node.height = (var.nodeSize * z).round()
             // 连线：源节点底部 → 垂直下降穿过 T4/T5 间隙 → bus 汇线 → 水平 → 垂直接入联动节点
             sourceRel1 = ((sourceX1 - nodeBaseX) * z).round()
             sourceRel2 = ((sourceX2 - nodeBaseX) * z).round()
-            targetRel1 = ((var.nodeSize / 2 - 10) * sz).round()
-            targetRel2 = ((var.nodeSize / 2 + 10) * sz).round()
+            targetRel1 = ((var.nodeSize / 2 - 10) * z).round()
+            targetRel2 = ((var.nodeSize / 2 + 10) * z).round()
             sourceBottomRel = ((var.sourceBottomY - var.linkY) * z).round()
             bus1RelZ = (var.bus1Rel * z).round()
             bus2RelZ = (var.bus2Rel * z).round()
@@ -339,35 +321,35 @@ ui:
             p2h = node['联动2横']
             p2in = node['联动2入竖']
             // 路径1：源1 → bus1 → 联动节点左侧
-            p1v.x = (sourceRel1 - var.lineW * sz / 2).round()
+            p1v.x = (sourceRel1 - var.lineW * z / 2).round()
             p1v.y = sourceBottomRel
-            p1v.width = (var.lineW * sz).round()
+            p1v.width = (var.lineW * z).round()
             p1v.height = (bus1RelZ - sourceBottomRel).round()
             p1v.visible = true
             p1h.x = (sourceRel1 < targetRel1 ? sourceRel1 : targetRel1).round()
-            p1h.y = (bus1RelZ - var.lineW * sz / 2).round()
+            p1h.y = (bus1RelZ - var.lineW * z / 2).round()
             p1h.width = (sourceRel1 < targetRel1 ? targetRel1 - sourceRel1 : sourceRel1 - targetRel1).round()
-            p1h.height = (var.lineW * sz).round()
+            p1h.height = (var.lineW * z).round()
             p1h.visible = true
-            p1in.x = (targetRel1 - var.lineW * sz / 2).round()
+            p1in.x = (targetRel1 - var.lineW * z / 2).round()
             p1in.y = bus1RelZ
-            p1in.width = (var.lineW * sz).round()
+            p1in.width = (var.lineW * z).round()
             p1in.height = (-bus1RelZ).round()
             p1in.visible = true
             // 路径2：源2 → bus2 → 联动节点右侧
-            p2v.x = (sourceRel2 - var.lineW * sz / 2).round()
+            p2v.x = (sourceRel2 - var.lineW * z / 2).round()
             p2v.y = sourceBottomRel
-            p2v.width = (var.lineW * sz).round()
+            p2v.width = (var.lineW * z).round()
             p2v.height = (bus2RelZ - sourceBottomRel).round()
             p2v.visible = true
             p2h.x = (sourceRel2 < targetRel2 ? sourceRel2 : targetRel2).round()
-            p2h.y = (bus2RelZ - var.lineW * sz / 2).round()
+            p2h.y = (bus2RelZ - var.lineW * z / 2).round()
             p2h.width = (sourceRel2 < targetRel2 ? targetRel2 - sourceRel2 : sourceRel2 - targetRel2).round()
-            p2h.height = (var.lineW * sz).round()
+            p2h.height = (var.lineW * z).round()
             p2h.visible = true
-            p2in.x = (targetRel2 - var.lineW * sz / 2).round()
+            p2in.x = (targetRel2 - var.lineW * z / 2).round()
             p2in.y = bus2RelZ
-            p2in.width = (var.lineW * sz).round()
+            p2in.width = (var.lineW * z).round()
             p2in.height = (-bus2RelZ).round()
             p2in.visible = true
           }
@@ -774,8 +756,8 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 20
-                  width: 900
-                  texts: "'&f天赋树 &7| &a可用: &f' + var.unspentTalentPoints.round() + ' &7/ &f' + var.talentPoints.round() + '  &7| &f等级: &e' + var.playerLevel.round() + '  &7| &b缩放: &f' + (var.zoomScale * 100).round() + '% &7| &d模式: &f' + (var.zoomMode == 'map' ? '地图' : '节点') + ' &7[&fM切换&7]'"
+                  width: 800
+                  texts: "'&f天赋树 &7| &a可用: &f' + var.unspentTalentPoints.round() + ' &7/ &f' + var.talentPoints.round() + '  &7| &f等级: &e' + var.playerLevel.round() + '  &7| &b缩放: &f' + (var.zoomScale * 100).round() + '% &7[&fR重置&7]'"
                   fontSize: 26
               重置按钮:
                 type: Canvas
@@ -819,15 +801,16 @@ controls:
               y: 76
               width: "var.contentW - 48"
               height: "var.viewH - 236"
-              moveX: "var.scrollX"
-              moveY: "var.scrollY"
+              moveX: "self.parent['树横滑块'].getDragXRatio()"
+              moveY: "self.parent['树滑块'].getDragYRatio()"
             action:
               clickLeft: |-
                 var.isDragging = true
                 var.dragStartMX = Mouse.x()
                 var.dragStartMY = Mouse.y()
-                var.dragStartSX = var.scrollX
-                var.dragStartSY = var.scrollY
+                var.dragStartSX = val.树横滑块.getDragXRatio()
+                var.dragStartSY = val.树滑块.getDragYRatio()
+                var.dragMoved = false
               releaseLeft: |-
                 var.isDragging = false
               wheel: |-
@@ -838,29 +821,34 @@ controls:
                 if(newZoom < 0.5){ newZoom = 0.5 }
                 if(newZoom > 2.0){ newZoom = 2.0 }
                 if(newZoom != oldZoom){
-                  // 保持滚动位置：scrollX * (contentW_old - viewW) = scrollX_new * (contentW_new - viewW)
+                  // 保持滚动位置：通过滑块 ratio 换算
                   viewW = var.contentW - 48
                   viewH = var.viewH - 236
                   oldRangeX = var.canvasW * oldZoom - viewW
                   newRangeX = var.canvasW * newZoom - viewW
                   oldRangeY = var.canvasH * oldZoom - viewH
                   newRangeY = var.canvasH * newZoom - viewH
+                  oldSX = val.树横滑块.getDragXRatio()
+                  oldSY = val.树滑块.getDragYRatio()
                   if(newRangeX > 0){
-                    var.scrollX = oldRangeX > 0 ? var.scrollX * oldRangeX / newRangeX : 0
-                    if(var.scrollX < 0){ var.scrollX = 0 }
-                    if(var.scrollX > 1){ var.scrollX = 1 }
+                    newSX = oldRangeX > 0 ? oldSX * oldRangeX / newRangeX : 0
+                    if(newSX < 0){ newSX = 0 }
+                    if(newSX > 1){ newSX = 1 }
                   } else {
-                    var.scrollX = 0
+                    newSX = 0
                   }
                   if(newRangeY > 0){
-                    var.scrollY = oldRangeY > 0 ? var.scrollY * oldRangeY / newRangeY : 0
-                    if(var.scrollY < 0){ var.scrollY = 0 }
-                    if(var.scrollY > 1){ var.scrollY = 1 }
+                    newSY = oldRangeY > 0 ? oldSY * oldRangeY / newRangeY : 0
+                    if(newSY < 0){ newSY = 0 }
+                    if(newSY > 1){ newSY = 1 }
                   } else {
-                    var.scrollY = 0
+                    newSY = 0
                   }
                   var.zoomScale = newZoom
                   var.needRebuild = true
+                  // 重建后设置滑块位置
+                  val.树横滑块.setDragXRatio(newSX)
+                  val.树滑块.setDragYRatio(newSY)
                 }
             children:
               树画布:
@@ -875,8 +863,8 @@ controls:
                     type: Canvas
                     val: 树标题模板
                     attribute:
-                      width: "(200 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
-                      height: "(40 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                      width: "(200 * var.zoomScale).round()"
+                      height: "(40 * var.zoomScale).round()"
                       treeId: 'steady'
                       visible: false
                     children:
@@ -884,9 +872,9 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: "(200 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                          width: "(200 * var.zoomScale).round()"
                           texts: "var.treeNames[self.parent.treeId] != none ? var.treeNames[self.parent.treeId] : '&7未知'"
-                          fontSize: "(34 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                          fontSize: "(34 * var.zoomScale).round()"
                           through: true
                   # 联动标题模板
                   联动标题模板:
@@ -918,8 +906,8 @@ controls:
                       isLink: false
                       entry: "self.isLink == true ? var.links[self.entryKey] : (var.trees[self.treeId] != none ? var.trees[self.treeId]['nodes'][self.entryKey] : none)"
                       visible: "self.entry != none"
-                      width: "var.nodeSize * (var.zoomMode == 'map' ? var.zoomScale : 1)"
-                      height: "var.nodeSize * (var.zoomMode == 'map' ? var.zoomScale : 1)"
+                      width: "var.nodeSize * var.zoomScale"
+                      height: "var.nodeSize * var.zoomScale"
                       brightColor: "self.treeId == 'steady' ? '72,238,112,255' : (self.treeId == 'swift' ? '48,208,248,255' : (self.treeId == 'pressure' ? '248,70,70,255' : (self.treeId == 'focus' ? '212,86,248,255' : (self.treeId == 'lucky' ? '252,198,42,255' : '255,128,42,255'))))"
                       dimColor: "self.treeId == 'steady' ? '48,156,82,255' : (self.treeId == 'swift' ? '34,138,170,255' : (self.treeId == 'pressure' ? '172,48,48,255' : (self.treeId == 'focus' ? '144,54,180,255' : (self.treeId == 'lucky' ? '180,138,30,255' : '190,76,30,255'))))"
                       lineColor: "self.entry != none && self.entry['unlocked'] == true ? self.brightColor : self.dimColor"
@@ -1041,21 +1029,21 @@ controls:
                         type: Slot
                         attribute:
                           point: ~middle_center
-                          width: "88 * (var.zoomMode == 'map' ? var.zoomScale : 1)"
-                          height: "88 * (var.zoomMode == 'map' ? var.zoomScale : 1)"
+                          width: "88 * var.zoomScale"
+                          height: "88 * var.zoomScale"
                           slotType: ~Icon
                           itemScale: 0.75
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,255'"
                           shape: ~round_rect
-                          radius: "(12 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                          radius: "(12 * var.zoomScale).round()"
                           seticon: "self.setItemIcon(self.parent.entry != none ? self.parent.entry['iconJson'] : var.emptyItemJson)"
                         effect:
                           stroke:
-                            width: "(self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 4) * (var.zoomMode == 'map' ? var.zoomScale : 1)"
+                            width: "(self.parent.entry != none && self.parent.entry['unlocked'] == true ? 6 : 4) * var.zoomScale"
                             color: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? self.parent.brightColor : self.parent.dimColor"
                           neon:
                             color: "self.parent.brightColor"
-                            size: "(6 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                            size: "(6 * var.zoomScale).round()"
                             intensity: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? 1 : 0"
                             animated: false
                         action:
@@ -1070,10 +1058,10 @@ controls:
                         type: Canvas
                         attribute:
                           point: ~bottom_right
-                          x: "(-2 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
-                          y: "(-2 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
-                          width: "(36 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
-                          height: "(20 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                          x: "(-2 * var.zoomScale).round()"
+                          y: "(-2 * var.zoomScale).round()"
+                          width: "(36 * var.zoomScale).round()"
+                          height: "(20 * var.zoomScale).round()"
                           visible: "self.parent.entry != none && self.parent.entry['unlocked'] == true && self.parent.nodeMaxLevel > 1"
                         children:
                           等级标签底:
@@ -1083,14 +1071,14 @@ controls:
                               through: true
                               normal: "self.parent.parent.isMaxed ? '40,80,40,220' : '20,30,45,220'"
                               shape: ~round_rect
-                              radius: "(4 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                              radius: "(4 * var.zoomScale).round()"
                           等级文字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: "(36 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                              width: "(36 * var.zoomScale).round()"
                               texts: "self.parent.parent.nodeLevel + '/' + self.parent.parent.nodeMaxLevel"
-                              fontSize: "(18 * (var.zoomMode == 'map' ? var.zoomScale : 1)).round()"
+                              fontSize: "(18 * var.zoomScale).round()"
                               through: true
           # 操作提示（拖拽滚动 + 滚轮缩放）
           操作提示:
@@ -1099,6 +1087,25 @@ controls:
               point: ~bottom_left
               x: 24
               y: -8
-              texts: "'&7拖拽滚动 &f| &7滚轮缩放 &f| &7M切换模式 &f| &7R重置'"
+              texts: "'&7拖拽滚动 &f| &7滚轮缩放 &f| &7R重置'"
               fontSize: 20
               shadow: true
+          # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不显示，仅用于程序化控制滚动位置）
+          树滑块:
+            type: Texture
+            val: 树滑块
+            attribute:
+              visible: false
+              width: 12
+              height: 120
+              normal: ~50,170,200,220
+              maxDragY: "var.canvasH * var.zoomScale - (var.viewH - 236)"
+          树横滑块:
+            type: Texture
+            val: 树横滑块
+            attribute:
+              visible: false
+              width: 160
+              height: 12
+              normal: ~50,170,200,220
+              maxDragX: "var.canvasW * var.zoomScale - (var.contentW - 48)"
