@@ -29,7 +29,7 @@ public final class TalentEngine {
 
     public TalentEngine(@NotNull Map<String, TalentTreeDefinition> trees,
                         @NotNull java.util.List<TalentNode> links) {
-        this(trees, links, Map.of("2", 3, "3", 3, "4", 3, "5", 3, "link", 3));
+        this(trees, links, Map.of("2", 1, "3", 1, "4", 1, "5", 1, "6", 1, "7", 1, "link", 1));
     }
 
     public TalentEngine(@NotNull Map<String, TalentTreeDefinition> trees,

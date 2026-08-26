@@ -98,8 +98,8 @@ ui:
       var.RlinkA = 460
       var.RlinkB = 500
       var.RlinkC = 540
-      // 6 棵树方向（从正上方开始顺时针）
-      var.treeIds = ['steady', 'swift', 'pressure', 'focus', 'lucky', 'endure']
+      // 所有树 ID（meta = T1/T2 根节点树）
+      var.treeIds = ['meta', 'steady', 'swift', 'pressure', 'focus', 'lucky', 'endure']
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
       var.treeNames['swift'] = '&b迅捷'
@@ -159,7 +159,8 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.s = s    open: |-
+      var.s = s
+    open: |-
       Packet.send(var.packetId, 'refresh_talents')
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -223,27 +224,32 @@ ui:
         // 收集所有节点
         var.allNodes = []
         var.allNodeById = {}
-        for(treeKey in var.trees){
+        for(ti in range(0, var.treeIds.size() - 1)){
+          treeKey = var.treeIds[ti]
           treeData = var.trees[treeKey]
           if(treeData != none){
             nodes = treeData['nodes']
             count = treeData['nodeCount']
             if(count == none){ count = 0 }
-            for(i in range(0, count - 1)){
-              node = nodes[i.round()]
-              if(node != none){
-                var.allNodes.add(node)
-                var.allNodeById[node['id']] = node
+            if(count > 0){
+              for(i in range(0, count - 1)){
+                node = nodes[i.round()]
+                if(node != none){
+                  var.allNodes.add(node)
+                  var.allNodeById[node['id']] = node
+                }
               }
             }
           }
         }
         // 联动节点也加入
-        for(i in range(0, var.linkCount - 1)){
-          link = var.links[i.round()]
-          if(link != none){
-            var.allNodes.add(link)
-            var.allNodeById[link['id']] = link
+        if(var.linkCount > 0){
+          for(i in range(0, var.linkCount - 1)){
+            link = var.links[i.round()]
+            if(link != none){
+              var.allNodes.add(link)
+              var.allNodeById[link['id']] = link
+            }
           }
         }
         // 第一遍：计算所有节点位置
@@ -299,28 +305,30 @@ ui:
           }
           if(tier == 0 || treeId == ''){
             // 联动节点（tier 0，无 tree）
-            // 解析前置中的 T3 或前一级联动
             prereqs = node['prerequisites']
-            // 基础联动（两个 T3）
-            if(prereqs.size() == 2 && !prereqs[0].startsWith('link-')){
-              p1 = prereqs[0]
-              p2 = prereqs[1]
-              n1 = var.allNodeById[p1]
-              n2 = var.allNodeById[p2]
-              if(n1 != none && n2 != none){
-                a1 = var.nodePositions[p1][2]
-                a2 = var.nodePositions[p2][2]
-                angle = (a1 + a2) / 2
+            if(prereqs != none && prereqs.size() >= 1){
+              // 检查第一个前置是否是联动节点（tier==0）
+              firstParent = var.allNodeById[prereqs[0]]
+              isChainLink = firstParent != none && firstParent['tier'] == 0
+              if(!isChainLink && prereqs.size() == 2){
+                // 基础联动（两个 T3）：角度取两棵树中点
+                p1 = prereqs[0]
+                p2 = prereqs[1]
+                pos1 = var.nodePositions[p1]
+                pos2 = var.nodePositions[p2]
+                if(pos1 != none && pos2 != none){
+                  angle = (pos1[2] + pos2[2]) / 2
+                }
+                R = var.RlinkA
               }
-              R = var.RlinkA
-            }
-            // 二级/三级联动（前置是 link）
-            if(prereqs.size() >= 1 && prereqs[0].startsWith('link-')){
-              parentId = prereqs[0]
-              parent = var.allNodeById[parentId]
-              if(parent != none){
-                angle = var.nodePositions[parentId][2]
-                R = var.nodePositions[parentId][3] + 40
+              if(isChainLink){
+                // 二级/三级联动（前置是 link）：沿径向向外
+                parentId = prereqs[0]
+                parentPos = var.nodePositions[parentId]
+                if(parentPos != none){
+                  angle = parentPos[2]
+                  R = parentPos[3] + 40
+                }
               }
             }
           }
@@ -391,12 +399,17 @@ ui:
         if(var.iconDelay == 0){
           for(ci in range(3, val.树画布.childrenCount() - 1)){
             ctrl = val.树画布.get(ci.round())
-            if(ctrl != none && ctrl.entry != none && ctrl['节点图标'] != none){
-              ctrl['节点图标'].setItemIcon(ctrl.entry['iconJson'])
+            if(ctrl != none && ctrl.entryId != none && ctrl.entryId != '' && ctrl['节点图标'] != none){
+              node = var.allNodeById[ctrl.entryId]
+              if(node != none){
+                ctrl['节点图标'].setItemIcon(node['iconJson'])
+              }
             }
           }
         }
-      }# ─── 控件树 ────────────────────────────────────────────────────────
+      }
+
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）
   全屏玻璃底:
@@ -906,7 +919,7 @@ controls:
                           fontSize: "(34 * var.zoomScale).round()"
                           through: true
                   # 天赋节点模板（正方形 Slot + 连线 + Tooltip）
-                  # tick 中 copy 后设置 entryKey/treeId/treeX/isLink
+                  # tick 中 copy 后设置 entryId/treeId/isLink
                   天赋节点模板:
                     type: Canvas
                     val: 天赋节点模板
@@ -915,7 +928,7 @@ controls:
                       entryId: ''
                       treeId: 'steady'
                       isLink: false
-                      entry: "self.isLink == true ? var.links[self.entryKey] : (var.trees[self.treeId] != none ? var.trees[self.treeId]['nodes'][self.entryKey] : none)"
+                      entry: "var.allNodeById[self.entryId]"
                       visible: "self.entry != none"
                       width: "var.nodeSize * var.zoomScale"
                       height: "var.nodeSize * var.zoomScale"
@@ -947,7 +960,6 @@ controls:
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,255'"
                           shape: ~round_rect
                           radius: "(10 * var.zoomScale).round()"
-                          seticon: "self.setItemIcon(self.parent.entry != none ? self.parent.entry['iconJson'] : var.emptyItemJson)"
                         effect:
                           stroke:
                             width: "(self.parent.entry != none && self.parent.entry['unlocked'] == true ? 5 : 3) * var.zoomScale"
