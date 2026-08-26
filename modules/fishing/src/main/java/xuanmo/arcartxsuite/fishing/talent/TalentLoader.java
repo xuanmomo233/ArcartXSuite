@@ -120,17 +120,14 @@ public final class TalentLoader {
                 Object rawLevels = map.get("levels");
                 if (rawLevels instanceof List<?> levelList) {
                     for (Object lv : levelList) {
-                        if (lv instanceof Number n) {
-                            levelValues.add(n.doubleValue());
-                        }
+                        levelValues.add(parseNumber(lv));
                     }
                 }
             }
 
             // 兼容旧格式：effect-value（单级）
             if (levelValues.isEmpty() && map.containsKey("effect-value")) {
-                double effectValue = ((Number) map.get("effect-value")).doubleValue();
-                levelValues.add(effectValue);
+                levelValues.add(parseNumber(map.get("effect-value")));
             }
 
             // 多效果（effects 列表，仅联动节点使用）
@@ -178,8 +175,7 @@ public final class TalentLoader {
             if (map.containsKey("effect-type")) {
                 effectType = String.valueOf(map.get("effect-type"));
                 if (map.containsKey("effect-value")) {
-                    double effectValue = ((Number) map.get("effect-value")).doubleValue();
-                    levelValues.add(effectValue);
+                    levelValues.add(parseNumber(map.get("effect-value")));
                 }
             }
 
@@ -190,7 +186,7 @@ public final class TalentLoader {
                     for (Object e : effectList) {
                         if (e instanceof Map<?, ?> em) {
                             String et = String.valueOf(em.get("effect-type"));
-                            double ev = ((Number) em.get("effect-value")).doubleValue();
+                            double ev = parseNumber(em.get("effect-value"));
                             effects.add(new TalentEffect(et, ev));
                         }
                     }
@@ -276,5 +272,15 @@ public final class TalentLoader {
         if (value == null) return defaultValue;
         String s = String.valueOf(value);
         return s.isBlank() ? defaultValue : s;
+    }
+
+    private static double parseNumber(@Nullable Object value) {
+        if (value == null) return 0.0;
+        if (value instanceof Number n) return n.doubleValue();
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
     }
 }
