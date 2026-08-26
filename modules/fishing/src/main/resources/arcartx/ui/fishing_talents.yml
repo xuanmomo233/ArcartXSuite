@@ -312,13 +312,19 @@ ui:
               firstParent = var.allNodeById[prereqs[0]]
               isChainLink = firstParent != none && firstParent['tier'] == 0
               if(!isChainLink && prereqs.size() == 2){
-                // 基础联动（两个 T3）：角度取两棵树中点
+                // 基础联动（两个 T4）：角度取两棵树中点
                 p1 = prereqs[0]
                 p2 = prereqs[1]
                 pos1 = var.nodePositions[p1]
                 pos2 = var.nodePositions[p2]
                 if(pos1 != none && pos2 != none){
-                  angle = (pos1[2] + pos2[2]) / 2
+                  a1 = pos1[2]
+                  a2 = pos2[2]
+                  // 处理角度跨越 ±π 边界：差值 > π 时补一圈
+                  diff = a2 - a1
+                  if(diff > math.PI()){ a2 = a2 - 2 * math.PI() }
+                  if(diff < -math.PI()){ a2 = a2 + 2 * math.PI() }
+                  angle = (a1 + a2) / 2
                 }
                 R = var.RlinkA
               }
