@@ -1145,7 +1145,7 @@ talents:
 links:
 - id: link-1
   display-name: '&6稳速'
-  description: 绿条反弹 -6.0%，鱼速度 -5.9%（需稳健T3b + 迅捷T3a）
+  description: 绿条反弹 -6.0%，鱼速度 -5.9%（需稳健T4b + 迅捷T4a）
   effects:
   - effect-type: bar_bounce
     effect-value: 0.06
@@ -1156,8 +1156,8 @@ links:
     id: rabbit_foot
     amount: 1
   prerequisites:
-  - steady
-  - swift
+  - steady-t4-b
+  - swift-t4-a
 - id: link-1-2
   display-name: '&6进阶联动1'
   description: 由 link-1 衍生
@@ -1184,7 +1184,7 @@ links:
   - link-1-2
 - id: link-2
   display-name: '&6疾退'
-  description: 鱼突进 -6.2%，逃离概率 -4.5%（需迅捷T3b + 威压T3a）
+  description: 鱼突进 -6.2%，逃离概率 -4.5%（需迅捷T4b + 威压T4a）
   effects:
   - effect-type: fish_dart
     effect-value: 0.06
@@ -1195,8 +1195,8 @@ links:
     id: feather
     amount: 1
   prerequisites:
-  - swift
-  - pressure
+  - swift-t4-b
+  - pressure-t4-a
 - id: link-2-2
   display-name: '&6进阶联动2'
   description: 由 link-2 衍生
@@ -1223,7 +1223,7 @@ links:
   - link-2-2
 - id: link-3
   display-name: '&6控进'
-  description: 逃离冷却 +6.5%，进度增速 +9.7%（需威压T3b + 专注T3a）
+  description: 逃离冷却 +6.5%，进度增速 +9.7%（需威压T4b + 专注T4a）
   effects:
   - effect-type: flee_cooldown
     effect-value: 0.065
@@ -1234,8 +1234,8 @@ links:
     id: clock
     amount: 1
   prerequisites:
-  - pressure
-  - focus
+  - pressure-t4-b
+  - focus-t4-a
 - id: link-3-2
   display-name: '&6进阶联动3'
   description: 由 link-3 衍生
@@ -1262,7 +1262,7 @@ links:
   - link-3-2
 - id: link-4
   display-name: '&6精运'
-  description: 完美窗口 +6.5%，钓鱼经验 +6.0%（需专注T3b + 幸运T3a）
+  description: 完美窗口 +6.5%，钓鱼经验 +6.0%（需专注T4b + 幸运T4a）
   effects:
   - effect-type: perfect_window
     effect-value: 0.065
@@ -1273,8 +1273,8 @@ links:
     id: ender_eye
     amount: 1
   prerequisites:
-  - focus
-  - lucky
+  - focus-t4-b
+  - lucky-t4-a
 - id: link-4-2
   display-name: '&6进阶联动4'
   description: 由 link-4 衍生
@@ -1301,7 +1301,7 @@ links:
   - link-4-2
 - id: link-5
   display-name: '&6耐运'
-  description: 稀有鱼概率 +4.5%，钓鱼超时 +3.6%（需幸运T3b + 持久T3a）
+  description: 稀有鱼概率 +4.5%，钓鱼超时 +3.6%（需幸运T4b + 持久T4a）
   effects:
   - effect-type: rare_chance
     effect-value: 0.045
@@ -1312,8 +1312,8 @@ links:
     id: lapis_lazuli
     amount: 1
   prerequisites:
-  - lucky
-  - endure
+  - lucky-t4-b
+  - endure-t4-a
 - id: link-5-2
   display-name: '&6进阶联动5'
   description: 由 link-5 衍生
@@ -1340,7 +1340,7 @@ links:
   - link-5-2
 - id: link-6
   display-name: '&6稳推'
-  description: 绿条点击力 +4.9%，绿条高度 +3.0px（需持久T3b + 稳健T3a）
+  description: 绿条点击力 +4.9%，绿条高度 +3.0px（需持久T4b + 稳健T4a）
   effects:
   - effect-type: bar_click_force
     effect-value: 0.0495
@@ -1351,8 +1351,8 @@ links:
     id: piston
     amount: 1
   prerequisites:
-  - endure
-  - steady
+  - endure-t4-b
+  - steady-t4-a
 - id: link-6-2
   display-name: '&6进阶联动6'
   description: 由 link-6 衍生

@@ -95,9 +95,9 @@ ui:
       var.R5 = 400
       var.R6 = 540
       var.R7 = 700
-      var.RlinkA = 460
-      var.RlinkB = 500
-      var.RlinkC = 540
+      // 联动链：基础在 T4/T5 之间，沿径向向外穿过 T6/T7 间隙
+      var.RlinkA = 480
+      var.RlinkStep = 65
       // 所有树 ID（meta = T1/T2 根节点树）
       var.treeIds = ['meta', 'steady', 'swift', 'pressure', 'focus', 'lucky', 'endure']
       var.treeNames = {}
@@ -135,10 +135,11 @@ ui:
       // 角度参数（弧度）
       var.angleT4 = math.PI() / 12
       var.angleT5 = math.PI() / 12
-      var.angleT6a = math.PI() / 8
-      var.angleT6b = math.PI() / 24
-      var.angleT7a = math.PI() / 8
-      var.angleT7b = math.PI() / 24
+      // T6/T7 收窄散开角度，给联动链留出两树间空隙
+      var.angleT6a = math.PI() / 10
+      var.angleT6b = math.PI() / 30
+      var.angleT7a = math.PI() / 10
+      var.angleT7b = math.PI() / 30
       // 联动角度偏移
       var.angleLinkBase = math.PI() / 36
       var.angleLinkStep = math.PI() / 60
@@ -327,7 +328,7 @@ ui:
                 parentPos = var.nodePositions[parentId]
                 if(parentPos != none){
                   angle = parentPos[2]
-                  R = parentPos[3] + 40
+                  R = parentPos[3] + var.RlinkStep
                 }
               }
             }
