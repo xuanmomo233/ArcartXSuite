@@ -38,6 +38,40 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     /** 全文索引是否可用（SQLite FTS5 或 MySQL FULLTEXT+ngram），false 时降级到 LIKE */
     private volatile boolean ftsAvailable = false;
 
+    /** 搜索关键字最大长度，防止超长输入导致性能问题 */
+    private static final int MAX_KEYWORD_LENGTH = 100;
+
+    /**
+     * 转义 LIKE 模式中的特殊字符（\、%、_），使关键字按字面量匹配。
+     * 配合 SQL 中的 ESCAPE '\\' 子句使用。
+     */
+    private static String escapeLike(String keyword) {
+        if (keyword == null) return "";
+        return keyword.replace("\\", "\\\\")
+                       .replace("%", "\\%")
+                       .replace("_", "\\_");
+    }
+
+    /**
+     * 清洗全文搜索关键字，移除 FTS 语法特殊字符（SQLite FTS5 / MySQL BOOLEAN MODE）。
+     * 仅保留字母、数字、中文及空格，避免语法错误或注入。
+     */
+    private static String sanitizeFtsKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) return "";
+        // 截断超长关键字
+        String truncated = keyword.length() > MAX_KEYWORD_LENGTH
+            ? keyword.substring(0, MAX_KEYWORD_LENGTH) : keyword;
+        // 移除 FTS 特殊字符，仅保留字母数字中文和空格
+        return truncated.replaceAll("[^\\p{L}\\p{Nd}\\s]", " ").trim();
+    }
+
+    /** 截断搜索关键字到最大长度 */
+    private static String truncateKeyword(String keyword) {
+        if (keyword == null) return "";
+        return keyword.length() > MAX_KEYWORD_LENGTH
+            ? keyword.substring(0, MAX_KEYWORD_LENGTH) : keyword;
+    }
+
     /**
      * 构造市场数据仓库。
      *
@@ -65,6 +99,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tGlobalStock = prefix + "shop_global_stock";
         tPlayerStock = prefix + "shop_player_stock";
         tListingsFts = prefix + "listings_fts";
+        // 防御性校验：表前缀只能包含字母数字下划线，防止拼接 SQL 时注入
+        if (!prefix.matches("[a-zA-Z0-9_]*")) {
+            throw new IllegalStateException("非法表前缀（仅允许字母数字下划线）: " + prefix);
+        }
         createTables(conn);
         initFullTextIndex(conn);
         logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix
@@ -662,13 +700,13 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         // 降级：LIKE 全表扫描
         String sql = "SELECT * FROM " + tListings
             + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)"
+            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')"
             + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
         List<AuctionListing> results = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, System.currentTimeMillis());
-            String like = "%" + keyword + "%";
+            String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
             ps.setString(2, like);
             ps.setString(3, like);
             ps.setString(4, like);
@@ -709,7 +747,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, System.currentTimeMillis());
-            ps.setString(2, keyword);
+            ps.setString(2, sanitizeFtsKeyword(keyword));
             ps.setInt(3, limit);
             ps.setInt(4, offset);
             try (ResultSet rs = ps.executeQuery()) {
@@ -749,8 +787,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         // 降级：LIKE 全表扫描
         String sql = "SELECT COUNT(*) FROM " + tListings
             + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)";
-        String like = "%" + keyword + "%";
+            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')";
+        String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
         return countQuery(sql, System.currentTimeMillis(), like, like, like);
     }
 
@@ -768,7 +806,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, System.currentTimeMillis());
-            ps.setString(2, keyword);
+            ps.setString(2, sanitizeFtsKeyword(keyword));
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getInt(1);
             }
@@ -995,7 +1033,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return new ShopLimitRecord(
-                        UUID.fromString(rs.getString("player")),
+                        parseUuidSafe(rs.getString("player"), "shop_limit.player"),
                         rs.getString("shop_id"),
                         rs.getString("item_id"),
                         rs.getInt("purchased_count"),
@@ -1157,12 +1195,14 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override
-    public void restoreGlobalShopStock(String shopId, String itemId, int amount) {
+    public void restoreGlobalShopStock(String shopId, String itemId, int amount, int defaultMax) {
         if (amount <= 0) {
             return;
         }
-        exec("UPDATE " + tGlobalStock + " SET remaining = remaining + ? WHERE shop_id=? AND item_id=?",
-            amount, shopId, itemId);
+        // 恢复库存但不超过初始上限，防止异常重试导致库存溢出
+        String func = isMysql() ? "LEAST" : "MIN";
+        exec("UPDATE " + tGlobalStock + " SET remaining = " + func + "(remaining + ?, ?) WHERE shop_id=? AND item_id=?",
+            amount, defaultMax, shopId, itemId);
     }
 
     // ─── 系统商店玩家独立库存 ─────────────────────────────────
@@ -1241,12 +1281,14 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
 
     @Override
-    public void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount) {
+    public void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax) {
         if (amount <= 0) {
             return;
         }
-        exec("UPDATE " + tPlayerStock + " SET remaining = remaining + ? WHERE player=? AND shop_id=? AND item_id=?",
-            amount, player.toString(), shopId, itemId);
+        // 恢复库存但不超过初始上限，防止异常重试导致库存溢出
+        String func = isMysql() ? "LEAST" : "MIN";
+        exec("UPDATE " + tPlayerStock + " SET remaining = " + func + "(remaining + ?, ?) WHERE player=? AND shop_id=? AND item_id=?",
+            amount, defaultMax, player.toString(), shopId, itemId);
     }
 
     // ─── 待发放队列 ─────────────────────────────────────────
@@ -1291,7 +1333,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private PendingDelivery mapPending(ResultSet rs) throws SQLException {
         return new PendingDelivery(
             rs.getLong("id"),
-            UUID.fromString(rs.getString("player")),
+            parseUuidSafe(rs.getString("player"), "pending.player"),
             rs.getString("type"),
             rs.getString("item_data"),
             rs.getString("currency"),
@@ -1354,12 +1396,23 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         else ps.setObject(index, value);
     }
 
+    /** 安全解析 UUID，脏数据时记录警告并返回 null */
+    private @Nullable UUID parseUuidSafe(String value, String context) {
+        if (value == null || value.isEmpty()) return null;
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            logger.warning("数据库中存在无效 UUID: " + value + " (" + context + ")");
+            return null;
+        }
+    }
+
     private AuctionListing mapListing(ResultSet rs) throws SQLException {
         String bidderStr = rs.getString("highest_bidder");
-        UUID bidder = bidderStr == null || bidderStr.isEmpty() ? null : UUID.fromString(bidderStr);
+        UUID bidder = parseUuidSafe(bidderStr, "listing.highest_bidder");
         return new AuctionListing(
             rs.getLong("id"),
-            UUID.fromString(rs.getString("seller")),
+            parseUuidSafe(rs.getString("seller"), "listing.seller"),
             rs.getString("seller_name"),
             rs.getString("item_data"),
             rs.getString("item_display_name"),
@@ -1382,7 +1435,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         return new AuctionBid(
             rs.getLong("id"),
             rs.getLong("listing_id"),
-            UUID.fromString(rs.getString("bidder")),
+            parseUuidSafe(rs.getString("bidder"), "bid.bidder"),
             rs.getString("bidder_name"),
             rs.getDouble("amount"),
             rs.getLong("timestamp")
@@ -1391,11 +1444,11 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     private AuctionHistory mapHistory(ResultSet rs) throws SQLException {
         String buyerStr = rs.getString("buyer");
-        UUID buyer = buyerStr == null || buyerStr.isEmpty() ? null : UUID.fromString(buyerStr);
+        UUID buyer = parseUuidSafe(buyerStr, "history.buyer");
         return new AuctionHistory(
             rs.getLong("id"),
             rs.getLong("listing_id"),
-            UUID.fromString(rs.getString("seller")),
+            parseUuidSafe(rs.getString("seller"), "history.seller"),
             buyer,
             rs.getString("item_data"),
             rs.getString("item_display_name"),

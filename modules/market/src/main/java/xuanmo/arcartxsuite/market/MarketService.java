@@ -198,8 +198,37 @@ public class MarketService {
             player.sendMessage(messages.get("player.auction-unavailable"));
             return;
         }
+        // 价格范围校验（覆盖命令路径，UI 路径在 handleAuctionListCreatePacket 已校验）
+        if (buyNowPrice < 0 || startingBid < 0) {
+            player.sendMessage(messages.get("player.sell.price-out-of-range",
+                formatPrice(config.auction().minPrice()),
+                formatPrice(config.auction().maxPrice())));
+            return;
+        }
+        if (buyNowPrice > 0 && (buyNowPrice < config.auction().minPrice() || buyNowPrice > config.auction().maxPrice())) {
+            player.sendMessage(messages.get("player.sell.price-out-of-range",
+                formatPrice(config.auction().minPrice()),
+                formatPrice(config.auction().maxPrice())));
+            return;
+        }
+        if (startingBid > 0 && (startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice())) {
+            player.sendMessage(messages.get("player.sell.price-out-of-range",
+                formatPrice(config.auction().minPrice()),
+                formatPrice(config.auction().maxPrice())));
+            return;
+        }
+        // 货币校验
+        String effectiveCurrency = currency != null && !currency.isBlank() ? currency : config.auction().defaultCurrency();
+        var currencyOption = config.auction().currencies().stream()
+            .filter(option -> option.id().equalsIgnoreCase(effectiveCurrency))
+            .findFirst().orElse(null);
+        if (currencyOption == null || currencyManager.bridge(effectiveCurrency) == null
+            || !currencyManager.bridge(effectiveCurrency).available()) {
+            player.sendMessage(messages.get("player.sell.invalid-currency"));
+            return;
+        }
         if (duration <= 0) duration = config.auction().defaultDurationSeconds();
-        var result = auctionService.createListing(player, item, buyNowPrice, startingBid, currency, duration);
+        var result = auctionService.createListing(player, item, buyNowPrice, startingBid, currencyOption.id(), duration);
         if (result.success()) {
             rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
@@ -789,7 +818,6 @@ public class MarketService {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
 
-        double totalValue = 0;
         double multiplier = recycleService != null ? recycleService.getMultiplier(player) : 1.0;
         Map<String, Double> totalsByCurrency = new LinkedHashMap<>();
         Map<String, Object> recyclables = new LinkedHashMap<>();
@@ -801,7 +829,6 @@ public class MarketService {
             if (unitPrice <= 0) continue;
             String key = Integer.toString(idx);
             double total = unitPrice * item.getAmount();
-            totalValue += total;
             String itemCurrency = recycleService.getRecycleCurrency(item);
             if (itemCurrency != null) totalsByCurrency.merge(itemCurrency, total, Double::sum);
             Map<String, Object> row = new LinkedHashMap<>();

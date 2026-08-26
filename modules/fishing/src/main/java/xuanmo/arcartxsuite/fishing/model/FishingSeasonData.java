@@ -49,7 +49,7 @@ public record FishingSeasonData(
     }
 
     public static @NotNull FishingSeasonData empty(@NotNull UUID uuid, @NotNull String seasonId) {
-        return new FishingSeasonData(uuid, seasonId, 1, 0, 0, 0, new HashMap<>(), new HashSet<>(), 0, false);
+        return new FishingSeasonData(uuid, seasonId, 0, 0, 0, 0, new HashMap<>(), new HashSet<>(), 0, false);
     }
 
     /**

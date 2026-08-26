@@ -2,8 +2,9 @@ talents:
 - id: root
   tier: 1
   branch: root
+  tree: null
   display-name: '&7根基'
-  description: 万丈高楼平地起，钓鱼经验小幅提升
+  description: 万丈高楼平地起，钓鱼经验提升
   effect-type: xp_multiplier
   effect-value: 0.05
   icon:
@@ -14,10 +15,11 @@ talents:
 - id: t2-power
   tier: 2
   branch: power
+  tree: null
   display-name: '&c力量'
-  description: 掌控绿条与鱼速，绿条高度小幅提升
+  description: 掌控绿条与鱼速，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.05
+  effect-value: 12
   icon:
     source: minecraft
     id: book
@@ -27,8 +29,9 @@ talents:
 - id: t2-control
   tier: 2
   branch: control
+  tree: null
   display-name: '&b掌控'
-  description: 驾驭鱼之行为，逃离概率小幅降低
+  description: 驾驭鱼之行为，逃离概率降低
   effect-type: flee_chance
   effect-value: 0.05
   icon:
@@ -40,8 +43,9 @@ talents:
 - id: t2-fortune
   tier: 2
   branch: fortune
+  tree: null
   display-name: '&e福运'
-  description: 财运与经验兼修，钓鱼经验小幅提升
+  description: 财运与经验兼修，钓鱼经验提升
   effect-type: xp_multiplier
   effect-value: 0.05
   icon:
@@ -57,7 +61,7 @@ talents:
   display-name: '&a稳健根基'
   description: 稳如泰山，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.2
+  effect-value: 18
   icon:
     source: minecraft
     id: iron_ingot
@@ -71,7 +75,7 @@ talents:
   display-name: '&b迅捷根基'
   description: 迅若疾风，鱼速度降低
   effect-type: fish_speed
-  effect-value: 0.0012
+  effect-value: 0.05
   icon:
     source: minecraft
     id: feather
@@ -85,7 +89,7 @@ talents:
   display-name: '&c威压根基'
   description: 威震四方，逃离概率降低
   effect-type: flee_chance
-  effect-value: 0.0011
+  effect-value: 0.04
   icon:
     source: minecraft
     id: iron_sword
@@ -99,10 +103,10 @@ talents:
   display-name: '&d专注根基'
   description: 心无旁骛，进度增速提升
   effect-type: progress_rate
-  effect-value: 0.0039
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: emerald
+    id: clock
     amount: 1
   prerequisites:
   - t2-control
@@ -113,10 +117,10 @@ talents:
   display-name: '&e幸运根基'
   description: 福星高照，钓鱼经验提升
   effect-type: xp_multiplier
-  effect-value: 0.0014
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: diamond
+    id: gold_ingot
     amount: 1
   prerequisites:
   - t2-fortune
@@ -127,7 +131,7 @@ talents:
   display-name: '&6持久根基'
   description: 绵绵不绝，钓鱼超时延长
   effect-type: catch_duration
-  effect-value: 0.006
+  effect-value: 0.05
   icon:
     source: minecraft
     id: clock
@@ -141,7 +145,7 @@ talents:
   display-name: '&a高杆'
   description: 挺拔如松，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.2
+  effect-value: 20
   icon:
     source: minecraft
     id: iron_ingot
@@ -155,7 +159,7 @@ talents:
   display-name: '&a稳杆'
   description: 稳如磐石，绿条阻尼提升
   effect-type: bar_damping
-  effect-value: 0.0023
+  effect-value: 0.03
   icon:
     source: minecraft
     id: slime_ball
@@ -167,12 +171,12 @@ talents:
   branch: a
   tree: steady
   display-name: '&a长杆'
-  description: 更上层楼，绿条高度进一步提升
+  description: 更上层楼，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.2
+  effect-value: 22
   icon:
     source: minecraft
-    id: iron_ingot
+    id: iron_block
     amount: 1
   prerequisites:
   - steady-t4-a
@@ -183,10 +187,10 @@ talents:
   display-name: '&a固杆'
   description: 坚不可摧，绿条反弹降低
   effect-type: bar_bounce
-  effect-value: 0.0036
+  effect-value: 0.1
   icon:
     source: minecraft
-    id: rabbit_foot
+    id: obsidian
     amount: 1
   prerequisites:
   - steady-t4-b
@@ -197,7 +201,7 @@ talents:
   display-name: '&a精控'
   description: 精准入微，绿条力系数提升
   effect-type: bar_force
-  effect-value: 0.002
+  effect-value: 0.05
   icon:
     source: minecraft
     id: anvil
@@ -211,7 +215,7 @@ talents:
   display-name: '&a厚杆'
   description: 厚重扎实，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.2
+  effect-value: 25
   icon:
     source: minecraft
     id: iron_block
@@ -225,7 +229,7 @@ talents:
   display-name: '&a柔杆'
   description: 柔韧有度，绿条阻尼提升
   effect-type: bar_damping
-  effect-value: 0.0017
+  effect-value: 0.04
   icon:
     source: minecraft
     id: slime_block
@@ -239,10 +243,10 @@ talents:
   display-name: '&a抗冲'
   description: 抗冲稳健，绿条反弹降低
   effect-type: bar_bounce
-  effect-value: 0.0024
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: rabbit_hide
+    id: obsidian
     amount: 1
   prerequisites:
   - steady-t5-b
@@ -251,9 +255,9 @@ talents:
   branch: a
   tree: steady
   display-name: '&a精控大成'
-  description: 炉火纯青，绿条力系数进一步提升
+  description: 炉火纯青，绿条力系数提升
   effect-type: bar_force
-  effect-value: 0.001
+  effect-value: 0.03
   icon:
     source: minecraft
     id: anvil
@@ -265,9 +269,9 @@ talents:
   branch: b
   tree: steady
   display-name: '&a厚杆大成'
-  description: 登峰造极，绿条高度进一步提升
+  description: 登峰造极，绿条高度提升
   effect-type: bar_height
-  effect-value: 0.1
+  effect-value: 15
   icon:
     source: minecraft
     id: iron_block
@@ -279,9 +283,9 @@ talents:
   branch: c
   tree: steady
   display-name: '&a柔杆大成'
-  description: 出神入化，绿条阻尼进一步提升
+  description: 出神入化，绿条阻尼提升
   effect-type: bar_damping
-  effect-value: 0.0009
+  effect-value: 0.02
   icon:
     source: minecraft
     id: slime_block
@@ -293,12 +297,12 @@ talents:
   branch: d
   tree: steady
   display-name: '&a抗冲大成'
-  description: 万冲不侵，绿条反弹进一步降低
+  description: 万冲不侵，绿条反弹降低
   effect-type: bar_bounce
-  effect-value: 0.0012
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: rabbit_hide
+    id: obsidian
     amount: 1
   prerequisites:
   - steady-t6-d
@@ -309,7 +313,7 @@ talents:
   display-name: '&b缓游'
   description: 缓其行速，鱼速度降低
   effect-type: fish_speed
-  effect-value: 0.0012
+  effect-value: 0.06
   icon:
     source: minecraft
     id: feather
@@ -321,12 +325,12 @@ talents:
   branch: b
   tree: swift
   display-name: '&b滞留'
-  description: 留其脚步，鱼停留时间降低
-  effect-type: fish_dwell
-  effect-value: 0.0045
+  description: 压制反弹，鱼边缘反弹降低
+  effect-type: fish_edge
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: clock
+    id: cobweb
     amount: 1
   prerequisites:
   - swift
@@ -335,9 +339,9 @@ talents:
   branch: a
   tree: swift
   display-name: '&b深缓'
-  description: 更缓其行，鱼速度进一步降低
+  description: 更缓其行，鱼速度降低
   effect-type: fish_speed
-  effect-value: 0.0012
+  effect-value: 0.07
   icon:
     source: minecraft
     id: feather
@@ -349,12 +353,12 @@ talents:
   branch: b
   tree: swift
   display-name: '&b深滞'
-  description: 更留其步，鱼停留时间进一步降低
-  effect-type: fish_dwell
-  effect-value: 0.0045
+  description: 更压反弹，鱼边缘反弹降低
+  effect-type: fish_edge
+  effect-value: 0.1
   icon:
     source: minecraft
-    id: clock
+    id: cobweb
     amount: 1
   prerequisites:
   - swift-t4-b
@@ -365,7 +369,7 @@ talents:
   display-name: '&b速压'
   description: 压制游速，鱼速度降低
   effect-type: fish_speed
-  effect-value: 0.0009
+  effect-value: 0.06
   icon:
     source: minecraft
     id: feather
@@ -376,13 +380,13 @@ talents:
   tier: 6
   branch: b
   tree: swift
-  display-name: '&b突压'
-  description: 压制突进，鱼突进概率降低
-  effect-type: fish_dart
-  effect-value: 0.0036
+  display-name: '&b轻触'
+  description: 轻触即应，绿条点击力提升
+  effect-type: bar_click_force
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: arrow
+    id: rabbit_foot
     amount: 1
   prerequisites:
   - swift-t5-a
@@ -390,13 +394,13 @@ talents:
   tier: 6
   branch: c
   tree: swift
-  display-name: '&b噪压'
-  description: 压制躁动，鱼噪声降低
-  effect-type: fish_noise
-  effect-value: 0.0036
+  display-name: '&b边压'
+  description: 压制反弹，鱼边缘反弹降低
+  effect-type: fish_edge
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: amethyst_shard
+    id: cobweb
     amount: 1
   prerequisites:
   - swift-t5-b
@@ -404,13 +408,13 @@ talents:
   tier: 6
   branch: d
   tree: swift
-  display-name: '&b边压'
-  description: 压制反弹，鱼边缘反弹降低
-  effect-type: fish_edge
-  effect-value: 0.002
+  display-name: '&b轻盈'
+  description: 轻盈如羽，绿条重力降低
+  effect-type: bar_gravity
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: shield
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - swift-t5-b
@@ -419,9 +423,9 @@ talents:
   branch: a
   tree: swift
   display-name: '&b速压大成'
-  description: 游速尽控，鱼速度进一步降低
+  description: 游速尽控，鱼速度降低
   effect-type: fish_speed
-  effect-value: 0.0005
+  effect-value: 0.03
   icon:
     source: minecraft
     id: feather
@@ -432,13 +436,13 @@ talents:
   tier: 7
   branch: b
   tree: swift
-  display-name: '&b突压大成'
-  description: 突进尽控，鱼突进概率进一步降低
-  effect-type: fish_dart
-  effect-value: 0.0018
+  display-name: '&b轻触大成'
+  description: 触即应，绿条点击力提升
+  effect-type: bar_click_force
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: arrow
+    id: rabbit_foot
     amount: 1
   prerequisites:
   - swift-t6-b
@@ -446,13 +450,13 @@ talents:
   tier: 7
   branch: c
   tree: swift
-  display-name: '&b噪压大成'
-  description: 躁动尽控，鱼噪声进一步降低
-  effect-type: fish_noise
-  effect-value: 0.0018
+  display-name: '&b边压大成'
+  description: 反弹尽控，鱼边缘反弹降低
+  effect-type: fish_edge
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: amethyst_shard
+    id: cobweb
     amount: 1
   prerequisites:
   - swift-t6-c
@@ -460,13 +464,13 @@ talents:
   tier: 7
   branch: d
   tree: swift
-  display-name: '&b边压大成'
-  description: 反弹尽控，鱼边缘反弹进一步降低
-  effect-type: fish_edge
-  effect-value: 0.001
+  display-name: '&b轻盈大成'
+  description: 轻若无物，绿条重力降低
+  effect-type: bar_gravity
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: shield
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - swift-t6-d
@@ -477,7 +481,7 @@ talents:
   display-name: '&c抑逃'
   description: 抑制逃意，逃离概率降低
   effect-type: flee_chance
-  effect-value: 0.0011
+  effect-value: 0.05
   icon:
     source: minecraft
     id: iron_sword
@@ -491,10 +495,10 @@ talents:
   display-name: '&c缓逃'
   description: 缓其逃速，逃离速度降低
   effect-type: flee_speed
-  effect-value: 0.0021
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: sugar
+    id: chain
     amount: 1
   prerequisites:
   - pressure
@@ -503,9 +507,9 @@ talents:
   branch: a
   tree: pressure
   display-name: '&c深抑'
-  description: 更抑其逃，逃离概率进一步降低
+  description: 更抑其逃，逃离概率降低
   effect-type: flee_chance
-  effect-value: 0.0011
+  effect-value: 0.06
   icon:
     source: minecraft
     id: iron_sword
@@ -517,12 +521,12 @@ talents:
   branch: b
   tree: pressure
   display-name: '&c深缓'
-  description: 更缓其逃，逃离速度进一步降低
+  description: 更缓其逃，逃离速度降低
   effect-type: flee_speed
-  effect-value: 0.0021
+  effect-value: 0.07
   icon:
     source: minecraft
-    id: sugar
+    id: chain
     amount: 1
   prerequisites:
   - pressure-t4-b
@@ -533,7 +537,7 @@ talents:
   display-name: '&c锁逃'
   description: 锁定逃意，逃离概率降低
   effect-type: flee_chance
-  effect-value: 0.0009
+  effect-value: 0.05
   icon:
     source: minecraft
     id: iron_sword
@@ -547,13 +551,13 @@ talents:
   display-name: '&c缚逃'
   description: 束缚逃速，逃离速度降低
   effect-type: flee_speed
-  effect-value: 0.0032
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: sugar
+    id: chain
     amount: 1
   prerequisites:
-  - pressure-t5-a
+  - pressure-t5-b
 - id: pressure-t6-c
   tier: 6
   branch: c
@@ -561,13 +565,13 @@ talents:
   display-name: '&c延冷'
   description: 延长喘息，逃离冷却提升
   effect-type: flee_cooldown
-  effect-value: 0.004
+  effect-value: 0.15
   icon:
     source: minecraft
     id: clock
     amount: 1
   prerequisites:
-  - pressure-t5-b
+  - pressure-t5-a
 - id: pressure-t6-d
   tier: 6
   branch: d
@@ -575,10 +579,10 @@ talents:
   display-name: '&c缩时'
   description: 缩短逃逸，逃离持续降低
   effect-type: flee_duration
-  effect-value: 0.0038
+  effect-value: 0.15
   icon:
     source: minecraft
-    id: string
+    id: clock
     amount: 1
   prerequisites:
   - pressure-t5-b
@@ -587,9 +591,9 @@ talents:
   branch: a
   tree: pressure
   display-name: '&c锁逃大成'
-  description: 逃意尽锁，逃离概率进一步降低
+  description: 逃意尽锁，逃离概率降低
   effect-type: flee_chance
-  effect-value: 0.0005
+  effect-value: 0.03
   icon:
     source: minecraft
     id: iron_sword
@@ -601,12 +605,12 @@ talents:
   branch: b
   tree: pressure
   display-name: '&c缚逃大成'
-  description: 逃速尽缚，逃离速度进一步降低
+  description: 逃速尽缚，逃离速度降低
   effect-type: flee_speed
-  effect-value: 0.0016
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: sugar
+    id: chain
     amount: 1
   prerequisites:
   - pressure-t6-b
@@ -615,9 +619,9 @@ talents:
   branch: c
   tree: pressure
   display-name: '&c延冷大成'
-  description: 喘息绵长，逃离冷却进一步提升
+  description: 喘息绵长，逃离冷却提升
   effect-type: flee_cooldown
-  effect-value: 0.002
+  effect-value: 0.08
   icon:
     source: minecraft
     id: clock
@@ -629,12 +633,12 @@ talents:
   branch: d
   tree: pressure
   display-name: '&c缩时大成'
-  description: 逃逸瞬灭，逃离持续进一步降低
+  description: 逃逸瞬灭，逃离持续降低
   effect-type: flee_duration
-  effect-value: 0.0019
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: string
+    id: clock
     amount: 1
   prerequisites:
   - pressure-t6-d
@@ -645,10 +649,10 @@ talents:
   display-name: '&d催进'
   description: 催动进度，进度增速提升
   effect-type: progress_rate
-  effect-value: 0.0039
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: emerald
+    id: clock
     amount: 1
   prerequisites:
   - focus
@@ -659,10 +663,10 @@ talents:
   display-name: '&d守进'
   description: 守护进度，进度下降降低
   effect-type: progress_drain
-  effect-value: 0.0028
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: honey_bottle
+    id: redstone
     amount: 1
   prerequisites:
   - focus
@@ -671,12 +675,12 @@ talents:
   branch: a
   tree: focus
   display-name: '&d深催'
-  description: 更催其进，进度增速进一步提升
+  description: 更催其进，进度增速提升
   effect-type: progress_rate
-  effect-value: 0.0039
+  effect-value: 0.07
   icon:
     source: minecraft
-    id: emerald
+    id: clock
     amount: 1
   prerequisites:
   - focus-t4-a
@@ -685,12 +689,12 @@ talents:
   branch: b
   tree: focus
   display-name: '&d深守'
-  description: 更守其进，进度下降进一步降低
+  description: 更守其进，进度下降降低
   effect-type: progress_drain
-  effect-value: 0.0028
+  effect-value: 0.07
   icon:
     source: minecraft
-    id: honey_bottle
+    id: redstone
     amount: 1
   prerequisites:
   - focus-t4-b
@@ -701,10 +705,10 @@ talents:
   display-name: '&d猛催'
   description: 猛催进度，进度增速提升
   effect-type: progress_rate
-  effect-value: 0.0031
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: emerald
+    id: clock
     amount: 1
   prerequisites:
   - focus-t5-a
@@ -715,27 +719,27 @@ talents:
   display-name: '&d固守'
   description: 固守进度，进度下降降低
   effect-type: progress_drain
-  effect-value: 0.0042
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: honey_bottle
+    id: redstone
     amount: 1
   prerequisites:
-  - focus-t5-a
+  - focus-t5-b
 - id: focus-t6-c
   tier: 6
   branch: c
   tree: focus
   display-name: '&d完美'
-  description: 完美之窗，完美窗口提升
+  description: 完美之窗，完美容错提升
   effect-type: perfect_window
-  effect-value: 0.0024
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: ender_eye
+    id: nether_star
     amount: 1
   prerequisites:
-  - focus-t5-b
+  - focus-t5-a
 - id: focus-t6-d
   tier: 6
   branch: d
@@ -743,10 +747,10 @@ talents:
   display-name: '&d起跑'
   description: 先发制人，起始进度提升
   effect-type: start_progress
-  effect-value: 0.0008
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: firework_rocket
+    id: minecart
     amount: 1
   prerequisites:
   - focus-t5-b
@@ -755,12 +759,12 @@ talents:
   branch: a
   tree: focus
   display-name: '&d猛催大成'
-  description: 进度如潮，进度增速进一步提升
+  description: 进度如潮，进度增速提升
   effect-type: progress_rate
-  effect-value: 0.0016
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: emerald
+    id: clock
     amount: 1
   prerequisites:
   - focus-t6-a
@@ -769,12 +773,12 @@ talents:
   branch: b
   tree: focus
   display-name: '&d固守大成'
-  description: 稳如金汤，进度下降进一步降低
+  description: 稳如金汤，进度下降降低
   effect-type: progress_drain
-  effect-value: 0.0021
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: honey_bottle
+    id: redstone
     amount: 1
   prerequisites:
   - focus-t6-b
@@ -783,12 +787,12 @@ talents:
   branch: c
   tree: focus
   display-name: '&d完美大成'
-  description: 完美之极，完美窗口进一步提升
+  description: 完美之极，完美容错提升
   effect-type: perfect_window
-  effect-value: 0.0012
+  effect-value: 0.02
   icon:
     source: minecraft
-    id: ender_eye
+    id: nether_star
     amount: 1
   prerequisites:
   - focus-t6-c
@@ -797,12 +801,12 @@ talents:
   branch: d
   tree: focus
   display-name: '&d起跑大成'
-  description: 先机在握，起始进度进一步提升
+  description: 先机在握，起始进度提升
   effect-type: start_progress
-  effect-value: 0.0004
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: firework_rocket
+    id: minecart
     amount: 1
   prerequisites:
   - focus-t6-d
@@ -813,10 +817,10 @@ talents:
   display-name: '&e经验'
   description: 经验丰收，钓鱼经验提升
   effect-type: xp_multiplier
-  effect-value: 0.0014
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: diamond
+    id: gold_ingot
     amount: 1
   prerequisites:
   - lucky
@@ -827,10 +831,10 @@ talents:
   display-name: '&e售价'
   description: 身价倍增，鱼售价提升
   effect-type: price_multiplier
-  effect-value: 0.0015
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: gold_ingot
+    id: emerald
     amount: 1
   prerequisites:
   - lucky
@@ -839,12 +843,12 @@ talents:
   branch: a
   tree: lucky
   display-name: '&e深经验'
-  description: 更丰经验，钓鱼经验进一步提升
+  description: 更丰经验，钓鱼经验提升
   effect-type: xp_multiplier
-  effect-value: 0.0014
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: diamond
+    id: gold_ingot
     amount: 1
   prerequisites:
   - lucky-t4-a
@@ -853,12 +857,12 @@ talents:
   branch: b
   tree: lucky
   display-name: '&e深售价'
-  description: 更倍身价，鱼售价进一步提升
+  description: 更倍身价，鱼售价提升
   effect-type: price_multiplier
-  effect-value: 0.0015
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: gold_ingot
+    id: emerald
     amount: 1
   prerequisites:
   - lucky-t4-b
@@ -869,10 +873,10 @@ talents:
   display-name: '&e厚经验'
   description: 厚重经验，钓鱼经验提升
   effect-type: xp_multiplier
-  effect-value: 0.0011
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: diamond
+    id: gold_ingot
     amount: 1
   prerequisites:
   - lucky-t5-a
@@ -883,13 +887,13 @@ talents:
   display-name: '&e厚售价'
   description: 厚重身价，鱼售价提升
   effect-type: price_multiplier
-  effect-value: 0.0012
+  effect-value: 0.04
   icon:
     source: minecraft
-    id: gold_ingot
+    id: emerald
     amount: 1
   prerequisites:
-  - lucky-t5-a
+  - lucky-t5-b
 - id: lucky-t6-c
   tier: 6
   branch: c
@@ -897,13 +901,13 @@ talents:
   display-name: '&e传说'
   description: 传说之力，传说鱼概率提升
   effect-type: legendary_chance
-  effect-value: 0.0014
+  effect-value: 0.02
   icon:
     source: minecraft
     id: nether_star
     amount: 1
   prerequisites:
-  - lucky-t5-b
+  - lucky-t5-a
 - id: lucky-t6-d
   tier: 6
   branch: d
@@ -911,10 +915,10 @@ talents:
   display-name: '&e宝藏'
   description: 宝藏之眼，宝藏概率提升
   effect-type: treasure_chance
-  effect-value: 0.0024
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: chest
+    id: ender_eye
     amount: 1
   prerequisites:
   - lucky-t5-b
@@ -923,12 +927,12 @@ talents:
   branch: a
   tree: lucky
   display-name: '&e厚经验大成'
-  description: 经验如泉，钓鱼经验进一步降低
+  description: 经验如泉，钓鱼经验提升
   effect-type: xp_multiplier
-  effect-value: 0.0005
+  effect-value: 0.02
   icon:
     source: minecraft
-    id: diamond
+    id: gold_ingot
     amount: 1
   prerequisites:
   - lucky-t6-a
@@ -937,12 +941,12 @@ talents:
   branch: b
   tree: lucky
   display-name: '&e厚售价大成'
-  description: 身价如金，鱼售价进一步提升
+  description: 身价如金，鱼售价提升
   effect-type: price_multiplier
-  effect-value: 0.0006
+  effect-value: 0.02
   icon:
     source: minecraft
-    id: gold_ingot
+    id: emerald
     amount: 1
   prerequisites:
   - lucky-t6-b
@@ -951,9 +955,9 @@ talents:
   branch: c
   tree: lucky
   display-name: '&e传说大成'
-  description: 传说降临，传说鱼概率进一步提升
+  description: 传说降临，传说鱼概率提升
   effect-type: legendary_chance
-  effect-value: 0.0007
+  effect-value: 0.01
   icon:
     source: minecraft
     id: nether_star
@@ -965,12 +969,12 @@ talents:
   branch: d
   tree: lucky
   display-name: '&e宝藏大成'
-  description: 宝藏满载，宝藏概率进一步提升
+  description: 宝藏满载，宝藏概率提升
   effect-type: treasure_chance
-  effect-value: 0.0012
+  effect-value: 0.02
   icon:
     source: minecraft
-    id: chest
+    id: ender_eye
     amount: 1
   prerequisites:
   - lucky-t6-d
@@ -981,7 +985,7 @@ talents:
   display-name: '&6延时'
   description: 延长时间，钓鱼超时延长
   effect-type: catch_duration
-  effect-value: 0.006
+  effect-value: 0.06
   icon:
     source: minecraft
     id: clock
@@ -995,10 +999,10 @@ talents:
   display-name: '&6轻体'
   description: 轻如鸿毛，绿条重力降低
   effect-type: bar_gravity
-  effect-value: 0.006
+  effect-value: 0.08
   icon:
     source: minecraft
-    id: feather
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - endure
@@ -1007,9 +1011,9 @@ talents:
   branch: a
   tree: endure
   display-name: '&6深延'
-  description: 更延其时，钓鱼超时进一步延长
+  description: 更延其时，钓鱼超时延长
   effect-type: catch_duration
-  effect-value: 0.006
+  effect-value: 0.07
   icon:
     source: minecraft
     id: clock
@@ -1023,7 +1027,7 @@ talents:
   display-name: '&6强推'
   description: 强力推送，绿条点击力提升
   effect-type: bar_click_force
-  effect-value: 0.005
+  effect-value: 0.08
   icon:
     source: minecraft
     id: piston
@@ -1037,10 +1041,10 @@ talents:
   display-name: '&6轻盈'
   description: 轻盈如燕，绿条重力降低
   effect-type: bar_gravity
-  effect-value: 0.005
+  effect-value: 0.1
   icon:
     source: minecraft
-    id: feather
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - endure-t5-a
@@ -1051,7 +1055,7 @@ talents:
   display-name: '&6久延'
   description: 久延不衰，钓鱼超时延长
   effect-type: catch_duration
-  effect-value: 0.004
+  effect-value: 0.05
   icon:
     source: minecraft
     id: clock
@@ -1065,7 +1069,7 @@ talents:
   display-name: '&6力推'
   description: 力推千钧，绿条点击力提升
   effect-type: bar_click_force
-  effect-value: 0.005
+  effect-value: 0.1
   icon:
     source: minecraft
     id: piston
@@ -1079,10 +1083,10 @@ talents:
   display-name: '&6缓降'
   description: 缓降如羽，绿条重力降低
   effect-type: bar_gravity
-  effect-value: 0.004
+  effect-value: 0.06
   icon:
     source: minecraft
-    id: feather
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - endure-t5-b
@@ -1091,12 +1095,12 @@ talents:
   branch: a
   tree: endure
   display-name: '&6轻盈大成'
-  description: 轻若无物，绿条重力进一步降低
+  description: 轻若无物，绿条重力降低
   effect-type: bar_gravity
-  effect-value: 0.003
+  effect-value: 0.05
   icon:
     source: minecraft
-    id: feather
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - endure-t6-a
@@ -1105,9 +1109,9 @@ talents:
   branch: b
   tree: endure
   display-name: '&6久延大成'
-  description: 延绵不绝，钓鱼超时进一步延长
+  description: 延绵不绝，钓鱼超时延长
   effect-type: catch_duration
-  effect-value: 0.002
+  effect-value: 0.03
   icon:
     source: minecraft
     id: clock
@@ -1119,9 +1123,9 @@ talents:
   branch: c
   tree: endure
   display-name: '&6力推大成'
-  description: 推山填海，绿条点击力进一步提升
+  description: 推山填海，绿条点击力提升
   effect-type: bar_click_force
-  effect-value: 0.003
+  effect-value: 0.05
   icon:
     source: minecraft
     id: piston
@@ -1133,12 +1137,12 @@ talents:
   branch: d
   tree: endure
   display-name: '&6缓降大成'
-  description: 飘落无声，绿条重力进一步降低
+  description: 飘落无声，绿条重力降低
   effect-type: bar_gravity
-  effect-value: 0.002
+  effect-value: 0.03
   icon:
     source: minecraft
-    id: feather
+    id: phantom_membrane
     amount: 1
   prerequisites:
   - endure-t6-d
@@ -1148,9 +1152,9 @@ links:
   description: 稳健与迅捷共鸣，绿条反弹降低且鱼速度降低
   effects:
   - effect-type: bar_bounce
-    effect-value: 0.06
+    effect-value: 0.15
   - effect-type: fish_speed
-    effect-value: 0.0585
+    effect-value: 0.1
   icon:
     source: minecraft
     id: rabbit_foot
@@ -1160,10 +1164,10 @@ links:
   - swift-t4-a
 - id: link-1-2
   display-name: '&6稳速·进阶'
-  description: 稳速之力升华，钓鱼经验提升
+  description: 稳速之力升华，绿条阻尼提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: bar_damping
+    effect-value: 0.05
   icon:
     source: minecraft
     id: nether_star
@@ -1172,10 +1176,10 @@ links:
   - link-1
 - id: link-1-3
   display-name: '&6稳速·终极'
-  description: 稳速之道大成，钓鱼经验进一步提升
+  description: 稳速之道大成，鱼速度降低
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.1
+  - effect-type: fish_speed
+    effect-value: 0.08
   icon:
     source: minecraft
     id: dragon_breath
@@ -1184,12 +1188,12 @@ links:
   - link-1-2
 - id: link-2
   display-name: '&6疾退联动'
-  description: 迅捷与威压共鸣，鱼突进降低且逃离概率降低
+  description: 迅捷与威压共鸣，鱼边缘反弹降低且逃离概率降低
   effects:
-  - effect-type: fish_dart
-    effect-value: 0.06
+  - effect-type: fish_edge
+    effect-value: 0.12
   - effect-type: flee_chance
-    effect-value: 0.045
+    effect-value: 0.08
   icon:
     source: minecraft
     id: feather
@@ -1199,10 +1203,10 @@ links:
   - pressure-t4-a
 - id: link-2-2
   display-name: '&6疾退·进阶'
-  description: 疾退之力升华，钓鱼经验提升
+  description: 疾退之力升华，鱼速度降低
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: fish_speed
+    effect-value: 0.06
   icon:
     source: minecraft
     id: nether_star
@@ -1211,10 +1215,10 @@ links:
   - link-2
 - id: link-2-3
   display-name: '&6疾退·终极'
-  description: 疾退之道大成，钓鱼经验进一步提升
+  description: 疾退之道大成，逃离速度降低
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.1
+  - effect-type: flee_speed
+    effect-value: 0.06
   icon:
     source: minecraft
     id: dragon_breath
@@ -1226,9 +1230,9 @@ links:
   description: 威压与专注共鸣，逃离冷却提升且进度增速提升
   effects:
   - effect-type: flee_cooldown
-    effect-value: 0.065
+    effect-value: 0.2
   - effect-type: progress_rate
-    effect-value: 0.0968
+    effect-value: 0.12
   icon:
     source: minecraft
     id: clock
@@ -1238,10 +1242,10 @@ links:
   - focus-t4-a
 - id: link-3-2
   display-name: '&6控进·进阶'
-  description: 控进之力升华，钓鱼经验提升
+  description: 控进之力升华，逃离持续降低
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: flee_duration
+    effect-value: 0.1
   icon:
     source: minecraft
     id: nether_star
@@ -1250,10 +1254,10 @@ links:
   - link-3
 - id: link-3-3
   display-name: '&6控进·终极'
-  description: 控进之道大成，钓鱼经验进一步提升
+  description: 控进之道大成，进度下降降低
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.1
+  - effect-type: progress_drain
+    effect-value: 0.08
   icon:
     source: minecraft
     id: dragon_breath
@@ -1262,10 +1266,10 @@ links:
   - link-3-2
 - id: link-4
   display-name: '&6精运联动'
-  description: 专注与幸运共鸣，完美窗口提升且钓鱼经验提升
+  description: 专注与幸运共鸣，完美容错提升且钓鱼经验提升
   effects:
   - effect-type: perfect_window
-    effect-value: 0.065
+    effect-value: 0.05
   - effect-type: xp_multiplier
     effect-value: 0.06
   icon:
@@ -1277,10 +1281,10 @@ links:
   - lucky-t4-a
 - id: link-4-2
   display-name: '&6精运·进阶'
-  description: 精运之力升华，钓鱼经验提升
+  description: 精运之力升华，起始进度提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: start_progress
+    effect-value: 0.03
   icon:
     source: minecraft
     id: nether_star
@@ -1289,10 +1293,10 @@ links:
   - link-4
 - id: link-4-3
   display-name: '&6精运·终极'
-  description: 精运之道大成，钓鱼经验进一步提升
+  description: 精运之道大成，钓鱼经验提升
   effects:
   - effect-type: xp_multiplier
-    effect-value: 0.1
+    effect-value: 0.06
   icon:
     source: minecraft
     id: dragon_breath
@@ -1304,9 +1308,9 @@ links:
   description: 幸运与持久共鸣，稀有鱼概率提升且钓鱼超时延长
   effects:
   - effect-type: rare_chance
-    effect-value: 0.045
+    effect-value: 0.05
   - effect-type: catch_duration
-    effect-value: 0.036
+    effect-value: 0.08
   icon:
     source: minecraft
     id: lapis_lazuli
@@ -1316,10 +1320,10 @@ links:
   - endure-t4-a
 - id: link-5-2
   display-name: '&6耐运·进阶'
-  description: 耐运之力升华，钓鱼经验提升
+  description: 耐运之力升华，宝藏概率提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: treasure_chance
+    effect-value: 0.03
   icon:
     source: minecraft
     id: nether_star
@@ -1328,10 +1332,10 @@ links:
   - link-5
 - id: link-5-3
   display-name: '&6耐运·终极'
-  description: 耐运之道大成，钓鱼经验进一步提升
+  description: 耐运之道大成，鱼售价提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.1
+  - effect-type: price_multiplier
+    effect-value: 0.05
   icon:
     source: minecraft
     id: dragon_breath
@@ -1343,9 +1347,9 @@ links:
   description: 持久与稳健共鸣，绿条点击力提升且绿条高度提升
   effects:
   - effect-type: bar_click_force
-    effect-value: 0.0495
+    effect-value: 0.12
   - effect-type: bar_height
-    effect-value: 3.0
+    effect-value: 30
   icon:
     source: minecraft
     id: piston
@@ -1355,10 +1359,10 @@ links:
   - steady-t4-a
 - id: link-6-2
   display-name: '&6稳推·进阶'
-  description: 稳推之力升华，钓鱼经验提升
+  description: 稳推之力升华，绿条力系数提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.08
+  - effect-type: bar_force
+    effect-value: 0.04
   icon:
     source: minecraft
     id: nether_star
@@ -1367,10 +1371,10 @@ links:
   - link-6
 - id: link-6-3
   display-name: '&6稳推·终极'
-  description: 稳推之道大成，钓鱼经验进一步提升
+  description: 稳推之道大成，绿条高度提升
   effects:
-  - effect-type: xp_multiplier
-    effect-value: 0.1
+  - effect-type: bar_height
+    effect-value: 20
   icon:
     source: minecraft
     id: dragon_breath

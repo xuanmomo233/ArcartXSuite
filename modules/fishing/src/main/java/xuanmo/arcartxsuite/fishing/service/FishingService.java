@@ -1910,14 +1910,36 @@ public final class FishingService {
 
     /**
      * 将效果类型+数值格式化为中文描述。
-     * bar_height 等像素类用 +Xpx，其余百分比类用 +X%。
+     * bar_height 单位是像素（直接显示），其余是百分比。
+     * "降低"类效果显示 -X%，"提升/加成"类显示 +X%。
      */
     private @NotNull String formatEffect(@NotNull String effectType, double value) {
         String name = EFFECT_NAMES.getOrDefault(effectType, effectType);
+        // 像素类：直接显示数值
         if ("bar_height".equals(effectType)) {
-            return name + " +" + String.format("%.1f", value * 18) + "px";
+            return name + " +" + String.format("%.0f", value) + "px";
         }
+        // "降低/减少"类效果
+        if (isReductionEffect(effectType)) {
+            return name + " -" + String.format("%.1f", value * 100) + "%";
+        }
+        // "提升/加成"类效果
         return name + " +" + String.format("%.1f", value * 100) + "%";
+    }
+
+    /** 判断是否为"降低/减少"类效果（显示 -X%） */
+    private boolean isReductionEffect(@NotNull String effectType) {
+        return "bar_bounce".equals(effectType)
+            || "bar_gravity".equals(effectType)
+            || "fish_speed".equals(effectType)
+            || "fish_dwell".equals(effectType)
+            || "fish_dart".equals(effectType)
+            || "fish_noise".equals(effectType)
+            || "fish_edge".equals(effectType)
+            || "flee_chance".equals(effectType)
+            || "flee_speed".equals(effectType)
+            || "flee_duration".equals(effectType)
+            || "progress_drain".equals(effectType);
     }
 
     private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canLevelUp, @NotNull Player player) {

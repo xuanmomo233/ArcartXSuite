@@ -163,7 +163,7 @@ public class AuctionService {
             seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), inHand);
         }
 
-        // 扣上架费
+        // 扣上架费（先验余额，避免不必要的扣款失败日志）
         BigDecimal feeCharged = null;
         CurrencyBridgeAPI.CurrencyBridge feeBridge = null;
         if (config.listingFee() > 0) {
@@ -172,12 +172,17 @@ public class AuctionService {
                 giveBack(seller, item);
                 return ListingResult.fail("上架费货币不可用");
             }
-            CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, BigDecimal.valueOf(config.listingFee()));
+            BigDecimal fee = BigDecimal.valueOf(config.listingFee());
+            if (feeBridge.balance(seller).compareTo(fee) < 0) {
+                giveBack(seller, item);
+                return ListingResult.fail(messages.insufficientFunds());
+            }
+            CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, fee);
             if (!feeResult.success()) {
                 giveBack(seller, item);
                 return ListingResult.fail(messages.insufficientFunds());
             }
-            feeCharged = BigDecimal.valueOf(config.listingFee());
+            feeCharged = fee;
         }
 
         // 序列化物品
@@ -344,6 +349,9 @@ public class AuctionService {
         );
         double minBid = listing.getCurrentBid() > 0 ? currentHighest + minIncrement : listing.getStartingBid();
 
+        if (amount <= 0) {
+            return BidResult.fail("出价必须大于 0");
+        }
         if (amount < minBid) {
             return BidResult.fail("出价必须 ≥ " + currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(minBid)));
         }
@@ -359,7 +367,7 @@ public class AuctionService {
         }
 
         // 退还上一位最高出价者押金（安全发放：在线即时入账并通知，离线入待发放队列，绝不丢钱）
-        // 注：竞价依赖客户端包已切主线程串行执行，单服内无并发覆盖问题。
+        // 注：竞价使用数据库 CAS（updateListingBidIfHigher）保证原子性，防止并发覆盖；客户端包统一切主线程串行执行进一步消除竞态。
         UUID previousBidder = listing.getHighestBidder();
         double previousBid = listing.getCurrentBid();
 
@@ -691,7 +699,11 @@ public class AuctionService {
 
     private double getEffectiveTaxRate(UUID seller) {
         Player player = Bukkit.getPlayer(seller);
-        if (player == null) return config.transactionTaxRate();
+        if (player == null) {
+            // 离线玩家无法检查权限，使用默认税率
+            logger.fine("卖家离线，使用默认税率 seller=" + seller);
+            return config.transactionTaxRate();
+        }
         double bestTaxRate = Double.POSITIVE_INFINITY;
         boolean matched = false;
         for (var entry : config.taxDiscount().entrySet()) {

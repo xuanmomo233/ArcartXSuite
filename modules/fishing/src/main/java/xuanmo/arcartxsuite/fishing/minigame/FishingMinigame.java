@@ -51,6 +51,7 @@ public final class FishingMinigame {
     private double barHeightRatioCache = 0.15; // 绿条高度缓存（每 tick 更新一次）
     private boolean wasPerfect = true;      // 是否全程在绿条内（需至少 tick 一次才有效）
     private int consecutiveInsideTicks = 0; // 连续在绿条内的 tick 数（用于 streak 加成）
+    private int imperfectTicks = 0;         // 累计不在绿条内的 tick 数（用于 perfect_window 容错）
     private BukkitTask tickTask;
     private final AtomicBoolean cleanedUp = new AtomicBoolean(false); // cleanup 幂等保护
 
@@ -82,6 +83,8 @@ public final class FishingMinigame {
         this.fatigueMultiplier = Math.max(0.1, fatigueMultiplier); // 防止除零和过度缩减
         this.ariaBridge = ariaBridge;
         this.fishEngine = new FishBehaviorEngine(session.fish().randomBehavior(), session.adjustedDifficulty());
+        // 天赋：起始进度（开局直接获得一定进度）
+        this.progress = Math.max(0.0, Math.min(0.5, talentBonuses.startProgressBonus()));
     }
 
     public void start() {
@@ -344,7 +347,12 @@ public final class FishingMinigame {
             progress += delta;
         } else {
             consecutiveInsideTicks = 0;
-            wasPerfect = false;
+            // perfect_window 天赋：允许短暂离开绿条仍算完美（容错 tick 数 = bonus * 100）
+            imperfectTicks++;
+            int perfectTolerance = (int) (talentBonuses.perfectWindowBonus() * 100);
+            if (imperfectTicks > perfectTolerance) {
+                wasPerfect = false;
+            }
             double curveValue = drainCurve.evaluate(progress, false, ariaBridge,
                 session.playerLevel(), session.adjustedDifficulty());
             double delta = curveValue * drainLevelFactor * drainTalentFactor * drainFatigueFactor;

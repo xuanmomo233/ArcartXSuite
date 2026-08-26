@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.market.storage;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -7,6 +8,8 @@ import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.RedisConfiguration;
 
 /**
@@ -79,8 +82,16 @@ public class RedisMarketCache {
     public void invalidateByPrefix(String prefix) {
         if (!isAvailable()) return;
         try (Jedis jedis = pool.getResource()) {
-            Set<String> keys = jedis.keys(prefix + "*");
-            if (keys != null && !keys.isEmpty()) {
+            // 使用 SCAN 代替 KEYS，避免在大数据量时阻塞 Redis
+            Set<String> keys = new HashSet<>();
+            ScanParams params = new ScanParams().match(prefix + "*").count(100);
+            String cursor = "0";
+            do {
+                ScanResult<String> scan = jedis.scan(cursor, params);
+                keys.addAll(scan.getResult());
+                cursor = scan.getCursor();
+            } while (!"0".equals(cursor));
+            if (!keys.isEmpty()) {
                 jedis.del(keys.toArray(new String[0]));
             }
         } catch (Exception e) {

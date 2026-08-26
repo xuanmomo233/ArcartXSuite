@@ -109,8 +109,8 @@ public interface MarketRepository {
      */
     boolean tryConsumeGlobalShopStock(String shopId, String itemId, int amount, int defaultMax);
 
-    /** 退还库存（购买失败或部分成交时调用）。 */
-    void restoreGlobalShopStock(String shopId, String itemId, int amount);
+    /** 退还库存（购买失败或部分成交时调用）。remaining 不超过 defaultMax。 */
+    void restoreGlobalShopStock(String shopId, String itemId, int amount, int defaultMax);
 
     // ─── 系统商店玩家独立库存（stock-mode: per-player）────────
 
@@ -124,8 +124,8 @@ public interface MarketRepository {
      */
     boolean tryConsumePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax);
 
-    /** 退还玩家独立库存（购买失败或部分成交时调用）。 */
-    void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount);
+    /** 退还玩家独立库存（购买失败或部分成交时调用）。remaining 不超过 defaultMax。 */
+    void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax);
 
     // ─── 回收统计 ───────────────────────────────────────────
 

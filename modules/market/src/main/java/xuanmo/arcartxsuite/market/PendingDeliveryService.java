@@ -71,12 +71,16 @@ public class PendingDeliveryService implements Listener {
 
         int deliveredItems = 0;
         double deliveredCurrency = 0;
+        int failedCount = 0;
         for (PendingDelivery delivery : pending) {
             try {
+                boolean success = false;
                 if (delivery.isItem()) {
                     ItemStack item = itemSerializer.deserialize(delivery.itemData());
                     if (item == null) {
                         logger.warning("待发放物品反序列化失败，已丢弃 id=" + delivery.id());
+                        // 反序列化失败=数据损坏，直接删除避免永久阻塞队列
+                        safeDelete(repository, delivery.id(), logger);
                         continue;
                     }
                     xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
@@ -90,24 +94,42 @@ public class PendingDeliveryService implements Listener {
                         itemRewardDispatcher.dispatchItem(player, item, options);
                     if (!result.success()) {
                         // 发放失败（含邮件失败且掉落失败）：保留记录待下次补发
+                        logger.warning("待发放物品发放失败，保留记录待下次补发 id=" + delivery.id()
+                            + " reason=" + result.message());
+                        failedCount++;
                         continue;
                     }
+                    success = true;
                     deliveredItems++;
                 } else if (delivery.isCurrency()) {
                     CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(delivery.currency());
                     if (bridge == null || !bridge.available()) {
+                        logger.warning("待发放货币桥接不可用，保留记录待下次补发 id=" + delivery.id()
+                            + " currency=" + delivery.currency());
+                        failedCount++;
                         continue;
                     }
                     CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(delivery.amount()));
                     if (!result.success()) {
+                        logger.warning("待发放货币入账失败，保留记录待下次补发 id=" + delivery.id()
+                            + " reason=" + result.message());
+                        failedCount++;
                         continue;
                     }
+                    success = true;
                     deliveredCurrency += delivery.amount();
                 }
-                repository.deletePendingDelivery(delivery.id());
+                // 发放成功后删除记录：独立 try-catch，避免 delete 异常导致 catch 误判为发放失败
+                if (success) {
+                    safeDelete(repository, delivery.id(), logger);
+                }
             } catch (Exception e) {
                 logger.warning("补发记录处理异常 id=" + delivery.id() + ": " + e.getMessage());
+                failedCount++;
             }
+        }
+        if (failedCount > 0) {
+            logger.warning("玩家 " + player.getName() + " 有 " + failedCount + " 条补发记录未成功发放，将在下次上线时重试");
         }
 
         if (deliveredItems > 0 || deliveredCurrency > 0) {
@@ -119,6 +141,15 @@ public class PendingDeliveryService implements Listener {
                 sb.append(' ').append(deliveredCurrency);
             }
             player.sendMessage(sb.toString());
+        }
+    }
+
+    /** 安全删除补发记录：delete 失败时仅记录警告，不影响已完成的发放结果。 */
+    private static void safeDelete(MarketRepository repository, long id, Logger logger) {
+        try {
+            repository.deletePendingDelivery(id);
+        } catch (Exception e) {
+            logger.warning("删除补发记录失败，可能导致下次重复补发 id=" + id + ": " + e.getMessage());
         }
     }
 }

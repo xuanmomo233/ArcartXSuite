@@ -132,6 +132,15 @@ public class ShopService {
             String itemDisplayName = itemSec.getString("display-name", itemDefinition.id());
             double buyPrice = itemSec.getDouble("buy-price", 0);
             double sellPrice = itemSec.getDouble("sell-price", 0);
+            // 价格非负校验：负价格可能导致玩家购买反而获得货币
+            if (buyPrice < 0) {
+                logger.warning("[Shop] 商品 " + itemKey + " 的 buy-price 为负数 (" + buyPrice + ")，已强制设为 0");
+                buyPrice = 0;
+            }
+            if (sellPrice < 0) {
+                logger.warning("[Shop] 商品 " + itemKey + " 的 sell-price 为负数 (" + sellPrice + ")，已强制设为 0");
+                sellPrice = 0;
+            }
             String currency = itemSec.getString("currency", config.defaultCurrency());
             String stockMode = itemSec.getString("stock-mode", "unlimited");
             int stockAmount = itemSec.getInt("stock-amount", 0);
@@ -336,11 +345,16 @@ public class ShopService {
     }
 
     private long calculateResetTime(String resetType) {
-        long now = System.currentTimeMillis();
+        // 按自然日/周/月边界重置（基于服务器时区），而非固定毫秒偏移
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.systemDefault());
         return switch (resetType.toLowerCase()) {
-            case "daily" -> now + 86400_000L;
-            case "weekly" -> now + 604800_000L;
-            case "monthly" -> now + 2592000_000L;
+            case "daily" -> now.plusDays(1).truncatedTo(java.time.temporal.ChronoUnit.DAYS).toInstant().toEpochMilli();
+            case "weekly" -> now.plusWeeks(1)
+                .with(java.time.DayOfWeek.MONDAY).truncatedTo(java.time.temporal.ChronoUnit.DAYS)
+                .toInstant().toEpochMilli();
+            case "monthly" -> now.plusMonths(1)
+                .withDayOfMonth(1).truncatedTo(java.time.temporal.ChronoUnit.DAYS)
+                .toInstant().toEpochMilli();
             default -> 0L;
         };
     }
@@ -372,9 +386,9 @@ public class ShopService {
             return;
         }
         if ("global".equalsIgnoreCase(shopItem.stockMode())) {
-            repository.restoreGlobalShopStock(shopId, itemId, amount);
+            repository.restoreGlobalShopStock(shopId, itemId, amount, shopItem.stockAmount());
         } else {
-            repository.restorePlayerShopStock(player.getUniqueId(), shopId, itemId, amount);
+            repository.restorePlayerShopStock(player.getUniqueId(), shopId, itemId, amount, shopItem.stockAmount());
         }
     }
 
