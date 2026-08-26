@@ -38,9 +38,9 @@ public class MarketEventListener implements Listener {
 
         ItemStack item = event.getItem().getItemStack();
         if (service.isRecyclable(item)) {
-            // 自动回收：取消拾取并给钱
+            // 自动回收：取消拾取并给钱，向玩家发送反馈
             event.setCancelled(true);
-            service.recycle(player, item.clone());
+            service.recycleAuto(player, item.clone());
             event.getItem().remove();
         }
     }

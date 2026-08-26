@@ -51,7 +51,8 @@ player:
   shop-unavailable: "&c系统商店未启用"
   recycle-unavailable: "&c回收商店未启用"
 
-  auto-recycle-disabled: "&c批量回收功能已关闭"
+  auto-recycle-disabled: "&c自动回收功能已关闭"
+  batch-recycle-disabled: "&c一键回收功能已关闭"
   help:
     title: "&6全球市场 命令"
     auction: "&7/market&f - 打开拍卖行"
@@ -97,4 +98,5 @@ recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回�
 insufficient-funds: "&c余额不足。"                    # 货币余额不足
 item-blacklisted: "&c该物品不允许上架。"               # 物品在黑名单中
 
-auto-recycle-disabled: "&c批量回收功能已关闭"          # 自动回收功能未启用
+auto-recycle-disabled: "&c自动回收功能已关闭"          # 拾取自动回收功能未启用
+batch-recycle-disabled: "&c一键回收功能已关闭"          # UI 一键回收功能未启用

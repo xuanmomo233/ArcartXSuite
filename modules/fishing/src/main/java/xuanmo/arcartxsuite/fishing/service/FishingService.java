@@ -1748,13 +1748,13 @@ public final class FishingService {
                 nodeMap.put("maxLevel", node.maxLevel());
                 nodeMap.put("canLevelUp", talentEngine.canLevelUp(seasonData, node.id()));
                 nodeMap.put("iconJson", buildTalentNodeIconJson(node, currentLevel > 0, talentEngine.canLevelUp(seasonData, node.id()), player));
-                // 效果描述（当前等级的效果值）
+                // 效果描述（中文）
                 java.util.List<String> effects = new java.util.ArrayList<>();
                 if (node.effectType() != null) {
-                    effects.add(node.effectType() + ": " + node.valueAtLevel(currentLevel));
+                    effects.add(formatEffect(node.effectType(), node.valueAtLevel(currentLevel)));
                 }
                 for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
-                    effects.add(effect.effectType() + ": " + effect.effectValue());
+                    effects.add(formatEffect(effect.effectType(), effect.effectValue()));
                 }
                 nodeMap.put("effects", effects);
                 // 前置节点
@@ -1787,10 +1787,10 @@ public final class FishingService {
             linkMap.put("iconJson", buildTalentNodeIconJson(link, linkLevel > 0, talentEngine.canLevelUp(seasonData, link.id()), player));
             java.util.List<String> linkEffects = new java.util.ArrayList<>();
             if (link.effectType() != null) {
-                linkEffects.add(link.effectType() + ": " + link.valueAtLevel(linkLevel));
+                linkEffects.add(formatEffect(link.effectType(), link.valueAtLevel(linkLevel)));
             }
             for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
-                linkEffects.add(effect.effectType() + ": " + effect.effectValue());
+                linkEffects.add(formatEffect(effect.effectType(), effect.effectValue()));
             }
             linkMap.put("effects", linkEffects);
             linkMap.put("prerequisites", new java.util.ArrayList<>(link.prerequisites()));
@@ -1875,6 +1875,49 @@ public final class FishingService {
             return "";
         }
         return iconResolver.resolveItemJson(player, icon);
+    }
+
+    /** 效果类型 → 中文描述映射 */
+    private static final java.util.Map<String, String> EFFECT_NAMES = java.util.Map.ofEntries(
+        java.util.Map.entry("bar_height", "绿条高度"),
+        java.util.Map.entry("bar_damping", "绿条阻尼"),
+        java.util.Map.entry("bar_bounce", "绿条反弹"),
+        java.util.Map.entry("bar_force", "绿条力系数"),
+        java.util.Map.entry("fish_speed", "鱼速度"),
+        java.util.Map.entry("fish_dwell", "鱼停留时间"),
+        java.util.Map.entry("fish_dart", "鱼突进"),
+        java.util.Map.entry("fish_noise", "鱼噪声"),
+        java.util.Map.entry("fish_edge", "鱼边缘反弹"),
+        java.util.Map.entry("flee_chance", "逃离概率"),
+        java.util.Map.entry("flee_speed", "逃离速度"),
+        java.util.Map.entry("flee_cooldown", "逃离冷却"),
+        java.util.Map.entry("flee_duration", "逃离持续"),
+        java.util.Map.entry("progress_rate", "进度增速"),
+        java.util.Map.entry("progress_drain", "进度下降"),
+        java.util.Map.entry("perfect_window", "完美窗口"),
+        java.util.Map.entry("start_progress", "起始进度"),
+        java.util.Map.entry("xp_multiplier", "钓鱼经验"),
+        java.util.Map.entry("price_multiplier", "鱼售价"),
+        java.util.Map.entry("legendary_chance", "传说鱼概率"),
+        java.util.Map.entry("treasure_chance", "宝藏概率"),
+        java.util.Map.entry("rare_chance", "稀有鱼概率"),
+        java.util.Map.entry("xp_in_bar", "绿条内经验"),
+        java.util.Map.entry("perfect_xp", "完美捕获经验"),
+        java.util.Map.entry("catch_duration", "钓鱼超时"),
+        java.util.Map.entry("bar_gravity", "绿条重力"),
+        java.util.Map.entry("bar_click_force", "绿条点击力")
+    );
+
+    /**
+     * 将效果类型+数值格式化为中文描述。
+     * bar_height 等像素类用 +Xpx，其余百分比类用 +X%。
+     */
+    private @NotNull String formatEffect(@NotNull String effectType, double value) {
+        String name = EFFECT_NAMES.getOrDefault(effectType, effectType);
+        if ("bar_height".equals(effectType)) {
+            return name + " +" + String.format("%.1f", value * 18) + "px";
+        }
+        return name + " +" + String.format("%.1f", value * 100) + "%";
     }
 
     private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canLevelUp, @NotNull Player player) {

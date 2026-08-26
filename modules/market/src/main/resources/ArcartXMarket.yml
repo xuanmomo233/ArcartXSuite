@@ -266,8 +266,13 @@ recycle:
   #   false - 只能通过 /market recycle 界面手动回收
   # 注意: 自动回收需要玩家拥有 axsmarket.autorecycle 权限
   allow-auto-recycle: true
+  # 是否允许 UI 一键回收（/market recycle 界面的"一键回收全部"按钮）:
+  #   true  - 一键回收按钮可用
+  #   false - 一键回收按钮禁用，玩家仍可逐件回收
+  # 注意: 此开关独立于 allow-auto-recycle，后者仅控制拾取时的自动回收
+  batch-recycle-enabled: true
   # 批量回收确认:
-  #   true  - 点击"一键回收"按钮时弹出确认窗口，避免误操作
+  #   true  - 点击"一键回收"按钮时需二次确认，避免误操作
   #   false - 直接执行，无确认提示
   batch-confirm: true
   # 回收价格倍率（按玩家权限组加成）

@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.bridge;
 
 import java.util.Locale;
+import io.lumine.mythic.lib.api.item.NBTItem;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
@@ -53,6 +54,42 @@ public final class MmoItemsBridge {
 
     public boolean isAvailable() {
         return available;
+    }
+
+    /**
+     * 识别 MMOItems 物品 ID，返回 "类型ID;物品ID" 格式（与 generateItem 的 id 格式一致）。
+     * 非 MMOItems 物品或桥接不可用时返回空串。
+     */
+    public String mmoItemId(ItemStack itemStack) {
+        if (!available || itemStack == null || itemStack.getType().isAir()) {
+            return "";
+        }
+        try {
+            NBTItem nbt = NBTItem.get(itemStack);
+            if (nbt == null || !nbt.hasType()) {
+                return "";
+            }
+            String type = nbt.getType();
+            String id = nbt.getString("MMOITEMS_ITEM_ID");
+            if (type == null || type.isBlank() || id == null || id.isBlank()) {
+                return "";
+            }
+            return type + ";" + id;
+        } catch (Exception | LinkageError ignored) {
+            return "";
+        }
+    }
+
+    public boolean isMmoItem(ItemStack itemStack) {
+        if (!available || itemStack == null || itemStack.getType().isAir()) {
+            return false;
+        }
+        try {
+            NBTItem nbt = NBTItem.get(itemStack);
+            return nbt != null && nbt.hasType();
+        } catch (Exception | LinkageError ignored) {
+            return false;
+        }
     }
 
     public ItemStack getItemStack(String typeId, String itemId, int amount) {

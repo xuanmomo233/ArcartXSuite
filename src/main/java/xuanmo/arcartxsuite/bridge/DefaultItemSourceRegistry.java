@@ -63,6 +63,11 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     }
 
     @Override
+    public String mmoItemId(ItemStack itemStack) {
+        return mmoItemsBridge != null ? mmoItemsBridge.mmoItemId(itemStack) : "";
+    }
+
+    @Override
     public boolean isMythicItem(ItemStack itemStack) {
         return mythicItemBridge != null && mythicItemBridge.isMythicItem(itemStack);
     }
@@ -70,6 +75,11 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     @Override
     public boolean isOvertureItem(ItemStack itemStack) {
         return overtureItemBridge != null && overtureItemBridge.isOvertureItem(itemStack);
+    }
+
+    @Override
+    public boolean isMmoItem(ItemStack itemStack) {
+        return mmoItemsBridge != null && mmoItemsBridge.isMmoItem(itemStack);
     }
 
     // ─── 物品生成 ─────────────────────────────────────────────────

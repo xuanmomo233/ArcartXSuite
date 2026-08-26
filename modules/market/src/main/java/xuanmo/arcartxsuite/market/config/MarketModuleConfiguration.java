@@ -186,6 +186,7 @@ public record MarketModuleConfiguration(
             readStr(sec, "recycle-directory", "recycle"),
             readStr(sec, "default-currency", "money"),
             sec.getBoolean("allow-auto-recycle", true),
+            sec.getBoolean("batch-recycle-enabled", true),
             sec.getBoolean("batch-confirm", true),
             priceMultiplier
         );
@@ -209,7 +210,7 @@ public record MarketModuleConfiguration(
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
             readStr(sec, "item-blacklisted", "&c该物品不允许上架。"),
-            readStr(sec, "auto-recycle-disabled", "&c批量回收功能已关闭")
+            readStr(sec, "batch-recycle-disabled", "&c一键回收功能已关闭")
         );
     }
 
@@ -349,11 +350,11 @@ public record MarketModuleConfiguration(
 
     public record RecycleConfiguration(
         boolean enabled, String recycleDirectory, String defaultCurrency,
-        boolean allowAutoRecycle, boolean batchConfirm,
+        boolean allowAutoRecycle, boolean batchRecycleEnabled, boolean batchConfirm,
         Map<String, Double> priceMultiplier
     ) {
         public static RecycleConfiguration defaults() {
-            return new RecycleConfiguration(true, "recycle", "money", true, true, Map.of());
+            return new RecycleConfiguration(true, "recycle", "money", true, true, true, Map.of());
         }
     }
 
@@ -363,7 +364,7 @@ public record MarketModuleConfiguration(
         String auctionSold, String auctionCancelled,
         String shopBought, String shopLimitReached,
         String recycleSuccess, String recycleNothing,
-        String insufficientFunds, String itemBlacklisted, String autoRecycleDisabled
+        String insufficientFunds, String itemBlacklisted, String batchRecycleDisabled
     ) {
         public static MessagesConfiguration defaults() {
             return new MessagesConfiguration(
@@ -374,7 +375,7 @@ public record MarketModuleConfiguration(
                 "&a回收成功！获得: &e%amount%", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",
-                "&c批量回收功能已关闭"
+                "&c一键回收功能已关闭"
             );
         }
     }

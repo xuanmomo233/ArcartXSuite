@@ -126,6 +126,23 @@ public class RecycleService {
     }
 
     /**
+     * 自动回收（拾取触发）：执行回收并向玩家发送反馈消息。
+     * 供 {@link xuanmo.arcartxsuite.market.listener.MarketEventListener} 调用。
+     */
+    public void recycleAuto(Player player, ItemStack item) {
+        RecycleResult result = recycle(player, item);
+        if (result.success()) {
+            String earnings = result.earningsByCurrency().entrySet().stream()
+                .map(e -> currencyManager.format(e.getKey(), BigDecimal.valueOf(e.getValue())))
+                .collect(java.util.stream.Collectors.joining(", "));
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                messages.recycleSuccess().replace("%amount%", earnings)));
+        } else {
+            player.sendMessage(ChatColor.RED + result.error());
+        }
+    }
+
+    /**
      * 批量回收背包所有可回收物品。
      */
     public RecycleResult recycleBatch(Player player) {
@@ -134,7 +151,8 @@ public class RecycleService {
         String mainCurrency = config.defaultCurrency();
         Map<String, Double> earningsByCurrency = new LinkedHashMap<>();
 
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
+        // 仅扫描主背包 0-35，避免误回收盔甲槽(36-39)与副手(40)
+        for (int i = 0; i < 36; i++) {
             ItemStack item = player.getInventory().getItem(i);
             if (item == null || item.getType().isAir()) continue;
 
@@ -213,6 +231,8 @@ public class RecycleService {
                     ? itemSourceRegistry.neigeItemId(item) : null;
                 case "overture" -> itemSourceRegistry.overtureBridgeAvailable()
                     ? itemSourceRegistry.overtureItemId(item) : null;
+                case "mmo", "mmoitems" -> itemSourceRegistry.mmoBridgeAvailable()
+                    ? itemSourceRegistry.mmoItemId(item) : null;
                 default -> null;
             };
         } catch (RuntimeException ex) {

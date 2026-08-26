@@ -529,8 +529,8 @@ public class MarketService {
     }
 
     private void handleRecycleAll(Player player) {
-        if (!config.recycle().allowAutoRecycle()) {
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().autoRecycleDisabled()));
+        if (!config.recycle().batchRecycleEnabled()) {
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().batchRecycleDisabled()));
             return;
         }
         recycleBatch(player);
@@ -540,7 +540,8 @@ public class MarketService {
     private void handleRecycleSinglePacket(Player player, List<String> data) {
         if (recycleService == null) return;
         int slot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
-        if (slot < 0 || slot >= player.getInventory().getSize()) return;
+        // 仅允许主背包 0-35，禁止回收装备栏(36-40)
+        if (slot < 0 || slot >= 36) return;
         ItemStack item = player.getInventory().getItem(slot);
         if (item == null || item.getType().isAir()) return;
         var result = recycleService.recycle(player, item);
@@ -833,6 +834,7 @@ public class MarketService {
         packet.put("maxEarningsCount", earningsTexts.size());
         packet.put("multiplier", String.format("%.1f", multiplier));
         packet.put("maxRecycleCount", recyclables.size());
+        packet.put("batchConfirm", config.recycle().batchConfirm());
         return packet;
     }
 

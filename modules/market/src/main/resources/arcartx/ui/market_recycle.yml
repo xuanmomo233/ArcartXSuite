@@ -39,6 +39,7 @@ ui:
       var.earningsTexts = packet['earningsTexts']
       var.maxEarningsCount = packet['maxEarningsCount']
       var.actionToken = packet['action_token']
+      var.batchConfirm = packet['batchConfirm']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
         if(json != none){
@@ -72,10 +73,11 @@ ui:
         e.entryKey = key
       }
       var.actionBusy = false
+      var.confirmPending = false
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同，用于刷新回收列表数据
     # 包字段: 同 init（packetId/multiplier/recyclables/recycleItemJson{key}/maxRecycleCount/
-    #   earningsTitle/earningsTexts/maxEarningsCount/action_token）
+    #   earningsTitle/earningsTexts/maxEarningsCount/action_token/batchConfirm）
     update: |-
       var.packetId = packet['packetId']
       var.multiplier = packet['multiplier']
@@ -86,6 +88,7 @@ ui:
       var.earningsTexts = packet['earningsTexts']
       var.maxEarningsCount = packet['maxEarningsCount']
       var.actionToken = packet['action_token']
+      var.batchConfirm = packet['batchConfirm']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
         if(json != none){
@@ -119,6 +122,7 @@ ui:
         e.entryKey = key
       }
       var.actionBusy = false
+      var.confirmPending = false
   action:
     seconds: |-
       if(var.actionBusy){
@@ -129,6 +133,15 @@ ui:
         }
       }else{
         var.actionBusySeconds = 0
+      }
+      if(var.confirmPending){
+        var.confirmPendingSeconds = var.confirmPendingSeconds + 1
+        if(var.confirmPendingSeconds >= 3){
+          var.confirmPending = false
+          var.confirmPendingSeconds = 0
+        }
+      }else{
+        var.confirmPendingSeconds = 0
       }
     # action: open
     # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求回收预览数据
@@ -144,6 +157,9 @@ ui:
       var.earningsTexts = {}
       var.maxEarningsCount = 0
       var.actionToken = ''
+      var.batchConfirm = false
+      var.confirmPending = false
+      var.confirmPendingSeconds = 0
       var.actionBusy = false
       var.actionBusySeconds = 0
       Packet.send(var.packetId, 'recycle_preview')
@@ -437,15 +453,21 @@ controls:
               enable: "!var.actionBusy && var.actionToken != ''"
             action:
               clickLeft: |-
-                var.actionBusy = true
-                Packet.send(var.packetId, 'recycle_all', var.actionToken)
+                if(var.batchConfirm && !var.confirmPending){
+                  var.confirmPending = true
+                  var.confirmPendingSeconds = 0
+                }else{
+                  var.confirmPending = false
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'recycle_all', var.actionToken)
+                }
             children:
               一键回收背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~60,200,100,220
+                  normal: "var.confirmPending ? '200,80,80,220' : '60,200,100,220'"
                   hover: ~Frosted:0;80,240,120,80
                   shape: ~round_rect
                   radius: 14
@@ -458,7 +480,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 240
-                  texts: "~&f一键回收全部"
+                  texts: "var.confirmPending ? '~&f确认回收?' : '~&f一键回收全部'"
                   fontSize: 42
                   through: true
 

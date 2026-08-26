@@ -27,11 +27,17 @@ public interface ItemSourceRegistry {
     /** 获取 Overture 物品 ID，非 Overture 物品返回空串 */
     String overtureItemId(ItemStack itemStack);
 
+    /** 获取 MMOItems 物品 ID（格式 "类型ID;物品ID"），非 MMOItems 物品返回空串 */
+    String mmoItemId(ItemStack itemStack);
+
     /** 判断是否为 MythicMobs 物品 */
     boolean isMythicItem(ItemStack itemStack);
 
     /** 判断是否为 Overture 物品 */
     boolean isOvertureItem(ItemStack itemStack);
+
+    /** 判断是否为 MMOItems 物品 */
+    boolean isMmoItem(ItemStack itemStack);
 
     // ─── 物品生成 ─────────────────────────────────────────────────
 
