@@ -398,20 +398,20 @@ public final class FishingService {
 
         int caughtSize = fish.randomSize();
 
-        // 动态超时：基础超时 × (1 + 难度/100 × 难度系数) + 鱼竿加成
+        // 计算天赋加成（开局一次性计算，catch_duration 需要在创建 session 前应用）
+        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
+
+        // 动态超时：基础超时 × (1 + 难度/100 × 难度系数) + 鱼竿加成 + 天赋超时加成
         // 低难度鱼超时短（要求快速完成），高难度鱼超时长（给更多尝试机会）
         xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.FishingSettings cfg = configuration.fishing();
         double difficultyFactor = 1.0 + (adjustedDifficulty / 100.0) * cfg.catchDurationDifficultyScale();
-        long durationTicks = (long) (cfg.catchDurationTicks() * difficultyFactor) + rod.catchDurationBonus();
+        long durationTicks = (long) (cfg.catchDurationTicks() * difficultyFactor * (1.0 + bonuses.catchDurationBonus())) + rod.catchDurationBonus();
 
         FishingSession session = new FishingSession(
             player, fish, caughtSize, playerLevel,
             durationTicks, water, adjustedDifficulty,
             baitId, rod.greenBarHeightBonus(), rod.expMultiplier(), rod.treasureChanceBonus()
         );
-
-        // 计算天赋加成（开局一次性计算）
-        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
 
         // 计算疲惫效率系数（开局一次性计算）
         double fatigueMultiplier = fatigueEngine != null ? fatigueEngine.efficiencyMultiplier(fatigue) : 1.0;
@@ -1923,6 +1923,9 @@ public final class FishingService {
                 case "treasure_chance" -> "minecraft:chest";
                 case "rare_chance" -> "minecraft:lapis_lazuli";
                 case "perfect_xp" -> "minecraft:experience_bottle";
+                case "catch_duration" -> "minecraft:clock";
+                case "bar_gravity" -> "minecraft:feather";
+                case "bar_click_force" -> "minecraft:piston";
                 default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
             };
             String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;

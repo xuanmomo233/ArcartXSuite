@@ -40,7 +40,10 @@ public record TalentEffect(
         TREASURE_CHANCE("treasure_chance"),
         RARE_CHANCE("rare_chance"),
         XP_IN_BAR("xp_in_bar"),
-        PERFECT_XP("perfect_xp");
+        PERFECT_XP("perfect_xp"),
+        CATCH_DURATION("catch_duration"),
+        BAR_GRAVITY("bar_gravity"),
+        BAR_CLICK_FORCE("bar_click_force");
 
         private final String key;
 

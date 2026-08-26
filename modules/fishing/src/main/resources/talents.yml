@@ -1,5 +1,5 @@
 ﻿# AXS 钓鱼天赋树配置
-# 每棵树 5 层（T1→T2二选一→T3→T4二选一→T5），8 个跨树联动天赋。
+# 每棵树 5 层（T1→T2二选一→T3→T4二选一→T5），12 个跨树联动天赋。
 # 每 1 级获得 1 点天赋点，100 级 = 100 点。
 # 普通节点支持 6 级升级（levels 列表指定每级效果值），联动节点固定 1 级但数值更大、效果更多。
 # 前置等级要求（倒序递减）：T2 需 T1 满 6 级，T3 需 T2 >= 5，T4 需 T3 >= 4，T5 需 T4 >= 3。
@@ -37,6 +37,9 @@
 #   rare_chance      — 稀有鱼概率加成（百分比，0-1）
 #   xp_in_bar        — 绿条内经验加成（百分比，0-1）
 #   perfect_xp       — 完美捕获经验加成（百分比，0-1）
+#   catch_duration   — 钓鱼超时时间加成（百分比，0-1）
+#   bar_gravity      — 绿条重力降低（百分比，0-1）
+#   bar_click_force  — 绿条点击力加成（百分比，0-1）
 
 # 前置等级要求：每个 tier 的节点首次点亮时，前置节点需达到的最低等级。
 # key = 目标 tier（2~5）或 "link"（联动节点），value = 前置节点最低等级。
@@ -880,6 +883,172 @@ trees:
           amount: 1
         prerequisites: [lucky-t4d]
 
+  # ─── 树6：持久（物理/时间） ────────────────────────────────
+  endure:
+    display-name: "&6持久"
+    description: "绿条物理控制与钓鱼时间延长"
+    icon:
+      source: minecraft
+      id: clock
+      amount: 1
+    nodes:
+      - id: endure-t1
+        tier: 1
+        branch: root
+        display-name: "&6持久根基"
+        description: "钓鱼超时 +3.6%"
+        effect-type: catch_duration
+        levels: [0.006, 0.012, 0.020, 0.028, 0.036, 0.029]
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
+        prerequisites: []
+      - id: endure-t2a
+        tier: 2
+        branch: a
+        display-name: "&6延长时"
+        description: "钓鱼超时 +3.6%"
+        effect-type: catch_duration
+        levels: [0.006, 0.012, 0.020, 0.028, 0.036, 0.029]
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
+        prerequisites: [endure-t1]
+      - id: endure-t2b
+        tier: 2
+        branch: b
+        display-name: "&6轻体"
+        description: "绿条重力 -3.8%"
+        effect-type: bar_gravity
+        levels: [0.006, 0.012, 0.020, 0.028, 0.038, 0.030]
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
+        prerequisites: [endure-t1]
+      - id: endure-t3a
+        tier: 3
+        branch: a
+        display-name: "&6持续延长"
+        description: "钓鱼超时 +3.6%"
+        effect-type: catch_duration
+        levels: [0.006, 0.012, 0.020, 0.028, 0.036, 0.029]
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
+        prerequisites: [endure-t2a]
+      - id: endure-t3b
+        tier: 3
+        branch: b
+        display-name: "&6强推"
+        description: "绿条点击力 +3.3%"
+        effect-type: bar_click_force
+        levels: [0.005, 0.010, 0.017, 0.023, 0.033, 0.026]
+        icon:
+          source: minecraft
+          id: piston
+          amount: 1
+        prerequisites: [endure-t2b]
+      - id: endure-t4a
+        tier: 4
+        branch: a
+        display-name: "&6轻盈"
+        description: "绿条重力 -2.9%"
+        effect-type: bar_gravity
+        levels: [0.005, 0.009, 0.015, 0.020, 0.029, 0.023]
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
+        prerequisites: [endure-t3a]
+      - id: endure-t4b
+        tier: 4
+        branch: b
+        display-name: "&6延时"
+        description: "钓鱼超时 +2.4%"
+        effect-type: catch_duration
+        levels: [0.004, 0.008, 0.013, 0.018, 0.024, 0.019]
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
+        prerequisites: [endure-t3a]
+      - id: endure-t4c
+        tier: 4
+        branch: c
+        display-name: "&6强推力"
+        description: "绿条点击力 +2.9%"
+        effect-type: bar_click_force
+        levels: [0.005, 0.009, 0.015, 0.020, 0.029, 0.023]
+        icon:
+          source: minecraft
+          id: piston
+          amount: 1
+        prerequisites: [endure-t3b]
+      - id: endure-t4d
+        tier: 4
+        branch: d
+        display-name: "&6缓降"
+        description: "绿条重力 -2.4%"
+        effect-type: bar_gravity
+        levels: [0.004, 0.008, 0.013, 0.018, 0.024, 0.019]
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
+        prerequisites: [endure-t3b]
+      - id: endure-t5a
+        tier: 5
+        branch: a
+        display-name: "&6轻盈大师"
+        description: "绿条重力 -1.4%"
+        effect-type: bar_gravity
+        levels: [0.003, 0.005, 0.009, 0.012, 0.014, 0.011]
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
+        prerequisites: [endure-t4a]
+      - id: endure-t5b
+        tier: 5
+        branch: b
+        display-name: "&6延时大师"
+        description: "钓鱼超时 +1.2%"
+        effect-type: catch_duration
+        levels: [0.002, 0.004, 0.006, 0.009, 0.012, 0.009]
+        icon:
+          source: minecraft
+          id: clock
+          amount: 1
+        prerequisites: [endure-t4b]
+      - id: endure-t5c
+        tier: 5
+        branch: c
+        display-name: "&6强推大师"
+        description: "绿条点击力 +1.7%"
+        effect-type: bar_click_force
+        levels: [0.003, 0.005, 0.009, 0.012, 0.017, 0.013]
+        icon:
+          source: minecraft
+          id: piston
+          amount: 1
+        prerequisites: [endure-t4c]
+      - id: endure-t5d
+        tier: 5
+        branch: d
+        display-name: "&6缓降大师"
+        description: "绿条重力 -1.2%"
+        effect-type: bar_gravity
+        levels: [0.002, 0.004, 0.006, 0.009, 0.012, 0.009]
+        icon:
+          source: minecraft
+          id: feather
+          amount: 1
+        prerequisites: [endure-t4d]
+
 # ─── 跨树联动天赋 ──────────────────────────────────────────
 # 每个联动天赋需要 2 个不同树的 T3 节点同时点亮才能解锁
 # 每种路线组合最多点亮 3-4 个联动天赋，强制策略性规划
@@ -990,3 +1159,55 @@ links:
       id: nether_star
       amount: 1
     prerequisites: [pressure-t3b, lucky-t3b]
+  - id: link-9
+    display-name: "&6稳固持久"
+    description: "钓鱼超时 +5.4%，绿条高度 +3.0px（需持久T3a + 稳健T3a）"
+    effects:
+      - effect-type: catch_duration
+        effect-value: 0.0540
+      - effect-type: bar_height
+        effect-value: 3.0
+    icon:
+      source: minecraft
+      id: clock
+      amount: 1
+    prerequisites: [endure-t3a, steady-t3a]
+  - id: link-10
+    display-name: "&6迅疾推力"
+    description: "绿条点击力 +4.9%，鱼速度 -5.9%（需持久T3b + 迅捷T3a）"
+    effects:
+      - effect-type: bar_click_force
+        effect-value: 0.0495
+      - effect-type: fish_speed
+        effect-value: 0.0585
+    icon:
+      source: minecraft
+      id: piston
+      amount: 1
+    prerequisites: [endure-t3b, swift-t3a]
+  - id: link-11
+    display-name: "&6持久专注"
+    description: "钓鱼超时 +5.4%，进度下降减少 +7.5%（需持久T3a + 专注T3b）"
+    effects:
+      - effect-type: catch_duration
+        effect-value: 0.0540
+      - effect-type: progress_drain
+        effect-value: 0.0750
+    icon:
+      source: minecraft
+      id: compass
+      amount: 1
+    prerequisites: [endure-t3a, focus-t3b]
+  - id: link-12
+    display-name: "&6持久威压"
+    description: "绿条点击力 +4.9%，逃离概率 -4.5%（需持久T3b + 威压T3a）"
+    effects:
+      - effect-type: bar_click_force
+        effect-value: 0.0495
+      - effect-type: flee_chance
+        effect-value: 0.0450
+    icon:
+      source: minecraft
+      id: piston
+      amount: 1
+    prerequisites: [endure-t3b, pressure-t3a]

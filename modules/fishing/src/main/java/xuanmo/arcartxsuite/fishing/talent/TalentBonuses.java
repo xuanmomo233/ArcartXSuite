@@ -137,6 +137,21 @@ public final class TalentBonuses {
         return get(TalentEffect.Type.PERFECT_XP.key());
     }
 
+    /** 钓鱼超时时间加成（0-1，累加） */
+    public double catchDurationBonus() {
+        return get(TalentEffect.Type.CATCH_DURATION.key());
+    }
+
+    /** 绿条重力降低（0-1，累加） */
+    public double barGravityReduction() {
+        return get(TalentEffect.Type.BAR_GRAVITY.key());
+    }
+
+    /** 绿条点击力加成（0-1，累加） */
+    public double barClickForceBonus() {
+        return get(TalentEffect.Type.BAR_CLICK_FORCE.key());
+    }
+
     private double get(String key) {
         return bonuses.getOrDefault(key, 0.0);
     }

@@ -256,7 +256,10 @@ public final class FishingMinigame {
 
         // 更新绿条位置（物理：惯性 + 重力 + 点击力 + 法向力 + 反弹）
         boolean pressing = session.isPressing();
-        double force = pressing ? settings.barClickForce() : settings.barGravity();
+        // 天赋：降低重力（bar_gravity）、增加点击力（bar_click_force）
+        double gravity = settings.barGravity() * (1.0 - talentBonuses.barGravityReduction());
+        double clickForce = settings.barClickForce() * (1.0 + talentBonuses.barClickForceBonus());
+        double force = pressing ? clickForce : gravity;
         double forceMultiplier = settings.barForceMultiplier() * (1.0 + talentBonuses.barForceBonus());
         double damping = settings.barDamping() + talentBonuses.barDampingBonus();
 
