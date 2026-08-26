@@ -97,7 +97,7 @@ ui:
       var.R7 = 700
       // 联动链：基础在 T4/T5 之间，沿径向向外穿过 T6/T7 间隙
       var.RlinkA = 480
-      var.RlinkStep = 65
+      var.RlinkStep = 90
       // 所有树 ID（meta = T1/T2 根节点树）
       var.treeIds = ['meta', 'steady', 'swift', 'pressure', 'focus', 'lucky', 'endure']
       var.treeNames = {}
@@ -343,23 +343,7 @@ ui:
           worldY = var.centerY + R * math.sin(angle)
           var.nodePositions[id] = [worldX, worldY, angle, R]
         }
-        // 第二遍：创建所有节点
-        for(node in var.allNodes){
-          id = node['id']
-          pos = var.nodePositions[id]
-          if(pos == none){ continue }
-          treeId = node['treeId']
-          if(treeId == ''){ treeId = 'meta' }
-          n = val.天赋节点模板.copy('节点_' + id)
-          n.entryId = id
-          n.treeId = treeId
-          n.isLink = (node['tier'] == 0)
-          n.x = ((pos[0] - var.nodeSize / 2) * z).round()
-          n.y = ((pos[1] - var.nodeSize / 2) * z).round()
-          n.width = (var.nodeSize * z).round()
-          n.height = (var.nodeSize * z).round()
-        }
-        // 第三遍：创建连线（父节点 → 子节点）
+        // 第二遍：创建连线（父节点 → 子节点）—— 先创建，渲染在底层
         for(node in var.allNodes){
           childId = node['id']
           childPos = var.nodePositions[childId]
@@ -399,6 +383,22 @@ ui:
             line.normal = lineColor
             line.visible = true
           }
+        }
+        // 第三遍：创建所有节点 —— 后创建，渲染在连线之上
+        for(node in var.allNodes){
+          id = node['id']
+          pos = var.nodePositions[id]
+          if(pos == none){ continue }
+          treeId = node['treeId']
+          if(treeId == ''){ treeId = 'meta' }
+          n = val.天赋节点模板.copy('节点_' + id)
+          n.entryId = id
+          n.treeId = treeId
+          n.isLink = (node['tier'] == 0)
+          n.x = ((pos[0] - var.nodeSize / 2) * z).round()
+          n.y = ((pos[1] - var.nodeSize / 2) * z).round()
+          n.width = (var.nodeSize * z).round()
+          n.height = (var.nodeSize * z).round()
         }
       }
       if(var.iconDelay > 0){
