@@ -135,19 +135,19 @@ public final class TalentEngine {
     }
 
     /**
-     * 判断玩家是否可以升级指定节点（点亮或提升等级）。
+     * 判断玩家是否可以解锁指定节点。
      * <p>
-     * 条件：
+     * 新版条件：
      * <ol>
      *   <li>节点存在</li>
      *   <li>玩家有未分配天赋点</li>
-     *   <li>节点当前等级 &lt; maxLevel</li>
-     *   <li>首次点亮时（当前等级为 0），所有前置节点等级 ≥ 该 tier 的前置等级要求</li>
+     *   <li>节点未点亮（当前等级为 0）</li>
+     *   <li>所有前置节点已点亮（等级 ≥ 1）</li>
      * </ol>
      *
      * @param data   玩家赛季数据
      * @param nodeId 节点 ID
-     * @return {@code true} 表示可以升级
+     * @return {@code true} 表示可以解锁
      */
     public boolean canLevelUp(@NotNull FishingSeasonData data, @NotNull String nodeId) {
         TalentNode node = nodesById.get(nodeId);
@@ -155,27 +155,25 @@ public final class TalentEngine {
         if (data.unspentTalentPoints() <= 0) return false;
         int currentLevel = data.talents().getOrDefault(nodeId, 0);
         if (currentLevel >= node.maxLevel()) return false;
-        // 首次点亮时检查前置等级要求；已点亮节点的后续升级不需要再检查
+        // 未点亮时检查前置节点是否已点亮（≥ 1）
         if (currentLevel == 0) {
-            int requiredLevel = prerequisiteLevelFor(node);
             for (String prereq : node.prerequisites()) {
-                if (data.talents().getOrDefault(prereq, 0) < requiredLevel) return false;
+                if (data.talents().getOrDefault(prereq, 0) < 1) return false;
             }
         }
         return true;
     }
 
     /**
-     * 升级一个天赋节点（消耗1点天赋点，等级+1）。
+     * 解锁一个天赋节点（消耗1点天赋点，等级固定为 1）。
      *
      * @param data   玩家赛季数据
      * @param nodeId 节点 ID
-     * @return 更新后的赛季数据，无法升级时返回原数据
+     * @return 更新后的赛季数据，无法解锁时返回原数据
      */
     public @NotNull FishingSeasonData levelUp(@NotNull FishingSeasonData data, @NotNull String nodeId) {
         if (!canLevelUp(data, nodeId)) return data;
-        TalentNode node = nodesById.get(nodeId);
-        return data.withTalentLeveledUp(nodeId, node.maxLevel());
+        return data.withTalentLeveledUp(nodeId, 1);
     }
 
     /**

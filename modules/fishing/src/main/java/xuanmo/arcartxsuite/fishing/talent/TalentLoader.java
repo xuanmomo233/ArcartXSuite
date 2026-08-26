@@ -29,30 +29,77 @@ public final class TalentLoader {
      */
     public static @NotNull TalentEngine load(@NotNull YamlConfiguration yaml, @NotNull Logger logger) {
         Map<String, TalentTreeDefinition> trees = new HashMap<>();
+        List<TalentNode> allNodes = new ArrayList<>();
         List<TalentNode> links = new ArrayList<>();
 
-        ConfigurationSection treesSection = yaml.getConfigurationSection("trees");
-        if (treesSection != null) {
-            for (String treeId : treesSection.getKeys(false)) {
-                ConfigurationSection treeSection = treesSection.getConfigurationSection(treeId);
-                if (treeSection == null) continue;
-                String displayName = treeSection.getString("display-name", treeId);
-                String description = treeSection.getString("description", "");
-                IconDefinition icon = IconDefinition.load(treeSection, "icon");
-                if (icon == null) {
-                    icon = IconDefinition.load("minecraft:stone");
-                }
-                List<TalentNode> nodes = new ArrayList<>();
-                List<?> rawNodes = treeSection.getList("nodes");
-                if (rawNodes != null) {
-                    for (Object item : rawNodes) {
-                        if (item instanceof Map<?, ?> map) {
-                            TalentNode node = parseNode(map, treeId, logger);
-                            if (node != null) nodes.add(node);
-                        }
+        // 新版格式：talents 为统一大树的扁平列表
+        List<?> rawTalents = yaml.getList("talents");
+        if (rawTalents != null) {
+            Map<String, List<TalentNode>> treeNodes = new HashMap<>();
+            Map<String, String> treeDisplayNames = new HashMap<>();
+            Map<String, String> treeDescriptions = new HashMap<>();
+            Map<String, IconDefinition> treeIcons = new HashMap<>();
+
+            for (Object item : rawTalents) {
+                if (item instanceof Map<?, ?> map) {
+                    TalentNode node = parseNode(map, logger);
+                    if (node == null) continue;
+                    allNodes.add(node);
+
+                    // 按 tree 字段分组；T1/T2 无 tree 字段，单独放在 meta 树
+                    String treeId = node.treeId();
+                    if (treeId.isBlank() || treeId.equals("meta")) {
+                        treeId = "meta";
+                    }
+                    treeNodes.computeIfAbsent(treeId, k -> new ArrayList<>()).add(node);
+
+                    // T3 节点作为原 6 棵树的根，继承显示名/图标
+                    if (node.tier() == 3) {
+                        treeDisplayNames.put(treeId, node.displayName());
+                        treeDescriptions.put(treeId, node.description());
+                        treeIcons.put(treeId, node.icon() != null ? node.icon() : IconDefinition.load("minecraft:stone"));
                     }
                 }
-                trees.put(treeId, new TalentTreeDefinition(displayName, description, icon, nodes));
+            }
+
+            // 构建 TalentTreeDefinition
+            for (Map.Entry<String, List<TalentNode>> entry : treeNodes.entrySet()) {
+                String treeId = entry.getKey();
+                String displayName = treeDisplayNames.getOrDefault(treeId, treeId);
+                String description = treeDescriptions.getOrDefault(treeId, "");
+                IconDefinition icon = treeIcons.getOrDefault(treeId, IconDefinition.load("minecraft:stone"));
+                trees.put(treeId, new TalentTreeDefinition(displayName, description, icon, entry.getValue()));
+            }
+        }
+
+        // 兼容旧版 trees 结构（fallback）
+        if (trees.isEmpty()) {
+            ConfigurationSection treesSection = yaml.getConfigurationSection("trees");
+            if (treesSection != null) {
+                for (String treeId : treesSection.getKeys(false)) {
+                    ConfigurationSection treeSection = treesSection.getConfigurationSection(treeId);
+                    if (treeSection == null) continue;
+                    String displayName = treeSection.getString("display-name", treeId);
+                    String description = treeSection.getString("description", "");
+                    IconDefinition icon = IconDefinition.load(treeSection, "icon");
+                    if (icon == null) {
+                        icon = IconDefinition.load("minecraft:stone");
+                    }
+                    List<TalentNode> nodes = new ArrayList<>();
+                    List<?> rawNodes = treeSection.getList("nodes");
+                    if (rawNodes != null) {
+                        for (Object item : rawNodes) {
+                            if (item instanceof Map<?, ?> map) {
+                                TalentNode node = parseNode(map, treeId, logger);
+                                if (node != null) {
+                                    nodes.add(node);
+                                    allNodes.add(node);
+                                }
+                            }
+                        }
+                    }
+                    trees.put(treeId, new TalentTreeDefinition(displayName, description, icon, nodes));
+                }
             }
         }
 
@@ -67,77 +114,55 @@ public final class TalentLoader {
             }
         }
 
-        // 读取前置等级要求映射（每个 tier 可独立配置）
+        // 新版天赋固定 1 级，前置等级统一为 1
         Map<String, Integer> prerequisiteLevels = new HashMap<>();
-        // 兼容旧格式：prerequisite-level（全局统一）
-        if (yaml.contains("prerequisite-level")) {
-            int globalLevel = yaml.getInt("prerequisite-level", 3);
-            prerequisiteLevels.put("2", globalLevel);
-            prerequisiteLevels.put("3", globalLevel);
-            prerequisiteLevels.put("4", globalLevel);
-            prerequisiteLevels.put("5", globalLevel);
-            prerequisiteLevels.put("link", globalLevel);
-        }
-        // 新格式：prerequisite-levels 映射（覆盖旧格式）
-        ConfigurationSection prereqSection = yaml.getConfigurationSection("prerequisite-levels");
-        if (prereqSection != null) {
-            for (String key : prereqSection.getKeys(false)) {
-                prerequisiteLevels.put(key, prereqSection.getInt(key, 1));
-            }
-        }
-        if (prerequisiteLevels.isEmpty()) {
-            // 默认值：所有 tier 统一要求 3 级
-            prerequisiteLevels.put("2", 3);
-            prerequisiteLevels.put("3", 3);
-            prerequisiteLevels.put("4", 3);
-            prerequisiteLevels.put("5", 3);
-            prerequisiteLevels.put("link", 3);
-        }
+        prerequisiteLevels.put("2", 1);
+        prerequisiteLevels.put("3", 1);
+        prerequisiteLevels.put("4", 1);
+        prerequisiteLevels.put("5", 1);
+        prerequisiteLevels.put("6", 1);
+        prerequisiteLevels.put("7", 1);
+        prerequisiteLevels.put("link", 1);
 
         return new TalentEngine(trees, links, prerequisiteLevels);
     }
 
     @SuppressWarnings("unchecked")
-    private static @Nullable TalentNode parseNode(Map<?, ?> map, @NotNull String treeId, @NotNull Logger logger) {
+    private static @Nullable TalentNode parseNode(@NotNull Map<?, ?> map, @NotNull Logger logger) {
         try {
             String id = String.valueOf(map.get("id"));
             int tier = ((Number) map.get("tier")).intValue();
             String branch = String.valueOf(map.get("branch"));
+            String treeId = map.containsKey("tree") ? String.valueOf(map.get("tree")) : "meta";
             String displayName = String.valueOf(map.get("display-name"));
             String description = String.valueOf(map.get("description"));
 
-            // 解析 effect-type 和 levels（多级）或 effect-value（单级兼容）
+            // 解析单效果
             String effectType = null;
             List<Double> levelValues = new ArrayList<>();
-            List<TalentEffect> effects = new ArrayList<>();
-
             if (map.containsKey("effect-type")) {
                 effectType = String.valueOf(map.get("effect-type"));
+                double value = parseNumber(map.get("effect-value"));
+                levelValues.add(value);
             }
 
-            // 优先解析 levels 列表（多级节点）
-            if (map.containsKey("levels")) {
+            // 兼容旧格式：levels 列表（取首级作为单级值）
+            if (levelValues.isEmpty() && map.containsKey("levels")) {
                 Object rawLevels = map.get("levels");
-                if (rawLevels instanceof List<?> levelList) {
-                    for (Object lv : levelList) {
-                        levelValues.add(parseNumber(lv));
-                    }
+                if (rawLevels instanceof List<?> levelList && !levelList.isEmpty()) {
+                    levelValues.add(parseNumber(levelList.get(0)));
                 }
             }
 
-            // 兼容旧格式：effect-value（单级）
-            if (levelValues.isEmpty() && map.containsKey("effect-value")) {
-                levelValues.add(parseNumber(map.get("effect-value")));
-            }
-
-            // 多效果（effects 列表，仅联动节点使用）
+            // 多效果（联动/特殊）
+            List<TalentEffect> effects = new ArrayList<>();
             if (map.containsKey("effects")) {
                 Object rawEffects = map.get("effects");
                 if (rawEffects instanceof List<?> effectList) {
                     for (Object e : effectList) {
                         if (e instanceof Map<?, ?> em) {
                             String et = String.valueOf(em.get("effect-type"));
-                            double ev = ((Number) em.get("effect-value")).doubleValue();
+                            double ev = parseNumber(em.get("effect-value"));
                             effects.add(new TalentEffect(et, ev));
                         }
                     }
@@ -161,25 +186,31 @@ public final class TalentLoader {
     }
 
     @SuppressWarnings("unchecked")
-    private static @Nullable TalentNode parseLink(Map<?, ?> map, @NotNull Logger logger) {
+    private static @Nullable TalentNode parseNode(@NotNull Map<?, ?> map, @NotNull String treeId, @NotNull Logger logger) {
+        TalentNode node = parseNode(map, logger);
+        if (node == null) return null;
+        // 兼容旧格式：传入 treeId 时覆盖
+        return new TalentNode(node.id(), treeId, node.tier(), node.branch(),
+            node.displayName(), node.description(), node.effectType(),
+            node.levelValues(), node.effects(), node.prerequisites(), node.icon());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable TalentNode parseLink(@NotNull Map<?, ?> map, @NotNull Logger logger) {
         try {
             String id = String.valueOf(map.get("id"));
             String displayName = String.valueOf(map.get("display-name"));
             String description = String.valueOf(map.get("description"));
 
-            // 联动节点固定 1 级
             String effectType = null;
             List<Double> levelValues = new ArrayList<>();
             List<TalentEffect> effects = new ArrayList<>();
 
             if (map.containsKey("effect-type")) {
                 effectType = String.valueOf(map.get("effect-type"));
-                if (map.containsKey("effect-value")) {
-                    levelValues.add(parseNumber(map.get("effect-value")));
-                }
+                levelValues.add(parseNumber(map.get("effect-value")));
             }
 
-            // 多效果联动（如 link-3）
             if (map.containsKey("effects")) {
                 Object rawEffects = map.get("effects");
                 if (rawEffects instanceof List<?> effectList) {
@@ -201,7 +232,6 @@ public final class TalentLoader {
                 }
             }
             IconDefinition icon = iconFromMap(map, "icon");
-            // 联动节点 treeId 为空，固定 1 级
             if (levelValues.isEmpty()) levelValues.add(0.0);
             return new TalentNode(id, "", 0, "link", displayName, description,
                 effectType, levelValues, effects, prerequisites, icon);
@@ -211,19 +241,6 @@ public final class TalentLoader {
         }
     }
 
-    // ─── 通用图标解析 ──────────────────────────────────────
-
-    /**
-     * 从 {@link Map} 解析图标定义（节点/联动级 icon）。
-     * <p>
-     * icon 为块式映射对象（Bukkit 反序列化为 {@code Map<?, ?>}），字段与
-     * {@link IconDefinition#load(ConfigurationSection)} 兼容。
-     * 解析失败或缺失时返回 null（UI 端回退到 effectType 映射）。
-     *
-     * @param map 所属 Map
-     * @param key icon 字段名
-     * @return 解析出的 {@link IconDefinition}，缺失时为 null
-     */
     private static @Nullable IconDefinition iconFromMap(@NotNull Map<?, ?> map, @NotNull String key) {
         Object raw = map.get(key);
         if (!(raw instanceof Map<?, ?> iconMap)) {
@@ -254,7 +271,6 @@ public final class TalentLoader {
         }
         Map<String, String> nbt = new HashMap<>();
         Object rawNbt = iconMap.get("nbt");
-        // nbt 如果是 Map（配置节），解析为键值对；如果是字符串，已在 nbtString 中处理
         if (rawNbt instanceof Map<?, ?> nbtMap && nbtString.isBlank()) {
             for (Map.Entry<?, ?> entry : nbtMap.entrySet()) {
                 nbt.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));

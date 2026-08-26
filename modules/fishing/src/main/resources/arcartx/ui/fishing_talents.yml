@@ -66,7 +66,7 @@ ui:
       if(var.linkCount == none){ var.linkCount = 0 }
       var.needRebuild = true
   action:
-    # load: 初始化变量 + 视口换算 + 环形扇形布局参数
+    # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
       var.packetId = 'AXS_FISHING_TALENTS'
       var.seasonId = ''
@@ -80,38 +80,25 @@ ui:
       var.needRebuild = false
       var.iconDelay = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      // 环形扇形布局参数（6 棵树 × 60° 扇形，从外圈向内圈生长）
-      var.nodeSize = 64
-      var.lineW = 5
+      // 中心发散布局参数
+      var.nodeSize = 48
+      var.lineW = 3
       var.canvasW = 1800
       var.canvasH = 1800
       var.centerX = var.canvasW / 2
       var.centerY = var.canvasH / 2
-      // 半径分配（从外到内：T1→T2→T3→T4→T5→联动）
-      var.R1 = 760
-      var.R2 = 620
-      var.R3 = 480
-      var.R4 = 340
-      var.R5 = 200
-      var.Rlink = 110
-      // 角度偏移（弧度）：同层兄弟节点沿圆周散开
-      var.angleT2 = math.PI() / 15
-      var.angleT3 = math.PI() / 18
-      var.angleT4a = math.PI() / 10
-      var.angleT4b = math.PI() / 30
-      var.angleT5a = math.PI() / 15
-      var.angleT5b = math.PI() / 45
-      // 联动节点最小角度间隔（弧度）= nodeSize / Rlink + 余量
-      var.minLinkAngleGap = var.nodeSize / var.Rlink + 0.15
-      // 拖拽滚动状态
-      var.isDragging = false
-      var.dragStartMX = 0
-      var.dragStartMY = 0
-      var.dragStartSX = 0
-      var.dragStartSY = 0
-      var.dragMoved = false
-      // 缩放状态
-      var.zoomScale = 1.0
+      // 半径：T1 中心 → T2 → T3 → T4 → T5 → T6 → T7 → 联动
+      var.R1 = 0
+      var.R2 = 80
+      var.R3 = 180
+      var.R4 = 280
+      var.R5 = 400
+      var.R6 = 540
+      var.R7 = 700
+      var.RlinkA = 460
+      var.RlinkB = 500
+      var.RlinkC = 540
+      // 6 棵树方向（从正上方开始顺时针）
       var.treeIds = ['steady', 'swift', 'pressure', 'focus', 'lucky', 'endure']
       var.treeNames = {}
       var.treeNames['steady'] = '&a稳健'
@@ -127,6 +114,43 @@ ui:
       var.treeDescs['focus'] = '进度获取与维持'
       var.treeDescs['lucky'] = '经验售价与稀有鱼'
       var.treeDescs['endure'] = '绿条物理与时间'
+      // T2 分支映射
+      var.t2Branches = {}
+      var.t2Branches['t2-power'] = 'power'
+      var.t2Branches['t2-control'] = 'control'
+      var.t2Branches['t2-fortune'] = 'fortune'
+      var.t2Children = {}
+      var.t2Children['power'] = ['steady', 'swift']
+      var.t2Children['control'] = ['pressure', 'focus']
+      var.t2Children['fortune'] = ['lucky', 'endure']
+      // 节点颜色映射
+      var.treeColors = {}
+      var.treeColors['steady'] = ['48,156,82,255', '72,238,112,255']
+      var.treeColors['swift'] = ['34,138,170,255', '48,208,248,255']
+      var.treeColors['pressure'] = ['172,48,48,255', '248,70,70,255']
+      var.treeColors['focus'] = ['144,54,180,255', '212,86,248,255']
+      var.treeColors['lucky'] = ['180,138,30,255', '252,198,42,255']
+      var.treeColors['endure'] = ['180,110,20,255', '255,165,0,255']
+      var.treeColors['meta'] = ['120,120,120,255', '180,180,180,255']
+      // 角度参数（弧度）
+      var.angleT4 = math.PI() / 12
+      var.angleT5 = math.PI() / 12
+      var.angleT6a = math.PI() / 8
+      var.angleT6b = math.PI() / 24
+      var.angleT7a = math.PI() / 8
+      var.angleT7b = math.PI() / 24
+      // 联动角度偏移
+      var.angleLinkBase = math.PI() / 36
+      var.angleLinkStep = math.PI() / 60
+      // 拖拽滚动状态
+      var.isDragging = false
+      var.dragStartMX = 0
+      var.dragStartMY = 0
+      var.dragStartSX = 0
+      var.dragStartSY = 0
+      var.dragMoved = false
+      // 缩放状态
+      var.zoomScale = 1.0
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -135,8 +159,7 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.s = s
-    open: |-
+      var.s = s    open: |-
       Packet.send(var.packetId, 'refresh_talents')
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -159,7 +182,7 @@ ui:
     releaseLeft: |-
       // 兜底：确保拖拽状态在鼠标移出滚动区后释放时也能重置
       var.isDragging = false
-    # tick: 数据变化时重建环形天赋网络
+    # tick: 数据变化时重建中心发散天赋网络
     tick: |-
       // 拖拽中：位移超过阈值才滚动
       if(var.isDragging){
@@ -191,245 +214,175 @@ ui:
         var.needRebuild = false
         var.iconDelay = 2
         z = var.zoomScale
-        // 清理动态控件（保留 3 个模板：树标题、天赋节点、联动连线段）
+        // 清理动态控件
         while(val.树画布.childrenCount() > 3){
           val.树画布.get(3).remove()
         }
-        // ── 辅助函数：极坐标 → 世界坐标（节点左上角）──
-        // polarToNode(angle, radius) → [x, y]
-        // 在 Aria 中用内联计算代替函数
-        // ── 辅助函数：创建旋转连线（树画布子控件）──
-        // createLine(x1, y1, x2, y2, color, name)
-        // 连线中心在两点中点，用 rotate 旋转
-        // ── 第一遍：计算所有节点位置 ──
-        // nodePositions[treeId + '_' + nodeId] = [worldX, worldY]
+        // 辅助：根据 tree 和 branch 计算节点角度
         var.nodePositions = {}
-        for(ti in range(0, 5)){
-          treeIndex = ti.round()
-          treeKey = var.treeIds[treeIndex]
+        // 收集所有节点
+        var.allNodes = []
+        var.allNodeById = {}
+        for(treeKey in var.trees){
           treeData = var.trees[treeKey]
           if(treeData != none){
-            // 树中心角度 = -PI/2 + ti * PI/3（从正上方开始，顺时针）
-            treeAngle = -math.PI() / 2 + treeIndex * math.PI() / 3
-            // 树标题：放在 T1 外侧
-            titleR = var.R1 + var.nodeSize + 30
-            titleX = var.centerX + titleR * math.cos(treeAngle)
-            titleY = var.centerY + titleR * math.sin(treeAngle)
-            titleCtrl = val.树标题模板.copy('树标题_' + treeIndex)
-            titleCtrl.x = ((titleX - 100) * z).round()
-            titleCtrl.y = ((titleY - 20) * z).round()
-            titleCtrl.treeId = treeKey
-            titleCtrl.visible = true
-            // 遍历节点
             nodes = treeData['nodes']
-            nodeCount = treeData['nodeCount']
-            if(nodeCount == none){ nodeCount = 0 }
-            for(i in range(0, nodeCount - 1)){
-              key = i.round()
-              entry = nodes[key]
-              if(entry != none){
-                tier = type.toNumber(entry['tier']).round()
-                branch = entry['branch']
-                // 计算节点角度偏移
-                angleOff = 0
-                if(tier == 2){
-                  angleOff = branch == 'a' ? -var.angleT2 : var.angleT2
-                }
-                if(tier == 3){
-                  angleOff = branch == 'a' ? -var.angleT3 : var.angleT3
-                }
-                if(tier == 4){
-                  if(branch == 'a'){ angleOff = -var.angleT4a }
-                  if(branch == 'b'){ angleOff = -var.angleT4b }
-                  if(branch == 'c'){ angleOff = var.angleT4b }
-                  if(branch == 'd'){ angleOff = var.angleT4a }
-                }
-                if(tier == 5){
-                  if(branch == 'a'){ angleOff = -var.angleT5a }
-                  if(branch == 'b'){ angleOff = -var.angleT5b }
-                  if(branch == 'c'){ angleOff = var.angleT5b }
-                  if(branch == 'd'){ angleOff = var.angleT5a }
-                }
-                // 半径
-                R = tier == 1 ? var.R1 : (tier == 2 ? var.R2 : (tier == 3 ? var.R3 : (tier == 4 ? var.R4 : var.R5)))
-                // 世界坐标
-                angle = treeAngle + angleOff
-                worldX = var.centerX + R * math.cos(angle)
-                worldY = var.centerY + R * math.sin(angle)
-                // 存储位置（未缩放）
-                posKey = treeKey + '_' + entry['id']
-                var.nodePositions[posKey] = [worldX, worldY]
-                // 创建节点
-                node = val.天赋节点模板.copy('节点_' + treeIndex + '_' + key)
-                node.entryKey = key
-                node.treeId = treeKey
-                node.isLink = false
-                node.x = ((worldX - var.nodeSize / 2) * z).round()
-                node.y = ((worldY - var.nodeSize / 2) * z).round()
-                node.width = (var.nodeSize * z).round()
-                node.height = (var.nodeSize * z).round()
+            count = treeData['nodeCount']
+            if(count == none){ count = 0 }
+            for(i in range(0, count - 1)){
+              node = nodes[i.round()]
+              if(node != none){
+                var.allNodes.add(node)
+                var.allNodeById[node['id']] = node
               }
             }
           }
         }
-        // ── 第二遍：创建树内连线（旋转 Texture，树画布子控件）──
-        for(ti in range(0, 5)){
-          treeIndex = ti.round()
-          treeKey = var.treeIds[treeIndex]
-          treeData = var.trees[treeKey]
-          if(treeData != none){
-            nodes = treeData['nodes']
-            nodeCount = treeData['nodeCount']
-            if(nodeCount == none){ nodeCount = 0 }
-            for(i in range(0, nodeCount - 1)){
-              key = i.round()
-              entry = nodes[key]
-              if(entry != none){
-                prereqs = entry['prerequisites']
-                if(prereqs != none && prereqs.size() > 0){
-                  parentId = prereqs[0]
-                  childId = entry['id']
-                  parentPos = var.nodePositions[treeKey + '_' + parentId]
-                  childPos = var.nodePositions[treeKey + '_' + childId]
-                  if(parentPos != none && childPos != none){
-                    // 连线颜色：子节点未点亮时暗色，点亮时亮色
-                    lineColor = entry['unlocked'] == true ? (treeKey == 'steady' ? '72,238,112,255' : (treeKey == 'swift' ? '48,208,248,255' : (treeKey == 'pressure' ? '248,70,70,255' : (treeKey == 'focus' ? '212,86,248,255' : (treeKey == 'lucky' ? '252,198,42,255' : '255,165,0,255'))))) : (treeKey == 'steady' ? '48,156,82,255' : (treeKey == 'swift' ? '34,138,170,255' : (treeKey == 'pressure' ? '172,48,48,255' : (treeKey == 'focus' ? '144,54,180,255' : (treeKey == 'lucky' ? '180,138,30,255' : '180,110,20,255')))))
-                    // 创建旋转连线
-                    x1 = parentPos[0]
-                    y1 = parentPos[1]
-                    x2 = childPos[0]
-                    y2 = childPos[1]
-                    ldx = x2 - x1
-                    ldy = y2 - y1
-                    len = math.sqrt(ldx * ldx + ldy * ldy)
-                    angDeg = math.atan2(ldy, ldx) * 180 / math.PI()
-                    midX = (x1 + x2) / 2
-                    midY = (y1 + y2) / 2
-                    line = val.联动连线段.copy('树线_' + treeIndex + '_' + key)
-                    line.x = ((midX - len / 2) * z).round()
-                    line.y = ((midY - var.lineW / 2) * z).round()
-                    line.width = (len * z).round()
-                    line.height = (var.lineW * z).round()
-                    line.rotate = angDeg
-                    line.normal = lineColor
-                    line.visible = true
-                  }
-                }
-              }
-            }
-          }
-        }
-        // ── 第三遍：计算联动节点位置 + 创建联动连线 ──
-        // 联动节点位置 = 两个源 T3 锚点角度中点 × Rlink
-        var.linkAngles = {}
-        var.linkAngleOrder = []
+        // 联动节点也加入
         for(i in range(0, var.linkCount - 1)){
-          key = i.round()
-          entry = var.links[key]
-          if(entry != none){
-            prereq1 = entry['prerequisites'][0]
-            prereq2 = entry['prerequisites'][1]
-            parts1 = prereq1.split('-')
-            parts2 = prereq2.split('-')
-            tree1 = parts1[0]
-            tree2 = parts2[0]
-            branch1 = parts1[1].substring(2)
-            branch2 = parts2[1].substring(2)
-            // 树索引
-            ti1 = tree1 == 'steady' ? 0 : (tree1 == 'swift' ? 1 : (tree1 == 'pressure' ? 2 : (tree1 == 'focus' ? 3 : (tree1 == 'lucky' ? 4 : 5))))
-            ti2 = tree2 == 'steady' ? 0 : (tree2 == 'swift' ? 1 : (tree2 == 'pressure' ? 2 : (tree2 == 'focus' ? 3 : (tree2 == 'lucky' ? 4 : 5))))
-            // 源 T3 角度
-            treeAngle1 = -math.PI() / 2 + ti1 * math.PI() / 3
-            treeAngle2 = -math.PI() / 2 + ti2 * math.PI() / 3
-            angle1 = treeAngle1 + (branch1 == 'a' ? -var.angleT3 : var.angleT3)
-            angle2 = treeAngle2 + (branch2 == 'a' ? -var.angleT3 : var.angleT3)
-            // 中点角度
-            linkAngle = (angle1 + angle2) / 2
-            var.linkAngles[key] = linkAngle
-            var.linkAngleOrder.add(key)
+          link = var.links[i.round()]
+          if(link != none){
+            var.allNodes.add(link)
+            var.allNodeById[link['id']] = link
           }
         }
-        // 按角度排序
-        var.linkAngleOrder.sortBy(-> { return var.linkAngles[args[0]] })
-        // 防重叠：确保最小角度间隔
-        linkCount = var.linkAngleOrder.size()
-        for(i in range(1, linkCount - 1)){
-          iIdx = i.round()
-          key = var.linkAngleOrder[iIdx]
-          prevKey = var.linkAngleOrder[iIdx - 1]
-          gap = var.linkAngles[key] - var.linkAngles[prevKey]
-          if(gap < var.minLinkAngleGap){
-            var.linkAngles[key] = var.linkAngles[prevKey] + var.minLinkAngleGap
+        // 第一遍：计算所有节点位置
+        for(node in var.allNodes){
+          id = node['id']
+          tier = type.toNumber(node['tier']).round()
+          branch = node['branch']
+          treeId = node['treeId']
+          // 计算角度和半径
+          angle = 0
+          R = 0
+          if(tier == 1){
+            angle = 0
+            R = var.R1
           }
+          if(tier == 2){
+            // 3 个 T2 均匀分布在 360°
+            if(branch == 'power'){ angle = -math.PI() / 2 }
+            if(branch == 'control'){ angle = math.PI() / 6 }
+            if(branch == 'fortune'){ angle = 5 * math.PI() / 6 }
+            R = var.R2
+          }
+          if(tier == 3){
+            // T3 是 6 棵树的根
+            ti = treeId == 'steady' ? 0 : (treeId == 'swift' ? 1 : (treeId == 'pressure' ? 2 : (treeId == 'focus' ? 3 : (treeId == 'lucky' ? 4 : 5))))
+            angle = -math.PI() / 2 + ti * math.PI() / 3
+            R = var.R3
+          }
+          if(tier == 4 || tier == 5){
+            ti = treeId == 'steady' ? 0 : (treeId == 'swift' ? 1 : (treeId == 'pressure' ? 2 : (treeId == 'focus' ? 3 : (treeId == 'lucky' ? 4 : 5))))
+            baseAngle = -math.PI() / 2 + ti * math.PI() / 3
+            angleOff = branch == 'a' ? -var.angleT4 : var.angleT4
+            if(tier == 5){ angleOff = branch == 'a' ? -var.angleT5 : var.angleT5 }
+            angle = baseAngle + angleOff
+            R = tier == 4 ? var.R4 : var.R5
+          }
+          if(tier == 6 || tier == 7){
+            ti = treeId == 'steady' ? 0 : (treeId == 'swift' ? 1 : (treeId == 'pressure' ? 2 : (treeId == 'focus' ? 3 : (treeId == 'lucky' ? 4 : 5))))
+            baseAngle = -math.PI() / 2 + ti * math.PI() / 3
+            angleOff = 0
+            if(branch == 'a'){ angleOff = -var.angleT6a }
+            if(branch == 'b'){ angleOff = -var.angleT6b }
+            if(branch == 'c'){ angleOff = var.angleT6b }
+            if(branch == 'd'){ angleOff = var.angleT6a }
+            if(tier == 7){
+              if(branch == 'a'){ angleOff = -var.angleT7a }
+              if(branch == 'b'){ angleOff = -var.angleT7b }
+              if(branch == 'c'){ angleOff = var.angleT7b }
+              if(branch == 'd'){ angleOff = var.angleT7a }
+            }
+            angle = baseAngle + angleOff
+            R = tier == 6 ? var.R6 : var.R7
+          }
+          if(tier == 0 || treeId == ''){
+            // 联动节点（tier 0，无 tree）
+            // 解析前置中的 T3 或前一级联动
+            prereqs = node['prerequisites']
+            // 基础联动（两个 T3）
+            if(prereqs.size() == 2 && !prereqs[0].startsWith('link-')){
+              p1 = prereqs[0]
+              p2 = prereqs[1]
+              n1 = var.allNodeById[p1]
+              n2 = var.allNodeById[p2]
+              if(n1 != none && n2 != none){
+                a1 = var.nodePositions[p1][2]
+                a2 = var.nodePositions[p2][2]
+                angle = (a1 + a2) / 2
+              }
+              R = var.RlinkA
+            }
+            // 二级/三级联动（前置是 link）
+            if(prereqs.size() >= 1 && prereqs[0].startsWith('link-')){
+              parentId = prereqs[0]
+              parent = var.allNodeById[parentId]
+              if(parent != none){
+                angle = var.nodePositions[parentId][2]
+                R = var.nodePositions[parentId][3] + 40
+              }
+            }
+          }
+          worldX = var.centerX + R * math.cos(angle)
+          worldY = var.centerY + R * math.sin(angle)
+          var.nodePositions[id] = [worldX, worldY, angle, R]
         }
-        // 创建联动节点 + 连线
-        for(i in range(0, linkCount - 1)){
-          key = var.linkAngleOrder[i.round()]
-          entry = var.links[key]
-          if(entry != none){
-            linkAngle = var.linkAngles[key]
-            linkX = var.centerX + var.Rlink * math.cos(linkAngle)
-            linkY = var.centerY + var.Rlink * math.sin(linkAngle)
-            node = val.天赋节点模板.copy('联动_' + key)
-            node.entryKey = key
-            node.treeId = 'link'
-            node.isLink = true
-            prereq1 = entry['prerequisites'][0]
-            prereq2 = entry['prerequisites'][1]
-            parts1 = prereq1.split('-')
-            parts2 = prereq2.split('-')
-            tree1 = parts1[0]
-            tree2 = parts2[0]
-            node.linkTree1 = tree1
-            node.linkTree2 = tree2
-            node.x = ((linkX - var.nodeSize / 2) * z).round()
-            node.y = ((linkY - var.nodeSize / 2) * z).round()
-            node.width = (var.nodeSize * z).round()
-            node.height = (var.nodeSize * z).round()
-            // 连线：源 T3 → 联动节点（旋转 Texture）
-            prereqStates = entry['prerequisiteStates']
-            // 路径1
-            sourcePos1 = var.nodePositions[tree1 + '_' + prereq1]
-            if(sourcePos1 != none){
-              color1 = (prereqStates != none && prereqStates[0] == true) ? (tree1 == 'steady' ? '82,255,128,255' : (tree1 == 'swift' ? '60,220,255,255' : (tree1 == 'pressure' ? '255,78,78,255' : (tree1 == 'focus' ? '218,95,255,255' : (tree1 == 'lucky' ? '255,210,55,255' : '255,180,60,255'))))) : (tree1 == 'steady' ? '48,165,82,255' : (tree1 == 'swift' ? '38,145,178,255' : (tree1 == 'pressure' ? '178,48,48,255' : (tree1 == 'focus' ? '142,58,178,255' : (tree1 == 'lucky' ? '184,142,34,255' : '180,120,30,255')))))
-              sx1 = sourcePos1[0]
-              sy1 = sourcePos1[1]
-              ldx1 = linkX - sx1
-              ldy1 = linkY - sy1
-              len1 = math.sqrt(ldx1 * ldx1 + ldy1 * ldy1)
-              angDeg1 = math.atan2(ldy1, ldx1) * 180 / math.PI()
-              midX1 = (sx1 + linkX) / 2
-              midY1 = (sy1 + linkY) / 2
-              line1 = val.联动连线段.copy('联动线_' + key + '_1')
-              line1.x = ((midX1 - len1 / 2) * z).round()
-              line1.y = ((midY1 - var.lineW / 2) * z).round()
-              line1.width = (len1 * z).round()
-              line1.height = (var.lineW * z).round()
-              line1.rotate = angDeg1
-              line1.normal = color1
-              line1.visible = true
+        // 第二遍：创建所有节点
+        for(node in var.allNodes){
+          id = node['id']
+          pos = var.nodePositions[id]
+          if(pos == none){ continue }
+          treeId = node['treeId']
+          if(treeId == ''){ treeId = 'meta' }
+          n = val.天赋节点模板.copy('节点_' + id)
+          n.entryId = id
+          n.treeId = treeId
+          n.isLink = (node['tier'] == 0)
+          n.x = ((pos[0] - var.nodeSize / 2) * z).round()
+          n.y = ((pos[1] - var.nodeSize / 2) * z).round()
+          n.width = (var.nodeSize * z).round()
+          n.height = (var.nodeSize * z).round()
+        }
+        // 第三遍：创建连线（父节点 → 子节点）
+        for(node in var.allNodes){
+          childId = node['id']
+          childPos = var.nodePositions[childId]
+          if(childPos == none){ continue }
+          prereqs = node['prerequisites']
+          if(prereqs == none || prereqs.size() == 0){ continue }
+          for(prereq in prereqs){
+            parentPos = var.nodePositions[prereq]
+            if(parentPos == none){ continue }
+            x1 = parentPos[0]
+            y1 = parentPos[1]
+            x2 = childPos[0]
+            y2 = childPos[1]
+            ldx = x2 - x1
+            ldy = y2 - y1
+            len = math.sqrt(ldx * ldx + ldy * ldy)
+            if(len == 0){ continue }
+            angDeg = math.atan2(ldy, ldx) * 180 / math.PI()
+            midX = (x1 + x2) / 2
+            midY = (y1 + y2) / 2
+            // 颜色：子节点点亮用亮色，否则用父节点颜色
+            childUnlocked = node['unlocked'] == true
+            treeId = node['treeId']
+            if(treeId == ''){ treeId = 'meta' }
+            dimColor = var.treeColors[treeId][0]
+            brightColor = var.treeColors[treeId][1]
+            lineColor = childUnlocked ? brightColor : dimColor
+            if(treeId == 'meta'){
+              lineColor = childUnlocked ? '180,180,180,255' : '100,100,100,255'
             }
-            // 路径2
-            sourcePos2 = var.nodePositions[tree2 + '_' + prereq2]
-            if(sourcePos2 != none){
-              color2 = (prereqStates != none && prereqStates[1] == true) ? (tree2 == 'steady' ? '82,255,128,255' : (tree2 == 'swift' ? '60,220,255,255' : (tree2 == 'pressure' ? '255,78,78,255' : (tree2 == 'focus' ? '218,95,255,255' : (tree2 == 'lucky' ? '255,210,55,255' : '255,180,60,255'))))) : (tree2 == 'steady' ? '48,165,82,255' : (tree2 == 'swift' ? '38,145,178,255' : (tree2 == 'pressure' ? '178,48,48,255' : (tree2 == 'focus' ? '142,58,178,255' : (tree2 == 'lucky' ? '184,142,34,255' : '180,120,30,255')))))
-              sx2 = sourcePos2[0]
-              sy2 = sourcePos2[1]
-              ldx2 = linkX - sx2
-              ldy2 = linkY - sy2
-              len2 = math.sqrt(ldx2 * ldx2 + ldy2 * ldy2)
-              angDeg2 = math.atan2(ldy2, ldx2) * 180 / math.PI()
-              midX2 = (sx2 + linkX) / 2
-              midY2 = (sy2 + linkY) / 2
-              line2 = val.联动连线段.copy('联动线_' + key + '_2')
-              line2.x = ((midX2 - len2 / 2) * z).round()
-              line2.y = ((midY2 - var.lineW / 2) * z).round()
-              line2.width = (len2 * z).round()
-              line2.height = (var.lineW * z).round()
-              line2.rotate = angDeg2
-              line2.normal = color2
-              line2.visible = true
-            }
+            line = val.联动连线段.copy('线_' + childId + '_' + prereq)
+            line.x = ((midX - len / 2) * z).round()
+            line.y = ((midY - var.lineW / 2) * z).round()
+            line.width = (len * z).round()
+            line.height = (var.lineW * z).round()
+            line.rotate = angDeg
+            line.normal = lineColor
+            line.visible = true
           }
         }
       }
@@ -443,9 +396,7 @@ ui:
             }
           }
         }
-      }
-
-# ─── 控件树 ────────────────────────────────────────────────────────
+      }# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
   # 全屏毛玻璃底（真高斯模糊世界背景）
   全屏玻璃底:
@@ -961,7 +912,7 @@ controls:
                     val: 天赋节点模板
                     attribute:
                       point: ~top_left
-                      entryKey: 0.round()
+                      entryId: ''
                       treeId: 'steady'
                       isLink: false
                       entry: "self.isLink == true ? var.links[self.entryKey] : (var.trees[self.treeId] != none ? var.trees[self.treeId]['nodes'][self.entryKey] : none)"
@@ -989,8 +940,8 @@ controls:
                         type: Slot
                         attribute:
                           point: ~middle_center
-                          width: "56 * var.zoomScale"
-                          height: "56 * var.zoomScale"
+                          width: "46 * var.zoomScale"
+                          height: "46 * var.zoomScale"
                           slotType: ~Icon
                           itemScale: 0.75
                           normal: "self.parent.entry != none && self.parent.entry['unlocked'] == true ? '24,30,38,255' : '16,20,28,255'"
@@ -1020,8 +971,8 @@ controls:
                           point: ~bottom_right
                           x: "(-2 * var.zoomScale).round()"
                           y: "(-2 * var.zoomScale).round()"
-                          width: "(28 * var.zoomScale).round()"
-                          height: "(16 * var.zoomScale).round()"
+                          width: "(24 * var.zoomScale).round()"
+                          height: "(14 * var.zoomScale).round()"
                           visible: "self.parent.entry != none && self.parent.entry['unlocked'] == true && self.parent.nodeMaxLevel > 1"
                         children:
                           等级标签底:
@@ -1036,9 +987,9 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: "(28 * var.zoomScale).round()"
+                              width: "(24 * var.zoomScale).round()"
                               texts: "self.parent.parent.nodeLevel + '/' + self.parent.parent.nodeMaxLevel"
-                              fontSize: "(14 * var.zoomScale).round()"
+                              fontSize: "(12 * var.zoomScale).round()"
                               through: true
                   # 联动连线段模板（作为树画布直接子控件，避免节点 Canvas 裁剪）
                   # tick 中 copy 后设置世界坐标 x/y/width/height/normal/visible

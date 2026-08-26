@@ -38,23 +38,26 @@ public record TalentNode(
 ) {
 
     /**
-     * 最大可升级等级（= levelValues 长度）。
+     * 最大可升级等级。
+     * <p>
+     * 新版天赋系统所有节点固定 1 级：点亮/未点亮。
+     * 读取配置时已有兼容处理，这里统一返回 1。
      *
-     * @return 最大等级，至少为 1
+     * @return 最大等级，固定 1
      */
     public int maxLevel() {
-        return Math.max(1, levelValues.size());
+        return 1;
     }
 
     /**
-     * 获取指定等级的效果值。
+     * 获取点亮后的效果值。
      *
      * @param level 当前等级（1-based）
      * @return 该等级的效果值，越界返回 0
      */
     public double valueAtLevel(int level) {
         if (level <= 0 || level > levelValues.size()) return 0.0;
-        return levelValues.get(level - 1);
+        return levelValues.get(0);
     }
 
     /**
@@ -67,11 +70,13 @@ public record TalentNode(
     }
 
     /**
-     * 是否支持多级升级（maxLevel > 1）。
+     * 是否支持多级升级。
+     * <p>
+     * 新版所有天赋固定 1 级，不再有升级概念，只有解锁。
      *
-     * @return {@code true} 表示可升级
+     * @return {@code false}
      */
     public boolean isUpgradable() {
-        return maxLevel() > 1;
+        return false;
     }
 }
