@@ -37,6 +37,8 @@ public final class FatigueEngine {
     private final String seasonId;
     private final IconResolver iconResolver;
     private final Supplier<CurrencyBridgeAPI> currencyProvider;
+    @Nullable
+    private java.util.function.Function<UUID, Double> restBoostProvider;
     private BukkitTask restTask;
 
     public FatigueEngine(@NotNull JavaPlugin plugin, @NotNull FatigueConfig config,
@@ -50,6 +52,16 @@ public final class FatigueEngine {
         this.seasonId = seasonId;
         this.iconResolver = iconResolver;
         this.currencyProvider = currencyProvider;
+    }
+
+    /**
+     * 设置休息恢复加速查询函数：传入玩家 UUID，返回该玩家的 rest_boost 天赋加成（0-1）。
+     * 由 FishingService 在初始化后调用，将天赋系统与疲惫引擎关联。
+     *
+     * @param provider 查询函数，返回 rest_boost 加成值（无天赋时返回 0）
+     */
+    public void setRestBoostProvider(@NotNull java.util.function.Function<UUID, Double> provider) {
+        this.restBoostProvider = provider;
     }
 
     /**
@@ -80,12 +92,20 @@ public final class FatigueEngine {
      */
     private void tickRest() {
         try {
-            int decrease = config.restDecreasePerMinute();
+            int baseDecrease = config.restDecreasePerMinute();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 try {
                     UUID uuid = player.getUniqueId();
                     FishingSeasonData data = repository.loadSeasonData(uuid, seasonId);
                     if (data.fatigue() <= 0) continue; // 已为 0，无需减少也无需保存
+                    // 天赋 rest_boost：提高休息恢复速度
+                    int decrease = baseDecrease;
+                    if (restBoostProvider != null) {
+                        double boost = restBoostProvider.apply(uuid);
+                        if (boost > 0) {
+                            decrease = (int) Math.round(baseDecrease * (1.0 + boost));
+                        }
+                    }
                     FishingSeasonData updated = data.withFatigueReduced(decrease);
                     // 仅当疲惫值实际变化时才保存
                     if (updated.fatigue() != data.fatigue()) {
@@ -106,13 +126,15 @@ public final class FatigueEngine {
      * 仅计算并返回更新后的赛季数据，不自行保存到数据库（由调用方统一保存，避免重复写入）。
      * 若首次达到 100 且奖励配置启用，会尝试发放奖励；仅当奖励全部发放成功时才标记为已领取。
      *
-     * @param player     玩家
-     * @param seasonData 钓鱼前的赛季数据
+     * @param player          玩家
+     * @param seasonData      钓鱼前的赛季数据
+     * @param fatigueReduction 疲惫值增长降低（0-1，来自天赋），实际增加量 = fatiguePerCatch × (1 - reduction)
      * @return 更新后的赛季数据（含疲惫值增加和可能的奖励标记）
      */
-    public @NotNull FishingSeasonData onFishCaught(@NotNull Player player, @NotNull FishingSeasonData seasonData) {
+    public @NotNull FishingSeasonData onFishCaught(@NotNull Player player, @NotNull FishingSeasonData seasonData,
+                                                    double fatigueReduction) {
         if (!config.enabled()) return seasonData;
-        int addAmount = config.fatiguePerCatch();
+        int addAmount = (int) Math.round(config.fatiguePerCatch() * (1.0 - Math.max(0.0, Math.min(0.9, fatigueReduction))));
         if (addAmount <= 0) return seasonData;
 
         int oldFatigue = seasonData.fatigue();

@@ -147,6 +147,18 @@ public final class FishingService {
         this.mailProvider = mailProvider;
         this.crossServer = crossServer;
         this.ariaBridge = ariaBridge;
+        // 将天赋系统的 rest_boost 查询关联到疲惫引擎
+        if (fatigueEngine != null) {
+            fatigueEngine.setRestBoostProvider(uuid -> {
+                try {
+                    FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+                    Map<String, Double> bonuses = talentEngine.computeBonuses(data);
+                    return bonuses.getOrDefault("rest_boost", 0.0);
+                } catch (Exception e) {
+                    return 0.0;
+                }
+            });
+        }
     }
 
     public void setMessageProvider(@Nullable MessageProvider messageProvider) {
@@ -415,6 +427,11 @@ public final class FishingService {
 
         // 计算疲惫效率系数（开局一次性计算）
         double fatigueMultiplier = fatigueEngine != null ? fatigueEngine.efficiencyMultiplier(fatigue) : 1.0;
+        // 天赋：疲惫效率惩罚缓解 — 将效率系数向 1.0 拉近
+        double fatigueEffBonus = bonuses.fatigueEfficiencyBonus();
+        if (fatigueEffBonus > 0 && fatigueMultiplier < 1.0) {
+            fatigueMultiplier = fatigueMultiplier + (1.0 - fatigueMultiplier) * fatigueEffBonus;
+        }
 
         FishingMinigame minigame = new FishingMinigame(
             plugin, packetBridge, configuration.fishing(), this, iconResolver, session, minigameUiId, bonuses,
@@ -505,8 +522,9 @@ public final class FishingService {
 
         // 疲惫值增加（钓鱼成功后 +fatiguePerCatch），并检查首次达到100奖励
         // C5: FatigueEngine.onFishCaught 仅计算不保存，统一由此处保存，避免重复写入
+        // 天赋 fatigue_reduction：降低每次钓鱼增加的疲惫值
         if (fatigueEngine != null) {
-            updatedSeason = fatigueEngine.onFishCaught(player, updatedSeason);
+            updatedSeason = fatigueEngine.onFishCaught(player, updatedSeason, bonuses.fatigueReduction());
         }
         repository.saveSeasonData(updatedSeason);
         repository.savePermanentData(updatedPerm);
@@ -1905,7 +1923,10 @@ public final class FishingService {
         java.util.Map.entry("perfect_xp", "完美捕获经验"),
         java.util.Map.entry("catch_duration", "钓鱼超时"),
         java.util.Map.entry("bar_gravity", "绿条重力"),
-        java.util.Map.entry("bar_click_force", "绿条点击力")
+        java.util.Map.entry("bar_click_force", "绿条点击力"),
+        java.util.Map.entry("fatigue_reduction", "疲惫增长降低"),
+        java.util.Map.entry("fatigue_efficiency", "疲惫效率缓解"),
+        java.util.Map.entry("rest_boost", "休息恢复加速")
     );
 
     /**
@@ -1939,7 +1960,8 @@ public final class FishingService {
             || "flee_chance".equals(effectType)
             || "flee_speed".equals(effectType)
             || "flee_duration".equals(effectType)
-            || "progress_drain".equals(effectType);
+            || "progress_drain".equals(effectType)
+            || "fatigue_reduction".equals(effectType);
     }
 
     private @NotNull String buildTalentNodeIconJson(@NotNull xuanmo.arcartxsuite.fishing.talent.TalentNode node, boolean unlocked, boolean canLevelUp, @NotNull Player player) {
@@ -1991,6 +2013,9 @@ public final class FishingService {
                 case "catch_duration" -> "minecraft:clock";
                 case "bar_gravity" -> "minecraft:feather";
                 case "bar_click_force" -> "minecraft:piston";
+                case "fatigue_reduction" -> "minecraft:golden_carrot";
+                case "fatigue_efficiency" -> "minecraft:golden_apple";
+                case "rest_boost" -> "minecraft:red_bed";
                 default -> node.isLink() ? "minecraft:heart_of_the_sea" : "minecraft:book";
             };
             String materialName = material.startsWith("minecraft:") ? material.substring("minecraft:".length()) : material;

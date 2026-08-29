@@ -43,7 +43,10 @@ public record TalentEffect(
         PERFECT_XP("perfect_xp"),
         CATCH_DURATION("catch_duration"),
         BAR_GRAVITY("bar_gravity"),
-        BAR_CLICK_FORCE("bar_click_force");
+        BAR_CLICK_FORCE("bar_click_force"),
+        FATIGUE_REDUCTION("fatigue_reduction"),
+        FATIGUE_EFFICIENCY("fatigue_efficiency"),
+        REST_BOOST("rest_boost");
 
         private final String key;
 

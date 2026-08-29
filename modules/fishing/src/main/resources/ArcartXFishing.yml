@@ -52,9 +52,10 @@ fishing:
   # 单次小游戏基础超时（ticks），超时视为失败。实际超时按鱼难度动态调整：
   #   实际超时 = catch-duration-ticks ×（1 + 鱼难度/100 × catch-duration-difficulty-scale）+ 鱼竿 catch-duration-bonus
   # 低难度鱼超时短（要求快速完成），高难度鱼超时长（给更多尝试机会）。
-  catch-duration-ticks: 400
+  catch-duration-ticks: 120
   # 难度对超时的缩放系数：难度 100 时超时增加此比例。0.5 = 难度 100 时超时为基础的 1.5 倍。
-  catch-duration-difficulty-scale: 0.5
+  # 设为极小值（0.01）以消除难度对时长的干扰，让成功率主要由公式系数控制。
+  catch-duration-difficulty-scale: 0.01
   # 钓鱼冷却时间（ticks）：小游戏结束后多少 ticks 内无法再次触发钓鱼。20 ticks = 1 秒，默认 100 = 5 秒。
   fishing-cooldown-ticks: 100
 
@@ -70,19 +71,19 @@ fishing:
   # 力缩放系数：bar-gravity 和 bar-click-force 都要乘以此系数后施加到绿条速度上，越大绿条响应越灵敏。
   bar-force-multiplier: 0.03
   # 绿条速度阻尼（0-1）：每 tick 绿条速度乘以此值。越接近 1 惯性越大（滑行越远），越接近 0 越容易停但越迟钝。
-  bar-damping: 0.85
+  bar-damping: 0.8
   # 绿条碰到轨道顶部/底部时的反弹阻尼（0-1）：碰撞后速度 = 原速度 × 此值。越接近 1 反弹越持久，越接近 0 越像撞墙停下。
   bar-bounce-damping: 0.7
 
   # ─── 绿条高度（绿条越大越容易覆盖鱼，钓鱼越简单） ────────────────
   # 绿条基础高度（像素），轨道总高 644 像素。玩家等级和钓竿会增加绿条高度。
-  base-green-bar-height: 50
+  base-green-bar-height: 60
   # 玩家每提升 1 级钓鱼等级，绿条增加的高度（像素）。等级越高绿条越大越容易钓。
   height-per-level: 1
   # 难度对绿条高度的缩减比例（0-1）：难度 100 时绿条高度 ×（1 - 此值）。0 = 不缩减，1 = 完全消失。
   # 注意：绿条有动态下限保护，此值越大下限越低，削减效果越明显；此值小时下限较高以保证可玩性。
   # 绝对底线约为轨道高度的 2%（约 13 像素），极端高难度+低等级时绿条不会比这更小。
-  difficulty-bar-shrink: 0.3
+  difficulty-bar-shrink: 0.4
 
   # ─── 鱼物理（鱼自动移动，玩家需用绿条追踪鱼） ────────────────
   # 鱼撞到轨道顶部/底部时的反弹力度（0-1）：碰撞后速度 = 原速度 × 此值。越接近 1 反弹越远，越接近 0 越像撞墙停下。
@@ -93,7 +94,7 @@ fishing:
   #
   # 进度增长/衰减使用 ARIA 表达式自定义函数，gain 和 drain 各自独立配置。
   # 表达式可访问以下变量（绑定到 ARIA global. 命名空间，需用 global. 前缀访问）：
-  #   global.progress   — 当前进度值 [0, 1]。gain 用当前进度，drain 用 (1 - progress)（对称处理）。
+  #   global.progress   — 当前进度值 [0, 1]，gain 和 drain 统一使用实际进度。如需对称处理在公式内自行写 (1 - global.progress)。
   #   global.base_rate  — 基础速率（即下方 base-rate 配置值），方便整体缩放。
   #   global.level      — 玩家钓鱼等级（整数）。
   #   global.difficulty — 鱼调整后难度（1~100）。
@@ -104,26 +105,31 @@ fishing:
   # 注意：drain 的返回值应大于 gain × 预期命中率，否则几乎不会失败。
 
   # 进度上升曲线（鱼在绿条内时进度增长）
-  # S 曲线模型：用 cos 函数实现连续平滑加速，无分段突变
-  #   gain = base_rate × (0.6 + 0.8 × (0.5 − 0.5 × cos(progress × π)))
-  #   progress=0   → 0.6× base_rate（起步慢，给玩家适应时间）
-  #   progress=0.5 → 1.0× base_rate（中段标准速率）
-  #   progress=1   → 1.4× base_rate（末段冲刺，加速收尾）
+  # 双因子模型：level 和 difficulty 用相同幂次（2.5）相互抵消，确保 L=D 时成功率恒定。
+  #   gain = base_rate × (0.43 + 0.35 × (level/100)^2.5 − 0.35 × (difficulty/100)^2.5) × S曲线
+  # S 曲线系数：progress=0 → 1.5×；progress=0.5 → 1.7×；progress=1 → 1.9×
+  #   难度系数表（无等级加成时）：
+  #   D0   → gain系数 = 0.43（基础值）
+  #   D30  → gain系数 = 0.43 − 0.35×0.3^2.5 = 0.43 − 0.0173 = 0.4127（低难度微降）
+  #   D50  → gain系数 = 0.43 − 0.35×0.5^2.5 = 0.43 − 0.0619 = 0.3681
+  #   D100 → gain系数 = 0.43 − 0.35×1.0^2.5 = 0.43 − 0.35  = 0.0800（高难度大幅缩减）
+  #   等级完全抵消难度：L50D50 系数 = 0.43（与 L0D0 相同），L100D100 系数 = 0.43
   progress-gain:
-    base-rate: 0.01
-    formula: "global.base_rate * (0.6 + 0.8 * (0.5 - 0.5 * math.cos(global.progress * math.PI())))"
+    base-rate: 0.04
+    formula: "global.base_rate * (0.43 + 0.35 * math.pow(global.level / 100, 2.5) - 0.35 * math.pow(global.difficulty / 100, 2.5)) * (1.5 + 0.4 * (0.5 - 0.5 * math.cos(global.progress * math.PI())))"
   # 进度下降曲线（鱼在绿条外时进度衰减）
-  # U 型曲线模型：低进度和高进度时 drain 都大，中进度稍缓和。
-  # 公式中的 progress 变量 = (1 - 实际进度)（对称处理，见 ProgressCurve.evaluate）。
-  #   drain = base_rate × (1 + difficulty/90) × (0.5 + 0.25×p + 0.35×(1−p)²)
-  #   p = 1 − progress（低进度 p=1，高进度 p=0）
-  #   低进度(0%)：drain = base × 2.11 × 0.85 = 1.79× base（起步难，需高命中率）
-  #   中进度(50%)：drain = base × 2.11 × 0.588 = 1.24× base（中段稍缓和）
-  #   高进度(100%)：drain = base × 2.11 × 0.85 = 1.79× base（收尾也难，防"快成功就稳了"）
-  # 难度影响：difficulty/90（比原 /200 更陡，难度100时 drain ×2.11）
+  # 双因子模型：level 和 difficulty 用相同幂次（2.5）相互抵消。
+  #   drain = base_rate × (1.0 − 0.5 × (level/100)^2.5 + 0.5 × (difficulty/100)^2.5) × U曲线
+  #   U曲线 = 1 + 0.5×p + 0.2×(1−p)²，p = 实际进度
+  #   难度系数表（无等级加成时）：
+  #   D0   → drain系数 = 1.0（基础值）
+  #   D30  → drain系数 = 1.0 + 0.5×0.3^2.5 = 1.0246（低难度微增）
+  #   D100 → drain系数 = 1.0 + 0.5×1.0^2.5 = 1.50（高难度衰减加快）
+  #   等级完全抵消难度：L50D50 系数 = 1.0，L100D100 系数 = 1.0
+  # 设计意图：低进度 drain 小（起步宽容）→ 高进度 drain 大（收尾紧张）
   progress-drain:
-    base-rate: 0.025
-    formula: "global.base_rate * (1 + global.difficulty / 90) * (0.5 + 0.25 * global.progress + 0.35 * (1 - global.progress) * (1 - global.progress))"
+    base-rate: 0.04
+    formula: "global.base_rate * (1.0 - 0.5 * math.pow(global.level / 100, 2.5) + 0.5 * math.pow(global.difficulty / 100, 2.5)) * (1 + 0.5 * global.progress + 0.2 * (1 - global.progress) * (1 - global.progress))"
 
   # ─── 连续命中加成（streak：持续追踪鱼的奖励） ────────────────
   # 连续在绿条内每达到 streak-threshold ticks，gain 系数递增 streak-bonus-per-step。
@@ -146,7 +152,8 @@ fishing:
   # 等级修正基础系数：满级时等级修正的最大值。例如 0.5 = 满级时 lvlMod = 0.5。
   # 以下各 scale 分别控制 lvlMod 对各参数的影响程度，默认 1.0 = 完全应用 lvlMod。
   # 设为 0.5 = 该参数只受一半 lvlMod 影响；设为 0 = 该参数不受等级影响。
-  level-modifier-scale: 0.5
+  # 注意：progress 公式已内置 level/difficulty 抵消机制，此处各 scale 设极小值避免双重叠加。
+  level-modifier-scale: 0.05
   # 鱼移动速度的等级修正系数：鱼速度 ×（1 - lvlMod × 此值）。满级时鱼速度最多减慢 level-modifier-scale × 此值。
   fish-speed-level-scale: 1.0
   # 逃离概率的等级修正系数：逃离概率 ×（1 - lvlMod × 此值）。满级时逃离概率最多降低 level-modifier-scale × 此值。
@@ -155,17 +162,19 @@ fishing:
   flee-speed-level-scale: 1.0
   # 进度上升的等级修正系数：gain ×（1 + lvlMod × 此值）。满级时进度上升最多加快 level-modifier-scale × 此值。
   # 建议设较低值（如 0.3），避免高等级进度增长过快。
-  progress-gain-level-scale: 0.3
+  # 注意：progress 公式已内置 level 因子，此处设极小值避免双重叠加。
+  progress-gain-level-scale: 0.01
   # 进度下降的等级修正系数：drain ×（1 - lvlMod × 此值）。满级时进度下降最多减慢 level-modifier-scale × 此值。
   # 可独立于 gain-level-scale 调节，例如设 0.5 让高等级衰减明显减慢但增速只轻微加快。
-  progress-drain-level-scale: 0.5
+  # 注意：progress 公式已内置 level 因子，此处设极小值避免双重叠加。
+  progress-drain-level-scale: 0.01
 
   # ─── 驱赶机制（鱼在绿条内时偶尔迅速逃离，增加操作难度） ────────
   # 逃离触发条件：鱼在绿条内 + 到达检查时间 + 随机骰 < 逃离概率。
   # 逃离概率 = [flee-base-chance +（鱼难度/100）× flee-chance-per-difficulty] ×（1 - 等级修正×flee-chance-level-scale）×（1 - 天赋减免）。
   # 难度越高逃离越频繁；玩家等级越高逃离概率越低。
-  flee-base-chance: 0.25
-  flee-chance-per-difficulty: 0.25
+  flee-base-chance: 0.1
+  flee-chance-per-difficulty: 0.1
   # 逃离速度 = [flee-base-speed +（鱼难度/100）× flee-speed-per-difficulty] ×（1 - 等级修正×flee-speed-level-scale）×（1 - 天赋减免）。
   # 难度越高逃离越快；玩家等级越高逃离速度越慢。
   flee-base-speed: 0.04

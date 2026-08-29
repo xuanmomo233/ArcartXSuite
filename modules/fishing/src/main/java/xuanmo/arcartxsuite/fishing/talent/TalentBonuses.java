@@ -152,6 +152,21 @@ public final class TalentBonuses {
         return get(TalentEffect.Type.BAR_CLICK_FORCE.key());
     }
 
+    /** 疲惫值增长降低（0-1，累加）：每钓一条鱼增加的疲惫值乘以 (1 - reduction) */
+    public double fatigueReduction() {
+        return get(TalentEffect.Type.FATIGUE_REDUCTION.key());
+    }
+
+    /** 疲惫效率惩罚缓解（0-1，累加）：将效率系数向1.0拉近，缓解高疲惫的负面影响 */
+    public double fatigueEfficiencyBonus() {
+        return get(TalentEffect.Type.FATIGUE_EFFICIENCY.key());
+    }
+
+    /** 休息恢复加速（0-1，累加）：每分钟休息减少的疲惫值乘以 (1 + boost) */
+    public double restBoostBonus() {
+        return get(TalentEffect.Type.REST_BOOST.key());
+    }
+
     private double get(String key) {
         return bonuses.getOrDefault(key, 0.0);
     }

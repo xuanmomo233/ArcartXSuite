@@ -133,7 +133,8 @@ public final class TalentLoader {
             String id = String.valueOf(map.get("id"));
             int tier = ((Number) map.get("tier")).intValue();
             String branch = String.valueOf(map.get("branch"));
-            String treeId = map.containsKey("tree") ? String.valueOf(map.get("tree")) : "meta";
+            Object treeRaw = map.get("tree");
+            String treeId = (treeRaw != null && !String.valueOf(treeRaw).isBlank() && !"null".equals(String.valueOf(treeRaw))) ? String.valueOf(treeRaw) : "meta";
             String displayName = String.valueOf(map.get("display-name"));
             String description = String.valueOf(map.get("description"));
 
