@@ -784,14 +784,6 @@ controls:
               height: 60
               normal: ~50,170,200,80
               maxDragY: 100
-          导航提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -84
-              texts: "~&fESC 关闭界面"
-              fontSize: 36
           重置天赋按钮:
             type: Canvas
             attribute:
@@ -1027,9 +1019,9 @@ controls:
             type: Text
             attribute:
               point: ~bottom_left
-              x: 24
-              y: -8
-              texts: "'&f拖拽滚动 &f| &7滚轮缩放 &f| &7R重置'"
+              x: 16
+              y: -16
+              texts: "'&f拖拽滚动 | 滚轮缩放 | R重置缩放'"
               fontSize: 36
           # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不可见但保留拖拽功能）
           竖向滑块:

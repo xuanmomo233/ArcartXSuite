@@ -357,14 +357,6 @@ controls:
                   x: 28
                   texts: "~&0结算"
                   fontSize: 36
-          导航提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -20
-              texts: "~&fESC 关闭界面"
-              fontSize: 28
           导航分隔线:
             type: Texture
             attribute:

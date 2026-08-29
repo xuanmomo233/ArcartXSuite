@@ -583,16 +583,6 @@ controls:
                   texts: "'&f' + var.seasonCount.round() + ' 项'"
                   fontSize: 26
                   through: true
-          # 导航提示
-          导航提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -80
-              texts: "~&fESC 关闭界面"
-              fontSize: 30
-              through: true
           # 刷新按钮
           刷新按钮:
             type: Canvas

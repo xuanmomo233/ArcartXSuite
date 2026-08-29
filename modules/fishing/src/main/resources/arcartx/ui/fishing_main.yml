@@ -502,14 +502,6 @@ controls:
               width: 264
               height: 2
               normal: ~80,200,220,220
-          导航提示:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -20
-              texts: "~&fESC 关闭界面"
-              fontSize: 28
 
       # ── 内容区（总览）───────────────────────────────────
       内容区:
