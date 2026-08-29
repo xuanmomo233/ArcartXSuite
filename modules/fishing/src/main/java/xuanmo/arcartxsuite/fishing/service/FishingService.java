@@ -1823,6 +1823,47 @@ public final class FishingService {
         payload.put("links", linksMap);
         payload.put("linkCount", linkIdx);
 
+        // 已激活天赋加成汇总（按效果类型累加，格式化为中文描述列表）
+        java.util.Map<String, Double> bonusSums = new java.util.LinkedHashMap<>();
+        for (xuanmo.arcartxsuite.fishing.talent.TalentTreeDefinition tree : talentEngine.getTrees().values()) {
+            for (xuanmo.arcartxsuite.fishing.talent.TalentNode node : tree.nodes()) {
+                if (seasonData.talents().getOrDefault(node.id(), 0) > 0) {
+                    if (node.effectType() != null && !node.effectType().isBlank()) {
+                        bonusSums.merge(node.effectType(), node.valueAtLevel(1), Double::sum);
+                    }
+                    for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
+                        bonusSums.merge(effect.effectType(), effect.effectValue(), Double::sum);
+                    }
+                }
+            }
+        }
+        for (xuanmo.arcartxsuite.fishing.talent.TalentNode link : talentEngine.getLinkNodes()) {
+            if (seasonData.talents().getOrDefault(link.id(), 0) > 0) {
+                if (link.effectType() != null && !link.effectType().isBlank()) {
+                    bonusSums.merge(link.effectType(), link.valueAtLevel(1), Double::sum);
+                }
+                for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : link.effects()) {
+                    bonusSums.merge(effect.effectType(), effect.effectValue(), Double::sum);
+                }
+            }
+        }
+        // 转为格式化中文列表（按效果类型排序：战斗向优先）
+        java.util.List<String> activeBonuses = new java.util.ArrayList<>();
+        java.util.List<String> effectOrder = java.util.List.of(
+            "progress_rate", "catch_duration", "flee_chance", "progress_drain", "start_progress",
+            "perfect_window", "flee_cooldown", "flee_duration", "flee_speed", "fish_speed", "fish_edge",
+            "bar_height", "bar_damping", "bar_bounce", "bar_force", "bar_click_force", "bar_gravity",
+            "fatigue_reduction", "fatigue_efficiency", "rest_boost",
+            "xp_multiplier", "price_multiplier", "rare_chance", "legendary_chance", "treasure_chance"
+        );
+        for (String effectType : effectOrder) {
+            Double sum = bonusSums.get(effectType);
+            if (sum != null && sum != 0.0) {
+                activeBonuses.add(formatEffect(effectType, sum));
+            }
+        }
+        payload.put("activeBonuses", activeBonuses);
+
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 
@@ -2028,11 +2069,15 @@ public final class FishingService {
         // 覆盖设置节点显示名和 lore（天赋树 UI 显示天赋信息，不是物品原始信息）
         java.util.List<String> lore = new java.util.ArrayList<>();
         lore.add(net.md_5.bungee.api.ChatColor.of("#B0B8C0") + ChatColor.stripColor(node.description()));
-        if (!node.effects().isEmpty()) {
-            lore.add("");
-            for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
-                lore.add(net.md_5.bungee.api.ChatColor.of("#5BC0EB") + effect.effectType() + ": " + effect.effectValue());
-            }
+        // 效果行：普通天赋（单效果）和联动天赋（多效果）统一用中文格式化
+        lore.add("");
+        if (node.effectType() != null && !node.effectType().isBlank()) {
+            // 普通天赋：单效果
+            lore.add(net.md_5.bungee.api.ChatColor.of("#5BC0EB") + formatEffect(node.effectType(), node.valueAtLevel(1)));
+        }
+        for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
+            // 联动天赋：多效果，统一中文格式化
+            lore.add(net.md_5.bungee.api.ChatColor.of("#5BC0EB") + formatEffect(effect.effectType(), effect.effectValue()));
         }
         lore.add("");
         if (unlocked) {

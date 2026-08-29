@@ -49,6 +49,8 @@ ui:
       if(var.links == none){ var.links = {} }
       var.linkCount = packet['linkCount']
       if(var.linkCount == none){ var.linkCount = 0 }
+      var.activeBonuses = packet['activeBonuses']
+      if(var.activeBonuses == none){ var.activeBonuses = [] }
       var.needRebuild = true
     update: |-
       var.packetId = packet['packetId']
@@ -64,6 +66,8 @@ ui:
       if(var.links == none){ var.links = {} }
       var.linkCount = packet['linkCount']
       if(var.linkCount == none){ var.linkCount = 0 }
+      var.activeBonuses = packet['activeBonuses']
+      if(var.activeBonuses == none){ var.activeBonuses = [] }
       var.needRebuild = true
   action:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
@@ -77,6 +81,7 @@ ui:
       var.trees = {}
       var.links = {}
       var.linkCount = 0
+      var.activeBonuses = []
       var.needRebuild = false
       var.iconDelay = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -731,11 +736,58 @@ controls:
             attribute:
               point: ~top_left
               x: 18
-              y: 380
+              y: 378
               width: 264
-              texts: "'&a可用: &f' + var.unspentTalentPoints.round() + ' &7/ &f' + var.talentPoints.round() + '  &7| &f等级: &e' + var.playerLevel.round()"
-              fontSize: 24
+              texts: "'&a可用 &f' + var.unspentTalentPoints.round() + '&7/&f' + var.talentPoints.round() + '  &7| &eLv.&f' + var.playerLevel.round()"
+              fontSize: 30
               shadow: true
+          加成标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 420
+              width: 264
+              texts: "~&b已激活加成"
+              fontSize: 28
+              shadow: true
+          加成列表区:
+            type: Scroll
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 458
+              width: 272
+              height: "var.viewH - 458 - 120"
+              moveY: "self.parent['加成滑块'].getDragYRatio()"
+            children:
+              加成列表容器:
+                type: VStack
+                attribute:
+                  point: ~top_left
+                  width: 248
+                  spaceBetween: 4
+                children:
+                  加成列表:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      width: 248
+                      texts: "var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
+                      fontSize: 24
+                      lineSpace: 30
+                      shadow: true
+          加成滑块:
+            type: Texture
+            val: 加成滑块
+            attribute:
+              point: ~top_right
+              x: -2
+              y: 458
+              width: 6
+              height: 60
+              normal: ~50,170,200,80
+              maxDragY: 100
           导航提示:
             type: Text
             attribute:
