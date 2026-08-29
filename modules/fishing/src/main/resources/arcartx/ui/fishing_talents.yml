@@ -739,7 +739,7 @@ controls:
               y: 378
               width: 264
               texts: "'&a可用 &f' + var.unspentTalentPoints.round() + '&7/&f' + var.talentPoints.round() + '  &7| &eLv.&f' + var.playerLevel.round()"
-              fontSize: 30
+              fontSize: 36
           加成标题:
             type: Text
             attribute:
@@ -748,7 +748,7 @@ controls:
               y: 420
               width: 264
               texts: "~&b已激活加成"
-              fontSize: 28
+              fontSize: 36
           加成列表区:
             type: Scroll
             attribute:
@@ -791,7 +791,7 @@ controls:
               x: 20
               y: -84
               texts: "~&fESC 关闭界面"
-              fontSize: 28
+              fontSize: 36
           重置天赋按钮:
             type: Canvas
             attribute:
@@ -823,7 +823,7 @@ controls:
                   point: ~middle_center
                   width: 272
                   texts: "~&f↻ 重置天赋树"
-                  fontSize: 30
+                  fontSize: 36
                   through: true
 
       # ── 内容区（天赋树画布）──────────────────────────────
