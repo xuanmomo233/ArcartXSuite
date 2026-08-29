@@ -740,7 +740,6 @@ controls:
               width: 264
               texts: "'&a可用 &f' + var.unspentTalentPoints.round() + '&7/&f' + var.talentPoints.round() + '  &7| &eLv.&f' + var.playerLevel.round()"
               fontSize: 30
-              shadow: true
           加成标题:
             type: Text
             attribute:
@@ -750,7 +749,6 @@ controls:
               width: 264
               texts: "~&b已激活加成"
               fontSize: 28
-              shadow: true
           加成列表区:
             type: Scroll
             attribute:
@@ -775,8 +773,6 @@ controls:
                       width: 248
                       texts: "var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
                       fontSize: 36
-                      lineSpace: 42
-                      shadow: true
           加成滑块:
             type: Texture
             val: 加成滑块
@@ -1035,7 +1031,6 @@ controls:
               y: -8
               texts: "'&f拖拽滚动 &f| &7滚轮缩放 &f| &7R重置'"
               fontSize: 36
-              shadow: true
           # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不可见但保留拖拽功能）
           竖向滑块:
             type: Texture
