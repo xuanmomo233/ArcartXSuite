@@ -774,8 +774,8 @@ controls:
                       point: ~top_left
                       width: 248
                       texts: "var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
-                      fontSize: 24
-                      lineSpace: 30
+                      fontSize: 36
+                      lineSpace: 42
                       shadow: true
           加成滑块:
             type: Texture
