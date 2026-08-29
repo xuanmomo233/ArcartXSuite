@@ -15,6 +15,9 @@ enabled: true
 
 # 鱼类列表（直接引用 fishes/ 目录下的鱼种 ID）
 fishes:
+  - "minnow"
+  - "crucian_carp"
+  - "carp"
   - "sea_bass"
   - "salmon"
 

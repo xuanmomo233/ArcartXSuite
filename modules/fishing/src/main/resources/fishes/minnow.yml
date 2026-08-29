@@ -1,0 +1,51 @@
+# 鱼类定义：麦穗鱼
+# 麦穗鱼是最基础的入门鱼，难度为0，仅5级前可遇，几乎不可能失败
+# 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+
+id: "minnow"                    # 鱼类唯一标识符
+display-name: "麦穗鱼"           # 显示名称
+rarity: common                  # 稀有度等级（common=常见）
+min-size: 3                     # 最小尺寸（厘米）
+max-size: 12                    # 最大尺寸（厘米）
+base-price: 15                  # 基础售价（游戏货币）
+base-xp: 5                      # 基础经验值（捕获时获得）
+seasons: [spring, summer, fall, winter]  # 全季节可捕
+weathers: [clear, rain]         # 晴天和雨天均可
+time-ranges:                    # 全天可捕
+  - start: "00:00"
+    end: "24:00"
+item:                           # 捕获后掉落的物品定义
+  source: "minecraft"           # 物品来源（minecraft=原版物品）
+  id: "tropical_fish"           # 原版物品ID（热带鱼，体积小代用）
+  amount: 1                     # 物品数量
+difficulty: 0                   # 钓鱼难度（0-100，难度为0，纯新手教学）
+behaviors:                      # 小游戏中鱼的行为模式及权重
+  - type: smooth                # 平滑型：鱼缓慢平稳移动
+    weight: 1.0                 # 权重1.0（仅平滑移动，不逃跑不突进）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 麦穗鱼极度温顺，进度衰减极慢，逃离几乎不存在
+progress-drain:
+  base-rate: 0.005              # 鱼在绿条外时进度下降极慢（全局默认0.02）
+progress-gain:
+  base-rate: 0.018              # 鱼在绿条内时进度上升快（全局默认0.01）
+flee-params:
+  base-chance: 0.02             # 逃离概率极低（全局默认0.25）
+  base-speed: 0.01              # 逃离速度极慢（全局默认0.04）
+  min-duration: 8               # 逃离持续很短（全局默认15）
+  max-duration: 15              # 逃离持续短（全局默认35）
+
+# ─── 奖励（可选） ──────────────────────────────────────
+currency-reward:
+  currency-id: "coin"
+  amount: 5
+
+# ─── 出现条件（可选） ──────────────────────────────────
+# 麦穗鱼仅5级前可遇，5级后不再出现
+min-player-level: 0
+max-player-level: 5
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "最常见的小型淡水鱼，体型微小，性情温顺，几乎不挣扎，是新手练习钓鱼的最佳对象。"
+icon-texture: "minecraft:tropical_fish"
+record-weight: 0.3              # 图鉴排序靠后（最常见鱼）

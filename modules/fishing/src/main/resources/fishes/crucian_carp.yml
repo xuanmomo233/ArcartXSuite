@@ -1,0 +1,63 @@
+# 鱼类定义：鲫鱼
+# 鲫鱼是新手进阶鱼，难度10，5-10级可遇，稍有挣扎但仍然容易
+# 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+
+id: "crucian_carp"              # 鱼类唯一标识符
+display-name: "鲫鱼"             # 显示名称
+rarity: common                  # 稀有度等级（common=常见）
+min-size: 8                     # 最小尺寸（厘米）
+max-size: 30                    # 最大尺寸（厘米）
+base-price: 30                  # 基础售价（游戏货币）
+base-xp: 10                     # 基础经验值（捕获时获得）
+seasons: [spring, summer, fall] # 春夏秋可捕
+weathers: [clear, rain]         # 晴天和雨天均可
+time-ranges:                    # 全天可捕
+  - start: "00:00"
+    end: "24:00"
+item:                           # 捕获后掉落的物品定义
+  source: "minecraft"           # 物品来源（minecraft=原版物品）
+  id: "cod"                     # 原版物品ID（鳕鱼，体型相近代用）
+  amount: 1                     # 物品数量
+difficulty: 10                  # 钓鱼难度（0-100，难度10，新手进阶）
+behaviors:                      # 小游戏中鱼的行为模式及权重
+  - type: smooth                # 平滑型：鱼缓慢平稳移动
+    weight: 0.8                 # 权重0.8（主要行为）
+  - type: floater               # 上浮型：鱼向轨道顶部移动
+    weight: 0.2                 # 权重0.2（次要行为）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 鲫鱼较温顺，进度衰减慢，逃离概率低
+progress-drain:
+  base-rate: 0.008              # 鱼在绿条外时进度下降慢（全局默认0.02）
+progress-gain:
+  base-rate: 0.015              # 鱼在绿条内时进度上升较快（全局默认0.01）
+flee-params:
+  base-chance: 0.08             # 逃离概率低（全局默认0.25）
+  base-speed: 0.02              # 逃离速度慢（全局默认0.04）
+  min-duration: 10              # 逃离持续较短（全局默认15）
+  max-duration: 20              # 逃离持续短（全局默认35）
+
+# ─── 奖励（可选） ──────────────────────────────────────
+currency-reward:
+  currency-id: "coin"
+  amount: 10
+
+# 大尺寸鲫鱼额外掉落
+drops:
+  big_crucian_bonus:
+    item:
+      source: "minecraft"
+      id: "cod"
+      amount: 1
+    weight: 1.0
+    condition: "size:25"        # 尺寸≥25cm 时额外掉落1条
+
+# ─── 出现条件（可选） ──────────────────────────────────
+# 鲫鱼仅5-10级可遇
+min-player-level: 5
+max-player-level: 10
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "常见的淡水鱼，体型较小，性情温和，偶有挣扎但力度不大，适合刚入门的钓手练习。"
+icon-texture: "minecraft:cod"
+record-weight: 0.4              # 图鉴排序靠后（常见鱼）

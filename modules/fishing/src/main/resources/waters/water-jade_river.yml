@@ -14,6 +14,9 @@ pos:
 
 # 鱼类列表
 fishes:
+  - "minnow"
+  - "crucian_carp"
+  - "carp"
   - "salmon"
   - "catfish"
 

@@ -1,0 +1,87 @@
+# 鱼类定义：鲤鱼
+# 鲤鱼是新手毕业鱼，难度20，10级后可遇，有一定挣扎力但仍是入门级别
+# 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+
+id: "carp"                      # 鱼类唯一标识符
+display-name: "鲤鱼"             # 显示名称
+rarity: common                  # 稀有度等级（common=常见）
+min-size: 15                    # 最小尺寸（厘米）
+max-size: 50                    # 最大尺寸（厘米）
+base-price: 60                  # 基础售价（游戏货币）
+base-xp: 20                     # 基础经验值（捕获时获得）
+seasons: [spring, summer, fall] # 春夏秋可捕
+weathers: [clear, rain]         # 晴天和雨天均可
+time-ranges:                    # 全天可捕
+  - start: "00:00"
+    end: "24:00"
+item:                           # 捕获后掉落的物品定义
+  source: "minecraft"           # 物品来源（minecraft=原版物品）
+  id: "salmon"                  # 原版物品ID（鲑鱼，体型相近代用）
+  amount: 1                     # 物品数量
+difficulty: 20                  # 钓鱼难度（0-100，难度20，新手毕业级别）
+behaviors:                      # 小游戏中鱼的行为模式及权重
+  - type: smooth                # 平滑型：鱼缓慢平稳移动
+    weight: 0.6                 # 权重0.6（主要行为）
+  - type: floater               # 上浮型：鱼向轨道顶部移动
+    weight: 0.2                 # 权重0.2（次要行为）
+  - type: sinker                # 下沉型：鱼向轨道底部移动
+    weight: 0.2                 # 权重0.2（次要行为）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 鲤鱼有一定活力，进度衰减适中，偶尔逃离
+progress-drain:
+  base-rate: 0.012              # 鱼在绿条外时进度下降适中（全局默认0.02）
+progress-gain:
+  base-rate: 0.012              # 鱼在绿条内时进度上升适中（全局默认0.01）
+flee-params:
+  base-chance: 0.15             # 逃离概率较低（全局默认0.25）
+  base-speed: 0.03              # 逃离速度中等（全局默认0.04）
+  min-duration: 12              # 逃离持续适中（全局默认15）
+  max-duration: 25              # 逃离持续适中（全局默认35）
+
+# 多阶段行为：鲤鱼后期会稍加挣扎
+behavior-stages:
+  stage1:
+    threshold: 0.0              # 进度 0% 起：平稳游动
+    behaviors:
+      - type: smooth
+        weight: 0.6
+      - type: floater
+        weight: 0.2
+      - type: sinker
+        weight: 0.2
+  stage2:
+    threshold: 0.6              # 进度 60% 后：加入突进
+    behaviors:
+      - type: smooth
+        weight: 0.4
+      - type: dart              # 突进型：鱼快速跳跃移动
+        weight: 0.3
+      - type: sinker
+        weight: 0.2
+      - type: floater
+        weight: 0.1
+
+# ─── 奖励（可选） ──────────────────────────────────────
+currency-reward:
+  currency-id: "coin"
+  amount: 20
+
+# 大尺寸鲤鱼额外掉落
+drops:
+  big_carp_bonus:
+    item:
+      source: "minecraft"
+      id: "salmon"
+      amount: 1
+    weight: 1.0
+    condition: "size:40"        # 尺寸≥40cm 时额外掉落1条
+
+# ─── 出现条件（可选） ──────────────────────────────────
+# 鲤鱼10级后可遇，无上限
+min-player-level: 10
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "常见的淡水鱼，体型中等，活力充沛，后期会稍有挣扎，是新手迈向进阶的练习对象。"
+icon-texture: "minecraft:salmon"
+record-weight: 0.5              # 图鉴排序靠后（常见鱼）
