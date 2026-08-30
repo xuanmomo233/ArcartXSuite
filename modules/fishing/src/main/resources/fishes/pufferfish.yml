@@ -68,6 +68,7 @@ drops:
     condition: "perfect"       # 完美捕获时掉落海晶碎片
 
 # ─── 出现条件（可选） ──────────────────────────────────
+min-player-level: 10
 biomes: [ocean, beach, lukewarm_ocean]  # 仅在海洋类生物群系出现
 
 # ─── 数据/展示（可选） ─────────────────────────────────

@@ -337,6 +337,7 @@ public record FishingModuleConfiguration(
 
         // ─── 出现条件（可选） ──────────────────────────────
         int minPlayerLevel = section.getInt("min-player-level", 0);
+        int maxPlayerLevel = section.getInt("max-player-level", 0);
         String requirePermission = section.contains("require-permission") ? section.getString("require-permission", "") : null;
         if (requirePermission != null && requirePermission.isEmpty()) requirePermission = null;
 
@@ -383,7 +384,7 @@ public record FishingModuleConfiguration(
             .progressDrainRate(progressDrainRate).progressGainRate(progressGainRate)
             .fleeParams(fleeParams).behaviorStages(behaviorStages)
             .drops(drops).commandRewards(commandRewards).currencyRewards(currencyRewards)
-            .minPlayerLevel(minPlayerLevel).requirePermission(requirePermission)
+            .minPlayerLevel(minPlayerLevel).maxPlayerLevel(maxPlayerLevel).requirePermission(requirePermission)
             .baitPreferences(baitPreferences).biomes(biomes).depthRange(depthRange)
             .description(description).iconTexture(iconTexture).iconTextureUrl(iconTextureUrl)
             .recordWeight(recordWeight)

@@ -88,6 +88,7 @@ command-rewards:
     condition: "size:100"      # 尺寸≥100cm 时全服公告
 
 # ─── 出现条件（可选） ──────────────────────────────────
+min-player-level: 10
 biomes: [ocean, deep_ocean, lukewarm_ocean, warm_ocean]  # 仅在海洋类生物群系
 depth-range:
   min-depth: 3                 # 至少3格深

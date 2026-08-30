@@ -38,6 +38,7 @@ public record FishDefinition(
 
     // ─── 出现条件（可选） ──────────────────────────────
     int minPlayerLevel,
+    int maxPlayerLevel,
     @Nullable String requirePermission,
     @NotNull List<BaitPreference> baitPreferences,
     @NotNull List<String> biomes,
@@ -200,6 +201,7 @@ public record FishDefinition(
 
         // 出现条件
         private int minPlayerLevel = 0;
+        private int maxPlayerLevel = 0;
         private String requirePermission = null;
         private List<BaitPreference> baitPreferences = List.of();
         private List<String> biomes = List.of();
@@ -233,6 +235,7 @@ public record FishDefinition(
         public Builder commandRewards(List<CommandReward> commandRewards) { this.commandRewards = List.copyOf(commandRewards); return this; }
         public Builder currencyRewards(List<CurrencyReward> currencyRewards) { this.currencyRewards = List.copyOf(currencyRewards); return this; }
         public Builder minPlayerLevel(int minPlayerLevel) { this.minPlayerLevel = minPlayerLevel; return this; }
+        public Builder maxPlayerLevel(int maxPlayerLevel) { this.maxPlayerLevel = maxPlayerLevel; return this; }
         public Builder requirePermission(String requirePermission) { this.requirePermission = requirePermission; return this; }
         public Builder baitPreferences(List<BaitPreference> baitPreferences) { this.baitPreferences = List.copyOf(baitPreferences); return this; }
         public Builder biomes(List<String> biomes) { this.biomes = List.copyOf(biomes); return this; }
@@ -248,7 +251,7 @@ public record FishDefinition(
                 seasons, weathers, timeRanges, itemRef, difficulty, behaviors, currencyReward,
                 progressDrainRate, progressGainRate, fleeParams, behaviorStages,
                 drops, commandRewards, currencyRewards,
-                minPlayerLevel, requirePermission, baitPreferences, biomes, depthRange,
+                minPlayerLevel, maxPlayerLevel, requirePermission, baitPreferences, biomes, depthRange,
                 description, iconTexture, iconTextureUrl, recordWeight
             );
         }

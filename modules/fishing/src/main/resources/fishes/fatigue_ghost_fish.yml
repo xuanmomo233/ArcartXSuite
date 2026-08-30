@@ -16,6 +16,7 @@ item:
   identifier: "minecraft:cod"
   amount: 1
 difficulty: 75
+min-player-level: 10
 behaviors:
   smooth:
     type: SMOOTH

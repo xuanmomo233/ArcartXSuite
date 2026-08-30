@@ -740,6 +740,7 @@ public final class FishingService {
             .filter(f -> f.weathers().contains(currentWeather))
             .filter(f -> isInTimeRange(currentTime, f.timeRanges()))
             .filter(f -> f.minPlayerLevel() <= playerLevel)
+            .filter(f -> f.maxPlayerLevel() <= 0 || playerLevel <= f.maxPlayerLevel())
             .filter(f -> f.requirePermission() == null || player.hasPermission(f.requirePermission()))
             .filter(f -> f.biomes().isEmpty() || f.biomes().contains(playerBiome))
             .toList();
