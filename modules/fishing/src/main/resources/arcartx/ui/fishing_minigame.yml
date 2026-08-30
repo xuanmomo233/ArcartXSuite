@@ -214,7 +214,7 @@ controls:
               itemScale: 1.0
               point: ~top_left
               x: 70
-              y: "(1 - var.fishY) * 524 + 8"
+              y: "math.max(8, math.min(532, (1 - var.fishY) * 604 + 8 - 40))"
               width: 80
               height: 80
               normal: ~0,0,0,0

@@ -52,9 +52,9 @@ public final class FishingMinigame {
     private boolean wasPerfect = true;      // 是否全程在绿条内（需至少 tick 一次才有效）
     private int consecutiveInsideTicks = 0; // 连续在绿条内的 tick 数（用于 streak 加成）
     private int imperfectTicks = 0;         // 累计不在绿条内的 tick 数（用于 perfect_window 容错）
-    // 判定容错：鱼图标视觉高度30px/604px轨道≈0.05，中心点到上下边缘≈0.025
-    // hitTolerance = 判定半径，鱼中心在绿条边缘外此距离内仍算命中（匹配鱼图标的视觉半高）
-    private static final double HIT_TOLERANCE = 0.025;
+    // 判定容错：鱼图标有视觉尺寸(80px/604px≈0.066)，中心点判定会与视觉边缘不符
+    // hitTolerance = 判定半径，鱼中心在绿条边缘外此距离内仍算命中
+    private static final double HIT_TOLERANCE = 0.05;
     // graceTicks = 边缘宽恕期，鱼刚离开绿条后此 tick 数内仍算命中（避免边缘频繁进出）
     private static final int GRACE_TICKS = 3;
     private int graceCounter = 0;           // 剩余宽恕 tick 数
