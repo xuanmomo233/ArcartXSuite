@@ -55,6 +55,17 @@ public final class NeigeItemsBridge {
         }
     }
 
+    /**
+     * 判断是否为 NeigeItems 物品。
+     * <p>
+     * NeigeItems 原生 ItemManager 仅暴露 {@code getItemId(ItemStack)}，未提供独立的轻量判断方法，
+     * 因此本方法基于 {@link #neigeItemId(ItemStack)} 返回非空来判断，无额外性能收益，
+     * 仅为与其他物品源桥接（Mythic/Overture/MMOItems）保持接口对称。
+     */
+    public boolean isNeigeItem(ItemStack itemStack) {
+        return !neigeItemId(itemStack).isBlank();
+    }
+
     public ItemStack getItemStack(String itemId, int amount) {
         if (!available || itemManager == null || itemId == null || itemId.isBlank()) {
             return null;

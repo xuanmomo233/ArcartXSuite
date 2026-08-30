@@ -73,6 +73,11 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     }
 
     @Override
+    public boolean isNeigeItem(ItemStack itemStack) {
+        return neigeItemsBridge != null && neigeItemsBridge.isNeigeItem(itemStack);
+    }
+
+    @Override
     public boolean isOvertureItem(ItemStack itemStack) {
         return overtureItemBridge != null && overtureItemBridge.isOvertureItem(itemStack);
     }

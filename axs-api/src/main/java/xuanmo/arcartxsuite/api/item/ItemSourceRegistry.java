@@ -30,13 +30,22 @@ public interface ItemSourceRegistry {
     /** 获取 MMOItems 物品 ID（格式 "类型ID;物品ID"），非 MMOItems 物品返回空串 */
     String mmoItemId(ItemStack itemStack);
 
-    /** 判断是否为 MythicMobs 物品 */
+    /** 判断是否为 MythicMobs 物品（透传 MythicBukkit 原生 isMythicItem，比取 ID 更轻量） */
     boolean isMythicItem(ItemStack itemStack);
 
-    /** 判断是否为 Overture 物品 */
+    /**
+     * 判断是否为 NeigeItems 物品。
+     * <p>
+     * 与 Mythic/Overture/MMOItems 不同：NeigeItems 原生 ItemManager 未提供独立的轻量判断方法，
+     * 因此本方法实现为 {@code !neigeItemId(itemStack).isBlank()} 的包装，无额外性能收益，
+     * 仅为保持四个物品源在"判断"能力上的接口对称，便于模块作者统一写法。
+     */
+    boolean isNeigeItem(ItemStack itemStack);
+
+    /** 判断是否为 Overture 物品（透传 OvertureAPI 原生 isOvertureItem，比取 ID 更轻量） */
     boolean isOvertureItem(ItemStack itemStack);
 
-    /** 判断是否为 MMOItems 物品 */
+    /** 判断是否为 MMOItems 物品（仅检查 NBTItem.hasType()，比取完整 ID 少一次 NBT 字段读取） */
     boolean isMmoItem(ItemStack itemStack);
 
     // ─── 物品生成 ─────────────────────────────────────────────────

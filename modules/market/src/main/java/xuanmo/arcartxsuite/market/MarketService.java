@@ -161,6 +161,13 @@ public class MarketService {
         if (config.shop().enabled()) {
             shopService = new ShopService(plugin, config.shop(), config.messages(),
                 repository, currencyManager, itemSourceRegistry, dataFolder, logger);
+            // 注入跨服限购广播回调
+            shopService.setLimitBroadcaster((playerUuid, shopId, itemId, newCount, timestamp, resetTime) -> {
+                if (crossServerChannel != null && crossServerChannel.isActive()) {
+                    crossServerChannel.publish("SHOP_LIMIT_UPDATE:" + playerUuid + ":" + shopId + ":"
+                        + itemId + ":" + newCount + ":" + timestamp + ":" + resetTime);
+                }
+            });
             shopService.start();
         }
 
@@ -1113,6 +1120,32 @@ public class MarketService {
                 }
             } else {
                 logger.warning("remote bid missing bidder; ignored: " + message);
+            }
+        }
+
+        // 跨服限购同步：其他服购买后广播，本地 upsert 限购记录
+        if (message.startsWith("SHOP_LIMIT_UPDATE:")) {
+            String[] parts = message.split(":", -1);
+            if (parts.length == 7) {
+                try {
+                    java.util.UUID playerUuid = java.util.UUID.fromString(parts[1]);
+                    String shopId = parts[2];
+                    String itemId = parts[3];
+                    int newCount = Integer.parseInt(parts[4]);
+                    long timestamp = Long.parseLong(parts[5]);
+                    long resetTime = Long.parseLong(parts[6]);
+                    if (newCount >= 0) {
+                        repository.upsertShopLimit(new xuanmo.arcartxsuite.market.shop.ShopLimitRecord(
+                            playerUuid, shopId, itemId, newCount, timestamp, resetTime
+                        ));
+                        logger.fine("applied remote shop limit update player=" + playerUuid
+                            + " shop=" + shopId + " item=" + itemId + " count=" + newCount);
+                    }
+                } catch (IllegalArgumentException e) {
+                    logger.warning("invalid remote shop limit payload: " + message);
+                }
+            } else {
+                logger.warning("remote shop limit payload malformed; ignored: " + message);
             }
         }
 

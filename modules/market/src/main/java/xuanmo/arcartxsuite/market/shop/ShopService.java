@@ -33,6 +33,11 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
  */
 public class ShopService {
 
+    /** 限购更新跨服广播回调（由 MarketService 注入，无注入时不广播）。 */
+    public interface LimitUpdateBroadcaster {
+        void broadcast(UUID player, String shopId, String itemId, int newCount, long timestamp, long resetTime);
+    }
+
     private final JavaPlugin plugin;
     private final ShopConfiguration config;
     private final MessagesConfiguration messages;
@@ -44,6 +49,7 @@ public class ShopService {
 
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
     private BukkitTask refreshTask;
+    private volatile LimitUpdateBroadcaster limitBroadcaster;
 
     /** 单次购买数量上限（36 格 × 64），防止客户端传入超大值导致整数溢出 / 刷物品。 */
     private static final int MAX_PURCHASE_AMOUNT = 36 * 64;
@@ -59,6 +65,11 @@ public class ShopService {
         this.itemSourceRegistry = itemSourceRegistry;
         this.dataFolder = dataFolder;
         this.logger = logger;
+    }
+
+    /** 注入跨服广播回调。 */
+    public void setLimitBroadcaster(LimitUpdateBroadcaster broadcaster) {
+        this.limitBroadcaster = broadcaster;
     }
 
     public void start() {
@@ -278,10 +289,15 @@ public class ShopService {
         if (shopItem.limitPerPlayer() <= 0 || delivered <= 0) return;
         ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
         int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
+        long now = System.currentTimeMillis();
+        long resetTime = calculateResetTime(shopItem.limitReset());
         repository.upsertShopLimit(new ShopLimitRecord(
-            player.getUniqueId(), shopId, itemId, newCount, System.currentTimeMillis(),
-            calculateResetTime(shopItem.limitReset())
+            player.getUniqueId(), shopId, itemId, newCount, now, resetTime
         ));
+        // 跨服广播限购更新，其他服收到后 upsert 本地 DB
+        if (limitBroadcaster != null) {
+            limitBroadcaster.broadcast(player.getUniqueId(), shopId, itemId, newCount, now, resetTime);
+        }
     }
 
     private boolean hasRewardCommands(ShopItem shopItem) {

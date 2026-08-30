@@ -10,6 +10,7 @@ dependencies {
     compileOnly("com.zaxxer:HikariCP:5.1.0")
     compileOnly("redis.clients:jedis:5.1.0")
     compileOnly("com.belerweb:pinyin4j:2.5.1")
+    compileOnly("net.luckperms:api:5.4")
 }
 
 tasks.compileJava {

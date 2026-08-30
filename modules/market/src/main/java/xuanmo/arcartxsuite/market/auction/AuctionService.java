@@ -699,11 +699,15 @@ public class AuctionService {
 
     private double getEffectiveTaxRate(UUID seller) {
         Player player = Bukkit.getPlayer(seller);
-        if (player == null) {
-            // 离线玩家无法检查权限，使用默认税率
-            logger.fine("卖家离线，使用默认税率 seller=" + seller);
-            return config.transactionTaxRate();
+        if (player != null) {
+            return getEffectiveTaxRateOnline(player);
         }
+        // 离线玩家：尝试用 LuckPerms 加载用户数据查询权限
+        return getEffectiveTaxRateOffline(seller);
+    }
+
+    /** 在线玩家权限检查 */
+    private double getEffectiveTaxRateOnline(Player player) {
         double bestTaxRate = Double.POSITIVE_INFINITY;
         boolean matched = false;
         for (var entry : config.taxDiscount().entrySet()) {
@@ -716,6 +720,47 @@ public class AuctionService {
             }
         }
         return matched ? bestTaxRate : config.transactionTaxRate();
+    }
+
+    /**
+     * 离线玩家权限检查：通过 LuckPerms API 异步加载用户数据后同步查询权限。
+     * <p>
+     * LuckPerms 未安装或加载失败时回退到默认税率。
+     * 定时任务（过期处理）在主线程调用，短暂阻塞可接受（loadUser 通常 <50ms）。
+     */
+    private double getEffectiveTaxRateOffline(UUID seller) {
+        if (config.taxDiscount().isEmpty()) {
+            return config.transactionTaxRate();
+        }
+        try {
+            net.luckperms.api.LuckPerms luckPerms = net.luckperms.api.LuckPermsProvider.get();
+            net.luckperms.api.model.user.UserManager userManager = luckPerms.getUserManager();
+            // 先查缓存（在线但 Bukkit.getPlayer 返回 null 的边缘情况）
+            net.luckperms.api.model.user.User cached = userManager.getUser(seller);
+            net.luckperms.api.model.user.User user = cached != null
+                ? cached : userManager.loadUser(seller).join();
+            if (user == null) {
+                logger.fine("LuckPerms 加载离线用户失败，使用默认税率 seller=" + seller);
+                return config.transactionTaxRate();
+            }
+            // 查询权限：user.getCachedData().getPermissionData().checkPermission(permission)
+            net.luckperms.api.cacheddata.CachedPermissionData permData = user.getCachedData().getPermissionData();
+            double bestTaxRate = Double.POSITIVE_INFINITY;
+            boolean matched = false;
+            for (var entry : config.taxDiscount().entrySet()) {
+                if (permData.checkPermission(entry.getKey()).asBoolean()) {
+                    double taxRate = Math.max(0, entry.getValue());
+                    if (!matched || taxRate < bestTaxRate) {
+                        bestTaxRate = taxRate;
+                    }
+                    matched = true;
+                }
+            }
+            return matched ? bestTaxRate : config.transactionTaxRate();
+        } catch (Exception | LinkageError e) {
+            logger.fine("LuckPerms 不可用，离线卖家使用默认税率 seller=" + seller + ": " + e.getMessage());
+            return config.transactionTaxRate();
+        }
     }
 
     private boolean isBlacklisted(ItemStack item) {
