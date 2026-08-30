@@ -52,6 +52,12 @@ public final class FishingMinigame {
     private boolean wasPerfect = true;      // 是否全程在绿条内（需至少 tick 一次才有效）
     private int consecutiveInsideTicks = 0; // 连续在绿条内的 tick 数（用于 streak 加成）
     private int imperfectTicks = 0;         // 累计不在绿条内的 tick 数（用于 perfect_window 容错）
+    // 判定容错：鱼图标视觉高度30px/604px轨道≈0.05，中心点到上下边缘≈0.025
+    // hitTolerance = 判定半径，鱼中心在绿条边缘外此距离内仍算命中（匹配鱼图标的视觉半高）
+    private static final double HIT_TOLERANCE = 0.025;
+    // graceTicks = 边缘宽恕期，鱼刚离开绿条后此 tick 数内仍算命中（避免边缘频繁进出）
+    private static final int GRACE_TICKS = 3;
+    private int graceCounter = 0;           // 剩余宽恕 tick 数
     private BukkitTask tickTask;
     private final AtomicBoolean cleanedUp = new AtomicBoolean(false); // cleanup 幂等保护
 
@@ -197,7 +203,7 @@ public final class FishingMinigame {
         double halfBarForFlee = barHeightRatioForFlee / 2.0;
         double barBottomForFlee = barPosition - halfBarForFlee;
         double barTopForFlee = barPosition + halfBarForFlee;
-        boolean fishInsideForFlee = fishPosition >= barBottomForFlee && fishPosition <= barTopForFlee;
+        boolean fishInsideForFlee = fishPosition >= (barBottomForFlee - HIT_TOLERANCE) && fishPosition <= (barTopForFlee + HIT_TOLERANCE);
 
         // 鱼独立逃离参数（可选覆盖全局配置）
         FishDefinition.FleeParams fp = session.fish().fleeParams();
@@ -300,10 +306,19 @@ public final class FishingMinigame {
             fishPosition = 0.5; fishVelocity = 0.0;
         }
 
-        // 检查鱼是否在绿条内
+        // 检查鱼是否在绿条内（含判定半径 + 边缘宽恕期）
         double barBottom = barPosition - halfBar;
         double barTop = barPosition + halfBar;
-        boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
+        // 扩大判定边界：鱼中心在绿条边缘外 HIT_TOLERANCE 内仍算命中（匹配鱼图标的视觉尺寸）
+        boolean fishInExpandedRange = fishPosition >= (barBottom - HIT_TOLERANCE) && fishPosition <= (barTop + HIT_TOLERANCE);
+        // 边缘宽恕期：鱼刚离开扩大判定范围后，GRACE_TICKS 内仍算命中
+        if (fishInExpandedRange) {
+            graceCounter = GRACE_TICKS;
+        } else if (graceCounter > 0) {
+            graceCounter--;
+            fishInExpandedRange = true;
+        }
+        boolean fishInside = fishInExpandedRange;
 
         // ── 进度计算（曲线模型） ────────────────────────────────
         // 进度从 0 开始，需持续命中绿条积累到 1.0 才成功。
