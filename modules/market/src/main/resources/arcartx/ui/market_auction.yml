@@ -624,11 +624,6 @@ controls:
                           radius: 16
                           visibleButtonCount: "self.entry != none ? ((self.entry['canBid'] ? 1 : 0) + (self.entry['canBuyNow'] ? 1 : 0) + (self.entry['canCancel'] ? 1 : 0)) : 0"
                           buttonStartX: "(374 - self.visibleButtonCount * 106 - (self.visibleButtonCount - 1) * 14) / 2"
-                        action:
-                          clickLeft: |-
-                            if(self.entry != none && self.entry['canBuyNow']){
-                              Packet.send(var.packetId, 'auction_buy', self.entry['id'].round(), var.actionToken)
-                            }
                         effect:
                           stroke:
                             width: 1
