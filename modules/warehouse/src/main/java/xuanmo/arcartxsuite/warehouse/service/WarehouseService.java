@@ -1009,19 +1009,27 @@ public final class WarehouseService implements Listener {
                 event.setCancelled(true);
                 event.getItem().remove();
             }
-            boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
-            if (notify && result.storedAmount() > 0) {
+            if (result.storedAmount() > 0) {
+                // 双通道提示：聊天栏与 HUD 独立工作，互不绑架。
+                // 聊天栏由 Warehouse 自身的 notify 开关控制（玩家个人设置优先于全局配置）；
+                // HUD 补发由 Pickup 的 toggle（isNotificationActive）控制。
+                // 注意：notifyPickup 内部为延迟发包的异步任务，返回 true 仅代表已排入推送队列，
+                // 不代表客户端 HUD 已渲染，因此不能用其返回值决定是否发送聊天栏，否则会出现
+                // HUD 实际未显示且聊天栏被跳过的双重丢失。
+                boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
+                if (notify) {
+                    player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
+                }
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
-                boolean hudNotified = false;
                 if (pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId())) {
                     // 通知模式 HUD 活跃：通过 notifyPickup 主动推送 HUD 提示
                     // 使用存入数量构造展示用 ItemStack，避免 stack 此时 amount=0 导致 itemJson 错误
                     ItemStack displayStack = stack.clone();
                     displayStack.setAmount((int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
-                    hudNotified = pickupNotifiable.notifyPickup(player, displayStack, (int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
-                }
-                if (!hudNotified) {
-                    player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
+                    boolean hudNotified = pickupNotifiable.notifyPickup(player, displayStack, (int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
+                    debug("auto-deposit-hud player=" + player.getName()
+                        + " stored=" + result.storedAmount()
+                        + " hudNotified=" + hudNotified);
                 }
             }
         } catch (Exception exception) {
