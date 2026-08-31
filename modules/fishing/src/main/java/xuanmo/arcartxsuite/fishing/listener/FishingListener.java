@@ -5,16 +5,13 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerFishEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.jetbrains.annotations.NotNull;
-import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
 /**
@@ -23,7 +20,7 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
  * 关联模块：{@code fishing}。拦截原版钓鱼事件并启动小游戏，
  * 在玩家退出/死亡/传送时清理进行中的小游戏会话，
  * 并处理鱼竿耐久度加成。
- * 右键鱼竿时自动装载背包里的饵料。
+ * 鱼咬钩时消耗饵料队列头部1个饵料。
  */
 public final class FishingListener implements Listener {
 
@@ -50,6 +47,8 @@ public final class FishingListener implements Listener {
         // 在 BITE 状态（鱼咬钩）时启动小游戏，而不是等 CAUGHT_FISH
         // CAUGHT_FISH 需要玩家右键收杆才触发，而我们要在收杆前就启动小游戏
         if (event.getState() == PlayerFishEvent.State.BITE) {
+            // 鱼咬钩时消耗饵料队列头部1个饵料
+            service.consumeBaitOnBite(player);
             // 取消原版钓鱼（阻止后续 CAUGHT_FISH/FAILED_ATTEMPT），启动小游戏
             boolean started = service.startMinigame(player);
             if (started) {
@@ -105,23 +104,6 @@ public final class FishingListener implements Listener {
             event.setCancelled(true);
         } else {
             event.setDamage(newDamage);
-        }
-    }
-
-    /**
-     * 右键空气/方块时，如果手持鱼竿且背包有饵料，自动装载饵料。
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerInteract(@NotNull PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        Player player = event.getPlayer();
-        if (service.isPlayerInMinigame(player.getUniqueId())) return;
-        if (player.getInventory().getItemInMainHand().getType() != Material.FISHING_ROD) return;
-
-        BaitDefinition bait = service.attachBait(player);
-        if (bait != null) {
-            player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
-                "&a已装载饵料: &f" + bait.displayName()));
         }
     }
 }

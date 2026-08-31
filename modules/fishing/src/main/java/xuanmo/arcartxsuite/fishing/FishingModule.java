@@ -72,6 +72,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private static final String REWARDS_UI_FILE = "ui/fishing_rewards.yml";
     private static final String TASKS_UI_RESOURCE = "arcartx/ui/fishing_tasks.yml";
     private static final String TASKS_UI_FILE = "ui/fishing_tasks.yml";
+    private static final String BAITS_UI_RESOURCE = "arcartx/ui/fishing_baits.yml";
+    private static final String BAITS_UI_FILE = "ui/fishing_baits.yml";
 
     private FishingModuleConfiguration configuration;
     private FishingService service;
@@ -82,6 +84,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private String talentsUiId;
     private String rewardsUiId;
     private String tasksUiId;
+    private String baitsUiId;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -120,6 +123,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         mappings.put(TALENTS_UI_RESOURCE, TALENTS_UI_FILE);
         mappings.put(REWARDS_UI_RESOURCE, REWARDS_UI_FILE);
         mappings.put(TASKS_UI_RESOURCE, TASKS_UI_FILE);
+        mappings.put(BAITS_UI_RESOURCE, BAITS_UI_FILE);
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 
@@ -136,7 +140,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             () -> collectionUiId,
             () -> talentsUiId,
             () -> rewardsUiId,
-            () -> tasksUiId
+            () -> tasksUiId,
+            () -> baitsUiId
         ), 0, null, null);
     }
 
@@ -271,6 +276,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         rewardsUiId = binding4.registeredUiId() != null ? binding4.registeredUiId() : configuration.ui().rewardsId();
         UiBinding binding5 = registerModuleUi(TASKS_UI_FILE, configuration.ui().tasksId(), configuration.ui().registerOnEnable());
         tasksUiId = binding5.registeredUiId() != null ? binding5.registeredUiId() : configuration.ui().tasksId();
+        UiBinding binding6 = registerModuleUi(BAITS_UI_FILE, configuration.ui().baitsId(), configuration.ui().registerOnEnable());
+        baitsUiId = binding6.registeredUiId() != null ? binding6.registeredUiId() : configuration.ui().baitsId();
 
         // 加载天赋树配置
         TalentEngine talentEngine;

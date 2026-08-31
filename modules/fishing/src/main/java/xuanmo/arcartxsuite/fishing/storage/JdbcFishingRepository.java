@@ -19,6 +19,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.fishing.model.BaitQueueEntry;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
@@ -111,6 +112,15 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         perfect INTEGER NOT NULL DEFAULT 0,
                         timestamp INTEGER NOT NULL)
                     """);
+
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_bait_queue (
+                        uuid TEXT NOT NULL,
+                        slot_index INTEGER NOT NULL,
+                        bait_id TEXT NOT NULL,
+                        amount INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY (uuid, slot_index))
+                    """);
             } else {
                 // ── MySQL 建表 ───────────────────────────────────────
                 stmt.executeUpdate("""
@@ -178,13 +188,22 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         INDEX idx_catch_uuid (uuid),
                         INDEX idx_catch_time (timestamp))
                     """);
+
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_bait_queue (
+                        uuid VARCHAR(36) NOT NULL,
+                        slot_index INT NOT NULL,
+                        bait_id VARCHAR(64) NOT NULL,
+                        amount INT NOT NULL DEFAULT 1,
+                        PRIMARY KEY (uuid, slot_index))
+                    """);
             }
         }
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_catch_records");
+        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_catch_records", "axs_fishing_bait_queue");
     }
 
     @Override
@@ -194,7 +213,7 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     protected List<String> allTables() {
-        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards");
+        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_bait_queue");
     }
 
     // ─── 赛季数据 ────────────────────────────────────────────────
@@ -636,5 +655,69 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
             first = false;
         }
         return sb.toString();
+    }
+
+    // ─── 饵料队列 ──────────────────────────────────────────────────
+
+    @Override
+    public @NotNull List<BaitQueueEntry> loadBaitQueue(@NotNull UUID uuid) {
+        List<BaitQueueEntry> queue = new ArrayList<>();
+        String sql = "SELECT slot_index, bait_id, amount FROM axs_fishing_bait_queue"
+            + " WHERE uuid=? ORDER BY slot_index ASC";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    queue.add(new BaitQueueEntry(uuid,
+                        rs.getInt("slot_index"),
+                        rs.getString("bait_id"),
+                        rs.getInt("amount")));
+                }
+            }
+        } catch (SQLException e) {
+            logger.warning("加载饵料队列失败 uuid=" + uuid + ": " + e.getMessage());
+        }
+        return queue;
+    }
+
+    @Override
+    public void saveBaitSlot(@NotNull BaitQueueEntry entry) {
+        if (entry.amount() <= 0) {
+            String sql = "DELETE FROM axs_fishing_bait_queue WHERE uuid=? AND slot_index=?";
+            try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, entry.playerUuid().toString());
+                ps.setInt(2, entry.slotIndex());
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                logger.warning("删除饵料槽位失败 uuid=" + entry.playerUuid() + " slot=" + entry.slotIndex() + ": " + e.getMessage());
+            }
+            return;
+        }
+        String sql = "INSERT INTO axs_fishing_bait_queue (uuid, slot_index, bait_id, amount) VALUES (?, ?, ?, ?)"
+            + " ON CONFLICT(uuid, slot_index) DO UPDATE SET bait_id=excluded.bait_id, amount=excluded.amount";
+        if (isMysql()) {
+            sql = "INSERT INTO axs_fishing_bait_queue (uuid, slot_index, bait_id, amount) VALUES (?, ?, ?, ?)"
+                + " ON DUPLICATE KEY UPDATE bait_id=VALUES(bait_id), amount=VALUES(amount)";
+        }
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, entry.playerUuid().toString());
+            ps.setInt(2, entry.slotIndex());
+            ps.setString(3, entry.baitId());
+            ps.setInt(4, entry.amount());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("保存饵料槽位失败 uuid=" + entry.playerUuid() + " slot=" + entry.slotIndex() + ": " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void clearBaitQueue(@NotNull UUID uuid) {
+        String sql = "DELETE FROM axs_fishing_bait_queue WHERE uuid=?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("清空饵料队列失败 uuid=" + uuid + ": " + e.getMessage());
+        }
     }
 }

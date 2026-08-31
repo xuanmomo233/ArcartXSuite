@@ -494,7 +494,8 @@ public record FishingModuleConfiguration(
                         section.getDouble("exp-multiplier", 1.0),
                         section.getInt("min-player-level", 0),
                         section.getInt("max-player-level", 0),
-                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName())
+                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName()),
+                        Math.max(1, section.getInt("bait-slots", 3))
                     ));
                 } catch (Exception e) {
                     logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());
@@ -832,7 +833,8 @@ public record FishingModuleConfiguration(
         String collectionId,
         String talentsId,
         String rewardsId,
-        String tasksId
+        String tasksId,
+        String baitsId
     ) {
         public static UiConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
@@ -844,7 +846,8 @@ public record FishingModuleConfiguration(
                 section.getString("collection-ui-id", "fishing_collection"),
                 section.getString("talents-ui-id", "fishing_talents"),
                 section.getString("rewards-ui-id", "fishing_rewards"),
-                section.getString("tasks-ui-id", "fishing_tasks")
+                section.getString("tasks-ui-id", "fishing_tasks"),
+                section.getString("baits-ui-id", "fishing_baits")
             );
         }
     }

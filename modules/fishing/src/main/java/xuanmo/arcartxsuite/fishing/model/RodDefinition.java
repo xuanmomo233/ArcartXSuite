@@ -19,11 +19,12 @@ public record RodDefinition(
     double expMultiplier,
     int minPlayerLevel,
     int maxPlayerLevel,
-    @Nullable ItemMatcher matcher
+    @Nullable ItemMatcher matcher,
+    int baitSlots
 ) {
 
     public static final RodDefinition DEFAULT = new RodDefinition(
         "default",
-        0.0, 0, 0, 1.0, 0, 0, null
+        0.0, 0, 0, 1.0, 0, 0, null, 3
     );
 }

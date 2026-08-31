@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.fishing.model.BaitQueueEntry;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingCatchRecord;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
@@ -68,4 +69,15 @@ public interface FishingRepository {
 
     /** 删除玩家所有捕获记录（数据迁移/清理时调用）。 */
     void clearCatchRecords(@NotNull UUID uuid);
+
+    // ─── 饵料队列（按玩家存储，鱼咬钩时按 slot_index 升序消耗） ──────
+
+    /** 加载玩家饵料队列（按 slot_index 升序）。 */
+    @NotNull List<BaitQueueEntry> loadBaitQueue(@NotNull UUID uuid);
+
+    /** 保存/更新饵料队列中的单个槽位（amount=0 时删除该槽位）。 */
+    void saveBaitSlot(@NotNull BaitQueueEntry entry);
+
+    /** 清空玩家饵料队列。 */
+    void clearBaitQueue(@NotNull UUID uuid);
 }

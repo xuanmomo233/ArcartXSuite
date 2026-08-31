@@ -21,10 +21,11 @@ public final class FishingPacketHandler implements ClientPacketHandler {
     public static final String TALENTS_PACKET_ID = "AXS_FISHING_TALENTS";
     public static final String REWARDS_PACKET_ID = "AXS_FISHING_REWARDS";
     public static final String TASKS_PACKET_ID = "AXS_FISHING_TASKS";
+    public static final String BAITS_PACKET_ID = "AXS_FISHING_BAITS";
 
     // 导航动作集合：所有页面共享的跨 UI 跳转动作
     private static final java.util.Set<String> NAV_ACTIONS = java.util.Set.of(
-        "open_main", "open_collection", "open_rewards", "open_talents", "open_tasks"
+        "open_main", "open_collection", "open_rewards", "open_talents", "open_tasks", "open_baits"
     );
 
     private final java.util.function.Function<Player, FishingMinigame> minigameLookup;
@@ -34,11 +35,12 @@ public final class FishingPacketHandler implements ClientPacketHandler {
     private final Supplier<String> talentsUiIdSupplier;
     private final Supplier<String> rewardsUiIdSupplier;
     private final Supplier<String> tasksUiIdSupplier;
+    private final Supplier<String> baitsUiIdSupplier;
 
     public FishingPacketHandler(java.util.function.Function<Player, FishingMinigame> minigameLookup,
                                 Supplier<FishingService> serviceSupplier,
                                 Supplier<String> collectionUiIdSupplier) {
-        this(minigameLookup, serviceSupplier, null, collectionUiIdSupplier, null, null, null);
+        this(minigameLookup, serviceSupplier, null, collectionUiIdSupplier, null, null, null, null);
     }
 
     public FishingPacketHandler(java.util.function.Function<Player, FishingMinigame> minigameLookup,
@@ -47,7 +49,7 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                                 Supplier<String> talentsUiIdSupplier,
                                 Supplier<String> rewardsUiIdSupplier,
                                 Supplier<String> tasksUiIdSupplier) {
-        this(minigameLookup, serviceSupplier, null, collectionUiIdSupplier, talentsUiIdSupplier, rewardsUiIdSupplier, tasksUiIdSupplier);
+        this(minigameLookup, serviceSupplier, null, collectionUiIdSupplier, talentsUiIdSupplier, rewardsUiIdSupplier, tasksUiIdSupplier, null);
     }
 
     public FishingPacketHandler(java.util.function.Function<Player, FishingMinigame> minigameLookup,
@@ -56,7 +58,8 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                                 Supplier<String> collectionUiIdSupplier,
                                 Supplier<String> talentsUiIdSupplier,
                                 Supplier<String> rewardsUiIdSupplier,
-                                Supplier<String> tasksUiIdSupplier) {
+                                Supplier<String> tasksUiIdSupplier,
+                                Supplier<String> baitsUiIdSupplier) {
         this.minigameLookup = minigameLookup;
         this.serviceSupplier = serviceSupplier;
         this.mainUiIdSupplier = mainUiIdSupplier;
@@ -64,6 +67,7 @@ public final class FishingPacketHandler implements ClientPacketHandler {
         this.talentsUiIdSupplier = talentsUiIdSupplier;
         this.rewardsUiIdSupplier = rewardsUiIdSupplier;
         this.tasksUiIdSupplier = tasksUiIdSupplier;
+        this.baitsUiIdSupplier = baitsUiIdSupplier;
     }
 
     @Override
@@ -72,7 +76,8 @@ public final class FishingPacketHandler implements ClientPacketHandler {
         boolean isFishingPacket = PACKET_ID.equalsIgnoreCase(packetId)
             || TALENTS_PACKET_ID.equalsIgnoreCase(packetId)
             || REWARDS_PACKET_ID.equalsIgnoreCase(packetId)
-            || TASKS_PACKET_ID.equalsIgnoreCase(packetId);
+            || TASKS_PACKET_ID.equalsIgnoreCase(packetId)
+            || BAITS_PACKET_ID.equalsIgnoreCase(packetId);
         if (!isFishingPacket) {
             return false;
         }
@@ -96,6 +101,10 @@ public final class FishingPacketHandler implements ClientPacketHandler {
         // 任务包
         if (TASKS_PACKET_ID.equalsIgnoreCase(packetId)) {
             return handleTasksPacket(player, data);
+        }
+        // 饵料包
+        if (BAITS_PACKET_ID.equalsIgnoreCase(packetId)) {
+            return handleBaitsPacket(player, data);
         }
         return false;
     }
@@ -134,6 +143,12 @@ public final class FishingPacketHandler implements ClientPacketHandler {
             }
             case "open_tasks" -> {
                 String uiId = tasksUiIdSupplier != null ? tasksUiIdSupplier.get() : null;
+                if (uiId != null && !uiId.isBlank()) {
+                    service.openUi(player, uiId);
+                }
+            }
+            case "open_baits" -> {
+                String uiId = baitsUiIdSupplier != null ? baitsUiIdSupplier.get() : null;
                 if (uiId != null && !uiId.isBlank()) {
                     service.openUi(player, uiId);
                 }
@@ -245,6 +260,50 @@ public final class FishingPacketHandler implements ClientPacketHandler {
             String uiId = tasksUiIdSupplier != null ? tasksUiIdSupplier.get() : null;
             if (uiId != null && !uiId.isBlank()) {
                 service.pushTasksData(player, uiId);
+            }
+        }
+        return true;
+    }
+
+    private boolean handleBaitsPacket(@NotNull Player player, @NotNull List<String> data) {
+        FishingService service = serviceSupplier != null ? serviceSupplier.get() : null;
+        if (service == null) return true;
+        String action = data.isEmpty() ? "" : data.get(0).toLowerCase(Locale.ROOT);
+        String uiId = baitsUiIdSupplier != null ? baitsUiIdSupplier.get() : null;
+        switch (action) {
+            case "open_baits", "refresh_baits" -> {
+                if (uiId != null && !uiId.isBlank()) {
+                    service.pushBaitsData(player, uiId);
+                }
+            }
+            case "put_bait" -> {
+                // data: [put_bait, invSlot, queueSlot, amount]
+                if (data.size() >= 4) {
+                    try {
+                        int invSlot = Integer.parseInt(data.get(1));
+                        int queueSlot = Integer.parseInt(data.get(2));
+                        int amount = Integer.parseInt(data.get(3));
+                        String result = service.putBait(player, invSlot, queueSlot, amount);
+                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                    } catch (NumberFormatException ignored) {}
+                }
+                if (uiId != null && !uiId.isBlank()) {
+                    service.pushBaitsData(player, uiId);
+                }
+            }
+            case "take_bait" -> {
+                // data: [take_bait, queueSlot, amount]
+                if (data.size() >= 3) {
+                    try {
+                        int queueSlot = Integer.parseInt(data.get(1));
+                        int amount = Integer.parseInt(data.get(2));
+                        String result = service.takeBait(player, queueSlot, amount);
+                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                    } catch (NumberFormatException ignored) {}
+                }
+                if (uiId != null && !uiId.isBlank()) {
+                    service.pushBaitsData(player, uiId);
+                }
             }
         }
         return true;

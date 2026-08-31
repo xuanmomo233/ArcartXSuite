@@ -1,0 +1,836 @@
+# AXS 钓鱼饵料管理界面
+# 打开方式: /fishing baits 或钓鱼主界面点击饵料按钮
+# 数据交互: packetHandler init/update（服务端 pushBaitsData 发送 init/update 包）
+# 全屏布局 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务/饵料，当前高亮"饵料"）+ 右侧内容区
+# 右侧内容区分为两部分：
+#   上方：饵料队列槽位（横向排列，数量由 packet.baitSlots 决定，每个槽位显示饵料图标+数量，点击取出）
+#   下方：玩家背包槽位（9列网格，slotType: ~Backpack，点击选择后点队列槽放入）
+#
+# 视觉规范（钓鱼青蓝主题，统一暗色玻璃 + 左侧导航）:
+#   全屏玻璃 Frosted:24;12,22,38,110   面板玻璃 Frosted:30;255,255,255,100
+#   卡片底 26,34,46,210   卡片描边 80,200,220,240
+#   主色（青蓝）50,170,200   悬停高亮 80,200,220
+#   文字默认 &f
+#
+# 数据包格式（packetHandler init/update）:
+#   packetId: "AXS_FISHING_BAITS"
+#   baitSlots: 饵料槽数量（int）
+#   queue:    { "0": {slotIndex, baitId, amount, displayName}, ... }  — 当前队列中各槽位的饵料
+#   baits:    { "baitId": {id, displayName, isDefault}, ... }          — 所有可用饵料定义
+#   queueIconJson{idx}: 每个有饵料的队列槽位的饵料物品图标 JSON（itemJson 分离模式）
+# 客户端发送包:
+#   Packet.send(var.packetId, 'refresh_baits')                              — 界面打开时请求数据
+#   Packet.send(var.packetId, 'put_bait', selectedInvSlot, queueSlot, 1)   — 放入饵料
+#   Packet.send(var.packetId, 'take_bait', queueSlot, 0)                   — 取出饵料（全部）
+
+ui:
+  isHud: false
+  background: false
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  itemSize: 16
+  packetHandler:
+    # packetHandler: init
+    # 接收服务端推送的饵料数据，写入 UI 变量并动态生成队列槽位
+    # 包字段:
+    #   - packetId: 包标识符，用于后续 Packet.send 回传
+    #   - baitSlots: 饵料队列槽数量（int）
+    #   - queue:    队列字典（key 为整数字符串 "0","1",...，含 slotIndex/baitId/amount/displayName）
+    #   - baits:    饵料定义字典（key 为 baitId 字符串，含 id/displayName/isDefault）
+    #   - queueIconJson{idx}: 每个有饵料的队列槽位的物品图标 JSON
+    init: |-
+      var.packetId = packet['packetId']
+      var.baitSlots = packet['baitSlots']
+      var.queue = packet['queue']
+      var.baits = packet['baits']
+      // 构建队列槽位图标映射（itemJson 分离模式）
+      var.queueIconJsons = {}
+      if(var.queue != none){
+        for(key in var.queue.keys()){
+          json = packet['queueIconJson' + key]
+          if(json != none && json != ''){
+            var.queueIconJsons[key] = json
+          } else {
+            var.queueIconJsons[key] = var.emptyItemJson
+          }
+        }
+      }
+      // 重建饵料队列槽位（模板在索引0，复制 1~baitSlots-1）
+      while(val.饵料队列.childrenCount() > 1){
+        val.饵料队列.get(1).remove()
+      }
+      if(var.baitSlots != none && var.baitSlots > 1){
+        for(i in range(1, var.baitSlots - 1)){
+          key = i.round()
+          e = val.饵料队列['队列槽'].copy('队列槽' + key)
+          e.entryKey = key
+        }
+      }
+      // 数据就绪后触发每个队列槽位图标的 seticon()
+      if(val.饵料队列['队列槽'] != none && val.饵料队列['队列槽']['队列槽图标'] != none){
+        val.饵料队列['队列槽']['队列槽图标'].seticon()
+      }
+      if(var.baitSlots != none && var.baitSlots > 1){
+        for(i in range(1, var.baitSlots - 1)){
+          key = i.round()
+          e = val.饵料队列['队列槽' + key]
+          if(e != none && e['队列槽图标'] != none){
+            e['队列槽图标'].seticon()
+          }
+        }
+      }
+      // 操作后清除选中状态
+      var.selectedInvSlot = none
+    # packetHandler: update
+    # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
+    update: |-
+      var.packetId = packet['packetId']
+      var.baitSlots = packet['baitSlots']
+      var.queue = packet['queue']
+      var.baits = packet['baits']
+      var.queueIconJsons = {}
+      if(var.queue != none){
+        for(key in var.queue.keys()){
+          json = packet['queueIconJson' + key]
+          if(json != none && json != ''){
+            var.queueIconJsons[key] = json
+          } else {
+            var.queueIconJsons[key] = var.emptyItemJson
+          }
+        }
+      }
+      while(val.饵料队列.childrenCount() > 1){
+        val.饵料队列.get(1).remove()
+      }
+      if(var.baitSlots != none && var.baitSlots > 1){
+        for(i in range(1, var.baitSlots - 1)){
+          key = i.round()
+          e = val.饵料队列['队列槽'].copy('队列槽' + key)
+          e.entryKey = key
+        }
+      }
+      if(val.饵料队列['队列槽'] != none && val.饵料队列['队列槽']['队列槽图标'] != none){
+        val.饵料队列['队列槽']['队列槽图标'].seticon()
+      }
+      if(var.baitSlots != none && var.baitSlots > 1){
+        for(i in range(1, var.baitSlots - 1)){
+          key = i.round()
+          e = val.饵料队列['队列槽' + key]
+          if(e != none && e['队列槽图标'] != none){
+            e['队列槽图标'].seticon()
+          }
+        }
+      }
+      var.selectedInvSlot = none
+  action:
+    # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
+    load: |-
+      var.packetId = 'AXS_FISHING_BAITS'
+      var.baitSlots = 0
+      var.queue = {}
+      var.baits = {}
+      var.queueIconJsons = {}
+      var.selectedInvSlot = none
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      // 视口换算：把窗口实际宽高折算回设计坐标系
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+    # open: 界面打开后主动请求服务端推送饵料数据
+    open: |-
+      Packet.send(var.packetId, 'refresh_baits')
+    # resize: 窗口尺寸变化后重算可用高宽
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+
+# ─── 控件树 ────────────────────────────────────────────────────────
+controls:
+  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:24;12,22,38,110
+
+  # 自适配布局：宽高 = 设计分辨率 1920x1080，窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点 ~top_center：1080 设计高度的顶边与窗口上边对齐，顶栏紧贴屏幕顶部
+  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边
+  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
+      顶栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
+        children:
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~80,200,220,230
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~50,170,200,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 68
+              texts: "~&f钓鱼"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 168
+              width: 1
+              height: 30
+              normal: ~80,200,220,230
+          页名:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 188
+              texts: "~&f饵料"
+              fontSize: 36
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
+                  through: true
+
+      # ── 左侧导航 ───────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~80,200,220,240
+          # 非当前页：总览
+          导航总览:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_main')
+            children:
+              总览底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              总览文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f总览"
+                  fontSize: 36
+                  through: true
+          # 非当前页：图鉴
+          导航图鉴:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_collection')
+            children:
+              图鉴底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              图鉴文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f图鉴"
+                  fontSize: 36
+                  through: true
+          # 非当前页：奖励
+          导航奖励:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_rewards')
+            children:
+              奖励底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f奖励"
+                  fontSize: 36
+                  through: true
+          # 非当前页：天赋
+          导航天赋:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_talents')
+            children:
+              天赋底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              天赋文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f天赋"
+                  fontSize: 36
+                  through: true
+          # 非当前页：任务
+          导航任务:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_tasks')
+            children:
+              任务底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              任务文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f任务"
+                  fontSize: 36
+                  through: true
+          # 当前页：饵料（高亮）
+          导航饵料:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 348
+              width: 272
+              height: 58
+            children:
+              饵料底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~50,170,200,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~50,170,200,230
+              饵料高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+              饵料文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0饵料"
+                  fontSize: 36
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 430
+              width: 264
+              height: 2
+              normal: ~80,200,220,220
+          # 操作提示
+          操作提示:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 448
+              width: 264
+              texts: "~&f先选背包饵料，再点队列槽放入"
+              fontSize: 32
+          # 刷新按钮
+          刷新按钮:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 14
+              y: -18
+              width: 272
+              height: 52
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'refresh_baits')
+            children:
+              刷新背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
+              刷新文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 272
+                  texts: "~&f刷新饵料"
+                  fontSize: 32
+                  through: true
+
+      # ── 内容区（饵料管理）──────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~80,200,220,240
+          # 页标题
+          页标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              texts: "~&f饵料管理"
+              fontSize: 40
+          页标题说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 220
+              y: 32
+              texts: "~&f选择背包饵料放入队列，或取出队列中的饵料"
+              fontSize: 32
+
+          # ══════════════════════════════════════════════
+          # 上方：饵料队列区
+          # ══════════════════════════════════════════════
+          饵料队列区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 96
+              width: "var.contentW - 64"
+              height: 200
+            children:
+              队列区底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~80,200,220,240
+              队列标题条:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 20
+                  width: 4
+                  height: 26
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+                  through: true
+              队列标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 34
+                  y: 18
+                  texts: "~&f饵料队列"
+                  fontSize: 36
+                  through: true
+              队列说明:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -24
+                  y: 22
+                  texts: "'&f共 &f' + var.baitSlots.round() + ' &f个槽位'"
+                  fontSize: 32
+                  through: true
+              # 饵料队列槽位（横向排列，模板在索引0，init 中按 baitSlots 动态复制）
+              # entryKey 必须用 0.round() 声明为整数（YAML 浮点数陷阱）
+              # queueEntry 为该槽位的队列数据，none 表示空槽位
+              # 交互：选中背包槽后点击队列槽 → put_bait；未选中且槽位有饵料 → take_bait
+              饵料队列:
+                type: HStack
+                val: 饵料队列
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 68
+                  width: "var.contentW - 112"
+                  spaceBetween: 12
+                children:
+                  # 队列槽模板（索引0）
+                  队列槽:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      queueEntry: var.queue[self.entryKey]
+                      visible: var.baitSlots > 0
+                      width: 72
+                      height: 96
+                    action:
+                      clickLeft: |-
+                        if(var.selectedInvSlot != none){
+                          Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, 1.round())
+                        } else {
+                          if(self.queueEntry != none){
+                            Packet.send(var.packetId, 'take_bait', self.entryKey, 0.round())
+                          }
+                        }
+                    children:
+                      队列槽背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.queueEntry != none ? '50,170,200,210' : '26,34,46,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '80,200,220,255' : (self.parent.queueEntry != none ? '50,170,200,230' : '80,200,220,240')"
+                      队列槽图标:
+                        type: Slot
+                        attribute:
+                          point: ~top_left
+                          x: 6
+                          y: 6
+                          width: 60
+                          height: 60
+                          slotType: ~Icon
+                          itemScale: 0.7
+                          normal: ~18,28,40,180
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                          seticon: "self.setItemIcon(var.queueIconJsons[self.parent.entryKey] != none ? var.queueIconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                      队列槽数量:
+                        type: Text
+                        attribute:
+                          point: ~bottom_right
+                          x: -4
+                          y: -2
+                          texts: "self.parent.queueEntry != none ? '&f' + self.parent.queueEntry['amount'].round() : none"
+                          fontSize: 32
+                          through: true
+                      队列槽空标:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          y: -8
+                          width: 72
+                          texts: "self.parent.queueEntry == none ? '&7空' : none"
+                          fontSize: 32
+                          through: true
+              # 空状态提示（无队列槽位时显示）
+              队列空状态:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  y: 10
+                  width: "var.contentW - 64"
+                  texts: "~&7暂无饵料槽位"
+                  fontSize: 36
+                  visible: var.baitSlots == 0
+
+          # ══════════════════════════════════════════════
+          # 下方：玩家背包区
+          # ══════════════════════════════════════════════
+          背包区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 320
+              width: "var.contentW - 64"
+              height: "var.viewH - 476"
+            children:
+              背包区底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~80,200,220,240
+              背包标题条:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 20
+                  width: 4
+                  height: 26
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+                  through: true
+              背包标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 34
+                  y: 18
+                  texts: "~&f背包"
+                  fontSize: 36
+                  through: true
+              背包说明:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -24
+                  y: 22
+                  texts: "var.selectedInvSlot != none ? '&f已选槽位 &e' + var.selectedInvSlot.round() : '&f点击选择饵料物品'"
+                  fontSize: 32
+                  through: true
+              # 背包网格（9列，36个槽位，slotType: ~Backpack 绑定玩家背包）
+              # 槽位 id 9~44 对应玩家背包 main inventory + hotbar
+              # lock: true 防止玩家直接拖动物品，通过 clickLeft 程序化处理
+              # 选中高亮：var.selectedInvSlot 匹配时变青蓝色底
+              背包网格:
+                type: HGrid
+                val: 背包网格
+                attribute:
+                  point: ~top_center
+                  y: 68
+                  width: "var.contentW - 120"
+                  height: 360
+                  column: 9
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
+                action:
+                  create: |-
+                    for(i in range(1, 35)){
+                      slot = self['背包槽'].copy('背包槽' + i.round())
+                      slot.entryKey = (9 + i).round()
+                      slot.id = (9 + i).round()
+                    }
+                children:
+                  # 背包槽模板（索引0，id=9）
+                  背包槽:
+                    type: Slot
+                    attribute:
+                      id: 9
+                      entryKey: 9.round()
+                      slotType: ~Backpack
+                      itemScale: 0.72
+                      lock: true
+                      width: 64
+                      height: 64
+                      normal: "self.entryKey == var.selectedInvSlot ? '50,170,200,210' : '26,34,46,210'"
+                      shape: ~round_rect
+                      radius: 10
+                    action:
+                      clickLeft: |-
+                        item = self.getSlotItemStack()
+                        if(item != none && item.getType() != 'null' && item.getCount() > 0){
+                          if(var.selectedInvSlot == self.entryKey){
+                            var.selectedInvSlot = none
+                          } else {
+                            var.selectedInvSlot = self.entryKey
+                          }
+                        } else {
+                          var.selectedInvSlot = none
+                        }
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '80,200,220,255' : (self.entryKey == var.selectedInvSlot ? '50,170,200,230' : '80,200,220,240')"

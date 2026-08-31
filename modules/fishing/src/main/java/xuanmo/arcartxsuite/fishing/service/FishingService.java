@@ -43,6 +43,7 @@ import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.minigame.FishingMinigame;
 import xuanmo.arcartxsuite.fishing.minigame.FishingSession;
 import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
+import xuanmo.arcartxsuite.fishing.model.BaitQueueEntry;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
@@ -823,20 +824,18 @@ public final class FishingService {
         return pool.get(pool.size() - 1);
     }
 
+    /**
+     * 检测玩家当前生效的饵料。
+     * 从数据库饵料队列头部（slot_index 最小）读取，未配置饵料时返回默认饵料。
+     */
     private @Nullable BaitDefinition detectBait(@NotNull Player player) {
-        ItemStack rod = player.getInventory().getItemInMainHand();
-        if (rod.getType() != Material.FISHING_ROD) {
-            rod = player.getInventory().getItemInOffHand();
-            if (rod.getType() != Material.FISHING_ROD) return null;
+        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
+        if (!queue.isEmpty()) {
+            BaitQueueEntry head = queue.get(0);
+            BaitDefinition bait = findBait(head.baitId());
+            if (bait != null) return bait;
         }
-
-        // 通过 PDC 标签检测饵料 ID
-        String baitId = getBaitIdFromRod(rod);
-        if (baitId != null) {
-            return findBait(baitId);
-        }
-
-        // 返回默认饵料
+        // 回退：默认饵料
         for (BaitDefinition bait : configuration.baits()) {
             if (bait.isDefault()) return bait;
         }
@@ -964,49 +963,129 @@ public final class FishingService {
         rewardDispatcher.dispatchItem(player, item, "fishing-drop");
     }
 
-    // ─── 饵料装载 ────────────────────────────────────────────────
+    // ─── 饵料队列管理 ────────────────────────────────────────────
 
-    /**
-     * 将玩家主手中的饵料装载到鱼竿上。
-     * 饵料物品会被消耗，鱼竿会写入 PDC 标签。
-     *
-     * @return 装载成功返回对应 BaitDefinition，失败返回 null
-     */
-    public @Nullable BaitDefinition attachBait(@NotNull Player player) {
-        ItemStack rod = player.getInventory().getItemInMainHand();
-        if (rod.getType() != Material.FISHING_ROD) {
-            rod = player.getInventory().getItemInOffHand();
-            if (rod.getType() != Material.FISHING_ROD) return null;
-        }
-
-        if (itemMatcher == null) return null;
-
-        // 用 ItemMatcher 匹配玩家背包里的饵料物品
-        for (BaitDefinition bait : configuration.baits()) {
-            if (bait.matcher() == null || bait.matcher().emptyMatcher()) continue;
-            for (int i = 0; i < player.getInventory().getSize(); i++) {
-                ItemStack item = player.getInventory().getItem(i);
-                if (item == null || item.getType().isAir()) continue;
-                if (itemMatcher.matches(bait.matcher(), item)) {
-                    // 消耗饵料
-                    item.setAmount(item.getAmount() - 1);
-                    player.getInventory().setItem(i, item.getAmount() == 0 ? null : item);
-                    // 写入 PDC 标签到鱼竿
-                    attachBaitToRod(rod, bait.id());
-                    return bait;
-                }
-            }
-        }
-        return null;
+    /** 获取玩家当前鱼竿的饵料槽数量。 */
+    public int getBaitSlots(@NotNull Player player) {
+        RodDefinition rod = detectRod(player);
+        return rod.baitSlots();
     }
 
-    private void attachBaitToRod(@NotNull ItemStack rod, @NotNull String baitId) {
-        ItemMeta meta = rod.getItemMeta();
-        if (meta == null) return;
-        PersistentDataContainer pdc = meta.getPersistentDataContainer();
-        NamespacedKey key = new NamespacedKey(plugin, PDC_BAIT_ID);
-        pdc.set(key, PersistentDataType.STRING, baitId);
-        rod.setItemMeta(meta);
+    /** 加载玩家饵料队列（按 slot_index 升序）。 */
+    public @NotNull List<BaitQueueEntry> loadBaitQueue(@NotNull Player player) {
+        return repository.loadBaitQueue(player.getUniqueId());
+    }
+
+    /**
+     * 将玩家背包指定槽位的饵料物品放入饵料队列的指定槽位。
+     * 从背包扣除物品，写入数据库队列。
+     *
+     * @param player      玩家
+     * @param invSlot     背包槽位号
+     * @param queueSlot   饵料队列目标槽位号
+     * @param amount      放入数量
+     * @return 操作结果消息（成功/失败原因）
+     */
+    public @NotNull String putBait(@NotNull Player player, int invSlot, int queueSlot, int amount) {
+        if (itemMatcher == null) return "&c物品匹配系统不可用。";
+        if (queueSlot < 0 || queueSlot >= getBaitSlots(player)) return "&c槽位号无效。";
+
+        ItemStack item = player.getInventory().getItem(invSlot);
+        if (item == null || item.getType().isAir()) return "&c背包槽位为空。";
+
+        // 用 ItemMatcher 识别物品对应的饵料定义
+        BaitDefinition matchedBait = null;
+        for (BaitDefinition bait : configuration.baits()) {
+            if (bait.matcher() == null || bait.matcher().emptyMatcher()) continue;
+            if (itemMatcher.matches(bait.matcher(), item)) {
+                matchedBait = bait;
+                break;
+            }
+        }
+        if (matchedBait == null) return "&c该物品不是饵料。";
+
+        int available = item.getAmount();
+        int toTake = Math.min(amount, available);
+        if (toTake <= 0) return "&c数量无效。";
+
+        // 检查目标槽位是否已有不同饵料
+        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
+        for (BaitQueueEntry entry : queue) {
+            if (entry.slotIndex() == queueSlot && !entry.baitId().equals(matchedBait.id())) {
+                return "&c槽位 " + (queueSlot + 1) + " 已有其他饵料，请先取出。";
+            }
+        }
+
+        // 计算新数量（同饵料叠加）
+        int newAmount = toTake;
+        for (BaitQueueEntry entry : queue) {
+            if (entry.slotIndex() == queueSlot && entry.baitId().equals(matchedBait.id())) {
+                newAmount = entry.amount() + toTake;
+                break;
+            }
+        }
+
+        // 从背包扣除物品
+        item.setAmount(available - toTake);
+        player.getInventory().setItem(invSlot, item.getAmount() == 0 ? null : item);
+
+        // 写入数据库
+        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), queueSlot, matchedBait.id(), newAmount));
+        return "&a成功放入 &e" + toTake + " &a个 &f" + matchedBait.displayName() + " &a到槽位 &e" + (queueSlot + 1);
+    }
+
+    /**
+     * 从饵料队列指定槽位取出饵料返还到玩家背包。
+     *
+     * @param player    玩家
+     * @param queueSlot 饵料队列槽位号
+     * @param amount    取出数量（<=0 表示全部取出）
+     * @return 操作结果消息
+     */
+    public @NotNull String takeBait(@NotNull Player player, int queueSlot, int amount) {
+        if (queueSlot < 0 || queueSlot >= getBaitSlots(player)) return "&c槽位号无效。";
+
+        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
+        BaitQueueEntry target = null;
+        for (BaitQueueEntry entry : queue) {
+            if (entry.slotIndex() == queueSlot) { target = entry; break; }
+        }
+        if (target == null) return "&c该槽位为空。";
+
+        BaitDefinition bait = findBait(target.baitId());
+        if (bait == null) return "&c未知饵料类型。";
+
+        int toReturn = amount <= 0 ? target.amount() : Math.min(amount, target.amount());
+
+        // 生成饵料物品返还玩家
+        ItemStack baitItem = iconResolver.resolveItemStack(player, bait.itemRef());
+        if (baitItem != null) {
+            baitItem.setAmount(toReturn);
+            Map<Integer, ItemStack> overflow = player.getInventory().addItem(baitItem);
+            // 背包满则掉落
+            for (ItemStack leftover : overflow.values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            }
+        }
+
+        // 更新数据库
+        int remaining = target.amount() - toReturn;
+        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), queueSlot, target.baitId(), remaining));
+        return "&a成功取出 &e" + toReturn + " &a个 &f" + bait.displayName();
+    }
+
+    /**
+     * 鱼咬钩时消耗队列头部1个饵料。
+     * 队列头部 = slot_index 最小的条目，amount-1，为0则删除。
+     */
+    public void consumeBaitOnBite(@NotNull Player player) {
+        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
+        if (queue.isEmpty()) return;
+        BaitQueueEntry head = queue.get(0);
+        int newAmount = head.amount() - 1;
+        repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), head.slotIndex(), head.baitId(), newAmount));
+        debug("consumeBaitOnBite: player=" + player.getName() + " bait=" + head.baitId()
+            + " slot=" + head.slotIndex() + " remaining=" + newAmount);
     }
 
     /**
@@ -2178,6 +2257,55 @@ public final class FishingService {
         payload.put("daily", dailyMap);
         payload.put("weekly", weeklyMap);
         payload.put("season", seasonMap);
+
+        sendUiInitPacket(player, uiId, payload);
+    }
+
+    /**
+     * 推送饵料管理 UI 数据。
+     * 包含：饵料槽数量、当前队列内容（含物品图标 JSON）、可用饵料定义列表。
+     */
+    public void pushBaitsData(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+
+        int slots = getBaitSlots(player);
+        List<BaitQueueEntry> queue = loadBaitQueue(player);
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("packetId", "AXS_FISHING_BAITS");
+        payload.put("baitSlots", slots);
+
+        // 队列条目
+        java.util.Map<String, Object> queueMap = new java.util.LinkedHashMap<>();
+        for (BaitQueueEntry entry : queue) {
+            BaitDefinition bait = findBait(entry.baitId());
+            java.util.Map<String, Object> slotData = new java.util.LinkedHashMap<>();
+            slotData.put("slotIndex", entry.slotIndex());
+            slotData.put("baitId", entry.baitId());
+            slotData.put("amount", entry.amount());
+            slotData.put("displayName", bait != null ? bait.displayName() : entry.baitId());
+            queueMap.put(Integer.toString(entry.slotIndex()), slotData);
+
+            // 生成饵料物品图标 JSON（itemJson 分离模式，key = queueIconJson{slotIndex}）
+            if (bait != null) {
+                String json = iconResolver.resolveItemJson(player, bait.itemRef());
+                if (json != null && !json.isEmpty()) {
+                    payload.put("queueIconJson" + entry.slotIndex(), json);
+                }
+            }
+        }
+        payload.put("queue", queueMap);
+
+        // 可用饵料定义列表（供 UI 显示图标）
+        java.util.Map<String, Object> baitsMap = new java.util.LinkedHashMap<>();
+        for (BaitDefinition bait : configuration.baits()) {
+            java.util.Map<String, Object> baitData = new java.util.LinkedHashMap<>();
+            baitData.put("id", bait.id());
+            baitData.put("displayName", bait.displayName());
+            baitData.put("isDefault", bait.isDefault());
+            baitsMap.put(bait.id(), baitData);
+        }
+        payload.put("baits", baitsMap);
 
         sendUiInitPacket(player, uiId, payload);
     }
