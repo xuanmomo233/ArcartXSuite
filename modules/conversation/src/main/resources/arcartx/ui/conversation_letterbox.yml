@@ -42,14 +42,9 @@ controls:
           x: 0
           y: 0
           width: 1920
-          height: 0
+          height: 180
           normal: ~0,0,0,255
           visible: var.letterboxVisible == true
-        action:
-          enter: |-
-            self.height = 0
-          load: |-
-            self.height = 0
       下黑边:
         type: Texture
         attribute:
@@ -57,11 +52,6 @@ controls:
           x: 0
           y: 0
           width: 1920
-          height: 0
+          height: 180
           normal: ~0,0,0,255
           visible: var.letterboxVisible == true
-        action:
-          enter: |-
-            self.height = 0
-          load: |-
-            self.height = 0
