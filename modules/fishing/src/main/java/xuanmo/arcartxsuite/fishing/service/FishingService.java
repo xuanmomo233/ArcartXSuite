@@ -111,6 +111,7 @@ public final class FishingService {
     private Supplier<CurrencyBridgeAPI> currencyProvider;
     private Supplier<TitleGrantable> titleProvider;
     private Supplier<MailDispatchable> mailProvider;
+    private xuanmo.arcartxsuite.api.item.ItemMatcherAPI itemMatcher;
 
     private static final String PDC_FISH_ID = "axs_fishing_fish_id";
     private static final String PDC_FISH_SIZE = "axs_fishing_fish_size";
@@ -189,6 +190,10 @@ public final class FishingService {
 
     public void setTitleProvider(@Nullable Supplier<TitleGrantable> provider) {
         this.titleProvider = provider;
+    }
+
+    public void setItemMatcher(@Nullable xuanmo.arcartxsuite.api.item.ItemMatcherAPI itemMatcher) {
+        this.itemMatcher = itemMatcher;
     }
 
     public void start() throws Exception {
@@ -860,6 +865,7 @@ public final class FishingService {
 
     /**
      * 检测玩家手持的鱼竿对应的 RodDefinition。
+     * 优先用 ItemMatcher 匹配，未配置 matcher 时回退到 PDC 标签。
      */
     public @NotNull RodDefinition detectRod(@NotNull Player player) {
         ItemStack rod = player.getInventory().getItemInMainHand();
@@ -867,6 +873,18 @@ public final class FishingService {
             rod = player.getInventory().getItemInOffHand();
             if (rod.getType() != Material.FISHING_ROD) return RodDefinition.DEFAULT;
         }
+
+        // 优先用 ItemMatcher 匹配
+        if (itemMatcher != null) {
+            for (RodDefinition def : configuration.rods()) {
+                if (def.matcher() != null && !def.matcher().emptyMatcher()
+                    && itemMatcher.matches(def.matcher(), rod)) {
+                    return def;
+                }
+            }
+        }
+
+        // 回退：PDC 标签识别
         String rodId = getRodIdFromRod(rod);
         if (rodId == null) return RodDefinition.DEFAULT;
         RodDefinition def = findRod(rodId);
@@ -961,23 +979,23 @@ public final class FishingService {
             if (rod.getType() != Material.FISHING_ROD) return null;
         }
 
-        // 查找玩家背包中的饵料物品
+        if (itemMatcher == null) return null;
+
+        // 用 ItemMatcher 匹配玩家背包里的饵料物品
         for (BaitDefinition bait : configuration.baits()) {
-            ItemStack baitItem = iconResolver.resolveItemStack(player, bait.itemRef());
-            if (baitItem == null) continue;
-            int slot = findBaitInInventory(player, baitItem.getType());
-            if (slot < 0) continue;
-
-            // 消耗饵料
-            ItemStack invItem = player.getInventory().getItem(slot);
-            if (invItem != null && invItem.getAmount() > 0) {
-                invItem.setAmount(invItem.getAmount() - 1);
-                player.getInventory().setItem(slot, invItem.getAmount() == 0 ? null : invItem);
+            if (bait.matcher() == null || bait.matcher().emptyMatcher()) continue;
+            for (int i = 0; i < player.getInventory().getSize(); i++) {
+                ItemStack item = player.getInventory().getItem(i);
+                if (item == null || item.getType().isAir()) continue;
+                if (itemMatcher.matches(bait.matcher(), item)) {
+                    // 消耗饵料
+                    item.setAmount(item.getAmount() - 1);
+                    player.getInventory().setItem(i, item.getAmount() == 0 ? null : item);
+                    // 写入 PDC 标签到鱼竿
+                    attachBaitToRod(rod, bait.id());
+                    return bait;
+                }
             }
-
-            // 写入 PDC 标签
-            attachBaitToRod(rod, bait.id());
-            return bait;
         }
         return null;
     }
@@ -999,16 +1017,6 @@ public final class FishingService {
         if (baitId == null) return 0;
         BaitDefinition bait = findBait(baitId);
         return bait != null ? bait.maxDurabilityBonus() : 0;
-    }
-
-    private int findBaitInInventory(@NotNull Player player, @NotNull Material baitMaterial) {
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
-            ItemStack item = player.getInventory().getItem(i);
-            if (item != null && item.getType() == baitMaterial) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private String getCurrentSeason() {

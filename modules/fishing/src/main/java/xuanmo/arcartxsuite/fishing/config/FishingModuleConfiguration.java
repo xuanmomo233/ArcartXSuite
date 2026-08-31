@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
@@ -459,6 +460,7 @@ public record FishingModuleConfiguration(
                         id,
                         section.getString("display-name", id),
                         parseIcon(section, "item", "minecraft:string"),
+                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "baits/" + p.getFileName()),
                         section.getBoolean("default", false),
                         Collections.unmodifiableMap(modifiers),
                         section.getDouble("treasure-chance-boost", 0.0),
@@ -491,7 +493,8 @@ public record FishingModuleConfiguration(
                         section.getInt("catch-duration-bonus", 0),
                         section.getDouble("exp-multiplier", 1.0),
                         section.getInt("min-player-level", 0),
-                        section.getInt("max-player-level", 0)
+                        section.getInt("max-player-level", 0),
+                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName())
                     ));
                 } catch (Exception e) {
                     logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());

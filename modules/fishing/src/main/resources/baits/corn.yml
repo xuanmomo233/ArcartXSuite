@@ -1,13 +1,33 @@
 ﻿# 饵料定义：玉米粒
 # 玉米粒是一种高级饵料，对传说鲤鱼有极强的吸引效果，同时提升宝藏概率
 # 饵料文件位于 baits/ 目录，每个文件定义一种饵料
+#
+# 饵料物品由外部物品库（NeigeItems/MythicMobs 等）生成，本配置仅用于识别物品和设置效果。
+# item: 块仅用于 UI 图标显示，不用于生成实际物品。
+# match: 块用于识别玩家背包里的饵料物品（ItemMatcher 标准格式，与 market/menu 一致）。
 
 id: "corn"                     # 饵料唯一标识符
 display-name: "玉米粒"          # 显示名称
-item:                          # 饵料对应的物品定义
-  source: "minecraft"          # 物品来源（minecraft=原版物品）
-  id: "wheat_seeds"       # 原版物品ID（使用小麦种子代替玉米）
-  amount: 1                    # 物品数量
+# item: UI 图标显示用（IconDefinition 标准格式，与 battlepass/menu 一致）
+#   source: 物品来源 — minecraft / mythic / neige / overture / mmoitems
+#   id:     物品 ID  — 原版材质名（source: minecraft 时）或外部物品库 ID
+item:
+  source: minecraft
+  id: wheat_seeds
+# match: 物品匹配规则（用于识别玩家背包里的饵料物品）
+#   neige-item-ids: NeigeItems 物品 ID 列表（匹配其中任一即视为该饵料）
+#   mythic-item-ids: MythicMobs 物品 ID 列表
+#   overture-item-ids: Overture 物品 ID 列表
+#   material-ids: 原版材质名列表（如 [wheat_seeds]）
+#   name-contains: 显示名需包含的子串列表
+#   lore-contains: Lore 需包含的子串列表
+#   nbt-keys: NBT/PDC 键白名单
+#   nbt-values: NBT 键值对精确匹配
+#   name-regex / lore-regex: 正则匹配
+# 所有列表为"或"关系，命中任一即匹配；空列表不参与匹配。
+match:
+  material-ids: [wheat_seeds]  # 原版小麦种子即视为玉米粒饵料（示例）
+  # neige-item-ids: [corn_bait]  # 或用 NeigeItems 物品 ID 匹配
 default: false                 # 是否为默认饵料（玩家无饵料时使用）
 fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概率乘数）
   legendary_carp: 2.5          # 传说鲤鱼吸引倍率2.5倍（强力吸引）

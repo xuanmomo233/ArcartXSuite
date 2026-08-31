@@ -377,6 +377,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         service.setCurrencyProvider(() -> currencyManager);
         service.setTitleProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
+        service.setItemMatcher(itemMatcher);
         service.start();
 
         // 启动疲惫值定时恢复任务
