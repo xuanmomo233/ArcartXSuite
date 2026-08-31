@@ -530,7 +530,7 @@ public final class FishingService {
         repository.savePermanentData(updatedPerm);
 
         // ─── 货币奖励（单个 + 多货币列表） ───────────────────────
-        CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
+        CurrencyBridgeAPI currencyApi = currencyApi();
         if (fish.currencyReward() != null && currencyApi != null) {
             try {
                 var reward = fish.currencyReward();
@@ -912,8 +912,20 @@ public final class FishingService {
         }
     }
 
+    /** 获取货币桥接 API，未配置时返回 null。 */
+    private @Nullable CurrencyBridgeAPI currencyApi() {
+        return currencyProvider != null ? currencyProvider.get() : null;
+    }
+
+    /** 发送 UI init 数据包，packetBridge 不可用时静默跳过。 */
+    private void sendUiInitPacket(@NotNull Player player, @NotNull String uiId,
+                                  @NotNull java.util.Map<String, Object> payload) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
     private @NotNull String getDefaultCurrency() {
-        CurrencyBridgeAPI api = currencyProvider != null ? currencyProvider.get() : null;
+        CurrencyBridgeAPI api = currencyApi();
         if (api != null && !api.currencyIds().isEmpty()) {
             return api.currencyIds().iterator().next();
         }
@@ -1458,7 +1470,7 @@ public final class FishingService {
         payload.put("recentCatches", recentMap);
         payload.put("recentCount", recent.size());
 
-        packetBridge.sendPacket(player, uiId, "init", payload);
+        sendUiInitPacket(player, uiId, payload);
     }
 
     public void pushCollectionData(@NotNull Player player, @NotNull String uiId) {
@@ -1502,7 +1514,7 @@ public final class FishingService {
         payload.put("fishList", fishDict);
         payload.put("maxFishCount", configuration.fishes().size());
 
-        packetBridge.sendPacket(player, uiId, "init", payload);
+        sendUiInitPacket(player, uiId, payload);
     }
 
     // ─── 跨模块事件发射 ──────────────────────────────────────────────
@@ -1616,6 +1628,17 @@ public final class FishingService {
 
     // ─── 售卖 ────────────────────────────────────────────────────────
 
+    /** 解析鱼的售卖货币：优先用 currencyReward 配置，未配置时回退到默认货币。 */
+    private @NotNull String resolveSellCurrency(@NotNull FishDefinition fish) {
+        return fish.currencyReward() != null ? fish.currencyReward().currencyId() : getDefaultCurrency();
+    }
+
+    /** 获取消息，null 时返回 fallback。 */
+    private @NotNull String msgOr(@NotNull String key, @NotNull String fallback, Object... args) {
+        String msg = getMessage(key, args);
+        return msg != null ? msg : fallback;
+    }
+
     /**
      * 售卖玩家主手中的鱼。
      */
@@ -1623,7 +1646,7 @@ public final class FishingService {
         ItemStack hand = player.getInventory().getItemInMainHand();
         String fishId = getFishIdFromItem(hand);
         if (fishId == null) {
-            return getMessage("sell_not_fish", "") != null ? getMessage("sell_not_fish", "") : "&c手中物品不是钓鱼产物。";
+            return msgOr("sell_not_fish", "&c手中物品不是钓鱼产物。");
         }
 
         FishDefinition fish = findFish(fishId);
@@ -1631,28 +1654,31 @@ public final class FishingService {
             return "&c未知鱼种，无法出售。";
         }
 
-        int size = getFishSizeFromItem(hand);
-        int price = fish.calculatePrice(size);
-        String currency = getDefaultCurrency();
-
-        CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
-        if (currencyApi != null) {
-            var bridge = currencyApi.bridge(currency);
-            if (bridge != null && bridge.available()) {
-                bridge.deposit(player, BigDecimal.valueOf(price));
-            }
+        CurrencyBridgeAPI currencyApi = currencyApi();
+        if (currencyApi == null) {
+            return "&c货币系统暂不可用。";
         }
 
+        int size = getFishSizeFromItem(hand);
+        int price = fish.calculatePrice(size);
+        String currency = resolveSellCurrency(fish);
+
+        var bridge = currencyApi.bridge(currency);
+        if (bridge == null || !bridge.available()) {
+            return "&c货币 " + currency + " 暂不可用。";
+        }
+
+        bridge.deposit(player, BigDecimal.valueOf(price));
         hand.setAmount(hand.getAmount() - 1);
-        String msg = getMessage("sell_success", fish.displayName(), String.valueOf(price), currency);
-        return msg != null ? msg : "&a成功出售 &e" + fish.displayName() + " &a获得 &6" + price + " " + currency;
+        return msgOr("sell_success", "&a成功出售 &e" + fish.displayName() + " &a获得 &6" + price + " " + currency,
+            fish.displayName(), String.valueOf(price), currency);
     }
 
     /**
      * 售卖背包中所有钓鱼产物。
      */
     public @NotNull String sellAllFish(@NotNull Player player) {
-        CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
+        CurrencyBridgeAPI currencyApi = currencyApi();
         if (currencyApi == null) {
             return "&c货币系统暂不可用。";
         }
@@ -1668,22 +1694,21 @@ public final class FishingService {
             FishDefinition fish = findFish(fishId);
             if (fish == null) continue;
 
+            String currency = resolveSellCurrency(fish);
+            var bridge = currencyApi.bridge(currency);
+            if (bridge == null || !bridge.available()) continue;
+
             int size = getFishSizeFromItem(item);
             int price = fish.calculatePrice(size);
-            String currency = fish.currencyReward() != null ? fish.currencyReward().currencyId() : getDefaultCurrency();
-
-            var bridge = currencyApi.bridge(currency);
-            if (bridge != null && bridge.available()) {
-                bridge.deposit(player, BigDecimal.valueOf(price * item.getAmount()));
-                earnings.merge(currency, (double) price * item.getAmount(), Double::sum);
-                totalSold += item.getAmount();
-                player.getInventory().setItem(i, null);
-            }
+            int amount = item.getAmount();
+            bridge.deposit(player, BigDecimal.valueOf(price * amount));
+            earnings.merge(currency, (double) price * amount, Double::sum);
+            totalSold += amount;
+            player.getInventory().setItem(i, null);
         }
 
         if (totalSold == 0) {
-            String msg = getMessage("sell_none", "");
-            return msg != null ? msg : "&c背包中没有可出售的鱼。";
+            return msgOr("sell_none", "&c背包中没有可出售的鱼。");
         }
 
         StringBuilder sb = new StringBuilder();
@@ -1696,29 +1721,36 @@ public final class FishingService {
 
     // ─── 物品识别辅助 ────────────────────────────────────────────────
 
-    private @Nullable String getFishIdFromItem(@Nullable ItemStack item) {
+    /** 从物品 PDC 读取字符串值，物品无效或无标签时返回 null。 */
+    private @Nullable String getPdcString(@Nullable ItemStack item, @NotNull String key) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) return null;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return null;
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
-        NamespacedKey key = new NamespacedKey(plugin, PDC_FISH_ID);
-        if (pdc.has(key, PersistentDataType.STRING)) {
-            return pdc.get(key, PersistentDataType.STRING);
-        }
-        return null;
+        NamespacedKey nk = new NamespacedKey(plugin, key);
+        return pdc.has(nk, PersistentDataType.STRING) ? pdc.get(nk, PersistentDataType.STRING) : null;
     }
 
-    private int getFishSizeFromItem(@Nullable ItemStack item) {
+    /** 从物品 PDC 读取整数值，物品无效或无标签时返回 0。 */
+    private int getPdcInt(@Nullable ItemStack item, @NotNull String key) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) return 0;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return 0;
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
-        NamespacedKey key = new NamespacedKey(plugin, PDC_FISH_SIZE);
-        if (pdc.has(key, PersistentDataType.INTEGER)) {
-            Integer val = pdc.get(key, PersistentDataType.INTEGER);
+        NamespacedKey nk = new NamespacedKey(plugin, key);
+        if (pdc.has(nk, PersistentDataType.INTEGER)) {
+            Integer val = pdc.get(nk, PersistentDataType.INTEGER);
             return val != null ? val : 0;
         }
         return 0;
+    }
+
+    private @Nullable String getFishIdFromItem(@Nullable ItemStack item) {
+        return getPdcString(item, PDC_FISH_ID);
+    }
+
+    private int getFishSizeFromItem(@Nullable ItemStack item) {
+        return getPdcInt(item, PDC_FISH_SIZE);
     }
 
     // ─── 天赋/奖励/任务 UI 数据推送 ──────────────────────────
@@ -1865,7 +1897,7 @@ public final class FishingService {
         }
         payload.put("activeBonuses", activeBonuses);
 
-        packetBridge.sendPacket(player, uiId, "init", payload);
+        sendUiInitPacket(player, uiId, payload);
     }
 
     /**
@@ -1903,7 +1935,7 @@ public final class FishingService {
         payload.put("rewards", rewardsMap);
         payload.put("rewardCount", seasonRewards.size());
 
-        packetBridge.sendPacket(player, uiId, "init", payload);
+        sendUiInitPacket(player, uiId, payload);
     }
 
     /**
@@ -2139,7 +2171,7 @@ public final class FishingService {
         payload.put("weekly", weeklyMap);
         payload.put("season", seasonMap);
 
-        packetBridge.sendPacket(player, uiId, "init", payload);
+        sendUiInitPacket(player, uiId, payload);
     }
 
     /**

@@ -58,6 +58,9 @@ drops:
 min-player-level: 10
 
 # ─── 数据/展示（可选） ─────────────────────────────────
+currency-reward:
+  currency-id: "coin"
+
 description: "全年可捕获的常见鱼类，在海洋和河流中均有分布，难度最低，新手友好。"
 icon:
   source: minecraft

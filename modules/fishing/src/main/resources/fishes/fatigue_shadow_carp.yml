@@ -30,5 +30,8 @@ behaviors:
   darting:
     type: DARTING
     weight: 0.4
+currency-reward:
+  currency-id: "coin"
+
 description: "疲惫深渊中浮现的暗影之鲤，游动轨迹难以捉摸"
 record-weight: 1.5

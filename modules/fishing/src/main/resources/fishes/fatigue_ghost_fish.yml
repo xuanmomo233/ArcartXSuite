@@ -30,5 +30,8 @@ behaviors:
   erratic:
     type: ERRATIC
     weight: 0.5
+currency-reward:
+  currency-id: "coin"
+
 description: "极度疲惫时出现的幽灵之鱼，据说只有在精疲力竭时才能看到它的身影"
 record-weight: 2.0

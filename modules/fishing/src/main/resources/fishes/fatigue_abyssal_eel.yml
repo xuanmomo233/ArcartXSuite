@@ -30,5 +30,8 @@ behaviors:
   erratic:
     type: ERRATIC
     weight: 0.3
+currency-reward:
+  currency-id: "coin"
+
 description: "疲惫至极时从深渊浮现的神秘鳗鱼"
 record-weight: 1.0

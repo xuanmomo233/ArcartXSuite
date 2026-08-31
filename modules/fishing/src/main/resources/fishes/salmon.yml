@@ -53,6 +53,9 @@ drops:
 min-player-level: 10
 
 # ─── 数据/展示（可选） ─────────────────────────────────
+currency-reward:
+  currency-id: "coin"
+
 description: "常见的淡水鱼，在河流中游弋，清晨至傍晚均可捕获，适合新手练习。"
 icon:
   source: minecraft
