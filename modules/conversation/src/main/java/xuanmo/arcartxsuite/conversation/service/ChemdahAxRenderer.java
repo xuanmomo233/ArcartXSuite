@@ -191,39 +191,6 @@ final class ChemdahAxRenderer {
     }
 
     /**
-     * 处理宿主全局确认按键，确认当前选中的回复。
-     *
-     * @param player 玩家
-     * @return {@code true} 表示存在活跃对话且已处理
-     */
-    boolean handleConfirmKey(Player player) {
-        DialogState dialogState = dialogStates.get(player.getUniqueId());
-        if (dialogState == null) {
-            return false;
-        }
-        confirmReply(player, dialogState, "key-confirm");
-        return true;
-    }
-
-    /**
-     * 处理宿主全局导航按键，按偏移量移动回复选中项。
-     *
-     * @param player 玩家
-     * @param delta  移动步数，负数向前、正数向后
-     * @return {@code true} 表示存在活跃对话且已处理
-     */
-    boolean handleNavigationKey(Player player, int delta) {
-        DialogState dialogState = dialogStates.get(player.getUniqueId());
-        if (dialogState == null) {
-            return false;
-        }
-        if (dialogState.moveSelection(delta)) {
-            syncDialogView(player, dialogState, delta < 0 ? "key-prev-reply" : "key-next-reply");
-        }
-        return true;
-    }
-
-    /**
      * 判断指定玩家是否存在活跃的对话状态。
      *
      * @param playerId 玩家 id
@@ -561,7 +528,7 @@ final class ChemdahAxRenderer {
         payload.put("packetId", configuration.clientPacketId());
         payload.put("speakerName", state.speakerName());
         payload.put("messageLines", state.messageLines());
-        payload.put("hintText", state.canNavigateReplies() ? "NUMPAD_8/2 切换，F 确认" : "当前没有可选回复");
+        payload.put("hintText", state.canNavigateReplies() ? "点击选项或按数字键 1-9 发送" : "当前没有可选回复");
         payload.put("canReply", state.canReply());
         payload.put("selectedReplyId", state.selectedReplyId());
         payload.put("selectedReplyIndex", state.selectedReplyIndex());
@@ -663,7 +630,7 @@ final class ChemdahAxRenderer {
     /**
      * 单个玩家的对话状态快照，承载会话、正文、回复列表与选中项等渲染所需信息。
      * <p>
-     * 选中项相关字段可变，其余字段不可变；通过 {@link #moveSelection} / {@link #selectReply}
+     * 选中项相关字段可变，其余字段不可变；通过 {@link #selectReply}
      * 修改选中项，{@link #setLastReplyActionAt} 更新最近操作时间用于防抖。
      */
     private static final class DialogState {
@@ -752,19 +719,6 @@ final class ChemdahAxRenderer {
 
         private boolean canNavigateReplies() {
             return canReply && !replyIds.isEmpty();
-        }
-
-        private boolean moveSelection(int delta) {
-            if (!canNavigateReplies()) {
-                return false;
-            }
-            int nextIndex = ConversationInteractionStateSupport.wrapIndex(selectedReplyIndex, replyIds.size(), delta);
-            if (nextIndex == selectedReplyIndex) {
-                return false;
-            }
-            selectedReplyIndex = nextIndex;
-            selectedReplyId = replyIds.get(nextIndex);
-            return true;
         }
 
         private boolean selectReply(String replyId) {

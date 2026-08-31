@@ -1,18 +1,21 @@
 # AXS 资源说明
-# 用途: Conversation 模块默认对话 Menu，负责显示 NPC 正文与玩家回复。
+# 用途: Conversation 模块默认对话 Menu（参考 对话.yml 布局 + 原神对话浮层风格改造）
 # 前置依赖: ArcartX、Chemdah、Adyeshach；Conversation 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.conversation.enabled + modules.conversation.password
 # 关联文件: ArcartXConversation.yml、ui/conversation_selector_hud.yml
 # 重载命令: /axs conversation reload
 # 最小使用路径: ui + controls
-# 结构提示: 顶层 ui 节点定义菜单行为；packetHandler 处理对话数据包；controls 定义说话人、正文和回复列表。
+# 结构提示: 轻薄底栏浮于底部，底栏背景为左右两块渐变（中间实、两边透明）。
+#          NPC名称和对话正文居中显示，选项区悬浮于底栏上方右侧。
+#          选项条用 gradient 特效实现左侧圆角实色→右侧平头淡出。
+#          选项高亮通过 isHovered() 表达式每帧自动判断。
 # 服务端 sync 字段:
 #   token, packetId, speakerName, messageLines, hintText, canReply,
 #   selectedReplyId, selectedReplyIndex, replyCount, replyScrollRatio, replyRows
 # replyRows 单行字段:
 #   id, text, replyType, selected, index
 # 客户端回包:
-#   select_reply
+#   confirm_reply
 # 回包格式:
 #   action, token, targetId
 
@@ -64,11 +67,12 @@ ui:
         val.reply_list.get(1).remove()
       }
 
-      for(i in range(1, var.replyCount - 1)){
+      for(i in range(1, var.replyCount)){
         key = i.round()
         ri = val.reply_list['回复模板'].copy('reply_' + i.round())
         ri.entryKey = key
       }
+
     # packetHandler: close
     # 包字段:
     #   - packetId: 通信标识（可能为 none）
@@ -98,6 +102,7 @@ ui:
       var.replyCount = 0
       var.replyScrollRatio = 0
       var.replyRows = {}
+      var.maxReplyWidth = 300
     close: |-
       var.replyRows = {}
     keyPress: |-
@@ -105,9 +110,19 @@ ui:
       if(var.k >= "1" && var.k <= "9"){
         var.rowKey = (var.k - 1).round()
         if(var.replyRows[var.rowKey] != none){
-          Chat.say("/session reply " + var.replyRows[var.rowKey]['id'])
+          Packet.send(var.packetId, 'confirm_reply', var.token, var.replyRows[var.rowKey]['id'])
         }
       }
+    tick: |-
+      mw = 0
+      for(i in range(0, val.reply_list.childrenCount())){
+        w = val.reply_list.get(i)['回复文字'].width
+        if(w > mw){
+          mw = w
+        }
+      }
+      var.maxReplyWidth = mw + 80
+
 controls:
   自适应全局布局:
     type: Adaptive
@@ -116,220 +131,212 @@ controls:
       width: 1920
       height: 1080
     children:
-      对话框布局:
+      底栏容器:
         type: Canvas
         attribute:
           point: ~bottom_center
           x: 0
-          y: -44
+          y: -28
           width: 1420
-          height: 372
+          height: 280
         children:
-          主面板:
+          底栏背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~100,100,100,255
+              x: 0
+              y: 0
+              width: 710
+              height: 280
+              normal: ~Frosted:30;0,0,0,200
               shape: ~round_rect
-              radius: 24
+              radius: 15
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
-          标题名称:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 22
-              texts: "'&0' + var.speakerName"
-              fontSize: 64
-          标题序号:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -148
-              y: 10
-              texts: 
-                - "~&0鼠标首次点击选中，再次点击进行回复"
-                - "~&0点击键盘上方数字键1-9直接回复选项1-9"
-              fontSize: 36
-              lineSpace: 8
-          关闭按钮:
+                width: 5
+                color: ~255,255,255,255
+          名称布局:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -28
-              y: 15
-              width: 84
-              height: 34
-            action:
-              clickLeft: |-
-                Screen.close()
+              width: self['NPC名称'].width + 70
+              height: 70
+              x: 70
+              y: -35
             children:
-              关闭背景:
+              名称背景:
                 type: Texture
                 attribute:
+                  normal: ~50,50,50,255
                   point: ~stretch_all
-                  through: true
-                  normal: ~150,150,150,255
-                  hover: ~200,200,200,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 25
                 effect:
                   stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              关闭文字:
+                    width: 3
+                    color: ~200,200,200,255
+              NPC名称:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 84
-                  texts: "~&0关闭"
-                  fontSize: 36
-                  through: true
-          消息面板:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 58
-              width: 900
-              height: 288
-              normal: ~120,120,120,200
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+                  texts:
+                    - "'&f' + var.speakerName"
+                  fontSize: 56
           消息文字:
             type: Text
             attribute:
               point: ~top_left
-              x: 46
-              y: 78
-              width: 858
-              texts: "var.messageLines"
-              fontSize: 49
-          回复面板:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -24
-              y: 58
-              width: 446
-              height: 288
-              normal: ~120,120,120,200
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          暂无回复提示:
+              x: 70
+              y: 70
+              texts: var.messageLines
+              fontSize: 48
+          提示文字:
             type: Text
             attribute:
-              point: ~middle_center
-              x: 474
-              y: 40
-              visible: var.replyCount <= 0
-              texts: "~&7当前没有可选回复"
-              fontSize: 81
-          回复滑块:
-            type: Texture
-            val: 回复滑块
+              point: ~bottom_left
+              x: 16
+              y: -16
+              texts:
+                - "~§7悬停选中选项，单击发送；键盘 1-9 直接发送。"
+              fontSize: 36
+
+          ### 本方案为滚动栏的方案，最多显示三个选项，需要鼠标轮滑翻页查看选项
+          选项区:
+            type: Canvas
             attribute:
-              point: ~top_right
-              x: -44
-              y: 78
-              width: 6
-              height: 30
-              normal: ~120,120,120,200
-              maxDragY: 218
-          回复滚动栏:
-            type: Scroll
-            attribute:
-              point: ~top_right
-              x: -44
-              y: 78
-              width: 398
-              height: 248
-              moveY: "self.parent['回复滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['回复滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['回复滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+              point: ~bottom_right
+              y: -300
+              width: var.maxReplyWidth + 10
+              height: 178
             children:
-              reply_stack:
-                val: reply_list
-                type: VStack
+              选项滑块:
+                type: Texture
+                val: 选项滑块
                 attribute:
-                  width: 394
-                  spaceBetween: 8
+                  point: ~top_right
+                  width: 4
+                  height: 30
+                  normal: ~150,150,150,255
+                  maxDragY: 148
+              选项滚动区:
+                type: Scroll
+                attribute:
+                  width: var.maxReplyWidth + 5
+                  height: 178
+                  moveY: "self.parent['选项滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['选项滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['选项滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
-                  回复模板:
-                    type: Canvas
+                  选项列表:
+                    type: VStack
+                    val: reply_list
                     attribute:
-                      entryKey: 0.round()
-                      visible: "var.replyRows[self.entryKey] != none"
-                      entry: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey] : none"
-                      replyId: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey]['id'] : none"
-                      width: 394
-                      height: 42
-                    action:
-                      clickLeft: |-
-                        if(self.entry != none){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
+                      width: var.maxReplyWidth
+                      spaceBetween: 5
                     children:
-                      回复背景:
-                        type: Texture
+                      回复模板:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~150,150,150,200
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      选中覆盖层:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      回复文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
-                          fontSize: 49
-                      回复序号:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != none ? '&8选项：' + (self.parent.entry['index']+1).round() : none"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
+                          entryKey: 0.round()
+                          entry: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey] : none"
+                          replyId: "self.entry != none ? self.entry['id'] : none"
+                          visible: self.entry != none
+                          width: var.maxReplyWidth
+                          height: 56
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none && self.replyId != none){
+                              Packet.send(var.packetId, 'confirm_reply', var.token, self.replyId)
+                            }
+                        children:
+                          选项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~Frosted:30;0,0,0,255
+                              shape: ~round_rect
+                              radius: 25
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "self.parent.isHovered() ? '255,255,255,255' : '80,86,108,255'"
+                          回复文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 14
+                              y: 0
+                              texts: "self.parent.entry['text']"
+                              fontSize: 48
+                              through: true
+                          回复序号:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -14
+                              y: 0
+                              texts: "self.parent.entry != none ? '&8' + ((self.parent.entry['index']+1).round() + '') : none"
+                              fontSize: 36
+                              through: true
+
+          # ### 本方案为无滚动栏的方案，能无限往上叠加选项，使用本方案请删除上面滚动栏方案
+          # 选项列表:
+          #   type: VStack
+          #   val: reply_list
+          #   attribute:
+          #     width: var.maxReplyWidth
+          #     spaceBetween: 5
+          #     point: ~bottom_right
+          #     y: -300
+          #   children:
+          #     回复模板:
+          #       type: Canvas
+          #       attribute:
+          #         entryKey: 0.round()
+          #         entry: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey] : none"
+          #         replyId: "self.entry != none ? self.entry['id'] : none"
+          #         visible: self.entry != none
+          #         width: var.maxReplyWidth
+          #         height: 56
+          #       action:
+          #         clickLeft: |-
+          #           if(self.entry != none && self.replyId != none){
+          #             Packet.send(var.packetId, 'confirm_reply', var.token, self.replyId)
+          #           }
+          #       children:
+          #         选项背景:
+          #           type: Texture
+          #           attribute:
+          #             point: ~stretch_all
+          #             through: true
+          #             normal: ~Frosted:30;0,0,0,255
+          #             shape: ~round_rect
+          #             radius: 25
+          #           effect:
+          #             stroke:
+          #               width: 3
+          #               color: "self.parent.isHovered() ? '255,255,255,255' : '80,86,108,255'"
+          #         回复文字:
+          #           type: Text
+          #           attribute:
+          #             point: ~middle_left
+          #             x: 14
+          #             y: 0
+          #             texts: "self.parent.entry['text']"
+          #             fontSize: 48
+          #             through: true
+          #         回复序号:
+          #           type: Text
+          #           attribute:
+          #             point: ~middle_right
+          #             x: -14
+          #             y: 0
+          #             texts: "self.parent.entry != none ? '&8' + ((self.parent.entry['index']+1).round() + '') : none"
+          #             fontSize: 36
+          #             through: true

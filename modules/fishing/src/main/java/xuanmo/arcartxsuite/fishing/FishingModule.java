@@ -165,8 +165,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
      */
     private void ensureDefinitionDefaults() {
         ensureDefinitionDir("fishes", new String[]{
-            "fishes/catfish.yml", "fishes/legendary_carp.yml", "fishes/pufferfish.yml",
-            "fishes/salmon.yml", "fishes/sea_bass.yml", "fishes/tuna.yml",
+            "fishes/carp.yml", "fishes/catfish.yml", "fishes/crucian_carp.yml", "fishes/minnow.yml",
+            "fishes/legendary_carp.yml", "fishes/pufferfish.yml", "fishes/salmon.yml",
+            "fishes/sea_bass.yml", "fishes/tuna.yml",
             "fishes/fatigue_ghost_fish.yml", "fishes/fatigue_shadow_carp.yml", "fishes/fatigue_abyssal_eel.yml"
         });
         ensureDefinitionDir("baits", new String[]{

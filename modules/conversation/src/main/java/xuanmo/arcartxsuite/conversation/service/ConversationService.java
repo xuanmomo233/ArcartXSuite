@@ -290,14 +290,11 @@ public final class ConversationService implements Listener {
 
     /**
      * 宿主按键回调：处理确认键（AXS_INTERACT），返回 true 表示已消费。
+     * 仅处理选择器状态（对话 UI 为非 HUD 模式，不接收全局按键事件）。
      */
     public boolean handleConfirmKeyFromHost(Player player) {
         if (player == null || !player.isOnline()) {
             return false;
-        }
-        // 对话中按确认 → 消费
-        if (dialogRenderer.handleConfirmKey(player)) {
-            return true;
         }
         // 选择器有候选 → 打开对话并消费
         SelectorState selectorState = selectorStates.get(player.getUniqueId());
@@ -310,14 +307,11 @@ public final class ConversationService implements Listener {
 
     /**
      * 宿主按键回调：处理导航键（上/下），返回 true 表示已消费。
+     * 仅处理选择器状态（对话 UI 为非 HUD 模式，不接收全局按键事件）。
      */
     public boolean handleNavigationKeyFromHost(Player player, int delta) {
         if (player == null || !player.isOnline()) {
             return false;
-        }
-        // 对话中导航 → 消费
-        if (dialogRenderer.handleNavigationKey(player, delta)) {
-            return true;
         }
         // 选择器中导航 → 消费
         SelectorState selectorState = selectorStates.get(player.getUniqueId());
@@ -591,29 +585,6 @@ public final class ConversationService implements Listener {
         }
     }
 
-    private void handleConfirmKey(Player player) {
-        if (dialogRenderer.handleConfirmKey(player)) {
-            return;
-        }
-        SelectorState selectorState = selectorStates.get(player.getUniqueId());
-        if (selectorState != null) {
-            openSelectedConversation(player, selectorState, "key-confirm");
-        }
-    }
-
-    private void handleNavigationKey(Player player, int delta) {
-        if (dialogRenderer.handleNavigationKey(player, delta)) {
-            return;
-        }
-        if (!interactionReady) {
-            return;
-        }
-        SelectorState selectorState = selectorStates.get(player.getUniqueId());
-        if (selectorState != null && selectorState.moveSelection(delta)) {
-            syncSelectorView(player, selectorState, delta < 0 ? "key-prev-npc" : "key-next-npc");
-        }
-    }
-
     private void openSelectedConversation(Player player, SelectorState state, String source) {
         if (!interactionReady || state == null || !state.hasCandidates()) {
             return;
@@ -843,7 +814,7 @@ public final class ConversationService implements Listener {
         payload.put("token", tokenFor(state.generation()));
         payload.put("packetId", configuration.clientPacketId());
         payload.put("title", "附近对话");
-        payload.put("hintText", "滚轮/NUMPAD_8/2 切换，F 确认");
+        payload.put("hintText", "滚轮/↑/↓ 切换，G 确认");
         payload.put("selectedNpcId", state.selectedNpcId());
         payload.put("selectedNpcIndex", state.selectedIndex());
         payload.put("npcCount", state.candidates().size());
