@@ -12,7 +12,8 @@ time-ranges:
     start: "00:00"
     end: "24:00"
 item:
-  material: "cod"
+  source: "minecraft"
+  identifier: "minecraft:cod"
   amount: 1
 difficulty: 65
 min-player-level: 10
@@ -24,4 +25,5 @@ behaviors:
     type: DARTING
     weight: 0.4
 description: "疲惫深渊中浮现的暗影之鲤，游动轨迹难以捉摸"
+icon-texture-url: ""
 record-weight: 1.5

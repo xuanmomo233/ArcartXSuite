@@ -15,7 +15,8 @@ time-ranges:                    # 全天可捕
   - start: "00:00"
     end: "24:00"
 item:                           # 捕获后掉落的物品定义
-  material: "cod"  # 原版物品
+  source: "minecraft"           # 物品来源（minecraft=原版物品）
+  id: "cod"                     # 原版物品ID（鳕鱼，体型相近代用）
   amount: 1                     # 物品数量
 difficulty: 10                  # 钓鱼难度（0-100，难度10，新手进阶）
 behaviors:                      # 小游戏中鱼的行为模式及权重
@@ -45,7 +46,8 @@ currency-reward:
 drops:
   big_crucian_bonus:
     item:
-      material: "cod"
+      source: "minecraft"
+      id: "cod"
       amount: 1
     weight: 1.0
     condition: "size:25"        # 尺寸≥25cm 时额外掉落1条
@@ -57,4 +59,5 @@ max-player-level: 10
 
 # ─── 数据/展示（可选） ─────────────────────────────────
 description: "常见的淡水鱼，体型较小，性情温和，偶有挣扎但力度不大，适合刚入门的钓手练习。"
+icon-texture: "minecraft:cod"
 record-weight: 0.4              # 图鉴排序靠后（常见鱼）

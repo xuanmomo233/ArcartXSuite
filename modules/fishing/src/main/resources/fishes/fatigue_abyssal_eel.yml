@@ -12,7 +12,8 @@ time-ranges:
     start: "00:00"
     end: "24:00"
 item:
-  material: "cod"
+  source: "minecraft"
+  identifier: "minecraft:cod"
   amount: 1
 difficulty: 55
 min-player-level: 10
@@ -24,4 +25,5 @@ behaviors:
     type: ERRATIC
     weight: 0.3
 description: "疲惫至极时从深渊浮现的神秘鳗鱼"
+icon-texture-url: ""
 record-weight: 1.0
