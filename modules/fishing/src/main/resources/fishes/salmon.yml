@@ -14,7 +14,12 @@ weathers: [clear, rain]        # 可捕获天气（晴天、雨天）
 time-ranges:                   # 可捕获时间段
   - start: "06:00"             # 开始时间（06:00，清晨）
     end: "19:00"               # 结束时间（19:00，傍晚前，白天时段）
-item:                          # 捕获后掉落的物品定义
+# item: 捕获后掉落的物品定义（IconDefinition 标准格式，支持以下写法三选一）
+#   原版物品:    material: "cod"
+#   外部物品库:  source: "neige"  (或 mythic/overture/mmo) + id: "物品ID"
+#   自定义JSON:  json: "{id:'minecraft:cod',components:{...}}"
+# 其他可选字段: amount / name / lore / custom-model-data / glow / skull-texture / color / nbt
+item:
   material: "salmon"
   amount: 1                    # 物品数量
 difficulty: 35                 # 钓鱼难度（0-100，较低难度）

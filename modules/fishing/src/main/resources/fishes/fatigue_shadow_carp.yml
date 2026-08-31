@@ -11,6 +11,11 @@ time-ranges:
   default:
     start: "00:00"
     end: "24:00"
+# item: 捕获后掉落的物品定义（IconDefinition 标准格式，支持以下写法三选一）
+#   原版物品:    material: "cod"
+#   外部物品库:  source: "neige"  (或 mythic/overture/mmo) + id: "物品ID"
+#   自定义JSON:  json: "{id:'minecraft:cod',components:{...}}"
+# 其他可选字段: amount / name / lore / custom-model-data / glow / skull-texture / color / nbt
 item:
   material: "cod"
   amount: 1
