@@ -14,11 +14,12 @@ ui:
   show: true
   screenScale: true
   level: 50
-  # 电影序列播放时隐藏所有其他 HUD，营造沉浸感
-  # HUD = 隐藏所有 ArcartX HUD 类型 UI
-  # 以下为原版 HUD 名称，保留 title_text（序列中 title 动作需要）
+  # 电影序列播放时隐藏其他 HUD，营造沉浸感
+  # 原版 HUD 填名称，ArcartX 自定义 HUD 填 UI ID（需带 AXS: 前缀）
+  # 保留 title_text 供序列中 title 动作使用
+  # 请根据本服务器实际安装的模块，在下方自行添加/删除需要隐藏的 ArcartX HUD ID
   hide:
-    - HUD
+    # ── 原版 HUD（固定，无需修改）──
     - vignette
     - spyglass
     - helmet
@@ -47,6 +48,10 @@ ui:
     - system_toast
     - advancement_toast
     - tutorial_toast
+    # ── ArcartX 自定义 HUD（请根据本服实际情况添加，需带 AXS: 前缀）──
+    # - AXS:announcer_hud
+    # - AXS:pickup_hud
+    # - AXS:boss_tracker
   packetHandler:
     # packetHandler: sync
     # 包字段:
