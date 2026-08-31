@@ -684,10 +684,10 @@ public record BattlePassModuleConfiguration(
             return new BattlePassUiConfiguration(
                 section.getBoolean("register-ui-on-enable", true),
                 section.getBoolean("overwrite-ui-files", false),
-                section.getString("main-ui-id", "battlepass_main"),
-                section.getString("tasks-ui-id", "battlepass_tasks"),
-                section.getString("rewards-ui-id", "battlepass_rewards"),
-                section.getString("settlement-ui-id", "battlepass_settlement")
+                section.getString("main-ui-id", "AXS:battlepass_main"),
+                section.getString("tasks-ui-id", "AXS:battlepass_tasks"),
+                section.getString("rewards-ui-id", "AXS:battlepass_rewards"),
+                section.getString("settlement-ui-id", "AXS:battlepass_settlement")
             );
         }
     }

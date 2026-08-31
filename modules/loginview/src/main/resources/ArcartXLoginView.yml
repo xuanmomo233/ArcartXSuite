@@ -37,7 +37,7 @@ qq-binding:
 # ─── UI 配置 ────────────────────────────────────────
 ui:
   # 登录 UI 的 ArcartX ID。
-  ui-id: AXS:LoginView
+  ui-id: AXS:login_view
   # 客户端回包 ID，用于接收输入框内容。
   packet-id: AXS_loginview
   # 默认使用紧凑登录 UI；可改为 login_view_menu.yml 使用纯色块主菜单风格 UI。

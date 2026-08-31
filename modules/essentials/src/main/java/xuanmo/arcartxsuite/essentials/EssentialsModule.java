@@ -234,10 +234,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         // UI 绑定与 Packet Handler 初始化
         if (packetBridge != null && packetBridge.isAvailable()) {
             UiBinding menuBinding = registerModuleUi(
-                EssentialsMenuPacketHandler.UI_FILE_PATH, null, true
+                EssentialsMenuPacketHandler.UI_FILE_PATH, "AXS:essentials_menu", true
             );
             UiBinding adminBinding = registerModuleUi(
-                EssentialsAdminPacketHandler.UI_FILE_PATH, null, true
+                EssentialsAdminPacketHandler.UI_FILE_PATH, "AXS:essentials_admin", true
             );
 
             if (menuBinding.registeredUiId() != null) {

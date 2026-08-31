@@ -5,13 +5,13 @@
 enabled: true  # 是否启用此 Tab 定义（默认开启，作为基础在线玩家列表）
 # UI 发包目标（同一个 payload 可同时发给多个 UI，每个 UI 可自定义 handler）：
 ui-targets:
-  - ui-id: "tab"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab.yml）
+  - ui-id: "AXS:tab"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab.yml）
     packet-handler: "tab"  # UI 端接收包的 handler 名称
 # 多 UI 示例（按需追加更多目标）：
 # ui-targets:
-#   - ui-id: "tab"
+#   - ui-id: "AXS:tab"
 #     packet-handler: "tab"
-#   - ui-id: "tab-hud"
+#   - ui-id: "AXS:tab-hud"
 #     packet-handler: "overlay"
 # Tab 仍以服务端周期 diff 同步为主；下面的客户端回包刷新保留为兼容入口，默认启用。
 # 客户端 Packet.send("TAB", "update") 会请求一次 viewer 级强制重发，但仍受限流保护。

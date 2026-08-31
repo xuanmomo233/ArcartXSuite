@@ -36,7 +36,7 @@
 kill-effect:
   enabled: true                    # 是否启用
   trigger: kill                    # 触发器: 击杀时触发
-  ui-id: "combat_kill_effect"      # 目标 UI ID
+  ui-id: "AXS:combat_kill_effect"      # 目标 UI ID
   packet-handler: "kill"           # UI 中的处理器名称
   recipients:                      # 接收者列表
     - killer                       # 攻击者（击杀者）
@@ -47,7 +47,7 @@ kill-effect:
 attack-effect:
   enabled: false                   # 默认关闭，按需开启
   trigger: attack                  # 触发器: 攻击时触发
-  ui-id: "combat_kill_effect"      # 目标 UI ID
+  ui-id: "AXS:combat_kill_effect"      # 目标 UI ID
   packet-handler: "attack"         # UI 中的处理器名称
   recipients:                      # 接收者列表
     - attacker                     # 攻击者
@@ -66,7 +66,7 @@ attack-effect:
 combo-5:
   enabled: true                    # 是否启用
   trigger: combo                   # 触发器: 连击条件触发
-  ui-id: "combo_effect"            # 目标 UI ID（连击特效面板）
+  ui-id: "AXS:combo_effect"            # 目标 UI ID（连击特效面板）
   packet-handler: "combo"          # UI 中的处理器名称（更新连击数字）
   recipients:                      # 接收者列表
     - attacker                     # 攻击者
@@ -81,7 +81,7 @@ combo-5:
 combo-10:
   enabled: true                    # 是否启用
   trigger: combo                   # 触发器: 连击条件触发
-  ui-id: "combo_effect"            # 目标 UI ID（连击特效面板）
+  ui-id: "AXS:combo_effect"            # 目标 UI ID（连击特效面板）
   packet-handler: "combo_milestone" # UI 中的处理器名称（更新数字 + 播放里程碑动画）
   recipients:                      # 接收者列表
     - attacker                     # 攻击者
@@ -100,7 +100,7 @@ combo-10:
 death-buffer-victim:
   enabled: true                    # 是否启用
   trigger: death                   # 触发器: 死亡缓冲触发
-  ui-id: "death_buffer"            # 目标 UI ID（全屏死亡缓冲界面）
+  ui-id: "AXS:death_buffer"            # 目标 UI ID（全屏死亡缓冲界面）
   packet-handler: "death"          # UI 中的处理器名称
   recipients:                      # 接收者列表
     - target                       # 受害者（即将死亡的玩家）
@@ -112,7 +112,7 @@ death-buffer-victim:
 death-buffer-killer:
   enabled: true                    # 是否启用
   trigger: death                   # 触发器: 死亡缓冲触发
-  ui-id: "combat_kill_effect"      # 目标 UI ID（复用击杀特效 HUD）
+  ui-id: "AXS:combat_kill_effect"      # 目标 UI ID（复用击杀特效 HUD）
   packet-handler: "kill"           # UI 中的处理器名称（显示击杀计数）
   recipients:                      # 接收者列表
     - attacker                     # 攻击者（击杀者，可能不存在）

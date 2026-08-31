@@ -129,9 +129,9 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     protected void startService() throws Exception {
 
         // 注册 UI（由基类根据 uiSpec() 自动导出并注册）
-        registerModuleUi("ui/combat_kill_effect.yml", "combat_kill_effect", true);
-        registerModuleUi("ui/combo_effect.yml", "combo_effect", true);
-        registerModuleUi("ui/death_buffer.yml", "death_buffer", true);
+        registerModuleUi("ui/combat_kill_effect.yml", "AXS:combat_kill_effect", true);
+        registerModuleUi("ui/combo_effect.yml", "AXS:combo_effect", true);
+        registerModuleUi("ui/death_buffer.yml", "AXS:death_buffer", true);
 
         // 导出 damage_display 资源到 ArcartX damage_display/ 目录
         exportDamageDisplayResources();

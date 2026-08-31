@@ -408,11 +408,11 @@ storage:
 # UI 文件名（qqbot_bind.yml 等）为代码常量，不再在此配置。
 ui:
   # 绑定中心 UI ID
-  bind-ui-id: "AXS:QQBot_Bind"
+  bind-ui-id: "AXS:qqbot_bind"
   # 消息通知 HUD UI ID
-  notify-ui-id: "AXS:QQBot_Notify"
+  notify-ui-id: "AXS:qqbot_notify"
   # 管理后台 UI ID
-  admin-ui-id: "AXS:QQBot_Admin"
+  admin-ui-id: "AXS:qqbot_admin"
   # 是否启用消息通知 HUD（屏幕右上角弹出新消息）
   notify-enabled: true
   # 模块启动时是否自动注册 UI

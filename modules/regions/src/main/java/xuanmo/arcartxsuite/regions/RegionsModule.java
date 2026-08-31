@@ -178,10 +178,10 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         // UI 绑定与 Packet Handler 初始化
         if (packetBridge != null && packetBridge.isAvailable()) {
             UiBinding menuBinding = registerModuleUi(
-                RegionsMenuPacketHandler.UI_FILE_PATH, null, true
+                RegionsMenuPacketHandler.UI_FILE_PATH, "AXS:regions_menu", true
             );
             UiBinding adminBinding = registerModuleUi(
-                RegionsAdminPacketHandler.UI_FILE_PATH, null, true
+                RegionsAdminPacketHandler.UI_FILE_PATH, "AXS:regions_admin", true
             );
 
             if (menuBinding.registeredUiId() != null) {

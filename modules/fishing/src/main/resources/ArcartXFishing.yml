@@ -227,15 +227,15 @@ ui:
   # 是否强制覆盖用户已修改的 UI 文件。
   overwrite-ui-files: false
   # 钓鱼小游戏 UI 的 ID。
-  minigame-ui-id: "fishing_minigame"
+  minigame-ui-id: "AXS:fishing_minigame"
   # 鱼类图鉴 UI 的 ID。
-  collection-ui-id: "fishing_collection"
+  collection-ui-id: "AXS:fishing_collection"
   # 天赋树 UI 的 ID。
-  talents-ui-id: "fishing_talents"
+  talents-ui-id: "AXS:fishing_talents"
   # 赛季等级奖励 UI 的 ID。
-  rewards-ui-id: "fishing_rewards"
+  rewards-ui-id: "AXS:fishing_rewards"
   # 任务列表 UI 的 ID。
-  tasks-ui-id: "fishing_tasks"
+  tasks-ui-id: "AXS:fishing_tasks"
 
 # ─── 命令配置 ────────────────────────────────────────
 commands:

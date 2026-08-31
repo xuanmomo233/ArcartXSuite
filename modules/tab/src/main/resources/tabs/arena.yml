@@ -13,7 +13,7 @@
 
 enabled: false  # 是否启用此 Tab 定义（默认关闭，避免与 online-tab / demo 同时推送导致多 HUD）
 ui-targets:  # 目标 UI 列表，同一个 payload 可同时发给多个 UI
-  - ui-id: "tab-arena"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab-arena.yml）
+  - ui-id: "AXS:tab-arena"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab-arena.yml）
     packet-handler: "tab"  # UI 端接收包的 handler 名称
 client-refresh-packet-id: "TAB"  # 客户端回包请求刷新的 Packet ID
 client-refresh-action: "update"  # 客户端回包请求刷新的 action 名称

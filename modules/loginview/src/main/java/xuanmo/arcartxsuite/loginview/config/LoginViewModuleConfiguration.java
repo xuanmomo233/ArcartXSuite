@@ -233,7 +233,7 @@ public record LoginViewModuleConfiguration(
     ) {
         private static UiConfiguration load(ConfigurationSection section) {
             return new UiConfiguration(
-                string(section, "ui-id", "AXS:LoginView"),
+                string(section, "ui-id", "AXS:login_view"),
                 string(section, "packet-id", "AXS_loginview"),
                 sanitizeUiFile(string(section, "ui-file", "login_view.yml")),
                 bool(section, "register-ui-on-enable", true),

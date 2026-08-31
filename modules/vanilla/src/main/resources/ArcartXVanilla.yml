@@ -8,9 +8,9 @@ config-version: 2
 # UI 配置（统一管理所有界面的 id 与覆盖策略）
 ui:
   # 工作台 UI id（与 vanilla_crafting.yml 文件名对应）
-  crafting-ui-id: "vanilla_crafting"
+  crafting-ui-id: "AXS:vanilla_crafting"
   # 熔炉 UI id（与 vanilla_furnace.yml 文件名对应）
-  furnace-ui-id: "vanilla_furnace"
+  furnace-ui-id: "AXS:vanilla_furnace"
   # 是否覆盖用户已修改的 UI 文件
   overwrite-ui-files: false
 

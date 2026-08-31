@@ -23,17 +23,17 @@ ui:
   packet-id: "AXS_CONVERSATION"
 
   # 主对话 Menu 与 NPC 选择 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
-  # dialog-ui-id: "AXS:conversation_menu"
+  # dialog-ui-id: "AXS:conversation_dialog"
   # 多 UI 示例（同一个 payload 同时发给多个 UI）：
   # dialog-ui-id:
-  #   - "AXS:conversation_menu"
-  #   - "AXS:conversation_menu_alt"
-  dialog-ui-id: "AXS:conversation_menu"
+  #   - "AXS:conversation_dialog"
+  #   - "AXS:conversation_dialog_alt"
+  dialog-ui-id: "AXS:conversation_dialog"
   # selector-ui-id 同样支持列表格式：
   # selector-ui-id:
-  #   - "AXS:conversation_selector_hud"
+  #   - "AXS:conversation_selector"
   #   - "AXS:conversation_selector_alt"
-  selector-ui-id: "AXS:conversation_selector_hud"
+  selector-ui-id: "AXS:conversation_selector"
   # 电影序列播放时显示的 letterbox 黑边 UI ID
   letterbox-ui-id: "AXS:conversation_letterbox"
 

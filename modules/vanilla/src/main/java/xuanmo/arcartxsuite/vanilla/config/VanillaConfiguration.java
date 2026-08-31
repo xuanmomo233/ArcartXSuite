@@ -31,8 +31,8 @@ public final class VanillaConfiguration {
 
     public static VanillaConfiguration load(YamlConfiguration yaml) {
         Ui ui = new Ui(
-            yaml.getString("ui.crafting-ui-id", "vanilla_crafting"),
-            yaml.getString("ui.furnace-ui-id", "vanilla_furnace"),
+            yaml.getString("ui.crafting-ui-id", "AXS:vanilla_crafting"),
+            yaml.getString("ui.furnace-ui-id", "AXS:vanilla_furnace"),
             yaml.getBoolean("ui.overwrite-ui-files", false)
         );
         Crafting crafting = new Crafting(

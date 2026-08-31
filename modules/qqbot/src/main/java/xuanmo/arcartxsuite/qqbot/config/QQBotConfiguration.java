@@ -393,9 +393,9 @@ public record QQBotConfiguration(
         );
 
         QQBotUiConfig ui = new QQBotUiConfig(
-            yaml.getString("ui.bind-ui-id", "AXS:QQBot_Bind"),
-            yaml.getString("ui.notify-ui-id", "AXS:QQBot_Notify"),
-            yaml.getString("ui.admin-ui-id", "AXS:QQBot_Admin"),
+            yaml.getString("ui.bind-ui-id", "AXS:qqbot_bind"),
+            yaml.getString("ui.notify-ui-id", "AXS:qqbot_notify"),
+            yaml.getString("ui.admin-ui-id", "AXS:qqbot_admin"),
             yaml.getBoolean("ui.notify-enabled", true),
             yaml.getBoolean("ui.register-ui-on-enable", true),
             yaml.getBoolean("ui.overwrite-ui-files", false)

@@ -17,8 +17,8 @@ public record ConversationModuleConfiguration(
     private static final boolean DEFAULT_DEBUG_ENABLED = false;
     private static final String DEFAULT_THEME_NAME = "ArcartXConversation";
     private static final String DEFAULT_PACKET_ID = "AXS_CONVERSATION";
-    private static final String DEFAULT_DIALOG_UI_ID = "AXS:conversation_menu";
-    private static final String DEFAULT_SELECTOR_UI_ID = "AXS:conversation_selector_hud";
+    private static final String DEFAULT_DIALOG_UI_ID = "AXS:conversation_dialog";
+    private static final String DEFAULT_SELECTOR_UI_ID = "AXS:conversation_selector";
     private static final boolean DEFAULT_REGISTER_UI_ON_ENABLE = true;
     private static final boolean DEFAULT_OVERWRITE_UI_FILES = false;
     private static final boolean DEFAULT_INTERACTION_ENABLED = true;

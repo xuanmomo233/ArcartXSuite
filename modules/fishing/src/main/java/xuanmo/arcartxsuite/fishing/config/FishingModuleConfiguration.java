@@ -841,13 +841,13 @@ public record FishingModuleConfiguration(
             return new UiConfiguration(
                 section.getBoolean("register-ui-on-enable", true),
                 section.getBoolean("overwrite-ui-files", false),
-                section.getString("main-ui-id", "fishing_main"),
-                section.getString("minigame-ui-id", "fishing_minigame"),
-                section.getString("collection-ui-id", "fishing_collection"),
-                section.getString("talents-ui-id", "fishing_talents"),
-                section.getString("rewards-ui-id", "fishing_rewards"),
-                section.getString("tasks-ui-id", "fishing_tasks"),
-                section.getString("baits-ui-id", "fishing_baits")
+                section.getString("main-ui-id", "AXS:fishing_main"),
+                section.getString("minigame-ui-id", "AXS:fishing_minigame"),
+                section.getString("collection-ui-id", "AXS:fishing_collection"),
+                section.getString("talents-ui-id", "AXS:fishing_talents"),
+                section.getString("rewards-ui-id", "AXS:fishing_rewards"),
+                section.getString("tasks-ui-id", "AXS:fishing_tasks"),
+                section.getString("baits-ui-id", "AXS:fishing_baits")
             );
         }
     }

@@ -113,7 +113,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         completionUiId = null;
         if (configuration.functions().mentionEnabled()) {
             UiBinding completionBinding = registerModuleUi(
-                COMPLETION_UI_FILE_PATH, "axs_chat_completion", true
+                COMPLETION_UI_FILE_PATH, "AXS:axs_chat_completion", true
             );
             if (completionBinding.registeredUiId() != null) {
                 completionUiId = completionBinding.registeredUiId();
