@@ -14,6 +14,39 @@ ui:
   show: true
   screenScale: true
   level: 50
+  # 电影序列播放时隐藏所有其他 HUD，营造沉浸感
+  # HUD = 隐藏所有 ArcartX HUD 类型 UI
+  # 以下为原版 HUD 名称，保留 title_text（序列中 title 动作需要）
+  hide:
+    - HUD
+    - vignette
+    - spyglass
+    - helmet
+    - frostbite
+    - portal
+    - hotbar
+    - crosshair
+    - boss_event_progress
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+    - mount_health
+    - jump_bar
+    - experience_bar
+    - item_name
+    - sleep_fade
+    - potion_icons
+    - debug_text
+    - fps_graph
+    - record_overlay
+    - scoreboard
+    - chat_panel
+    - player_list
+    - recipe_toast
+    - system_toast
+    - advancement_toast
+    - tutorial_toast
   packetHandler:
     # packetHandler: sync
     # 包字段:
