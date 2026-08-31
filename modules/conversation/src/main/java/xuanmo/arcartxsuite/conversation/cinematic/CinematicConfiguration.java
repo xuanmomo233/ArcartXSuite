@@ -1,6 +1,9 @@
 package xuanmo.arcartxsuite.conversation.cinematic;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -8,6 +11,7 @@ import java.util.Map;
 import org.bukkit.GameMode;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
  * 电影序列配置解析。
@@ -39,6 +43,51 @@ public final class CinematicConfiguration {
                 instance.sequences.put(sequenceId, sequence);
             } catch (RuntimeException ignored) {
                 // 跳过解析失败的序列
+            }
+        }
+        return instance;
+    }
+
+    /**
+     * 从指定目录加载所有 {@code .yml} 文件并合并其中的电影序列定义。
+     * <p>
+     * 每个文件可包含 {@code cinematic.cinematics} 或顶层 {@code cinematics} 节，
+     * 所有文件中的序列会被合并到同一个 {@link CinematicConfiguration} 实例中。
+     * 文件按文件名排序加载，后加载的文件中同 ID 的序列会覆盖先前的。
+     *
+     * @param dir 存放电影序列配置的目录，不存在或非目录时返回空配置
+     * @return 合并后的配置实例
+     */
+    public static CinematicConfiguration loadFromDirectory(File dir) {
+        CinematicConfiguration instance = new CinematicConfiguration();
+        if (dir == null || !dir.isDirectory()) {
+            return instance;
+        }
+        File[] files = dir.listFiles((d, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
+        if (files == null || files.length == 0) {
+            return instance;
+        }
+        Arrays.sort(files, Comparator.comparing(File::getName));
+        for (File file : files) {
+            try {
+                FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+                ConfigurationSection cinematicsSection = config.getConfigurationSection("cinematic.cinematics");
+                if (cinematicsSection == null) {
+                    cinematicsSection = config.getConfigurationSection("cinematics");
+                }
+                if (cinematicsSection == null) continue;
+                for (String sequenceId : cinematicsSection.getKeys(false)) {
+                    ConfigurationSection seqSection = cinematicsSection.getConfigurationSection(sequenceId);
+                    if (seqSection == null) continue;
+                    try {
+                        CinematicSequence sequence = parseSequence(sequenceId, seqSection);
+                        instance.sequences.put(sequenceId, sequence);
+                    } catch (RuntimeException ignored) {
+                        // 跳过解析失败的序列
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // 跳过无法加载的文件
             }
         }
         return instance;

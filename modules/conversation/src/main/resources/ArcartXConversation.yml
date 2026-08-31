@@ -99,6 +99,11 @@ npc-appearances:
 # 按顺序对玩家播放，营造过场动画效果。
 # 播放时会自动显示 letterbox 黑边 UI（可配置 UI ID）。
 #
+# 序列定义文件存放位置: data/conversation/cinematics/*.yml
+# 模块启动/重载时会扫描该目录下所有 .yml 文件并合并其中的序列。
+# 每个文件可包含 cinematic.cinematics 或顶层 cinematics 节。
+# 建议按主题分文件管理，例如 npc_shimei.yml、boss_intro.yml。
+#
 # 命令:
 #   /axs conversation cinematic play <序列ID> [玩家名]
 #   /axs conversation cinematic stop
@@ -123,67 +128,69 @@ npc-appearances:
 #   arcartx_sound  - 播放 ArcartX 资源包自定义音效
 #
 # 每个动作可设 delay-after-ms: 执行后等待的毫秒数。
+#
+# 以下为序列定义示例，实际使用请在 cinematics/ 目录下创建独立 .yml 文件:
+#   cinematic:
+#     enabled: true          ← 仅此处需要 enabled 开关
+#     cinematics:
+#       intro:
+#         name: "开场动画"
+#         actions:
+#           - type: lock_movement
+#             locked: true
+#             delay-after-ms: 0
+#           - type: title
+#             title: "&6第一章"
+#             subtitle: "&7新的开始"
+#             fade-in: 10
+#             stay: 60
+#             fade-out: 10
+#             delay-after-ms: 2000
+#           - type: camera_path
+#             world: world
+#             duration-ms: 5000
+#             ticks-per-frame: 2
+#             points:
+#               - { x: 100, y: 70, z: 200, yaw: 0, pitch: 30 }
+#               - { x: 110, y: 75, z: 210, yaw: 45, pitch: 20 }
+#               - { x: 120, y: 80, z: 220, yaw: 90, pitch: 10 }
+#             delay-after-ms: 1000
+#           - type: npc_animation
+#             npc: "村长老王"
+#             animation: wave
+#             speed: 1.0
+#             transition-time: 5
+#             keep-time: -1
+#             delay-after-ms: 2000
+#           - type: title
+#             title: ""
+#             subtitle: "&a欢迎来到村庄"
+#             fade-in: 10
+#             stay: 40
+#             fade-out: 10
+#             delay-after-ms: 1500
+#           - type: lock_movement
+#             locked: false
+#             delay-after-ms: 0
+#
+# ── ArcartX 动作示例 ──
+#           - type: subtitle
+#             group-id: intro_subtitle
+#             delay-after-ms: 3000
+#           - type: ui_packet
+#             ui-id: AXS:custom_hud
+#             handler: show_title
+#             payload:
+#               text: "过场动画"
+#               color: gold
+#             delay-after-ms: 2000
+#           - type: arcartx_sound
+#             resource-path: sounds/cinematic_intro.ogg
+#             category: master
+#             at-player: true
+#             pitch: 1.0
+#             keep-time-ms: 5000
+#             delay-after-ms: 1000
 cinematic:
   # 是否启用电影序列功能
   enabled: true
-
-  # 序列定义（每个根键为序列 ID，可在命令中引用）
-  cinematics:
-#    intro:
-#      name: "开场动画"
-#      actions:
-#        - type: lock_movement
-#          locked: true
-#          delay-after-ms: 0
-#        - type: title
-#          title: "&6第一章"
-#          subtitle: "&7新的开始"
-#          fade-in: 10
-#          stay: 60
-#          fade-out: 10
-#          delay-after-ms: 2000
-#        - type: camera_path
-#          world: world
-#          duration-ms: 5000
-#          ticks-per-frame: 2
-#          points:
-#            - { x: 100, y: 70, z: 200, yaw: 0, pitch: 30 }
-#            - { x: 110, y: 75, z: 210, yaw: 45, pitch: 20 }
-#            - { x: 120, y: 80, z: 220, yaw: 90, pitch: 10 }
-#          delay-after-ms: 1000
-#        - type: npc_animation
-#          npc: "村长老王"
-#          animation: wave
-#          speed: 1.0
-#          transition-time: 5
-#          keep-time: -1
-#          delay-after-ms: 2000
-#        - type: title
-#          title: ""
-#          subtitle: "&a欢迎来到村庄"
-#          fade-in: 10
-#          stay: 40
-#          fade-out: 10
-#          delay-after-ms: 1500
-#        - type: lock_movement
-#          locked: false
-#          delay-after-ms: 0
-#
-# ── ArcartX 动作示例 ──
-#        - type: subtitle
-#          group-id: intro_subtitle
-#          delay-after-ms: 3000
-#        - type: ui_packet
-#          ui-id: AXS:custom_hud
-#          handler: show_title
-#          payload:
-#            text: "过场动画"
-#            color: gold
-#          delay-after-ms: 2000
-#        - type: arcartx_sound
-#          resource-path: sounds/cinematic_intro.ogg
-#          category: master
-#          at-player: true
-#          pitch: 1.0
-#          keep-time-ms: 5000
-#          delay-after-ms: 1000

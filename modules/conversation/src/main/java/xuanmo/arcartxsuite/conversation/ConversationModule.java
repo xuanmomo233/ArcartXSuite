@@ -141,9 +141,17 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         );
         service.start();
 
-        // 电影序列服务
-        CinematicConfiguration cinematicConfig = CinematicConfiguration.load(
-            YamlConfiguration.loadConfiguration(new File(dataFolder, configSpec().configFileName())));
+        // 电影序列服务：从 data/conversation/cinematics/ 目录加载所有 .yml 文件
+        File cinematicsDir = new File(dataFolder, "cinematics");
+        if (!cinematicsDir.exists()) {
+            cinematicsDir.mkdirs();
+        }
+        // 首次启动导出示例配置（不覆盖已存在的文件）
+        File exampleFile = new File(cinematicsDir, "cinematic_example.yml");
+        if (!exampleFile.exists()) {
+            exportResource("cinematics/cinematic_example.yml", exampleFile, false);
+        }
+        CinematicConfiguration cinematicConfig = CinematicConfiguration.loadFromDirectory(cinematicsDir);
         java.util.List<String> letterboxRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.cinematic().letterboxUiIds()) {
             UiBinding letterboxBinding = registerModuleUi(
