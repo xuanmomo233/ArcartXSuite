@@ -371,8 +371,6 @@ public record FishingModuleConfiguration(
 
         // ─── 数据/展示（可选） ─────────────────────────────
         String description = section.contains("description") ? section.getString("description") : null;
-        String iconTexture = section.contains("icon-texture") ? section.getString("icon-texture") : null;
-        String iconTextureUrl = section.contains("icon-texture-url") ? section.getString("icon-texture-url") : null;
         double recordWeight = section.getDouble("record-weight", 1.0);
 
         return FishDefinition.builder()
@@ -386,7 +384,7 @@ public record FishingModuleConfiguration(
             .drops(drops).commandRewards(commandRewards).currencyRewards(currencyRewards)
             .minPlayerLevel(minPlayerLevel).maxPlayerLevel(maxPlayerLevel).requirePermission(requirePermission)
             .baitPreferences(baitPreferences).biomes(biomes).depthRange(depthRange)
-            .description(description).iconTexture(iconTexture).iconTextureUrl(iconTextureUrl)
+            .description(description)
             .recordWeight(recordWeight)
             .build();
     }

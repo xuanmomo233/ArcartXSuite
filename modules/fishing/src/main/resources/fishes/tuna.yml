@@ -15,8 +15,7 @@ time-ranges:                   # 可捕获时间段
   - start: "10:00"             # 开始时间（10:00，上午）
     end: "18:00"               # 结束时间（18:00，傍晚前，白天时段）
 item:                          # 捕获后掉落的物品定义
-  source: "minecraft"          # 物品来源（minecraft=原版物品）
-  id: "tropical_fish"     # 原版物品ID（热带鱼）
+  material: "tropical_fish"  # 原版物品
   amount: 1                    # 物品数量
 difficulty: 50                 # 钓鱼难度（0-100，中等难度）
 behaviors:                     # 小游戏中鱼的行为模式及权重
@@ -68,15 +67,13 @@ currency-rewards:
 drops:
   big_tuna_bonus:
     item:
-      source: "minecraft"
-      id: "iron_ingot"
+      material: "iron_ingot"
       amount: 2
     weight: 1.0
     condition: "size:80"       # 尺寸≥80cm 时额外掉落铁锭
   perfect_bonus:
     item:
-      source: "minecraft"
-      id: "gold_ingot"
+      material: "gold_ingot"
       amount: 1
     weight: 1.0
     condition: "perfect"       # 完美捕获时掉落金锭
@@ -96,5 +93,4 @@ depth-range:
 
 # ─── 数据/展示（可选） ─────────────────────────────────
 description: "夏秋季节晴天出现在海洋中的大型鱼类，速度极快，钓到大会很有成就感。"
-icon-texture: "minecraft:tropical_fish"
 record-weight: 0.9

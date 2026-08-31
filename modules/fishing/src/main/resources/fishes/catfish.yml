@@ -15,8 +15,7 @@ time-ranges:                   # 可捕获时间段
   - start: "18:00"             # 开始时间（18:00）
     end: "06:00"               # 结束时间（次日06:00，即夜间时段）
 item:                          # 捕获后掉落的物品定义
-  source: "minecraft"          # 物品来源（minecraft=原版物品）
-  id: "cooked_cod"        # 原版物品ID（使用熟鳕鱼代替）
+  material: "cooked_cod"  # 原版物品
   amount: 1                    # 物品数量
 difficulty: 70                 # 钓鱼难度（0-100，越高越难）
 behaviors:                     # 小游戏中鱼的行为模式及权重
@@ -84,22 +83,19 @@ currency-rewards:
 drops:
   perfect_bonus:
     item:
-      source: "minecraft"
-      id: "emerald"
+      material: "emerald"
       amount: 2
     weight: 1.0
     condition: "perfect"       # 完美捕获时掉落绿宝石
   big_catfish_bonus:
     item:
-      source: "minecraft"
-      id: "diamond"
+      material: "diamond"
       amount: 1
     weight: 1.0
     condition: "size:120"      # 尺寸≥120cm 时掉落钻石
   first_catch_reward:
     item:
-      source: "minecraft"
-      id: "experience_bottle"
+      material: "experience_bottle"
       amount: 5
     weight: 1.0
     condition: "first_catch"   # 首次捕获时给附魔瓶
@@ -131,6 +127,4 @@ bait-preferences:
 
 # ─── 数据/展示（可选） ─────────────────────────────────
 description: "稀有的淡水鱼，仅在春夏雨夜的河流和湖泊中出没，潜伏深水，难以捕捉。"
-icon-texture: "minecraft:cooked_cod"
-icon-texture-url: "https://example.com/textures/catfish.png"
 record-weight: 1.5             # 图鉴排序靠前（稀有鱼）
