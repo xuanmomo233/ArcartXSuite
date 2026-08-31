@@ -1451,7 +1451,7 @@ public final class FishingService {
             // 鱼物品图标 JSON（分离模式）
             FishDefinition fishDef = findFish(catchEntry.fishId());
             if (fishDef != null) {
-                payload.put("recentIconJson" + idx, iconResolver.resolveItemJson(player, fishDef.itemRef()));
+                payload.put("recentIconJson" + idx, iconResolver.resolveItemJson(player, fishDef.displayIcon()));
             }
             idx++;
         }
@@ -1496,7 +1496,7 @@ public final class FishingService {
             entry.put("count", caught != null ? caught.caughtCount() : 0);
             fishDict.put(Integer.toString(idx), entry);
             // 鱼物品图标 itemJson（分离模式，UI 端 Slot Icon 通过 fishIconJson{idx} 渲染）
-            payload.put("fishIconJson" + idx, iconResolver.resolveItemJson(player, fish.itemRef()));
+            payload.put("fishIconJson" + idx, iconResolver.resolveItemJson(player, fish.displayIcon()));
             idx++;
         }
         payload.put("fishList", fishDict);

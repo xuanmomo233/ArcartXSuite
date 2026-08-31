@@ -46,10 +46,16 @@ public record FishDefinition(
 
     // ─── 数据/展示（可选） ─────────────────────────────
     @Nullable String description,
-    @Nullable String iconTexture,
-    @Nullable String iconTextureUrl,
+    @Nullable IconDefinition iconRef,
     double recordWeight
 ) {
+
+    /**
+     * 获取用于 UI 显示的图标定义，优先使用独立配置的 iconRef，未配置时回退到 itemRef。
+     */
+    public @NotNull IconDefinition displayIcon() {
+        return iconRef != null ? iconRef : itemRef;
+    }
 
     public int randomSize() {
         if (minSize >= maxSize) return minSize;
@@ -209,8 +215,7 @@ public record FishDefinition(
 
         // 数据/展示
         private String description = null;
-        private String iconTexture = null;
-        private String iconTextureUrl = null;
+        private IconDefinition iconRef = null;
         private double recordWeight = 1.0;
 
         public Builder id(String id) { this.id = id; return this; }
@@ -241,8 +246,7 @@ public record FishDefinition(
         public Builder biomes(List<String> biomes) { this.biomes = List.copyOf(biomes); return this; }
         public Builder depthRange(DepthRange depthRange) { this.depthRange = depthRange; return this; }
         public Builder description(String description) { this.description = description; return this; }
-        public Builder iconTexture(String iconTexture) { this.iconTexture = iconTexture; return this; }
-        public Builder iconTextureUrl(String iconTextureUrl) { this.iconTextureUrl = iconTextureUrl; return this; }
+        public Builder iconRef(IconDefinition iconRef) { this.iconRef = iconRef; return this; }
         public Builder recordWeight(double recordWeight) { this.recordWeight = recordWeight; return this; }
 
         public FishDefinition build() {
@@ -252,7 +256,7 @@ public record FishDefinition(
                 progressDrainRate, progressGainRate, fleeParams, behaviorStages,
                 drops, commandRewards, currencyRewards,
                 minPlayerLevel, maxPlayerLevel, requirePermission, baitPreferences, biomes, depthRange,
-                description, iconTexture, iconTextureUrl, recordWeight
+                description, iconRef, recordWeight
             );
         }
     }

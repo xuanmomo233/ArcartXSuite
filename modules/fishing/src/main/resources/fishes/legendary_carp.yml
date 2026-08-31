@@ -16,8 +16,7 @@ time-ranges:                   # 可捕获时间段
   - start: "05:00"             # 开始时间（05:00，黎明时分）
     end: "07:00"               # 结束时间（07:00，仅2小时窗口）
 item:                          # 捕获后掉落的物品定义
-  source: "minecraft"          # 物品来源（minecraft=原版物品）
-  id: "enchanted_golden_apple" # 原版物品ID（附魔金苹果，稀有物品）
+  material: "enchanted_golden_apple"
   amount: 1                    # 物品数量
 difficulty: 90                 # 钓鱼难度（0-100，极高难度）
 behaviors:                     # 小游戏中鱼的行为模式及权重
@@ -88,22 +87,19 @@ currency-rewards:
 drops:
   rare_drop:
     item:
-      source: "minecraft"
-      id: "nether_star"
+      material: "nether_star"
       amount: 1
     weight: 1.0
     condition: "perfect"       # 仅完美捕获时掉落
   big_fish_bonus:
     item:
-      source: "minecraft"
-      id: "diamond"
+      material: "diamond"
       amount: 3
     weight: 1.0
     condition: "size:200"      # 尺寸≥200cm 时掉落
   first_catch_reward:
     item:
-      source: "minecraft"
-      id: "golden_apple"
+      material: "golden_apple"
       amount: 5
     weight: 1.0
     condition: "first_catch"   # 首次捕获此鱼时掉落
@@ -141,6 +137,5 @@ depth-range:
 
 # ─── 数据/展示（可选） ─────────────────────────────────
 description: "传说中的金色鲤鱼，据说只有最虔诚的渔夫才能在黎明的雨中湖畔遇见它。"
-icon-texture: "minecraft:enchanted_golden_apple"  # 图鉴中的鱼图标
-icon-texture-url: "https://example.com/textures/legendary_carp.png"  # 自定义贴图URL
+icon: "enchanted_golden_apple"  # 图鉴图标
 record-weight: 2.0             # 图鉴排序权重（越大越靠前）

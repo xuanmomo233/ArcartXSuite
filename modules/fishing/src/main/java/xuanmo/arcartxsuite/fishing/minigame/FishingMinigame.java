@@ -522,7 +522,7 @@ public final class FishingMinigame {
         payload.put("caughtSize", session.caughtSize());
         payload.put("rarity", session.fish().rarity().name().toLowerCase());
         // 鱼物品图标 JSON（UI 端 Slot 控件通过 seticon 渲染）
-        String fishIconJson = iconResolver.resolveItemJson(player, session.fish().itemRef());
+        String fishIconJson = iconResolver.resolveItemJson(player, session.fish().displayIcon());
         service.debug("sendInitPacket: fish=" + session.fish().id() + " iconLen=" + fishIconJson.length());
         payload.put("fishIconJson", fishIconJson);
         packetBridge.sendPacket(player, uiId, "init", payload);
