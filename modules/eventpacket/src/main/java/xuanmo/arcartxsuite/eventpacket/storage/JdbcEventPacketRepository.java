@@ -84,10 +84,6 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(2, ruleId);
             statement.setInt(3, Math.max(0, count));
             statement.setLong(4, System.currentTimeMillis());
-            if (isMysql()) {
-                statement.setInt(5, Math.max(0, count));
-                statement.setLong(6, System.currentTimeMillis());
-            }
             statement.executeUpdate();
         }
     }
@@ -194,9 +190,6 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ruleId);
             statement.setLong(3, System.currentTimeMillis());
-            if (isMysql()) {
-                statement.setLong(4, System.currentTimeMillis());
-            }
             statement.executeUpdate();
         }
     }
