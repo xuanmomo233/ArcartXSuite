@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
+import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
 
 /**
  * 在线奖励模块顶层配置。
@@ -33,6 +34,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  * @param monthlyRewards        周期性月奖励列表
  * @param offlineSavings        离线储蓄配置
  * @param serverSignInGoal      全服签到目标配置
+ * @param timeBasedRewards      时刻奖励列表（指定时刻给在线玩家发奖励）
  */
 public record OnlineRewardsModuleConfiguration(
     boolean debug,
@@ -50,7 +52,8 @@ public record OnlineRewardsModuleConfiguration(
     List<OnlineRewardsPeriodicReward> weeklyRewards,
     List<OnlineRewardsPeriodicReward> monthlyRewards,
     OnlineRewardsOfflineSavingsConfiguration offlineSavings,
-    OnlineRewardsServerSignInGoalConfiguration serverSignInGoal
+    OnlineRewardsServerSignInGoalConfiguration serverSignInGoal,
+    List<OnlineRewardsTimeBasedReward> timeBasedRewards
 ) {
 
     /**
@@ -131,7 +134,8 @@ public record OnlineRewardsModuleConfiguration(
             loadPeriodicRewards(configuration.getMapList("weekly-rewards")),
             loadPeriodicRewards(configuration.getMapList("monthly-rewards")),
             loadOfflineSavings(configuration.getConfigurationSection("offline-savings")),
-            loadServerSignInGoal(configuration.getConfigurationSection("server-sign-in-goal"))
+            loadServerSignInGoal(configuration.getConfigurationSection("server-sign-in-goal")),
+            loadTimeBasedRewards(configuration.getMapList("time-based-rewards"))
         );
     }
 
@@ -366,6 +370,44 @@ public record OnlineRewardsModuleConfiguration(
             boolean repeat = parseBoolean(value.get("repeat"), false);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
             rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat, itemRewards));
+            index++;
+        }
+        return List.copyOf(rewards);
+    }
+
+    private static List<OnlineRewardsTimeBasedReward> loadTimeBasedRewards(List<Map<?, ?>> values) {
+        List<OnlineRewardsTimeBasedReward> rewards = new ArrayList<>();
+        int index = 0;
+        for (Map<?, ?> value : values) {
+            String id = nullToDefault(value.get("id"), "time-based-" + index);
+            boolean enabled = parseBoolean(value.get("enabled"), true);
+            String name = nullToDefault(value.get("name"), "时刻奖励");
+            String rewardText = nullToDefault(value.get("rewardText"), "");
+            List<String> commands = toStringList(value.get("commands"));
+            List<String> mailPresetIds = readMailPresetIds(value);
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            String broadcastMessage = nullToDefault(value.get("broadcast"), "");
+            // 解析 schedule 节
+            ScheduleSpec schedule = null;
+            Object scheduleObj = value.get("schedule");
+            if (scheduleObj instanceof Map<?, ?> scheduleMap) {
+                try {
+                    // 借助临时 ConfigurationSection 包装解析
+                    org.bukkit.configuration.MemorySection ms = new org.bukkit.configuration.MemoryConfiguration();
+                    for (Map.Entry<?, ?> entry : scheduleMap.entrySet()) {
+                        ms.set(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                    schedule = ScheduleSpec.load(ms);
+                } catch (Exception ignored) {
+                    // schedule 配置非法时跳过该奖励
+                }
+            }
+            if (schedule != null) {
+                rewards.add(new OnlineRewardsTimeBasedReward(
+                    id, enabled, schedule, name, rewardText,
+                    commands, mailPresetIds, itemRewards, broadcastMessage
+                ));
+            }
             index++;
         }
         return List.copyOf(rewards);

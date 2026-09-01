@@ -12,6 +12,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
+import xuanmo.arcartxsuite.market.dynamic.DynamicStrategyConfig;
 
 /**
  * Market 模块配置记录，聚合 UI、存储、Redis、跨服、拍卖、商店、回收、消息等子配置。
@@ -25,6 +26,8 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
  * @param auction                 拍卖配置
  * @param shop                    商店配置
  * @param recycle                 回收配置
+ * @param dynamic                 动态商品策略配置
+ * @param playerShop              玩家商店配置
  * @param messages                消息配置
  */
 public record MarketModuleConfiguration(
@@ -37,6 +40,8 @@ public record MarketModuleConfiguration(
     AuctionConfiguration auction,
     ShopConfiguration shop,
     RecycleConfiguration recycle,
+    DynamicConfiguration dynamic,
+    PlayerShopConfiguration playerShop,
     MessagesConfiguration messages
 ) {
 
@@ -53,9 +58,11 @@ public record MarketModuleConfiguration(
         AuctionConfiguration auction = loadAuction(config, logger);
         ShopConfiguration shop = loadShop(config);
         RecycleConfiguration recycle = loadRecycle(config);
+        DynamicConfiguration dynamic = loadDynamic(config);
+        PlayerShopConfiguration playerShop = loadPlayerShop(config, logger);
         MessagesConfiguration messages = loadMessages(messagesConfig);
 
-        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, auction, shop, recycle, messages);
+        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, auction, shop, recycle, dynamic, playerShop, messages);
     }
 
     private static UiConfiguration loadUi(FileConfiguration config) {
@@ -68,6 +75,10 @@ public record MarketModuleConfiguration(
             readStr(config, "ui.recycle-file", "arcartx/ui/market_recycle.yml"),
             readStr(config, "ui.history-ui-id", "AXS:market_history"),
             readStr(config, "ui.history-file", "arcartx/ui/market_history.yml"),
+            readStr(config, "ui.sell-ui-id", "AXS:market_sell"),
+            readStr(config, "ui.sell-file", "arcartx/ui/market_sell.yml"),
+            readStr(config, "ui.player-shop-ui-id", "AXS:market_player_shop"),
+            readStr(config, "ui.player-shop-file", "arcartx/ui/market_player_shop.yml"),
             readStr(config, "ui.packet-id", "AXS_MARKET"),
             config.getBoolean("ui.register-ui-on-enable", true),
             config.getBoolean("ui.overwrite-ui-files", false)
@@ -158,6 +169,53 @@ public record MarketModuleConfiguration(
         );
     }
 
+    private static PlayerShopConfiguration loadPlayerShop(FileConfiguration config, Logger logger) {
+        ConfigurationSection sec = config.getConfigurationSection("player-shop");
+        if (sec == null) return PlayerShopConfiguration.defaults();
+
+        Map<String, Double> taxDiscount = new LinkedHashMap<>();
+        ConfigurationSection tdSec = sec.getConfigurationSection("tax-discount");
+        if (tdSec != null) {
+            for (String key : tdSec.getKeys(false)) {
+                taxDiscount.put(key, tdSec.getDouble(key, 0.0));
+            }
+        }
+
+        ItemMatcher blacklist = ItemMatcherLoader.load(
+            sec.getConfigurationSection("blacklist"), logger, "player-shop.blacklist");
+
+        List<CurrencyOption> currencies = new ArrayList<>();
+        for (Map<?, ?> raw : sec.getMapList("currencies")) {
+            Object rawId = raw.get("id");
+            String id = rawId == null ? "" : String.valueOf(rawId).trim();
+            Object rawName = raw.get("name");
+            if (rawName == null) rawName = raw.get("display-name");
+            String name = rawName == null ? id : String.valueOf(rawName).trim();
+            if (!id.isEmpty()) currencies.add(new CurrencyOption(id, name.isEmpty() ? id : name));
+        }
+        if (currencies.isEmpty()) currencies.add(new CurrencyOption("money", "money"));
+        String defaultCurrency = readStr(sec, "default-currency", currencies.get(0).id());
+
+        return new PlayerShopConfiguration(
+            sec.getBoolean("enabled", true),
+            currencies, defaultCurrency,
+            sec.getDouble("min-price", 1.0),
+            sec.getDouble("max-price", 1000000000.0),
+            Math.max(0, sec.getInt("message-max-length", 50)),
+            sec.getLong("min-duration-seconds", 3600L),
+            sec.getLong("max-duration-seconds", 2592000L),
+            sec.getLong("default-duration-seconds", 604800L),
+            sec.getInt("max-listings-per-player", 20),
+            sec.getDouble("listing-fee", 0.0),
+            readStr(sec, "listing-fee-currency", "money"),
+            sec.getDouble("transaction-tax-rate", 0.05),
+            readStr(sec, "transaction-tax-currency", "money"),
+            taxDiscount,
+            readStr(sec, "expired-return-method", "mail"),
+            blacklist
+        );
+    }
+
     private static ShopConfiguration loadShop(FileConfiguration config) {
         ConfigurationSection sec = config.getConfigurationSection("shop");
         if (sec == null) return ShopConfiguration.defaults();
@@ -210,7 +268,12 @@ public record MarketModuleConfiguration(
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
             readStr(sec, "item-blacklisted", "&c该物品不允许上架。"),
-            readStr(sec, "batch-recycle-disabled", "&c一键回收功能已关闭")
+            readStr(sec, "batch-recycle-disabled", "&c一键回收功能已关闭"),
+            readStr(sec, "player-shop-listed", "&a商品已上架到你的商店！"),
+            readStr(sec, "player-shop-bought", "&a购买成功！花费: &e%amount%"),
+            readStr(sec, "player-shop-sold", "&a你商店中的 &e%item% &a已售出！收入: &e%amount%"),
+            readStr(sec, "player-shop-expired", "&7你商店中的 &e%item% &7已到期，已退回。"),
+            readStr(sec, "player-shop-cancelled", "&7已下架商品。")
         );
     }
 
@@ -226,6 +289,8 @@ public record MarketModuleConfiguration(
         String auctionId, String auctionFile,
         String recycleId, String recycleFile,
         String historyId, String historyFile,
+        String sellId, String sellFile,
+        String playerShopId, String playerShopFile,
         String packetId,
         boolean registerOnEnable, boolean overwriteUiFiles
     ) {}
@@ -334,6 +399,31 @@ public record MarketModuleConfiguration(
         }
     }
 
+    /** 玩家商店配置（固定价格、有期限、数量限制）。 */
+    public record PlayerShopConfiguration(
+        boolean enabled,
+        List<CurrencyOption> currencies, String defaultCurrency,
+        double minPrice, double maxPrice, int messageMaxLength,
+        long minDurationSeconds, long maxDurationSeconds, long defaultDurationSeconds,
+        int maxListingsPerPlayer,
+        double listingFee, String listingFeeCurrency,
+        double transactionTaxRate, String transactionTaxCurrency,
+        Map<String, Double> taxDiscount,
+        String expiredReturnMethod,
+        ItemMatcher blacklist
+    ) {
+        public static PlayerShopConfiguration defaults() {
+            return new PlayerShopConfiguration(
+                true, List.of(new CurrencyOption("money", "money")), "money",
+                1.0, 1000000000.0, 50,
+                3600L, 2592000L, 604800L, 20,
+                0.0, "money", 0.05, "money",
+                Map.of(), "mail",
+                ItemMatcher.empty()
+            );
+        }
+    }
+
     public record CategoryDefinition(
         String displayName, int priority, String nbtPath, List<String> nbtValues, boolean isDefault
     ) {}
@@ -346,6 +436,38 @@ public record MarketModuleConfiguration(
         public static ShopConfiguration defaults() {
             return new ShopConfiguration(true, "shops", 6000L, "money");
         }
+    }
+
+    /** 动态商品策略配置。 */
+    public record DynamicConfiguration(
+        boolean enabled,
+        List<DynamicStrategyConfig> strategies
+    ) {
+        public static DynamicConfiguration defaults() {
+            return new DynamicConfiguration(false, java.util.List.of());
+        }
+    }
+
+    private static DynamicConfiguration loadDynamic(FileConfiguration config) {
+        ConfigurationSection sec = config.getConfigurationSection("shop.dynamic");
+        if (sec == null) return DynamicConfiguration.defaults();
+        boolean enabled = sec.getBoolean("enabled", false);
+        List<DynamicStrategyConfig> strategies = new ArrayList<>();
+        ConfigurationSection strategiesSec = sec.getConfigurationSection("strategies");
+        if (strategiesSec != null) {
+            for (String key : strategiesSec.getKeys(false)) {
+                ConfigurationSection strategySec = strategiesSec.getConfigurationSection(key);
+                if (strategySec != null) {
+                    try {
+                        strategies.add(DynamicStrategyConfig.load(key, strategySec));
+                    } catch (Exception e) {
+                        Logger.getLogger("ArcartXSuite").warning(
+                            "[Market] 加载动态策略配置失败: " + key + " | " + e.getMessage());
+                    }
+                }
+            }
+        }
+        return new DynamicConfiguration(enabled, strategies);
     }
 
     public record RecycleConfiguration(
@@ -364,7 +486,9 @@ public record MarketModuleConfiguration(
         String auctionSold, String auctionCancelled,
         String shopBought, String shopLimitReached,
         String recycleSuccess, String recycleNothing,
-        String insufficientFunds, String itemBlacklisted, String batchRecycleDisabled
+        String insufficientFunds, String itemBlacklisted, String batchRecycleDisabled,
+        String playerShopListed, String playerShopBought, String playerShopSold,
+        String playerShopExpired, String playerShopCancelled
     ) {
         public static MessagesConfiguration defaults() {
             return new MessagesConfiguration(
@@ -375,7 +499,10 @@ public record MarketModuleConfiguration(
                 "&a回收成功！获得: &e%amount%", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",
-                "&c一键回收功能已关闭"
+                "&c一键回收功能已关闭",
+                "&a商品已上架到你的商店！", "&a购买成功！花费: &e%amount%",
+                "&a你商店中的 &e%item% &a已售出！收入: &e%amount%",
+                "&7你商店中的 &e%item% &7已到期，已退回。", "&7已下架商品。"
             );
         }
     }

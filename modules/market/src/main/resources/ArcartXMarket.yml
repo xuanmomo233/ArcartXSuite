@@ -57,6 +57,12 @@ ui:
   # 交易历史 UI ID
   history-ui-id: "AXS:market_history"
   history-file: "arcartx/ui/market_history.yml"
+  # 统一上架 UI ID（拍卖行 + 玩家商店共用）
+  sell-ui-id: "AXS:market_sell"
+  sell-file: "arcartx/ui/market_sell.yml"
+  # 玩家商店浏览 UI ID
+  player-shop-ui-id: "AXS:market_player_shop"
+  player-shop-file: "arcartx/ui/market_player_shop.yml"
   # 客户端数据包 ID，所有 Market UI 通信均通过此 ID
   packet-id: "AXS_MARKET"
   # 是否在模块启动时自动将 UI 文件注册到 ArcartX 桥接层
@@ -226,6 +232,60 @@ auction:
       display-name: "&7其他"
       priority: 9999                    # 放在最后
       default: true                     # 未匹配其他分类时归入此类
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子系统配置 - 玩家商店
+# ═══════════════════════════════════════════════════════════════════════════════
+# 玩家商店允许玩家以固定价格上架物品，其他玩家可直接购买（无竞价机制）。
+# 与拍卖行独立运作，使用单独的数据库表。
+# ═══════════════════════════════════════════════════════════════════════════════
+player-shop:
+  # 是否启用玩家商店功能
+  enabled: true
+  # 允许用于玩家商店交易的货币，id 必须已由 CurrencyBridgeAPI 注册
+  currencies:
+    - id: "money"
+      name: "金币"
+  default-currency: "money"
+  # 出售价格全局范围
+  min-price: 1
+  max-price: 1000000000
+  # 留言最大字符数
+  message-max-length: 50
+  # 上架时长限制（秒）
+  min-duration-seconds: 3600        # 最短 1 小时
+  max-duration-seconds: 2592000     # 最长 30 天
+  # 默认上架时长（秒）= 7 天
+  default-duration-seconds: 604800
+  # 每个玩家同时最多可上架的物品数量
+  max-listings-per-player: 20
+  # 上架手续费（固定金额，上架时立即扣除，无论是否成交）
+  # 设为 0 表示免费上架
+  listing-fee: 0
+  listing-fee-currency: "money"
+  # 成交税率（0.05 = 5%，从卖家最终收入中扣除）
+  transaction-tax-rate: 0.05
+  transaction-tax-currency: "money"
+  # VIP 税率减免（拥有对应权限的玩家享受更低税率）
+  # 最终税率取匹配权限中最低的税率值，未匹配则使用 transaction-tax-rate
+  tax-discount:
+    "axsmarket.vip": 0.02            # VIP 税率 2%
+    "axsmarket.mvp": 0.01            # MVP 税率 1%
+  # 到期未售物品退回方式:
+  #   mail     - 通过邮件系统退回（需 Mail 模块支持）
+  #   inventory- 直接放入玩家背包（背包满时可能丢失！）
+  expired-return-method: "mail"
+  # 玩家商店物品黑名单（格式同拍卖行 blacklist）
+  blacklist:
+    material-ids: []
+    mythic-item-ids: []
+    neige-item-ids: []
+    name-contains:
+      - "绑定"
+    lore-contains:
+      - "不可交易"
+    name-regex: []
+    lore-regex: []
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子系统配置 - 系统商店

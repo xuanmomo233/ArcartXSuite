@@ -91,6 +91,17 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         return configuration.nodeId();
     }
 
+    /** Redis 后端是否已激活（供 axs-core 内部选主服务使用）。 */
+    public boolean isRedisAvailable() {
+        return jedisPool != null && !jedisPool.isClosed();
+    }
+
+    /** 获取 Redis 连接池（供 axs-core 内部选主服务使用，Redis 不可用时返回 null）。 */
+    @org.jetbrains.annotations.Nullable
+    public JedisPool getJedisPoolInternal() {
+        return jedisPool;
+    }
+
     @Override
     public CrossServerChannel openChannel(
         String moduleId,

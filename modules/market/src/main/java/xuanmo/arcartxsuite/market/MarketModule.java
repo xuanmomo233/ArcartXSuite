@@ -48,8 +48,10 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     private static final String SHOP_UI_FILE_PATH = "ui/market_shop.yml";
     private static final String AUCTION_UI_RESOURCE_PATH = "arcartx/ui/market_auction.yml";
     private static final String AUCTION_UI_FILE_PATH = "ui/market_auction.yml";
-    private static final String AUCTION_SELL_UI_RESOURCE_PATH = "arcartx/ui/market_auction_sell.yml";
-    private static final String AUCTION_SELL_UI_FILE_PATH = "ui/market_auction_sell.yml";
+    private static final String AUCTION_SELL_UI_RESOURCE_PATH = "arcartx/ui/market_sell.yml";
+    private static final String AUCTION_SELL_UI_FILE_PATH = "ui/market_sell.yml";
+    private static final String PLAYER_SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_player_shop.yml";
+    private static final String PLAYER_SHOP_UI_FILE_PATH = "ui/market_player_shop.yml";
     private static final String RECYCLE_UI_RESOURCE_PATH = "arcartx/ui/market_recycle.yml";
     private static final String RECYCLE_UI_FILE_PATH = "ui/market_recycle.yml";
     private static final String HISTORY_UI_RESOURCE_PATH = "arcartx/ui/market_history.yml";
@@ -77,6 +79,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                     .dynamicSection("auction.categories")
                     .dynamicSection("auction.blacklist")
                     .dynamicSection("auction.tax-discount")
+                    .dynamicSection("player-shop.blacklist")
+                    .dynamicSection("player-shop.tax-discount")
                     .dynamicSection("recycle.price-multiplier")
                     .dynamicSection("messages")
                 .build())
@@ -107,6 +111,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         mappings.put(SHOP_UI_RESOURCE_PATH, SHOP_UI_FILE_PATH);
         mappings.put(AUCTION_UI_RESOURCE_PATH, AUCTION_UI_FILE_PATH);
         mappings.put(AUCTION_SELL_UI_RESOURCE_PATH, AUCTION_SELL_UI_FILE_PATH);
+        mappings.put(PLAYER_SHOP_UI_RESOURCE_PATH, PLAYER_SHOP_UI_FILE_PATH);
         mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
         mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
@@ -149,7 +154,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected List<String> publishedTopics() {
-        return List.of("market.listing_created", "market.auction_purchased");
+        return List.of("market.listing_created", "market.auction_purchased", "market.shop_dynamic_triggered");
     }
 
     @Override
@@ -218,7 +223,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, itemMatcher, logger, crossServer, messages());
+            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, itemMatcher, logger, crossServer, scheduler, messages());
         service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setEventBusProvider(() -> getCapability(
@@ -233,6 +238,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
         bindMarketUi(configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
         bindMarketUi("AXS:market_auction_sell", AUCTION_SELL_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().sellId(), AUCTION_SELL_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().playerShopId(), PLAYER_SHOP_UI_FILE_PATH);
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
 

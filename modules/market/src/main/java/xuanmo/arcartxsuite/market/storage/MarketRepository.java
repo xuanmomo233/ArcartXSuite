@@ -5,6 +5,8 @@ import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
+import xuanmo.arcartxsuite.market.dynamic.DynamicShopState;
+import xuanmo.arcartxsuite.market.playershop.PlayerShopListing;
 import xuanmo.arcartxsuite.market.shop.ShopLimitRecord;
 
 /**
@@ -146,4 +148,75 @@ public interface MarketRepository {
 
     /** 删除一条已成功发放的记录。 */
     void deletePendingDelivery(long id);
+
+    // ─── 动态商品策略状态 ───────────────────────────────────
+
+    /** 获取动态策略持久化状态。 */
+    @Nullable DynamicShopState getDynamicShopState(String strategyKey);
+
+    /** 保存（UPSERT）动态策略持久化状态。 */
+    void upsertDynamicShopState(DynamicShopState state);
+
+    // ─── 玩家商店 ─────────────────────────────────────────────
+
+    /** 插入玩家商店上架记录，成功后 id 回填。 */
+    boolean insertPlayerShopListing(PlayerShopListing listing);
+
+    void updatePlayerShopListing(PlayerShopListing listing);
+
+    /** 状态 CAS：仅当当前状态等于 expect 时才更新为 update。 */
+    boolean compareAndSetPlayerShopListingStatus(long listingId,
+                                                  PlayerShopListing.ListingStatus expect,
+                                                  PlayerShopListing.ListingStatus update);
+
+    @Nullable PlayerShopListing getPlayerShopListing(long listingId);
+
+    /** 获取所有活跃的玩家商店商品（分页）。 */
+    List<PlayerShopListing> getActivePlayerShopListings(int offset, int limit);
+
+    /** 按卖家获取活跃商品（分页）。 */
+    List<PlayerShopListing> getActivePlayerShopListingsBySeller(UUID seller, int offset, int limit);
+
+    /** 搜索玩家商店商品。 */
+    List<PlayerShopListing> searchPlayerShopListings(String keyword, int offset, int limit);
+
+    /** 获取有活跃商品的所有卖家（UUID + 名称），用于浏览玩家列表。 */
+    List<PlayerShopSellerInfo> getPlayerShopSellers(int offset, int limit);
+
+    int countActivePlayerShopListings();
+
+    int countActivePlayerShopListingsBySeller(UUID seller);
+
+    int countSearchPlayerShopListings(String keyword);
+
+    int countPlayerShopSellers();
+
+    int countListingsByPlayerShopSeller(UUID seller);
+
+    List<PlayerShopListing> getExpiredPlayerShopListings();
+
+    // ─── 玩家商店交易历史 ──────────────────────────────────────
+
+    void insertPlayerShopHistory(PlayerShopHistory history);
+
+    List<PlayerShopHistory> getPlayerShopHistoryByPlayer(UUID player, int offset, int limit);
+
+    int countPlayerShopHistoryByPlayer(UUID player);
+
+    // ─── 玩家商店卖家信息 ──────────────────────────────────────
+
+    /** 玩家商店卖家摘要（UUID + 名称 + 在售数量）。 */
+    record PlayerShopSellerInfo(UUID seller, String sellerName, int activeCount) {}
+
+    /** 玩家商店交易历史记录。 */
+    record PlayerShopHistory(
+        long id, long listingId, UUID seller, UUID buyer,
+        String itemData, String itemDisplayName,
+        double price, String currency, double taxAmount,
+        String transactionType, long timestamp
+    ) {
+        public enum TransactionType {
+            PURCHASE, EXPIRED, CANCELLED
+        }
+    }
 }

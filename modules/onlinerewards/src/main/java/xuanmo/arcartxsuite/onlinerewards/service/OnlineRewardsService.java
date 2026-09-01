@@ -57,6 +57,7 @@ import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalTarget;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsSignInConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsTimeBasedReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsTimeBonusGroup;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardScope;
@@ -64,6 +65,8 @@ import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
+import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
+import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import java.util.logging.Logger;
 
@@ -118,6 +121,10 @@ public class OnlineRewardsService implements Listener {
 
     private BukkitTask minuteTask;
     private BukkitTask leaderboardRefreshTask;
+    private ScheduledTask schedulerMinuteTask;
+    private ScheduledTask schedulerLeaderboardTask;
+    private final List<ScheduledTask> timeBasedRewardTasks = new ArrayList<>();
+    private SchedulerAPI scheduler;
     private CrossServerChannel crossServerChannel;
     private java.util.List<String> runtimeMenuUiIds = java.util.List.of();
     private java.util.List<String> registeredMenuUiIds = java.util.List.of();
@@ -221,6 +228,11 @@ public class OnlineRewardsService implements Listener {
         this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
+    /** 注入调度器，用于底层定时任务和时刻奖励调度。 */
+    public void setScheduler(SchedulerAPI scheduler) {
+        this.scheduler = scheduler;
+    }
+
     /**
      * 启动服务：初始化存储、绑定 UI、注册事件、刷新排行榜、调度每分钟 tick 与跨服通道。
      *
@@ -233,9 +245,30 @@ public class OnlineRewardsService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshLeaderboardSnapshots();
         scheduleSyncForOnlinePlayers();
-        minuteTask = AxsScheduler.runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
-        // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
-        leaderboardRefreshTask = AxsScheduler.runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
+        // 底层调度：优先使用 SchedulerAPI，降级到 AxsScheduler
+        if (scheduler != null) {
+            schedulerMinuteTask = scheduler.scheduleAtFixedRate(plugin, this::tickOnlinePlayers, 20L, 1200L);
+            // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
+            schedulerLeaderboardTask = scheduler.scheduleAtFixedRate(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
+        } else {
+            minuteTask = AxsScheduler.runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
+            // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
+            leaderboardRefreshTask = AxsScheduler.runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
+        }
+        // 时刻奖励调度
+        if (scheduler != null && configuration.timeBasedRewards() != null) {
+            for (OnlineRewardsTimeBasedReward reward : configuration.timeBasedRewards()) {
+                if (!reward.enabled()) continue;
+                try {
+                    ScheduledTask task = scheduler.scheduleCalendar(plugin,
+                        () -> executeTimeBasedReward(reward), reward.schedule());
+                    timeBasedRewardTasks.add(task);
+                    logger.info("时刻奖励已调度: " + reward.id() + " (" + reward.schedule() + ")");
+                } catch (Exception e) {
+                    logger.warning("时刻奖励调度失败: " + reward.id() + " | " + e.getMessage());
+                }
+            }
+        }
         crossServerChannel = crossServer.openChannel(
             "onlinerewards",
             configuration.crossServer(),
@@ -258,6 +291,18 @@ public class OnlineRewardsService implements Listener {
             leaderboardRefreshTask.cancel();
             leaderboardRefreshTask = null;
         }
+        if (schedulerMinuteTask != null) {
+            schedulerMinuteTask.cancel();
+            schedulerMinuteTask = null;
+        }
+        if (schedulerLeaderboardTask != null) {
+            schedulerLeaderboardTask.cancel();
+            schedulerLeaderboardTask = null;
+        }
+        for (ScheduledTask task : timeBasedRewardTasks) {
+            task.cancel();
+        }
+        timeBasedRewardTasks.clear();
         if (crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
@@ -1077,6 +1122,36 @@ public class OnlineRewardsService implements Listener {
             );
         }
         return true;
+    }
+
+    /**
+     * 执行时刻奖励：给所有在线玩家发放指定奖励。
+     * <p>
+     * 由 {@link SchedulerAPI#scheduleCalendar} 在指定时刻触发。
+     *
+     * @param reward 时刻奖励定义
+     * @since 1.6.0
+     */
+    private void executeTimeBasedReward(OnlineRewardsTimeBasedReward reward) {
+        OnlineRewardsPeriodContext context = currentPeriodContext();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            for (String rawCommand : reward.commands()) {
+                String command = renderCommand(rawCommand, player, new OnlineRewardsSignInResult(
+                    false, false, 0, 0, context.rewardDate(), context.date().getDayOfMonth()
+                ));
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+            }
+            dispatchMailPresets(player, reward.mailPresetIds(),
+                "时刻奖励 '" + reward.name() + "'", "OnlineRewards:TimeBased:" + reward.id());
+            dispatchItemRewards(player, reward.itemRewards(), "时刻奖励 '" + reward.name() + "'");
+        }
+        if (reward.broadcastMessage() != null && !reward.broadcastMessage().isBlank()) {
+            Bukkit.broadcastMessage(
+                org.bukkit.ChatColor.translateAlternateColorCodes('&', reward.broadcastMessage()));
+        }
+        if (configuration.debug()) {
+            logger.info("时刻奖励已发放: " + reward.id() + " | 在线人数=" + Bukkit.getOnlinePlayers().size());
+        }
     }
 
     private void executeRewardCommands(Player player, OnlineRewardDefinition reward, OnlineRewardsPeriodContext context) {

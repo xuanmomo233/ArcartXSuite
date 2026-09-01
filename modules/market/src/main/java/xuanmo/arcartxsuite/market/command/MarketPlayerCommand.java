@@ -68,6 +68,7 @@ public class MarketPlayerCommand implements TabExecutor {
                 }
             }
             case "auction", "ah" -> service.openAuctionUi(player);
+            case "pshop", "playershop" -> service.openPlayerShopUi(player);
             case "sell", "list" -> {
                 // /market sell <一口价> [起拍价] [时长秒]
                 if (args.length < 2) {
@@ -134,6 +135,7 @@ public class MarketPlayerCommand implements TabExecutor {
     private void sendHelp(Player player) {
         player.sendMessage(fullMsg("player.help.title"));
         player.sendMessage(fullMsg("player.help.auction"));
+        player.sendMessage(fullMsg("player.help.pshop"));
         player.sendMessage(fullMsg("player.help.shop"));
         player.sendMessage(fullMsg("player.help.sell"));
         player.sendMessage(fullMsg("player.help.recycle"));
@@ -146,7 +148,7 @@ public class MarketPlayerCommand implements TabExecutor {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            List<String> subs = List.of("help", "shop", "auction", "sell", "recycle", "history", "my", "search", "cancel");
+            List<String> subs = List.of("help", "shop", "auction", "pshop", "sell", "recycle", "history", "my", "search", "cancel");
             return filterStartsWith(subs, args[0]);
         }
         if (args.length == 2) {

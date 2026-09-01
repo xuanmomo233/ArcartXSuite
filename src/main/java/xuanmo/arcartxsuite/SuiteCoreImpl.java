@@ -77,6 +77,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     private ChatSignBypassService chatSignBypassService;
     private SecondaryPasswordService secondaryPasswordService;
     private xuanmo.arcartxsuite.selection.DefaultPolygonSelectionManager polygonSelectionManager;
+    private xuanmo.arcartxsuite.scheduler.SchedulerServiceImpl schedulerService;
     private xuanmo.arcartxsuite.storage.StorageManagerImpl storageManager;
     private BridgeLifecycleManager bridgeLifecycleManager;
     private ClientEventLifecycleManager clientEventLifecycleManager;
@@ -214,6 +215,16 @@ public final class SuiteCoreImpl implements SuiteCore {
         }
 
         // 8. ModuleRegistry：扫描并加载所有外部模块
+        //    先创建统一调度服务（供所有模块使用日历触发/跨服单点调度）
+        schedulerService = new xuanmo.arcartxsuite.scheduler.SchedulerServiceImpl(
+            host,
+            getLogger(),
+            crossServerService != null ? crossServerService.nodeId() : "single",
+            crossServerService,
+            storageManager != null ? storageManager.getDataSource() : null,
+            "axs_scheduler_leader");
+        schedulerService.start();
+
         moduleRegistry = new ModuleRegistry(
             host,
             new File(getDataFolder(), "modules"),
@@ -227,7 +238,8 @@ public final class SuiteCoreImpl implements SuiteCore {
             crossServerService,
             placeholderResolver,
             bridgeLifecycleManager.worldTextureBridge(),
-            storageManager
+            storageManager,
+            schedulerService
         );
         moduleRegistry.attachCore(this);
         try {
@@ -504,6 +516,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         if (moduleRegistry != null) {
             moduleRegistry.unloadAll();
             moduleRegistry = null;
+        }
+        if (schedulerService != null) {
+            schedulerService.shutdown();
+            schedulerService = null;
         }
         if (storageManager != null) {
             storageManager.shutdown();

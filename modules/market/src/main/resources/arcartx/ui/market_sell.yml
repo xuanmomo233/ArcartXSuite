@@ -1,5 +1,6 @@
-# ── 全球市场 · 拍卖行上架 ─────────────────────────────────────
+# ── 全球市场 · 统一上架 ─────────────────────────────────────
 # 背包选择、上架参数填写及确认提交。
+# 顶部 Tab 切换拍卖行 / 玩家商店两种上架模式。
 
 ui:
   isHud: false
@@ -31,6 +32,7 @@ ui:
       var.selectedMessage = none
       var.selectedDuration = 86400
       var.selectedCurrency = none
+      var.selectedMode = 'auction'
       var.priceMin = 1
       var.priceMax = 1000000000
       var.messageMaxLength = 50
@@ -38,49 +40,89 @@ ui:
       var.selectedItemAmount = 0
       var.selectedItemLore = none
       var.selectedItemJson = none
-      var.currencies = {}
+      var.auctionCurrencies = {}
+      var.auctionMaxCurrencyCount = 0
+      var.auctionDefaultCurrency = none
+      var.auctionPriceMin = 1
+      var.auctionPriceMax = 1000000000
+      var.auctionMessageMaxLength = 50
+      var.auctionEnabled = true
+      var.pshopCurrencies = {}
+      var.pshopMaxCurrencyCount = 0
+      var.pshopDefaultCurrency = none
+      var.pshopPriceMin = 1
+      var.pshopPriceMax = 1000000000
+      var.pshopMessageMaxLength = 50
+      var.pshopEnabled = true
+      var.activeCurrencies = {}
       var.maxCurrencyCount = 0
       var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
-    open: "Packet.send(var.packetId, 'auction_sell_open')"
+      var.syncMode = -> {
+        if(var.selectedMode == 'auction'){
+          var.activeCurrencies = var.auctionCurrencies
+          var.maxCurrencyCount = var.auctionMaxCurrencyCount
+          var.selectedCurrency = var.auctionDefaultCurrency
+          var.priceMin = var.auctionPriceMin
+          var.priceMax = var.auctionPriceMax
+          var.messageMaxLength = var.auctionMessageMaxLength
+        } else {
+          var.activeCurrencies = var.pshopCurrencies
+          var.maxCurrencyCount = var.pshopMaxCurrencyCount
+          var.selectedCurrency = var.pshopDefaultCurrency
+          var.priceMin = var.pshopPriceMin
+          var.priceMax = var.pshopPriceMax
+          var.messageMaxLength = var.pshopMessageMaxLength
+        }
+        while(val.货币滚动['货币列表'].childrenCount() > 1){
+          val.货币滚动['货币列表'].get(1).remove()
+        }
+        for(i in range(1, var.maxCurrencyCount)){
+          key = i.round()
+          e = val.货币滚动['货币列表']['货币项'].copy('货币项' + key)
+          e.entryKey = key
+        }
+      }
+    open: "Packet.send(var.packetId, 'sell_open')"
   packetHandler:
     init: |-
       var.packetId = packet['packetId']
-      var.currencies = packet['currencies']
-      var.maxCurrencyCount = packet['maxCurrencyCount']
-      var.selectedCurrency = packet['defaultCurrency']
-      var.priceMin = packet['priceMin']
-      var.priceMax = packet['priceMax']
-      var.messageMaxLength = packet['messageMaxLength']
+      var.auctionCurrencies = packet['auctionCurrencies']
+      var.auctionMaxCurrencyCount = packet['auctionMaxCurrencyCount']
+      var.auctionDefaultCurrency = packet['auctionDefaultCurrency']
+      var.auctionPriceMin = packet['auctionPriceMin']
+      var.auctionPriceMax = packet['auctionPriceMax']
+      var.auctionMessageMaxLength = packet['auctionMessageMaxLength']
+      var.auctionEnabled = packet['auctionEnabled']
+      var.pshopCurrencies = packet['pshopCurrencies']
+      var.pshopMaxCurrencyCount = packet['pshopMaxCurrencyCount']
+      var.pshopDefaultCurrency = packet['pshopDefaultCurrency']
+      var.pshopPriceMin = packet['pshopPriceMin']
+      var.pshopPriceMax = packet['pshopPriceMax']
+      var.pshopMessageMaxLength = packet['pshopMessageMaxLength']
+      var.pshopEnabled = packet['pshopEnabled']
       var.actionToken = packet['action_token']
-      
-      while(val.货币列表.childrenCount() > 1){
-        val.货币列表.get(1).remove()
-      }
-      for(i in range(1, var.maxCurrencyCount - 1)){
-        key = i.round()
-        e = val.货币列表['货币项'].copy('货币项' + key)
-        e.entryKey = key
-      }
+      var.selectedMode = var.auctionEnabled ? 'auction' : 'pshop'
+      var.syncMode()
       var.actionBusy = false
     update: |-
-      var.currencies = packet['currencies']
-      var.maxCurrencyCount = packet['maxCurrencyCount']
-      var.selectedCurrency = packet['defaultCurrency']
-      var.priceMin = packet['priceMin']
-      var.priceMax = packet['priceMax']
-      var.messageMaxLength = packet['messageMaxLength']
+      var.auctionCurrencies = packet['auctionCurrencies']
+      var.auctionMaxCurrencyCount = packet['auctionMaxCurrencyCount']
+      var.auctionDefaultCurrency = packet['auctionDefaultCurrency']
+      var.auctionPriceMin = packet['auctionPriceMin']
+      var.auctionPriceMax = packet['auctionPriceMax']
+      var.auctionMessageMaxLength = packet['auctionMessageMaxLength']
+      var.auctionEnabled = packet['auctionEnabled']
+      var.pshopCurrencies = packet['pshopCurrencies']
+      var.pshopMaxCurrencyCount = packet['pshopMaxCurrencyCount']
+      var.pshopDefaultCurrency = packet['pshopDefaultCurrency']
+      var.pshopPriceMin = packet['pshopPriceMin']
+      var.pshopPriceMax = packet['pshopPriceMax']
+      var.pshopMessageMaxLength = packet['pshopMessageMaxLength']
+      var.pshopEnabled = packet['pshopEnabled']
       var.actionToken = packet['action_token']
-      
-      while(val.货币列表.childrenCount() > 1){
-        val.货币列表.get(1).remove()
-      }
-      for(i in range(1, var.maxCurrencyCount - 1)){
-        key = i.round()
-        e = val.货币列表['货币项'].copy('货币项' + key)
-        e.entryKey = key
-      }
+      var.syncMode()
       var.actionBusy = false
   defaultOpen: false
 controls:
@@ -121,7 +163,7 @@ controls:
             attribute:
               x: 42
               y: 28
-              texts: ~&f物品上架
+              texts: "~&f物品上架"
               fontSize: 100
               through: true
           关闭按钮:
@@ -151,7 +193,84 @@ controls:
                   center: true
                   fontSize: 48
                   texts: ~&f✕
-          # ── 左上：背包面板 ──────────────────────────
+          # ── 顶部 Tab 切换 ──────────────────────────────────
+          模式Tab栏:
+            type: Canvas
+            attribute:
+              x: 200
+              y: 28
+              width: 500
+              height: 48
+            children:
+              拍卖行Tab:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 230
+                  height: 48
+                  enable: var.auctionEnabled
+                action:
+                  clickLeft: |-
+                    var.selectedMode = 'auction'
+                    var.syncMode()
+                children:
+                  拍卖行Tab背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.selectedMode == 'auction' ? '70,150,250,230' : '56,58,70,200'"
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  拍卖行Tab文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 230
+                      texts: ~&f拍卖行
+                      fontSize: 28
+                      through: true
+              玩家商店Tab:
+                type: Canvas
+                attribute:
+                  x: 250
+                  y: 0
+                  width: 230
+                  height: 48
+                  enable: var.pshopEnabled
+                action:
+                  clickLeft: |-
+                    var.selectedMode = 'pshop'
+                    var.syncMode()
+                children:
+                  玩家商店Tab背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.selectedMode == 'pshop' ? '70,150,250,230' : '56,58,70,200'"
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  玩家商店Tab文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 230
+                      texts: ~&f玩家商店
+                      fontSize: 28
+                      through: true
+          # ── 左上：背包面板 ──────────────────────────────────
           背包面板:
             type: Canvas
             attribute:
@@ -176,7 +295,7 @@ controls:
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f选择背包物品
+                  texts: "~&f选择背包物品"
                   fontSize: 48
                   through: true
               背包说明:
@@ -184,7 +303,7 @@ controls:
                 attribute:
                   x: 24
                   y: 64
-                  texts: ~&7点击物品选择，再次点击取消
+                  texts: "~&7点击物品选择，再次点击取消"
                   fontSize: 36
                   through: true
               背包网格:
@@ -286,7 +405,7 @@ controls:
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f上架信息
+                  texts: "~&f上架信息"
                   fontSize: 36
                   through: true
               标题分隔线:
@@ -339,7 +458,7 @@ controls:
                 attribute:
                   x: 24
                   y: 202
-                  texts: ~&f物品介绍
+                  texts: "~&f物品介绍"
                   fontSize: 30
                   through: true
               介绍滚动:
@@ -424,7 +543,7 @@ controls:
                 attribute:
                   x: 24
                   y: 20
-                  texts: ~&f起拍价格
+                  texts: "var.selectedMode == 'auction' ? '~&f起拍价格' : '~&f出售价格'"
                   fontSize: 30
                   through: true
               价格输入框:
@@ -435,7 +554,7 @@ controls:
                   width: 400
                   height: 48
                   length: 12
-                  emptyText: ~输入起拍价格...
+                  emptyText: "var.selectedMode == 'auction' ? '~输入起拍价格...' : '~输入出售价格...'"
                   fontSize: 28
                   background: ~56,58,70,220
                   shape: ~round_rect
@@ -547,7 +666,7 @@ controls:
                         type: Canvas
                         attribute:
                           entryKey: 0.round()
-                          entry: var.currencies[self.entryKey]
+                          entry: var.activeCurrencies[self.entryKey]
                           visible: self.entry != none
                           width: 240
                           height: 38
@@ -680,13 +799,45 @@ controls:
                       texts: ~&f7天
                       fontSize: 24
                       through: true
+              时长30天:
+                type: Canvas
+                attribute:
+                  x: 1166
+                  y: 52
+                  width: 74
+                  height: 40
+                  visible: "var.selectedMode == 'pshop'"
+                action:
+                  clickLeft: var.selectedDuration = 2592000
+                children:
+                  时长30天背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.selectedDuration == 2592000 ? '70,150,250,230' : '56,58,70,200'"
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  时长30天文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 74
+                      texts: ~&f30天
+                      fontSize: 24
+                      through: true
               时长说明:
                 type: Text
                 attribute:
                   x: 920
                   y: 104
                   width: 236
-                  texts: ~&7选择拍卖持续时间
+                  texts: "var.selectedMode == 'auction' ? '~&7选择拍卖持续时间' : '~&7选择上架持续时间'"
                   fontSize: 20
                   through: true
               操作提示:
@@ -694,7 +845,7 @@ controls:
                 attribute:
                   x: 24
                   y: 230
-                  texts: ~&7填写价格和留言后，在右侧确认上架
+                  texts: "~&7填写价格和留言后，在右侧确认上架"
                   fontSize: 20
                   through: true
               返回按钮:
@@ -706,7 +857,11 @@ controls:
                   height: 56
                 action:
                   clickLeft: |-
-                    Screen.open("AXS:market_auction")
+                    if(var.selectedMode == 'auction'){
+                      Screen.open("AXS:market_auction")
+                    } else {
+                      Screen.open("AXS:market_player_shop")
+                    }
                 children:
                   返回背景:
                     type: Texture
@@ -742,7 +897,7 @@ controls:
                     if(var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''){
                       msg = var.selectedMessage == none ? '' : var.selectedMessage
                       var.actionBusy = true
-                      Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, msg, var.selectedDuration.round(), var.selectedCurrency, var.actionToken)
+                      Packet.send(var.packetId, 'pshop_create', var.selectedSlot, var.selectedPrice, msg, var.selectedDuration.round(), var.selectedCurrency, var.selectedMode, var.actionToken)
                     }
                 children:
                   确认上架背景:
@@ -763,6 +918,6 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 266
-                      texts: ~&f确认上架
+                      texts: "var.selectedMode == 'auction' ? '~&f确认上架拍卖' : '~&f确认上架商店'"
                       fontSize: 42
                       through: true

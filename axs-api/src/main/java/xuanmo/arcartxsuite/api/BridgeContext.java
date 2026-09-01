@@ -18,6 +18,8 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
+import xuanmo.arcartxsuite.api.bridge.ApiStability;
+import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
 /**
@@ -80,4 +82,12 @@ public interface BridgeContext {
 
     @xuanmo.arcartxsuite.api.bridge.ApiStability.Internal
     @NotNull SoundPlayerBridgeAPI createSoundPlayerBridge();
+
+    /**
+     * 宿主统一调度 API（固定间隔 / 日历触发 / 跨服单点）。
+     *
+     * @since 1.6.0
+     */
+    @ApiStability.Stable
+    @NotNull SchedulerAPI scheduler();
 }

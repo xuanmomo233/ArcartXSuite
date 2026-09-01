@@ -56,6 +56,7 @@ player:
   help:
     title: "&6全球市场 命令"
     auction: "&7/market&f - 打开拍卖行"
+    pshop: "&7/market pshop&f - 玩家商店"
     shop: "&7/market shop [商店ID]&f - 系统商店"
     sell: "&7/market sell <一口价> [起拍价] [时长] [货币]&f - 上架物品"
     recycle: "&7/market recycle [all]&f - 回收商店"
@@ -94,6 +95,12 @@ shop-limit-reached: "&c该商品已达购买上限。"           # 限购商品�
 # ── 回收商店消息 ──
 recycle-success: "&a回收成功！获得: &e%amount%"        # %amount%=获得金额
 recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回收物品
+# ── 玩家商店消息 ──
+player-shop-listed: "&a商品已上架到你的商店！"          # 上架成功
+player-shop-bought: "&a购买成功！花费: &e%amount%"     # %amount%=花费金额
+player-shop-sold: "&a你商店中的 &e%item% &a已售出！收入: &e%amount%"  # %item%=物品名 %amount%=税后收入
+player-shop-expired: "&7你商店中的 &e%item% &7已到期，已退回。"  # 到期退回通知
+player-shop-cancelled: "&7已下架商品。"                # 下架成功
 # ── 通用错误消息 ──
 insufficient-funds: "&c余额不足。"                    # 货币余额不足
 item-blacklisted: "&c该物品不允许上架。"               # 物品在黑名单中

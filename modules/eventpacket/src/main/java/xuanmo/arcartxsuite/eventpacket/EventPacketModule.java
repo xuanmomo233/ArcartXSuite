@@ -227,7 +227,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
         // 启动定时命令服务
         scheduledCommandService = new ScheduledCommandService(
-            plugin, logger, configuration.scheduledCommands());
+            plugin, logger, configuration.scheduledCommands(), scheduler);
         scheduledCommandService.start();
 
         JdbcEventPacketRepository epRepo = (JdbcEventPacketRepository) repository;

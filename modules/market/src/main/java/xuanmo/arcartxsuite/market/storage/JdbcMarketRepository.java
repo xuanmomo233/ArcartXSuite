@@ -17,6 +17,8 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
+import xuanmo.arcartxsuite.market.dynamic.DynamicShopState;
+import xuanmo.arcartxsuite.market.playershop.PlayerShopListing;
 import xuanmo.arcartxsuite.market.shop.ShopLimitRecord;
 
 /**
@@ -34,6 +36,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private String tGlobalStock;
     private String tPlayerStock;
     private String tListingsFts;
+    private String tDynamicState;
+    private String tPlayerShopListings;
+    private String tPlayerShopHistory;
 
     /** 全文索引是否可用（SQLite FTS5 或 MySQL FULLTEXT+ngram），false 时降级到 LIKE */
     private volatile boolean ftsAvailable = false;
@@ -99,6 +104,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tGlobalStock = prefix + "shop_global_stock";
         tPlayerStock = prefix + "shop_player_stock";
         tListingsFts = prefix + "listings_fts";
+        tDynamicState = prefix + "dynamic_shop_state";
+        tPlayerShopListings = prefix + "player_shop_listings";
+        tPlayerShopHistory = prefix + "player_shop_history";
         // 防御性校验：表前缀只能包含字母数字下划线，防止拼接 SQL 时注入
         if (!prefix.matches("[a-zA-Z0-9_]*")) {
             throw new IllegalStateException("非法表前缀（仅允许字母数字下划线）: " + prefix);
@@ -140,6 +148,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 total += execUpdate(conn, "DELETE FROM " + tPending + " WHERE player=?", uuid);
                 // 玩家商店库存
                 total += execUpdate(conn, "DELETE FROM " + tPlayerStock + " WHERE player=?", uuid);
+                // 玩家商店上架记录：卖家或买家
+                total += execUpdate(conn, "DELETE FROM " + tPlayerShopListings + " WHERE seller=?", uuid);
+                // 玩家商店交易历史：卖家或买家
+                total += execUpdate(conn, "DELETE FROM " + tPlayerShopHistory + " WHERE seller=? OR buyer=?", uuid, uuid);
                 conn.commit();
             } catch (SQLException e) {
                 conn.rollback();
@@ -172,7 +184,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             prefix + "recycle_stats",
             prefix + "pending_deliveries",
             prefix + "shop_global_stock",
-            prefix + "shop_player_stock"
+            prefix + "shop_player_stock",
+            prefix + "player_shop_listings",
+            prefix + "player_shop_history"
         ));
         // SQLite FTS5 虚拟表（迁移时需要一并处理）
         if (!isMysql() && tListingsFts != null) {
@@ -302,6 +316,54 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 remaining INTEGER NOT NULL,
                 PRIMARY KEY (player, shop_id, item_id))
             """.formatted(tPlayerStock));
+
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                strategy_key TEXT NOT NULL PRIMARY KEY,
+                shop_id TEXT NOT NULL,
+                strategy_type TEXT NOT NULL,
+                state_json TEXT NOT NULL DEFAULT '',
+                last_trigger_time INTEGER NOT NULL DEFAULT 0,
+                next_trigger_time INTEGER NOT NULL DEFAULT 0)
+            """.formatted(tDynamicState));
+
+        // ── 玩家商店 ──────────────────────────────────────
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seller TEXT NOT NULL,
+                seller_name TEXT NOT NULL,
+                item_data TEXT NOT NULL,
+                item_display_name TEXT NOT NULL,
+                pinyin TEXT NOT NULL DEFAULT '',
+                initials TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                price REAL NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'money',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL)
+            """.formatted(tPlayerShopListings));
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pshop_status ON " + tPlayerShopListings + "(status)");
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pshop_seller ON " + tPlayerShopListings + "(seller)");
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pshop_expires ON " + tPlayerShopListings + "(expires_at)");
+
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                listing_id INTEGER NOT NULL,
+                seller TEXT NOT NULL,
+                buyer TEXT,
+                item_data TEXT NOT NULL,
+                item_display_name TEXT NOT NULL,
+                price REAL NOT NULL,
+                currency TEXT NOT NULL,
+                tax_amount REAL NOT NULL DEFAULT 0,
+                transaction_type TEXT NOT NULL,
+                timestamp INTEGER NOT NULL)
+            """.formatted(tPlayerShopHistory));
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pshop_history_seller ON " + tPlayerShopHistory + "(seller)");
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pshop_history_buyer ON " + tPlayerShopHistory + "(buyer)");
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
@@ -425,9 +487,58 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 PRIMARY KEY (player, shop_id, item_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """.formatted(tPlayerStock));
-    }
 
-    // ─── 全文索引初始化 ────────────────────────────────────
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                strategy_key VARCHAR(128) NOT NULL PRIMARY KEY,
+                shop_id VARCHAR(64) NOT NULL,
+                strategy_type VARCHAR(32) NOT NULL,
+                state_json TEXT NOT NULL,
+                last_trigger_time BIGINT NOT NULL DEFAULT 0,
+                next_trigger_time BIGINT NOT NULL DEFAULT 0
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tDynamicState));
+
+        // ── 玩家商店 ──────────────────────────────────────
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                seller CHAR(36) NOT NULL,
+                seller_name VARCHAR(64) NOT NULL,
+                item_data MEDIUMTEXT NOT NULL,
+                item_display_name VARCHAR(256) NOT NULL,
+                pinyin VARCHAR(512) NOT NULL DEFAULT '',
+                initials VARCHAR(512) NOT NULL DEFAULT '',
+                message VARCHAR(256) NOT NULL DEFAULT '',
+                price DOUBLE NOT NULL DEFAULT 0,
+                currency VARCHAR(32) NOT NULL DEFAULT 'money',
+                status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+                created_at BIGINT NOT NULL,
+                expires_at BIGINT NOT NULL,
+                INDEX idx_pshop_status (status),
+                INDEX idx_pshop_seller (seller),
+                INDEX idx_pshop_expires (expires_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPlayerShopListings));
+
+        stmt.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                listing_id BIGINT NOT NULL,
+                seller CHAR(36) NOT NULL,
+                buyer CHAR(36),
+                item_data MEDIUMTEXT NOT NULL,
+                item_display_name VARCHAR(256) NOT NULL,
+                price DOUBLE NOT NULL,
+                currency VARCHAR(32) NOT NULL,
+                tax_amount DOUBLE NOT NULL DEFAULT 0,
+                transaction_type VARCHAR(16) NOT NULL,
+                timestamp BIGINT NOT NULL,
+                INDEX idx_pshop_history_seller (seller),
+                INDEX idx_pshop_history_buyer (buyer)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """.formatted(tPlayerShopHistory));
+    }
 
     /**
      * 初始化全文索引：
@@ -1449,6 +1560,357 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             rs.getLong("id"),
             rs.getLong("listing_id"),
             parseUuidSafe(rs.getString("seller"), "history.seller"),
+            buyer,
+            rs.getString("item_data"),
+            rs.getString("item_display_name"),
+            rs.getDouble("price"),
+            rs.getString("currency"),
+            rs.getDouble("tax_amount"),
+            rs.getString("transaction_type"),
+            rs.getLong("timestamp")
+        );
+    }
+
+    // ─── 动态商品策略状态 ───────────────────────────────────
+
+    @Override
+    public @Nullable DynamicShopState getDynamicShopState(String strategyKey) {
+        String sql = "SELECT strategy_key, shop_id, strategy_type, state_json, last_trigger_time, next_trigger_time FROM "
+            + tDynamicState + " WHERE strategy_key=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, strategyKey);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new DynamicShopState(
+                        rs.getString("strategy_key"),
+                        rs.getString("shop_id"),
+                        rs.getString("strategy_type"),
+                        rs.getString("state_json"),
+                        rs.getLong("last_trigger_time"),
+                        rs.getLong("next_trigger_time")
+                    );
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "查询动态策略状态失败: " + strategyKey, e);
+        }
+        return null;
+    }
+
+    @Override
+    public void upsertDynamicShopState(DynamicShopState state) {
+        if (isMysql()) {
+            exec("INSERT INTO " + tDynamicState
+                + " (strategy_key, shop_id, strategy_type, state_json, last_trigger_time, next_trigger_time) VALUES (?,?,?,?,?,?)"
+                + " ON DUPLICATE KEY UPDATE shop_id=VALUES(shop_id), strategy_type=VALUES(strategy_type),"
+                + " state_json=VALUES(state_json), last_trigger_time=VALUES(last_trigger_time), next_trigger_time=VALUES(next_trigger_time)",
+                state.strategyKey(), state.shopId(), state.strategyType(),
+                state.stateJson(), state.lastTriggerTime(), state.nextTriggerTime());
+        } else {
+            exec("INSERT OR REPLACE INTO " + tDynamicState
+                + " (strategy_key, shop_id, strategy_type, state_json, last_trigger_time, next_trigger_time) VALUES (?,?,?,?,?,?)",
+                state.strategyKey(), state.shopId(), state.strategyType(),
+                state.stateJson(), state.lastTriggerTime(), state.nextTriggerTime());
+        }
+    }
+
+    // ─── 玩家商店 ─────────────────────────────────────────────
+
+    @Override
+    public boolean insertPlayerShopListing(PlayerShopListing listing) {
+        String sql = "INSERT INTO " + tPlayerShopListings
+            + " (seller, seller_name, item_data, item_display_name, pinyin, initials, message, price, currency, status, created_at, expires_at)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, listing.getSeller().toString());
+            ps.setString(2, listing.getSellerName());
+            ps.setString(3, listing.getItemData());
+            ps.setString(4, listing.getItemDisplayName());
+            ps.setString(5, listing.getPinyin());
+            ps.setString(6, listing.getInitials());
+            ps.setString(7, listing.getMessage());
+            ps.setDouble(8, listing.getPrice());
+            ps.setString(9, listing.getCurrency());
+            ps.setString(10, listing.getStatus().name());
+            ps.setLong(11, listing.getCreatedAt());
+            ps.setLong(12, listing.getExpiresAt());
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) listing.setId(rs.getLong(1));
+            }
+            return listing.getId() > 0;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "插入玩家商店物品失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public void updatePlayerShopListing(PlayerShopListing listing) {
+        String sql = "UPDATE " + tPlayerShopListings + " SET status=? WHERE id=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, listing.getStatus().name());
+            ps.setLong(2, listing.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "更新玩家商店物品失败", e);
+        }
+    }
+
+    @Override
+    public boolean compareAndSetPlayerShopListingStatus(long listingId,
+                                                          PlayerShopListing.ListingStatus expect,
+                                                          PlayerShopListing.ListingStatus update) {
+        String sql = "UPDATE " + tPlayerShopListings + " SET status=? WHERE id=? AND status=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, update.name());
+            ps.setLong(2, listingId);
+            ps.setString(3, expect.name());
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "玩家商店状态 CAS 失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public @Nullable PlayerShopListing getPlayerShopListing(long listingId) {
+        String sql = "SELECT * FROM " + tPlayerShopListings + " WHERE id=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, listingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return mapPlayerShopListing(rs);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "查询玩家商店物品失败: " + listingId, e);
+        }
+        return null;
+    }
+
+    @Override
+    public List<PlayerShopListing> getActivePlayerShopListings(int offset, int limit) {
+        return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            System.currentTimeMillis(), limit, offset);
+    }
+
+    @Override
+    public List<PlayerShopListing> getActivePlayerShopListingsBySeller(UUID seller, int offset, int limit) {
+        return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            System.currentTimeMillis(), seller.toString(), limit, offset);
+    }
+
+    @Override
+    public List<PlayerShopListing> searchPlayerShopListings(String keyword, int offset, int limit) {
+        String sql = "SELECT * FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?"
+            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')"
+            + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        List<PlayerShopListing> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
+            ps.setString(2, like);
+            ps.setString(3, like);
+            ps.setString(4, like);
+            ps.setInt(5, limit);
+            ps.setInt(6, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(mapPlayerShopListing(rs));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "搜索玩家商店物品失败", e);
+        }
+        return results;
+    }
+
+    @Override
+    public List<MarketRepository.PlayerShopSellerInfo> getPlayerShopSellers(int offset, int limit) {
+        String sql = "SELECT seller, seller_name, COUNT(*) AS active_count FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?"
+            + " GROUP BY seller, seller_name ORDER BY active_count DESC LIMIT ? OFFSET ?";
+        List<MarketRepository.PlayerShopSellerInfo> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            ps.setInt(2, limit);
+            ps.setInt(3, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    UUID seller = parseUuidSafe(rs.getString("seller"), "pshop.seller");
+                    if (seller != null) {
+                        results.add(new MarketRepository.PlayerShopSellerInfo(
+                            seller, rs.getString("seller_name"), rs.getInt("active_count")));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "查询玩家商店卖家列表失败", e);
+        }
+        return results;
+    }
+
+    @Override
+    public int countActivePlayerShopListings() {
+        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?", System.currentTimeMillis());
+    }
+
+    @Override
+    public int countActivePlayerShopListingsBySeller(UUID seller) {
+        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ? AND seller=?",
+            System.currentTimeMillis(), seller.toString());
+    }
+
+    @Override
+    public int countSearchPlayerShopListings(String keyword) {
+        String sql = "SELECT COUNT(*) FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?"
+            + " AND (item_display_name LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\' OR initials LIKE ? ESCAPE '\\')";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            String like = "%" + escapeLike(truncateKeyword(keyword)) + "%";
+            ps.setString(2, like);
+            ps.setString(3, like);
+            ps.setString(4, like);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "统计搜索玩家商店物品失败", e);
+        }
+        return 0;
+    }
+
+    @Override
+    public int countPlayerShopSellers() {
+        String sql = "SELECT COUNT(DISTINCT seller) FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at > ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, System.currentTimeMillis());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "统计玩家商店卖家数失败", e);
+        }
+        return 0;
+    }
+
+    @Override
+    public int countListingsByPlayerShopSeller(UUID seller) {
+        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopListings + " WHERE seller=?", seller.toString());
+    }
+
+    @Override
+    public List<PlayerShopListing> getExpiredPlayerShopListings() {
+        return queryPlayerShopListings("SELECT * FROM " + tPlayerShopListings
+            + " WHERE status='ACTIVE' AND expires_at <= ? ORDER BY expires_at ASC",
+            System.currentTimeMillis());
+    }
+
+    @Override
+    public void insertPlayerShopHistory(MarketRepository.PlayerShopHistory history) {
+        String sql = "INSERT INTO " + tPlayerShopHistory
+            + " (listing_id, seller, buyer, item_data, item_display_name, price, currency, tax_amount, transaction_type, timestamp)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?)";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setLong(1, history.listingId());
+            ps.setString(2, history.seller().toString());
+            ps.setString(3, history.buyer() == null ? null : history.buyer().toString());
+            ps.setString(4, history.itemData());
+            ps.setString(5, history.itemDisplayName());
+            ps.setDouble(6, history.price());
+            ps.setString(7, history.currency());
+            ps.setDouble(8, history.taxAmount());
+            ps.setString(9, history.transactionType());
+            ps.setLong(10, history.timestamp());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "插入玩家商店历史失败", e);
+        }
+    }
+
+    @Override
+    public List<MarketRepository.PlayerShopHistory> getPlayerShopHistoryByPlayer(UUID player, int offset, int limit) {
+        String sql = "SELECT * FROM " + tPlayerShopHistory
+            + " WHERE seller=? OR buyer=? ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+        List<MarketRepository.PlayerShopHistory> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, player.toString());
+            ps.setString(2, player.toString());
+            ps.setInt(3, limit);
+            ps.setInt(4, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(mapPlayerShopHistory(rs));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "查询玩家商店历史失败", e);
+        }
+        return results;
+    }
+
+    @Override
+    public int countPlayerShopHistoryByPlayer(UUID player) {
+        return countQuery("SELECT COUNT(*) FROM " + tPlayerShopHistory
+            + " WHERE seller=? OR buyer=?", player.toString(), player.toString());
+    }
+
+    // ─── 玩家商店映射工具 ─────────────────────────────────────
+
+    private List<PlayerShopListing> queryPlayerShopListings(String sql, Object... params) {
+        List<PlayerShopListing> results = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) {
+                setParam(ps, i + 1, params[i]);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(mapPlayerShopListing(rs));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "查询玩家商店列表失败", e);
+        }
+        return results;
+    }
+
+    private PlayerShopListing mapPlayerShopListing(ResultSet rs) throws SQLException {
+        return new PlayerShopListing(
+            rs.getLong("id"),
+            parseUuidSafe(rs.getString("seller"), "pshop.seller"),
+            rs.getString("seller_name"),
+            rs.getString("item_data"),
+            rs.getString("item_display_name"),
+            rs.getString("pinyin"),
+            rs.getString("initials"),
+            rs.getString("message"),
+            rs.getDouble("price"),
+            rs.getString("currency"),
+            PlayerShopListing.ListingStatus.valueOf(rs.getString("status")),
+            rs.getLong("created_at"),
+            rs.getLong("expires_at")
+        );
+    }
+
+    private MarketRepository.PlayerShopHistory mapPlayerShopHistory(ResultSet rs) throws SQLException {
+        String buyerStr = rs.getString("buyer");
+        UUID buyer = parseUuidSafe(buyerStr, "pshop_history.buyer");
+        return new MarketRepository.PlayerShopHistory(
+            rs.getLong("id"),
+            rs.getLong("listing_id"),
+            parseUuidSafe(rs.getString("seller"), "pshop_history.seller"),
             buyer,
             rs.getString("item_data"),
             rs.getString("item_display_name"),

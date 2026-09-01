@@ -1,0 +1,822 @@
+# AXS Market — 玩家商店浏览界面
+# 打开方式: /market pshop
+# 左侧玩家列表，右侧选中玩家的在售商品
+# 数据交互: packetHandler pshop_list / pshop_sellers
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    # 商品列表包
+    pshop_list: |-
+      var.packetId = packet['packetId']
+      var.page = packet['page']
+      var.totalPages = packet['totalPages']
+      var.pageText = packet['pageText']
+      var.keyword = packet['keyword']
+      var.sellerUuid = packet['sellerUuid']
+      var.listings = packet['listings']
+      var.listingTexts = packet['listingTexts']
+      var.itemJsons = {}
+      var.maxItemCount = packet['maxItemCount']
+      var.actionToken = packet['action_token']
+      for(key in var.listings.keys()){
+        json = packet['itemJson' + key]
+        if(json != none){
+          var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      while(val.商品列表.childrenCount() > 1){
+        val.商品列表.get(1).remove()
+      }
+      for(i in range(1, var.maxItemCount)){
+        key = i.round()
+        e = val.商品列表['商品卡片'].copy('商品卡片' + key)
+        e.entryKey = key
+      }
+      for(i in range(0, var.maxItemCount)){
+        key = i.round()
+        e = val.商品列表.get(key)
+        if(e != none && e['商品图标'] != none){
+          e['商品图标'].entryKey = key
+          e['商品图标'].seticon()
+        }
+      }
+      var.actionBusy = false
+    # 卖家列表包
+    pshop_sellers: |-
+      var.packetId = packet['packetId']
+      var.sellerPage = packet['page']
+      var.sellerTotalPages = packet['totalPages']
+      var.sellerPageText = packet['pageText']
+      var.sellers = packet['sellers']
+      var.sellerTexts = packet['sellerTexts']
+      var.maxSellerCount = packet['maxSellerCount']
+      while(val.卖家列表.childrenCount() > 1){
+        val.卖家列表.get(1).remove()
+      }
+      for(i in range(1, var.maxSellerCount)){
+        key = i.round()
+        e = val.卖家列表['卖家项'].copy('卖家项' + key)
+        e.entryKey = key
+      }
+  action:
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
+    open: |-
+      var.packetId = 'AXS_MARKET'
+      var.page = 0
+      var.totalPages = 1
+      var.pageText = '1/1'
+      var.sellerPage = 0
+      var.sellerTotalPages = 1
+      var.sellerPageText = '1/1'
+      var.keyword = ''
+      var.sellerUuid = ''
+      var.listings = {}
+      var.listingTexts = {}
+      var.itemJsons = {}
+      var.sellers = {}
+      var.sellerTexts = {}
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.maxItemCount = 0
+      var.maxSellerCount = 0
+      var.actionToken = ''
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      Packet.send(var.packetId, 'pshop_sellers', '0')
+      Packet.send(var.packetId, 'pshop_list', '0', none, none)
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1500
+          height: 900
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~28,30,42,244
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~90,170,255,150
+              shadow:
+                xOffset: 0
+                yOffset: 4
+                blur: 12
+                color: ~0,0,0,140
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: "~&6玩家商店"
+              fontSize: 100
+              through: true
+          # ── 顶部按钮栏 ──────────────────────────────
+          上架按钮:
+            type: Canvas
+            attribute:
+              x: 400
+              y: 28
+              width: 130
+              height: 48
+            action:
+              clickLeft: Screen.open("AXS:market_sell")
+            children:
+              上架背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~60,180,100,200
+                  hover: "~Frosted:0;80,220,120,230"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,255,140,120
+              上架文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 130
+                  texts: ~&f上架商品
+                  fontSize: 28
+                  through: true
+          拍卖行按钮:
+            type: Canvas
+            attribute:
+              x: 550
+              y: 28
+              width: 130
+              height: 48
+            action:
+              clickLeft: Screen.open("AXS:market_auction")
+            children:
+              拍卖行背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~56,58,70,220
+                  hover: "~Frosted:0;255,255,255,80"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~90,170,255,70
+              拍卖行文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 130
+                  texts: ~&f拍卖行
+                  fontSize: 28
+                  through: true
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 1420
+              y: 28
+              width: 48
+              height: 48
+              normal: ~180,70,70,210
+              hover: "~Frosted:0;220,90,90,230"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: Screen.close()
+            effect:
+              stroke:
+                width: 1
+                color: ~255,130,130,120
+            children:
+              关闭文字:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 9
+                  through: true
+                  center: true
+                  fontSize: 48
+                  texts: ~&f✕
+          # ── 左侧：卖家列表 ────────────────────────────────
+          卖家面板:
+            type: Canvas
+            attribute:
+              x: 30
+              y: 100
+              width: 380
+              height: 720
+            children:
+              卖家面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~42,45,58,220
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~90,170,255,50
+              卖家标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: "~&f玩家商店"
+                  fontSize: 40
+                  through: true
+              卖家分隔线:
+                type: Texture
+                attribute:
+                  x: 20
+                  y: 60
+                  width: 340
+                  height: 2
+                  normal: ~90,170,255,40
+                  through: true
+              卖家滚动:
+                type: Scroll
+                val: 卖家滚动
+                attribute:
+                  x: 16
+                  y: 72
+                  width: 340
+                  height: 580
+                  moveY: "self.parent['卖家滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['卖家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['卖家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  卖家列表:
+                    type: VStack
+                    val: 卖家列表
+                    attribute:
+                      width: 340
+                      spaceBetween: 6
+                    children:
+                      卖家项:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.sellers[self.entryKey]
+                          visible: self.entry != none
+                          width: 340
+                          height: 56
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none){
+                              var.sellerUuid = self.entry['uuid']
+                              var.page = 0
+                              Packet.send(var.packetId, 'pshop_list', '0', none, var.sellerUuid)
+                            }
+                        children:
+                          卖家项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '70,150,250,230' : '56,58,70,200'"
+                              hover: "~Frosted:0;255,255,255,80"
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~90,170,255,50
+                          卖家项文字:
+                            type: Text
+                            attribute:
+                              x: 16
+                              y: 8
+                              width: 308
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : ''"
+                              fontSize: 28
+                              through: true
+                          卖家项数量:
+                            type: Text
+                            attribute:
+                              x: 16
+                              y: 34
+                              width: 308
+                              texts: "self.parent.entry != none ? '&7在售 ' + self.parent.entry['activeCount'] + ' 件' : ''"
+                              fontSize: 20
+                              through: true
+              卖家滑块:
+                type: Texture
+                val: 卖家滑块
+                attribute:
+                  x: 358
+                  y: 72
+                  width: 6
+                  height: 40
+                  normal: ~120,120,120,200
+                  maxDragY: 540
+              # 卖家分页
+              卖家上一页:
+                type: Canvas
+                attribute:
+                  x: 40
+                  y: 668
+                  width: 130
+                  height: 40
+                  enable: "var.sellerPage > 0"
+                action:
+                  clickLeft: |-
+                    if(var.sellerPage > 0){
+                      Packet.send(var.packetId, 'pshop_sellers', (var.sellerPage - 1).round())
+                    }
+                children:
+                  卖家上一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~56,58,70,220
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  卖家上一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: ~&f上一页
+                      fontSize: 24
+                      through: true
+              卖家页码:
+                type: Text
+                attribute:
+                  x: 180
+                  y: 676
+                  width: 80
+                  center: true
+                  texts: "var.sellerPageText"
+                  fontSize: 24
+                  through: true
+              卖家下一页:
+                type: Canvas
+                attribute:
+                  x: 270
+                  y: 668
+                  width: 130
+                  height: 40
+                  enable: "var.sellerPage < var.sellerTotalPages - 1"
+                action:
+                  clickLeft: |-
+                    if(var.sellerPage < var.sellerTotalPages - 1){
+                      Packet.send(var.packetId, 'pshop_sellers', (var.sellerPage + 1).round())
+                    }
+                children:
+                  卖家下一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~56,58,70,220
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  卖家下一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: ~&f下一页
+                      fontSize: 24
+                      through: true
+          # ── 右侧：商品列表 ────────────────────────────────
+          商品面板:
+            type: Canvas
+            attribute:
+              x: 430
+              y: 100
+              width: 1040
+              height: 720
+            children:
+              商品面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~42,45,58,220
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~90,170,255,50
+              搜索框:
+                type: TextBox
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 400
+                  height: 44
+                  length: 30
+                  emptyText: ~搜索商品名称...
+                  fontSize: 26
+                  background: ~56,58,70,220
+                  shape: ~round_rect
+                  radius: 10
+                action:
+                  textChange: var.keyword = self.getContent()
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~90,170,255,50
+              搜索按钮:
+                type: Canvas
+                attribute:
+                  x: 440
+                  y: 16
+                  width: 100
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.page = 0
+                    kw = var.keyword == none ? '' : var.keyword
+                    Packet.send(var.packetId, 'pshop_list', '0', kw, var.sellerUuid)
+                children:
+                  搜索背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~70,150,250,200
+                      hover: "~Frosted:0;90,170,255,230"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  搜索文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 100
+                      texts: ~&f搜索
+                      fontSize: 26
+                      through: true
+              全部商品按钮:
+                type: Canvas
+                attribute:
+                  x: 560
+                  y: 16
+                  width: 130
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.sellerUuid = ''
+                    var.page = 0
+                    Packet.send(var.packetId, 'pshop_list', '0', none, none)
+                children:
+                  全部背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~56,58,70,220
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  全部文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: ~&f全部商品
+                      fontSize: 26
+                      through: true
+              商品分隔线:
+                type: Texture
+                attribute:
+                  x: 20
+                  y: 70
+                  width: 1000
+                  height: 2
+                  normal: ~90,170,255,40
+                  through: true
+              商品滚动:
+                type: Scroll
+                val: 商品滚动
+                attribute:
+                  x: 16
+                  y: 82
+                  width: 980
+                  height: 580
+                  moveY: "self.parent['商品滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['商品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['商品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  商品列表:
+                    type: VStack
+                    val: 商品列表
+                    attribute:
+                      width: 980
+                      spaceBetween: 8
+                    children:
+                      商品卡片:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.listings[self.entryKey]
+                          visible: self.entry != none
+                          width: 980
+                          height: 80
+                        children:
+                          卡片背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~52,54,66,220
+                              hover: "~Frosted:0;255,255,255,40"
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~90,170,255,40
+                          商品图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.7
+                              x: 10
+                              y: 8
+                              width: 64
+                              height: 64
+                              normal: ~0,0,0,0
+                              shape: ~round_rect
+                              radius: 8
+                              through: true
+                              entryKey: 0.round()
+                              entry: var.itemJsons[self.entryKey]
+                              seticon: "self.setItemIcon(self.entry != none ? self.entry : var.emptyItemJson)"
+                          商品名称:
+                            type: Text
+                            attribute:
+                              x: 90
+                              y: 8
+                              width: 400
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['itemDisplayName'] : ''"
+                              fontSize: 26
+                              through: true
+                          商品卖家:
+                            type: Text
+                            attribute:
+                              x: 90
+                              y: 38
+                              width: 400
+                              texts: "self.parent.entry != none ? '&7卖家: &f' + self.parent.entry['sellerName'] : ''"
+                              fontSize: 20
+                              through: true
+                          商品留言:
+                            type: Text
+                            attribute:
+                              x: 90
+                              y: 58
+                              width: 400
+                              texts: "self.parent.entry != none && self.parent.entry['message'] != '' ? '&7' + self.parent.entry['message'] : ''"
+                              fontSize: 18
+                              through: true
+                          商品价格:
+                            type: Text
+                            attribute:
+                              x: 680
+                              y: 16
+                              width: 180
+                              texts: "self.parent.entry != none ? '&e' + self.parent.entry['price'] + ' ' + self.parent.entry['currency'] : ''"
+                              fontSize: 28
+                              center: true
+                              through: true
+                          购买按钮:
+                            type: Canvas
+                            attribute:
+                              x: 870
+                              y: 16
+                              width: 96
+                              height: 48
+                              enable: "self.parent.entry != none && !self.parent.entry['isMine'] && !var.actionBusy"
+                            action:
+                              clickLeft: |-
+                                if(self.parent.entry != none && !var.actionBusy){
+                                  var.actionBusy = true
+                                  listingId = self.parent.entry['id']
+                                  Packet.send(var.packetId, 'pshop_buy', listingId.round(), var.actionToken)
+                                }
+                            children:
+                              购买背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~60,180,100,200
+                                  hover: "~Frosted:0;80,220,120,230"
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: ~80,255,140,120
+                              购买文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  width: 96
+                                  texts: ~&f购买
+                                  fontSize: 24
+                                  through: true
+                          下架按钮:
+                            type: Canvas
+                            attribute:
+                              x: 870
+                              y: 16
+                              width: 96
+                              height: 48
+                              visible: "self.parent.entry != none && self.parent.entry['isMine']"
+                              enable: "!var.actionBusy"
+                            action:
+                              clickLeft: |-
+                                if(self.parent.entry != none && !var.actionBusy){
+                                  var.actionBusy = true
+                                  listingId = self.parent.entry['id']
+                                  Packet.send(var.packetId, 'pshop_cancel', listingId.round(), var.actionToken)
+                                }
+                            children:
+                              下架背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~180,70,70,200
+                                  hover: "~Frosted:0;220,90,90,230"
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: ~255,130,130,120
+                              下架文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  width: 96
+                                  texts: ~&f下架
+                                  fontSize: 24
+                                  through: true
+              商品滑块:
+                type: Texture
+                val: 商品滑块
+                attribute:
+                  x: 998
+                  y: 82
+                  width: 6
+                  height: 40
+                  normal: ~120,120,120,200
+                  maxDragY: 540
+              # 商品分页
+              商品上一页:
+                type: Canvas
+                attribute:
+                  x: 300
+                  y: 668
+                  width: 130
+                  height: 40
+                  enable: "var.page > 0"
+                action:
+                  clickLeft: |-
+                    if(var.page > 0){
+                      kw = var.keyword == none ? '' : var.keyword
+                      Packet.send(var.packetId, 'pshop_list', (var.page - 1).round(), kw, var.sellerUuid)
+                    }
+                children:
+                  商品上一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~56,58,70,220
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  商品上一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: ~&f上一页
+                      fontSize: 24
+                      through: true
+              商品页码:
+                type: Text
+                attribute:
+                  x: 440
+                  y: 676
+                  width: 160
+                  center: true
+                  texts: "var.pageText"
+                  fontSize: 24
+                  through: true
+              商品下一页:
+                type: Canvas
+                attribute:
+                  x: 610
+                  y: 668
+                  width: 130
+                  height: 40
+                  enable: "var.page < var.totalPages - 1"
+                action:
+                  clickLeft: |-
+                    if(var.page < var.totalPages - 1){
+                      kw = var.keyword == none ? '' : var.keyword
+                      Packet.send(var.packetId, 'pshop_list', (var.page + 1).round(), kw, var.sellerUuid)
+                    }
+                children:
+                  商品下一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~56,58,70,220
+                      hover: "~Frosted:0;255,255,255,80"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~90,170,255,70
+                  商品下一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: ~&f下一页
+                      fontSize: 24
+                      through: true

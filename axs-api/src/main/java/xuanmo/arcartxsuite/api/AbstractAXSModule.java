@@ -85,6 +85,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected @Nullable xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge;
     protected File pluginDataFolder;
     protected @NotNull StorageManager storageManager;
+    protected @NotNull xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
 
 
     private boolean ready;
@@ -269,6 +270,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.expansionRegistry = context.expansionRegistry();
         this.propBridge = context.propBridge();
         this.storageManager = context.storageManager();
+        this.scheduler = context.scheduler();
 
         Logger logger = context.logger();
 

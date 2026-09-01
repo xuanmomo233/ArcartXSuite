@@ -80,6 +80,7 @@ public final class ModuleRegistry {
     private final PlaceholderResolverAPI placeholderResolver;
     private final ArcartXWorldTextureService worldTextureBridge;
     private final xuanmo.arcartxsuite.api.storage.StorageManager storageManager;
+    private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
 
     // ─── 拆分组件 ──────────────────────────────────────────────
     private final CapabilityRegistry capabilityRegistry;
@@ -104,7 +105,8 @@ public final class ModuleRegistry {
         CrossServerService crossServerService,
         PlaceholderResolverAPI placeholderResolver,
         ArcartXWorldTextureService worldTextureBridge,
-        xuanmo.arcartxsuite.api.storage.StorageManager storageManager
+        xuanmo.arcartxsuite.api.storage.StorageManager storageManager,
+        xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -119,6 +121,7 @@ public final class ModuleRegistry {
         this.placeholderResolver = placeholderResolver;
         this.worldTextureBridge = worldTextureBridge;
         this.storageManager = storageManager;
+        this.scheduler = scheduler;
         this.capabilityRegistry = new CapabilityRegistry();
         this.clientPacketRouter = new ClientPacketRouter(packetGuard);
         this.globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
@@ -748,7 +751,8 @@ public final class ModuleRegistry {
             taczCombatBridge,
             crossServerService,
             placeholderResolver,
-            storageManager
+            storageManager,
+            scheduler
         );
 
         LoadedModule loaded = jarBytes != null

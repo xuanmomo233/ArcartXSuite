@@ -26,6 +26,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.ShopConfiguration;
+import xuanmo.arcartxsuite.market.dynamic.DynamicShopService;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 
 /**
@@ -50,6 +51,7 @@ public class ShopService {
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
     private BukkitTask refreshTask;
     private volatile LimitUpdateBroadcaster limitBroadcaster;
+    private volatile DynamicShopService dynamicShopService;
 
     /** 单次购买数量上限（36 格 × 64），防止客户端传入超大值导致整数溢出 / 刷物品。 */
     private static final int MAX_PURCHASE_AMOUNT = 36 * 64;
@@ -70,6 +72,11 @@ public class ShopService {
     /** 注入跨服广播回调。 */
     public void setLimitBroadcaster(LimitUpdateBroadcaster broadcaster) {
         this.limitBroadcaster = broadcaster;
+    }
+
+    /** 注入动态商品策略服务。 */
+    public void setDynamicShopService(DynamicShopService service) {
+        this.dynamicShopService = service;
     }
 
     public void start() {
@@ -180,7 +187,7 @@ public class ShopService {
      * 购买系统商店物品。
      */
     public BuyResult buy(Player player, String shopId, String itemId, int amount) {
-        ShopDefinition shop = shops.get(shopId);
+        ShopDefinition shop = getEffectiveShop(shopId);
         if (shop == null) return BuyResult.fail("商店不存在");
         if (!shop.permission().isEmpty() && !player.hasPermission(shop.permission())) {
             return BuyResult.fail("无权限访问该商店");
@@ -271,6 +278,11 @@ public class ShopService {
         updateLimit(player, shopId, itemId, shopItem, delivered);
         executeRewardCommands(player, shopItem, delivered);
 
+        // 记录成交量（供需模式价格浮动策略据此调价）
+        if (dynamicShopService != null) {
+            dynamicShopService.recordPurchase(shopId, itemId, delivered);
+        }
+
         return BuyResult.success(unitPrice.multiply(BigDecimal.valueOf(delivered)).doubleValue(), shopItem.currency());
     }
 
@@ -283,6 +295,56 @@ public class ShopService {
 
     public @Nullable ShopDefinition getShop(String shopId) {
         return shops.get(shopId);
+    }
+
+    /**
+     * 获取合并动态商品层和价格乘数后的有效商店定义。
+     * <p>
+     * 如果没有动态策略作用于该商店，返回与 {@link #getShop(String)} 相同的静态定义。
+     *
+     * @param shopId 商店 ID
+     * @return 有效商店定义，商店不存在时返回 null
+     */
+    public @Nullable ShopDefinition getEffectiveShop(String shopId) {
+        ShopDefinition staticShop = shops.get(shopId);
+        if (staticShop == null) return null;
+        if (dynamicShopService == null) return staticShop;
+
+        // 合并动态商品
+        Map<String, ShopItem> dynamicItems = dynamicShopService.getDynamicItems(shopId);
+        Map<String, Double> multipliers = dynamicShopService.getPriceMultipliers(shopId);
+        if (dynamicItems.isEmpty() && multipliers.isEmpty()) return staticShop;
+
+        // 合并商品列表
+        Map<String, ShopItem> effectiveItems = new LinkedHashMap<>(staticShop.items());
+        effectiveItems.putAll(dynamicItems);
+
+        // 应用价格乘数
+        if (!multipliers.isEmpty()) {
+            Map<String, ShopItem> pricedItems = new LinkedHashMap<>();
+            for (Map.Entry<String, ShopItem> entry : effectiveItems.entrySet()) {
+                String key = entry.getKey();
+                ShopItem item = entry.getValue();
+                double multiplier = multipliers.getOrDefault(key, 1.0);
+                if (multiplier != 1.0) {
+                    item = new ShopItem(
+                        item.key(), item.type(), item.icon(), item.rewardCommands(),
+                        item.item(), item.displayName(),
+                        item.buyPrice() * multiplier,
+                        item.sellPrice() * multiplier,
+                        item.currency(), item.stockMode(), item.stockAmount(),
+                        item.limitPerPlayer(), item.limitReset(), item.discount()
+                    );
+                }
+                pricedItems.put(key, item);
+            }
+            effectiveItems = pricedItems;
+        }
+
+        return new ShopDefinition(
+            staticShop.id(), staticShop.displayName(), staticShop.icon(),
+            staticShop.permission(), staticShop.tags(), effectiveItems
+        );
     }
 
     private void updateLimit(Player player, String shopId, String itemId, ShopItem shopItem, int delivered) {
