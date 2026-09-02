@@ -141,17 +141,17 @@ controls:
           标题:
             type: Text
             attribute:
-              x: 42
+              x: 32
               y: 24
               texts: "~&6玩家商店"
-              fontSize: 100
+              fontSize: 64
               through: true
           # ── 顶部按钮栏 ──────────────────────────────
           上架按钮:
             type: Canvas
             attribute:
-              x: 400
-              y: 28
+              x: 300
+              y: 24
               width: 130
               height: 48
             action:
@@ -174,15 +174,14 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 130
                   texts: ~&f上架商品
                   fontSize: 28
                   through: true
           拍卖行按钮:
             type: Canvas
             attribute:
-              x: 550
-              y: 28
+              x: 450
+              y: 24
               width: 130
               height: 48
             action:
@@ -205,7 +204,6 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 130
                   texts: ~&f拍卖行
                   fontSize: 28
                   through: true
@@ -213,7 +211,7 @@ controls:
             type: Texture
             attribute:
               x: 1420
-              y: 28
+              y: 22
               width: 48
               height: 48
               normal: ~180,70,70,210
@@ -241,9 +239,9 @@ controls:
             type: Canvas
             attribute:
               x: 30
-              y: 100
+              y: 110
               width: 380
-              height: 720
+              height: 700
             children:
               卖家面板背景:
                 type: Texture
@@ -280,7 +278,7 @@ controls:
                   x: 16
                   y: 72
                   width: 340
-                  height: 580
+                  height: 540
                   moveY: "self.parent['卖家滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -332,7 +330,6 @@ controls:
                             attribute:
                               x: 16
                               y: 8
-                              width: 308
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : ''"
                               fontSize: 28
                               through: true
@@ -341,7 +338,6 @@ controls:
                             attribute:
                               x: 16
                               y: 34
-                              width: 308
                               texts: "self.parent.entry != none ? '&7在售 ' + self.parent.entry['activeCount'] + ' 件' : ''"
                               fontSize: 20
                               through: true
@@ -354,14 +350,14 @@ controls:
                   width: 6
                   height: 40
                   normal: ~120,120,120,200
-                  maxDragY: 540
+                  maxDragY: 500
               # 卖家分页
               卖家上一页:
                 type: Canvas
                 attribute:
-                  x: 40
-                  y: 668
-                  width: 130
+                  x: 60
+                  y: 630
+                  width: 120
                   height: 40
                   enable: "var.sellerPage > 0"
                 action:
@@ -387,16 +383,14 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 130
                       texts: ~&f上一页
                       fontSize: 24
                       through: true
               卖家页码:
                 type: Text
                 attribute:
-                  x: 180
-                  y: 676
-                  width: 80
+                  x: 190
+                  y: 638
                   center: true
                   texts: "var.sellerPageText"
                   fontSize: 24
@@ -404,9 +398,9 @@ controls:
               卖家下一页:
                 type: Canvas
                 attribute:
-                  x: 270
-                  y: 668
-                  width: 130
+                  x: 200
+                  y: 630
+                  width: 120
                   height: 40
                   enable: "var.sellerPage < var.sellerTotalPages - 1"
                 action:
@@ -432,7 +426,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 130
                       texts: ~&f下一页
                       fontSize: 24
                       through: true
@@ -441,9 +434,9 @@ controls:
             type: Canvas
             attribute:
               x: 430
-              y: 100
+              y: 110
               width: 1040
-              height: 720
+              height: 700
             children:
               商品面板背景:
                 type: Texture
@@ -505,7 +498,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 100
                       texts: ~&f搜索
                       fontSize: 26
                       through: true
@@ -539,7 +531,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 130
                       texts: ~&f全部商品
                       fontSize: 26
                       through: true
@@ -559,7 +550,7 @@ controls:
                   x: 16
                   y: 82
                   width: 980
-                  height: 580
+                  height: 540
                   moveY: "self.parent['商品滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -620,7 +611,6 @@ controls:
                             attribute:
                               x: 90
                               y: 8
-                              width: 400
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['itemDisplayName'] : ''"
                               fontSize: 26
                               through: true
@@ -629,7 +619,6 @@ controls:
                             attribute:
                               x: 90
                               y: 38
-                              width: 400
                               texts: "self.parent.entry != none ? '&7卖家: &f' + self.parent.entry['sellerName'] : ''"
                               fontSize: 20
                               through: true
@@ -638,7 +627,6 @@ controls:
                             attribute:
                               x: 90
                               y: 58
-                              width: 400
                               texts: "self.parent.entry != none && self.parent.entry['message'] != '' ? '&7' + self.parent.entry['message'] : ''"
                               fontSize: 18
                               through: true
@@ -647,7 +635,6 @@ controls:
                             attribute:
                               x: 680
                               y: 16
-                              width: 180
                               texts: "self.parent.entry != none ? '&e' + self.parent.entry['price'] + ' ' + self.parent.entry['currency'] : ''"
                               fontSize: 28
                               center: true
@@ -659,7 +646,8 @@ controls:
                               y: 16
                               width: 96
                               height: 48
-                              enable: "self.parent.entry != none && !self.parent.entry['isMine'] && !var.actionBusy"
+                              visible: "self.parent.entry != none && !self.parent.entry['isMine']"
+                              enable: "self.parent.entry != none && !self.parent.entry['isMine'] && !var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
                                 if(self.parent.entry != none && !var.actionBusy){
@@ -685,7 +673,6 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 96
                                   texts: ~&f购买
                                   fontSize: 24
                                   through: true
@@ -697,7 +684,7 @@ controls:
                               width: 96
                               height: 48
                               visible: "self.parent.entry != none && self.parent.entry['isMine']"
-                              enable: "!var.actionBusy"
+                              enable: "self.parent.entry != none && !var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
                                 if(self.parent.entry != none && !var.actionBusy){
@@ -723,7 +710,6 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 96
                                   texts: ~&f下架
                                   fontSize: 24
                                   through: true
@@ -736,13 +722,13 @@ controls:
                   width: 6
                   height: 40
                   normal: ~120,120,120,200
-                  maxDragY: 540
+                  maxDragY: 500
               # 商品分页
               商品上一页:
                 type: Canvas
                 attribute:
-                  x: 300
-                  y: 668
+                  x: 380
+                  y: 630
                   width: 130
                   height: 40
                   enable: "var.page > 0"
@@ -770,16 +756,14 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 130
                       texts: ~&f上一页
                       fontSize: 24
                       through: true
               商品页码:
                 type: Text
                 attribute:
-                  x: 440
-                  y: 676
-                  width: 160
+                  x: 520
+                  y: 638
                   center: true
                   texts: "var.pageText"
                   fontSize: 24
@@ -787,8 +771,8 @@ controls:
               商品下一页:
                 type: Canvas
                 attribute:
-                  x: 610
-                  y: 668
+                  x: 530
+                  y: 630
                   width: 130
                   height: 40
                   enable: "var.page < var.totalPages - 1"
@@ -816,7 +800,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 130
                       texts: ~&f下一页
                       fontSize: 24
                       through: true

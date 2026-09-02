@@ -193,7 +193,6 @@ digis-display:
       player-min-amount: 1.0
 
     # ─── 暴击/闪避/克制飘字（全局配置，跨所有属性插件） ───
-    # 这些配置对所有属性来源（Symphony/AttributePlus/CraneAttribute/MythicLib）生效。
     # 当前仅 Symphony 能在伤害事件中提供暴击/闪避/克制标记，
     # 其他属性插件触发时 critical=false / dodged=false / relation=null，自动降级为普通伤害飘字。
     # 优先级: 闪避 > 暴击 > 克制 > 普通伤害

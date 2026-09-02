@@ -161,16 +161,16 @@ controls:
           标题:
             type: Text
             attribute:
-              x: 42
-              y: 28
+              x: 32
+              y: 24
               texts: "~&f物品上架"
-              fontSize: 100
+              fontSize: 64
               through: true
           关闭按钮:
             type: Texture
             attribute:
               x: 1368
-              y: 28
+              y: 22
               width: 48
               height: 48
               normal: ~180,70,70,210
@@ -197,8 +197,8 @@ controls:
           模式Tab栏:
             type: Canvas
             attribute:
-              x: 200
-              y: 28
+              x: 400
+              y: 24
               width: 500
               height: 48
             children:
@@ -232,7 +232,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 230
                       texts: ~&f拍卖行
                       fontSize: 28
                       through: true
@@ -266,7 +265,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 230
                       texts: ~&f玩家商店
                       fontSize: 28
                       through: true
@@ -275,7 +273,7 @@ controls:
             type: Canvas
             attribute:
               x: 40
-              y: 100
+              y: 110
               width: 800
               height: 460
             children:
@@ -385,7 +383,7 @@ controls:
             val: 信息面板
             attribute:
               x: 860
-              y: 100
+              y: 110
               width: 560
               height: 460
             children:
@@ -440,7 +438,6 @@ controls:
                 attribute:
                   x: 124
                   y: 92
-                  width: 410
                   texts: "var.selectedSlot != none && var.selectedItemName != none ? '&f' + var.selectedItemName : '&7未选择物品'"
                   fontSize: 30
                   through: true
@@ -543,7 +540,7 @@ controls:
                 attribute:
                   x: 24
                   y: 20
-                  texts: "var.selectedMode == 'auction' ? '~&f起拍价格' : '~&f出售价格'"
+                  texts: "var.selectedMode == 'auction' ? '&f起拍价格' : '&f出售价格'"
                   fontSize: 30
                   through: true
               价格输入框:
@@ -551,10 +548,10 @@ controls:
                 attribute:
                   x: 24
                   y: 52
-                  width: 400
+                  width: 300
                   height: 48
                   length: 12
-                  emptyText: "var.selectedMode == 'auction' ? '~输入起拍价格...' : '~输入出售价格...'"
+                  emptyText: "var.selectedMode == 'auction' ? '输入起拍价格...' : '输入出售价格...'"
                   fontSize: 28
                   background: ~56,58,70,220
                   shape: ~round_rect
@@ -568,9 +565,8 @@ controls:
               价格状态:
                 type: Text
                 attribute:
-                  x: 440
+                  x: 340
                   y: 62
-                  width: 200
                   texts: "var.selectedPrice == none || var.selectedPrice == '' ? '&c请输入价格' : '&a价格已填写'"
                   fontSize: 28
                   through: true
@@ -587,7 +583,7 @@ controls:
                 attribute:
                   x: 24
                   y: 142
-                  width: 560
+                  width: 420
                   height: 48
                   length: 50
                   emptyText: ~输入物品留言（可选）...
@@ -612,9 +608,8 @@ controls:
               留言状态:
                 type: Text
                 attribute:
-                  x: 300
+                  x: 260
                   y: 200
-                  width: 284
                   texts: "var.selectedMessage == none || var.selectedMessage == '' ? '&7可选留言' : '&a留言已填写'"
                   fontSize: 20
                   through: true
@@ -622,7 +617,7 @@ controls:
               货币标签:
                 type: Text
                 attribute:
-                  x: 640
+                  x: 480
                   y: 20
                   texts: ~&f结算货币
                   fontSize: 30
@@ -631,20 +626,20 @@ controls:
                 type: Texture
                 val: 货币滑块
                 attribute:
-                  x: 886
+                  x: 766
                   y: 52
                   width: 6
-                  height: 40
+                  height: 60
                   normal: ~120,120,120,200
                   maxDragY: 80
               货币滚动:
                 type: Scroll
                 val: 货币滚动
                 attribute:
-                  x: 640
+                  x: 480
                   y: 52
-                  width: 240
-                  height: 120
+                  width: 280
+                  height: 140
                   moveY: "self.parent['货币滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -659,7 +654,7 @@ controls:
                     type: VStack
                     val: 货币列表
                     attribute:
-                      width: 240
+                      width: 280
                       spaceBetween: 6
                     children:
                       货币项:
@@ -668,7 +663,7 @@ controls:
                           entryKey: 0.round()
                           entry: var.activeCurrencies[self.entryKey]
                           visible: self.entry != none
-                          width: 240
+                          width: 280
                           height: 38
                         action:
                           clickLeft: |-
@@ -693,7 +688,6 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: 240
                               texts: "self.parent.entry != none ? self.parent.entry['name'] : ''"
                               fontSize: 24
                               through: true
@@ -701,7 +695,7 @@ controls:
               时长标签:
                 type: Text
                 attribute:
-                  x: 920
+                  x: 820
                   y: 20
                   texts: ~&f上架时长
                   fontSize: 30
@@ -709,7 +703,7 @@ controls:
               时长1天:
                 type: Canvas
                 attribute:
-                  x: 920
+                  x: 820
                   y: 52
                   width: 74
                   height: 40
@@ -733,14 +727,13 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 74
                       texts: ~&f1天
                       fontSize: 24
                       through: true
               时长3天:
                 type: Canvas
                 attribute:
-                  x: 1002
+                  x: 910
                   y: 52
                   width: 74
                   height: 40
@@ -764,14 +757,13 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 74
                       texts: ~&f3天
                       fontSize: 24
                       through: true
               时长7天:
                 type: Canvas
                 attribute:
-                  x: 1084
+                  x: 1000
                   y: 52
                   width: 74
                   height: 40
@@ -795,14 +787,13 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 74
                       texts: ~&f7天
                       fontSize: 24
                       through: true
               时长30天:
                 type: Canvas
                 attribute:
-                  x: 1166
+                  x: 1090
                   y: 52
                   width: 74
                   height: 40
@@ -827,17 +818,15 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 74
                       texts: ~&f30天
                       fontSize: 24
                       through: true
               时长说明:
                 type: Text
                 attribute:
-                  x: 920
+                  x: 820
                   y: 104
-                  width: 236
-                  texts: "var.selectedMode == 'auction' ? '~&7选择拍卖持续时间' : '~&7选择上架持续时间'"
+                  texts: "var.selectedMode == 'auction' ? '&7选择拍卖持续时间' : '&7选择上架持续时间'"
                   fontSize: 20
                   through: true
               操作提示:
@@ -851,7 +840,7 @@ controls:
               返回按钮:
                 type: Canvas
                 attribute:
-                  x: 920
+                  x: 820
                   y: 150
                   width: 150
                   height: 56
@@ -880,14 +869,13 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 150
                       texts: ~&f返回
                       fontSize: 42
                       through: true
               确认上架按钮:
                 type: Canvas
                 attribute:
-                  x: 1090
+                  x: 1000
                   y: 150
                   width: 266
                   height: 56
@@ -917,7 +905,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 266
-                      texts: "var.selectedMode == 'auction' ? '~&f确认上架拍卖' : '~&f确认上架商店'"
+                      texts: "var.selectedMode == 'auction' ? '&f确认上架拍卖' : '&f确认上架商店'"
                       fontSize: 42
                       through: true

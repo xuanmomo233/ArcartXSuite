@@ -503,6 +503,9 @@ public class MarketService {
 
     private void handleSellOpenPacket(Player player) {
         if (playerShopService == null && auctionService == null) return;
+        // 无论从何处打开本 UI（Screen.open 或 openSellUi），都在此签发 token，
+        // 保证确认上架按钮的 enable 条件 var.actionToken != '' 成立
+        issueActionToken(player, config.ui().sellId());
         sendUiPacket(player, config.ui().sellId(), "update", buildSellPacket(player));
     }
 
@@ -659,6 +662,9 @@ public class MarketService {
 
     private void handlePlayerShopListPacket(Player player, List<String> data) {
         if (playerShopService == null) return;
+        // 无论从何处打开本 UI（Screen.open 或 openPlayerShopUi），都在首次列表请求时签发 token，
+        // 保证购买/下架按钮的 enable 条件 var.actionToken != '' 成立
+        issueActionToken(player, config.ui().playerShopId());
         int page = data.size() > 1 ? parseIntSafe(data.get(1), 0) : 0;
         String keyword = data.size() > 2 ? data.get(2) : null;
         String sellerUuid = data.size() > 3 ? data.get(3) : null;
@@ -821,6 +827,9 @@ public class MarketService {
 
     private void handleAuctionListPacket(Player player, List<String> data) {
         if (auctionService == null) return;
+        // 无论从何处打开本 UI（Screen.open 或 openAuctionUi），都在首次列表请求时签发 token，
+        // 保证购买/出价/取消按钮的 enable 条件 var.actionToken != '' 成立
+        issueActionToken(player, config.ui().auctionId());
         int page = data.size() > 1 ? parseIntSafe(data.get(1), 0) : 0;
         String category = data.size() > 2 ? data.get(2) : null;
         String keyword = data.size() > 3 ? data.get(3) : null;
