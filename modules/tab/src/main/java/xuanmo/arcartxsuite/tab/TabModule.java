@@ -286,7 +286,10 @@ public final class TabModule extends AbstractAXSModule {
                 if (uiId.isBlank() || bindings.containsKey(uiId)) {
                     continue;
                 }
-                String fileRelative = "ui/" + uiId + ".yml";
+                // ui-id 可能带命名空间前缀（如 "AXS:tab"），拼文件路径时剥离前缀，
+                // 与 ArcartXPacketBridge.buildCandidateUiIds 的剥离逻辑保持一致。
+                String fileName = uiId.contains(":") ? uiId.substring(uiId.lastIndexOf(':') + 1) : uiId;
+                String fileRelative = "ui/" + fileName + ".yml";
                 File uiFile = new File(pluginDataFolder, fileRelative);
                 xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
                     bridge.registerOrReloadUi(uiId, uiFile);
