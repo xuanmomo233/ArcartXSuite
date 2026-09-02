@@ -1070,6 +1070,7 @@ public final class WarehouseService implements Listener {
         if (!packetBridge.openUi(player, storageRuntimeUiId)) {
             invalidateActionToken(player, storageRuntimeUiId);
         }
+        sendStorage(player, "update");
     }
 
     /**
@@ -1082,6 +1083,7 @@ public final class WarehouseService implements Listener {
         if (!packetBridge.openUi(player, manageRuntimeUiId)) {
             invalidateActionToken(player, manageRuntimeUiId);
         }
+        sendManage(player, "update");
     }
 
     /**
@@ -1094,6 +1096,8 @@ public final class WarehouseService implements Listener {
         if (!packetBridge.openUi(player, bankRuntimeUiId)) {
             invalidateActionToken(player, bankRuntimeUiId);
         }
+        // 打开后立即推送数据包，确保 UI 端 var.actionToken 与服务端同步
+        sendBank(player, "update");
     }
 
     /**
