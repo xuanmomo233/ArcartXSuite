@@ -3405,20 +3405,30 @@ public final class WarehouseService implements Listener {
             row.put("durationText", formatDuration(product.durationSeconds()));
             row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
             row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()));
-            // 利率阶梯文本：如 "5.0%" 或 "3.0%~8.0%"
+            // 利率阶梯文本：如 "1%" 或 "1%~2%"
             String rateText;
             if (product.interestTiers().isEmpty()) {
                 rateText = "—";
             } else if (product.interestTiers().size() == 1) {
-                rateText = product.interestTiers().get(0).rate().toPlainString() + "%";
+                rateText = product.interestTiers().get(0).rate().multiply(BigDecimal.valueOf(100)).toPlainString() + "%";
             } else {
                 BigDecimal minRate = product.interestTiers().stream()
                     .map(InterestTier::rate).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
                 BigDecimal maxRate = product.interestTiers().stream()
                     .map(InterestTier::rate).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-                rateText = minRate.toPlainString() + "%~" + maxRate.toPlainString() + "%";
+                rateText = minRate.multiply(BigDecimal.valueOf(100)).toPlainString() + "%~" + maxRate.multiply(BigDecimal.valueOf(100)).toPlainString() + "%";
             }
             row.put("rateText", rateText);
+            // 利率阶梯数据，供 UI 端根据输入金额计算预期收益
+            List<Map<String, Object>> tiers = new ArrayList<>();
+            for (InterestTier tier : product.interestTiers()) {
+                Map<String, Object> tierMap = new LinkedHashMap<>();
+                tierMap.put("min", tier.minAmount().toPlainString());
+                tierMap.put("max", tier.maxAmount().toPlainString());
+                tierMap.put("rate", tier.rate().toPlainString());
+                tiers.add(tierMap);
+            }
+            row.put("tiers", tiers);
             row.put("text", product.displayName());
             result.put(Integer.toString(idx), row);
             idx++;
@@ -3431,15 +3441,27 @@ public final class WarehouseService implements Listener {
         long now = System.currentTimeMillis();
         int idx = 0;
         for (FixedDepositRecord deposit : repository.loadFixedDeposits(player.getUniqueId())) {
+            DepositProductDefinition productDef = configuration.depositProduct(deposit.productId());
+            String productName = productDef != null ? productDef.displayName() : deposit.productId();
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", deposit.id());
             row.put("product", deposit.productId());
+            row.put("productName", productName);
             row.put("currency", deposit.currencyId());
+            row.put("currencyName", currencyDisplayName(deposit.currencyId()));
             row.put("principal", formatCurrency(deposit.currencyId(), deposit.principal()));
-            row.put("rate", deposit.interestRate().toPlainString());
+            row.put("rate", deposit.interestRate().multiply(BigDecimal.valueOf(100)).toPlainString() + "%");
             row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
-            row.put("matured", deposit.maturesAt() <= now);
-            row.put("text", deposit.productId() + " 本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            boolean matured = deposit.maturesAt() <= now;
+            row.put("matured", matured);
+            row.put("statusText", matured ? "&a可领取" : "&e未到期");
+            // 预期本息 = 本金 + 本金 × 利率
+            BigDecimal payout = deposit.principal()
+                .add(deposit.principal().multiply(deposit.interestRate()))
+                .setScale(8, java.math.RoundingMode.DOWN)
+                .stripTrailingZeros();
+            row.put("payout", formatCurrency(deposit.currencyId(), payout));
+            row.put("text", productName);
             result.put(Integer.toString(idx), row);
             idx++;
         }

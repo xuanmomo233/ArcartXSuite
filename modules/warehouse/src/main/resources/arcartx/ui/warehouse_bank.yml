@@ -116,6 +116,19 @@ ui:
           }
         }
       }
+      // 根据 selectedDeposit 查找对应的定期 entry
+      var.selectedDepositEntry = none
+      if(var.selectedDeposit != none && var.fixedDeposits != null){
+        for(key in var.fixedDeposits.keys()){
+          entry = var.fixedDeposits[key]
+          if(entry != null && entry['id'] == var.selectedDeposit){
+            var.selectedDepositEntry = entry
+            break
+          }
+        }
+      }
+      // 计算预期收益
+      calcExpectedPayout()
   action:
     seconds: |-
       if(var.actionBusy){
@@ -145,7 +158,10 @@ ui:
       var.selectedCurrency = 'money'
       var.selectedProduct = none
       var.selectedProductEntry = none
+      var.selectedDeposit = none
+      var.selectedDepositEntry = none
       var.bankAmount = none
+      var.expectedPayout = '—'
       var.maxBalanceCount = 0
       var.maxProductCount = 0
       var.maxFixedCount = 0
@@ -162,6 +178,35 @@ ui:
       var.col1W = 360
       var.col2W = 280
       var.col3W = var.contentW - 40 - var.col1W - var.col2W - 24
+      // 预期收益计算函数：根据输入金额匹配利率阶梯，计算到期本息
+      calcExpectedPayout = func(){
+        var.expectedPayout = '—'
+        if(var.selectedProductEntry == none || var.bankAmount == none || var.bankAmount == ''){
+          return
+        }
+        amount = parseFloat(var.bankAmount)
+        if(amount <= 0){
+          return
+        }
+        tiers = var.selectedProductEntry['tiers']
+        if(tiers == null || tiers.length == 0){
+          return
+        }
+        matchedRate = 0
+        for(i in range(0, tiers.length)){
+          tier = tiers[i]
+          tierMin = parseFloat(tier['min'])
+          tierMax = parseFloat(tier['max'])
+          if(amount >= tierMin && (tierMax <= 0 || amount <= tierMax)){
+            matchedRate = parseFloat(tier['rate'])
+            break
+          }
+        }
+        if(matchedRate > 0){
+          payout = amount + amount * matchedRate
+          var.expectedPayout = payout.round().toString()
+        }
+      }
     open: |-
       Packet.send(var.packetId, 'refresh')
     # 窗口尺寸变化后重算可用高宽
@@ -637,6 +682,7 @@ controls:
                     action:
                       textChange: |-
                         var.bankAmount = self.getContent()
+                        calcExpectedPayout()
               存入:
                 type: Canvas
                 attribute:
@@ -872,7 +918,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -28
+                  x: -36
                   y: 416
                   width: 10
                   height: "var.viewH - 632"
@@ -888,7 +934,7 @@ controls:
                 val: 定期滑块
                 attribute:
                   point: ~top_right
-                  x: -28
+                  x: -36
                   y: 416
                   width: 10
                   height: 50
@@ -928,32 +974,31 @@ controls:
                           entry: var.fixedDeposits[self.entryKey]
                           visible: self.entry != none
                           width: "var.col1W - 100"
-                          height: 64
-                          enable: "!var.actionBusy && var.actionToken != ''"
+                          height: 48
                         action:
                           clickLeft: |-
-                            var.actionBusy = true
-                            Packet.send(var.packetId, 'fixed_claim', self.entry['id'], var.actionToken)
+                            var.selectedDeposit = self.entry['id']
+                            var.selectedDepositEntry = self.entry
+                            var.selectedProduct = none
+                            var.selectedProductEntry = none
                         children:
                           项背景:
                             type: Texture
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~44,50,58,245
+                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedDeposit ? '64,72,82,225' : '44,50,58,245'"
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                                color: "self.isHovered() ? '220,230,240,255' : (self.parent.entry != none && self.parent.entry['id'] == var.selectedDeposit ? '255,255,255,255' : '100,110,120,220')"
                           项文字:
                             type: Text
                             attribute:
-                              point: ~top_left
-                              x: 12
-                              y: 6
-                              texts: "var.fixedDepositTexts[self.parent.entryKey]"
+                              point: ~middle_center
+                              texts: "'&f' + var.fixedDepositTexts[self.parent.entryKey]"
                               fontSize: 36
                               through: true
 
@@ -1059,6 +1104,9 @@ controls:
                           clickLeft: |-
                             var.selectedProduct = self.entry['id']
                             var.selectedProductEntry = self.entry
+                            var.selectedDeposit = none
+                            var.selectedDepositEntry = none
+                            calcExpectedPayout()
                         children:
                           项背景:
                             type: Texture
@@ -1101,16 +1149,16 @@ controls:
                   stroke:
                     width: 3
                     color: ~100,110,120,220
-              # 未选中产品时的提示
+              # 未选中任何条目时的提示
               未选中提示:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&7请选择左侧产品"
+                  texts: "~&7请选择左侧产品或定期"
                   fontSize: 36
-                  visible: "var.selectedProduct == none"
+                  visible: "var.selectedProduct == none && var.selectedDeposit == none"
               # 选中产品后的详情内容
-              详情内容:
+              产品详情:
                 type: Canvas
                 attribute:
                   point: ~stretch_all
@@ -1124,7 +1172,6 @@ controls:
                       y: 24
                       texts: "var.selectedProductEntry != none ? var.selectedProductEntry['name'] : ''"
                       fontSize: 36
-                  # 产品信息行
                   期限标签:
                     type: Text
                     attribute:
@@ -1231,7 +1278,32 @@ controls:
                       width: "var.col3W - 48"
                       texts: "var.selectedProductEntry != none ? var.selectedProductEntry['description'] : ''"
                       fontSize: 36
-                  # 购买按钮（底部）
+                  收益分隔:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 440
+                      width: "var.col3W - 48"
+                      height: 2
+                      normal: ~100,110,120,220
+                  收益标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 456
+                      texts: "~&f预期收益"
+                      fontSize: 36
+                  收益说明:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 492
+                      width: "var.col3W - 48"
+                      texts: "var.bankAmount != none && var.bankAmount != '' ? ('&a存入 ' + var.bankAmount + ' 到期可得 ' + var.expectedPayout) : '&7请在左侧输入金额查看预期收益'"
+                      fontSize: 36
                   购买:
                     type: Canvas
                     attribute:
@@ -1263,5 +1335,159 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "~&f购买选中产品"
+                          fontSize: 36
+                          through: true
+              # 选中定期后的详情内容
+              定期详情:
+                type: Canvas
+                attribute:
+                  point: ~stretch_all
+                  visible: "var.selectedDeposit != none"
+                children:
+                  定期详情标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 24
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['productName'] : ''"
+                      fontSize: 36
+                  定期本金标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 80
+                      texts: "~&f本金"
+                      fontSize: 36
+                  定期本金值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 80
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['principal'] : ''"
+                      fontSize: 36
+                  定期利率标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 124
+                      texts: "~&f利率"
+                      fontSize: 36
+                  定期利率值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 124
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['rate'] : ''"
+                      fontSize: 36
+                  定期货币标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 168
+                      texts: "~&f结算货币"
+                      fontSize: 36
+                  定期货币值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 168
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['currencyName'] : ''"
+                      fontSize: 36
+                  定期到期标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 212
+                      texts: "~&f到期时间"
+                      fontSize: 36
+                  定期到期值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 212
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['maturesAt'] : ''"
+                      fontSize: 36
+                  定期状态标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 256
+                      texts: "~&f状态"
+                      fontSize: 36
+                  定期状态值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 256
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['statusText'] : ''"
+                      fontSize: 36
+                  定期详情分隔:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 308
+                      width: "var.col3W - 48"
+                      height: 2
+                      normal: ~100,110,120,220
+                  定期本息标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 324
+                      texts: "~&f到期本息"
+                      fontSize: 36
+                  定期本息值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 324
+                      texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['payout'] : ''"
+                      fontSize: 36
+                  # 领取按钮（底部，仅到期可领取）
+                  领取:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 24
+                      y: -24
+                      width: "var.col3W - 48"
+                      height: 48
+                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedDeposit != none && var.selectedDepositEntry != none && var.selectedDepositEntry['matured']"
+                    action:
+                      clickLeft: |-
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'fixed_claim', var.selectedDeposit, var.actionToken)
+                    children:
+                      领取底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~44,50,58,245
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                      领取字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.selectedDepositEntry != none && var.selectedDepositEntry['matured'] ? '&a领取本息' : '&7未到期'"
                           fontSize: 36
                           through: true
