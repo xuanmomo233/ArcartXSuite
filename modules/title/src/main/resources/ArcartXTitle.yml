@@ -88,7 +88,7 @@ ui:
   attribute-line-color: "&0"
 
   # 当某个属性列表为空时，后端会发送的占位字符串（已带 attribute-line-color 前缀）。
-  empty-attribute-placeholder: "-"
+  empty-attribute-placeholder: "暂无属性"
 
 attributeplus:
   # AP 属性来源前缀。
@@ -127,7 +127,7 @@ display-title:
   separator: " "
 
   # 没有装备任何称号时返回的文本。留空则返回空字符串。
-  empty-text: none
+  empty-text: ""
 
 groups:
   # 分组字典。

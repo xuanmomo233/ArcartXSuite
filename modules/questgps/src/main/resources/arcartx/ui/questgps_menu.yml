@@ -1,15 +1,19 @@
-# AXS 资源说明
-# 用途: QuestGPS 任务总览菜单 — 分类筛选、任务列表、目标/奖励详情、接取/放弃/追踪操作。
-# 前置依赖: ArcartX；QuestGPS 模块启用后自动注册。
-# 关联文件: ArcartXQuestGPS.yml、ui/questgps_guide.yml
+# AXS QuestGPS 任务总览菜单 — 紫罗兰重写版
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
+# 布局: 左导航(分页切换+分类筛选滚动) + 内容区(左任务列表 + 右任务详情)
+# 配色: 紫罗兰 主色170,120,220 底28,22,38,110 抬升50,44,68,245 描边170,120,220,240
+# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
 
 ui:
-  background: true
+  isHud: false
+  background: false
   escClose: true
   closeDied: true
   through: false
   screenScale: true
   show: true
+  level: 8
+  itemSize: 16
   packetHandler:
     # packetHandler: init
     # 包字段:
@@ -103,6 +107,13 @@ ui:
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
+      var.rewardItemJsons = {}
+      for(key in var.rKeys){
+        rewardEntry = var.rewards[key]
+        if(rewardEntry != none && rewardEntry['itemJson'] != none){
+          var.rewardItemJsons[key] = rewardEntry['itemJson']
+        }
+      }
       while(val.reward_list.childrenCount() > 1){
         val.reward_list.get(1).remove()
       }
@@ -181,6 +192,13 @@ ui:
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
+      var.rewardItemJsons = {}
+      for(key in var.rKeys){
+        rewardEntry = var.rewards[key]
+        if(rewardEntry != none && rewardEntry['itemJson'] != none){
+          var.rewardItemJsons[key] = rewardEntry['itemJson']
+        }
+      }
       while(val.reward_list.childrenCount() > 1){
         val.reward_list.get(1).remove()
       }
@@ -204,6 +222,8 @@ ui:
       var.quests = {}
       var.tasks = {}
       var.rewards = {}
+      var.rewardItemJsons = {}
+      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
       var.categoryId = none
       var.pageId = none
       var.categoryName = none
@@ -227,127 +247,371 @@ ui:
       var.questTracked = false
       var.taskCount = 0
       var.rewardCount = 0
+      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
+      // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
+      // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
+      // contentW = 内容区宽度（左 372 右 48 边距），detailW = 右详情区宽度
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.detailW = var.contentW - 528
+      var.detailScrollW = var.detailW - 24
+      var.taskScrollH = (var.viewH - 620) / 2
+    open: |-
+      Packet.send(var.packetId, 'refresh')
+    # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.detailW = var.contentW - 528
+      var.detailScrollW = var.detailW - 24
+      var.taskScrollH = (var.viewH - 620) / 2
 
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
+  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;28,22,38,110
+  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      面板:
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
+      顶栏:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1400
-          height: 820
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
-          背景:
+          顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~95,95,95,220
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~170,120,220,230
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~170,120,220,255
               shape: ~round_rect
-              radius: 28
-            effect:
-              stroke:
-                width: 2
-                color: ~80,180,255,180
-              shadow:
-                xOffset: 2
-                yOffset: 2
-                blur: 5
-                color: ~255,255,255,75
+              radius: 3
           标题:
             type: Text
             attribute:
-              x: 40
-              y: 30
-              fontSize: 64
-              texts: "'&f任务总览  &r&7' + var.categoryName + ' · ' + var.pageName"
-          关闭:
+              point: ~middle_left
+              x: 68
+              texts: "~&f任务导航"
+              fontSize: 48
+          标题竖线:
             type: Texture
             attribute:
-              x: 1290
-              y: 24
-              width: 70
-              height: 49
-              normal: ~180,60,60,200
-              hover: ~Frosted:0;220,80,80,230
-              shape: ~round_rect
-              radius: 14
+              point: ~middle_left
+              x: 220
+              width: 1
+              height: 30
+              normal: ~170,120,220,230
+          副标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 240
+              texts: "var.categoryName != none ? '&f' + var.categoryName + ' &f· &f' + var.pageName : '&f' + var.pageName"
+              fontSize: 36
+          追踪摘要:
+            type: Text
+            attribute:
+              point: ~middle_right
+              x: -260
+              texts: "'&f' + var.trackSummary"
+              fontSize: 32
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
             action:
               clickLeft: |-
                 Screen.close()
-            effect:
-              stroke:
-                width: 2
-                color: ~255,120,120,120
             children:
-              关闭字:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~50,44,68,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '220,180,255,255' : '170,120,220,240'"
+              关闭文字:
                 type: Text
                 attribute:
-                  x: 35
-                  y: 14
-                  through: true
-                  center: true
+                  point: ~middle_center
+                  texts: "~&f✕"
                   fontSize: 36
-                  texts: ~&f关闭
-          左板:
+                  through: true
+
+      # ── 左侧导航 ───────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
             type: Texture
             attribute:
-              x: 40
-              y: 100
-              width: 380
-              height: 680
-              normal: ~255,255,255,120
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
-              radius: 20
+              radius: 14
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
-          分类标签:
+                width: 3
+                color: ~170,120,220,240
+          # 分页：可接取
+          导航可接取:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'switch_page', 'available')
+            children:
+              可接取底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'available' ? '170,120,220,210' : '50,44,68,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.pageId == 'available' ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+              可接取高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~170,120,220,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.pageId == 'available'"
+                  through: true
+              可接取文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.pageId == 'available' ? '&0可接取' : '&f可接取'"
+                  fontSize: 36
+                  through: true
+              可接取数量:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.availableCount.round()"
+                  fontSize: 32
+                  through: true
+          # 分页：进行中
+          导航进行中:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'switch_page', 'active')
+            children:
+              进行中底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'active' ? '124,196,142,210' : '50,44,68,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.pageId == 'active' ? '124,196,142,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+              进行中高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~124,196,142,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.pageId == 'active'"
+                  through: true
+              进行中文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.pageId == 'active' ? '&0进行中' : '&f进行中'"
+                  fontSize: 36
+                  through: true
+              进行中数量:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.activeCount.round()"
+                  fontSize: 32
+                  through: true
+          # 分页：已完成
+          导航已完成:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'switch_page', 'completed')
+            children:
+              已完成底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'completed' ? '232,180,90,210' : '50,44,68,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.pageId == 'completed' ? '232,180,90,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+              已完成高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~232,180,90,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.pageId == 'completed'"
+                  through: true
+              已完成文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.pageId == 'completed' ? '&0已完成' : '&f已完成'"
+                  fontSize: 36
+                  through: true
+              已完成数量:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "'&f' + var.completedCount.round()"
+                  fontSize: 32
+                  through: true
+          # 分隔线
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 232
+              width: 264
+              height: 2
+              normal: ~170,120,220,220
+          # 分类筛选标题
+          分类标题:
             type: Text
             attribute:
-              x: 56
-              y: 116
+              point: ~top_left
+              x: 20
+              y: 250
+              texts: "~&f分类筛选"
               fontSize: 36
-              texts: ~&0分类筛选
-          分类滑块:
-            type: Texture
-            val: 分类滑块
-            attribute:
-              x: 56
-              y: 192
-              width: 40
-              height: 4
-              normal: ~120,120,120,200
-              maxDragX: 308
+          # 分类滚动区
           分类滚动:
             type: Scroll
             attribute:
-              x: 56
-              y: 148
-              width: 350
-              height: 40
-              moveX: self.parent['分类滑块'].getDragXRatio()
+              point: ~top_left
+              x: 14
+              y: 296
+              width: 244
+              height: "var.viewH - 458"
+              moveY: "self.parent['分类滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveX >= 0 && self.wheelValue > 0){
-                  self.parent['分类滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['分类滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
-                if(self.moveX <= 1 && self.wheelValue < 0){
-                  self.parent['分类滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['分类滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               分类列表:
                 val: cat_list
-                type: HStack
+                type: VStack
                 attribute:
-                  height: 40
-                  spaceBetween: 10
+                  width: 244
+                  spaceBetween: 8
                 children:
                   分类模板:
                     type: Canvas
@@ -355,8 +619,8 @@ controls:
                       entryKey: none
                       entry: var.categories[self.entryKey]
                       visible: self.entryKey != none && self.entry != none
-                      width: 100
-                      height: 40
+                      width: 244
+                      height: 48
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'switch_category', self.entry['id'])
@@ -366,138 +630,104 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,210' : '50,44,68,245'"
                           shape: ~round_rect
-                          radius: 12
+                          radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~0,0,0,255
+                            width: 3
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
                       分类文字:
                         type: Text
                         attribute:
-                          point: ~middle_center
-                          width: 100
-                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-                          fontSize: 36
+                          point: ~middle_left
+                          x: 16
+                          texts: "self.parent.entry != none ? (self.parent.entry['selected'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
+                          fontSize: 32
                           through: true
-          可接取:
-            type: Canvas
+          # 分类滑块轨道
+          分类滑块轨道:
+            type: Texture
             attribute:
-              x: 56
-              y: 204
-              width: 108
-              height: 40
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'switch_page', 'available')
-            children:
-              可接取背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.pageId == 'available' ? '120,190,255,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              可接取文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 108
-                  texts: "'&0可接取 ' + var.availableCount.round()"
-                  fontSize: 30
-                  through: true
-          进行中:
-            type: Canvas
+              point: ~top_left
+              x: 260
+              y: 296
+              width: 10
+              height: "var.viewH - 458"
+              normal: ~60,50,80,200
+              shape: ~round_rect
+              radius: 5
+              through: true
+          # 分类滑块
+          分类滑块:
+            type: Texture
+            val: 分类滑块
             attribute:
-              x: 174
-              y: 204
-              width: 108
-              height: 40
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'switch_page', 'active')
-            children:
-              进行中背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.pageId == 'active' ? '100,200,130,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              进行中文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 108
-                  texts: "'&0进行中 ' + var.activeCount.round()"
-                  fontSize: 30
-                  through: true
-          已完成:
-            type: Canvas
+              point: ~top_left
+              x: 260
+              y: 296
+              width: 10
+              height: 50
+              normal: ~170,120,220,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.viewH - 508"
+
+      # ── 内容区 ─────────────────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
             attribute:
-              x: 292
-              y: 204
-              width: 108
-              height: 40
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'switch_page', 'completed')
-            children:
-              已完成背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.pageId == 'completed' ? '200,150,80,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              已完成文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 108
-                  texts: "'&0已完成 ' + var.completedCount.round()"
-                  fontSize: 30
-                  through: true
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~170,120,220,240
+          页标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              texts: "~&f任务总览"
+              fontSize: 40
+          页标题说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 196
+              y: 32
+              texts: "~&f选择任务查看详情，追踪任务开启导航指引"
+              fontSize: 32
+
+          # ── 左列表区 ──────────────────────────────────
           列表标题:
             type: Text
             attribute:
-              x: 56
-              y: 258
+              point: ~top_left
+              x: 32
+              y: 84
+              texts: "'&f任务列表 &f(' + var.questCount.round() + ')'"
               fontSize: 36
-              texts: "'&0任务列表 (' + var.questCount.round() + ')'"
-          任务滑块:
-            type: Texture
-            val: 任务滑块
-            attribute:
-              x: 414
-              y: 300
-              width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 410
           任务滚动:
             type: Scroll
             attribute:
-              x: 56
-              y: 300
-              width: 352
-              height: 460
+              point: ~top_left
+              x: 32
+              y: 132
+              width: 416
+              height: "var.viewH - 300"
               moveY: "self.parent['任务滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -512,436 +742,544 @@ controls:
                 val: quest_list
                 type: VStack
                 attribute:
-                  width: 348
+                  width: 416
                   spaceBetween: 8
                 children:
                   任务模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: none
                       entry: var.quests[self.entryKey]
                       visible: self.entryKey != none && self.entry != none
-                      width: 348
+                      width: 416
                       height: 80
-                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_quest', self.entry['id'])
                     children:
+                      任务背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,210' : '50,44,68,245'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
                       任务名:
                         type: Text
                         attribute:
-                          x: 14
+                          point: ~top_left
+                          x: 16
                           y: 10
-                          width: 220
+                          texts: "self.parent.entry != none ? (self.parent.entry['selected'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
                           fontSize: 36
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
                           through: true
                       任务状态:
                         type: Text
                         attribute:
-                          x: 240
+                          point: ~top_right
+                          x: -16
                           y: 12
-                          fontSize: 30
-                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['state'] : none"
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['state'] : none"
+                          fontSize: 32
                           through: true
                       任务摘要:
                         type: Text
                         attribute:
-                          x: 14
-                          y: 42
-                          width: 260
-                          fontSize: 30
-                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['summary'] : none"
+                          point: ~top_left
+                          x: 16
+                          y: 44
+                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['summary'] : none"
+                          fontSize: 32
                           through: true
-                      可导航:
+                      可导航标记:
                         type: Text
                         attribute:
-                          x: 290
-                          y: 42
-                          fontSize: 28
+                          point: ~top_right
+                          x: -16
+                          y: 44
                           texts: "self.parent.entry != none && self.parent.entry['trackable'] ? '&a可导航' : none"
+                          fontSize: 32
                           through: true
-          右板:
+          任务滑块轨道:
             type: Texture
             attribute:
-              x: 440
-              y: 100
-              width: 920
-              height: 680
-              normal: ~255,255,255,120
+              point: ~top_left
+              x: 452
+              y: 132
+              width: 10
+              height: "var.viewH - 300"
+              normal: ~60,50,80,200
               shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          详情标题:
-            type: Text
-            attribute:
-              x: 464
-              y: 116
-              fontSize: 56
-              texts: "var.selectedQuestName == none ? '&0未选择任务' : '&0' + var.selectedQuestName"
-          详情状态:
-            type: Text
-            attribute:
-              x: 1240
-              y: 122
-              fontSize: 36
-              texts: "'&7' + var.selectedQuestState"
-          详情路径:
-            type: Text
-            attribute:
-              x: 464
-              y: 158
-              width: 520
-              fontSize: 36
-              texts: "'&8' + var.selectedQuestPath"
-          详情描述:
-            type: Text
-            attribute:
-              x: 464
-              y: 196
-              width: 520
-              fontSize: 42
-              texts: var.selectedQuestDescriptionText
-          追踪摘要:
-            type: Text
-            attribute:
-              x: 1020
-              y: 116
-              width: 320
-              fontSize: 36
-              texts: "'&7' + var.trackSummary"
-          目标标题:
-            type: Text
-            attribute:
-              x: 464
-              y: 260
-              fontSize: 36
-              texts: "'&0任务目标 (' + var.taskCount.round() + ')'"
-          目标滑块:
+              radius: 5
+              through: true
+          任务滑块:
             type: Texture
-            val: 目标滑块
+            val: 任务滑块
             attribute:
-              x: 1346
-              y: 300
-              width: 6
+              point: ~top_left
+              x: 452
+              y: 132
+              width: 10
               height: 50
-              normal: ~120,120,120,200
-              maxDragY: 130
-          目标滚动:
-            type: Scroll
+              normal: ~170,120,220,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.viewH - 350"
+
+          # 左列表与右详情之间的竖向分界线
+          列表详情分界线:
+            type: Texture
             attribute:
-              x: 464
-              y: 300
-              width: 870
-              height: 180
-              moveY: "self.parent['目标滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+              point: ~top_left
+              x: 472
+              y: 84
+              width: 2
+              height: "var.viewH - 300"
+              normal: ~170,120,220,180
+              through: true
+
+          # ── 右详情区 ──────────────────────────────────
+          # x=496 = 32(内边距) + 416(列表) + 24(间距) + 24(滑块区)
+          详情区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 496
+              y: 84
+              width: "var.detailW"
+              height: "var.viewH - 252"
             children:
-              目标列表:
-                val: task_list
-                type: VStack
+              详情标题:
+                type: Text
                 attribute:
-                  width: 868
-                  spaceBetween: 8
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.selectedQuestName == none ? '&f未选择任务' : '&f' + var.selectedQuestName"
+                  fontSize: 56
+              详情状态:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 6
+                  texts: "'&f' + var.selectedQuestState"
+                  fontSize: 36
+              详情路径:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 56
+                  texts: "'&f' + var.selectedQuestPath"
+                  fontSize: 36
+              详情描述:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 92
+                  texts: "var.selectedQuestDescriptionText"
+                  fontSize: 48
+              追踪摘要:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 140
+                  texts: "'&f导航: ' + var.trackSummary"
+                  fontSize: 32
+              # 详情头部与目标区之间的横向分界线
+              头部目标分界线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 172
+                  width: "var.detailW"
+                  height: 2
+                  normal: ~170,120,220,160
+                  through: true
+              # 目标区
+              目标标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 180
+                  texts: "'&f任务目标 &f(' + var.taskCount.round() + ')'"
+                  fontSize: 36
+              目标滚动:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 220
+                  width: "var.detailScrollW"
+                  height: "var.taskScrollH"
+                  moveY: "self.parent['目标滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
-                  目标模板:
-                    type: Texture
+                  目标列表:
+                    val: task_list
+                    type: VStack
                     attribute:
-                      entryKey: none
-                      entry: var.tasks[self.entryKey]
-                      visible: self.entryKey != none && self.entry != none
-                      width: 868
-                      height: 50
-                      normal: "self.entry != none && self.entry['tracked'] ? '110,170,230,255' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
+                      width: "var.detailScrollW"
+                      spaceBetween: 8
+                    children:
+                      目标模板:
+                        type: Canvas
+                        attribute:
+                          entryKey: none
+                          entry: var.tasks[self.entryKey]
+                          visible: self.entryKey != none && self.entry != none
+                          width: "var.detailScrollW"
+                          height: 50
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.entry['id'])
+                        children:
+                          目标背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['tracked'] ? '170,120,220,210' : '50,44,68,245'"
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "self.parent.entry != none && self.parent.entry['tracked'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                          目标文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
+                              fontSize: 32
+                              through: true
+                          目标状态:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -16
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['status'] : none"
+                              fontSize: 32
+                              through: true
+              目标滑块轨道:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: "var.detailScrollW + 6"
+                  y: 220
+                  width: 10
+                  height: "var.taskScrollH"
+                  normal: ~60,50,80,200
+                  shape: ~round_rect
+                  radius: 5
+                  through: true
+              目标滑块:
+                type: Texture
+                val: 目标滑块
+                attribute:
+                  point: ~top_left
+                  x: "var.detailScrollW + 6"
+                  y: 220
+                  width: 10
+                  height: 50
+                  normal: ~170,120,220,220
+                  shape: ~round_rect
+                  radius: 5
+                  maxDragY: "var.taskScrollH - 50"
+              # 目标区与奖励区之间的横向分界线
+              目标奖励分界线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: "228 + var.taskScrollH + 8"
+                  width: "var.detailW"
+                  height: 2
+                  normal: ~170,120,220,160
+                  through: true
+              # 奖励区
+              奖励标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: "228 + var.taskScrollH + 20"
+                  texts: "'&f任务奖励 &f(' + var.rewardCount.round() + ')'"
+                  fontSize: 36
+              奖励滚动:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: "228 + var.taskScrollH + 56"
+                  width: "var.detailScrollW"
+                  height: "var.taskScrollH"
+                  moveY: "self.parent['奖励滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  奖励列表:
+                    val: reward_list
+                    type: VStack
+                    attribute:
+                      width: "var.detailScrollW"
+                      spaceBetween: 8
+                    children:
+                      奖励模板:
+                        type: Canvas
+                        attribute:
+                          entryKey: none
+                          entry: var.rewards[self.entryKey]
+                          visible: self.entryKey != none && self.entry != none
+                          width: "var.detailScrollW"
+                          height: 72
+                        children:
+                          奖励背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~50,44,68,245
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~170,120,220,240
+                          奖励图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.72
+                              x: 8
+                              y: 8
+                              width: 56
+                              height: 56
+                              normal: ~38,32,52,180
+                              shape: ~round_rect
+                              radius: 8
+                              seticon: "self.setItemIcon(var.rewardItemJsons[self.parent.entryKey] != none ? var.rewardItemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                          奖励名:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 76
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['title'] : none"
+                              fontSize: 32
+                              through: true
+                          奖励描述:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -16
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                              fontSize: 32
+                              through: true
+              奖励滑块轨道:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: "var.detailScrollW + 6"
+                  y: "228 + var.taskScrollH + 56"
+                  width: 10
+                  height: "var.taskScrollH"
+                  normal: ~60,50,80,200
+                  shape: ~round_rect
+                  radius: 5
+                  through: true
+              奖励滑块:
+                type: Texture
+                val: 奖励滑块
+                attribute:
+                  point: ~top_left
+                  x: "var.detailScrollW + 6"
+                  y: "228 + var.taskScrollH + 56"
+                  width: 10
+                  height: 50
+                  normal: ~170,120,220,220
+                  shape: ~round_rect
+                  radius: 5
+                  maxDragY: "var.taskScrollH - 50"
+              # 操作区
+              操作区:
+                type: HStack
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: "var.viewH - 328"
+                  spaceBetween: 16
+                children:
+                  接取按钮:
+                    type: Canvas
+                    attribute:
+                      width: 160
+                      height: 44
+                      visible: var.canAccept
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.entry['id'])
+                        Packet.send(var.packetId, 'accept_quest', var.selectedQuestId)
                     children:
-                      目标文字:
-                        type: Text
+                      接取背景:
+                        type: Texture
                         attribute:
-                          x: 14
-                          y: 10
-                          width: 680
-                          fontSize: 36
-                          texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&0' + self.parent.entry['text']) : none"
+                          point: ~stretch_all
                           through: true
-                      目标状态:
-                        type: Text
-                        attribute:
-                          x: 700
-                          y: 10
-                          width: 150
-                          fontSize: 36
-                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['status'] : none"
-                          through: true
-          奖励标题:
-            type: Text
-            attribute:
-              x: 464
-              y: 490
-              fontSize: 36
-              texts: "'&0任务奖励 (' + var.rewardCount.round() + ')'"
-          奖励滑块:
-            type: Texture
-            val: 奖励滑块
-            attribute:
-              x: 1346
-              y: 530
-              width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 80
-          奖励滚动:
-            type: Scroll
-            attribute:
-              x: 464
-              y: 530
-              width: 870
-              height: 130
-              moveY: "self.parent['奖励滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              奖励列表:
-                val: reward_list
-                type: VStack
-                attribute:
-                  width: 868
-                  spaceBetween: 8
-                children:
-                  奖励模板:
-                    type: Texture
-                    attribute:
-                      entryKey: none
-                      entry: var.rewards[self.entryKey]
-                      visible: self.entryKey != none && self.entry != none
-                      width: 868
-                      height: 50
-                      normal: ~145,145,145,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    children:
-                      奖励图标:
-                        type: Slot
-                        attribute:
-                          slotType: ~Icon
-                          visible: "self.parent.entry != none && self.parent.entry['itemJson'] != none && self.parent.entry['itemJson'] != none"
-                          itemScale: 0.72
-                          x: 4
-                          y: 1
-                          width: 48
-                          height: 48
-                          normal: ~95,95,95,180
+                          normal: ~124,196,142,230
                           shape: ~round_rect
-                          radius: 8
-                          through: true
-                          seticon: "self.parent.entry != none && self.parent.entry['itemJson'] != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
-                      奖励名:
+                          radius: 12
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,255,230,255' : '124,196,142,240'"
+                      接取文字:
                         type: Text
                         attribute:
-                          x: 60
-                          y: 10
+                          point: ~middle_center
+                          texts: "~&0接取任务"
                           fontSize: 36
-                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['title'] : none"
                           through: true
-                      奖励描述:
+                  放弃按钮:
+                    type: Canvas
+                    attribute:
+                      width: 160
+                      height: 44
+                      visible: var.canAbandon
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'abandon_quest', var.selectedQuestId)
+                    children:
+                      放弃背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~235,100,100,230
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '255,200,200,255' : '235,100,100,240'"
+                      放弃文字:
                         type: Text
                         attribute:
-                          x: 430
-                          y: 10
-                          width: 420
+                          point: ~middle_center
+                          texts: "~&f放弃任务"
                           fontSize: 36
-                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['description'] : none"
                           through: true
-          操作区:
-            type: HStack
-            attribute:
-              x: 464
-              y: 680
-              spaceBetween: 20
-            children:
-              接取:
-                type: Canvas
-                attribute:
-                  width: 160
-                  height: 44
-                  visible: var.canAccept
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'accept_quest', var.selectedQuestId)
-                children:
-                  接取背景:
-                    type: Texture
+                  追踪按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~255,255,255,150
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  接取文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
                       width: 160
-                      texts: "~&0接取任务"
-                      fontSize: 36
-                      through: true
-              放弃:
-                type: Canvas
-                attribute:
-                  width: 160
-                  height: 44
-                  visible: var.canAbandon
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'abandon_quest', var.selectedQuestId)
-                children:
-                  放弃背景:
-                    type: Texture
+                      height: 44
+                      visible: "var.canTrackQuest && !var.questTracked"
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+                    children:
+                      追踪背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~170,120,220,230
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,180,255,255' : '170,120,220,240'"
+                      追踪文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0追踪任务"
+                          fontSize: 36
+                          through: true
+                  取消按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~255,255,255,150
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  放弃文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
                       width: 160
-                      texts: "~&0放弃任务"
-                      fontSize: 36
-                      through: true
-              追踪:
-                type: Canvas
-                attribute:
-                  width: 190
-                  height: 44
-                  visible: var.canTrackQuest && !var.questTracked
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
-                children:
-                  追踪背景:
-                    type: Texture
+                      height: 44
+                      visible: var.questTracked
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'clear_track')
+                    children:
+                      取消背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~200,160,80,230
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '255,230,180,255' : '200,160,80,240'"
+                      取消文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0取消导航"
+                          fontSize: 36
+                          through: true
+                  地图按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~255,255,255,150
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  追踪文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 190
-                      texts: "~&0追踪任务"
-                      fontSize: 36
-                      through: true
-              取消:
-                type: Canvas
-                attribute:
-                  width: 160
-                  height: 44
-                  visible: var.questTracked
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'clear_track')
-                children:
-                  取消背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~255,255,255,150
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  取消文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
                       width: 160
-                      texts: "~&0取消导航"
-                      fontSize: 36
-                      through: true
-              地图:
-                type: Canvas
-                attribute:
-                  width: 160
-                  height: 44
-                  visible: var.navigationReady
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'open_map')
-                children:
-                  地图背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~120,190,255,230
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  地图文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 160
-                      texts: "~&0打开地图"
-                      fontSize: 36
-                      through: true
-
+                      height: 44
+                      visible: var.navigationReady
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'open_map')
+                    children:
+                      地图背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,160,240,230
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '180,220,255,255' : '80,160,240,240'"
+                      地图文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0打开地图"
+                          fontSize: 36
+                          through: true

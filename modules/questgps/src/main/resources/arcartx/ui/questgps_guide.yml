@@ -1,7 +1,8 @@
-# AXS 资源说明
-# 用途: QuestGPS 任务指引清单 HUD — 左侧竖排信息流/RPG 风格。
-# 前置依赖: ArcartX；QuestGPS 模块启用后会自动注册或导出。
-# 关联文件: ArcartXQuestGPS.yml、ui/questgps_menu.yml
+# AXS QuestGPS 任务指引 HUD — 紫罗兰重写版
+# 用途: 任务追踪时屏幕左上角常驻 HUD，展示任务名、进度条、目标列表
+# 风格: 紫罗兰毛玻璃，与 questgps_menu 主菜单统一
+# 位置: 左上角偏下（x=16, y=220），避开聊天框/血条/小地图
+# 数据: 服务端 QuestGpsGuidePacketFactory 发送 init/update 包，最多3个目标
 
 ui:
   isHud: true
@@ -21,8 +22,8 @@ ui:
     #   - completedCount: 已完成目标数
     #   - totalCount: 总目标数
     #   - progressText: 进度文本（如 "2/5"）
-    #   - tasks: 任务目标字典（key=目标ID，value含completed/text字段）
-    #   - taskCount: 目标总数
+    #   - tasks: 任务目标字典（key=目标ID，value含id/text/description/completed/status字段）
+    #   - taskCount: 目标总数（最多3）
     #   - navWorld: 导航点所在世界名
     #   - navX: 导航点 X 坐标
     #   - navY: 导航点 Y 坐标
@@ -94,7 +95,7 @@ ui:
     load: |-
       var.packetId = 'AXS_QUESTGPS'
       var.active = false
-      var.questName = none
+      var.questName = '当前未追踪任务'
       var.completedCount = 0
       var.totalCount = 0
       var.progressText = '0/0'
@@ -106,6 +107,10 @@ ui:
       var.navZ = 0
       var.hasNav = false
 
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: Adaptive stretch_all + 左上角偏下面板（420宽）
+# 结构: 毛玻璃底 + 紫罗兰强调条 + 任务名 + 进度条 + 3个目标项 + 关闭按钮
+# 配色: 紫罗兰 主色170,120,220 底28,22,38,210 抬升50,44,68,245 描边170,120,220,240
 controls:
   自适应全局布局:
     type: Adaptive
@@ -130,13 +135,19 @@ controls:
             x: -440
             y: 0
         children:
+          # ── 面板背景 ────────────────────────────────
           背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~12,12,18,210
+              normal: ~20,16,30,235
               shape: ~round_rect
               radius: 16
+            effect:
+              stroke:
+                width: 3
+                color: ~170,120,220,240
+          # 紫罗兰强调条（左侧竖条）
           强调条:
             type: Texture
             attribute:
@@ -145,77 +156,78 @@ controls:
               y: 0
               width: 5
               height: 340
-              normal: ~248,202,83,255
+              normal: ~170,120,220,255
               shape: ~round_rect
               radius: 4
+          # ── 任务头部（任务名左 + 进度文字右）─────────
           任务图标:
             type: Text
             attribute:
               point: ~top_left
               x: 20
-              y: 14
-              texts: "~&6⬡"
-              fontSize: 20
-              shadow: false
+              y: 16
+              texts: "~&f⬡"
+              fontSize: 32
+              through: true
           任务名称:
             type: Text
             attribute:
               point: ~top_left
-              x: 44
-              y: 14
-              width: 260
-              texts: "'&e' + var.questName"
-              fontSize: 18
-              shadow: false
+              x: 48
+              y: 16
+              texts: "'&f' + var.questName"
+              fontSize: 32
+              through: true
+          进度文字:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 16
+              texts: "'&f' + var.progressText"
+              fontSize: 32
+              through: true
+          # ── 进度条（横跨面板，任务名下方）────────────
           进度条背景:
             type: Texture
             attribute:
               point: ~top_left
-              x: 310
-              y: 16
-              width: 96
-              height: 18
-              normal: ~40,40,50,200
+              x: 16
+              y: 52
+              width: 388
+              height: 12
+              normal: ~50,40,60,220
               shape: ~round_rect
-              radius: 8
+              radius: 6
           进度条填充:
             type: Texture
             attribute:
               point: ~top_left
-              x: 310
-              y: 16
-              width: "var.totalCount > 0 ? math.max(12, 96 * var.completedCount / var.totalCount) : 12"
-              height: 18
-              normal: ~120,220,80,230
+              x: 16
+              y: 52
+              width: "var.totalCount > 0 ? math.max(12, 388 * var.completedCount / var.totalCount) : 12"
+              height: 12
+              normal: ~170,120,220,235
               shape: ~round_rect
-              radius: 8
-          进度文字:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 310
-              y: 17
-              width: 96
-              texts: "'&f' + var.progressText"
-              fontSize: 12
-              shadow: false
-              center: true
-          上分隔线:
+              radius: 6
+          # ── 头部分隔线 ──────────────────────────────
+          头部分隔线:
             type: Texture
             attribute:
               point: ~top_left
               x: 16
-              y: 42
+              y: 72
               width: 388
-              height: 1
-              normal: ~255,255,255,40
+              height: 2
+              normal: ~170,120,220,180
+          # ── 目标列表（3个固定槽位）──────────────────
           任务列表:
             val: guide_task_list
             type: VStack
             attribute:
               point: ~top_left
               x: 16
-              y: 50
+              y: 84
               width: 388
               spaceBetween: 4
             children:
@@ -229,43 +241,54 @@ controls:
                   visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
+                  项背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   状态图标:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 8
-                      y: 10
+                      y: 4
                       texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 16
-                      shadow: false
+                      fontSize: 48
+                      through: true
                   任务文字:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 30
-                      y: 10
-                      width: 280
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 14
-                      shadow: false
+                      x: 36
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
+                      fontSize: 32
+                      through: true
                   任务状态:
                     type: Text
                     attribute:
                       point: ~top_right
                       x: -8
-                      y: 10
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
-                      fontSize: 12
-                      shadow: false
-                  行分隔线:
-                    type: Texture
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
+                      fontSize: 32
+                      through: true
+                  任务描述:
+                    type: Text
                     attribute:
-                      point: ~bottom_left
-                      x: 8
-                      y: -2
-                      width: 372
-                      height: 1
-                      normal: ~255,255,255,20
+                      point: ~top_left
+                      x: 36
+                      y: 36
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                      fontSize: 32
+                      through: true
               引导项1:
                 type: Canvas
                 attribute:
@@ -276,43 +299,54 @@ controls:
                   visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
+                  项背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   状态图标:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 8
-                      y: 10
+                      y: 4
                       texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 16
-                      shadow: false
+                      fontSize: 48
+                      through: true
                   任务文字:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 30
-                      y: 10
-                      width: 280
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 14
-                      shadow: false
+                      x: 36
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
+                      fontSize: 32
+                      through: true
                   任务状态:
                     type: Text
                     attribute:
                       point: ~top_right
                       x: -8
-                      y: 10
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
-                      fontSize: 12
-                      shadow: false
-                  行分隔线:
-                    type: Texture
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
+                      fontSize: 32
+                      through: true
+                  任务描述:
+                    type: Text
                     attribute:
-                      point: ~bottom_left
-                      x: 8
-                      y: -2
-                      width: 372
-                      height: 1
-                      normal: ~255,255,255,20
+                      point: ~top_left
+                      x: 36
+                      y: 36
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                      fontSize: 32
+                      through: true
               引导项2:
                 type: Canvas
                 attribute:
@@ -323,100 +357,52 @@ controls:
                   visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
+                  项背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,32,56,200
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~170,120,220,160
                   状态图标:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 8
-                      y: 10
+                      y: 4
                       texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 16
-                      shadow: false
+                      fontSize: 48
+                      through: true
                   任务文字:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 30
-                      y: 10
-                      width: 280
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 14
-                      shadow: false
+                      x: 36
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
+                      fontSize: 32
+                      through: true
                   任务状态:
                     type: Text
                     attribute:
                       point: ~top_right
                       x: -8
-                      y: 10
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
-                      fontSize: 12
-                      shadow: false
-                  行分隔线:
-                    type: Texture
+                      y: 8
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
+                      fontSize: 32
+                      through: true
+                  任务描述:
+                    type: Text
                     attribute:
-                      point: ~bottom_left
-                      x: 8
-                      y: -2
-                      width: 372
-                      height: 1
-                      normal: ~255,255,255,20
-          下分隔线:
-            type: Texture
-            attribute:
-              point: ~bottom_left
-              x: 16
-              y: -56
-              width: 388
-              height: 1
-              normal: ~255,255,255,40
-              visible: var.hasNav
-          导航图标:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 20
-              y: -42
-              texts: "~&b🌐"
-              fontSize: 14
-              shadow: false
-              visible: var.hasNav
-          导航坐标:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 42
-              y: -42
-              width: 360
-              texts: "'&3' + var.navWorld + '  &bX:&f' + var.navX + '  &bY:&f' + var.navY + '  &bZ:&f' + var.navZ"
-              fontSize: 13
-              shadow: false
-              visible: var.hasNav
-          关闭按钮:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -8
-              y: 8
-              width: 22
-              height: 22
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'clear_track')
-            children:
-              关闭背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~255,255,255,40
-                  shape: ~round_rect
-                  radius: 6
-              关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 22
-                  texts: ~&7✕
-                  fontSize: 12
-                  shadow: false
-                  through: true
+                      point: ~top_left
+                      x: 36
+                      y: 36
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                      fontSize: 32
+                      through: true
+

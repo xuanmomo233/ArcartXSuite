@@ -1,6 +1,7 @@
-# 称号总览菜单 UI 配置
-# 作用: 渲染称号管理界面，展示玩家拥有的称号列表、分组/品质筛选、详情面板、装备/卸下/隐藏等操作按钮。
-# 布局: 左侧栏（筛选 + 称号列表）、中间栏（详情信息）、右侧栏（已装备 + 总属性 + 操作按钮）。
+# 称号总览菜单 UI 配置（金色重写版）
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左导航 + 称号列表栏 + 详情栏 + 右侧栏
+# 布局: 顶栏(标题+统计摘要+关闭) + 左导航(筛选模式/分组/品质) + 称号列表栏(滚动) + 详情栏(弹性宽,滚动) + 右侧栏(已装备/总属性/操作按钮)
+# 配色: 琥珀金 主色232,180,90 底30,32,38,110 面板Frosted:30;255,255,255,100 卡片255,255,255,125 描边232,180,90,240
 # 数据来源: 后端通过 AXS_TITLE_MENU 数据包推送 titles/groups/qualities/sets 等数据，由 packetHandler 接收。
 # 操作交互: 点击称号项发送 select 包，装备/卸下/隐藏/设为主展示等按钮发送对应操作包。
 
@@ -11,6 +12,8 @@ ui:
   show: true
   through: false
   screenScale: true
+  level: 8
+  itemSize: 16
   action:
     seconds: |-
       if(var.actionBusy){
@@ -76,6 +79,50 @@ ui:
       var.rightScrollRatio = 0
       var.actionBusy = false
       var.actionBusySeconds = 0
+      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
+      // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
+      // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
+      // contentW = 内容区宽度（左 48 + 左导航 300 + 间距 24 + 右 48 = 420）
+      // detailW  = 详情栏弹性宽度（称号列表 440 + 右侧栏 440 + 两个间距 16*2 = 912）
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.detailW = var.contentW - 912
+      // 各滚动区高度（栏高 viewH-144，减去标题/按钮区/内边距）
+      var.titleScrollH = var.viewH - 224
+      var.detailScrollH = var.viewH - 296
+      var.rightScrollH = var.viewH - 318
+      // 左导航分组/品质竖向滚动区高度（导航高 viewH-144，减去顶部 176 + 底部 16 + 中间品质标题 44）
+      var.groupScrollH = (var.viewH - 380) / 2
+      var.qualityScrollY = 176 + var.groupScrollH + 44
+      var.qualityScrollH = var.groupScrollH
+      // 右侧栏按钮区 y 坐标（top_left，相对栏左上角）
+      var.btnRow1Y = var.viewH - 294
+      var.btnRow2Y = var.viewH - 244
+      var.btnRefreshY = var.viewH - 194
+    # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.detailW = var.contentW - 912
+      var.titleScrollH = var.viewH - 224
+      var.detailScrollH = var.viewH - 296
+      var.rightScrollH = var.viewH - 318
+      var.groupScrollH = (var.viewH - 380) / 2
+      var.qualityScrollY = 176 + var.groupScrollH + 44
+      var.qualityScrollH = var.groupScrollH
+      var.btnRow1Y = var.viewH - 294
+      var.btnRow2Y = var.viewH - 244
+      var.btnRefreshY = var.viewH - 194
   packetHandler:
     # packetHandler: init
     # 首次接收后端数据包时执行，初始化所有界面变量。
@@ -372,317 +419,468 @@ ui:
       }
       // update 包到达，重置防抖标志，恢复按钮可点击
       var.actionBusy = false
+
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
+  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;30,32,38,110
+  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
+  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给各栏贴住底边；
+  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配，顶栏与各栏同步铺满
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      根面板:
-        type: Texture
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
+      顶栏:
+        type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1520
-          height: 900
-          normal: ~95,95,95,220
-          shape: ~round_rect
-          radius: 28
-        effect:
-          stroke:
-            width: 2
-            color: ~80,180,255,180
-          shadow:
-            xOffset: 2
-            yOffset: 2
-            blur: 5
-            color: ~255,255,255,75
-          ripple:
-            duration: 1200
-            color: ~255,255,255,110
-            width: 0.05
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~232,180,90,230
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~232,180,90,255
+              shape: ~round_rect
+              radius: 3
           标题:
             type: Text
             attribute:
-              x: 40
-              y: 30
-              fontSize: 81
+              point: ~middle_left
+              x: 68
               texts: "~&f称号总览"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 220
+              width: 1
+              height: 30
+              normal: ~232,180,90,230
           统计摘要:
             type: Text
             attribute:
-              x: 40
-              y: 82
+              point: ~middle_left
+              x: 240
+              texts: "'&f已拥有 &f' + var.ownedCount.round() + '  &f已隐藏 &f' + var.hiddenCount.round() + '  &f已装备 &f' + var.equippedCount.round()"
               fontSize: 36
-              texts: "'&0已拥有: &0' + var.ownedCount.round() + '   &0已隐藏: &0' + var.hiddenCount.round() + '   &0已装备: &0' + var.equippedCount.round()"
-          展示称号预览:
+          主展示摘要:
             type: Text
             attribute:
-              x: 40
-              y: 108
-              fontSize: 36
-              texts: "'&0总展示称号: &0' + (var.displayTitleName == none ? '无' : var.displayTitleName)"
-
-          # ========== 左侧栏 ==========
-          左侧面板:
-            type: Texture
+              point: ~middle_right
+              x: -100
+              texts: "'&f总展示: &f' + (var.displayTitleName == none ? '无' : var.displayTitleName)"
+              fontSize: 32
+          关闭按钮:
+            type: Canvas
             attribute:
-              x: 40
-              y: 140
-              width: 420
-              height: 720
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          全部模式:
-            type: Texture
-            attribute:
-              x: 56
-              y: 156
-              width: 120
+              point: ~middle_right
+              x: -40
+              width: 40
               height: 40
-              normal: "var.filterMode == 'all' ? '120,190,255,230' : '100,100,100,200'"
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,46,58,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '232,180,90,240'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
+
+      # ── 左侧导航（筛选模式 + 分组 + 品质）───────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
-              radius: 12
+              radius: 14
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
+                width: 3
+                color: ~232,180,90,240
+          筛选标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 18
+              texts: "~&f筛选模式"
+              fontSize: 36
+          # 筛选模式：全部 / 已拥有 / 已隐藏（三按钮横排，宽 84 间距 8，总 268 居中于 272 可用宽）
+          筛选全部:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 58
+              width: 84
+              height: 42
             action:
               clickLeft: |-
                 var.filterMode = 'all'
             children:
-              全部模式文字:
+              全部底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.filterMode == 'all' ? '232,180,90,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "var.filterMode == 'all' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+              全部文字:
                 type: Text
                 attribute:
-                  x: 60
-                  y: 10
-                  through: true
-                  center: true
+                  point: ~middle_center
+                  texts: "var.filterMode == 'all' ? '&0全部' : '&f全部'"
                   fontSize: 36
-                  texts: "~&0全部"
-          已拥有模式:
-            type: Texture
+                  through: true
+          筛选已拥有:
+            type: Canvas
             attribute:
-              x: 188
-              y: 156
-              width: 120
-              height: 40
-              normal: "var.filterMode == 'owned' ? '100,200,130,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+              point: ~top_left
+              x: 108
+              y: 58
+              width: 84
+              height: 42
             action:
               clickLeft: |-
                 var.filterMode = 'owned'
             children:
-              已拥有模式文字:
+              已拥有底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.filterMode == 'owned' ? '232,180,90,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "var.filterMode == 'owned' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+              已拥有文字:
                 type: Text
                 attribute:
-                  x: 60
-                  y: 10
-                  through: true
-                  center: true
+                  point: ~middle_center
+                  texts: "var.filterMode == 'owned' ? '&0已拥有' : '&f已拥有'"
                   fontSize: 36
-                  texts: "~&0已拥有"
-          已隐藏模式:
-            type: Texture
+                  through: true
+          筛选已隐藏:
+            type: Canvas
             attribute:
-              x: 320
-              y: 156
-              width: 120
-              height: 40
-              normal: "var.filterMode == 'hidden' ? '200,150,80,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+              point: ~top_left
+              x: 200
+              y: 58
+              width: 84
+              height: 42
             action:
               clickLeft: |-
                 var.filterMode = 'hidden'
             children:
-              已隐藏模式文字:
+              已隐藏底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.filterMode == 'hidden' ? '232,180,90,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "var.filterMode == 'hidden' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+              已隐藏文字:
                 type: Text
                 attribute:
-                  x: 60
-                  y: 10
-                  through: true
-                  center: true
+                  point: ~middle_center
+                  texts: "var.filterMode == 'hidden' ? '&0已隐藏' : '&f已隐藏'"
                   fontSize: 36
-                  texts: "~&0已隐藏"
-          分组标签:
+                  through: true
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 116
+              width: 264
+              height: 2
+              normal: ~232,180,90,220
+          分组标题:
             type: Text
             attribute:
-              x: 56
-              y: 206
+              point: ~top_left
+              x: 20
+              y: 132
+              texts: "~&f分组筛选"
               fontSize: 36
-              texts: "~&0分组筛选"
-          分组滑块:
-            type: Texture
-            val: 分组滑块
-            attribute:
-              x: 56
-              y: 280
-              width: 40
-              height: 4
-              normal: ~120,120,120,200
-              maxDragX: 348
           分组滚动区:
             type: Scroll
             attribute:
-              x: 56
-              y: 238
-              width: 388
-              height: 36
-              moveX: "self.parent['分组滑块'].getDragXRatio()"
+              point: ~top_left
+              x: 14
+              y: 176
+              width: 244
+              height: "var.groupScrollH"
+              moveY: "self.parent['分组滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveX >= 0 && self.wheelValue > 0){
-                  self.parent['分组滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
-                if(self.moveX <= 1 && self.wheelValue < 0){
-                  self.parent['分组滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               分组列表:
                 val: group_list
-                type: HStack
+                type: VStack
                 attribute:
-                  height: 36
-                  spaceBetween: 10
+                  width: 244
+                  spaceBetween: 8
                 children:
                   分组模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.groups[self.entryKey]
-                      width: 100
-                      height: 36
-                      normal: "var.filterGroup == self.entry['id'] ? '120,190,255,230' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 12
+                      width: 244
+                      height: 48
                       visible: self.entryKey != none && self.entry != none
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         var.filterGroup = self.entry['id']
                     children:
-                      分组模板文字:
+                      分组底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.filterGroup == self.parent.entry['id'] ? '232,180,90,210' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "var.filterGroup == self.parent.entry['id'] ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                      分组文字:
                         type: Text
                         attribute:
-                          x: 50
-                          y: 8
+                          point: ~middle_left
+                          x: 16
+                          texts: "self.parent.entry != none ? (var.filterGroup == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
+                          fontSize: 32
                           through: true
-                          center: true
-                          fontSize: 36
-                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-          品质标签:
+          分组滑块轨道:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 270
+              y: 176
+              width: 10
+              height: "var.groupScrollH"
+              normal: ~60,50,80,200
+              shape: ~round_rect
+              radius: 5
+              through: true
+          分组滑块:
+            type: Texture
+            val: 分组滑块
+            attribute:
+              point: ~top_left
+              x: 270
+              y: 176
+              width: 10
+              height: 50
+              normal: ~232,180,90,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.groupScrollH - 50"
+          品质标题:
             type: Text
             attribute:
-              x: 56
-              y: 286
+              point: ~top_left
+              x: 20
+              y: "var.qualityScrollY - 36"
+              texts: "~&f品质筛选"
               fontSize: 36
-              texts: "~&0品质筛选"
-          品质滑块:
-            type: Texture
-            val: 品质滑块
-            attribute:
-              x: 56
-              y: 360
-              width: 40
-              height: 4
-              normal: ~120,120,120,200
-              maxDragX: 348
           品质滚动区:
             type: Scroll
             attribute:
-              x: 56
-              y: 318
-              width: 388
-              height: 36
-              moveX: "self.parent['品质滑块'].getDragXRatio()"
+              point: ~top_left
+              x: 14
+              y: "var.qualityScrollY"
+              width: 244
+              height: "var.qualityScrollH"
+              moveY: "self.parent['品质滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveX >= 0 && self.wheelValue > 0){
-                  self.parent['品质滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
-                if(self.moveX <= 1 && self.wheelValue < 0){
-                  self.parent['品质滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               品质列表:
                 val: quality_list
-                type: HStack
+                type: VStack
                 attribute:
-                  height: 36
-                  spaceBetween: 10
+                  width: 244
+                  spaceBetween: 8
                 children:
                   品质模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.qualities[self.entryKey]
-                      width: 100
-                      height: 36
-                      normal: "var.filterQuality == self.entry['id'] ? '200,150,80,230' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 12
+                      width: 244
+                      height: 48
                       visible: self.entryKey != none && self.entry != none
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         var.filterQuality = self.entry['id']
                     children:
-                      品质模板文字:
+                      品质底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.filterQuality == self.parent.entry['id'] ? '232,180,90,210' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "var.filterQuality == self.parent.entry['id'] ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                      品质文字:
                         type: Text
                         attribute:
-                          x: 50
-                          y: 8
+                          point: ~middle_left
+                          x: 16
+                          texts: "self.parent.entry != none ? (var.filterQuality == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
+                          fontSize: 32
                           through: true
-                          center: true
-                          fontSize: 36
-                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-          称号列表标签:
+          品质滑块轨道:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 270
+              y: "var.qualityScrollY"
+              width: 10
+              height: "var.qualityScrollH"
+              normal: ~60,50,80,200
+              shape: ~round_rect
+              radius: 5
+              through: true
+          品质滑块:
+            type: Texture
+            val: 品质滑块
+            attribute:
+              point: ~top_left
+              x: 270
+              y: "var.qualityScrollY"
+              width: 10
+              height: 50
+              normal: ~232,180,90,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.qualityScrollH - 50"
+
+      # ── 称号列表栏 ─────────────────────────────────────
+      称号列表栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: 440
+          height: "var.viewH - 144"
+        children:
+          列表栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~232,180,90,240
+          列表标题:
             type: Text
             attribute:
-              x: 56
-              y: 366
+              point: ~top_left
+              x: 20
+              y: 18
+              texts: "~&f称号列表"
               fontSize: 36
-              texts: "~&0称号列表"
-          称号滑块:
-            type: Texture
-            val: 称号滑块
-            attribute:
-              x: 442
-              y: 400
-              width: 6
-              height: 60
-              normal: ~120,120,120,200
-              maxDragY: 380
           称号滚动区:
             type: Scroll
             attribute:
-              x: 56
-              y: 400
-              width: 388
-              height: 440
+              point: ~top_left
+              x: 14
+              y: 64
+              width: 380
+              height: "var.titleScrollH"
               moveY: "self.parent['称号滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -697,111 +895,140 @@ controls:
                 val: title_list
                 type: VStack
                 attribute:
-                  width: 372
+                  width: 380
                   spaceBetween: 8
                 children:
                   称号模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.titles[self.entryKey]
-                      width: 372
+                      width: 380
                       height: 64
-                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 14
                       visible: "self.entryKey != none && self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'owned' && self.entry['owned']) || (var.filterMode == 'hidden' && self.entry['hidden'])) && (var.filterGroup == 'all' || var.filterGroup == self.entry['group_id']) && (var.filterQuality == 'all' || var.filterQuality == self.entry['quality_id'])"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         Packet.send('AXS_TITLE_MENU', 'select', self.entry['id'])
                     children:
+                      称号项底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,210' : '255,255,255,125'"
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,230' : '255,255,255,165'"
                       称号名称:
                         type: Text
                         attribute:
+                          point: ~top_left
                           x: 12
                           y: 8
-                          width: 324
-                          fontSize: 48
-                          texts: "self.parent.entry['display_name']"
+                          texts: "self.parent.entry != none ? self.parent.entry['display_name'] : none"
+                          fontSize: 36
                           through: true
                       称号状态:
                         type: Text
                         attribute:
+                          point: ~top_left
                           x: 12
                           y: 36
-                          width: 324
-                          fontSize: 36
-                          texts: "self.parent.entry['quality_name'] + ' &0/ &f' + self.parent.entry['group_name'] + ' &0/ &f' + self.parent.entry['remaining_text']"
+                          texts: "self.parent.entry != none ? self.parent.entry['quality_name'] + '  &f' + self.parent.entry['group_name'] + '  &f' + self.parent.entry['remaining_text'] : none"
+                          fontSize: 32
                           through: true
                       装备标记:
                         type: Text
                         attribute:
-                          x: 336
-                          y: 14
-                          width: 28
-                          fontSize: 48
+                          point: ~middle_right
+                          x: -12
                           texts: "~&a✔"
+                          fontSize: 36
                           visible: self.parent.entry != none && self.parent.entry['equipped']
                           through: true
-
-          # ========== 中间栏 ==========
-          中间面板:
+          称号滑块轨道:
             type: Texture
             attribute:
-              x: 480
-              y: 140
-              width: 540
-              height: 720
-              normal: ~255,255,255,120
+              point: ~top_left
+              x: 406
+              y: 64
+              width: 10
+              height: "var.titleScrollH"
+              normal: ~60,50,80,200
               shape: ~round_rect
-              radius: 20
+              radius: 5
+              through: true
+          称号滑块:
+            type: Texture
+            val: 称号滑块
+            attribute:
+              point: ~top_left
+              x: 406
+              y: 64
+              width: 10
+              height: 60
+              normal: ~232,180,90,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.titleScrollH - 60"
+
+      # ── 详情栏（弹性宽度）──────────────────────────────
+      详情栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "828 - var.offX"
+          y: 120
+          width: "var.detailW"
+          height: "var.viewH - 144"
+        children:
+          详情栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
+                width: 3
+                color: ~232,180,90,240
           详情标题:
             type: Text
             attribute:
-              x: 504
-              y: 160
-              fontSize: 49
-              texts: "var.selectedName == none ? '&0未选择称号' : var.selectedName"
+              point: ~top_left
+              x: 20
+              y: 18
+              texts: "var.selectedName == none ? '&7未选择称号' : var.selectedName"
+              fontSize: 48
           详情副标题:
             type: Text
             attribute:
-              x: 504
-              y: 196
+              point: ~top_left
+              x: 20
+              y: 72
+              texts: "var.selectedKindText == none ? none : '&f' + var.selectedKindText + '  &f分组: &f' + var.selectedGroupName + '  &f品质: &f' + var.selectedQualityName"
               fontSize: 36
-              texts: "var.selectedKindText == none ? none : '&0' + var.selectedKindText + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
           分割线:
             type: Texture
             attribute:
-              x: 480
-              y: 225
-              width: 540
+              point: ~top_left
+              x: 14
+              y: 120
+              width: "var.detailW - 28"
               height: 2
-              normal: ~0,0,0,100
-          详情滑块:
-            type: Texture
-            val: 详情滑块
-            attribute:
-              x: 1000
-              y: 240
-              width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 550
+              normal: ~232,180,90,220
           详情滚动区:
             type: Scroll
             attribute:
-              x: 504
-              y: 240
-              width: 492
-              height: 600
+              point: ~top_left
+              x: 14
+              y: 136
+              width: "var.detailW - 60"
+              height: "var.detailScrollH"
               moveY: "self.parent['详情滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -815,178 +1042,210 @@ controls:
               详情堆叠:
                 type: VStack
                 attribute:
-                  width: 472
-                  spaceBetween: 12
+                  width: "var.detailW - 60"
+                  spaceBetween: 24
                 children:
-                  选中前缀:
-                    type: Text
+                  选中前缀区:
+                    type: VStack
                     attribute:
-                      width: 472
-                      fontSize: 36
-                      lineSpace: 10
-                      texts:
-                        - "'&0聊天前缀: &0' + (var.selectedChatPrefix == none ? '无' : var.selectedChatPrefix)"
-                        - "'&0聊天后缀: &0' + (var.selectedChatSuffix == none ? '无' : var.selectedChatSuffix)"
-                        - "'&0Tab 前缀: &0' + (var.selectedTabPrefix == none ? '无' : var.selectedTabPrefix)"
-                        - "'&0Tab 后缀: &0' + (var.selectedTabSuffix == none ? '无' : var.selectedTabSuffix)"
-                  选中描述:
-                    type: Text
+                      width: "var.detailW - 60"
+                      spaceBetween: 10
+                    children:
+                      聊天前缀行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f聊天前缀: &f' + (var.selectedChatPrefix != none && var.selectedChatPrefix != '' ? var.selectedChatPrefix : '无')"
+                      聊天后缀行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f聊天后缀: &f' + (var.selectedChatSuffix != none && var.selectedChatSuffix != '' ? var.selectedChatSuffix : '无')"
+                      Tab前缀行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&fTab 前缀: &f' + (var.selectedTabPrefix != none && var.selectedTabPrefix != '' ? var.selectedTabPrefix : '无')"
+                      Tab后缀行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&fTab 后缀: &f' + (var.selectedTabSuffix != none && var.selectedTabSuffix != '' ? var.selectedTabSuffix : '无')"
+                  选中描述区:
+                    type: VStack
                     attribute:
-                      width: 472
-                      fontSize: 36
-                      lineSpace: 10
-                      texts:
-                        - "'&0介绍: &0' + (var.selectedDescription == none ? '暂无介绍' : var.selectedDescription)"
-                        - "'&0获取渠道: &0' + (var.selectedSource == none ? '未填写' : var.selectedSource)"
-                        - "'&0拥有状态: &0' + (var.selectedOwned ? '已拥有' : '未拥有')"
-                        - "'&0剩余时间: &0' + var.selectedRemainingText"
+                      width: "var.detailW - 60"
+                      spaceBetween: 10
+                    children:
+                      介绍行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f介绍: &f' + (var.selectedDescription != none && var.selectedDescription != '' ? var.selectedDescription : '暂无介绍')"
+                      获取渠道行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f获取渠道: &f' + (var.selectedSource != none && var.selectedSource != '' ? var.selectedSource : '未填写')"
+                      拥有状态行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f拥有状态: &f' + (var.selectedOwned ? '已拥有' : '未拥有')"
+                      剩余时间行:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          texts: "'&f剩余时间: &f' + (var.selectedRemainingText != none && var.selectedRemainingText != '' ? var.selectedRemainingText : '永久')"
+                  分隔线1:
+                    type: Texture
+                    attribute:
+                      width: "var.detailW - 60"
+                      height: 2
+                      normal: ~232,180,90,180
+                      shape: ~round_rect
+                      radius: 1
                   佩戴属性标签:
                     type: Text
                     attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0佩戴属性"
+                      fontSize: 54
+                      texts: "~&f佩戴属性"
                   佩戴属性值:
                     type: Text
                     attribute:
-                      width: 472
                       fontSize: 36
-                      lineSpace: 4
-                      texts: var.selectedDisplayAttributesText
+                      lineSpace: 12
+                      texts: "var.selectedDisplayAttributesText != none && var.selectedDisplayAttributesText != '' ? var.selectedDisplayAttributesText : '&7暂无属性'"
                   收集属性标签:
                     type: Text
                     attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0收集属性"
+                      fontSize: 54
+                      texts: "~&f收集属性"
                   收集属性值:
                     type: Text
                     attribute:
-                      width: 472
                       fontSize: 36
-                      lineSpace: 4
-                      texts: var.selectedCollectionAttributesText
-                  当前装备属性标签:
-                    type: Text
+                      lineSpace: 12
+                      texts: "var.selectedCollectionAttributesText != none && var.selectedCollectionAttributesText != '' ? var.selectedCollectionAttributesText : '&7暂无属性'"
+                  分隔线2:
+                    type: Texture
                     attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0当前装备属性"
-                  当前装备属性值:
-                    type: Text
-                    attribute:
-                      width: 472
-                      fontSize: 36
-                      lineSpace: 4
-                      texts: var.displayAttributesText
-                  当前收集属性标签:
-                    type: Text
-                    attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0当前收集属性"
-                  当前收集属性值:
-                    type: Text
-                    attribute:
-                      width: 472
-                      fontSize: 36
-                      lineSpace: 4
-                      texts: var.collectionAttributesText
-                  总属性标签:
-                    type: Text
-                    attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0总属性"
-                  总属性值:
-                    type: Text
-                    attribute:
-                      width: 472
-                      fontSize: 36
-                      lineSpace: 4
-                      texts: var.totalAttributesText
+                      width: "var.detailW - 60"
+                      height: 2
+                      normal: ~232,180,90,180
+                      shape: ~round_rect
+                      radius: 1
+                      visible: var.sets != none && var.sets.size() > 0
                   套装加成标签:
                     type: Text
                     attribute:
-                      width: 472
-                      fontSize: 49
-                      texts: "~&0套装加成属性"
+                      fontSize: 54
+                      texts: "~&f套装加成属性"
                       visible: var.sets != none && var.sets.size() > 0
                   套装加成值:
                     type: Text
                     attribute:
-                      width: 472
                       fontSize: 36
-                      lineSpace: 4
-                      texts: var.setBonusAttributesText
+                      lineSpace: 12
+                      texts: "var.setBonusAttributesText != none && var.setBonusAttributesText != '' ? var.setBonusAttributesText : '&7暂无加成'"
                       visible: var.sets != none && var.sets.size() > 0
                   套装列表:
                     val: set_list
                     type: VStack
                     attribute:
-                      width: 472
+                      width: "var.detailW - 60"
                       spaceBetween: 10
                       visible: var.sets != none && var.sets.size() > 0
                     children:
                       套装模板:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           entryKey: 0.round()
                           entry: var.sets[self.entryKey]
-                          width: 472
+                          width: "var.detailW - 60"
                           height: 80
-                          normal: ~255,255,255,80
-                          shape: ~round_rect
-                          radius: 12
                           visible: self.entryKey != none && self.entry != none
                         children:
+                          套装底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~255,255,255,125
+                              shape: ~round_rect
+                              radius: 12
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,165
                           套装信息:
                             type: Text
                             attribute:
+                              point: ~top_left
                               x: 10
                               y: 6
-                              width: 452
-                              fontSize: 36
-                              lineSpace: 8
                               texts:
-                                - "(self.parent.entry['active'] ? '&a✔ ' : '&c✘ ') + '&0' + self.parent.entry['display_name'] + '  &0(' + self.parent.entry['progress'] + ')'"
-                                - "'&0所需: ' + self.parent.entry['required_titles_text']"
-                                - "'&0加成: &0' + self.parent.entry['bonus_text']"
+                                - "(self.parent.entry['active'] ? '&a✔ ' : '&c✘ ') + '&f' + self.parent.entry['display_name'] + '  &f(' + self.parent.entry['progress'] + ')'"
+                                - "'&f所需: ' + self.parent.entry['required_titles_text']"
+                                - "'&f加成: &f' + self.parent.entry['bonus_text']"
+                              fontSize: 32
                               visible: self.parent.entry != none
                               through: true
-
-          # ========== 右侧栏 ==========
-          右侧面板:
+          详情滑块轨道:
             type: Texture
             attribute:
-              x: 1040
-              y: 140
-              width: 440
-              height: 720
-              normal: ~255,255,255,120
+              point: ~top_left
+              x: "var.detailW - 34"
+              y: 136
+              width: 10
+              height: "var.detailScrollH"
+              normal: ~60,50,80,200
               shape: ~round_rect
-              radius: 20
+              radius: 5
+              through: true
+          详情滑块:
+            type: Texture
+            val: 详情滑块
+            attribute:
+              point: ~top_left
+              x: "var.detailW - 34"
+              y: 136
+              width: 10
+              height: 50
+              normal: ~232,180,90,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.detailScrollH - 50"
+
+      # ── 右侧栏（已装备 + 总属性 + 操作按钮）────────────
+      右侧栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "844 + var.detailW - var.offX"
+          y: 120
+          width: 440
+          height: "var.viewH - 144"
+        children:
+          右侧栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
             effect:
               stroke:
-                width: 2
-                color: ~0,0,0,255
-          右栏滑块:
-            type: Texture
-            val: 右栏滑块
-            attribute:
-              x: 1462
-              y: 160
-              width: 6
-              height: 40
-              normal: ~120,120,120,200
-              maxDragY: 480
+                width: 3
+                color: ~232,180,90,240
           右栏滚动区:
             type: Scroll
             attribute:
-              x: 1056
-              y: 160
-              width: 408
-              height: 520
+              point: ~top_left
+              x: 14
+              y: 16
+              width: 380
+              height: "var.rightScrollH"
               moveY: "self.parent['右栏滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -1000,276 +1259,354 @@ controls:
               右栏内容:
                 type: VStack
                 attribute:
-                  width: 392
+                  width: 380
                   spaceBetween: 12
                 children:
                   已装备标题:
                     type: Text
                     attribute:
-                      fontSize: 49
-                      texts: "~&0当前已装备"
+                      fontSize: 48
+                      texts: "~&f当前已装备"
                   已装备列表:
                     val: equipped_list
                     type: VStack
                     attribute:
-                      width: 392
+                      width: 380
                       spaceBetween: 8
                     children:
                       已装备模板:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           entryKey: 0.round()
                           entry: var.equippedByGroup[self.entryKey]
-                          width: 392
+                          width: 380
                           height: 52
-                          normal: ~255,255,255,80
-                          shape: ~round_rect
-                          radius: 10
                           visible: self.entryKey != none && self.entry != none
                         children:
+                          已装备底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~255,255,255,125
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,165
                           已装备信息:
                             type: Text
                             attribute:
+                              point: ~top_left
                               x: 10
                               y: 6
-                              width: 372
-                              fontSize: 36
-                              lineSpace: 6
                               texts:
-                                - "'&0' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'])"
-                                - "self.parent.entry['title_id'] != none ? '&0' + self.parent.entry['quality_name'] : none"
+                                - "'&f' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'])"
+                                - "self.parent.entry['title_id'] != none ? '&f' + self.parent.entry['quality_name'] : ''"
+                              fontSize: 32
                               visible: self.parent.entry != none
                               through: true
+                  当前装备属性标题:
+                    type: Text
+                    attribute:
+                      fontSize: 48
+                      texts: "~&f当前装备属性"
+                  当前装备属性值:
+                    type: Text
+                    attribute:
+                      fontSize: 36
+                      lineSpace: 12
+                      texts: "var.displayAttributesText != none && var.displayAttributesText != '' ? var.displayAttributesText : '&7暂无属性'"
+                  当前收集属性标题:
+                    type: Text
+                    attribute:
+                      fontSize: 48
+                      texts: "~&f当前收集属性"
+                  当前收集属性值:
+                    type: Text
+                    attribute:
+                      fontSize: 36
+                      lineSpace: 12
+                      texts: "var.collectionAttributesText != none && var.collectionAttributesText != '' ? var.collectionAttributesText : '&7暂无属性'"
                   总属性标题:
                     type: Text
                     attribute:
-                      fontSize: 49
-                      texts: "~&0总属性汇总"
+                      fontSize: 48
+                      texts: "~&f总属性汇总"
                   总属性汇总值:
                     type: Text
                     attribute:
-                      width: 408
                       fontSize: 36
-                      lineSpace: 4
-                      texts: var.totalAttributesText
+                      lineSpace: 12
+                      texts: "var.totalAttributesText != none && var.totalAttributesText != '' ? var.totalAttributesText : '&7暂无属性数据'"
                   主展示标题:
                     type: Text
                     attribute:
-                      fontSize: 49
-                      texts: "~&0当前主展示"
+                      fontSize: 48
+                      texts: "~&f当前主展示"
                   主展示值:
                     type: Text
                     attribute:
-                      width: 408
                       fontSize: 36
-                      texts: "var.displayTitleId != none && var.displayTitleName != none ? '&0' + var.displayTitleName : '&7未设置'"
+                      texts: "var.displayTitleName != none && var.displayTitleName != '' ? '&f' + var.displayTitleName : '&0未设置'"
+          右栏滑块轨道:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 406
+              y: 16
+              width: 10
+              height: "var.rightScrollH"
+              normal: ~60,50,80,200
+              shape: ~round_rect
+              radius: 5
+              through: true
+          右栏滑块:
+            type: Texture
+            val: 右栏滑块
+            attribute:
+              point: ~top_left
+              x: 406
+              y: 16
+              width: 10
+              height: 40
+              normal: ~232,180,90,220
+              shape: ~round_rect
+              radius: 5
+              maxDragY: "var.rightScrollH - 40"
+          # ── 操作按钮区（固定在右侧栏底部）──────────────
           按钮行1:
             type: HStack
             attribute:
-              x: 1056
-              y: 690
-              width: 408
+              point: ~top_left
+              x: 14
+              y: "var.btnRow1Y"
+              width: 412
               height: 42
               spaceBetween: 12
             children:
               设为主展示按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: "var.selectedIsEquipped && !var.selectedIsDisplayTitle ? '120,190,255,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 14
                   visible: var.selectedIsEquipped && !var.selectedIsDisplayTitle
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
                 children:
-                  设为主展示按钮文字:
+                  设为主展示底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~232,180,90,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~232,180,90,230
+                  设为主展示文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&0设为主展示"
+                      fontSize: 36
+                      through: true
               装备按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: "var.selectedCanEquip ? '120,190,255,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 14
                   visible: var.selectedCanEquip
                   enable: "!var.actionBusy"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
                 children:
-                  装备按钮文字:
+                  装备底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~232,180,90,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~232,180,90,230
+                  装备文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&0装备本组"
+                      fontSize: 36
+                      through: true
               卸下本组按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: "var.selectedIsEquipped ? '200,150,80,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 14
                   visible: var.selectedIsEquipped
                   enable: "!var.actionBusy"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
                 children:
-                  卸下本组按钮文字:
+                  卸下本组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~124,196,142,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~124,196,142,230
+                  卸下本组文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&0卸下本组"
+                      fontSize: 36
+                      through: true
           按钮行2:
             type: HStack
             attribute:
-              x: 1056
-              y: 742
-              width: 408
+              point: ~top_left
+              x: 14
+              y: "var.btnRow2Y"
+              width: 412
               height: 42
               spaceBetween: 12
             children:
               全部卸下按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 14
                   enable: "!var.actionBusy"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unequip_all')
                 children:
-                  全部卸下按钮文字:
+                  全部卸下底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,165
+                  全部卸下文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
+                      point: ~middle_center
+                      texts: "~&f全部卸下"
                       fontSize: 36
-                      texts: "~&0全部卸下"
+                      through: true
               隐藏按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: "var.selectedOwned && !var.selectedHidden ? '100,100,100,200' : '150,150,150,255'"
-                  shape: ~round_rect
-                  radius: 14
                   visible: var.selectedOwned && !var.selectedHidden
                   enable: "!var.actionBusy"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
                 children:
-                  隐藏按钮文字:
+                  隐藏底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,165
+                  隐藏文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
+                      point: ~middle_center
+                      texts: "~&f隐藏"
                       fontSize: 36
-                      texts: "~&0隐藏"
+                      through: true
               取消隐藏按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 196
                   height: 42
-                  normal: "var.selectedOwned && var.selectedHidden ? '200,150,80,230' : '100,100,100,200'"
-                  shape: ~round_rect
-                  radius: 14
                   visible: var.selectedOwned && var.selectedHidden
                   enable: "!var.actionBusy"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.actionBusy = true
                     Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
                 children:
-                  取消隐藏按钮文字:
+                  取消隐藏底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~232,180,90,210
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~232,180,90,230
+                  取消隐藏文字:
                     type: Text
                     attribute:
-                      x: 98
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&0取消隐藏"
+                      fontSize: 36
+                      through: true
           刷新按钮:
-            type: Texture
+            type: Canvas
             attribute:
-              x: 1056
-              y: 794
-              width: 408
+              point: ~top_left
+              x: 14
+              y: "var.btnRefreshY"
+              width: 412
               height: 42
-              normal: ~150,150,150,255
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'refresh')
             children:
-              刷新按钮文字:
+              刷新底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,165
+              刷新文字:
                 type: Text
                 attribute:
-                  x: 204
-                  y: 10
-                  through: true
-                  center: true
+                  point: ~middle_center
+                  texts: "~&f刷新"
                   fontSize: 36
-                  texts: "~&0刷新"
+                  through: true
