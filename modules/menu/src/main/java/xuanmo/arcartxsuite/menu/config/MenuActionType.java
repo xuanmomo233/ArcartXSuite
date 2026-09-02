@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 public enum MenuActionType {
     COMMAND,
     CHAT,
+    CONNECT,
     PLAYER_OP,
     CONSOLE,
     MESSAGE,
@@ -37,6 +38,7 @@ public enum MenuActionType {
         return switch (raw.trim().toLowerCase(Locale.ROOT)) {
             case "command" -> COMMAND;
             case "chat" -> CHAT;
+            case "connect" -> CONNECT;
             case "op" -> PLAYER_OP;
             case "console" -> CONSOLE;
             case "message" -> MESSAGE;

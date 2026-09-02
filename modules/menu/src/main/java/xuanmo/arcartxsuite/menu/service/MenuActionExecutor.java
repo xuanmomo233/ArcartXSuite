@@ -1,6 +1,9 @@
 package xuanmo.arcartxsuite.menu.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -26,6 +29,8 @@ import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
  */
 public final class MenuActionExecutor {
 
+    private static final String BUNGEE_CHANNEL = "BungeeCord";
+
     private final JavaPlugin plugin;
     private final MenuService menuService;
     private final Logger logger;
@@ -41,6 +46,12 @@ public final class MenuActionExecutor {
         this.menuService = menuService;
         this.logger = logger;
         this.signalProvider = signalProvider;
+        // 确保 BungeeCord outgoing channel 已注册，供 connect: 动作使用
+        try {
+            plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
+        } catch (IllegalArgumentException ignored) {
+            // channel 已注册，忽略
+        }
     }
 
     /**
@@ -71,6 +82,16 @@ public final class MenuActionExecutor {
                 String trimmed = raw.trim();
                 final String chatMessage = trimmed.startsWith("/") ? trimmed : "/" + trimmed;
                 AxsScheduler.runTask(plugin, () -> player.chat(chatMessage));
+                yield menuService.configuration().settings().closeOnAction();
+            }
+            case CONNECT -> {
+                String targetServer = MenuConditionEvaluator.applyPlaceholders(player, action.value());
+                if (targetServer == null || targetServer.isBlank()) {
+                    yield false;
+                }
+                targetServer = targetServer.trim();
+                final String serverName = targetServer;
+                AxsScheduler.runTask(plugin, () -> connectToServer(player, serverName));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case PLAYER_OP -> {
@@ -186,6 +207,19 @@ public final class MenuActionExecutor {
         }
         if (shouldClose) {
             menuService.closeMenu(player);
+        }
+    }
+
+    private void connectToServer(Player player, String serverName) {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            try (DataOutputStream output = new DataOutputStream(buffer)) {
+                output.writeUTF("Connect");
+                output.writeUTF(serverName);
+            }
+            player.sendPluginMessage(plugin, BUNGEE_CHANNEL, buffer.toByteArray());
+        } catch (IOException exception) {
+            logger.warning("Menu connect 动作发送失败: " + exception.getMessage());
         }
     }
 
