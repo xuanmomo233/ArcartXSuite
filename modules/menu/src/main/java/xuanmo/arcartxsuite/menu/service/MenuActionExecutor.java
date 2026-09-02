@@ -63,6 +63,16 @@ public final class MenuActionExecutor {
                 AxsScheduler.runTask(plugin, () -> player.performCommand(command));
                 yield menuService.configuration().settings().closeOnAction();
             }
+            case CHAT -> {
+                String raw = MenuConditionEvaluator.applyPlaceholders(player, action.value());
+                if (raw == null || raw.isBlank()) {
+                    yield false;
+                }
+                String trimmed = raw.trim();
+                final String chatMessage = trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+                AxsScheduler.runTask(plugin, () -> player.chat(chatMessage));
+                yield menuService.configuration().settings().closeOnAction();
+            }
             case PLAYER_OP -> {
                 String command = normalizeCommand(MenuConditionEvaluator.applyPlaceholders(player, action.value()));
                 if (command.isBlank()) {
