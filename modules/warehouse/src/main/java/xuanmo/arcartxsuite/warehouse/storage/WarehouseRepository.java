@@ -23,9 +23,6 @@ public interface WarehouseRepository {
 
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException;
 
-    /** 加载所有槽位记录（用于搜索字段迁移）。 */
-    List<SlotItemRecord> loadAllSlots() throws SQLException;
-
     Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
 
     Optional<SlotItemRecord> findSlotByHash(String ownerType, String ownerId, String warehouseId, String itemHash) throws SQLException;

@@ -24,6 +24,7 @@ import org.bukkit.profile.PlayerTextures;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.util.SnbtItemAdapter;
 
 /**
  * 通用图标解析器，将 {@link IconDefinition} 转换为 ItemStack 或 itemJson 字符串。
@@ -106,14 +107,9 @@ public final class IconResolver {
             return stack;
         }
         if (icon.nbtString() != null && !icon.nbtString().isBlank()) {
-            try {
-                ItemStack modified =
-                    Bukkit.getUnsafe().modifyItemStack(stack.clone(), icon.nbtString());
-                if (modified != null) {
-                    stack = modified;
-                }
-            } catch (Exception ignored) {
-                // SNBT 解析失败时保留原物品
+            ItemStack modified = SnbtItemAdapter.applySnbt(stack, icon.nbtString());
+            if (modified != null) {
+                stack = modified;
             }
         }
         if (itemStackBridge == null) {
@@ -150,11 +146,8 @@ public final class IconResolver {
             return null;
         }
         if (icon.json() != null && !icon.json().isBlank()) {
-            try {
-                return Bukkit.getUnsafe().modifyItemStack(new ItemStack(Material.STONE), icon.json());
-            } catch (Exception ignored) {
-                return null;
-            }
+            ItemStack fromJson = SnbtItemAdapter.applySnbt(new ItemStack(Material.STONE), icon.json());
+            return fromJson != null ? fromJson : null;
         }
         ItemStack generated = generateExternalItem(player, icon);
         if (generated != null) {

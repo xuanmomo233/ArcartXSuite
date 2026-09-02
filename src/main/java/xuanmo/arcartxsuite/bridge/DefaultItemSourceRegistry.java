@@ -135,7 +135,7 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     /**
      * 应用 SNBT 格式的 NBT 标签到物品上。
      * <p>
-     * 使用 {@link org.bukkit.UnsafeValues#modifyItemStack} 解析 SNBT 字符串，
+     * 使用 {@link xuanmo.arcartxsuite.api.util.SnbtItemAdapter#applySnbt} 跨版本解析 SNBT 字符串，
      * 失败时保留原物品并记录警告。
      *
      * @param item 原始物品，为 null 时直接返回 null
@@ -146,13 +146,8 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
                                @org.jetbrains.annotations.Nullable String nbt) {
         if (item == null) return null;
         if (nbt == null || nbt.isBlank()) return item;
-        try {
-            ItemStack modified = org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
-            return modified != null ? modified : item;
-        } catch (Exception e) {
-            logger.warning("应用 NBT 失败: " + nbt + " | " + e.getMessage());
-            return item;
-        }
+        ItemStack modified = xuanmo.arcartxsuite.api.util.SnbtItemAdapter.applySnbt(item, nbt);
+        return modified != null ? modified : item;
     }
 
     @Override

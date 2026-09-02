@@ -281,7 +281,6 @@ public final class WarehouseService implements Listener {
             crossServerLockService.start();
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        AxsScheduler.runAsync(plugin, this::migrateSearchText);
         // 模块重载后，向所有 UI 仍开着的在线玩家重新签发 token 并推送 update 包，
         // 避免重载导致 token 丢失后玩家操作被静默丢弃。
         AxsScheduler.runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
@@ -321,57 +320,6 @@ public final class WarehouseService implements Listener {
                 debug("reissue-tokens-failed player=" + player.getName() + " error=" + exception.getMessage());
             }
         }
-    }
-
-    /**
-     * 反序列化 itemData 重新计算 searchText/pinyin/initials 并 UPDATE。
-     */
-    private void migrateSearchText() {
-        try {
-            List<SlotItemRecord> allSlots = repository.loadAllSlots();
-            int migrated = 0;
-            for (SlotItemRecord item : allSlots) {
-                // searchText 含中文说明已是新格式，跳过
-                if (containsChinese(item.searchText())) {
-                    continue;
-                }
-                try {
-                    ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-                    if (stack == null || stack.getType().isAir()) {
-                        continue;
-                    }
-                    String displayName = resolveDisplayName(stack);
-                    SearchTokens tokens = toSearchTokens(displayName);
-                    repository.upsertSlot(new SlotItemRecord(
-                        item.ownerType(), item.ownerId(), item.warehouseId(), item.slot(),
-                        item.itemHash(), item.categoryId(), item.displayName(), item.materialId(),
-                        tokens.searchText(), tokens.pinyin(), tokens.initials(),
-                        item.itemData(), item.itemJson(), item.amount(), item.createdAt(), item.updatedAt()
-                    ));
-                    migrated++;
-                } catch (Exception ignored) {
-                    // 反序列化失败的跳过
-                }
-            }
-            if (migrated > 0) {
-                logger.info("搜索字段迁移完成，共更新 " + migrated + " 条记录");
-            }
-        } catch (Exception exception) {
-            logger.warning("搜索字段迁移失败: " + exception.getMessage());
-        }
-    }
-
-    /** 判断字符串是否包含中文字符 */
-    private static boolean containsChinese(String text) {
-        if (text == null || text.isEmpty()) {
-            return false;
-        }
-        for (char c : text.toCharArray()) {
-            if (c >= '\u4e00' && c <= '\u9fff') {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -1812,6 +1760,12 @@ public final class WarehouseService implements Listener {
         ViewState state = state(player);
         debug("DEPOSIT start player=" + player.getName() + " rawArg=" + safe(rawSlotValue)
             + " amount=" + requestedAmount + " ownerType=" + state.ownerType() + " ownerId=" + state.ownerId() + " warehouseId=" + state.warehouseId());
+        if (!isSecondaryUnlocked(player)) {
+            debug("DEPOSIT reject player=" + player.getName() + " reason=secondary-locked");
+            sendMessage(player, false, message("player.secondary-required-deposit"));
+            refreshBoth(player);
+            return;
+        }
         if (!canModifyCurrent(player, state)) {
             debug("DEPOSIT reject player=" + player.getName() + " reason=read-only-or-locked");
             sendMessage(player, false, message("player.read-only-deposit"));
@@ -1874,6 +1828,12 @@ public final class WarehouseService implements Listener {
         ViewState state = state(player);
         debug("DEPOSIT-ALL start player=" + player.getName()
             + " ownerType=" + state.ownerType() + " ownerId=" + state.ownerId() + " warehouseId=" + state.warehouseId());
+        if (!isSecondaryUnlocked(player)) {
+            debug("DEPOSIT-ALL reject player=" + player.getName() + " reason=secondary-locked");
+            sendMessage(player, false, message("player.secondary-required-deposit"));
+            refreshBoth(player);
+            return;
+        }
         if (!canModifyCurrent(player, state)) {
             debug("DEPOSIT-ALL reject player=" + player.getName() + " reason=read-only-or-locked");
             sendMessage(player, false, message("player.read-only-deposit"));
@@ -2151,7 +2111,7 @@ public final class WarehouseService implements Listener {
         }
         var result = bridge.withdraw(player, amount);
         if (!result.success()) {
-            sendMessage(player, false, result.message());
+            sendMessage(player, false, message("player.insufficient-funds"));
             refreshBoth(player);
             return;
         }
@@ -2198,7 +2158,7 @@ public final class WarehouseService implements Listener {
         var result = bridge.deposit(player, amount);
         if (!result.success()) {
             repository.creditBankBalance(player.getUniqueId(), normalized, amount, now);
-            sendMessage(player, false, result.message());
+            sendMessage(player, false, message("player.bank-deposit-failed"));
             refreshBoth(player);
             return;
         }
@@ -3245,6 +3205,7 @@ public final class WarehouseService implements Listener {
             rowMap.put("ownerType", OWNER_PERSONAL);
             rowMap.put("target", target);
             rowMap.put("selected", OWNER_PERSONAL.equals(state.ownerType()) && target.equals(state.warehouseId()));
+            rowMap.put("name", safe(String.valueOf(row.get("name"))));
             rowMap.put("text", message("ui.personal-entry", safe(String.valueOf(row.get("name"))), row.get("level"), row.get("capacity")));
             result.put(Integer.toString(idx), rowMap);
             idx++;
@@ -3258,6 +3219,7 @@ public final class WarehouseService implements Listener {
             rowMap.put("ownerType", OWNER_SHARED);
             rowMap.put("target", target);
             rowMap.put("selected", OWNER_SHARED.equals(state.ownerType()) && target.equals(state.ownerId()));
+            rowMap.put("name", safe(String.valueOf(row.get("name"))));
             rowMap.put("text", safe(String.valueOf(row.get("manageText"))));
             result.put(Integer.toString(idx), rowMap);
             idx++;
@@ -3308,7 +3270,7 @@ public final class WarehouseService implements Listener {
             rowMap.put("name", memberName);
             rowMap.put("role", member.role());
             rowMap.put("roleName", sharedRoleName(member.role()));
-            rowMap.put("text", "&0" + memberName + " &7" + sharedRoleName(member.role()));
+            rowMap.put("text", memberName + " " + sharedRoleName(member.role()));
             result.put(Integer.toString(idx), rowMap);
             idx++;
         }
@@ -3411,7 +3373,7 @@ public final class WarehouseService implements Listener {
             row.put("id", currencyId);
             row.put("name", currencyDisplayName(currencyId));
             row.put("balance", formatCurrency(currencyId, balance));
-            row.put("text", "&0" + currencyDisplayName(currencyId) + "  &7" + formatCurrency(currencyId, balance));
+            row.put("text", currencyDisplayName(currencyId) + "  " + formatCurrency(currencyId, balance));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -3434,10 +3396,26 @@ public final class WarehouseService implements Listener {
             row.put("name", product.displayName());
             row.put("description", product.description());
             row.put("currency", product.currencyId());
+            row.put("currencyName", currencyDisplayName(product.currencyId()));
             row.put("duration", product.durationSeconds());
+            row.put("durationText", formatDuration(product.durationSeconds()));
             row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
             row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()));
-            row.put("text", "&0" + product.displayName() + "\n&7最低 " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
+            // 利率阶梯文本：如 "5.0%" 或 "3.0%~8.0%"
+            String rateText;
+            if (product.interestTiers().isEmpty()) {
+                rateText = "—";
+            } else if (product.interestTiers().size() == 1) {
+                rateText = product.interestTiers().get(0).rate().toPlainString() + "%";
+            } else {
+                BigDecimal minRate = product.interestTiers().stream()
+                    .map(InterestTier::rate).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+                BigDecimal maxRate = product.interestTiers().stream()
+                    .map(InterestTier::rate).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+                rateText = minRate.toPlainString() + "%~" + maxRate.toPlainString() + "%";
+            }
+            row.put("rateText", rateText);
+            row.put("text", product.displayName());
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -3457,7 +3435,7 @@ public final class WarehouseService implements Listener {
             row.put("rate", deposit.interestRate().toPlainString());
             row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             row.put("matured", deposit.maturesAt() <= now);
-            row.put("text", "&0" + deposit.productId() + " &7本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            row.put("text", deposit.productId() + " 本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -3715,6 +3693,23 @@ public final class WarehouseService implements Listener {
         return currencyBridgeManager.format(currencyId, amount == null ? BigDecimal.ZERO : amount);
     }
 
+    /** 将秒数格式化为人类可读的期限文本，如 "7天"、"30天"、"1小时"。 */
+    private String formatDuration(long seconds) {
+        if (seconds <= 0) {
+            return "—";
+        }
+        if (seconds % 86400 == 0) {
+            return (seconds / 86400) + "天";
+        }
+        if (seconds % 3600 == 0) {
+            return (seconds / 3600) + "小时";
+        }
+        if (seconds % 60 == 0) {
+            return (seconds / 60) + "分钟";
+        }
+        return seconds + "秒";
+    }
+
     private String currencyDisplayName(String currencyId) {
         CurrencyDefinition definition = currencyBridgeManager.definition(currencyId);
         return definition == null ? currencyId : definition.displayName();
@@ -3749,7 +3744,7 @@ public final class WarehouseService implements Listener {
         }
         var result = bridge.withdraw(player, cost.amount());
         if (!result.success()) {
-            sendMessage(player, false, result.message());
+            sendMessage(player, false, message("player.insufficient-funds"));
             return false;
         }
         return true;

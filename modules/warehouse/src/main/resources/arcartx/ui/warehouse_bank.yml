@@ -1,8 +1,7 @@
 # AXS Warehouse Bank - 重构版
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
-# 布局: 左导航(仓库/银行/管理) + 内容区(账户区 + 理财区[定期产品/我的定期])
-# 配色: 暖橙铜(木箱感) 主色200,130,70 底36,30,24,235 抬升48,40,32,245 描边90,72,52,220
-# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航(含余额列表) + 内容区(存取区+产品列表+详情面板)
+# 配色: 银灰金库 深底浅字 — 抬升面44,50,58 选中160,170,180 描边100,110,120 输入/网格底36,42,50
+# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息/输入/提示) — 全部标准档位
 
 ui:
   isHud: false
@@ -37,12 +36,12 @@ ui:
     #   - balances: 各货币余额数据
     #   - balanceTexts: 余额显示文本
     #   - products: 理财产品列表
-    #   - productTexts: 产品显示文本
+    #   - productTexts: 产品显示文本（仅名称）
     #   - fixedDeposits: 定期存款列表
     #   - fixedDepositTexts: 定期存款显示文本
     #   - unlocked: 二级密码是否已解锁
     #   - hasPassword: 是否已设置二级密码
-    #   - maxBalanceCount: 余额条目最大数量（用于动态创建控件）
+    #   - maxBalanceCount: 余额条目最大数量
     #   - maxProductCount: 产品条目最大数量
     #   - maxFixedCount: 定期存款条目最大数量
     #   - selectedCurrency: 当前选中的货币 ID
@@ -62,7 +61,7 @@ ui:
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
       var.selectedCurrency = packet['selectedCurrency']
-      余额数 = var.maxBalanceCount.round()
+      余额数 = var.maxBalanceCount
       现有余额数 = val.余额列表.childrenCount() - 1
       if(现有余额数 != 余额数 - 1){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
@@ -70,13 +69,13 @@ ui:
           val.余额列表.get(1).remove()
         }
         if(余额数 > 1){
-          for(序号 in range(1, 余额数 - 1)){
+          for(序号 in range(1, 余额数)){
             项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      产品数 = var.maxProductCount.round()
+      产品数 = var.maxProductCount
       现有产品数 = val.产品列表.childrenCount() - 1
       if(现有产品数 != 产品数 - 1){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
@@ -84,13 +83,13 @@ ui:
           val.产品列表.get(1).remove()
         }
         if(产品数 > 1){
-          for(序号 in range(1, 产品数 - 1)){
+          for(序号 in range(1, 产品数)){
             项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      定期数 = var.maxFixedCount.round()
+      定期数 = var.maxFixedCount
       现有定期数 = val.定期列表.childrenCount() - 1
       if(现有定期数 != 定期数 - 1){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
@@ -98,7 +97,7 @@ ui:
           val.定期列表.get(1).remove()
         }
         if(定期数 > 1){
-          for(序号 in range(1, 定期数 - 1)){
+          for(序号 in range(1, 定期数)){
             项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
@@ -106,6 +105,17 @@ ui:
       }
       // update 包到达，重置防抖标志，恢复按钮可点击
       var.actionBusy = false
+      // 根据 selectedProduct 查找对应的产品 entry
+      var.selectedProductEntry = none
+      if(var.selectedProduct != none && var.products != null){
+        for(key in var.products.keys()){
+          entry = var.products[key]
+          if(entry != null && entry['id'] == var.selectedProduct){
+            var.selectedProductEntry = entry
+            break
+          }
+        }
+      }
   action:
     seconds: |-
       if(var.actionBusy){
@@ -134,6 +144,7 @@ ui:
       var.actionBusySeconds = 0
       var.selectedCurrency = 'money'
       var.selectedProduct = none
+      var.selectedProductEntry = none
       var.bankAmount = none
       var.maxBalanceCount = 0
       var.maxProductCount = 0
@@ -147,9 +158,10 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.accountW = 460
-      var.financeW = var.contentW - var.accountW
-      var.financeH = var.viewH - 184
+      // 三列宽度：存取区 360 + 间隔 12 + 产品列表 280 + 间隔 12 + 详情面板 = contentW - 40
+      var.col1W = 360
+      var.col2W = 280
+      var.col3W = var.contentW - 40 - var.col1W - var.col2W - 24
     open: |-
       Packet.send(var.packetId, 'refresh')
     # 窗口尺寸变化后重算可用高宽
@@ -161,9 +173,9 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.accountW = 460
-      var.financeW = var.contentW - var.accountW
-      var.financeH = var.viewH - 184
+      var.col1W = 360
+      var.col2W = 280
+      var.col3W = var.contentW - 40 - var.col1W - var.col2W - 24
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 controls:
@@ -173,7 +185,7 @@ controls:
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;30,24,18,110
+      normal: ~Frosted:24;20,24,28,110
   # 自适配布局：宽高 = 设计分辨率(1920x1080)，顶部锚点使顶栏紧贴屏幕顶部
   自适应全局布局:
     type: Adaptive
@@ -201,7 +213,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~90,72,52,220
+              normal: ~100,110,120,220
           标题色块:
             type: Texture
             attribute:
@@ -209,7 +221,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~200,130,70,255
+              normal: ~180,190,200,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -226,23 +238,21 @@ controls:
               x: 360
               width: 1
               height: 30
-              normal: ~90,72,52,220
+              normal: ~100,110,120,220
           状态:
             type: Text
             attribute:
               point: ~middle_left
               x: 380
-              width: 800
-              texts: "var.unlocked ? '&a二级密码已解锁' : (var.hasPassword ? '&c提现与领取需先解锁二级密码' : '&e首次使用请设置二级密码')"
-              fontSize: 26
-          # 右侧：刷新 + 关闭
+              texts: "!var.hasPassword ? '&e首次使用请设置二级密码' : (var.unlocked ? '&a二级密码已解锁' : '&c提现与领取需先解锁二级密码')"
+              fontSize: 36
           刷新:
             type: Canvas
             attribute:
               point: ~middle_right
               x: -112
               width: 64
-              height: 40
+              height: 48
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'refresh')
@@ -252,28 +262,27 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~48,40,32,245
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               刷新字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 64
                   texts: "~&f刷新"
-                  fontSize: 28
+                  fontSize: 36
                   through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~middle_right
-              x: -40
-              width: 40
-              height: 40
+              x: -48
+              width: 48
+              height: 48
             action:
               clickLeft: |-
                 Screen.close()
@@ -283,23 +292,22 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~48,40,32,245
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 40
                   texts: "~&f✕"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
 
-      # ── 左侧导航 ───────────────────────────────────────
+      # ── 左侧导航（导航3项 + 账户余额列表）──────────────────
       左侧导航:
         type: Canvas
         attribute:
@@ -319,7 +327,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~90,72,52,220
+                color: ~100,110,120,220
           导航仓库:
             type: Canvas
             attribute:
@@ -337,14 +345,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~48,40,32,245
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               仓库文字:
                 type: Text
                 attribute:
@@ -353,7 +361,6 @@ controls:
                   texts: "~&f仓库"
                   fontSize: 36
                   through: true
-          # 当前页：银行
           导航银行:
             type: Canvas
             attribute:
@@ -367,13 +374,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~200,130,70,210
+                  normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~200,130,70,230
+                    color: ~255,255,255,255
               银行高亮条:
                 type: Texture
                 attribute:
@@ -381,7 +388,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~200,130,70,255
+                  normal: ~180,190,200,255
                   shape: ~round_rect
                   radius: 2
               银行文字:
@@ -408,14 +415,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~48,40,32,245
+                  normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
               管理文字:
                 type: Text
                 attribute:
@@ -432,7 +439,110 @@ controls:
               y: 232
               width: 264
               height: 2
-              normal: ~90,72,52,220
+              normal: ~100,110,120,220
+          账户标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 250
+              texts: "~&f账户余额"
+              fontSize: 36
+          账户说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 286
+              texts: "~&e点击选择货币"
+              fontSize: 36
+          余额滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -12
+              y: 330
+              width: 10
+              height: "var.viewH - 524"
+              normal: ~40,44,52,225
+              shape: ~round_rect
+              radius: 5
+            effect:
+              stroke:
+                width: 2
+                color: ~100,110,120,220
+          余额滑块:
+            type: Texture
+            val: 余额滑块
+            attribute:
+              point: ~top_right
+              x: -12
+              y: 330
+              width: 10
+              height: 50
+              normal: ~180,190,200,255
+              maxDragY: "var.viewH - 574"
+              shape: ~round_rect
+              radius: 5
+          余额滚动:
+            type: Scroll
+            val: 余额滚动
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 330
+              width: 258
+              height: "var.viewH - 524"
+              moveY: "self.parent['余额滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['余额滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['余额滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+            children:
+              余额列表:
+                val: 余额列表
+                type: VStack
+                attribute:
+                  width: 258
+                  spaceBetween: 8
+                children:
+                  项:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.balances[self.entryKey]
+                      visible: self.entry != none
+                      width: 258
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.selectedProduct = none
+                        var.selectedProductEntry = none
+                        Packet.send(var.packetId, 'select_currency', self.entry['id'])
+                    children:
+                      项背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '64,72,82,225' : '44,50,58,245'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,230,240,255' : (self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : '100,110,120,220')"
+                      项文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "'&f' + var.balanceTexts[self.parent.entryKey]"
+                          fontSize: 36
+                          through: true
           导航提示:
             type: Text
             attribute:
@@ -440,9 +550,9 @@ controls:
               x: 20
               y: -20
               texts: "~&fESC 关闭界面"
-              fontSize: 28
+              fontSize: 36
 
-      # ── 内容区（账户区 + 理财区）─────────────────────────
+      # ── 内容区（存取区 + 产品列表 + 详情面板）───────────────
       内容区:
         type: Canvas
         attribute:
@@ -462,155 +572,68 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~90,72,52,220
+                color: ~100,110,120,220
 
-          # ── 账户区（余额列表 + 存取操作 + 密码）──────────────
-          账户区:
+          # ── 存取区（左列：金额输入+存入+提现+密码+我的定期）──
+          存取区:
             type: Canvas
             attribute:
               point: ~top_left
               x: 20
               y: 20
-              width: "var.accountW - 40"
+              width: "var.col1W"
               height: "var.viewH - 184"
             children:
-              账户标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 0
-                  width: 420
-                  texts: "~&f账户余额"
-                  fontSize: 34
-              账户说明:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 40
-                  width: 420
-                  texts: "~&e点击选择要存取的货币"
-                  fontSize: 22
-              余额滑块:
+              存取区底:
                 type: Texture
-                val: 余额纵向滑块
                 attribute:
-                  point: ~top_right
-                  x: 0
-                  y: 76
-                  width: 10
-                  height: 50
-                  normal: ~200,130,70,255
-                  maxDragY: 270
+                  point: ~stretch_all
+                  normal: ~36,42,50,225
                   shape: ~round_rect
-                  radius: 5
-              余额滚动:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 76
-                  width: 410
-                  height: 320
-                  moveY: "self.parent['余额滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['余额滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['余额滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  余额列表:
-                    val: 余额列表
-                    type: VStack
-                    attribute:
-                      width: 410
-                      spaceBetween: 10
-                    children:
-                      项:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.balances[self.entryKey]
-                          visible: self.entry != none
-                          width: 410
-                          height: 52
-                        action:
-                          clickLeft: |-
-                            var.selectedProduct = none
-                            Packet.send(var.packetId, 'select_currency', self.entry['id'])
-                        children:
-                          项背景:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '120,80,50,225' : '48,40,32,245'"
-                              shape: ~round_rect
-                              radius: 12
-                            effect:
-                              stroke:
-                                width: 3
-                                color: "self.isHovered() ? '230,160,100,255' : (self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '200,130,70,235' : '90,72,52,220')"
-                          项文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              width: 410
-                              texts: "var.balanceTexts[self.parent.entryKey]"
-                              fontSize: 28
-                              through: true
-              操作分隔:
-                type: Texture
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 412
-                  width: 420
-                  height: 2
-                  normal: ~90,72,52,220
-              操作标题:
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              存取标题:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 0
-                  y: 424
-                  width: 420
+                  x: 20
+                  y: 20
                   texts: "~&f存取"
-                  fontSize: 28
+                  fontSize: 36
+              # 金额输入 + 存入按钮（同一行）
               金额输入:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 0
-                  y: 460
-                  width: 250
-                  height: 44
+                  x: 20
+                  y: 64
+                  width: "var.col1W - 132"
+                  height: 48
                 children:
                   金额底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~40,34,28,225
+                      normal: ~36,42,50,225
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   输入框:
                     type: TextBox
                     attribute:
                       x: 10
-                      y: 10
-                      width: 230
-                      height: 34
+                      y: 6
+                      width: "var.col1W - 152"
+                      height: 36
                       length: 18
-                      emptyText: ~金额
-                      fontSize: 30
+                      emptyText: ~&7金额
+                      fontSize: 36
                     action:
                       textChange: |-
                         var.bankAmount = self.getContent()
@@ -618,10 +641,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 260
-                  y: 460
-                  width: 160
-                  height: 44
+                  x: "var.col1W - 104"
+                  y: 64
+                  width: 84
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -633,29 +656,29 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~200,130,70,235
+                      normal: ~44,50,58,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '200,130,70,255'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   存入字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 160
-                      texts: "~&8存入"
-                      fontSize: 30
+                      texts: "~&f存入"
+                      fontSize: 36
                       through: true
+              # 提现按钮（整行）
               提现:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 0
-                  y: 514
-                  width: 420
-                  height: 44
+                  x: 20
+                  y: 124
+                  width: "var.col1W - 40"
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -667,60 +690,68 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~48,40,32,245
+                      normal: ~44,50,58,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   提现字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 420
                       texts: "~&f提现到背包"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
+              存取分隔:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 188
+                  width: "var.col1W - 40"
+                  height: 2
+                  normal: ~100,110,120,220
+              # 二级密码区
               密码标题:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 0
-                  y: 572
-                  width: 420
-                  texts: "var.hasPassword ? '&f二级密码' : '&e首次使用请设置二级密码'"
-                  fontSize: 24
+                  x: 20
+                  y: 204
+                  texts: "!var.hasPassword ? '&e首次使用请设置二级密码' : '&f二级密码'"
+                  fontSize: 36
               密码输入:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 0
-                  y: 604
-                  width: 250
-                  height: 44
+                  x: 20
+                  y: 248
+                  width: "var.col1W - 132"
+                  height: 48
                 children:
                   密码底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~40,34,28,225
+                      normal: ~36,42,50,225
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   输入框:
                     type: TextBox
                     attribute:
                       x: 10
-                      y: 10
-                      width: 230
-                      height: 34
+                      y: 6
+                      width: "var.col1W - 152"
+                      height: 36
                       length: 32
-                      emptyText: ~二级密码
-                      fontSize: 30
+                      emptyText: ~&7二级密码
+                      fontSize: 36
                     action:
                       textChange: |-
                         var.passwordText = self.getContent()
@@ -728,12 +759,12 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 260
-                  y: 604
-                  width: 160
-                  height: 44
-                  visible: "!var.unlocked"
-                  enable: "!var.actionBusy"
+                  x: "var.col1W - 104"
+                  y: 248
+                  width: 84
+                  height: 48
+                  visible: "!var.unlocked || !var.hasPassword"
+                  enable: "!var.actionBusy && (var.hasPassword || var.actionToken != '')"
                 action:
                   clickLeft: |-
                     if(var.hasPassword){
@@ -748,30 +779,29 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~48,40,32,245
+                      normal: ~44,50,58,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   解锁字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 160
                       texts: "var.hasPassword ? '&f解锁' : '&f设置'"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               锁定:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 260
-                  y: 604
-                  width: 160
-                  height: 44
-                  visible: "var.unlocked"
+                  x: "var.col1W - 104"
+                  y: 248
+                  width: 84
+                  height: 48
+                  visible: "var.unlocked && var.hasPassword"
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -783,234 +813,97 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~48,40,32,245
+                      normal: ~44,50,58,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                   锁定字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 160
                       texts: "~&f锁定"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
-
-          # ── 理财区（定期产品列表 + 我的定期列表）──────────────
-          理财区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: "var.accountW + 4"
-              y: 20
-              width: "var.financeW - 24"
-              height: "var.viewH - 184"
-            children:
-              产品标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 0
-                  width: 600
-                  texts: "~&f定期产品"
-                  fontSize: 34
-              产品说明:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 40
-                  width: 600
-                  texts: "~&e选择产品后在左侧填写金额，再点下方购买"
-                  fontSize: 22
-              产品区底:
-                type: Texture
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 72
-                  width: "var.financeW - 56"
-                  height: "var.financeH / 2 - 88"
-                  normal: ~40,34,28,225
-                  shape: ~round_rect
-                  radius: 16
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~90,72,52,220
-              产品滑块:
-                type: Texture
-                val: 产品纵向滑块
-                attribute:
-                  point: ~top_right
-                  x: -16
-                  y: 88
-                  width: 10
-                  height: 50
-                  normal: ~200,130,70,255
-                  maxDragY: "var.financeH / 2 - 154"
-                  shape: ~round_rect
-                  radius: 5
-              产品滚动:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 32
-                  y: 88
-                  width: "var.financeW - 90"
-                  height: "var.financeH / 2 - 104"
-                  moveY: "self.parent['产品滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['产品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['产品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  产品列表:
-                    val: 产品列表
-                    type: VStack
-                    attribute:
-                      width: "var.financeW - 90"
-                      spaceBetween: 10
-                    children:
-                      项:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.products[self.entryKey]
-                          visible: self.entry != none
-                          width: "var.financeW - 90"
-                          height: 72
-                        action:
-                          clickLeft: |-
-                            var.selectedProduct = self.entry['id']
-                        children:
-                          项背景:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedProduct ? '120,80,50,225' : '48,40,32,245'"
-                              shape: ~round_rect
-                              radius: 12
-                            effect:
-                              stroke:
-                                width: 3
-                                color: "self.isHovered() ? '230,160,100,255' : (self.parent.entry != none && self.parent.entry['id'] == var.selectedProduct ? '200,130,70,235' : '90,72,52,220')"
-                          项文字:
-                            type: Text
-                            attribute:
-                              point: ~top_left
-                              x: 12
-                              y: 6
-                              width: "var.financeW - 114"
-                              texts: "var.productTexts[self.parent.entryKey]"
-                              fontSize: 26
-                              through: true
-              购买:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: "var.financeH / 2 - 8"
-                  width: "var.financeW - 56"
-                  height: 48
-                  enable: "!var.actionBusy && var.actionToken != ''"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send(var.packetId, 'fixed_create', var.selectedProduct, var.bankAmount, var.actionToken)
-                children:
-                  购买底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~200,130,70,235
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '230,160,100,255' : '200,130,70,255'"
-                  购买字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 600
-                      texts: "~&8购买选中产品"
-                      fontSize: 32
-                      through: true
+              # 我的定期列表（存取区下方）
               定期分隔:
                 type: Texture
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: "var.financeH / 2 + 48"
-                  width: "var.financeW - 56"
+                  x: 20
+                  y: 312
+                  width: "var.col1W - 40"
                   height: 2
-                  normal: ~90,72,52,220
+                  normal: ~100,110,120,220
               定期标题:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: "var.financeH / 2 + 56"
-                  width: 540
+                  x: 20
+                  y: 324
                   texts: "~&f我的定期"
-                  fontSize: 30
+                  fontSize: 36
               定期说明:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: "var.financeH / 2 + 92"
-                  width: 556
-                  texts: "~&e点击条目领取到期本息，需先解锁二级密码"
-                  fontSize: 22
+                  x: 20
+                  y: 360
+                  texts: "~&e点击领取到期本息"
+                  fontSize: 36
               定期区底:
                 type: Texture
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: "var.financeH / 2 + 120"
-                  width: "var.financeW - 56"
-                  height: "var.financeH / 2 - 136"
-                  normal: ~40,34,28,225
+                  x: 20
+                  y: 400
+                  width: "var.col1W - 40"
+                  height: "var.viewH - 600"
+                  normal: ~36,42,50,225
                   shape: ~round_rect
-                  radius: 16
+                  radius: 14
                 effect:
                   stroke:
                     width: 3
-                    color: ~90,72,52,220
-              定期滑块:
+                    color: ~100,110,120,220
+              定期滑轨:
                 type: Texture
-                val: 定期纵向滑块
                 attribute:
                   point: ~top_right
-                  x: -16
-                  y: "var.financeH / 2 + 136"
+                  x: -28
+                  y: 416
+                  width: 10
+                  height: "var.viewH - 632"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 5
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~100,110,120,220
+              定期滑块:
+                type: Texture
+                val: 定期滑块
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 416
                   width: 10
                   height: 50
-                  normal: ~200,130,70,255
-                  maxDragY: "var.financeH / 2 - 202"
+                  normal: ~180,190,200,255
+                  maxDragY: "var.viewH - 682"
                   shape: ~round_rect
                   radius: 5
               定期滚动:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 32
-                  y: "var.financeH / 2 + 136"
-                  width: "var.financeW - 90"
-                  height: "var.financeH / 2 - 152"
+                  x: 36
+                  y: 416
+                  width: "var.col1W - 100"
+                  height: "var.viewH - 632"
                   moveY: "self.parent['定期滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -1025,8 +918,8 @@ controls:
                     val: 定期列表
                     type: VStack
                     attribute:
-                      width: "var.financeW - 90"
-                      spaceBetween: 10
+                      width: "var.col1W - 100"
+                      spaceBetween: 8
                     children:
                       项:
                         type: Canvas
@@ -1034,7 +927,7 @@ controls:
                           entryKey: 0.round()
                           entry: var.fixedDeposits[self.entryKey]
                           visible: self.entry != none
-                          width: "var.financeW - 90"
+                          width: "var.col1W - 100"
                           height: 64
                           enable: "!var.actionBusy && var.actionToken != ''"
                         action:
@@ -1047,20 +940,328 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~48,40,32,245
+                              normal: ~44,50,58,245
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.isHovered() ? '230,160,100,255' : '90,72,52,220'"
+                                color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
                           项文字:
                             type: Text
                             attribute:
                               point: ~top_left
                               x: 12
                               y: 6
-                              width: "var.financeW - 114"
                               texts: "var.fixedDepositTexts[self.parent.entryKey]"
-                              fontSize: 26
+                              fontSize: 36
                               through: true
+
+          # ── 产品列表（中列：只显示产品名称）──────────────────
+          产品区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.col1W + 32"
+              y: 20
+              width: "var.col2W"
+              height: "var.viewH - 184"
+            children:
+              产品区底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~36,42,50,225
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              产品标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 20
+                  texts: "~&f定期产品"
+                  fontSize: 36
+              产品说明:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 56
+                  texts: "~&e点击选择查看详情"
+                  fontSize: 36
+              产品滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 100
+                  width: 10
+                  height: "var.viewH - 300"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 5
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~100,110,120,220
+              产品滑块:
+                type: Texture
+                val: 产品滑块
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 100
+                  width: 10
+                  height: 50
+                  normal: ~180,190,200,255
+                  maxDragY: "var.viewH - 350"
+                  shape: ~round_rect
+                  radius: 5
+              产品滚动:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 14
+                  y: 100
+                  width: "var.col2W - 40"
+                  height: "var.viewH - 300"
+                  moveY: "self.parent['产品滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['产品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['产品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  产品列表:
+                    val: 产品列表
+                    type: VStack
+                    attribute:
+                      width: "var.col2W - 40"
+                      spaceBetween: 8
+                    children:
+                      项:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.products[self.entryKey]
+                          visible: self.entry != none
+                          width: "var.col2W - 40"
+                          height: 48
+                        action:
+                          clickLeft: |-
+                            var.selectedProduct = self.entry['id']
+                            var.selectedProductEntry = self.entry
+                        children:
+                          项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedProduct ? '64,72,82,225' : '44,50,58,245'"
+                              shape: ~round_rect
+                              radius: 12
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "self.isHovered() ? '220,230,240,255' : (self.parent.entry != none && self.parent.entry['id'] == var.selectedProduct ? '255,255,255,255' : '100,110,120,220')"
+                          项文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "'&f' + var.productTexts[self.parent.entryKey]"
+                              fontSize: 36
+                              through: true
+
+          # ── 详情面板（右列：选中产品详情 + 购买按钮）──────────
+          详情区:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.col1W + var.col2W + 44"
+              y: 20
+              width: "var.col3W"
+              height: "var.viewH - 184"
+            children:
+              详情区底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~36,42,50,225
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~100,110,120,220
+              # 未选中产品时的提示
+              未选中提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&7请选择左侧产品"
+                  fontSize: 36
+                  visible: "var.selectedProduct == none"
+              # 选中产品后的详情内容
+              详情内容:
+                type: Canvas
+                attribute:
+                  point: ~stretch_all
+                  visible: "var.selectedProduct != none"
+                children:
+                  详情标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 24
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['name'] : ''"
+                      fontSize: 36
+                  # 产品信息行
+                  期限标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 80
+                      texts: "~&f期限"
+                      fontSize: 36
+                  期限值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 80
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['durationText'] : ''"
+                      fontSize: 36
+                  利率标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 124
+                      texts: "~&f收益率"
+                      fontSize: 36
+                  利率值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 124
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['rateText'] : ''"
+                      fontSize: 36
+                  货币标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 168
+                      texts: "~&f结算货币"
+                      fontSize: 36
+                  货币值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 168
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['currencyName'] : ''"
+                      fontSize: 36
+                  最低标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 212
+                      texts: "~&f最低起存"
+                      fontSize: 36
+                  最低值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 212
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['min'] : ''"
+                      fontSize: 36
+                  最高标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 256
+                      texts: "~&f最高限额"
+                      fontSize: 36
+                  最高值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -24
+                      y: 256
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['max'] : ''"
+                      fontSize: 36
+                  详情分隔:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 308
+                      width: "var.col3W - 48"
+                      height: 2
+                      normal: ~100,110,120,220
+                  描述标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 324
+                      texts: "~&f产品介绍"
+                      fontSize: 36
+                  描述内容:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 368
+                      width: "var.col3W - 48"
+                      texts: "var.selectedProductEntry != none ? var.selectedProductEntry['description'] : ''"
+                      fontSize: 36
+                  # 购买按钮（底部）
+                  购买:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 24
+                      y: -24
+                      width: "var.col3W - 48"
+                      height: 48
+                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedProduct != none"
+                    action:
+                      clickLeft: |-
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'fixed_create', var.selectedProduct, var.bankAmount, var.actionToken)
+                    children:
+                      购买底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~44,50,58,245
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                      购买字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f购买选中产品"
+                          fontSize: 36
+                          through: true

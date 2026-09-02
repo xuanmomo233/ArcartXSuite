@@ -79,8 +79,7 @@ public final class MenuActionExecutor {
                 if (raw == null || raw.isBlank()) {
                     yield false;
                 }
-                String trimmed = raw.trim();
-                final String chatMessage = trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+                final String chatMessage = raw.trim();
                 AxsScheduler.runTask(plugin, () -> player.chat(chatMessage));
                 yield menuService.configuration().settings().closeOnAction();
             }
