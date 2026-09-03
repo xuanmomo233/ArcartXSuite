@@ -947,6 +947,9 @@ public final class WarehouseService implements Listener {
             return;
         }
         ItemStack stack = event.getItem().getItemStack().clone();
+        // 保留原始物品原型用于 HUD 展示：setAmount(0) 会使 ItemStack.getType() 变成 AIR，
+        // 导致后续 notifyPickup 收到 AIR 物品而 early-return，HUD 提示不显示。
+        ItemStack displayPrototype = stack.clone();
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
             if (!result.success()) {
@@ -975,8 +978,9 @@ public final class WarehouseService implements Listener {
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
                 if (pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId())) {
                     // 通知模式 HUD 活跃：通过 notifyPickup 主动推送 HUD 提示
-                    // 使用存入数量构造展示用 ItemStack，避免 stack 此时 amount=0 导致 itemJson 错误
-                    ItemStack displayStack = stack.clone();
+                    // 使用存入数量构造展示用 ItemStack（基于原始物品原型，避免 stack 此时 amount=0
+                    // 导致 type 变 AIR 使 notifyPickup early-return）
+                    ItemStack displayStack = displayPrototype.clone();
                     displayStack.setAmount((int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
                     boolean hudNotified = pickupNotifiable.notifyPickup(player, displayStack, (int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
                     debug("auto-deposit-hud player=" + player.getName()

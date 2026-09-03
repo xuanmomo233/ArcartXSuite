@@ -153,26 +153,6 @@ controls:
           alpha: "var.fade != none ? var.fade.get() : 1"
           y: "var.slide != none ? var.slide.get() : 0"
         children:
-          标题文字:
-            type: Text
-            attribute:
-              point: ~middle_center
-              y: -105
-              texts:
-                - ~&f合成
-              fontSize: 18
-              through: true
-          标题下划线:
-            type: Texture
-            attribute:
-              point: ~middle_center
-              y: -93
-              width: 180
-              height: 2
-              normal: ~255,255,255,200
-              shape: ~round_rect
-              radius: 1
-              through: true
           面板底:
             type: Texture
             attribute:
@@ -193,6 +173,26 @@ controls:
                 yOffset: 2
                 blur: 5
                 color: ~0,0,0,120
+          标题文字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -105
+              texts:
+                - ~&f合成
+              fontSize: 18
+              through: true
+          标题下划线:
+            type: Texture
+            attribute:
+              point: ~middle_center
+              y: -93
+              width: 180
+              height: 2
+              normal: ~255,255,255,200
+              shape: ~round_rect
+              radius: 1
+              through: true
           配方书按钮:
             type: Slot
             val: 配方书按钮

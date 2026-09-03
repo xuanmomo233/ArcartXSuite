@@ -9,8 +9,6 @@ import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.inventory.FurnaceRecipe;
-import org.bukkit.inventory.SmokingRecipe;
-import org.bukkit.inventory.BlastingRecipe;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 
 import java.util.ArrayList;
@@ -61,6 +59,8 @@ public final class RecipeCollector {
     }
 
     public Map<String, Object> collectFurnaceRecipes(Player player) {
+        // 只收集 FurnaceRecipe，还原原版行为：熔炉配方书只显示熔炉配方。
+        // SmokingRecipe / BlastingRecipe 留给将来烟熏炉/高炉 UI 替换使用。
         Map<String, Object> recipes = new LinkedHashMap<>();
         Set<NamespacedKey> discovered = player.getDiscoveredRecipes();
         Iterator<Recipe> it = Bukkit.recipeIterator();
@@ -72,20 +72,6 @@ public final class RecipeCollector {
                 if (!discovered.contains(furnace.getKey())) continue;
                 Map<String, Object> entry = buildCookingEntry(furnace.getResult(), furnace.getInput(), "furnace");
                 entry.put("canCraft", player.getInventory().containsAtLeast(furnace.getInput(), furnace.getInput().getAmount()) ? 1 : 0);
-                recipes.put(Integer.toString(index), entry);
-                index++;
-            } else if (recipe instanceof SmokingRecipe) {
-                SmokingRecipe smoking = (SmokingRecipe) recipe;
-                if (!discovered.contains(smoking.getKey())) continue;
-                Map<String, Object> entry = buildCookingEntry(smoking.getResult(), smoking.getInput(), "smoking");
-                entry.put("canCraft", player.getInventory().containsAtLeast(smoking.getInput(), smoking.getInput().getAmount()) ? 1 : 0);
-                recipes.put(Integer.toString(index), entry);
-                index++;
-            } else if (recipe instanceof BlastingRecipe) {
-                BlastingRecipe blasting = (BlastingRecipe) recipe;
-                if (!discovered.contains(blasting.getKey())) continue;
-                Map<String, Object> entry = buildCookingEntry(blasting.getResult(), blasting.getInput(), "blasting");
-                entry.put("canCraft", player.getInventory().containsAtLeast(blasting.getInput(), blasting.getInput().getAmount()) ? 1 : 0);
                 recipes.put(Integer.toString(index), entry);
                 index++;
             }
