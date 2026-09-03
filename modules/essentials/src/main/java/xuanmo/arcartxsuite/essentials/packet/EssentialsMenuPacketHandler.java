@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,7 +24,7 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
  * Essentials 玩家菜单的 Packet Handler。
  * <p>
  * 处理客户端 UI 回包：navigate / teleport_home / delete_home / set_home /
- * teleport_warp / send_tpa / accept_tpa / deny_tpa / toggle_fly /
+ * teleport_warp / send_tpa / accept_tpa / deny_tpa /
  * toggle_replant / toggle_autotool / sort
  */
 public final class EssentialsMenuPacketHandler implements ClientPacketHandler {
@@ -105,14 +104,6 @@ public final class EssentialsMenuPacketHandler implements ClientPacketHandler {
             }
             case "accept_tpa" -> teleportService.acceptTpa(player);
             case "deny_tpa" -> teleportService.denyTpa(player);
-            case "toggle_fly" -> {
-                if (!player.hasPermission("axs.essentials.fly")) {
-                    player.sendMessage(ChatColor.RED + "你没有飞行权限。");
-                    break;
-                }
-                playerService.toggleFly(player, player);
-                pushInitData(player, "settings");
-            }
             case "toggle_replant" -> {
                 if (inventoryActionsService != null) {
                     inventoryActionsService.toggleReplant(player.getUniqueId());

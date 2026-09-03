@@ -107,8 +107,6 @@ ui:
         var.resultVisible = (resultItem == none || resultItem.getType() == 'null' || resultItem.getCount() == 0)
       }
     open: |-
-      var.fade = Lerp(0, 1, 300)
-      var.slide = Lerp(15, 0, 300)
       Packet.send('AXS:vanilla_crafting', 'request_recipe_book')
   packetHandler:
     # packetHandler: recipe_book_toggle
@@ -150,8 +148,6 @@ controls:
           point: ~middle_center
           width: 223
           height: 235
-          alpha: "var.fade != none ? var.fade.get() : 1"
-          y: "var.slide != none ? var.slide.get() : 0"
         children:
           面板底:
             type: Texture

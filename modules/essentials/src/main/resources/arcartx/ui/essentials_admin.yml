@@ -141,7 +141,7 @@ controls:
             attribute:
               point: ~middle_left
               x: 288
-              texts: "'&7在线 &f' + var.playerCount"
+              texts: "'&a在线 &f' + var.playerCount"
               fontSize: 36
           关闭按钮:
             type: Canvas
