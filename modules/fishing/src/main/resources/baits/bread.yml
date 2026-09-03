@@ -11,6 +11,17 @@ display-name: "面包屑"          # 显示名称
 item:
   source: minecraft
   id: bread
+# match: 物品匹配规则（用于识别玩家背包里的饵料物品）
+#   neige-item-ids: NeigeItems 物品 ID 列表（匹配其中任一即视为该饵料）
+#   mythic-item-ids: MythicMobs 物品 ID 列表
+#   overture-item-ids: Overture 物品 ID 列表
+#   material-ids: 原版材质名列表（如 [wheat_seeds]）
+#   name-contains: 显示名需包含的子串列表
+#   lore-contains: Lore 需包含的子串列表
+#   nbt-keys: NBT/PDC 键白名单
+#   nbt-values: NBT 键值对精确匹配
+#   name-regex / lore-regex: 正则匹配
+# 所有列表为"或"关系，命中任一即匹配；空列表不参与匹配。
 match:
   material-ids: [bread]        # 原版面包即视为面包屑饵料（示例）
   # neige-item-ids: [bread_crumb]  # 或用 NeigeItems 物品 ID 匹配

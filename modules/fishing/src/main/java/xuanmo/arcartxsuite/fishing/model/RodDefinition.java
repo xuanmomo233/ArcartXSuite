@@ -25,6 +25,6 @@ public record RodDefinition(
 
     public static final RodDefinition DEFAULT = new RodDefinition(
         "default",
-        0.0, 0, 0, 1.0, 0, 0, null, 3
+        0.0, 0, 0, 1.0, 0, 0, null, 1
     );
 }

@@ -42,9 +42,13 @@ ui:
     #   - queue:    队列字典（key 为整数字符串 "0","1",...，含 slotIndex/baitId/amount/displayName）
     #   - baits:    饵料定义字典（key 为 baitId 字符串，含 id/displayName/isDefault）
     #   - queueIconJson{idx}: 每个有饵料的队列槽位的物品图标 JSON
+    #   - baitSlotsBase: 鱼竿提供的基础饵料槽数量
+    #   - baitSlotsBonus: 天赋提供的额外饵料槽数量
     init: |-
       var.packetId = packet['packetId']
       var.baitSlots = packet['baitSlots']
+      var.baitSlotsBase = packet['baitSlotsBase']
+      var.baitSlotsBonus = packet['baitSlotsBonus']
       var.queue = packet['queue']
       var.baits = packet['baits']
       // 构建队列槽位图标映射（itemJson 分离模式）
@@ -85,11 +89,14 @@ ui:
       }
       // 操作后清除选中状态
       var.selectedInvSlot = none
+      var.selectedQueueSlot = none
     # packetHandler: update
     # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
     update: |-
       var.packetId = packet['packetId']
       var.baitSlots = packet['baitSlots']
+      var.baitSlotsBase = packet['baitSlotsBase']
+      var.baitSlotsBonus = packet['baitSlotsBonus']
       var.queue = packet['queue']
       var.baits = packet['baits']
       var.queueIconJsons = {}
@@ -126,6 +133,7 @@ ui:
         }
       }
       var.selectedInvSlot = none
+      var.selectedQueueSlot = none
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
@@ -135,6 +143,7 @@ ui:
       var.baits = {}
       var.queueIconJsons = {}
       var.selectedInvSlot = none
+      var.selectedQueueSlot = none
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 视口换算：把窗口实际宽高折算回设计坐标系
       sx = Screen.getWidth() / 1920
@@ -581,7 +590,7 @@ controls:
               point: ~top_left
               x: 220
               y: 32
-              texts: "~&f选择背包饵料放入队列，或取出队列中的饵料"
+              texts: "~&7左键放入/取出 &f| &7右键全部/交换 &f| &7左侧优先消耗"
               fontSize: 32
 
           # ══════════════════════════════════════════════
@@ -635,7 +644,16 @@ controls:
                   point: ~top_right
                   x: -24
                   y: 22
-                  texts: "'&f共 &f' + var.baitSlots.round() + ' &f个槽位'"
+                  texts: "var.baitSlotsBonus > 0 ? '&f鱼竿 &e' + var.baitSlotsBase.round() + ' &f+ 天赋 &e' + var.baitSlotsBonus.round() + ' &f= &e' + var.baitSlots.round() + ' &f槽位' : '&f共 &e' + var.baitSlots.round() + ' &f个槽位'"
+                  fontSize: 32
+                  through: true
+              队列优先级提示:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 34
+                  y: 52
+                  texts: "~&7左侧优先消耗"
                   fontSize: 32
                   through: true
               # 饵料队列槽位（横向排列，模板在索引0，init 中按 baitSlots 动态复制）
@@ -653,6 +671,9 @@ controls:
                   spaceBetween: 12
                 children:
                   # 队列槽模板（索引0）
+                  # 交互逻辑：
+                  #   选中背包槽时：左键放1个，右键放全部
+                  #   未选中背包槽时：左键取出，右键选中队列槽用于交换（再右键另一个队列槽交换）
                   队列槽:
                     type: Canvas
                     attribute:
@@ -664,10 +685,32 @@ controls:
                     action:
                       clickLeft: |-
                         if(var.selectedInvSlot != none){
+                          // 选中背包槽：左键放1个
                           Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, 1.round())
                         } else {
+                          // 未选中背包槽：左键取出
                           if(self.queueEntry != none){
                             Packet.send(var.packetId, 'take_bait', self.entryKey, 0.round())
+                          }
+                        }
+                      clickRight: |-
+                        if(var.selectedInvSlot != none){
+                          // 选中背包槽：右键放全部（amount=-1）
+                          Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, (-1).round())
+                        } else {
+                          // 未选中背包槽：右键选中队列槽用于交换
+                          if(var.selectedQueueSlot == self.entryKey){
+                            // 再次右键同一个槽位 → 取消选中
+                            var.selectedQueueSlot = none
+                          } else {
+                            if(var.selectedQueueSlot != none){
+                              // 已选中队列槽 → 与当前槽位交换
+                              Packet.send(var.packetId, 'swap_bait', var.selectedQueueSlot, self.entryKey)
+                              var.selectedQueueSlot = none
+                            } else {
+                              // 选中当前队列槽
+                              var.selectedQueueSlot = self.entryKey
+                            }
                           }
                         }
                     children:
@@ -676,13 +719,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.queueEntry != none ? '50,170,200,210' : '26,34,46,210'"
+                          normal: "self.parent.entryKey == var.selectedQueueSlot ? '80,200,220,210' : (self.parent.queueEntry != none ? '50,170,200,210' : '26,34,46,210')"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '80,200,220,255' : (self.parent.queueEntry != none ? '50,170,200,230' : '80,200,220,240')"
+                            color: "self.isHovered() ? '80,200,220,255' : (self.parent.entryKey == var.selectedQueueSlot ? '80,200,220,255' : (self.parent.queueEntry != none ? '50,170,200,230' : '80,200,220,240'))"
                       队列槽图标:
                         type: Slot
                         attribute:
@@ -702,8 +745,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~bottom_right
-                          x: -4
-                          y: -2
+                          x: -5
+                          y: -5
                           texts: "self.parent.queueEntry != none ? '&f' + self.parent.queueEntry['amount'].round() : none"
                           fontSize: 32
                           through: true
@@ -711,7 +754,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          y: -8
+                          y: -12
                           width: 72
                           texts: "self.parent.queueEntry == none ? '&7空' : none"
                           fontSize: 32
@@ -778,7 +821,7 @@ controls:
                   point: ~top_right
                   x: -24
                   y: 22
-                  texts: "var.selectedInvSlot != none ? '&f已选槽位 &e' + var.selectedInvSlot.round() : '&f点击选择饵料物品'"
+                  texts: "var.selectedInvSlot != none ? '&f已选 &e' + var.selectedInvSlot.round() + ' &7左键放1/右键放全部' : (var.selectedQueueSlot != none ? '&f已选队列 &e' + (var.selectedQueueSlot + 1).round() + ' &7右键另一槽交换' : '&f选背包饵料后点队列放入')"
                   fontSize: 32
                   through: true
               # 背包网格（9列，36个槽位，slotType: ~Backpack 绑定玩家背包）

@@ -460,7 +460,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 380
+              y: 446
               width: 272
               height: 58
             action:
@@ -514,7 +514,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 446
+              y: 512
               width: 272
               height: 58
             action:
@@ -568,7 +568,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 512
+              y: 578
               width: 272
               height: 58
             action:

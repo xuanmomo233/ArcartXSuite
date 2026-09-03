@@ -305,6 +305,20 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                     service.pushBaitsData(player, uiId);
                 }
             }
+            case "swap_bait" -> {
+                // data: [swap_bait, slotA, slotB]
+                if (data.size() >= 3) {
+                    try {
+                        int slotA = Integer.parseInt(data.get(1));
+                        int slotB = Integer.parseInt(data.get(2));
+                        String result = service.swapBaitQueue(player, slotA, slotB);
+                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                    } catch (NumberFormatException ignored) {}
+                }
+                if (uiId != null && !uiId.isBlank()) {
+                    service.pushBaitsData(player, uiId);
+                }
+            }
         }
         return true;
     }

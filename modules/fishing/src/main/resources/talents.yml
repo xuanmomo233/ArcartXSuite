@@ -744,13 +744,13 @@ talents:
     tier: 6
     branch: d
     tree: focus
-    display-name: '&d起跑'
-    description: 先发制人，起始进度提升
-    effect-type: start_progress
-    effect-value: 0.03
+    display-name: '&d备饵'
+    description: 有备无患，饵料队列槽位 +1
+    effect-type: bait_slot_bonus
+    effect-value: 1
     icon:
       source: minecraft
-      id: minecart
+      id: fishing_rod
       amount: 1
     prerequisites:
       - focus-t5-b
@@ -1264,12 +1264,14 @@ links:
       - link-3
   - id: link-3-3
     display-name: '&6控进·终极'
-    description: 控进之道大成，进度下降降低且起始进度提升
+    description: 控进之道大成，进度下降降低且起始进度提升，饵料队列槽位 +1
     effects:
       - effect-type: progress_drain
         effect-value: 0.03
       - effect-type: start_progress
         effect-value: 0.03
+      - effect-type: bait_slot_bonus
+        effect-value: 1
     icon:
       source: minecraft
       id: dragon_breath
@@ -1296,7 +1298,7 @@ links:
     description: 精运之力升华，起始进度提升且钓鱼经验提升
     effects:
       - effect-type: start_progress
-        effect-value: 0.02
+        effect-value: 0.05
       - effect-type: xp_multiplier
         effect-value: 0.03
     icon:
@@ -1307,12 +1309,14 @@ links:
       - link-4
   - id: link-4-3
     display-name: '&6精运·终极'
-    description: 精运之道大成，传说鱼概率提升且完美窗口扩大
+    description: 精运之道大成，传说鱼概率提升且完美窗口扩大，饵料队列槽位 +1
     effects:
       - effect-type: legendary_chance
         effect-value: 0.02
       - effect-type: perfect_window
         effect-value: 0.02
+      - effect-type: bait_slot_bonus
+        effect-value: 1
     icon:
       source: minecraft
       id: dragon_breath

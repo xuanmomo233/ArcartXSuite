@@ -965,10 +965,25 @@ public final class FishingService {
 
     // ─── 饵料队列管理 ────────────────────────────────────────────
 
-    /** 获取玩家当前鱼竿的饵料槽数量。 */
+    /** 获取玩家当前饵料槽数量（鱼竿基础槽位 + 天赋加成）。 */
     public int getBaitSlots(@NotNull Player player) {
         RodDefinition rod = detectRod(player);
-        return rod.baitSlots();
+        int base = rod.baitSlots();
+        // 天赋加成：bait_slot_bonus effect-type
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
+        int bonus = (int) TalentEngine.getBonus(bonuses, "bait_slot_bonus");
+        return base + bonus;
+    }
+
+    /** 获取玩家饵料槽位的鱼竿基础数量和天赋加成数量（供 UI 显示来源）。 */
+    public int[] getBaitSlotsBreakdown(@NotNull Player player) {
+        RodDefinition rod = detectRod(player);
+        int base = rod.baitSlots();
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
+        int bonus = (int) TalentEngine.getBonus(bonuses, "bait_slot_bonus");
+        return new int[]{base, bonus};
     }
 
     /** 加载玩家饵料队列（按 slot_index 升序）。 */
@@ -990,7 +1005,11 @@ public final class FishingService {
         if (itemMatcher == null) return "&c物品匹配系统不可用。";
         if (queueSlot < 0 || queueSlot >= getBaitSlots(player)) return "&c槽位号无效。";
 
-        ItemStack item = player.getInventory().getItem(invSlot);
+        // ARIA UI ~Backpack 槽位 id → Bukkit inventory slot index 转换
+        // ARIA 9-35 → Bukkit 9-35（主背包27格，相同）
+        // ARIA 36-44 → Bukkit 0-8（快捷栏9格，差36）
+        int bukkitSlot = toBukkitBackpackSlot(invSlot);
+        ItemStack item = player.getInventory().getItem(bukkitSlot);
         if (item == null || item.getType().isAir()) return "&c背包槽位为空。";
 
         // 用 ItemMatcher 识别物品对应的饵料定义
@@ -1005,7 +1024,8 @@ public final class FishingService {
         if (matchedBait == null) return "&c该物品不是饵料。";
 
         int available = item.getAmount();
-        int toTake = Math.min(amount, available);
+        // amount <= 0 表示放入全部数量
+        int toTake = amount <= 0 ? available : Math.min(amount, available);
         if (toTake <= 0) return "&c数量无效。";
 
         // 检查目标槽位是否已有不同饵料
@@ -1027,11 +1047,57 @@ public final class FishingService {
 
         // 从背包扣除物品
         item.setAmount(available - toTake);
-        player.getInventory().setItem(invSlot, item.getAmount() == 0 ? null : item);
+        player.getInventory().setItem(bukkitSlot, item.getAmount() == 0 ? null : item);
 
         // 写入数据库
         repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), queueSlot, matchedBait.id(), newAmount));
         return "&a成功放入 &e" + toTake + " &a个 &f" + matchedBait.displayName() + " &a到槽位 &e" + (queueSlot + 1);
+    }
+
+    /**
+     * 将 ARIA UI ~Backpack 槽位编号转换为 Bukkit inventory slot index。
+     * ARIA rawSlot 9-35 → Bukkit 9-35（主背包 27 格），
+     * ARIA rawSlot 36-44 → Bukkit 0-8（快捷栏 9 格）。
+     */
+    private static int toBukkitBackpackSlot(int rawSlot) {
+        if (rawSlot >= 36 && rawSlot <= 44) {
+            return rawSlot - 36;
+        }
+        return rawSlot;
+    }
+
+    /**
+     * 交换饵料队列中两个槽位的饵料（用于调整优先级）。
+     *
+     * @param player  玩家
+     * @param slotA   槽位A
+     * @param slotB   槽位B
+     * @return 操作结果消息
+     */
+    public @NotNull String swapBaitQueue(@NotNull Player player, int slotA, int slotB) {
+        int maxSlots = getBaitSlots(player);
+        if (slotA < 0 || slotA >= maxSlots || slotB < 0 || slotB >= maxSlots) return "&c槽位号无效。";
+        if (slotA == slotB) return "&c不能与自身交换。";
+
+        List<BaitQueueEntry> queue = repository.loadBaitQueue(player.getUniqueId());
+        BaitQueueEntry entryA = null, entryB = null;
+        for (BaitQueueEntry entry : queue) {
+            if (entry.slotIndex() == slotA) entryA = entry;
+            if (entry.slotIndex() == slotB) entryB = entry;
+        }
+
+        // 交换：A的位置放B的内容，B的位置放A的内容（amount=0 自动删除）
+        if (entryB != null) {
+            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotA, entryB.baitId(), entryB.amount()));
+        } else {
+            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotA, "", 0));
+        }
+        if (entryA != null) {
+            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotB, entryA.baitId(), entryA.amount()));
+        } else {
+            repository.saveBaitSlot(new BaitQueueEntry(player.getUniqueId(), slotB, "", 0));
+        }
+        return "&a已交换槽位 &e" + (slotA + 1) + " &a和 &e" + (slotB + 1) + " &a的饵料";
     }
 
     /**
@@ -2269,11 +2335,14 @@ public final class FishingService {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
 
         int slots = getBaitSlots(player);
+        int[] breakdown = getBaitSlotsBreakdown(player);
         List<BaitQueueEntry> queue = loadBaitQueue(player);
 
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING_BAITS");
         payload.put("baitSlots", slots);
+        payload.put("baitSlotsBase", breakdown[0]);
+        payload.put("baitSlotsBonus", breakdown[1]);
 
         // 队列条目
         java.util.Map<String, Object> queueMap = new java.util.LinkedHashMap<>();
