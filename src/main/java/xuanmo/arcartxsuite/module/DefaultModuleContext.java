@@ -362,14 +362,77 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public void registerCommand(String commandName, TabExecutor executor) {
         PluginCommand command = plugin.getCommand(commandName);
-        if (command == null) {
-            logger.warning("命令 '" + commandName + "' 未在 plugin.yml 中声明，跳过绑定");
+        if (command != null) {
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
+            registeredCommandNames.add(commandName);
+            logger.fine("命令 '" + commandName + "' 已绑定到 " + executor.getClass().getSimpleName());
             return;
         }
-        command.setExecutor(executor);
-        command.setTabCompleter(executor);
-        registeredCommandNames.add(commandName);
-        logger.fine("命令 '" + commandName + "' 已绑定到 " + executor.getClass().getSimpleName());
+        // 命令未在 plugin.yml 声明，尝试通过 CommandMap 动态注册
+        if (registerDynamicCommand(commandName, executor)) {
+            logger.fine("命令 '" + commandName + "' 已通过 CommandMap 动态注册");
+        } else {
+            logger.warning("命令 '" + commandName + "' 未在 plugin.yml 中声明，且动态注册失败，跳过绑定");
+        }
+    }
+
+    /**
+     * 通过 Bukkit CommandMap 动态注册命令（不依赖 plugin.yml 声明）。
+     * <p>
+     * 用于支持模块在运行时注册配置化命令别名等场景。
+     *
+     * @param commandName 命令名
+     * @param executor    命令执行器
+     * @return {@code true} 表示注册成功
+     */
+    private boolean registerDynamicCommand(String commandName, TabExecutor executor) {
+        try {
+            org.bukkit.command.CommandMap commandMap = getCommandMap();
+            if (commandMap == null) return false;
+            // 避免重复注册
+            if (commandMap.getCommand(commandName) != null) {
+                // 命令已存在（可能是其他插件注册的），只绑定执行器
+                org.bukkit.command.Command existing = commandMap.getCommand(commandName);
+                if (existing instanceof PluginCommand pc && pc.getPlugin() == plugin) {
+                    pc.setExecutor(executor);
+                    pc.setTabCompleter(executor);
+                    registeredCommandNames.add(commandName);
+                    return true;
+                }
+                // 命令属于其他插件，不覆盖
+                logger.warning("命令 '" + commandName + "' 已被其他插件注册，跳过");
+                return false;
+            }
+            // 用反射创建 PluginCommand（构造函数需要 Plugin 参数）
+            java.lang.reflect.Constructor<PluginCommand> ctor =
+                PluginCommand.class.getDeclaredConstructor(String.class, org.bukkit.plugin.Plugin.class);
+            ctor.setAccessible(true);
+            PluginCommand newCommand = ctor.newInstance(commandName, plugin);
+            newCommand.setExecutor(executor);
+            newCommand.setTabCompleter(executor);
+            commandMap.register(plugin.getName().toLowerCase(), newCommand);
+            registeredCommandNames.add(commandName);
+            return true;
+        } catch (Exception e) {
+            logger.warning("动态注册命令 '" + commandName + "' 失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取 Bukkit 服务器的 CommandMap。
+     */
+    private org.bukkit.command.CommandMap getCommandMap() {
+        try {
+            org.bukkit.Server server = Bukkit.getServer();
+            java.lang.reflect.Field commandMapField = server.getClass().getDeclaredField("commandMap");
+            commandMapField.setAccessible(true);
+            return (org.bukkit.command.CommandMap) commandMapField.get(server);
+        } catch (Exception e) {
+            logger.warning("获取 CommandMap 失败: " + e.getMessage());
+            return null;
+        }
     }
 
     /**

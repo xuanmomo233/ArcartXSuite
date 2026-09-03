@@ -27,6 +27,191 @@ commands:
     description: Essentials 玩家命令（/axs essentials 缩写）
     usage: /ess <action> [args...]
     permission: axs.essentials.menu
+  # ─── Essentials 简写别名（预置，可在 ArcartXEssentials.yml command-aliases 中增删）───
+  fly:
+    description: 飞行开关
+    usage: /<command> [player]
+    permission: axs.essentials.fly
+  god:
+    description: 无敌开关
+    usage: /<command> [player]
+    permission: axs.essentials.god
+  gm:
+    description: 游戏模式切换
+    usage: /<command> <0|1|2|3|s|c|a|sp|survival|creative|adventure|spectator> [player]
+    permission: axs.essentials.gamemode
+  heal:
+    description: 治疗
+    usage: /<command> [player]
+    permission: axs.essentials.heal
+  feed:
+    description: 喂食
+    usage: /<command> [player]
+    permission: axs.essentials.feed
+  tp:
+    description: 传送到玩家
+    usage: /<command> <player> [target]
+    permission: axs.essentials.teleport
+  top:
+    description: 传送到顶部
+    usage: /<command>
+    permission: axs.essentials.teleport
+  back:
+    description: 返回上次位置
+    usage: /<command>
+    permission: axs.essentials.back
+  home:
+    description: 传送到家
+    usage: /<command> [name]
+    permission: axs.essentials.home
+  sethome:
+    description: 设置家
+    usage: /<command> [name]
+    permission: axs.essentials.sethome
+  delhome:
+    description: 删除家
+    usage: /<command> [name]
+    permission: axs.essentials.delhome
+  warp:
+    description: 传送到传送点
+    usage: /<command> <name>
+    permission: axs.essentials.warp
+  setwarp:
+    description: 设置传送点
+    usage: /<command> <name>
+    permission: axs.essentials.setwarp
+  delwarp:
+    description: 删除传送点
+    usage: /<command> <name>
+    permission: axs.essentials.delwarp
+  spawn:
+    description: 传送到出生点
+    usage: /<command>
+    permission: axs.essentials.spawn
+  setspawn:
+    description: 设置出生点
+    usage: /<command>
+    permission: axs.essentials.setspawn
+  tpa:
+    description: 发送传送请求
+    usage: /<command> <player>
+    permission: axs.essentials.tpa
+  tpahere:
+    description: 发送传送到此请求
+    usage: /<command> <player>
+    permission: axs.essentials.tpa
+  tpaccept:
+    description: 接受传送请求
+    usage: /<command>
+    permission: axs.essentials.tpa
+  tpdeny:
+    description: 拒绝传送请求
+    usage: /<command>
+    permission: axs.essentials.tpa
+  tppos:
+    description: 传送到坐标
+    usage: /<command> <x> <y> <z>
+    permission: axs.essentials.teleport
+  vanish:
+    description: 隐身开关
+    usage: /<command>
+    permission: axs.essentials.vanish
+  hat:
+    description: 戴帽子
+    usage: /<command>
+    permission: axs.essentials.hat
+  repair:
+    description: 修复手持物品
+    usage: /<command>
+    permission: axs.essentials.repair
+  enderchest:
+    description: 打开末影箱
+    usage: /<command> [player]
+    permission: axs.essentials.enderchest
+  workbench:
+    description: 打开工作台
+    usage: /<command>
+    permission: axs.essentials.workbench
+  anvil:
+    description: 打开铁砧
+    usage: /<command>
+    permission: axs.essentials.anvil
+  trash:
+    description: 打开垃圾桶
+    usage: /<command>
+    permission: axs.essentials.trash
+  nick:
+    description: 设置昵称
+    usage: /<command> <nick|off>
+    permission: axs.essentials.nick
+  seen:
+    description: 查看玩家信息
+    usage: /<command> <player>
+    permission: axs.essentials.seen
+  inv:
+    description: 查看玩家背包
+    usage: /<command> <player>
+    permission: axs.essentials.inv
+  sit:
+    description: 坐下
+    usage: /<command>
+    permission: axs.essentials.sit
+  lay:
+    description: 躺下
+    usage: /<command>
+    permission: axs.essentials.lay
+  sort:
+    description: 整理背包
+    usage: /<command>
+    permission: axs.essentials.sort
+  speed:
+    description: 设置速度
+    usage: /<command> <fly|walk> <1-10>
+    permission: axs.essentials.speed
+  time:
+    description: 设置时间
+    usage: /<command> <day|night|noon|midnight|set <ticks>>
+    permission: axs.essentials.time
+  weather:
+    description: 设置天气
+    usage: /<command> <clear|rain|thunder>
+    permission: axs.essentials.weather
+  ban:
+    description: 封禁玩家
+    usage: /<command> <player> [reason]
+    permission: axs.essentials.ban
+  tempban:
+    description: 临时封禁
+    usage: /<command> <player> <duration> [reason]
+    permission: axs.essentials.ban
+  unban:
+    description: 解封
+    usage: /<command> <player>
+    permission: axs.essentials.unban
+  mute:
+    description: 禁言
+    usage: /<command> <player> [reason]
+    permission: axs.essentials.mute
+  tempmute:
+    description: 临时禁言
+    usage: /<command> <player> <duration> [reason]
+    permission: axs.essentials.mute
+  unmute:
+    description: 解除禁言
+    usage: /<command> <player>
+    permission: axs.essentials.unmute
+  kick:
+    description: 踢出玩家
+    usage: /<command> <player> [reason]
+    permission: axs.essentials.kick
+  warn:
+    description: 警告玩家
+    usage: /<command> <player> [reason]
+    permission: axs.essentials.warn
+  sudo:
+    description: 以玩家身份执行命令
+    usage: /<command> <player> <command>
+    permission: axs.essentials.sudo
   rg:
     description: Regions 玩家命令（/axs regions 缩写）
     usage: /rg <action> [args...]
