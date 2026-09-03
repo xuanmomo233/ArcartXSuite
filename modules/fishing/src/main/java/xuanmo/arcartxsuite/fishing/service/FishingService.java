@@ -570,6 +570,15 @@ public final class FishingService {
                 try {
                     ItemStack dropStack = iconResolver.resolveItemStack(player, drop.itemRef());
                     if (dropStack != null) {
+                        // 给掉落物设置 PDC 标签，使其可被 /fishing sell 识别出售
+                        ItemMeta dropMeta = dropStack.getItemMeta();
+                        if (dropMeta != null) {
+                            PersistentDataContainer pdc = dropMeta.getPersistentDataContainer();
+                            pdc.set(new NamespacedKey(plugin, PDC_FISH_ID), PersistentDataType.STRING, fish.id());
+                            pdc.set(new NamespacedKey(plugin, PDC_FISH_SIZE), PersistentDataType.INTEGER, size);
+                            pdc.set(new NamespacedKey(plugin, PDC_IS_PERFECT), PersistentDataType.BYTE, (byte) (perfect ? 1 : 0));
+                            dropStack.setItemMeta(dropMeta);
+                        }
                         dropOrGive(player, dropStack);
                     }
                 } catch (Exception e) {
