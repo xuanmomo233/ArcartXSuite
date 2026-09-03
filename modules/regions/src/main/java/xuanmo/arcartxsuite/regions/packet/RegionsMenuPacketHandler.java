@@ -15,8 +15,10 @@ import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
+import xuanmo.arcartxsuite.regions.model.Selection;
 import xuanmo.arcartxsuite.regions.service.RegionManager;
 
 /**
@@ -34,15 +36,17 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     private final PacketBridgeAPI packetBridge;
     private final PacketGuardAPI packetGuard;
     private final RegionManager regionManager;
+    private final RegionsConfiguration config;
     private final String uiId;
 
     public RegionsMenuPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, RegionManager regionManager,
-                                    String uiId) {
+                                    RegionsConfiguration config, String uiId) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
         this.packetGuard = packetGuard;
         this.regionManager = regionManager;
+        this.config = config;
         this.uiId = uiId;
     }
 
@@ -53,13 +57,25 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
 
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         switch (action) {
-            case "navigate" -> pushData(player, hasValue(data, 1) ? data.get(1) : "current");
+            case "navigate" -> {
+                String page = hasValue(data, 1) ? data.get(1) : "current";
+                if ("selection".equals(page)) {
+                    pushSelectionData(player);
+                } else {
+                    pushData(player, page);
+                }
+            }
             case "refresh" -> pushData(player, hasValue(data, 1) ? data.get(1) : "current");
             case "select_region" -> {
                 if (hasValue(data, 1)) {
                     pushRegionDetail(player, data.get(1));
                 }
             }
+            case "clear_selection" -> {
+                regionManager.clearSelection(player.getUniqueId());
+                pushSelectionData(player);
+            }
+            case "query_selection" -> pushSelectionData(player);
             default -> pushData(player, "current");
         }
         return true;
@@ -172,6 +188,26 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
         }
         payload.put("members", members);
 
+        packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 推送玩家当前选区会话数据（pos1/pos2/体积/世界/完成状态）。
+     */
+    public void pushSelectionData(Player player) {
+        if (packetBridge == null) return;
+        Selection sel = regionManager.getSelection(player.getUniqueId());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("page", "selection");
+        payload.put("packetId", PACKET_ID);
+        payload.put("selWorld", sel.world() != null ? sel.world() : player.getWorld().getName());
+        payload.put("pos1Set", String.valueOf(sel.isPos1Set()));
+        payload.put("pos2Set", String.valueOf(sel.isPos2Set()));
+        payload.put("pos1", sel.isPos1Set() ? sel.x1() + ", " + sel.y1() + ", " + sel.z1() : "未设置");
+        payload.put("pos2", sel.isPos2Set() ? sel.x2() + ", " + sel.y2() + ", " + sel.z2() : "未设置");
+        payload.put("selComplete", String.valueOf(sel.isComplete()));
+        payload.put("selVolume", String.valueOf(sel.volume()));
+        payload.put("maxVolume", String.valueOf(config != null ? config.selection().maxVolume() : 0));
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 

@@ -27,6 +27,8 @@ ui:
     #   - selVolume: 选中区域体积 (方块数)
     #   - selFlags: 选中区域标志列表
     #   - selMembers: 选中区域成员列表
+    #   - worlds: 世界规则页的世界列表
+    #   - worldCount: 世界数量
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']
@@ -41,6 +43,8 @@ ui:
       var.selVolume = packet['selVolume']
       var.selFlags = packet['selFlags']
       var.selMembers = packet['selMembers']
+      var.worlds = packet['worlds']
+      var.worldCount = packet['worldCount']
       # 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
       var.regionList = []
       if(var.regions != null){
@@ -60,6 +64,14 @@ ui:
           var.flagList.add(var.selFlags[key])
         }
       }
+      var.worldList = []
+      if(var.worlds != null){
+        for(key in var.worlds.keys()){
+          var.worldList.add(var.worlds[key])
+        }
+      }
+      var.newRegionName = ''
+      var.renameValue = ''
 
 controls:
   自适应全局布局:
@@ -181,6 +193,34 @@ controls:
                       fontSize: 28
                       texts: "~&f编辑"
 
+              导航世界规则入口:
+                type: Canvas
+                attribute:
+                  x: 10
+                  y: 116
+                  width: 140
+                  height: 40
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'select_world_rule')
+                children:
+                  导航世界规则背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.page == 'world_rules' ? '180,130,40,200' : (self.isHovered() ? '65,65,80,210' : '45,45,55,180')"
+                      shape: ~round_rect
+                      radius: 8
+                  导航世界规则文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      through: true
+                      fontSize: 28
+                      texts: "~&f世界规则"
+
           # ═══ 内容区 ═══
           内容区:
             type: Texture
@@ -208,6 +248,48 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: "~&6所有区域"
+                  新建区域输入框:
+                    type: TextBox
+                    attribute:
+                      x: 320
+                      y: 4
+                      width: 280
+                      height: 36
+                      length: 32
+                      emptyText: "~&8输入新区域名称..."
+                      background: "~45,45,55,200"
+                    action:
+                      textChange: |-
+                        var.newRegionName = self.text
+                  创建区域按钮:
+                    type: Canvas
+                    attribute:
+                      x: 620
+                      y: 0
+                      width: 100
+                      height: 40
+                    action:
+                      click: |-
+                        if(var.newRegionName != null && var.newRegionName != ''){
+                          Packet.send(var.packetId, 'create_region', var.newRegionName)
+                        }
+                    children:
+                      创建按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '60,160,80,230' : '40,140,60,200'"
+                          shape: ~round_rect
+                          radius: 8
+                      创建按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          through: true
+                          fontSize: 28
+                          texts: "~&f+ 创建"
                   区域列表滑块:
                     type: Texture
                     val: 区域列表滑块
@@ -366,6 +448,33 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: "~&6编辑: &f{var.selId}"
+                  重定义按钮:
+                    type: Canvas
+                    attribute:
+                      x: 620
+                      y: 0
+                      width: 100
+                      height: 40
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'redefine_region', var.selId)
+                    children:
+                      重定义按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '80,140,220,230' : '60,120,200,200'"
+                          shape: ~round_rect
+                          radius: 8
+                      重定义按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          through: true
+                          fontSize: 26
+                          texts: "~&f重定义"
                   编辑信息文字:
                     type: Text
                     attribute:
@@ -373,6 +482,48 @@ controls:
                       y: 46
                       fontSize: 26
                       texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != none ? var.selParent : '无'}"
+                  重命名输入框:
+                    type: TextBox
+                    attribute:
+                      x: 500
+                      y: 46
+                      width: 200
+                      height: 32
+                      length: 32
+                      emptyText: "~&8新名称..."
+                      background: "~45,45,55,200"
+                    action:
+                      textChange: |-
+                        var.renameValue = self.text
+                  重命名按钮:
+                    type: Canvas
+                    attribute:
+                      x: 720
+                      y: 44
+                      width: 80
+                      height: 36
+                    action:
+                      click: |-
+                        if(var.renameValue != null && var.renameValue != ''){
+                          Packet.send(var.packetId, 'rename_region', var.selId, var.renameValue)
+                        }
+                    children:
+                      重命名按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.isHovered() ? '180,140,60,230' : '160,120,40,200'"
+                          shape: ~round_rect
+                          radius: 6
+                      重命名按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 80
+                          through: true
+                          fontSize: 26
+                          texts: "~&f重命名"
                   编辑边界文字:
                     type: Text
                     attribute:
@@ -682,3 +833,152 @@ controls:
                           through: true
                           fontSize: 26
                           texts: "~&f← 返回"
+
+              # ─── 世界规则视图 ───
+              世界规则布局:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: "var.page == 'world_rules'"
+                children:
+                  世界规则标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&6世界规则管理"
+                  世界规则说明:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 46
+                      fontSize: 26
+                      texts: "~&7点击开关切换禁飞/禁活塞状态"
+                  世界规则滑块:
+                    type: Texture
+                    val: 世界规则滑块
+                    attribute:
+                      x: 834
+                      y: 90
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 480
+                  世界规则滚动栏:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 90
+                      width: 840
+                      height: 490
+                      moveY: "self.parent['世界规则滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['世界规则滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['世界规则滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      world_rules_list:
+                        val: world_rule_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(1, 30)){
+                              row = self['世界规则行'].copy('世界规则行' + i.round)
+                              row.entryKey = i.round
+                            }
+                        children:
+                          世界规则行:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              entry: "var.worldList != null ? var.worldList[self.entryKey] : none"
+                              visible: self.entry != none
+                              width: 820
+                              height: 60
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            children:
+                              世界名称文字:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 18
+                                  through: true
+                                  fontSize: 28
+                                  texts: "~&f{self.parent.entry['name']}"
+                              禁飞按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 260
+                                  y: 14
+                                  width: 100
+                                  height: 34
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'toggle_no_fly', self.parent.entry['name'])
+                                children:
+                                  禁飞按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry['noFly'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
+                                      shape: ~round_rect
+                                      radius: 6
+                                  禁飞按钮文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 100
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~{self.parent.entry['noFly'] == 'true' ? '&f禁飞' : '&7飞行'}"
+                              禁活塞按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 380
+                                  y: 14
+                                  width: 110
+                                  height: 34
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'toggle_no_piston', self.parent.entry['name'])
+                                children:
+                                  禁活塞按钮背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry['noPiston'] == 'true' ? '200,60,60,220' : (self.isHovered() ? '70,70,85,210' : '50,50,60,180')"
+                                      shape: ~round_rect
+                                      radius: 6
+                                  禁活塞按钮文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 110
+                                      through: true
+                                      fontSize: 26
+                                      texts: "~{self.parent.entry['noPiston'] == 'true' ? '&f禁活塞' : '&7活塞'}"
+                              禁交互文字:
+                                type: Text
+                                attribute:
+                                  x: 510
+                                  y: 18
+                                  through: true
+                                  fontSize: 26
+                                  texts: "~&7交互: &f{self.parent.entry['interactions'] != none && self.parent.entry['interactions'] != '' ? self.parent.entry['interactions'] : '&8无'}"

@@ -20,14 +20,22 @@ public final class Selection {
         this.pos1Set = true;
     }
 
-    public void setPos2(Location loc) {
+    /**
+     * 设置选区点 2。
+     *
+     * @return true 表示设置成功；false 表示跨世界，调用方应提示玩家并保持原 pos2
+     */
+    public boolean setPos2(Location loc) {
         if (this.world == null) {
             this.world = loc.getWorld().getName();
+        } else if (!this.world.equals(loc.getWorld().getName())) {
+            return false;
         }
         this.x2 = loc.getBlockX();
         this.y2 = loc.getBlockY();
         this.z2 = loc.getBlockZ();
         this.pos2Set = true;
+        return true;
     }
 
     public boolean isComplete() {

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +22,9 @@ import xuanmo.arcartxsuite.regions.storage.RegionsRepository;
 
 /**
  * 区域管理器 — 内存缓存所有区域，提供快速查询。
+ * <p>
+ * 维护按世界分桶的网格索引（chunk 粒度，每格 16×16×16），将区域注册到其覆盖的所有网格 cell，
+ * 查询时只遍历目标点所在 cell 内的区域，避免全量线性扫描。
  */
 public final class RegionManager {
 
@@ -32,6 +36,13 @@ public final class RegionManager {
     private final Map<UUID, Selection> selections = new ConcurrentHashMap<>();
     private final Map<UUID, String> lastRegion = new ConcurrentHashMap<>();
 
+    /** 按世界分桶的空间索引：world -> cellKey -> 该 cell 内的区域列表 */
+    private final Map<String, Map<Long, List<Region>>> spatialIndex = new ConcurrentHashMap<>();
+    /** 网格单元大小（X/Z 用 16，Y 用 16，便于按位打包成 long key） */
+    private static final int CELL = 16;
+    private static final int CELL_MASK = 0xFFFF; // 16 位掩码（支持负数位移）
+    private static final int Y_BITS = 16;
+
     public RegionManager(RegionsRepository repository, RegionsConfiguration config, Logger logger) {
         this.repository = repository;
         this.config = config;
@@ -40,8 +51,66 @@ public final class RegionManager {
 
     public void loadAll() throws SQLException {
         regions.clear();
+        spatialIndex.clear();
         regions.addAll(repository.loadAllRegions());
+        for (Region r : regions) indexRegion(r);
         logger.info("已加载 " + regions.size() + " 个区域。");
+    }
+
+    // ─── 空间索引 ───
+
+    /**
+     * 将区域注册到其覆盖的所有网格 cell。
+     */
+    private void indexRegion(Region r) {
+        Map<Long, List<Region>> worldBucket = spatialIndex.computeIfAbsent(r.world(), k -> new ConcurrentHashMap<>());
+        int minCx = r.minX() >> 4, maxCx = r.maxX() >> 4;
+        int minCz = r.minZ() >> 4, maxCz = r.maxZ() >> 4;
+        int minCy = r.minY() >> 4, maxCy = r.maxY() >> 4;
+        for (int cx = minCx; cx <= maxCx; cx++) {
+            for (int cz = minCz; cz <= maxCz; cz++) {
+                for (int cy = minCy; cy <= maxCy; cy++) {
+                    long key = cellKey(cx, cy, cz);
+                    worldBucket.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>()).add(r);
+                }
+            }
+        }
+    }
+
+    /**
+     * 从索引中移除区域（遍历其覆盖的所有 cell）。
+     */
+    private void unindexRegion(Region r) {
+        Map<Long, List<Region>> worldBucket = spatialIndex.get(r.world());
+        if (worldBucket == null) return;
+        int minCx = r.minX() >> 4, maxCx = r.maxX() >> 4;
+        int minCz = r.minZ() >> 4, maxCz = r.maxZ() >> 4;
+        int minCy = r.minY() >> 4, maxCy = r.maxY() >> 4;
+        for (int cx = minCx; cx <= maxCx; cx++) {
+            for (int cz = minCz; cz <= maxCz; cz++) {
+                for (int cy = minCy; cy <= maxCy; cy++) {
+                    long key = cellKey(cx, cy, cz);
+                    List<Region> list = worldBucket.get(key);
+                    if (list != null) list.remove(r);
+                }
+            }
+        }
+    }
+
+    /**
+     * 区域范围变更后重建索引（redefine 调用）。
+     */
+    private void reindexRegion(Region r) {
+        unindexRegion(r);
+        indexRegion(r);
+    }
+
+    private static long cellKey(int cx, int cy, int cz) {
+        // 将 cx(16bit) cy(16bit) cz(16bit) 打包成 long（高 16 位空闲，避免负数位移问题用 long 掩码）
+        long x = cx & 0xFFFFL;
+        long y = cy & 0xFFFFL;
+        long z = cz & 0xFFFFL;
+        return (x << 32) | (y << 16) | z;
     }
 
     // ─── 选区 ───
@@ -97,16 +166,47 @@ public final class RegionManager {
         Region region = new Region(id, sel.world(), sel.x1(), sel.y1(), sel.z1(), sel.x2(), sel.y2(), sel.z2());
         repository.saveRegion(region);
         regions.add(region);
+        indexRegion(region);
         return region;
     }
 
     public void deleteRegion(Region region) throws SQLException {
         repository.deleteRegion(region.id(), region.world());
         regions.remove(region);
+        unindexRegion(region);
+    }
+
+    /**
+     * 重命名区域：删除旧记录，创建新记录并拷贝全部状态（范围/优先级/父区域/成员/标志）。
+     *
+     * @return 新区域实例
+     */
+    public Region renameRegion(Region old, String newId) throws SQLException {
+        Region newRegion = new Region(newId, old.world(),
+            old.minX(), old.minY(), old.minZ(),
+            old.maxX(), old.maxY(), old.maxZ());
+        newRegion.setPriority(old.priority());
+        newRegion.setParentId(old.parentId());
+        for (UUID u : old.owners()) newRegion.addOwner(u);
+        for (UUID u : old.members()) newRegion.addMember(u);
+        for (String g : old.ownerGroups()) newRegion.addOwnerGroup(g);
+        for (String g : old.memberGroups()) newRegion.addMemberGroup(g);
+        for (var e : old.flags().entrySet()) newRegion.setFlag(e.getKey(), e.getValue());
+        for (var e : old.flagData().entrySet()) newRegion.setFlagData(e.getKey(), e.getValue());
+        // 先持久化新记录，再删除旧记录，避免中间态丢失
+        repository.saveRegion(newRegion);
+        repository.deleteRegion(old.id(), old.world());
+        regions.remove(old);
+        unindexRegion(old);
+        regions.add(newRegion);
+        indexRegion(newRegion);
+        return newRegion;
     }
 
     public void saveRegion(Region region) throws SQLException {
         repository.saveRegion(region);
+        // 范围可能被 redefine 改过，重建索引
+        reindexRegion(region);
     }
 
     public int countRegionsByOwner(UUID owner) {
@@ -121,13 +221,17 @@ public final class RegionManager {
 
     /**
      * 获取某坐标所在的所有区域（按优先级降序）。
+     * 使用空间索引，仅遍历目标点所在 cell 内的区域候选，再做精确 contains 校验。
      */
     public List<Region> getRegionsAt(String world, int x, int y, int z) {
-        List<Region> result = new ArrayList<>();
-        for (Region region : regions) {
-            if (region.contains(world, x, y, z)) {
-                result.add(region);
-            }
+        Map<Long, List<Region>> worldBucket = spatialIndex.get(world);
+        if (worldBucket == null || worldBucket.isEmpty()) return List.of();
+        long key = cellKey(x >> 4, y >> 4, z >> 4);
+        List<Region> candidates = worldBucket.get(key);
+        if (candidates == null || candidates.isEmpty()) return List.of();
+        List<Region> result = new ArrayList<>(candidates.size());
+        for (Region region : candidates) {
+            if (region.contains(world, x, y, z)) result.add(region);
         }
         result.sort(Comparator.comparingInt(Region::priority).reversed());
         return result;

@@ -21,6 +21,7 @@ import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
 import xuanmo.arcartxsuite.regions.model.Selection;
 import xuanmo.arcartxsuite.regions.service.RegionManager;
+import xuanmo.arcartxsuite.regions.service.SelectionParticleTask;
 
 /**
  * 区域管理命令处理器。
@@ -31,7 +32,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
     private static final List<String> ACTIONS = List.of(
         "help", "status", "reload",
         "define", "remove", "redefine", "rename",
-        "list", "info", "select", "pos1", "pos2",
+        "list", "info", "select", "pos1", "pos2", "wand", "show",
         "flag", "removeflag", "flags",
         "addowner", "removeowner", "addmember", "removemember",
         "priority", "parent", "tp"
@@ -40,11 +41,14 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
     private final RegionManager manager;
     private final RegionsConfiguration config;
     private final MessageProvider messages;
+    private final SelectionParticleTask particleTask;
 
-    public RegionCommandHandler(RegionManager manager, RegionsConfiguration config, MessageProvider messages) {
+    public RegionCommandHandler(RegionManager manager, RegionsConfiguration config, MessageProvider messages,
+                                SelectionParticleTask particleTask) {
         this.manager = manager;
         this.config = config;
         this.messages = messages;
+        this.particleTask = particleTask;
     }
 
     private String fullMsg(String key, Object... args) {
@@ -68,6 +72,8 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             case "info" -> handleInfo(sender, args);
             case "pos1" -> handlePos(sender, 1);
             case "pos2" -> handlePos(sender, 2);
+            case "wand" -> handleWand(sender);
+            case "show" -> handleShow(sender);
             case "flag" -> handleFlag(sender, args);
             case "removeflag" -> handleRemoveFlag(sender, args);
             case "flags" -> handleFlags(sender, args);
@@ -245,12 +251,51 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         if (!(sender instanceof Player player)) { sender.sendMessage(fullMsg("common.only-player")); return; }
         Selection sel = manager.getSelection(player.getUniqueId());
         if (pos == 1) sel.setPos1(player.getLocation());
-        else sel.setPos2(player.getLocation());
+        else if (!sel.setPos2(player.getLocation())) {
+            sender.sendMessage(prefix() + fmtMsg("&c选区点 2 必须与点 1 在同一世界 (&f" + sel.world() + "&c)。"));
+            return;
+        }
         String msg = (pos == 1 ? config.messages().wandPos1() : config.messages().wandPos2())
             .replace("{x}", String.valueOf(player.getLocation().getBlockX()))
             .replace("{y}", String.valueOf(player.getLocation().getBlockY()))
             .replace("{z}", String.valueOf(player.getLocation().getBlockZ()));
         player.sendMessage(prefix() + fmtMsg(msg));
+    }
+
+    /**
+     * 给予玩家一把选区工具（与 selection.wand-item 配置一致）。
+     */
+    private void handleWand(CommandSender sender) {
+        if (!(sender instanceof Player player)) { sender.sendMessage(fullMsg("common.only-player")); return; }
+        if (!player.hasPermission("axs.regions.select")) {
+            sender.sendMessage(fullMsg("common.no-permission"));
+            return;
+        }
+        org.bukkit.inventory.ItemStack wand = new org.bukkit.inventory.ItemStack(config.selection().wandItem());
+        var meta = wand.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', "&6区域选区工具 &7(左键设点1 / 右键设点2)"));
+            wand.setItemMeta(meta);
+        }
+        player.getInventory().addItem(wand);
+        player.sendMessage(prefix() + fmtMsg("&a已给予选区工具。手持它左键设点 1、右键设点 2。"));
+    }
+
+    /**
+     * 切换区域边框常驻粒子可视化（仅显示自己拥有/参与的区域；admin 显示所有）。
+     */
+    private void handleShow(CommandSender sender) {
+        if (!(sender instanceof Player player)) { sender.sendMessage(fullMsg("common.only-player")); return; }
+        if (particleTask == null) {
+            sender.sendMessage(prefix() + fmtMsg("&c粒子可视化服务未启动。"));
+            return;
+        }
+        boolean enabled = particleTask.toggleRegionBorder(player);
+        if (enabled) {
+            player.sendMessage(prefix() + fmtMsg("&a已开启区域边框可视化 &7(再次输入 /rg show 关闭)"));
+        } else {
+            player.sendMessage(prefix() + fmtMsg("&c已关闭区域边框可视化。"));
+        }
     }
 
     private void handleFlag(CommandSender sender, String[] args) {
@@ -407,6 +452,16 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         } else {
             Region parent = manager.getRegion(parentName);
             if (parent == null) { sender.sendMessage(prefix() + fmtMsg(config.messages().regionNotFound().replace("{name}", parentName))); return; }
+            // 父区域必须与当前区域同世界
+            if (!parent.world().equals(region.world())) {
+                sender.sendMessage(prefix() + fmtMsg("&c父区域必须与当前区域处于同一世界。"));
+                return;
+            }
+            // 成环检测：沿父链向上走，若回到 region 自身则拒绝
+            if (wouldCreateCycle(region, parent)) {
+                sender.sendMessage(prefix() + fmtMsg("&c不能将 &f" + parent.id() + "&c 设为父区域：会形成继承环。"));
+                return;
+            }
             region.setParentId(parent.id());
         }
         try {
@@ -415,6 +470,22 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         } catch (SQLException e) {
             sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
+    }
+
+    /**
+     * 检查将 {@code newParent} 设为 {@code region} 的父区域是否会形成继承环。
+     * 沿 newParent 的父链向上遍历，若途中遇到 region 自身则成环。
+     */
+    private boolean wouldCreateCycle(Region region, Region newParent) {
+        Region cursor = newParent;
+        int guard = 0;
+        while (cursor != null && guard < 64) {
+            if (cursor == region) return true;
+            if (cursor.parentId() == null) return false;
+            cursor = manager.getRegion(cursor.parentId(), cursor.world());
+            guard++;
+        }
+        return false; // 超过 64 层视为断链，不视为环
     }
 
     private void handleTeleport(CommandSender sender, String[] args) {

@@ -34,6 +34,7 @@ import xuanmo.arcartxsuite.regions.listener.SelectionListener;
 import xuanmo.arcartxsuite.regions.packet.RegionsAdminPacketHandler;
 import xuanmo.arcartxsuite.regions.packet.RegionsMenuPacketHandler;
 import xuanmo.arcartxsuite.regions.service.RegionManager;
+import xuanmo.arcartxsuite.regions.service.SelectionParticleTask;
 import xuanmo.arcartxsuite.regions.service.WorldRulesService;
 import xuanmo.arcartxsuite.regions.storage.RegionsRepository;
 
@@ -57,6 +58,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     private WorldRulesService worldRulesService;
     private RegionsMenuPacketHandler menuPacketHandler;
     private RegionsAdminPacketHandler adminPacketHandler;
+    private SelectionParticleTask particleTask;
 
     /**
      * 返回模块描述符，包含模块 ID、名称、版本与主类信息。
@@ -166,12 +168,24 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         Bukkit.getPluginManager().registerEvents(protectionListener, plugin);
         Bukkit.getPluginManager().registerEvents(selectionListener, plugin);
 
-        commandHandler = new RegionCommandHandler(regionManager, configuration, messages());
+        // 选区与区域边框粒子可视化
+        particleTask = new SelectionParticleTask(plugin, regionManager, configuration);
+        particleTask.start();
+
+        commandHandler = new RegionCommandHandler(regionManager, configuration, messages(), particleTask);
 
         // 世界规则服务
         var worldRulesSection = rawYaml.getConfigurationSection("world-rules");
         if (worldRulesSection != null) {
-            worldRulesService = new WorldRulesService(plugin, logger, worldRulesSection);
+            worldRulesService = new WorldRulesService(plugin, logger, worldRulesSection,
+                rawYaml, svc -> {
+                    try {
+                        File configFile = new File(dataFolder, configSpec().configFileName());
+                        rawYaml.save(configFile);
+                    } catch (Exception ex) {
+                        logger.warning("世界规则持久化失败: " + ex.getMessage());
+                    }
+                });
             worldRulesService.start();
         }
 
@@ -187,12 +201,12 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new RegionsMenuPacketHandler(
                     plugin, packetBridge, packetGuard,
-                    regionManager, menuBinding.runtimeUiId());
+                    regionManager, configuration, menuBinding.runtimeUiId());
             }
             if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new RegionsAdminPacketHandler(
                     plugin, packetBridge, packetGuard,
-                    regionManager, adminBinding.runtimeUiId());
+                    regionManager, configuration, worldRulesService, adminBinding.runtimeUiId());
             }
         }
 
@@ -253,6 +267,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     protected void stopService() {
         menuPacketHandler = null;
         adminPacketHandler = null;
+        if (particleTask != null) { particleTask.shutdown(); particleTask = null; }
         if (worldRulesService != null) { worldRulesService.shutdown(); worldRulesService = null; }
         if (protectionListener != null) { HandlerList.unregisterAll(protectionListener); protectionListener = null; }
         if (selectionListener != null) { HandlerList.unregisterAll(selectionListener); selectionListener = null; }

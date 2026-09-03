@@ -53,7 +53,11 @@ public final class SelectionListener implements Listener {
             event.setCancelled(true);
             Location loc = event.getClickedBlock().getLocation();
             Selection sel = manager.getSelection(player.getUniqueId());
-            sel.setPos2(loc);
+            if (!sel.setPos2(loc)) {
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    config.messages().prefix() + "&c选区点 2 必须与点 1 在同一世界 (&f" + sel.world() + "&c)。"));
+                return;
+            }
             String msg = config.messages().wandPos2()
                 .replace("{x}", String.valueOf(loc.getBlockX()))
                 .replace("{y}", String.valueOf(loc.getBlockY()))
