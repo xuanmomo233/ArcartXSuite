@@ -1,20 +1,24 @@
 package xuanmo.arcartxsuite.essentials.packet;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.capability.ChatMutable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
@@ -24,8 +28,8 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 /**
  * Essentials 管理员面板的 Packet Handler。
  * <p>
- * 处理客户端 UI 回包：refresh / heal / feed / fly / god / kick / ban / unban /
- * unmute / set_time / set_weather / set_warp / del_warp / set_spawn
+ * 处理客户端 UI 回包：refresh / heal / feed / fly / god / teleport_to / teleport_here /
+ * mute / unmute / kick / ban / unban / set_time / set_weather / set_warp / del_warp / set_spawn
  */
 public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
 
@@ -39,6 +43,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
     private final PlayerManagementService playerService;
     private final TeleportService teleportService;
     private final EssentialsRepository repository;
+    private final Supplier<ChatMutable> chatMutableSupplier;
     private final String uiId;
 
     public EssentialsAdminPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
@@ -46,6 +51,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                                         PlayerManagementService playerService,
                                         TeleportService teleportService,
                                         EssentialsRepository repository,
+                                        Supplier<ChatMutable> chatMutableSupplier,
                                         String uiId) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
@@ -53,6 +59,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
         this.playerService = playerService;
         this.teleportService = teleportService;
         this.repository = repository;
+        this.chatMutableSupplier = chatMutableSupplier;
         this.uiId = uiId;
     }
 
@@ -85,6 +92,48 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 if (!player.hasPermission("axs.essentials.god")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) { playerService.toggleGod(target); pushAdminData(player, "players"); }
+            }
+            case "teleport_to" -> {
+                if (!player.hasPermission("axs.essentials.teleport")) break;
+                Player target = resolveTarget(data, 1);
+                if (target != null && target != player) {
+                    teleportService.delayedTeleport(player, target.getLocation(), "已传送到 " + target.getName());
+                }
+            }
+            case "teleport_here" -> {
+                if (!player.hasPermission("axs.essentials.teleport")) break;
+                Player target = resolveTarget(data, 1);
+                if (target != null && target != player) {
+                    teleportService.delayedTeleport(target, player.getLocation(), "你已被传送到管理员身边");
+                }
+            }
+            case "mute" -> {
+                if (!player.hasPermission("axs.essentials.mute")) break;
+                Player target = resolveTarget(data, 1);
+                if (target != null) {
+                    ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
+                    if (chatMutable != null) {
+                        String reason = hasValue(data, 2) ? data.get(2) : "无";
+                        String result = chatMutable.mutePlayer(target.getName(), null, reason, player.getName());
+                        player.sendMessage(prefix(result));
+                        pushAdminData(player, "mutes");
+                    } else {
+                        player.sendMessage(prefix(ChatColor.RED + "聊天模块未加载，无法禁言"));
+                    }
+                }
+            }
+            case "unmute" -> {
+                if (!player.hasPermission("axs.essentials.unmute")) break;
+                if (hasValue(data, 1)) {
+                    ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
+                    if (chatMutable != null) {
+                        String result = chatMutable.unmutePlayer(data.get(1));
+                        player.sendMessage(prefix(result));
+                        pushAdminData(player, "mutes");
+                    } else {
+                        player.sendMessage(prefix(ChatColor.RED + "聊天模块未加载，无法解禁"));
+                    }
+                }
             }
             case "kick" -> {
                 if (!player.hasPermission("axs.essentials.kick")) break;
@@ -227,6 +276,27 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
             payload.put("banCount", "0");
         }
 
+        // 禁言列表（来自 Chat 模块的 ChatMutable capability）
+        ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
+        payload.put("chatAvailable", String.valueOf(chatMutable != null));
+        if (chatMutable != null) {
+            List<Map<String, String>> mutes = new ArrayList<>();
+            for (var info : chatMutable.listMutes()) {
+                Map<String, String> item = new HashMap<>();
+                item.put("uuid", info.playerUuid().toString());
+                item.put("name", info.playerName() != null ? info.playerName() : "未知");
+                item.put("reason", info.reason() != null ? info.reason() : "");
+                item.put("operator", info.mutedBy() != null ? info.mutedBy() : "");
+                item.put("permanent", String.valueOf(info.isPermanent()));
+                mutes.add(item);
+            }
+            payload.put("mutes", mutes);
+            payload.put("muteCount", String.valueOf(mutes.size()));
+        } else {
+            payload.put("mutes", List.of());
+            payload.put("muteCount", "0");
+        }
+
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 
@@ -237,6 +307,10 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
 
     private static boolean hasValue(List<String> data, int index) {
         return data != null && data.size() > index && !safe(data.get(index)).isBlank();
+    }
+
+    private static String prefix(String message) {
+        return ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET + message;
     }
 
     private static String safe(String value) {

@@ -176,6 +176,29 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
                 var record = muteService.getCachedMute(playerUuid);
                 return record != null && record.active(java.time.Instant.now());
             }
+
+            @Override
+            public @NotNull java.util.List<MuteInfo> listMutes() {
+                java.util.List<MuteInfo> result = new java.util.ArrayList<>();
+                java.time.Instant now = java.time.Instant.now();
+                for (var entry : muteService.getAllCachedMutes().entrySet()) {
+                    var record = entry.getValue();
+                    if (record == null || !record.active(now)) continue;
+                    // 尝试从在线玩家获取名称
+                    String name = null;
+                    org.bukkit.entity.Player online = org.bukkit.Bukkit.getPlayer(entry.getKey());
+                    if (online != null) name = online.getName();
+                    result.add(new MuteInfo(
+                        entry.getKey(),
+                        name,
+                        record.mutedBy(),
+                        record.reason(),
+                        record.createdAt(),
+                        record.expiresAt()
+                    ));
+                }
+                return result;
+            }
         });
 
         ensureChatCardDefaults();

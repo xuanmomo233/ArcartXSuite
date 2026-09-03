@@ -275,6 +275,19 @@ public final class ChatService implements Listener {
         return playerUuid == null ? null : currentMute(playerUuid);
     }
 
+    /**
+     * 返回当前缓存中所有禁言记录的快照映射（UUID → ChatMuteRecord）。
+     * <p>
+     * 返回的是缓存 Map 的副本，调用方修改不会影响内部缓存。
+     * 可能包含已过期但尚未被清理任务移除的记录，调用方应自行用
+     * {@link ChatMuteRecord#active(Instant)} 过滤。
+     *
+     * @return 禁言缓存快照
+     */
+    public Map<UUID, ChatMuteRecord> getAllCachedMutes() {
+        return new java.util.HashMap<>(mutes);
+    }
+
     public String replyTargetName(UUID playerUuid) {
         if (playerUuid == null) {
             return "";

@@ -1,6 +1,9 @@
 package xuanmo.arcartxsuite.essentials.config;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.ConfigurationSection;
@@ -13,6 +16,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * 各子配置均为独立 record，通过静态 {@code load} 方法从对应节点解析。
  *
  * @param debug       是否启用调试日志
+ * @param commandAliases 命令简写别名映射（别名 → action）
  * @param player      玩家管理配置（飞行速度、AFK 超时、隐身消息隐藏等）
  * @param teleport    传送配置（TPA 超时、传送延迟、家上限、安全传送等）
  * @param world       世界配置（允许生效的世界列表）
@@ -23,6 +27,7 @@ import org.bukkit.configuration.ConfigurationSection;
  */
 public record EssentialsConfiguration(
     boolean debug,
+    Map<String, String> commandAliases,
     PlayerConfiguration player,
     TeleportConfiguration teleport,
     WorldConfiguration world,
@@ -42,6 +47,7 @@ public record EssentialsConfiguration(
     public static EssentialsConfiguration load(ConfigurationSection root, Logger logger) {
         return new EssentialsConfiguration(
             root.getBoolean("debug", false),
+            loadCommandAliases(root),
             PlayerConfiguration.load(section(root, "player")),
             TeleportConfiguration.load(section(root, "teleport")),
             WorldConfiguration.load(section(root, "world")),
@@ -360,6 +366,30 @@ public record EssentialsConfiguration(
     }
 
     // ─── Helpers ───
+
+    /**
+     * 从 YAML 加载命令简写别名映射。
+     * <p>
+     * 读取 {@code command-aliases} 节点，键为别名（独立命令名），值为对应的
+     * {@code /essentials <action>} 子命令名。别名会被转为小写并去除前后空白。
+     *
+     * @param root YAML 根节点
+     * @return 别名 → action 的有序映射，无配置时返回空 Map
+     */
+    private static Map<String, String> loadCommandAliases(ConfigurationSection root) {
+        ConfigurationSection section = root.getConfigurationSection("command-aliases");
+        Map<String, String> aliases = new LinkedHashMap<>();
+        if (section != null) {
+            for (String alias : section.getKeys(false)) {
+                String action = section.getString(alias);
+                if (action != null && !action.isBlank() && !alias.isBlank()) {
+                    aliases.put(alias.toLowerCase(Locale.ROOT), action.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return aliases;
+    }
+
     private static ConfigurationSection section(ConfigurationSection parent, String key) {
         ConfigurationSection s = parent.getConfigurationSection(key);
         if (s == null) s = parent.createSection(key);

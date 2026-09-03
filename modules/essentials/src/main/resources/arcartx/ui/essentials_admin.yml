@@ -285,13 +285,59 @@ controls:
                   texts: "var.page == 'bans' ? '&0封禁' : '&f封禁'"
                   fontSize: 36
                   through: true
+          # 当前页：禁言（Chat 模块未加载时隐藏）
+          导航禁言:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+              visible: "var.chatAvailable == 'true'"
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'navigate', 'mutes')
+            children:
+              禁言底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.page == 'mutes' ? '220,120,60,210' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.page == 'mutes' ? '220,120,60,230' : (self.isHovered() ? '245,205,130,255' : '255,255,255,230')"
+              禁言高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~220,120,60,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.page == 'mutes'"
+              禁言文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.page == 'mutes' ? '&0禁言' : '&f禁言'"
+                  fontSize: 36
+                  through: true
           # 当前页：传送点
           导航传送点:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 150
+              y: "var.chatAvailable == 'true' ? 216 : 150"
               width: 272
               height: 58
             action:
@@ -336,7 +382,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 216
+              y: "var.chatAvailable == 'true' ? 282 : 216"
               width: 272
               height: 58
             action:
@@ -483,199 +529,347 @@ controls:
                               stroke:
                                 width: 2
                                 color: ~255,255,255,180
-                          玩家名称:
-                            type: Text
+                          玩家信息滚动:
+                            type: Scroll
                             attribute:
                               point: ~middle_left
                               x: 20
-                              texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 36
-                              through: true
-                          玩家生命值:
-                            type: Text
-                            attribute:
-                              point: ~middle_left
-                              x: 200
-                              texts: "'&c❤ ' + self.parent.entry['health']"
-                              fontSize: 36
-                              through: true
-                          玩家状态:
-                            type: Text
-                            attribute:
-                              point: ~middle_left
-                              x: 320
-                              texts: "self.parent.entry['isFlying'] == 'true' ? (self.parent.entry['isGod'] == 'true' ? '&b飞行 &a无敌' : '&b飞行') : (self.parent.entry['isGod'] == 'true' ? '&a无敌' : '&7普通')"
-                              fontSize: 36
-                              through: true
-                          玩家世界:
-                            type: Text
+                              width: 420
+                              height: 36
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              enter: |-
+                                self.scrollAnim = Lerp(0, 1, 2000)
+                              leave: |-
+                                self.scrollAnim = none
+                            children:
+                              信息横排:
+                                type: HStack
+                                attribute:
+                                  height: 36
+                                children:
+                                  玩家信息:
+                                    type: Text
+                                    attribute:
+                                      x: 0
+                                      y: 0
+                                      texts: "'&f' + self.parent.parent.parent.entry['name'] + '  &c❤ ' + self.parent.parent.parent.entry['health'] + '  ' + (self.parent.parent.parent.entry['isFlying'] == 'true' ? (self.parent.parent.parent.entry['isGod'] == 'true' ? '&b飞行 &a无敌' : '&b飞行') : (self.parent.parent.parent.entry['isGod'] == 'true' ? '&a无敌' : '&7普通'))"
+                                      fontSize: 36
+                          玩家世界滚动:
+                            type: Scroll
                             attribute:
                               point: ~middle_left
                               x: 440
-                              texts: "'&7' + self.parent.entry['world']"
-                              fontSize: 36
-                              through: true
-                          # 操作按钮组
-                          治疗按钮:
+                              width: 200
+                              height: 36
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              enter: |-
+                                self.scrollAnim = Lerp(0, 1, 2000)
+                              leave: |-
+                                self.scrollAnim = none
+                            children:
+                              世界横排:
+                                type: HStack
+                                attribute:
+                                  height: 36
+                                children:
+                                  玩家世界:
+                                    type: Text
+                                    attribute:
+                                      x: 0
+                                      y: 0
+                                      texts: "'&7' + self.parent.parent.parent.entry['world']"
+                                      fontSize: 36
+                          # 操作按钮组（靠右排列）
+                          操作按钮组:
                             type: Canvas
                             attribute:
-                              point: ~middle_left
-                              x: 560
-                              width: 80
+                              point: ~middle_right
+                              x: -16
+                              width: "var.chatAvailable == 'true' ? 700 : 612"
                               height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'heal', self.parent.entry['name'])
                             children:
-                              治疗底:
-                                type: Texture
+                              按钮横排:
+                                type: HStack
                                 attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~50,140,80,210
-                                  hover: ~70,170,100,230
-                                  shape: ~round_rect
-                                  radius: 8
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '124,196,142,255' : '255,255,255,180'"
-                              治疗文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f治疗"
-                                  fontSize: 36
-                                  through: true
-                          喂食按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_left
-                              x: 648
-                              width: 80
-                              height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'feed', self.parent.entry['name'])
-                            children:
-                              喂食底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~160,130,40,210
-                                  hover: ~190,160,60,230
-                                  shape: ~round_rect
-                                  radius: 8
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,180'"
-                              喂食文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f喂食"
-                                  fontSize: 36
-                                  through: true
-                          飞行按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_left
-                              x: 736
-                              width: 80
-                              height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'fly', self.parent.entry['name'])
-                            children:
-                              飞行底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: "self.parent.entry['isFlying'] == 'true' ? '60,160,220,230' : '60,100,160,210'"
-                                  hover: "self.parent.entry['isFlying'] == 'true' ? '90,180,240,255' : '80,130,190,230'"
-                                  shape: ~round_rect
-                                  radius: 8
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
-                              飞行文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f飞行"
-                                  fontSize: 36
-                                  through: true
-                          踢出按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_left
-                              x: 824
-                              width: 80
-                              height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'kick', self.parent.entry['name'])
-                            children:
-                              踢出底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~200,120,40,210
-                                  hover: ~230,150,60,230
-                                  shape: ~round_rect
-                                  radius: 8
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '245,180,80,255' : '255,255,255,180'"
-                              踢出文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f踢出"
-                                  fontSize: 36
-                                  through: true
-                          封禁按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_left
-                              x: 912
-                              width: 80
-                              height: 40
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'ban', self.parent.entry['name'])
-                            children:
-                              封禁底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~180,50,50,210
-                                  hover: ~220,70,70,230
-                                  shape: ~round_rect
-                                  radius: 8
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '235,100,100,255' : '255,255,255,180'"
-                              封禁文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f封禁"
-                                  fontSize: 36
-                                  through: true
+                                  point: ~middle_right
+                                  height: 40
+                                  spaceBetween: 8
+                                children:
+                                  治疗按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'heal', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      治疗底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~50,140,80,210
+                                          hover: ~70,170,100,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '124,196,142,255' : '255,255,255,180'"
+                                      治疗文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f治疗"
+                                          fontSize: 36
+                                          through: true
+                                  喂食按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'feed', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      喂食底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~160,130,40,210
+                                          hover: ~190,160,60,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '245,205,130,255' : '255,255,255,180'"
+                                      喂食文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f喂食"
+                                          fontSize: 36
+                                          through: true
+                                  飞行按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'fly', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      飞行底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: "self.parent.parent.parent.parent.entry['isFlying'] == 'true' ? '60,160,220,230' : '60,100,160,210'"
+                                          hover: "self.parent.parent.parent.parent.entry['isFlying'] == 'true' ? '90,180,240,255' : '80,130,190,230'"
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
+                                      飞行文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f飞行"
+                                          fontSize: 36
+                                          through: true
+                                  无敌按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'god', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      无敌底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: "self.parent.parent.parent.parent.entry['isGod'] == 'true' ? '80,160,80,230' : '70,100,70,210'"
+                                          hover: "self.parent.parent.parent.parent.entry['isGod'] == 'true' ? '110,200,110,255' : '100,140,100,230'"
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '124,196,142,255' : '255,255,255,180'"
+                                      无敌文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f无敌"
+                                          fontSize: 36
+                                          through: true
+                                  传至按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'teleport_to', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      传至底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~60,140,200,210
+                                          hover: ~80,170,230,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
+                                      传至文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f传至"
+                                          fontSize: 36
+                                          through: true
+                                  召来按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'teleport_here', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      召来底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~140,100,200,210
+                                          hover: ~170,130,230,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '180,140,240,255' : '255,255,255,180'"
+                                      召来文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f召来"
+                                          fontSize: 36
+                                          through: true
+                                  禁言按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                      visible: "var.chatAvailable == 'true'"
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'mute', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      禁言按钮底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~180,100,60,210
+                                          hover: ~210,130,80,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '235,160,100,255' : '255,255,255,180'"
+                                      禁言按钮文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f禁言"
+                                          fontSize: 36
+                                          through: true
+                                  踢出按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'kick', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      踢出底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~200,120,40,210
+                                          hover: ~230,150,60,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '245,180,80,255' : '255,255,255,180'"
+                                      踢出文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f踢出"
+                                          fontSize: 36
+                                          through: true
+                                  封禁按钮:
+                                    type: Canvas
+                                    attribute:
+                                      width: 80
+                                      height: 40
+                                    action:
+                                      clickLeft: |-
+                                        Packet.send(var.packetId, 'ban', self.parent.parent.parent.entry['name'])
+                                    children:
+                                      封禁底:
+                                        type: Texture
+                                        attribute:
+                                          point: ~stretch_all
+                                          through: true
+                                          normal: ~180,50,50,210
+                                          hover: ~220,70,70,230
+                                          shape: ~round_rect
+                                          radius: 8
+                                        effect:
+                                          ripple:
+                                          stroke:
+                                            width: 2
+                                            color: "self.isHovered() ? '235,100,100,255' : '255,255,255,180'"
+                                      封禁文字:
+                                        type: Text
+                                        attribute:
+                                          point: ~middle_center
+                                          texts: "~&f封禁"
+                                          fontSize: 36
+                                          through: true
 
           # ─── 封禁列表视图 ───
           封禁布局:
@@ -828,6 +1022,160 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: "~&f解封"
+                                  fontSize: 36
+                                  through: true
+
+          # ─── 禁言列表视图（Chat 模块未加载时隐藏）───
+          禁言布局:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              width: "var.contentW - 64"
+              height: "var.viewH - 196"
+              visible: |-
+                var.page == 'mutes' && var.chatAvailable == 'true'
+            children:
+              禁言页标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "~&f禁言列表"
+                  fontSize: 48
+              禁言数量:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 6
+                  texts: "'&7共 &f' + var.muteCount + ' &7条记录'"
+                  fontSize: 36
+              禁言空状态:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 100
+                  visible: |-
+                    var.muteCount == '0'
+                  texts: "~&8暂无禁言记录"
+                  fontSize: 36
+              禁言滑块:
+                type: Texture
+                val: 禁言滑块
+                attribute:
+                  point: ~top_right
+                  x: -6
+                  y: 60
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: "var.viewH - 316"
+              禁言滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 60
+                  width: "var.contentW - 82"
+                  height: "var.viewH - 256"
+                  moveY: "self.parent['禁言滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['禁言滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['禁言滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  mutes_list:
+                    val: mute_data
+                    type: VStack
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: "var.contentW - 82"
+                      spaceBetween: 8
+                    children:
+                      禁言行:
+                        type: Canvas
+                        attribute:
+                          entry: var.mutes[self.key]
+                          visible: self.entry != none
+                          width: "var.contentW - 90"
+                          height: 72
+                        children:
+                          禁言行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,180
+                          禁言名称:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 20
+                              y: 12
+                              texts: "'&f' + self.parent.entry['name']"
+                              fontSize: 36
+                              through: true
+                          禁言原因:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 20
+                              y: 42
+                              texts: "'&7原因 &f' + (self.parent.entry['reason'] != none && self.parent.entry['reason'] != '' ? self.parent.entry['reason'] : '未填写') + '  &7操作者 &b' + self.parent.entry['operator']"
+                              fontSize: 36
+                              through: true
+                          禁言永久标记:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 400
+                              texts: "self.parent.entry['permanent'] == 'true' ? '&c永久' : '&e临时'"
+                              fontSize: 36
+                              through: true
+                          解禁按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_right
+                              x: -16
+                              width: 90
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'unmute', self.parent.entry['name'])
+                            children:
+                              解禁底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~50,140,80,210
+                                  hover: ~70,170,100,230
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  ripple:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '124,196,142,255' : '255,255,255,180'"
+                              解禁文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f解禁"
                                   fontSize: 36
                                   through: true
 

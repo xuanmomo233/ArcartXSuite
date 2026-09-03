@@ -250,7 +250,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                 adminPacketHandler = new EssentialsAdminPacketHandler(
                     plugin, packetBridge, packetGuard,
                     playerService, teleportService, repository,
-                    adminBinding.runtimeUiId());
+                    chatMutableSupplier, adminBinding.runtimeUiId());
             }
         }
 
@@ -276,6 +276,40 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                 return result != null ? result : List.of();
             }
         });
+
+        // 注册配置中定义的命令简写别名（如 /fly /god /gm 等），转发到 /essentials <action>
+        if (configuration != null && configuration.commandAliases() != null) {
+            for (var entry : configuration.commandAliases().entrySet()) {
+                String alias = entry.getKey();
+                String action = entry.getValue();
+                registerCommand(alias, new org.bukkit.command.TabExecutor() {
+                    @Override
+                    public boolean onCommand(@NotNull org.bukkit.command.CommandSender sender,
+                            @NotNull org.bukkit.command.Command command,
+                            @NotNull String label, @NotNull String[] args) {
+                        // 转发为 /essentials <action> [args...]
+                        String[] forwarded = new String[args.length + 2];
+                        forwarded[0] = "essentials";
+                        forwarded[1] = action;
+                        System.arraycopy(args, 0, forwarded, 2, args.length);
+                        return EssentialsModule.this.onCommand(sender, label, forwarded);
+                    }
+                    @Override
+                    public java.util.List<String> onTabComplete(@NotNull org.bukkit.command.CommandSender sender,
+                            @NotNull org.bukkit.command.Command command,
+                            @NotNull String label, @NotNull String[] args) {
+                        // 转发 tab 补全，但补全位置要减去 action 参数
+                        String[] forwarded = new String[args.length + 2];
+                        forwarded[0] = "essentials";
+                        forwarded[1] = action;
+                        System.arraycopy(args, 0, forwarded, 2, args.length);
+                        java.util.List<String> result = EssentialsModule.this.onTabComplete(sender, forwarded);
+                        return result != null ? result : List.of();
+                    }
+                });
+            }
+            logger.info("已注册 " + configuration.commandAliases().size() + " 个命令简写别名");
+        }
 
         EssentialsRepository essRepo = repository;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,

@@ -7,6 +7,60 @@ config-version: 3
 
 debug: false
 
+# ─── 命令简写别名 ───
+# 注册独立的顶层命令，转发到 /essentials <action>。
+# 格式: 别名: action
+# 别名不能包含空格，action 必须是 /essentials 的合法子命令。
+# 注意: 别名可能与其它插件冲突，冲突时以先注册者为准。
+command-aliases:
+  fly: fly
+  god: god
+  gm: gamemode
+  heal: heal
+  feed: feed
+  tp: tp
+  top: top
+  back: back
+  home: home
+  sethome: sethome
+  delhome: delhome
+  warp: warp
+  setwarp: setwarp
+  delwarp: delwarp
+  spawn: spawn
+  setspawn: setspawn
+  tpa: tpa
+  tpahere: tpahere
+  tpaccept: tpaccept
+  tpdeny: tpdeny
+  tppos: tppos
+  vanish: vanish
+  afk: afk
+  hat: hat
+  repair: repair
+  enderchest: enderchest
+  workbench: workbench
+  anvil: anvil
+  trash: trash
+  nick: nick
+  seen: seen
+  inv: inv
+  sit: sit
+  lay: lay
+  sort: sort
+  speed: speed
+  time: time
+  weather: weather
+  ban: ban
+  tempban: tempban
+  unban: unban
+  mute: mute
+  tempmute: tempmute
+  unmute: unmute
+  kick: kick
+  warn: warn
+  sudo: sudo
+
 # ─── 玩家管理 ───
 player:
   # 默认飞行速度倍率 (1-10)
