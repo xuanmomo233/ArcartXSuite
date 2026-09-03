@@ -113,10 +113,14 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 if (target != null) {
                     ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
                     if (chatMutable != null) {
-                        String reason = hasValue(data, 2) ? data.get(2) : "无";
-                        String result = chatMutable.mutePlayer(target.getName(), null, reason, player.getName());
-                        player.sendMessage(prefix(result));
-                        pushAdminData(player, "mutes");
+                        try {
+                            String reason = hasValue(data, 2) ? data.get(2) : "无";
+                            String result = chatMutable.mutePlayer(target.getName(), null, reason, player.getName());
+                            player.sendMessage(prefix(result));
+                            pushAdminData(player, "mutes");
+                        } catch (NoSuchMethodError e) {
+                            player.sendMessage(prefix(ChatColor.RED + "Chat 模块版本过旧，不支持禁言功能，请更新 Chat 模块"));
+                        }
                     } else {
                         player.sendMessage(prefix(ChatColor.RED + "聊天模块未加载，无法禁言"));
                     }
@@ -127,9 +131,13 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 if (hasValue(data, 1)) {
                     ChatMutable chatMutable = chatMutableSupplier != null ? chatMutableSupplier.get() : null;
                     if (chatMutable != null) {
-                        String result = chatMutable.unmutePlayer(data.get(1));
-                        player.sendMessage(prefix(result));
-                        pushAdminData(player, "mutes");
+                        try {
+                            String result = chatMutable.unmutePlayer(data.get(1));
+                            player.sendMessage(prefix(result));
+                            pushAdminData(player, "mutes");
+                        } catch (NoSuchMethodError e) {
+                            player.sendMessage(prefix(ChatColor.RED + "Chat 模块版本过旧，不支持解禁功能，请更新 Chat 模块"));
+                        }
                     } else {
                         player.sendMessage(prefix(ChatColor.RED + "聊天模块未加载，无法解禁"));
                     }
@@ -281,14 +289,20 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
         payload.put("chatAvailable", String.valueOf(chatMutable != null));
         if (chatMutable != null) {
             List<Map<String, String>> mutes = new ArrayList<>();
-            for (var info : chatMutable.listMutes()) {
-                Map<String, String> item = new HashMap<>();
-                item.put("uuid", info.playerUuid().toString());
-                item.put("name", info.playerName() != null ? info.playerName() : "未知");
-                item.put("reason", info.reason() != null ? info.reason() : "");
-                item.put("operator", info.mutedBy() != null ? info.mutedBy() : "");
-                item.put("permanent", String.valueOf(info.isPermanent()));
-                mutes.add(item);
+            try {
+                for (var info : chatMutable.listMutes()) {
+                    Map<String, String> item = new HashMap<>();
+                    item.put("uuid", info.playerUuid().toString());
+                    item.put("name", info.playerName() != null ? info.playerName() : "未知");
+                    item.put("reason", info.reason() != null ? info.reason() : "");
+                    item.put("operator", info.mutedBy() != null ? info.mutedBy() : "");
+                    item.put("permanent", String.valueOf(info.isPermanent()));
+                    mutes.add(item);
+                }
+            } catch (NoSuchMethodError e) {
+                // 旧版 Chat 模块没有 listMutes() 方法，降级为空列表
+                plugin.getLogger().warning("Chat 模块版本过旧，不支持禁言列表查询，请更新 Chat 模块");
+                payload.put("chatAvailable", "false");
             }
             payload.put("mutes", mutes);
             payload.put("muteCount", String.valueOf(mutes.size()));
