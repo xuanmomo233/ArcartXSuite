@@ -21,13 +21,16 @@ ui:
   packetHandler:
     # packetHandler: init
     # 包字段:
-    #   - page: 当前页面 (players/bans/warps/world)
+    #   - page: 当前页面 (players/bans/mutes/warps/world)
     #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
     #   - players: 在线玩家数据列表
     #   - playerCount: 在线玩家数量
     #   - warps: 传送点数据列表
     #   - bans: 封禁列表数据
     #   - banCount: 封禁数量
+    #   - chatAvailable: Chat 模块是否可用 (true/false)
+    #   - mutes: 禁言列表数据
+    #   - muteCount: 禁言数量
     #   - worldName: 当前世界名称
     #   - worldTime: 当前世界时间
     #   - worldWeather: 当前世界天气
@@ -39,6 +42,9 @@ ui:
       var.warps = packet['warps']
       var.bans = packet['bans']
       var.banCount = packet['banCount']
+      var.chatAvailable = packet['chatAvailable']
+      var.mutes = packet['mutes']
+      var.muteCount = packet['muteCount']
       var.worldName = packet['worldName']
       var.worldTime = packet['worldTime']
       var.worldWeather = packet['worldWeather']
@@ -51,6 +57,9 @@ ui:
       var.warps = []
       var.bans = []
       var.banCount = '0'
+      var.chatAvailable = 'false'
+      var.mutes = []
+      var.muteCount = '0'
       var.worldName = ''
       var.worldTime = '0'
       var.worldWeather = 'clear'
@@ -486,7 +495,7 @@ controls:
               玩家滚动栏:
                 type: Scroll
                 attribute:
-                  point: ~top_left
+                  point: ~middle_left
                   x: 0
                   y: 60
                   width: "var.contentW - 82"
