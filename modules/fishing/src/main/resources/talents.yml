@@ -240,13 +240,13 @@ talents:
     tier: 6
     branch: d
     tree: steady
-    display-name: '&a抗冲'
-    description: 冲而不溃，绿条反弹降低
-    effect-type: bar_bounce
-    effect-value: 0.08
+    display-name: '&a备饵'
+    description: 有备无患，饵料队列槽位 +1
+    effect-type: bait_slot_bonus
+    effect-value: 1
     icon:
       source: minecraft
-      id: obsidian
+      id: fishing_rod
       amount: 1
     prerequisites:
       - steady-t5-b
@@ -1080,13 +1080,13 @@ talents:
     tier: 6
     branch: d
     tree: endure
-    display-name: '&6稳阻'
-    description: 稳阻不移，绿条阻尼提升
-    effect-type: bar_damping
-    effect-value: 0.04
+    display-name: '&6备饵'
+    description: 有备无患，饵料队列槽位 +1
+    effect-type: bait_slot_bonus
+    effect-value: 1
     icon:
       source: minecraft
-      id: phantom_membrane
+      id: fishing_rod
       amount: 1
     prerequisites:
       - endure-t5-b
@@ -1167,7 +1167,7 @@ links:
     description: 稳速之力升华，绿条阻尼提升且绿条力系数提升
     effects:
       - effect-type: bar_damping
-        effect-value: 0.05
+        effect-value: 0.09
       - effect-type: bar_force
         effect-value: 0.03
     icon:
@@ -1178,12 +1178,14 @@ links:
       - link-1
   - id: link-1-3
     display-name: '&6稳速·终极'
-    description: 稳速之道大成，鱼速度降低且绿条重力降低
+    description: 稳速之道大成，鱼速度降低且绿条重力降低且绿条反弹降低
     effects:
       - effect-type: fish_speed
         effect-value: 0.08
       - effect-type: bar_gravity
         effect-value: 0.04
+      - effect-type: bar_bounce
+        effect-value: 0.08
     icon:
       source: minecraft
       id: dragon_breath
@@ -1388,7 +1390,7 @@ links:
       - effect-type: bar_force
         effect-value: 0.04
       - effect-type: bar_damping
-        effect-value: 0.03
+        effect-value: 0.07
     icon:
       source: minecraft
       id: nether_star

@@ -494,8 +494,7 @@ public record FishingModuleConfiguration(
                         section.getDouble("exp-multiplier", 1.0),
                         section.getInt("min-player-level", 0),
                         section.getInt("max-player-level", 0),
-                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName()),
-                        Math.max(1, section.getInt("bait-slots", 3))
+                        ItemMatcherLoader.load(section.getConfigurationSection("match"), logger, "rods/" + p.getFileName())
                     ));
                 } catch (Exception e) {
                     logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());

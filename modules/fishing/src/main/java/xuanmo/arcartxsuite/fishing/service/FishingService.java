@@ -965,10 +965,9 @@ public final class FishingService {
 
     // ─── 饵料队列管理 ────────────────────────────────────────────
 
-    /** 获取玩家当前饵料槽数量（鱼竿基础槽位 + 天赋加成）。 */
+    /** 获取玩家当前饵料槽数量（固定基础1 + 天赋加成）。 */
     public int getBaitSlots(@NotNull Player player) {
-        RodDefinition rod = detectRod(player);
-        int base = rod.baitSlots();
+        int base = 1;
         // 天赋加成：bait_slot_bonus effect-type
         FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
         Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
@@ -976,10 +975,9 @@ public final class FishingService {
         return base + bonus;
     }
 
-    /** 获取玩家饵料槽位的鱼竿基础数量和天赋加成数量（供 UI 显示来源）。 */
+    /** 获取玩家饵料槽位的基础数量和天赋加成数量（供 UI 显示来源）。 */
     public int[] getBaitSlotsBreakdown(@NotNull Player player) {
-        RodDefinition rod = detectRod(player);
-        int base = rod.baitSlots();
+        int base = 1;
         FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
         Map<String, Double> bonuses = talentEngine.computeBonuses(seasonData);
         int bonus = (int) TalentEngine.getBonus(bonuses, "bait_slot_bonus");
@@ -2153,7 +2151,8 @@ public final class FishingService {
         java.util.Map.entry("bar_click_force", "绿条点击力"),
         java.util.Map.entry("fatigue_reduction", "疲惫增长降低"),
         java.util.Map.entry("fatigue_efficiency", "疲惫效率缓解"),
-        java.util.Map.entry("rest_boost", "休息恢复加速")
+        java.util.Map.entry("rest_boost", "休息恢复加速"),
+        java.util.Map.entry("bait_slot_bonus", "饵料槽位")
     );
 
     /**
@@ -2166,6 +2165,10 @@ public final class FishingService {
         // 像素类：直接显示数值
         if ("bar_height".equals(effectType)) {
             return name + " +" + String.format("%.0f", value) + "px";
+        }
+        // 整数槽位类：直接显示整数
+        if ("bait_slot_bonus".equals(effectType)) {
+            return name + " +" + String.format("%.0f", value);
         }
         // "降低/减少"类效果
         if (isReductionEffect(effectType)) {

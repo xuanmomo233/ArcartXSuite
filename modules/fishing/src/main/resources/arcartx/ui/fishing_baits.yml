@@ -132,13 +132,14 @@ ui:
           }
         }
       }
-      var.selectedInvSlot = none
-      var.selectedQueueSlot = none
+      // 不重置 selectedInvSlot/selectedQueueSlot，保留选中状态供连续操作
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
       var.packetId = 'AXS_FISHING_BAITS'
       var.baitSlots = 0
+      var.baitSlotsBase = 0
+      var.baitSlotsBonus = 0
       var.queue = {}
       var.baits = {}
       var.queueIconJsons = {}
@@ -509,16 +510,6 @@ controls:
               width: 264
               height: 2
               normal: ~80,200,220,220
-          # 操作提示
-          操作提示:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 18
-              y: 448
-              width: 264
-              texts: "~&f先选背包饵料，再点队列槽放入"
-              fontSize: 32
           # 刷新按钮
           刷新按钮:
             type: Canvas
@@ -584,14 +575,15 @@ controls:
               y: 26
               texts: "~&f饵料管理"
               fontSize: 40
-          页标题说明:
+          # 动态操作提示：根据当前选中状态智能显示下一步操作指引
+          动态提示:
             type: Text
             attribute:
               point: ~top_left
-              x: 220
-              y: 32
-              texts: "~&7左键放入/取出 &f| &7右键全部/交换 &f| &7左侧优先消耗"
-              fontSize: 32
+              x: 32
+              y: 72
+              texts: "var.selectedInvSlot != none ? '&a已选中饵料 → 左键队列槽放入1个 | 右键队列槽放入全部 | 再次左键背包槽取消' : (var.selectedQueueSlot != none ? '&a已选中队列槽 → 右键另一队列槽交换顺序 | 左键队列槽取出饵料' : '&f左键背包饵料选中后放入队列 | 左键有饵料的队列槽取出 | 右键两个队列槽交换顺序')"
+              fontSize: 36
 
           # ══════════════════════════════════════════════
           # 上方：饵料队列区
@@ -601,7 +593,7 @@ controls:
             attribute:
               point: ~top_left
               x: 32
-              y: 96
+              y: 112
               width: "var.contentW - 64"
               height: 200
             children:
@@ -644,16 +636,7 @@ controls:
                   point: ~top_right
                   x: -24
                   y: 22
-                  texts: "var.baitSlotsBonus > 0 ? '&f鱼竿 &e' + var.baitSlotsBase.round() + ' &f+ 天赋 &e' + var.baitSlotsBonus.round() + ' &f= &e' + var.baitSlots.round() + ' &f槽位' : '&f共 &e' + var.baitSlots.round() + ' &f个槽位'"
-                  fontSize: 32
-                  through: true
-              队列优先级提示:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 34
-                  y: 52
-                  texts: "~&7左侧优先消耗"
+                  texts: "var.baitSlotsBonus > 0 ? '&f基础 &e' + var.baitSlotsBase.round() + ' &f+ 天赋 &e' + var.baitSlotsBonus.round() + ' &f= &e' + var.baitSlots.round() + ' &f槽位 &f| 左侧优先' : '&f共 &e' + var.baitSlots.round() + ' &f个槽位 &f| 左侧优先'"
                   fontSize: 32
                   through: true
               # 饵料队列槽位（横向排列，模板在索引0，init 中按 baitSlots 动态复制）
@@ -688,7 +671,8 @@ controls:
                           // 选中背包槽：左键放1个
                           Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, 1.round())
                         } else {
-                          // 未选中背包槽：左键取出
+                          // 未选中背包槽：左键取出，同时清除队列选中状态
+                          var.selectedQueueSlot = none
                           if(self.queueEntry != none){
                             Packet.send(var.packetId, 'take_bait', self.entryKey, 0.round())
                           }
@@ -778,9 +762,9 @@ controls:
             attribute:
               point: ~top_left
               x: 32
-              y: 320
+              y: 336
               width: "var.contentW - 64"
-              height: "var.viewH - 476"
+              height: "var.viewH - 492"
             children:
               背包区底:
                 type: Texture
@@ -821,8 +805,8 @@ controls:
                   point: ~top_right
                   x: -24
                   y: 22
-                  texts: "var.selectedInvSlot != none ? '&f已选 &e' + var.selectedInvSlot.round() + ' &7左键放1/右键放全部' : (var.selectedQueueSlot != none ? '&f已选队列 &e' + (var.selectedQueueSlot + 1).round() + ' &7右键另一槽交换' : '&f选背包饵料后点队列放入')"
-                  fontSize: 32
+                  texts: "~&f左键选择饵料"
+                  fontSize: 36
                   through: true
               # 背包网格（9列，36个槽位，slotType: ~Backpack 绑定玩家背包）
               # 槽位 id 9~44 对应玩家背包 main inventory + hotbar
@@ -858,7 +842,7 @@ controls:
                       lock: true
                       width: 64
                       height: 64
-                      normal: "self.entryKey == var.selectedInvSlot ? '50,170,200,210' : '26,34,46,210'"
+                      normal: "(self.entryKey == var.selectedInvSlot && self.getSlotItemStack() != none && self.getSlotItemStack().getCount() > 0) ? '50,170,200,210' : '26,34,46,210'"
                       shape: ~round_rect
                       radius: 10
                     action:
@@ -876,4 +860,4 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '80,200,220,255' : (self.entryKey == var.selectedInvSlot ? '50,170,200,230' : '80,200,220,240')"
+                        color: "self.isHovered() ? '80,200,220,255' : ((self.entryKey == var.selectedInvSlot && self.getSlotItemStack() != none && self.getSlotItemStack().getCount() > 0) ? '50,170,200,230' : '80,200,220,240')"
