@@ -481,22 +481,36 @@ controls:
                   y: 0
                   texts: "~&f在线玩家"
                   fontSize: 48
+              玩家滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  y: 60
+                  width: 12
+                  height: "var.viewH - 256"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
               玩家滑块:
                 type: Texture
                 val: 玩家滑块
                 attribute:
                   point: ~top_right
-                  x: -6
                   y: 60
-                  width: 6
-                  height: 50
-                  normal: ~120,120,120,200
+                  width: 12
+                  height: 60
+                  normal: ~120,160,220,255
                   maxDragY: "var.viewH - 316"
+                  shape: ~round_rect
+                  radius: 6
               玩家滚动栏:
                 type: Scroll
                 attribute:
-                  point: ~middle_left
-                  x: 0
+                  point: ~top_left
                   y: 60
                   width: "var.contentW - 82"
                   height: "var.viewH - 256"
@@ -525,7 +539,7 @@ controls:
                           entry: var.players[self.key]
                           visible: self.entry != none
                           width: "var.contentW - 90"
-                          height: 64
+                          height: 72
                         children:
                           玩家行底:
                             type: Texture
@@ -543,8 +557,8 @@ controls:
                             attribute:
                               point: ~middle_left
                               x: 20
-                              width: 420
-                              height: 36
+                              width: 620
+                              height: 72
                               scrollAnim: none
                               moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
                             action:
@@ -556,42 +570,15 @@ controls:
                               信息横排:
                                 type: HStack
                                 attribute:
+                                  y: 16
                                   height: 36
                                 children:
                                   玩家信息:
                                     type: Text
                                     attribute:
-                                      x: 0
-                                      y: 0
-                                      texts: "'&f' + self.parent.parent.parent.entry['name'] + '  &c❤ ' + self.parent.parent.parent.entry['health'] + '  ' + (self.parent.parent.parent.entry['isFlying'] == 'true' ? (self.parent.parent.parent.entry['isGod'] == 'true' ? '&b飞行 &a无敌' : '&b飞行') : (self.parent.parent.parent.entry['isGod'] == 'true' ? '&a无敌' : '&7普通'))"
-                                      fontSize: 36
-                          玩家世界滚动:
-                            type: Scroll
-                            attribute:
-                              point: ~middle_left
-                              x: 440
-                              width: 200
-                              height: 36
-                              scrollAnim: none
-                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
-                            action:
-                              enter: |-
-                                self.scrollAnim = Lerp(0, 1, 2000)
-                              leave: |-
-                                self.scrollAnim = none
-                            children:
-                              世界横排:
-                                type: HStack
-                                attribute:
-                                  height: 36
-                                children:
-                                  玩家世界:
-                                    type: Text
-                                    attribute:
-                                      x: 0
-                                      y: 0
-                                      texts: "'&7' + self.parent.parent.parent.entry['world']"
-                                      fontSize: 36
+                                      y: 10
+                                      texts: "'&f' + self.parent.parent.parent.entry['name'] + '    &c❤ ' + self.parent.parent.parent.entry['health'] + '    ' + (self.parent.parent.parent.entry['isFlying'] == 'true' ? (self.parent.parent.parent.entry['isGod'] == 'true' ? '&b飞行 &a无敌' : '&b飞行') : (self.parent.parent.parent.entry['isGod'] == 'true' ? '&a无敌' : '&7普通')) + '    &7' + self.parent.parent.parent.entry['world']"
+                                      fontSize: 42
                           # 操作按钮组（靠右排列）
                           操作按钮组:
                             type: Canvas
@@ -599,20 +586,20 @@ controls:
                               point: ~middle_right
                               x: -16
                               width: "var.chatAvailable == 'true' ? 700 : 612"
-                              height: 40
+                              height: 48
                             children:
                               按钮横排:
                                 type: HStack
                                 attribute:
                                   point: ~middle_right
-                                  height: 40
+                                  height: 48
                                   spaceBetween: 8
                                 children:
                                   治疗按钮:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'heal', self.parent.parent.parent.entry['name'])
@@ -642,7 +629,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'feed', self.parent.parent.parent.entry['name'])
@@ -672,7 +659,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'fly', self.parent.parent.parent.entry['name'])
@@ -702,7 +689,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'god', self.parent.parent.parent.entry['name'])
@@ -732,7 +719,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'teleport_to', self.parent.parent.parent.entry['name'])
@@ -762,7 +749,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'teleport_here', self.parent.parent.parent.entry['name'])
@@ -792,7 +779,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                       visible: "var.chatAvailable == 'true'"
                                     action:
                                       clickLeft: |-
@@ -823,7 +810,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'kick', self.parent.parent.parent.entry['name'])
@@ -853,7 +840,7 @@ controls:
                                     type: Canvas
                                     attribute:
                                       width: 80
-                                      height: 40
+                                      height: 48
                                     action:
                                       clickLeft: |-
                                         Packet.send(var.packetId, 'ban', self.parent.parent.parent.entry['name'])
@@ -918,22 +905,36 @@ controls:
                     var.banCount == '0'
                   texts: "~&8暂无封禁记录"
                   fontSize: 36
+              封禁滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  y: 60
+                  width: 12
+                  height: "var.viewH - 256"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
               封禁滑块:
                 type: Texture
                 val: 封禁滑块
                 attribute:
                   point: ~top_right
-                  x: -6
                   y: 60
-                  width: 6
-                  height: 50
-                  normal: ~120,120,120,200
+                  width: 12
+                  height: 60
+                  normal: ~220,120,120,255
                   maxDragY: "var.viewH - 316"
+                  shape: ~round_rect
+                  radius: 6
               封禁滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 0
                   y: 60
                   width: "var.contentW - 82"
                   height: "var.viewH - 256"
@@ -1007,7 +1008,7 @@ controls:
                               point: ~middle_right
                               x: -16
                               width: 90
-                              height: 40
+                              height: 48
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'unban', self.parent.entry['uuid'])
@@ -1072,22 +1073,36 @@ controls:
                     var.muteCount == '0'
                   texts: "~&8暂无禁言记录"
                   fontSize: 36
+              禁言滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  y: 60
+                  width: 12
+                  height: "var.viewH - 256"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
               禁言滑块:
                 type: Texture
                 val: 禁言滑块
                 attribute:
                   point: ~top_right
-                  x: -6
                   y: 60
-                  width: 6
-                  height: 50
-                  normal: ~120,120,120,200
+                  width: 12
+                  height: 60
+                  normal: ~220,160,120,255
                   maxDragY: "var.viewH - 316"
+                  shape: ~round_rect
+                  radius: 6
               禁言滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 0
                   y: 60
                   width: "var.contentW - 82"
                   height: "var.viewH - 256"
@@ -1161,7 +1176,7 @@ controls:
                               point: ~middle_right
                               x: -16
                               width: 90
-                              height: 40
+                              height: 48
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'unmute', self.parent.entry['name'])
@@ -1241,22 +1256,36 @@ controls:
                       texts: "~&f+ 新建传送点"
                       fontSize: 36
                       through: true
+              传送点滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  y: 60
+                  width: 12
+                  height: "var.viewH - 256"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
               传送点滑块:
                 type: Texture
                 val: 传送点滑块
                 attribute:
                   point: ~top_right
-                  x: -6
                   y: 60
-                  width: 6
-                  height: 50
-                  normal: ~120,120,120,200
+                  width: 12
+                  height: 60
+                  normal: ~120,200,160,255
                   maxDragY: "var.viewH - 316"
+                  shape: ~round_rect
+                  radius: 6
               传送点滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 0
                   y: 60
                   width: "var.contentW - 82"
                   height: "var.viewH - 256"
@@ -1312,7 +1341,7 @@ controls:
                               point: ~middle_right
                               x: -16
                               width: 90
-                              height: 40
+                              height: 48
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'del_warp', self.parent.entry)

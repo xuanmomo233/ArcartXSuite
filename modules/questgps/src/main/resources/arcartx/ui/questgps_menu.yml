@@ -430,8 +430,8 @@ controls:
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.pageId == 'available' ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                    width: "var.pageId == 'available' ? 4 : 3"
+                    color: "var.pageId == 'available' ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
               可接取高亮条:
                 type: Texture
                 attribute:
@@ -478,14 +478,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.pageId == 'active' ? '124,196,142,210' : '50,44,68,245'"
+                  normal: "var.pageId == 'active' ? '170,120,220,210' : '50,44,68,245'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.pageId == 'active' ? '124,196,142,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                    width: "var.pageId == 'active' ? 4 : 3"
+                    color: "var.pageId == 'active' ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
               进行中高亮条:
                 type: Texture
                 attribute:
@@ -493,7 +493,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~124,196,142,255
+                  normal: ~170,120,220,255
                   shape: ~round_rect
                   radius: 2
                   visible: "var.pageId == 'active'"
@@ -532,14 +532,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.pageId == 'completed' ? '232,180,90,210' : '50,44,68,245'"
+                  normal: "var.pageId == 'completed' ? '170,120,220,210' : '50,44,68,245'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.pageId == 'completed' ? '232,180,90,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                    width: "var.pageId == 'completed' ? 4 : 3"
+                    color: "var.pageId == 'completed' ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
               已完成高亮条:
                 type: Texture
                 attribute:
@@ -547,7 +547,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~232,180,90,255
+                  normal: ~170,120,220,255
                   shape: ~round_rect
                   radius: 2
                   visible: "var.pageId == 'completed'"
@@ -635,8 +635,8 @@ controls:
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                            width: "self.parent.entry != none && self.parent.entry['selected'] ? 4 : 3"
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
                       分类文字:
                         type: Text
                         attribute:
@@ -658,6 +658,10 @@ controls:
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~170,120,220,220
           # 分类滑块
           分类滑块:
             type: Texture
@@ -767,8 +771,8 @@ controls:
                           radius: 12
                         effect:
                           stroke:
-                            width: 3
-                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                            width: "self.parent.entry != none && self.parent.entry['selected'] ? 4 : 3"
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
                       任务名:
                         type: Text
                         attribute:
@@ -817,6 +821,10 @@ controls:
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~170,120,220,220
           任务滑块:
             type: Texture
             val: 任务滑块
@@ -961,8 +969,8 @@ controls:
                               radius: 10
                             effect:
                               stroke:
-                                width: 3
-                                color: "self.parent.entry != none && self.parent.entry['tracked'] ? '170,120,220,230' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
+                                width: "self.parent.entry != none && self.parent.entry['tracked'] ? 4 : 3"
+                                color: "self.parent.entry != none && self.parent.entry['tracked'] ? '255,255,255,255' : (self.isHovered() ? '220,180,255,255' : '170,120,220,240')"
                           目标文字:
                             type: Text
                             attribute:
@@ -991,6 +999,10 @@ controls:
                   shape: ~round_rect
                   radius: 5
                   through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~170,120,220,220
               目标滑块:
                 type: Texture
                 val: 目标滑块
@@ -1111,6 +1123,10 @@ controls:
                   shape: ~round_rect
                   radius: 5
                   through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~170,120,220,220
               奖励滑块:
                 type: Texture
                 val: 奖励滑块

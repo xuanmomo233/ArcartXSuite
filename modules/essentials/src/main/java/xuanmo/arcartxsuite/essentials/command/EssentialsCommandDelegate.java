@@ -553,7 +553,7 @@ public final class EssentialsCommandDelegate {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
-        p.openInventory(target.getInventory());
+        playerService.openPlayerInventory(p, target);
     }
 
     // --- Sit / Lay ---
@@ -577,16 +577,24 @@ public final class EssentialsCommandDelegate {
 
     private void handleLay(Player player) {
         cancelPoseTask(player.getUniqueId());
-        org.bukkit.entity.ArmorStand bed = player.getWorld().spawn(
-            player.getLocation().subtract(0, 0.2, 0), org.bukkit.entity.ArmorStand.class, stand -> {
-                stand.setVisible(false); stand.setGravity(false); stand.setSmall(true);
-                stand.setMarker(true); stand.setInvulnerable(true);
-            });
-        bed.addPassenger(player);
+        // 如果已经在睡觉状态，先唤醒
+        if (player.isSleeping()) {
+            player.wakeup(true);
+            player.sendMessage(prefix() + configuration.messages().layUp());
+            return;
+        }
+        // 用 sleep API 让玩家进入躺床姿势（身体水平），force=true 不需要真实床
+        org.bukkit.Location sleepLoc = player.getLocation();
+        boolean success = player.sleep(sleepLoc, true);
+        if (!success) {
+            player.sendMessage(prefix() + ChatColor.RED + "当前无法躺下。");
+            return;
+        }
         player.sendMessage(prefix() + configuration.messages().layDown());
+        // 定时检查玩家是否还处于睡觉状态，脱离后清理任务
         BukkitTask monitorTask = AxsScheduler.runTaskTimer(plugin, () -> {
-            if (!bed.isValid() || bed.getPassengers().isEmpty()) {
-                bed.remove(); cancelPoseTask(player.getUniqueId());
+            if (!player.isOnline() || !player.isSleeping()) {
+                cancelPoseTask(player.getUniqueId());
             }
         }, 20L, 20L);
         poseMonitorTasks.put(player.getUniqueId(), monitorTask);

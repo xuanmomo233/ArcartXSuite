@@ -92,18 +92,18 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.detailW = var.contentW - 912
-      // 各滚动区高度（栏高 viewH-144，减去标题/按钮区/内边距）
-      var.titleScrollH = var.viewH - 224
-      var.detailScrollH = var.viewH - 296
-      var.rightScrollH = var.viewH - 318
+      // 各滚动区高度（子栏高 viewH-176，减去标题/按钮区/内边距）
+      var.titleScrollH = var.viewH - 256
+      var.detailScrollH = var.viewH - 328
+      var.rightScrollH = var.viewH - 350
       // 左导航分组/品质竖向滚动区高度（导航高 viewH-144，减去顶部 176 + 底部 16 + 中间品质标题 44）
       var.groupScrollH = (var.viewH - 380) / 2
       var.qualityScrollY = 176 + var.groupScrollH + 44
       var.qualityScrollH = var.groupScrollH
-      // 右侧栏按钮区 y 坐标（top_left，相对栏左上角）
-      var.btnRow1Y = var.viewH - 294
-      var.btnRow2Y = var.viewH - 244
-      var.btnRefreshY = var.viewH - 194
+      // 右侧栏按钮区 y 坐标（top_left，相对栏左上角，子栏 y=136 起）
+      var.btnRow1Y = var.viewH - 326
+      var.btnRow2Y = var.viewH - 276
+      var.btnRefreshY = var.viewH - 226
     # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -114,15 +114,15 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.detailW = var.contentW - 912
-      var.titleScrollH = var.viewH - 224
-      var.detailScrollH = var.viewH - 296
-      var.rightScrollH = var.viewH - 318
+      var.titleScrollH = var.viewH - 256
+      var.detailScrollH = var.viewH - 328
+      var.rightScrollH = var.viewH - 350
       var.groupScrollH = (var.viewH - 380) / 2
       var.qualityScrollY = 176 + var.groupScrollH + 44
       var.qualityScrollH = var.groupScrollH
-      var.btnRow1Y = var.viewH - 294
-      var.btnRow2Y = var.viewH - 244
-      var.btnRefreshY = var.viewH - 194
+      var.btnRow1Y = var.viewH - 326
+      var.btnRow2Y = var.viewH - 276
+      var.btnRefreshY = var.viewH - 226
   packetHandler:
     # packetHandler: init
     # 首次接收后端数据包时执行，初始化所有界面变量。
@@ -578,7 +578,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.filterMode == 'all' ? '232,180,90,210' : '62,66,74,210'"
+                  normal: "var.filterMode == 'all' ? '232,180,90,210' : '42,46,58,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -610,7 +610,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.filterMode == 'owned' ? '232,180,90,210' : '62,66,74,210'"
+                  normal: "var.filterMode == 'owned' ? '232,180,90,210' : '42,46,58,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -642,7 +642,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.filterMode == 'hidden' ? '232,180,90,210' : '62,66,74,210'"
+                  normal: "var.filterMode == 'hidden' ? '232,180,90,210' : '42,46,58,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -716,7 +716,7 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.filterGroup == self.parent.entry['id'] ? '232,180,90,210' : '62,66,74,210'"
+                          normal: "var.filterGroup == self.parent.entry['id'] ? '232,180,90,210' : '42,46,58,210'"
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -751,10 +751,14 @@ controls:
               y: 176
               width: 10
               height: "var.groupScrollH"
-              normal: ~60,50,80,200
+              normal: ~42,46,58,210
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           分组滑块:
             type: Texture
             val: 分组滑块
@@ -818,7 +822,7 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.filterQuality == self.parent.entry['id'] ? '232,180,90,210' : '62,66,74,210'"
+                          normal: "var.filterQuality == self.parent.entry['id'] ? '232,180,90,210' : '42,46,58,210'"
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -853,10 +857,14 @@ controls:
               y: "var.qualityScrollY"
               width: 10
               height: "var.qualityScrollH"
-              normal: ~60,50,80,200
+              normal: ~42,46,58,210
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           品质滑块:
             type: Texture
             val: 品质滑块
@@ -871,17 +879,17 @@ controls:
               radius: 5
               maxDragY: "var.qualityScrollH - 50"
 
-      # ── 称号列表栏 ─────────────────────────────────────
-      称号列表栏:
+      # ── 内容区面板（包裹称号列表栏+详情栏+右侧栏）─────────
+      内容区面板:
         type: Canvas
         attribute:
           point: ~top_left
           x: "372 - var.offX"
           y: 120
-          width: 440
+          width: "var.contentW"
           height: "var.viewH - 144"
         children:
-          列表栏底:
+          内容区底:
             type: Texture
             attribute:
               point: ~stretch_all
@@ -891,7 +899,29 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~232,180,90,240
+                color: ~255,255,255,230
+
+      # ── 称号列表栏 ─────────────────────────────────────
+      称号列表栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "388 - var.offX"
+          y: 136
+          width: 424
+          height: "var.viewH - 176"
+        children:
+          列表栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~42,46,58,210
+              shape: ~round_rect
+              radius: 10
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
           列表标题:
             type: Text
             attribute:
@@ -906,7 +936,7 @@ controls:
               point: ~top_left
               x: 14
               y: 64
-              width: 380
+              width: 364
               height: "var.titleScrollH"
               moveY: "self.parent['称号滑块'].getDragYRatio()"
             action:
@@ -922,7 +952,7 @@ controls:
                 val: title_list
                 type: VStack
                 attribute:
-                  width: 380
+                  width: 364
                   spaceBetween: 8
                 children:
                   称号模板:
@@ -930,7 +960,7 @@ controls:
                     attribute:
                       entryKey: 0.round()
                       entry: var.titles[self.entryKey]
-                      width: 380
+                      width: 364
                       height: 64
                       visible: "self.entryKey != none && self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'owned' && self.entry['owned']) || (var.filterMode == 'hidden' && self.entry['hidden'])) && (var.filterGroup == 'all' || var.filterGroup == self.entry['group_id']) && (var.filterQuality == 'all' || var.filterQuality == self.entry['quality_id'])"
                     action:
@@ -942,7 +972,7 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,210' : '62,66,74,210'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,210' : '42,46,58,210'"
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -992,20 +1022,24 @@ controls:
             type: Texture
             attribute:
               point: ~top_left
-              x: 406
+              x: 390
               y: 64
               width: 10
               height: "var.titleScrollH"
-              normal: ~60,50,80,200
+              normal: ~42,46,58,210
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           称号滑块:
             type: Texture
             val: 称号滑块
             attribute:
               point: ~top_left
-              x: 406
+              x: 390
               y: 64
               width: 10
               height: 60
@@ -1020,21 +1054,21 @@ controls:
         attribute:
           point: ~top_left
           x: "828 - var.offX"
-          y: 120
+          y: 136
           width: "var.detailW"
-          height: "var.viewH - 144"
+          height: "var.viewH - 176"
         children:
           详情栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~42,46,58,210
               shape: ~round_rect
-              radius: 14
+              radius: 10
             effect:
               stroke:
                 width: 3
-                color: ~232,180,90,240
+                color: ~255,255,255,230
           详情标题:
             type: Text
             attribute:
@@ -1066,7 +1100,7 @@ controls:
               point: ~top_left
               x: 14
               y: 136
-              width: "var.detailW - 60"
+              width: "var.detailW - 76"
               height: "var.detailScrollH"
               moveY: "self.parent['详情滑块'].getDragYRatio()"
             action:
@@ -1081,13 +1115,13 @@ controls:
               详情堆叠:
                 type: VStack
                 attribute:
-                  width: "var.detailW - 60"
+                  width: "var.detailW - 76"
                   spaceBetween: 24
                 children:
                   选中前缀区:
                     type: VStack
                     attribute:
-                      width: "var.detailW - 60"
+                      width: "var.detailW - 76"
                       spaceBetween: 10
                     children:
                       聊天前缀行:
@@ -1113,7 +1147,7 @@ controls:
                   选中描述区:
                     type: VStack
                     attribute:
-                      width: "var.detailW - 60"
+                      width: "var.detailW - 76"
                       spaceBetween: 10
                     children:
                       介绍行:
@@ -1139,7 +1173,7 @@ controls:
                   分隔线1:
                     type: Texture
                     attribute:
-                      width: "var.detailW - 60"
+                      width: "var.detailW - 76"
                       height: 2
                       normal: ~232,180,90,180
                       shape: ~round_rect
@@ -1169,7 +1203,7 @@ controls:
                   分隔线2:
                     type: Texture
                     attribute:
-                      width: "var.detailW - 60"
+                      width: "var.detailW - 76"
                       height: 2
                       normal: ~232,180,90,180
                       shape: ~round_rect
@@ -1192,7 +1226,7 @@ controls:
                     val: set_list
                     type: VStack
                     attribute:
-                      width: "var.detailW - 60"
+                      width: "var.detailW - 76"
                       spaceBetween: 10
                       visible: var.sets != none && var.sets.size() > 0
                     children:
@@ -1201,7 +1235,7 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           entry: var.sets[self.entryKey]
-                          width: "var.detailW - 60"
+                          width: "var.detailW - 76"
                           height: 80
                           visible: self.entryKey != none && self.entry != none
                         children:
@@ -1210,7 +1244,7 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~62,66,74,210
+                              normal: ~42,46,58,210
                               shape: ~round_rect
                               radius: 10
                             effect:
@@ -1234,20 +1268,24 @@ controls:
             type: Texture
             attribute:
               point: ~top_left
-              x: "var.detailW - 34"
+              x: "var.detailW - 50"
               y: 136
               width: 10
               height: "var.detailScrollH"
-              normal: ~60,50,80,200
+              normal: ~42,46,58,210
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           详情滑块:
             type: Texture
             val: 详情滑块
             attribute:
               point: ~top_left
-              x: "var.detailW - 34"
+              x: "var.detailW - 50"
               y: 136
               width: 10
               height: 50
@@ -1262,28 +1300,28 @@ controls:
         attribute:
           point: ~top_left
           x: "844 + var.detailW - var.offX"
-          y: 120
-          width: 440
-          height: "var.viewH - 144"
+          y: 136
+          width: 424
+          height: "var.viewH - 176"
         children:
           右侧栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~42,46,58,210
               shape: ~round_rect
-              radius: 14
+              radius: 10
             effect:
               stroke:
                 width: 3
-                color: ~232,180,90,240
+                color: ~255,255,255,230
           右栏滚动区:
             type: Scroll
             attribute:
               point: ~top_left
               x: 14
               y: 16
-              width: 380
+              width: 364
               height: "var.rightScrollH"
               moveY: "self.parent['右栏滑块'].getDragYRatio()"
             action:
@@ -1298,7 +1336,7 @@ controls:
               右栏内容:
                 type: VStack
                 attribute:
-                  width: 380
+                  width: 364
                   spaceBetween: 12
                 children:
                   已装备标题:
@@ -1310,7 +1348,7 @@ controls:
                     val: equipped_list
                     type: VStack
                     attribute:
-                      width: 380
+                      width: 364
                       spaceBetween: 8
                     children:
                       已装备模板:
@@ -1318,7 +1356,7 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           entry: var.equippedByGroup[self.entryKey]
-                          width: 380
+                          width: 364
                           height: 52
                           visible: self.entryKey != none && self.entry != none
                         children:
@@ -1327,7 +1365,7 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~62,66,74,210
+                              normal: ~42,46,58,210
                               shape: ~round_rect
                               radius: 10
                             effect:
@@ -1404,20 +1442,24 @@ controls:
             type: Texture
             attribute:
               point: ~top_left
-              x: 406
+              x: 390
               y: 16
               width: 10
               height: "var.rightScrollH"
-              normal: ~60,50,80,200
+              normal: ~42,46,58,210
               shape: ~round_rect
               radius: 5
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           右栏滑块:
             type: Texture
             val: 右栏滑块
             attribute:
               point: ~top_left
-              x: 406
+              x: 390
               y: 16
               width: 10
               height: 40
@@ -1556,7 +1598,7 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~62,66,74,210
+                      normal: ~42,46,58,210
                       shape: ~round_rect
                       radius: 10
                     effect:
@@ -1588,7 +1630,7 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~62,66,74,210
+                      normal: ~42,46,58,210
                       shape: ~round_rect
                       radius: 10
                     effect:
@@ -1641,7 +1683,7 @@ controls:
               point: ~top_left
               x: 14
               y: "var.btnRefreshY"
-              width: 412
+              width: 404
               height: 42
             action:
               clickLeft: |-
@@ -1652,7 +1694,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~42,46,58,210
                   shape: ~round_rect
                   radius: 10
                 effect:
