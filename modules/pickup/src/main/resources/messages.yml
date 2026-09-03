@@ -38,8 +38,8 @@ state:
 player:
   help:
     title: "&6拾取 命令"
-    on: "&7/pickup on&f - 开启拾取功能"
-    off: "&7/pickup off&f - 关闭拾取功能"
+    "on": "&7/pickup on&f - 开启拾取功能"
+    "off": "&7/pickup off&f - 关闭拾取功能"
     status: "&7/pickup status&f - 查看当前状态"
 
 hints:

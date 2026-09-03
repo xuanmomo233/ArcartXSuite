@@ -17,7 +17,6 @@ ui:
   through: false
   screenScale: true
   show: true
-  level: 8
   itemSize: 16
   packetHandler:
     # packetHandler: init
@@ -82,7 +81,6 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      through: true
       normal: ~Frosted:24;30,32,38,110
 
   # 自适配布局：宽高 = 设计分辨率 1920x1080，窗口分辨率变化时按比例缩放子控件
@@ -172,9 +170,8 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 40
                   texts: "~&f✕"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
 
       # ── 左侧导航 ───────────────────────────────────────
@@ -385,7 +382,7 @@ controls:
               x: 20
               y: -20
               texts: "~&7ESC 关闭界面"
-              fontSize: 28
+              fontSize: 36
 
       # ── 内容区 ─────────────────────────────────────────
       内容区:
@@ -428,7 +425,7 @@ controls:
                   x: 0
                   y: 0
                   texts: "~&f在线玩家"
-                  fontSize: 40
+                  fontSize: 48
               玩家滑块:
                 type: Texture
                 val: 玩家滑块
@@ -492,7 +489,7 @@ controls:
                               point: ~middle_left
                               x: 20
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 32
+                              fontSize: 36
                               through: true
                           玩家生命值:
                             type: Text
@@ -500,7 +497,7 @@ controls:
                               point: ~middle_left
                               x: 200
                               texts: "'&c❤ ' + self.parent.entry['health']"
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                           玩家状态:
                             type: Text
@@ -508,7 +505,7 @@ controls:
                               point: ~middle_left
                               x: 320
                               texts: "self.parent.entry['isFlying'] == 'true' ? (self.parent.entry['isGod'] == 'true' ? '&b飞行 &a无敌' : '&b飞行') : (self.parent.entry['isGod'] == 'true' ? '&a无敌' : '&7普通')"
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                           玩家世界:
                             type: Text
@@ -516,7 +513,7 @@ controls:
                               point: ~middle_left
                               x: 440
                               texts: "'&7' + self.parent.entry['world']"
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                           # 操作按钮组
                           治疗按钮:
@@ -548,9 +545,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 80
                                   texts: "~&f治疗"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
                           喂食按钮:
                             type: Canvas
@@ -581,9 +577,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 80
                                   texts: "~&f喂食"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
                           飞行按钮:
                             type: Canvas
@@ -614,9 +609,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 80
                                   texts: "~&f飞行"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
                           踢出按钮:
                             type: Canvas
@@ -647,9 +641,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 80
                                   texts: "~&f踢出"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
                           封禁按钮:
                             type: Canvas
@@ -680,9 +673,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 80
                                   texts: "~&f封禁"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
 
           # ─── 封禁列表视图 ───
@@ -704,7 +696,7 @@ controls:
                   x: 0
                   y: 0
                   texts: "~&f封禁列表"
-                  fontSize: 40
+                  fontSize: 48
               封禁数量:
                 type: Text
                 attribute:
@@ -712,7 +704,7 @@ controls:
                   x: 0
                   y: 6
                   texts: "'&7共 &f' + var.banCount + ' &7条记录'"
-                  fontSize: 30
+                  fontSize: 36
               封禁空状态:
                 type: Text
                 attribute:
@@ -722,7 +714,7 @@ controls:
                   visible: |-
                     var.banCount == '0'
                   texts: "~&8暂无封禁记录"
-                  fontSize: 30
+                  fontSize: 36
               封禁滑块:
                 type: Texture
                 val: 封禁滑块
@@ -787,7 +779,7 @@ controls:
                               x: 20
                               y: 12
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 32
+                              fontSize: 36
                               through: true
                           封禁原因:
                             type: Text
@@ -796,7 +788,7 @@ controls:
                               x: 20
                               y: 42
                               texts: "'&7原因 &f' + (self.parent.entry['reason'] != none && self.parent.entry['reason'] != '' ? self.parent.entry['reason'] : '未填写') + '  &7操作者 &b' + self.parent.entry['operator']"
-                              fontSize: 26
+                              fontSize: 36
                               through: true
                           封禁永久标记:
                             type: Text
@@ -804,7 +796,7 @@ controls:
                               point: ~middle_left
                               x: 400
                               texts: "self.parent.entry['permanent'] == 'true' ? '&c永久' : '&e临时'"
-                              fontSize: 28
+                              fontSize: 36
                               through: true
                           解封按钮:
                             type: Canvas
@@ -835,9 +827,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 90
                                   texts: "~&f解封"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
 
           # ─── 传送点管理视图 ───
@@ -859,7 +850,7 @@ controls:
                   x: 0
                   y: 0
                   texts: "~&f传送点管理"
-                  fontSize: 40
+                  fontSize: 48
               新建传送点按钮:
                 type: Canvas
                 attribute:
@@ -890,9 +881,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 160
                       texts: "~&f+ 新建传送点"
-                      fontSize: 28
+                      fontSize: 36
                       through: true
               传送点滑块:
                 type: Texture
@@ -957,7 +947,7 @@ controls:
                               point: ~middle_left
                               x: 20
                               texts: "'&e' + self.parent.entry"
-                              fontSize: 32
+                              fontSize: 36
                               through: true
                           删除传送点按钮:
                             type: Canvas
@@ -988,9 +978,8 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 90
                                   texts: "~&f删除"
-                                  fontSize: 28
+                                  fontSize: 36
                                   through: true
 
           # ─── 世界控制视图 ───
@@ -1012,7 +1001,7 @@ controls:
                   x: 0
                   y: 0
                   texts: "~&f世界管理"
-                  fontSize: 40
+                  fontSize: 48
               世界信息卡:
                 type: Canvas
                 attribute:
@@ -1039,7 +1028,7 @@ controls:
                       point: ~middle_left
                       x: 24
                       texts: "'&7世界 &f' + var.worldName + '  &7时间 &f' + var.worldTime + '  &7天气 &f' + var.worldWeather"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               # 时间设置
               时间标题:
@@ -1049,7 +1038,7 @@ controls:
                   x: 0
                   y: 168
                   texts: "~&f时间设置"
-                  fontSize: 32
+                  fontSize: 36
               白天按钮:
                 type: Canvas
                 attribute:
@@ -1080,9 +1069,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f白天"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               夜晚按钮:
                 type: Canvas
@@ -1114,9 +1102,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f夜晚"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               正午按钮:
                 type: Canvas
@@ -1148,9 +1135,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f正午"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               # 天气设置
               天气标题:
@@ -1160,7 +1146,7 @@ controls:
                   x: 0
                   y: 288
                   texts: "~&f天气设置"
-                  fontSize: 32
+                  fontSize: 36
               晴天按钮:
                 type: Canvas
                 attribute:
@@ -1191,9 +1177,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f晴天"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               雨天按钮:
                 type: Canvas
@@ -1225,9 +1210,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f雨天"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               雷暴按钮:
                 type: Canvas
@@ -1259,9 +1243,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 120
                       texts: "~&f雷暴"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               # 出生点
               设置出生点按钮:
@@ -1294,7 +1277,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 180
                       texts: "~&f设置出生点"
-                      fontSize: 30
+                      fontSize: 36
                       through: true

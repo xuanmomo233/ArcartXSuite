@@ -119,11 +119,12 @@ public final class VanillaService {
     private void sendCraftingRecipeBookPacket(Player player, boolean open) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("open", open);
+        // catIcons 始终推送：配方书按钮(书本图标)在关闭状态下也需要图标
+        packet.put("catIcons", recipeCollector.craftingCategoryIcons());
         if (open) {
             Map<String, Object> recipes = recipeCollector.collectCraftingRecipes(player);
             packet.put("recipes", recipes);
             packet.put("recipeCount", recipes.size());
-            packet.put("catIcons", recipeCollector.craftingCategoryIcons());
         }
         packetBridge.sendPacket(player, craftingUiId, "recipe_book_toggle", packet);
     }
@@ -144,11 +145,12 @@ public final class VanillaService {
     private void sendFurnaceRecipeBookPacket(Player player, boolean open) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("open", open);
+        // catIcons 始终推送：配方书按钮(书本图标)在关闭状态下也需要图标
+        packet.put("catIcons", recipeCollector.furnaceCategoryIcons());
         if (open) {
             Map<String, Object> recipes = recipeCollector.collectFurnaceRecipes(player);
             packet.put("recipes", recipes);
             packet.put("recipeCount", recipes.size());
-            packet.put("catIcons", recipeCollector.furnaceCategoryIcons());
         }
         packetBridge.sendPacket(player, furnaceUiId, "recipe_book_toggle", packet);
     }

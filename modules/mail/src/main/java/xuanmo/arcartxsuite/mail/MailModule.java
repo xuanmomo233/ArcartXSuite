@@ -38,6 +38,9 @@ import xuanmo.arcartxsuite.mail.placeholder.MailPlaceholderExpansion;
 import xuanmo.arcartxsuite.mail.service.MailService;
 import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.mail.AxsMailApi;
+import xuanmo.arcartxsuite.api.mail.AxsMailService;
+import xuanmo.arcartxsuite.mail.service.AxsMailServiceAdapter;
 
 /**
  * 邮件模块主类，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
@@ -54,6 +57,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     private MailModuleConfiguration configuration;
     private MailService service;
     private JdbcMailRepository repository;
+    private AxsMailServiceAdapter mailApiAdapter;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -273,6 +277,17 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                 }
             });
 
+        // 注册公开 API（ServicesManager + 静态入口），供外部插件调用
+        mailApiAdapter = new AxsMailServiceAdapter(plugin, service, logger);
+        org.bukkit.plugin.RegisteredServiceProvider<AxsMailService> existingRegistration =
+            plugin.getServer().getServicesManager().getRegistration(AxsMailService.class);
+        if (existingRegistration != null) {
+            plugin.getServer().getServicesManager().unregister(AxsMailService.class, existingRegistration.getProvider());
+        }
+        plugin.getServer().getServicesManager().register(AxsMailService.class, mailApiAdapter, plugin, org.bukkit.plugin.ServicePriority.Normal);
+        AxsMailApi.setService(mailApiAdapter);
+        logger.info("Mail 公开 API 已注册（AxsMailApi / ServicesManager）");
+
         logger.fine(
             "Mail 模块已载入，预设=" + service.presetCount()
                 + " | 存储=" + configuration.storage().mode()
@@ -283,6 +298,12 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void stopService() {
+        // 注销公开 API
+        if (mailApiAdapter != null) {
+            plugin.getServer().getServicesManager().unregister(AxsMailService.class, mailApiAdapter);
+            AxsMailApi.setService(null);
+            mailApiAdapter = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;

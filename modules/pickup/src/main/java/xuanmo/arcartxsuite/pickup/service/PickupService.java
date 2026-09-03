@@ -156,14 +156,22 @@ public final class PickupService implements Listener {
      * @return true 表示已排入推送流程
      */
     public boolean notifyPickup(Player player, ItemStack itemStack, int amount) {
+        // [诊断] 无条件输出，定位补发失败的具体原因（不依赖 configuration.debug）
         if (!active || player == null || !player.isOnline() || itemStack == null) {
+            logger.info("[PickupDiag] notifyPickup early-return-1 active=" + active
+                + " player=" + (player != null ? player.getName() : "null")
+                + " online=" + (player != null && player.isOnline())
+                + " itemStack=" + (itemStack != null ? itemStack.getType() : "null"));
             return false;
         }
         if (amount <= 0 || itemStack.getType() == Material.AIR) {
+            logger.info("[PickupDiag] notifyPickup early-return-2 amount=" + amount
+                + " type=" + itemStack.getType());
             return false;
         }
         UUID playerId = player.getUniqueId();
         if (disabledPlayers.contains(playerId)) {
+            logger.info("[PickupDiag] notifyPickup early-return-3 reason=disabled-by-player");
             return false;
         }
 
@@ -172,16 +180,23 @@ public final class PickupService implements Listener {
         payload.put("amount", amount);
 
         if (openedPlayers.contains(playerId)) {
+            logger.info("[PickupDiag] notifyPickup already-opened -> scheduleSend");
             scheduleSend(player, payload, OPENED_PACKET_DELAY_TICKS);
             return true;
         }
 
         Map<String, Object> queuedPayload = enqueuePickup(playerId, payload);
-        if (!ensureUiOpen(player)) {
+        boolean opened = ensureUiOpen(player);
+        if (!opened) {
             removeQueuedPayload(playerId, queuedPayload);
+            logger.info("[PickupDiag] notifyPickup ensureUiOpen-failed"
+                + " bridgeAvailable=" + (bridge != null && bridge.isAvailable())
+                + " uiId=" + uiId
+                + " openedPlayers.contains=" + openedPlayers.contains(playerId));
             logPickupPacket(player, payload, false);
             return false;
         }
+        logger.info("[PickupDiag] notifyPickup ensureUiOpen-ok -> queued");
         return true;
     }
 
@@ -248,6 +263,9 @@ public final class PickupService implements Listener {
 
     private boolean ensureUiOpen(Player player) {
         if (player == null || !player.isOnline() || !bridge.isAvailable()) {
+            logger.info("[PickupDiag] ensureUiOpen skip player=" + (player != null ? player.getName() : "null")
+                + " online=" + (player != null && player.isOnline())
+                + " bridgeAvailable=" + (bridge != null && bridge.isAvailable()));
             return false;
         }
         UUID playerId = player.getUniqueId();
@@ -259,6 +277,8 @@ public final class PickupService implements Listener {
         // 延迟 OPEN_CONFIRM_DELAY_TICKS 后将玩家标记为已打开并 flush 待发队列，
         // 给客户端足够时间完成 HUD 渲染。后续 onClientInitialized 会兜底重试。
         boolean opened = bridge.openUi(player, uiId);
+        logger.info("[PickupDiag] ensureUiOpen openUi player=" + player.getName()
+            + " uiId=" + uiId + " returned=" + opened);
         if (opened) {
             logOpenMode(player, "open");
             AxsScheduler.runTaskLater(plugin, () -> handleUiOpened(player), OPEN_CONFIRM_DELAY_TICKS);

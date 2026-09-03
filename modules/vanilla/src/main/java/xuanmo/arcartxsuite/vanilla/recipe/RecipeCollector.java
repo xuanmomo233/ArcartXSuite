@@ -190,6 +190,7 @@ public final class RecipeCollector {
 
     public Map<String, String> craftingCategoryIcons() {
         Map<String, String> icons = new LinkedHashMap<>();
+        icons.put("book", serializeIconWithLore(Material.BOOK, "§f配方书", "§7点击打开/关闭配方书"));
         icons.put("toggle", serializeIconWithLore(Material.CRAFTING_TABLE, "§f显示切换", "§7点击切换显示模式"));
         icons.put("all", serializeIconWithLore(Material.COMPASS, "§f全部", "§7点击查看所有配方"));
         icons.put("tools", serializeIconWithLore(Material.IRON_AXE, "§f工具", "§7点击查看工具配方"));
@@ -201,6 +202,7 @@ public final class RecipeCollector {
 
     public Map<String, String> furnaceCategoryIcons() {
         Map<String, String> icons = new LinkedHashMap<>();
+        icons.put("book", serializeIconWithLore(Material.BOOK, "§f配方书", "§7点击打开/关闭配方书"));
         icons.put("toggle", serializeIconWithLore(Material.FURNACE, "§f显示切换", "§7点击切换显示模式"));
         icons.put("all", serializeIconWithLore(Material.COMPASS, "§f全部", "§7点击查看所有配方"));
         icons.put("food", serializeIconWithLore(Material.PORKCHOP, "§f食品", "§7点击查看食品配方"));

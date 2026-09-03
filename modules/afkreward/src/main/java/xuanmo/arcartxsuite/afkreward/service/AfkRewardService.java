@@ -70,6 +70,7 @@ public final class AfkRewardService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final long TICK_INTERVAL = 20L; // 每秒一次
+    private static final long SAVE_INTERVAL = 600L; // 30 秒定期保存一次（单位：tick，20 tick = 1 秒）
 
     private final JavaPlugin plugin;
     private final AfkRewardConfiguration config;
@@ -108,6 +109,7 @@ public final class AfkRewardService {
     private volatile String hudUiId;
 
     private BukkitTask tickTask;
+    private BukkitTask saveTask;
     private boolean active;
 
     // 排行榜缓存
@@ -162,6 +164,14 @@ public final class AfkRewardService {
             }
         }.runTaskTimer(plugin, TICK_INTERVAL, TICK_INTERVAL);
 
+        // 定期保存在线玩家统计到数据库，防止 totalSeconds 长期不持久化
+        saveTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                saveOnlineStats();
+            }
+        }.runTaskTimer(plugin, SAVE_INTERVAL, SAVE_INTERVAL);
+
         // 为在线玩家预加载缓存
         for (Player player : Bukkit.getOnlinePlayers()) {
             preloadStats(player.getUniqueId(), player.getName());
@@ -179,6 +189,10 @@ public final class AfkRewardService {
         if (tickTask != null) {
             tickTask.cancel();
             tickTask = null;
+        }
+        if (saveTask != null) {
+            saveTask.cancel();
+            saveTask = null;
         }
         // 保存 MANUAL 模式下在线玩家的 session，以便崩溃恢复
         for (Map.Entry<UUID, PlayerAfkState> entry : afkStates.entrySet()) {
@@ -1105,7 +1119,38 @@ public final class AfkRewardService {
 
     private void refreshLeaderboard() {
         try {
-            leaderboardCache = repository.loadLeaderboard(config.manual().leaderboardSize());
+            int limit = config.manual().leaderboardSize();
+            List<PlayerStats> dbList = repository.loadLeaderboard(limit);
+            // 合并在线玩家的内存数据：statsCache 中的 totalSeconds 可能比 DB 更新（updateTotalTime 不即时持久化）
+            Map<String, PlayerStats> onlineByName = new HashMap<>();
+            for (Map.Entry<UUID, PlayerStats> entry : statsCache.entrySet()) {
+                if (failedLoads.contains(entry.getKey())) continue;
+                PlayerStats s = entry.getValue();
+                if (s.playerName().isEmpty()) continue;
+                onlineByName.put(s.playerName(), s);
+            }
+            if (!onlineByName.isEmpty()) {
+                // 用内存数据覆盖 DB 中同名条目
+                List<PlayerStats> merged = new ArrayList<>(dbList.size() + onlineByName.size());
+                Set<String> seen = new HashSet<>();
+                for (PlayerStats db : dbList) {
+                    PlayerStats live = onlineByName.get(db.playerName());
+                    merged.add(live != null ? live : db);
+                    seen.add(db.playerName());
+                }
+                // 加入 DB 中不存在但在线的玩家
+                for (PlayerStats live : onlineByName.values()) {
+                    if (!seen.contains(live.playerName())) {
+                        merged.add(live);
+                    }
+                }
+                // 重新排序并截断
+                merged.sort(Comparator.comparingInt(PlayerStats::totalSeconds).reversed());
+                leaderboardCache = merged.size() > limit
+                    ? List.copyOf(merged.subList(0, limit)) : List.copyOf(merged);
+            } else {
+                leaderboardCache = dbList;
+            }
             leaderboardLastUpdate = System.currentTimeMillis();
         } catch (Exception e) {
             logger.warning("刷新排行榜失败: " + e.getMessage());
@@ -1117,6 +1162,13 @@ public final class AfkRewardService {
             AxsScheduler.runAsync(plugin, this::refreshLeaderboard);
         }
         return leaderboardCache;
+    }
+
+    private void saveOnlineStats() {
+        if (!active) return;
+        for (Map.Entry<UUID, PlayerStats> entry : statsCache.entrySet()) {
+            trySave(entry.getKey(), entry.getValue());
+        }
     }
 
     public record OnlineAfkPlayer(String playerName, String areaName, String mode, int seconds) {}

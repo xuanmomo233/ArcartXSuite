@@ -522,7 +522,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '245,205,130,255' : '232,180,90,240'"
+                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -582,9 +582,10 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 effect:
+                  ripple:
                   stroke:
                     width: 3
-                    color: "var.filterMode == 'all' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                    color: "var.filterMode == 'all' ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
               全部文字:
                 type: Text
                 attribute:
@@ -613,9 +614,10 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 effect:
+                  ripple:
                   stroke:
                     width: 3
-                    color: "var.filterMode == 'owned' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                    color: "var.filterMode == 'owned' ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
               已拥有文字:
                 type: Text
                 attribute:
@@ -644,9 +646,10 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 effect:
+                  ripple:
                   stroke:
                     width: 3
-                    color: "var.filterMode == 'hidden' ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                    color: "var.filterMode == 'hidden' ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
               已隐藏文字:
                 type: Text
                 attribute:
@@ -717,14 +720,26 @@ controls:
                           shape: ~round_rect
                           radius: 10
                         effect:
+                          ripple:
                           stroke:
                             width: 3
-                            color: "var.filterGroup == self.parent.entry['id'] ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                            color: "var.filterGroup == self.parent.entry['id'] ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
+                      分组高亮条:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          width: 4
+                          height: 28
+                          normal: ~232,180,90,255
+                          shape: ~round_rect
+                          radius: 2
+                          visible: "self.parent.parent.entry != none && var.filterGroup == self.parent.parent.entry['id']"
                       分组文字:
                         type: Text
                         attribute:
                           point: ~middle_left
-                          x: 16
+                          x: 28
                           texts: "self.parent.entry != none ? (var.filterGroup == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
                           fontSize: 32
                           through: true
@@ -807,14 +822,26 @@ controls:
                           shape: ~round_rect
                           radius: 10
                         effect:
+                          ripple:
                           stroke:
                             width: 3
-                            color: "var.filterQuality == self.parent.entry['id'] ? '232,180,90,230' : (self.isHovered() ? '245,205,130,255' : '232,180,90,240')"
+                            color: "var.filterQuality == self.parent.entry['id'] ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
+                      品质高亮条:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          width: 4
+                          height: 28
+                          normal: ~232,180,90,255
+                          shape: ~round_rect
+                          radius: 2
+                          visible: "self.parent.parent.entry != none && var.filterQuality == self.parent.parent.entry['id']"
                       品质文字:
                         type: Text
                         attribute:
                           point: ~middle_left
-                          x: 16
+                          x: 28
                           texts: "self.parent.entry != none ? (var.filterQuality == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']) : none"
                           fontSize: 32
                           through: true
@@ -915,38 +942,50 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,210' : '255,255,255,125'"
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,210' : '62,66,74,210'"
                           shape: ~round_rect
-                          radius: 14
+                          radius: 10
                         effect:
+                          ripple:
                           stroke:
-                            width: 2
-                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '232,180,90,230' : '255,255,255,165'"
+                            width: 3
+                            color: "self.parent.entry != none && self.parent.entry['selected'] ? '255,255,255,230' : (self.isHovered() ? '255,255,255,255' : '255,255,255,230')"
+                      称号高亮条:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          width: 4
+                          height: 36
+                          normal: ~232,180,90,255
+                          shape: ~round_rect
+                          radius: 2
+                          visible: "self.parent.parent.entry != none && self.parent.parent.entry['selected']"
                       称号名称:
                         type: Text
                         attribute:
                           point: ~top_left
-                          x: 12
+                          x: 20
                           y: 8
-                          texts: "self.parent.entry != none ? self.parent.entry['display_name'] : none"
+                          texts: "self.parent.entry != none ? (self.parent.entry['selected'] ? '&0' + self.parent.entry['display_name'] : '&f' + self.parent.entry['display_name']) : none"
                           fontSize: 36
                           through: true
                       称号状态:
                         type: Text
                         attribute:
                           point: ~top_left
-                          x: 12
+                          x: 20
                           y: 36
-                          texts: "self.parent.entry != none ? self.parent.entry['quality_name'] + '  &f' + self.parent.entry['group_name'] + '  &f' + self.parent.entry['remaining_text'] : none"
+                          texts: "self.parent.entry != none ? (self.parent.entry['selected'] ? '&0' + self.parent.entry['quality_name'] + '  ' + self.parent.entry['group_name'] + '  ' + self.parent.entry['remaining_text'] : '&f' + self.parent.entry['quality_name'] + '  &f' + self.parent.entry['group_name'] + '  &f' + self.parent.entry['remaining_text']) : none"
                           fontSize: 32
                           through: true
                       装备标记:
                         type: Text
                         attribute:
                           point: ~middle_right
-                          x: -12
-                          texts: "~&a✔"
-                          fontSize: 36
+                          x: -14
+                          texts: "~&a已装备"
+                          fontSize: 30
                           visible: self.parent.entry != none && self.parent.entry['equipped']
                           through: true
           称号滑块轨道:
@@ -1171,13 +1210,13 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~255,255,255,125
+                              normal: ~62,66,74,210
                               shape: ~round_rect
-                              radius: 12
+                              radius: 10
                             effect:
                               stroke:
-                                width: 2
-                                color: ~255,255,255,165
+                                width: 3
+                                color: ~255,255,255,230
                           套装信息:
                             type: Text
                             attribute:
@@ -1288,18 +1327,29 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~255,255,255,125
+                              normal: ~62,66,74,210
                               shape: ~round_rect
                               radius: 10
                             effect:
                               stroke:
-                                width: 2
-                                color: ~255,255,255,165
+                                width: 3
+                                color: ~255,255,255,230
+                          已装备色条:
+                            type: Texture
+                            attribute:
+                              point: ~middle_left
+                              x: 10
+                              width: 4
+                              height: 34
+                              normal: ~232,180,90,255
+                              shape: ~round_rect
+                              radius: 2
+                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['title_id'] != none"
                           已装备信息:
                             type: Text
                             attribute:
                               point: ~top_left
-                              x: 10
+                              x: 28
                               y: 6
                               texts:
                                 - "'&f' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'])"
@@ -1401,13 +1451,14 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~232,180,90,210
+                      normal: ~232,180,90,235
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~232,180,90,230
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   设为主展示文字:
                     type: Text
                     attribute:
@@ -1432,13 +1483,14 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~232,180,90,210
+                      normal: ~232,180,90,235
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~232,180,90,230
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   装备文字:
                     type: Text
                     attribute:
@@ -1463,13 +1515,14 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~124,196,142,210
+                      normal: ~124,196,142,235
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~124,196,142,230
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   卸下本组文字:
                     type: Text
                     attribute:
@@ -1505,11 +1558,12 @@ controls:
                       through: true
                       normal: ~62,66,74,210
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~255,255,255,165
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   全部卸下文字:
                     type: Text
                     attribute:
@@ -1536,11 +1590,12 @@ controls:
                       through: true
                       normal: ~62,66,74,210
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~255,255,255,165
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   隐藏文字:
                     type: Text
                     attribute:
@@ -1565,13 +1620,14 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~232,180,90,210
+                      normal: ~232,180,90,235
                       shape: ~round_rect
-                      radius: 14
+                      radius: 10
                     effect:
+                      ripple:
                       stroke:
-                        width: 2
-                        color: ~232,180,90,230
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
                   取消隐藏文字:
                     type: Text
                     attribute:
@@ -1598,11 +1654,12 @@ controls:
                   through: true
                   normal: ~62,66,74,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 10
                 effect:
+                  ripple:
                   stroke:
-                    width: 2
-                    color: ~255,255,255,165
+                    width: 3
+                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
               刷新文字:
                 type: Text
                 attribute:

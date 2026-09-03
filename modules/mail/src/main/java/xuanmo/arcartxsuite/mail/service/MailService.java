@@ -2211,6 +2211,111 @@ public final class MailService implements Listener {
         }
     }
 
+    // ── 公开 API 适配方法（供 AxsMailServiceAdapter 调用） ──────────────
+
+    /**
+     * 标记邮件为已读，返回更新后的邮件。
+     * <p>
+     * 如果邮件已经是已读或更后状态，不改变状态但仍返回邮件。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param mailId     邮件 ID
+     * @return 更新后的邮件，不存在时返回 {@link Optional#empty()}
+     */
+    public Optional<MailMessage> markMailRead(UUID playerUuid, long mailId) {
+        try {
+            Optional<MailMessage> optionalMail = repository.loadMail(playerUuid, mailId);
+            if (optionalMail.isEmpty()) {
+                return Optional.empty();
+            }
+            MailMessage mail = optionalMail.get();
+            if (mail.unread()) {
+                Instant now = Instant.now();
+                repository.updateMailState(
+                    new MailMessage(
+                        mail.id(), mail.ownerUuid(), mail.senderUuid(), mail.senderName(),
+                        mail.sourceType(), mail.presetId(), mail.cdkCode(),
+                        mail.subject(), mail.body(), MailStatus.READ,
+                        mail.attachments(), mail.claimCommands(), mail.claimConditions(),
+                        mail.createdAt(), mail.expiresAt(), now,
+                        mail.claimedAt(), mail.deletedAt()
+                    )
+                );
+                return Optional.of(withStatus(mail, MailStatus.READ, now));
+            }
+            return optionalMail;
+        } catch (Exception exception) {
+            this.logger.warning("标记已读失败: " + exception.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 按 UUID 领取邮件附件。
+     * <p>
+     * 领取物品附件需要玩家在线（发放到背包）。玩家离线时返回失败。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param mailId     邮件 ID
+     * @return 领取结果
+     */
+    public MailOperationResult claimMailByUuid(UUID playerUuid, long mailId) {
+        Player player = Bukkit.getPlayer(playerUuid);
+        if (player == null || !player.isOnline()) {
+            return MailOperationResult.failure("PLAYER_OFFLINE");
+        }
+        return claimMail(player, mailId, false);
+    }
+
+    /**
+     * 按 UUID 删除邮件。
+     * <p>
+     * 不需要玩家在线，直接操作数据库。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param mailId     邮件 ID
+     * @return 删除结果
+     */
+    public MailOperationResult deleteMailByUuid(UUID playerUuid, long mailId) {
+        try {
+            Optional<MailMessage> optionalMail = repository.loadMail(playerUuid, mailId);
+            if (optionalMail.isEmpty()) {
+                return MailOperationResult.failure("NOT_FOUND");
+            }
+            MailMessage mail = optionalMail.get();
+            if (!canDeleteMail(configuration.retention().allowDeleteWithUnclaimedAttachments(), mail)) {
+                return MailOperationResult.failure("PROTECTED_ATTACHMENTS");
+            }
+            Instant now = Instant.now();
+            repository.updateMailState(
+                new MailMessage(
+                    mail.id(), mail.ownerUuid(), mail.senderUuid(), mail.senderName(),
+                    mail.sourceType(), mail.presetId(), mail.cdkCode(),
+                    mail.subject(), mail.body(), MailStatus.DELETED,
+                    mail.attachments(), mail.claimCommands(), mail.claimConditions(),
+                    mail.createdAt(), mail.expiresAt(), now,
+                    mail.claimedAt(), now
+                )
+            );
+            appendLog(playerUuid, "delete", "删除邮件: " + mail.subject());
+            return MailOperationResult.success("OK");
+        } catch (Exception exception) {
+            this.logger.warning("删除邮件失败: " + exception.getMessage());
+            return MailOperationResult.failure("DELETE_FAILED");
+        }
+    }
+
+    private MailMessage withStatus(MailMessage mail, MailStatus status, Instant updatedAt) {
+        return new MailMessage(
+            mail.id(), mail.ownerUuid(), mail.senderUuid(), mail.senderName(),
+            mail.sourceType(), mail.presetId(), mail.cdkCode(),
+            mail.subject(), mail.body(), status,
+            mail.attachments(), mail.claimCommands(), mail.claimConditions(),
+            mail.createdAt(), mail.expiresAt(), updatedAt,
+            mail.claimedAt(), mail.deletedAt()
+        );
+    }
+
     private File exportUiResource(String resourcePath, String relativePath) throws IOException {
         return uiResourceExporter.export(resourcePath, relativePath, configuration.ui().overwriteUiFiles());
     }

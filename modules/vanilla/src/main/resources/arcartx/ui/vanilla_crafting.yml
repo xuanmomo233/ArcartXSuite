@@ -1,6 +1,7 @@
 #
-# ArcartXSuite Vanilla 工作台 UI — 纯色块风格
+# ArcartXSuite Vanilla 工作台 UI — 纯色块风格（参考纯色块背包-优化版）
 # 逻辑脚本(packetHandler/action/val引用/entryKey)与原版完全一致，仅重构视觉层
+# 配方书按钮改为 Slot+icon(BOOK) 展示书本样式，颜色+描边区分打开/关闭状态
 #
 ui:
   isHud: false
@@ -108,13 +109,13 @@ ui:
     open: |-
       var.fade = Lerp(0, 1, 300)
       var.slide = Lerp(15, 0, 300)
-      Packet.send('vanilla_crafting', 'request_recipe_book')
+      Packet.send('AXS:vanilla_crafting', 'request_recipe_book')
   packetHandler:
     # packetHandler: recipe_book_toggle
     # 包字段:
     #   - open: 配方书是否展开 (true/false)
     #   - recipes: 全部配方数据 map (key=配方名, value=配方详情)
-    #   - catIcons: 分类图标 map (key=all/tools/building/food/redstone/toggle, value=物品JSON)
+    #   - catIcons: 分类图标 map (key=book/all/tools/building/food/redstone/toggle, value=物品JSON)
     recipe_book_toggle: |-
       var.recipeBookOpen = packet['open']
       if(!var.recipeBookOpen){
@@ -126,6 +127,7 @@ ui:
       }
       if(packet['catIcons'] != none){
         var.catIcons = packet['catIcons']
+        val.配方书按钮.setItemIcon(var.catIcons['book'])
         val.显示切换.setItemIcon(var.catIcons['toggle'])
         val.分类栏['分类_全部'].setItemIcon(var.catIcons['all'])
         val.分类栏['分类_工具'].setItemIcon(var.catIcons['tools'])
@@ -192,42 +194,31 @@ controls:
                 blur: 5
                 color: ~0,0,0,120
           配方书按钮:
-            type: Canvas
+            type: Slot
+            val: 配方书按钮
             attribute:
               x: -78
               y: -48
               width: 19
               height: 19
+              slotType: ~Icon
               point: ~middle_center
+              normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 6
+              itemScale: 0.7
               tip: ~shift+左键点击配方，即可快速填充材料
             action:
-              clickLeft: "Packet.send('vanilla_crafting', 'toggle_recipe_book')"
-            children:
-              配方书背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 6
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~0,0,0,180
-                  ripple:
-                    duration: 1200
-                    color: ~255,255,255,100
-                    width: 0.05
-              配方书文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 19
-                  texts: "~&0书"
-                  fontSize: 12
-                  through: true
+              clickLeft: "Packet.send('AXS:vanilla_crafting', 'toggle_recipe_book')"
+            effect:
+              stroke:
+                width: 1
+                color: "var.recipeBookOpen ? '120,190,255,255' : '0,0,0,180'"
+              ripple:
+                duration: 1200
+                color: ~255,255,255,100
+                width: 0.05
           合成网格:
             type: HGrid
             val: 合成网格
@@ -392,7 +383,7 @@ controls:
                 effect:
                   stroke:
                     width: 1
-                    color: ~0,0,0,180
+                    color: "var.showAll ? '120,190,255,255' : '0,0,0,180'"
                   ripple:
                     duration: 1200
                     color: ~255,255,255,100
@@ -424,7 +415,7 @@ controls:
                     effect:
                       stroke:
                         width: 1
-                        color: ~0,0,0,180
+                        color: "var.currentCategory == 'all' ? '120,190,255,255' : '0,0,0,180'"
                       ripple:
                         duration: 1200
                         color: ~255,255,255,100
@@ -446,7 +437,7 @@ controls:
                     effect:
                       stroke:
                         width: 1
-                        color: ~0,0,0,180
+                        color: "var.currentCategory == 'tools' ? '120,190,255,255' : '0,0,0,180'"
                       ripple:
                         duration: 1200
                         color: ~255,255,255,100
@@ -468,7 +459,7 @@ controls:
                     effect:
                       stroke:
                         width: 1
-                        color: ~0,0,0,180
+                        color: "var.currentCategory == 'building' ? '120,190,255,255' : '0,0,0,180'"
                       ripple:
                         duration: 1200
                         color: ~255,255,255,100
@@ -490,7 +481,7 @@ controls:
                     effect:
                       stroke:
                         width: 1
-                        color: ~0,0,0,180
+                        color: "var.currentCategory == 'food' ? '120,190,255,255' : '0,0,0,180'"
                       ripple:
                         duration: 1200
                         color: ~255,255,255,100
@@ -512,7 +503,7 @@ controls:
                     effect:
                       stroke:
                         width: 1
-                        color: ~0,0,0,180
+                        color: "var.currentCategory == 'redstone' ? '120,190,255,255' : '0,0,0,180'"
                       ripple:
                         duration: 1200
                         color: ~255,255,255,100
@@ -566,7 +557,7 @@ controls:
                                 for(key in var.allRecipes.keys()){
                                   r = var.allRecipes[key]
                                   if(r['resultItemId'] == recipe['resultItemId']){
-                                    Packet.send('vanilla_crafting', 'place_ingredients', key)
+                                    Packet.send('AXS:vanilla_crafting', 'place_ingredients', key)
                                     break
                                   }
                                 }
@@ -591,7 +582,7 @@ controls:
                         effect:
                           stroke:
                             width: 1
-                            color: ~0,0,0,180
+                            color: "var.recipeCanCraft[self.entryKey] == 1 ? '120,190,255,255' : '0,0,0,180'"
                           ripple:
                             duration: 1200
                             color: ~255,255,255,100

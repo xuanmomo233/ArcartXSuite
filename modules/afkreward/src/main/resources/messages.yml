@@ -31,8 +31,8 @@ player:
     list: "&7/afkreward list&f - 查看在线挂机列表"
     top: "&7/afkreward top&f - 查看挂机排行榜"
   toggle:
-    on: "&a已开启挂机 HUD 显示。"
-    off: "&c已关闭挂机 HUD 显示。"
+    "on": "&a已开启挂机 HUD 显示。"
+    "off": "&c已关闭挂机 HUD 显示。"
   status:
     title: "&6挂机状态"
     none: "&7当前不在任何挂机区域。"

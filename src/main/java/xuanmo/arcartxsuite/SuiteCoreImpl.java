@@ -278,6 +278,16 @@ public final class SuiteCoreImpl implements SuiteCore {
             xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability.class,
             (xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability) () -> polygonSelectionManager);
 
+        // 8.6 SystemMail 降级适配器（core capability，在模块加载前注册）
+        // 如果 AXS mail 模块加载，会覆盖此 capability；如果 mail 模块未加载但 SystemMail 存在，
+        // 所有依赖 MailDispatchable 的模块将降级使用 SystemMail 发送邮件
+        if (xuanmo.arcartxsuite.bridge.SystemMailMailDispatchable.isSystemMailReady()) {
+            moduleRegistry.registerCoreCapability(
+                xuanmo.arcartxsuite.api.capability.MailDispatchable.class,
+                new xuanmo.arcartxsuite.bridge.SystemMailMailDispatchable(getLogger()));
+            consoleInfo("检测到 SystemMail 插件，已注册邮件降级适配器（MailDispatchable → SystemMail）");
+        }
+
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(
             "模块加载完成: 发现 " + summary.discoveredCount()

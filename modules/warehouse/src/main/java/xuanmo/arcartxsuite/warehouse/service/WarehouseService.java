@@ -956,6 +956,10 @@ public final class WarehouseService implements Listener {
             if (result.remainingAmount() <= 0) {
                 event.setCancelled(true);
                 event.getItem().remove();
+            } else {
+                // 部分存入：必须同步更新实际掉落物的数量，否则玩家会拾取原始数量进背包，
+                // 导致已存入仓库的部分被复制（仓库一份 + 背包一份）。
+                event.getItem().setItemStack(stack);
             }
             if (result.storedAmount() > 0) {
                 // 双通道提示：聊天栏与 HUD 独立工作，互不绑架。

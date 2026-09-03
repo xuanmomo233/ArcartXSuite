@@ -142,7 +142,7 @@ controls:
                   point: ~middle_left
                   x: 44
                   texts: "~&f玩家工具"
-                  fontSize: 42
+                  fontSize: 48
               标题竖线:
                 type: Texture
                 attribute:
@@ -157,7 +157,7 @@ controls:
                   point: ~middle_left
                   x: 244
                   texts: "'&7' + var.playerName"
-                  fontSize: 32
+                  fontSize: 36
               关闭按钮:
                 type: Canvas
                 attribute:
@@ -185,9 +185,8 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 36
                       texts: "~&f✕"
-                      fontSize: 28
+                      fontSize: 36
                       through: true
 
           # ── 左侧导航 ─────────────────────────────────────
@@ -243,7 +242,7 @@ controls:
                       point: ~middle_left
                       x: 20
                       texts: "var.page == 'home' ? '&0首页' : '&f首页'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               # 家列表
               导航家列表:
@@ -277,7 +276,7 @@ controls:
                       point: ~middle_left
                       x: 20
                       texts: "var.page == 'homes' ? '&0家' : '&f家'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               # 传送点
               导航传送点:
@@ -311,7 +310,7 @@ controls:
                       point: ~middle_left
                       x: 20
                       texts: "var.page == 'warps' ? '&0传送点' : '&f传送点'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               # 传送请求
               导航传送请求:
@@ -345,7 +344,7 @@ controls:
                       point: ~middle_left
                       x: 20
                       texts: "var.page == 'tpa' ? '&0传送' : '&f传送'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               # 设置
               导航设置:
@@ -379,7 +378,7 @@ controls:
                       point: ~middle_left
                       x: 20
                       texts: "var.page == 'settings' ? '&0设置' : '&f设置'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               导航提示:
                 type: Text
@@ -388,7 +387,7 @@ controls:
                   x: 16
                   y: -16
                   texts: "~&7ESC 关闭"
-                  fontSize: 26
+                  fontSize: 36
 
           # ── 右侧内容区 ───────────────────────────────────
           内容区:
@@ -419,7 +418,7 @@ controls:
                       x: 0
                       y: 0
                       texts: "~&f玩家状态"
-                      fontSize: 40
+                      fontSize: 48
                   # 状态卡片
                   状态卡片:
                     type: Canvas
@@ -448,7 +447,7 @@ controls:
                           x: 32
                           y: 32
                           texts: "'&7飞行 &f' + (var.isFlying == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 32
+                          fontSize: 36
                       状态无敌:
                         type: Text
                         attribute:
@@ -456,7 +455,7 @@ controls:
                           x: 32
                           y: 80
                           texts: "'&7无敌 &f' + (var.isGod == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 32
+                          fontSize: 36
                       状态闲置:
                         type: Text
                         attribute:
@@ -464,7 +463,7 @@ controls:
                           x: 32
                           y: 128
                           texts: "'&7挂机 &f' + (var.isAfk == 'true' ? '&e是' : '&a否')"
-                          fontSize: 32
+                          fontSize: 36
                       状态速度:
                         type: Text
                         attribute:
@@ -472,7 +471,7 @@ controls:
                           x: 32
                           y: 176
                           texts: "'&7飞行速度 &f' + var.flySpeed + '  &7行走速度 &f' + var.walkSpeed"
-                          fontSize: 32
+                          fontSize: 36
                       状态位置:
                         type: Text
                         attribute:
@@ -480,7 +479,7 @@ controls:
                           x: 32
                           y: 224
                           texts: "'&7位置 &f' + var.location"
-                          fontSize: 32
+                          fontSize: 36
                       状态统计:
                         type: Text
                         attribute:
@@ -488,7 +487,7 @@ controls:
                           x: 32
                           y: 272
                           texts: "'&7家数量 &b' + var.homeCount + '  &7传送点 &b' + var.warpCount"
-                          fontSize: 32
+                          fontSize: 36
 
               # ─── 家列表视图 ───
               家列表布局:
@@ -509,7 +508,7 @@ controls:
                       x: 0
                       y: 0
                       texts: "~&f我的家"
-                      fontSize: 40
+                      fontSize: 48
                   设置家按钮:
                     type: Canvas
                     attribute:
@@ -540,9 +539,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 130
                           texts: "~&f设置家"
-                          fontSize: 30
+                          fontSize: 36
                           through: true
                   家滑块:
                     type: Texture
@@ -607,7 +605,7 @@ controls:
                                   point: ~middle_left
                                   x: 20
                                   texts: "'&b' + self.parent.entry['name']"
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
                               家项目坐标:
                                 type: Text
@@ -615,7 +613,7 @@ controls:
                                   point: ~middle_left
                                   x: 200
                                   texts: "'&7' + self.parent.entry['world'] + ' ' + self.parent.entry['coords']"
-                                  fontSize: 26
+                                  fontSize: 36
                                   through: true
                               传送家按钮:
                                 type: Canvas
@@ -646,9 +644,8 @@ controls:
                                       type: Text
                                       attribute:
                                         point: ~middle_center
-                                        width: 80
                                         texts: "~&f传送"
-                                        fontSize: 28
+                                        fontSize: 36
                                         through: true
                               删除家按钮:
                                 type: Canvas
@@ -679,9 +676,8 @@ controls:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
-                                      width: 80
                                       texts: "~&f删除"
-                                      fontSize: 28
+                                      fontSize: 36
                                       through: true
 
               # ─── 传送点视图 ───
@@ -703,7 +699,7 @@ controls:
                       x: 0
                       y: 0
                       texts: "~&f传送点列表"
-                      fontSize: 40
+                      fontSize: 48
                   传送点滑块:
                     type: Texture
                     val: 传送点滑块
@@ -767,7 +763,7 @@ controls:
                                   point: ~middle_left
                                   x: 20
                                   texts: "'&e' + self.parent.entry"
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
                               传送点传送按钮:
                                 type: Canvas
@@ -798,9 +794,8 @@ controls:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
-                                      width: 90
                                       texts: "~&f传送"
-                                      fontSize: 28
+                                      fontSize: 36
                                       through: true
 
               # ─── TPA 视图 ───
@@ -822,7 +817,7 @@ controls:
                       x: 0
                       y: 0
                       texts: "~&f传送请求"
-                      fontSize: 40
+                      fontSize: 48
                   传送请求提示:
                     type: Text
                     attribute:
@@ -830,7 +825,7 @@ controls:
                       x: 0
                       y: 52
                       texts: "~&7点击玩家名发送传送请求"
-                      fontSize: 28
+                      fontSize: 36
                   接受传送请求按钮:
                     type: Canvas
                     attribute:
@@ -861,9 +856,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 90
                           texts: "~&f接受"
-                          fontSize: 30
+                          fontSize: 36
                           through: true
                   拒绝传送请求按钮:
                     type: Canvas
@@ -895,9 +889,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 90
                           texts: "~&f拒绝"
-                          fontSize: 30
+                          fontSize: 36
                           through: true
                   玩家滑块:
                     type: Texture
@@ -967,7 +960,7 @@ controls:
                                   point: ~middle_left
                                   x: 20
                                   texts: "'&f' + self.parent.entry"
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
 
               # ─── 设置视图 ───
@@ -989,7 +982,7 @@ controls:
                       x: 0
                       y: 0
                       texts: "~&f个人设置"
-                      fontSize: 40
+                      fontSize: 48
                   # 飞行开关
                   切换飞行按钮:
                     type: Canvas
@@ -1023,7 +1016,7 @@ controls:
                           point: ~middle_left
                           x: 24
                           texts: "'&f飞行: ' + (var.isFlying == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   # 自动补种
                   切换补种按钮:
@@ -1058,7 +1051,7 @@ controls:
                           point: ~middle_left
                           x: 24
                           texts: "'&f自动补种: ' + (var.replantEnabled == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   # 自动工具
                   切换自动工具按钮:
@@ -1093,7 +1086,7 @@ controls:
                           point: ~middle_left
                           x: 24
                           texts: "'&f自动工具: ' + (var.autotoolEnabled == 'true' ? '&a开启' : '&c关闭')"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   # 背包整理
                   排序按钮:
@@ -1128,5 +1121,5 @@ controls:
                           point: ~middle_left
                           x: 24
                           texts: "~&f背包整理"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
