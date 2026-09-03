@@ -59,7 +59,7 @@ min-player-level: 10
 
 # ─── 数据/展示（可选） ─────────────────────────────────
 currency-reward:
-  currency-id: "coin"
+  currency-id: "money"  # 货币ID，默认money对应Vault经济，自定义货币请改为本体config.yml中currencies节定义的ID
 
 description: "全年可捕获的常见鱼类，在海洋和河流中均有分布，难度最低，新手友好。"
 icon:

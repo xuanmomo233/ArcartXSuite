@@ -45,7 +45,7 @@ flee-params:
 
 # ─── 奖励（可选） ──────────────────────────────────────
 currency-reward:
-  currency-id: "coin"
+  currency-id: "money"  # 货币ID，默认money对应Vault经济，自定义货币请改为本体config.yml中currencies节定义的ID
   amount: 10
 
 # 大尺寸鲫鱼额外掉落

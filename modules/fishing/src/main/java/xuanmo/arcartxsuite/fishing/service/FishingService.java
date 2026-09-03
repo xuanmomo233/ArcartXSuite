@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
@@ -943,10 +944,19 @@ public final class FishingService {
 
     private @NotNull String getDefaultCurrency() {
         CurrencyBridgeAPI api = currencyApi();
-        if (api != null && !api.currencyIds().isEmpty()) {
-            return api.currencyIds().iterator().next();
+        if (api != null) {
+            // 优先找 provider 为 vault 的货币（Vault 注册的默认经济）
+            for (CurrencyDefinition def : api.definitions()) {
+                if (def.provider() != null && "vault".equalsIgnoreCase(def.provider().trim())) {
+                    return def.id();
+                }
+            }
+            // 回退：第一个可用货币
+            if (!api.currencyIds().isEmpty()) {
+                return api.currencyIds().iterator().next();
+            }
         }
-        return "coin";
+        return "money";
     }
 
     private void giveTreasureItem(@NotNull Player player, @NotNull TreasureDefinition treasure) {

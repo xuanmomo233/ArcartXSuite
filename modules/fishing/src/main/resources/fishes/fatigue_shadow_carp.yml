@@ -31,7 +31,7 @@ behaviors:
     type: DARTING
     weight: 0.4
 currency-reward:
-  currency-id: "coin"
+  currency-id: "money"  # 货币ID，默认money对应Vault经济，自定义货币请改为本体config.yml中currencies节定义的ID
 
 description: "疲惫深渊中浮现的暗影之鲤，游动轨迹难以捉摸"
 record-weight: 1.5

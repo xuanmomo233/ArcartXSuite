@@ -76,7 +76,7 @@ behavior-stages:
 # ─── 奖励（可选） ──────────────────────────────────────
 # 货币奖励（单个，向后兼容）
 currency-reward:
-  currency-id: "coin"
+  currency-id: "money"  # 货币ID，默认money对应Vault经济，自定义货币请改为本体config.yml中currencies节定义的ID
   amount: 500
 
 # 多货币奖励列表（与 currency-reward 叠加生效）
