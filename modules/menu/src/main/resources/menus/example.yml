@@ -182,9 +182,54 @@ pages:
           #   url: "https://example.com/icon.gif"  — 等同于上述texture-url
         # 动作列表（按顺序执行）
         actions:
-          - "command: warehouse open"
           - "close"
-
+          - "delay: 10"
+          - "command: warehouse open"
+        # ============================================================
+        # 动作类型完整参考
+        # ============================================================
+        # 按钮/生命周期中可用的动作（actions）类型：
+        #
+        #   "command: xxx"          — 以玩家身份执行命令（后端本地 performCommand，不经过代理端）
+        #   "chat: <消息>"           — 以玩家身份发送聊天消息（以 / 开头=执行命令，否则=普通聊天消息）
+        #   "connect: <服务器名>"    — 通过 BungeeCord Plugin Messaging 切换到代理端的指定子服（BungeeCord/Velocity 通用）,velocity.toml 需要启用 bungee-plugin-message-channel = true（默认开启）
+        #   "console: xxx"           — 以控制台（服务器）身份执行命令
+        #   "close"                  — 关闭当前菜单
+        #   "open: <菜单id>"         — 打开另一个菜单
+        #   "page: <页面id>"         — 切换到同菜单内的另一页
+        #   "message: <消息>"        — 向玩家发送聊天消息（支持颜色代码）
+        #   "sound: <音效名>|<音量>|<音调>"  — 播放音效
+        #   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
+        #   "signal: <名称>"            — 触发 EventPacket command-signal 信号
+        #   "signal: <名称>|键=值|键2=值2" — 触发信号并传递变量
+        #   "aria: <脚本>"             — 执行 Aria 脚本（注入 AXS player 门面到 global. 命名空间，用 global.player 调用）
+        #   "js: <脚本>"               — 执行 JavaScript（注入 AXS player 门面 + Bukkit，js 中用裸名 player），需 classpath 上有 JS 引擎
+        #   "delay: <tick>"          — 延迟 N tick 后执行后续所有动作（1 tick = 50ms，非阻塞，主线程调度）
+        #                              通用延时，后续可接任意动作组合，支持嵌套多个 delay 分段延时
+        #                              常见用法：close → delay: 10 → command，规避 ax 客户端在 menu UI 未关闭时打开新界面导致卡死
+        #
+        # aria 与 js 都注入 AXS 自有的 player 门面对象：aria 中以 global.player 调用，js 中以裸名 player 调用；区别在运行时来源与限制：
+        #   aria：由 ArcartX 内置提供（硬依赖，始终可用）。常用方法：
+        #         读取 global.player.getLevel()/getFood()/getHealth()/getWorld()/getName()、isSneaking()/isFlying() 等；
+        #         权限 global.player.hasPermission('a.b')；变量 global.player.papi('%...%')（字符串）/papiNumber('%...%')（数字）；
+        #         动作 global.player.command('cmd')（玩家）/console('cmd')（控制台）/op('cmd')（临时OP）/
+        #              msg('&a..')（发消息）/title('主','副')/sound('名字')/close()。
+        #         动作脚本按原样执行（副作用即执行）；作为条件时为单个表达式，Suite 自动补 return。
+        #         AriaPlayer 门面已把常用值收敛为单层方法，global.player.getWorld() 直接返回世界名；
+        #         门面未覆盖的原生 Bukkit API、链式调用或世界对象请使用 global.player.bukkit()。
+        #         Aria 动作求值前会预展开 %...% PAPI 与 {player}；JS 动作不做脚本级预展开，
+        #         JS 中取 PAPI 请使用 player.papi(...) / player.papiNumber(...)。
+        #         Aria 语法：// 注释、单引号字符串、空值 none、if/elif/else、&& || >= <= ==。
+        #   js  ：注入同一个 player 门面 + Bukkit（js 中用裸名 player）；但需 classpath 上有 JS 引擎（GraalJS 等），
+        #         Java 15+ 默认无 Nashorn，无引擎时 js 动作/条件静默跳过。
+        #
+        # 所有 command / console / message / op / signal 动作中均可使用 PlaceholderAPI 变量：
+        #   %player_name%    — 玩家名
+        #   %player_level%   — 玩家等级
+        #   %player_world%   — 当前世界名
+        #   %vault_eco_balance% — 经济余额
+        #   等等...
+        # ============================================================
       # ─── ArcartX 自定义贴图图标（演示：url NBT 渲染 GUI 图标） ───
       custom_texture_demo:
         text: "&b自定义贴图"
@@ -207,8 +252,9 @@ pages:
           material: PAPER
           name: "&f邮件"
         actions:
-          - "command: mail open"
           - "close"
+          - "delay: 10"
+          - "command: mail open"
 
       # ─── 在线奖励（演示：条件判断 + 拒绝消息） ───
       rewards:
@@ -229,16 +275,18 @@ pages:
         #   - "sound: ENTITY_VILLAGER_NO|1.0|1.0"
         #   - "close"
         actions:
-          - "command: onlinerewards open"
           - "close"
+          - "delay: 10"
+          - "command: onlinerewards open"
 
       # ─── 任务导航（演示：基础按钮） ───
       quest:
         text: "&f任务导航"
         order: 3
         actions:
-          - "command: questgps open"
           - "close"
+          - "delay: 10"
+          - "command: questgps open"
 
       # ─── 世界地图（演示：requirements 前置条件） ───
       map:
@@ -250,8 +298,9 @@ pages:
         requirements:
           - "%player_level% >= 1"
         actions:
-          - "command: map open"
           - "close"
+          - "delay: 10"
+          - "command: map open"
 
       # ─── 传送菜单（演示：打开子菜单） ───
       teleport:
@@ -288,14 +337,16 @@ pages:
         text: "&f基础工具"
         order: 0
         actions:
-          - "command: axs essentials menu"
           - "close"
+          - "delay: 10"
+          - "command: axs essentials menu"
       spawn:
         text: "&f返回出生点"
         order: 1
         actions:
-          - "command: axs essentials spawn"
           - "close"
+          - "delay: 10"
+          - "command: axs essentials spawn"
 
       # ─── 脚本动作示例（aria / js）───
       # aria 与 js 都会注入 AXS 自有的 player 门面对象到 ARIA global. 命名空间：
@@ -472,48 +523,7 @@ pages:
         order: 4
         actions:
           - "page: page2"
-# ============================================================
-# 动作类型完整参考
-# ============================================================
-# 按钮/生命周期中可用的动作（actions）类型：
-#
-#   "command: xxx"          — 以玩家身份执行命令（后端本地 performCommand，不经过代理端）
-#   "chat: <消息>"           — 以玩家身份发送聊天消息（以 / 开头=执行命令，否则=普通聊天消息）
-#   "connect: <服务器名>"    — 通过 BungeeCord Plugin Messaging 切换到代理端的指定子服（BungeeCord/Velocity 通用）,velocity.toml 需要启用 bungee-plugin-message-channel = true（默认开启）
-#   "console: xxx"           — 以控制台（服务器）身份执行命令
-#   "close"                  — 关闭当前菜单
-#   "open: <菜单id>"         — 打开另一个菜单
-#   "page: <页面id>"         — 切换到同菜单内的另一页
-#   "message: <消息>"        — 向玩家发送聊天消息（支持颜色代码）
-#   "sound: <音效名>|<音量>|<音调>"  — 播放音效
-#   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
-#   "signal: <名称>"            — 触发 EventPacket command-signal 信号
-#   "signal: <名称>|键=值|键2=值2" — 触发信号并传递变量
-#   "aria: <脚本>"             — 执行 Aria 脚本（注入 AXS player 门面到 global. 命名空间，用 global.player 调用）
-#   "js: <脚本>"               — 执行 JavaScript（注入 AXS player 门面 + Bukkit，js 中用裸名 player），需 classpath 上有 JS 引擎
-#
-# aria 与 js 都注入 AXS 自有的 player 门面对象：aria 中以 global.player 调用，js 中以裸名 player 调用；区别在运行时来源与限制：
-#   aria：由 ArcartX 内置提供（硬依赖，始终可用）。常用方法：
-#         读取 global.player.getLevel()/getFood()/getHealth()/getWorld()/getName()、isSneaking()/isFlying() 等；
-#         权限 global.player.hasPermission('a.b')；变量 global.player.papi('%...%')（字符串）/papiNumber('%...%')（数字）；
-#         动作 global.player.command('cmd')（玩家）/console('cmd')（控制台）/op('cmd')（临时OP）/
-#              msg('&a..')（发消息）/title('主','副')/sound('名字')/close()。
-#         动作脚本按原样执行（副作用即执行）；作为条件时为单个表达式，Suite 自动补 return。
-#         AriaPlayer 门面已把常用值收敛为单层方法，global.player.getWorld() 直接返回世界名；
-#         门面未覆盖的原生 Bukkit API、链式调用或世界对象请使用 global.player.bukkit()。
-#         Aria 动作求值前会预展开 %...% PAPI 与 {player}；JS 动作不做脚本级预展开，
-#         JS 中取 PAPI 请使用 player.papi(...) / player.papiNumber(...)。
-#         Aria 语法：// 注释、单引号字符串、空值 none、if/elif/else、&& || >= <= ==。
-#   js  ：注入同一个 player 门面 + Bukkit（js 中用裸名 player）；但需 classpath 上有 JS 引擎（GraalJS 等），
-#         Java 15+ 默认无 Nashorn，无引擎时 js 动作/条件静默跳过。
-#
-# 所有 command / console / message / op / signal 动作中均可使用 PlaceholderAPI 变量：
-#   %player_name%    — 玩家名
-#   %player_level%   — 玩家等级
-#   %player_world%   — 当前世界名
-#   %vault_eco_balance% — 经济余额
-#   等等...
-# ============================================================
+
 
 # ────────────────────────────────────────────────────────────
 # 二级菜单示例 — 传送点
@@ -544,8 +554,9 @@ pages:
             - none
             - "&e点击传送"
         actions:
-          - "command: spawn"
           - "close"
+          - "delay: 10"
+          - "command: spawn"
       home:
         text: "&f回家"
         order: 1
@@ -555,8 +566,9 @@ pages:
           lore:
             - "&7传送到你设置的家"
         actions:
-          - "command: home"
           - "close"
+          - "delay: 10"
+          - "command: home"
       # warp:
       #   text: "&f传送点列表"
       #   order: 2
@@ -564,8 +576,9 @@ pages:
       #     material: ENDER_PEARL
       #     name: "&a传送点"
       #   actions:
-      #     - "command: warps"
       #     - "close"
+      #     - "delay: 10"
+      #     - "command: warps"
       # tpa:
       #   text: "&f请求传送"
       #   order: 3
@@ -576,6 +589,7 @@ pages:
       #       - "&7向其他玩家发送传送请求"
       #   actions:
       #     - "close"
+      #     - "delay: 10"
       #     - "command: tpa"
       back:
         text: "&7« 返回主菜单"

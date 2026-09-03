@@ -48,26 +48,29 @@ pages:
         order: 0
         # 按钮动作列表：
         #   command: 执行指令 | close: 关闭菜单 | open: 打开其他菜单
-        #   page: 跳转页面 | message: 发送消息
+        #   page: 跳转页面 | message: 发送消息 | delay:N 延迟 N tick 后执行后续动作
         actions:
-          - "command: market shop"
           - "close"
+          - "delay: 10"
+          - "command: market shop"
 
       # ——— 仓库系统按钮 ———
       warehouse:
         text: "&f仓库系统"
         order: 1
         actions:
-          - "command: warehouse open"
           - "close"
+          - "delay: 10"
+          - "command: warehouse open"
 
       # ——— 邮件按钮 ———
       mail:
         text: "&f邮件"
         order: 2
         actions:
-          - "command: mail open"
           - "close"
+          - "delay: 10"
+          - "command: mail open"
 
       # ——— 在线奖励按钮 ———
       rewards:
@@ -78,32 +81,36 @@ pages:
         #   - "%player_level% >= 5"
         # deny-message: "&c需要达到 5 级才能领取在线奖励"
         actions:
-          - "command: onlinerewards open"
           - "close"
+          - "delay: 10"
+          - "command: onlinerewards open"
 
       # ——— 任务导航按钮 ———
       quest:
         text: "&f任务"
         order: 4
         actions:
-          - "command: questgps open"
           - "close"
+          - "delay: 10"
+          - "command: questgps open"
 
       # ——— 地图按钮 ———
       map:
         text: "&f地图"
         order: 5
         actions:
-          - "command: map open"
           - "close"
+          - "delay: 10"
+          - "command: map open"
 
       # ——— 称号按钮 ———
       title:
         text: "&f称号"
         order: 6
         actions:
-          - "command: title open"
           - "close"
+          - "delay: 10"
+          - "command: title open"
 
       # ——— 功能菜单（跳转到 example 子菜单） ———
       example:

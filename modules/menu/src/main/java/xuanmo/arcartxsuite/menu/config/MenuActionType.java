@@ -22,6 +22,7 @@ public enum MenuActionType {
     SIGNAL,
     SCRIPT_JS,
     SCRIPT_ARIA,
+    DELAY,
     NONE;
 
     /**
@@ -49,6 +50,7 @@ public enum MenuActionType {
             case "signal" -> SIGNAL;
             case "js" -> SCRIPT_JS;
             case "aria" -> SCRIPT_ARIA;
+            case "delay" -> DELAY;
             default -> {
                 if (logger != null) {
                     logger.warning("未知 Menu 动作关键字，已降级为 NONE: " + raw);

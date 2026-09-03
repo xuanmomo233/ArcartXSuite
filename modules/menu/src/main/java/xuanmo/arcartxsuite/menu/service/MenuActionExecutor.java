@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -181,6 +182,7 @@ public final class MenuActionExecutor {
             }
             case SCRIPT_JS -> runScript(player, ScriptActionKind.JS, action.value());
             case SCRIPT_ARIA -> runScript(player, ScriptActionKind.ARIA, action.value());
+            case DELAY -> false; // 延迟由 executeAll 处理，单个 execute 调用时无副作用
             case NONE -> false;
         };
     }
@@ -195,17 +197,55 @@ public final class MenuActionExecutor {
 
     /**
      * 依次执行多个菜单动作，若任一动作返回需要关闭菜单则在全部执行后关闭。
+     * <p>
+     * 支持 {@link MenuActionType#DELAY} 动作：遇到 delay 时会先处理已累积的关闭请求
+     * （立即关闭菜单 UI），再按指定 tick 数延迟执行后续所有动作。DELAY 是通用延时，
+     * 可延时执行任意后续动作组合，也支持嵌套多个 DELAY（分段延时）。
      *
      * @param player  目标玩家
      * @param actions 动作定义集合
      */
-    public void executeAll(Player player, Iterable<MenuActionDefinition> actions) {
+    public void executeAll(Player player, List<MenuActionDefinition> actions) {
+        executeAllFrom(player, actions, 0);
+    }
+
+    private void executeAllFrom(Player player, List<MenuActionDefinition> actions, int startIndex) {
         boolean shouldClose = false;
-        for (MenuActionDefinition action : actions) {
+        for (int i = startIndex; i < actions.size(); i++) {
+            MenuActionDefinition action = actions.get(i);
+            if (action.type() == MenuActionType.DELAY) {
+                // 先把累积的关闭请求处理掉（立即关闭 menu UI），再延迟执行后续动作
+                if (shouldClose) {
+                    menuService.closeMenu(player);
+                    shouldClose = false;
+                }
+                long delayTicks = parseDelayTicks(action.value());
+                if (delayTicks <= 0) {
+                    continue;
+                }
+                int nextIndex = i + 1;
+                AxsScheduler.runTaskLater(plugin, () -> {
+                    if (player.isOnline() && nextIndex < actions.size()) {
+                        executeAllFrom(player, actions, nextIndex);
+                    }
+                }, delayTicks);
+                return;
+            }
             shouldClose |= execute(player, action);
         }
         if (shouldClose) {
             menuService.closeMenu(player);
+        }
+    }
+
+    private static long parseDelayTicks(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0L;
+        }
+        try {
+            return Math.max(0L, Long.parseLong(raw.trim()));
+        } catch (NumberFormatException exception) {
+            return 0L;
         }
     }
 
