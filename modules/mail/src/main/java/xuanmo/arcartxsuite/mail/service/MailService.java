@@ -30,14 +30,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
-import xuanmo.arcartxsuite.api.util.InventoryViewCompat;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -94,7 +89,6 @@ public final class MailService implements Listener {
     private static final String COMPOSE_UI_FILE_PATH = "ui/mail_compose.yml";
     private static final String LOGS_UI_FILE_PATH = "ui/mail_logs.yml";
     private static final String ADMIN_UI_FILE_PATH = "ui/mail_admin.yml";
-    private static final String ADMIN_INVENTORY_TITLE = "AXS Mail Admin";
     private static final int ADMIN_ATTACHMENT_SLOTS = 6;
     private static final String STARTER_PRESET_RESOURCE_PATH = "mail/presets/starter.yml";
     private static final int INBOX_PAGE_SIZE = 6;
@@ -288,11 +282,26 @@ public final class MailService implements Listener {
         adminUiId = configuration.ui().adminUiId();
         bindUiResources();
         adminTemplateKey = new NamespacedKey(plugin, "admin_template");
-        if (!"AXS Mail Compose".equals(configuration.ui().composeInventoryTitle())) {
-            this.logger
-                .warning(
-                    "ArcartXMail 的 compose-inventory-title 当前不是默认值。mail_compose.yml 的 match 仍默认匹配 'AXS Mail Compose'，如需修改标题，请同步调整 ArcartX UI 文件。"
-                );
+
+        // 注册 compose/admin UI 关闭回调，关闭时归还附件
+        if (bridge != null) {
+            if (composeUiId != null) {
+                bridge.registerUiCloseCallback(composeUiId, player -> {
+                    ComposeSession session = composeSessions.remove(player.getUniqueId());
+                    composePasswordPanels.remove(player.getUniqueId());
+                    if (session != null && !session.sent()) {
+                        returnComposeItems(player, session);
+                    }
+                });
+            }
+            if (adminUiId != null) {
+                bridge.registerUiCloseCallback(adminUiId, player -> {
+                    AdminEditSession adminSession = adminEditSessions.remove(player.getUniqueId());
+                    if (adminSession != null) {
+                        returnAdminItems(player, adminSession);
+                    }
+                });
+            }
         }
 
         logUnavailableCurrencyProviders();
@@ -342,6 +351,15 @@ public final class MailService implements Listener {
         inboxViewers.clear();
         logViewers.clear();
         HandlerList.unregisterAll(this);
+
+        if (bridge != null) {
+            if (composeUiId != null) {
+                bridge.unregisterUiCloseCallback(composeUiId);
+            }
+            if (adminUiId != null) {
+                bridge.unregisterUiCloseCallback(adminUiId);
+            }
+        }
 
         unregisterBoundUi(registeredInboxUiId);
         unregisterBoundUi(registeredComposeUiId);
@@ -465,7 +483,7 @@ public final class MailService implements Listener {
     }
 
     /**
-     * 为管理员玩家打开 Admin UI（容器背板 + ArcartX 覆盖层）并发送预设列表。
+     * 为管理员玩家打开 Admin UI（ArcartX UI）并发送预设列表。
      */
     public void openAdminUi(Player player) {
         if (player == null || !player.isOnline()) return;
@@ -481,12 +499,9 @@ public final class MailService implements Listener {
 
         closeOtherMailUis(player);
 
-        AdminEditInventoryHolder holder = new AdminEditInventoryHolder();
-        Inventory inventory = Bukkit.createInventory(holder, 9, ADMIN_INVENTORY_TITLE);
-        holder.inventory = inventory;
-        AdminEditSession session = new AdminEditSession(player.getUniqueId(), inventory, null);
+        AdminEditSession session = new AdminEditSession(player.getUniqueId(), null);
         adminEditSessions.put(player.getUniqueId(), session);
-        player.openInventory(inventory);
+        bridge.openUi(player, adminUiId);
 
         AxsScheduler.runTask(plugin, () -> {
             if (player.isOnline()) {
@@ -567,17 +582,11 @@ public final class MailService implements Listener {
     }
 
     /**
-     * 关闭 Bukkit 容器（compose/admin 会话），不显式关闭 ArcartX UI。
-     * ArcartX 的 openUi 会自动替换当前打开的 ArcartX UI，无需显式 closeUi，
-     * 显式 closeUi 会导致 Minecraft GUI 关闭事件 → 鼠标重置到屏幕中心。
-     * 仅需关闭 Bukkit 容器（compose/admin 的物品栏），因为 openUi 不会自动关闭它。
+     * compose/admin 不再使用 Bukkit 容器，无需关闭容器。
+     * ArcartX 的 openUi 会自动替换当前打开的 ArcartX UI。
      */
     private void closeOtherMailUis(Player player) {
-        // 关闭 Bukkit 容器（compose / admin 会话）
-        if (composeSessions.containsKey(player.getUniqueId())
-            || adminEditSessions.containsKey(player.getUniqueId())) {
-            player.closeInventory();
-        }
+        // 无需关闭 Bukkit 容器，compose/admin 不再使用容器
     }
 
     public MailOperationResult openInbox(Player player) {
@@ -605,6 +614,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.target-offline"));
         }
 
+        // 归还旧会话附件
         ComposeSession previous = composeSessions.remove(player.getUniqueId());
         composePasswordPanels.remove(player.getUniqueId());
         if (previous != null && !previous.sent()) {
@@ -615,36 +625,68 @@ public final class MailService implements Listener {
         inboxViewers.remove(player.getUniqueId());
         logViewers.remove(player.getUniqueId());
 
-        ComposeInventoryHolder holder = new ComposeInventoryHolder();
-        Inventory inventory = Bukkit.createInventory(holder, 27, configuration.ui().composeInventoryTitle());
-        holder.inventory = inventory;
-        ComposeSession session = new ComposeSession(UUID.randomUUID(), player.getUniqueId(), inventory, false, configuration.playerSend().feeCurrency());
+        // 创建新会话（无 Bukkit 容器）
+        ComposeSession session = new ComposeSession(UUID.randomUUID(), player.getUniqueId(), false, configuration.playerSend().feeCurrency());
         composeSessions.put(player.getUniqueId(), session);
-        player.openInventory(inventory);
 
+        // 打开 ArcartX UI
+        bridge.openUi(player, composeUiId);
+
+        // 延迟 1 tick 发送 init 包（含背包和附件数据）
         AxsScheduler.runTask(plugin, () -> {
             if (player.isOnline()) {
-                Map<String, Object> composePacket = MailComposePacketFactory.buildInit(
-                    session.sessionId(),
-                    configuration,
-                    currencyBridgeManager,
-                    messages,
-                    calculateComposeQuote(configuration.playerSend(), Map.of(), 0, configuration.playerSend().feeCurrency()),
-                    effectiveAttachmentSlots(inventory),
-                    0,
-                    composePasswordPanels.contains(player.getUniqueId()),
-                    session.actionToken()
-                );
-                composePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
-                bridge.sendPacket(
-                    player,
-                    composeUiId,
-                    "init",
-                    composePacket
-                );
+                sendComposeInitPacket(player, session);
             }
         });
         return MailOperationResult.success(message("player.compose-opened"));
+    }
+
+    private void sendComposeInitPacket(Player player, ComposeSession session) {
+        Map<String, Object> composePacket = MailComposePacketFactory.buildInit(
+            session.sessionId(),
+            configuration,
+            currencyBridgeManager,
+            messages,
+            calculateComposeQuote(configuration.playerSend(), buildAttachmentItemMap(session.attachments()), session.attachments().size(), session.feeCurrency()),
+            configuration.playerSend().maxAttachments(),
+            session.attachments().size(),
+            composePasswordPanels.contains(player.getUniqueId()),
+            session.actionToken()
+        );
+        composePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
+        // 序列化附件和背包
+        composePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
+        composePacket.put("backpack_jsons", serializeBackpack(player));
+        bridge.sendPacket(player, composeUiId, "init", composePacket);
+    }
+
+    private Map<String, Object> serializeAttachments(List<ItemStack> attachments) {
+        Map<String, Object> jsons = new LinkedHashMap<>();
+        if (attachments == null) return jsons;
+        for (int i = 0; i < attachments.size(); i++) {
+            ItemStack item = attachments.get(i);
+            if (item != null && !item.getType().isAir()) {
+                jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
+            }
+        }
+        return jsons;
+    }
+
+    private Map<String, Object> serializeBackpack(Player player) {
+        Map<String, Object> jsons = new LinkedHashMap<>();
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int i = 0; i < Math.min(35, contents.length); i++) {
+            ItemStack item = contents[i];
+            if (item != null && !item.getType().isAir()) {
+                jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
+            }
+        }
+        return jsons;
+    }
+
+    private Map<String, BigDecimal> buildAttachmentItemMap(List<ItemStack> attachments) {
+        // compose 物品附件不产生货币金额，货币附件通过 vault 金额单独传入
+        return Map.of();
     }
 
     public MailOperationResult claimAll(Player player) {
@@ -958,108 +1000,7 @@ public final class MailService implements Listener {
         }
     }
 
-    @EventHandler
-    public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) {
-            return;
-        }
-
-        ComposeSession session = composeSessions.get(player.getUniqueId());
-        if (session != null && event.getInventory() == session.inventory()) {
-            composeSessions.remove(player.getUniqueId());
-            composePasswordPanels.remove(player.getUniqueId());
-            if (!session.sent()) {
-                returnComposeItems(player, session);
-                player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.compose-attachments-returned"));
-            }
-            return;
-        }
-
-        AdminEditSession adminSession = adminEditSessions.get(player.getUniqueId());
-        if (adminSession != null && event.getInventory() == adminSession.inventory()) {
-            adminEditSessions.remove(player.getUniqueId());
-            returnAdminItems(player, adminSession);
-            player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.admin-edits-returned"));
-        }
-    }
-
-    @EventHandler
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        Inventory topInventory = InventoryViewCompat.getTopInventory(event);
-
-        // Compose container
-        ComposeSession session = composeSessions.get(player.getUniqueId());
-        if (session != null && topInventory == session.inventory() && topInventory.getHolder() instanceof ComposeInventoryHolder) {
-            int maxAttachments = effectiveAttachmentSlots(topInventory);
-            if (event.getRawSlot() < topInventory.getSize() && event.getRawSlot() >= maxAttachments) {
-                event.setCancelled(true);
-                return;
-            }
-            if (event.isShiftClick()) {
-                event.setCancelled(true);
-                return;
-            }
-            if (event.getRawSlot() >= 0 && event.getRawSlot() < topInventory.getSize()) {
-                scheduleComposeQuoteRefresh(player);
-            }
-            return;
-        }
-
-        // Admin container
-        AdminEditSession adminSession = adminEditSessions.get(player.getUniqueId());
-        if (adminSession != null && topInventory == adminSession.inventory() && topInventory.getHolder() instanceof AdminEditInventoryHolder) {
-            if (event.getRawSlot() < topInventory.getSize() && event.getRawSlot() >= ADMIN_ATTACHMENT_SLOTS) {
-                event.setCancelled(true);
-                return;
-            }
-            if (event.isShiftClick()) {
-                event.setCancelled(true);
-                return;
-            }
-            if (event.getRawSlot() >= 0 && event.getRawSlot() < ADMIN_ATTACHMENT_SLOTS) {
-                scheduleAdminAttachmentCountRefresh(player);
-            }
-        }
-    }
-
-    @EventHandler
-    public void onInventoryDrag(InventoryDragEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        Inventory topInventory = InventoryViewCompat.getTopInventory(event);
-
-        // Compose container
-        ComposeSession session = composeSessions.get(player.getUniqueId());
-        if (session != null && topInventory == session.inventory() && topInventory.getHolder() instanceof ComposeInventoryHolder) {
-            int maxAttachments = effectiveAttachmentSlots(topInventory);
-            boolean touchesTop = false;
-            for (Integer rawSlot : event.getRawSlots()) {
-                if (rawSlot == null || rawSlot < 0 || rawSlot >= topInventory.getSize()) continue;
-                touchesTop = true;
-                if (rawSlot >= maxAttachments) { event.setCancelled(true); return; }
-            }
-            if (touchesTop) scheduleComposeQuoteRefresh(player);
-            return;
-        }
-
-        // Admin container
-        AdminEditSession adminSession = adminEditSessions.get(player.getUniqueId());
-        if (adminSession != null && topInventory == adminSession.inventory() && topInventory.getHolder() instanceof AdminEditInventoryHolder) {
-            boolean touchesTop = false;
-            for (Integer rawSlot : event.getRawSlots()) {
-                if (rawSlot == null || rawSlot < 0 || rawSlot >= topInventory.getSize()) continue;
-                touchesTop = true;
-                if (rawSlot >= ADMIN_ATTACHMENT_SLOTS) { event.setCancelled(true); return; }
-            }
-            if (touchesTop) scheduleAdminAttachmentCountRefresh(player);
-        }
-    }
+    // compose/admin 不再使用 Bukkit 容器，关闭/点击/拖拽事件由 ArcartX UI 关闭回调处理
 
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !CLIENT_PACKET_ID.equalsIgnoreCase(packetId)) {
@@ -1131,6 +1072,38 @@ public final class MailService implements Listener {
                         session.setFeeCurrency(currencyId);
                         pushComposeQuote(player, calculateCurrentComposeQuote(player));
                     }
+                }
+                return true;
+            }
+            case "compose-add-attachment" -> {
+                if (data != null && data.size() >= 3) {
+                    int slot = (int) parseLong(data.get(1), -1);
+                    String countStr = safe(data.get(2));
+                    sendPlayerResult(player, handleComposeAddAttachment(player, slot, countStr));
+                }
+                return true;
+            }
+            case "compose-remove-attachment" -> {
+                if (data != null && data.size() >= 2) {
+                    int index = (int) parseLong(data.get(1), -1);
+                    sendPlayerResult(player, handleComposeRemoveAttachment(player, index));
+                }
+                return true;
+            }
+            case "admin-add-attachment" -> {
+                if (!player.hasPermission("arcartxsuite.admin")) return true;
+                if (data != null && data.size() >= 3) {
+                    int slot = (int) parseLong(data.get(1), -1);
+                    String countStr = safe(data.get(2));
+                    sendAdminResult(player, handleAdminAddAttachment(player, slot, countStr));
+                }
+                return true;
+            }
+            case "admin-remove-attachment" -> {
+                if (!player.hasPermission("arcartxsuite.admin")) return true;
+                if (data != null && data.size() >= 2) {
+                    int index = (int) parseLong(data.get(1), -1);
+                    sendAdminResult(player, handleAdminRemoveAttachment(player, index));
                 }
                 return true;
             }
@@ -1328,10 +1301,10 @@ public final class MailService implements Listener {
             List<MailAttachment> attachments = new ArrayList<>();
             int order = 0;
 
-            // 从容器读取物品附件
+            // 从附件列表读取物品附件
             AdminEditSession adminSession = adminEditSessions.get(player.getUniqueId());
-            if (adminSession != null && adminSession.inventory() != null) {
-                List<ItemStack> containerItems = collectAdminItems(adminSession.inventory());
+            if (adminSession != null) {
+                List<ItemStack> containerItems = collectAdminItems(adminSession);
                 for (ItemStack itemStack : containerItems) {
                     ItemStack clean = stripTemplateTag(itemStack);
                     attachments.add(new MailAttachment(
@@ -1374,10 +1347,10 @@ public final class MailService implements Listener {
             MailOperationResult result = savePreset(newPreset);
             sendAdminResult(player, result);
             if (result.success()) {
-                // 保存成功后退回物品并清空容器
+                // 保存成功后退回物品并清空附件列表
                 if (adminSession != null) {
                     returnAdminItems(player, adminSession);
-                    adminSession.inventory().clear();
+                    adminSession.attachments().clear();
                 }
                 sendAdminPresetList(player);
             }
@@ -1579,21 +1552,16 @@ public final class MailService implements Listener {
     }
 
     private void returnComposeItems(Player player, ComposeSession session) {
-        if (player == null || session == null || session.inventory() == null) {
-            return;
-        }
-
+        if (player == null || session == null) return;
         PlayerInventory playerInventory = player.getInventory();
-        for (ItemStack itemStack : session.inventory().getContents()) {
-            if (!isRealItem(itemStack)) {
-                continue;
-            }
+        for (ItemStack itemStack : session.attachments()) {
+            if (!isRealItem(itemStack)) continue;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack);
             for (ItemStack leftover : leftovers.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             }
         }
-        session.inventory().clear();
+        session.attachments().clear();
     }
 
     private String crop(String rawValue, int maxLength) {
@@ -1890,8 +1858,8 @@ public final class MailService implements Listener {
             pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
-        int maxAttachmentSlots = effectiveAttachmentSlots(session.inventory());
-        if (hasItemsOutsideAttachmentSlots(session.inventory(), maxAttachmentSlots)) {
+        int maxAttachmentSlots = configuration.playerSend().maxAttachments();
+        if (session.attachments().size() > maxAttachmentSlots) {
             MailOperationResult result = MailOperationResult.failure(message("player.attachment-slot-limit", maxAttachmentSlots));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
@@ -1929,7 +1897,7 @@ public final class MailService implements Listener {
                 }
             }
 
-            List<ItemStack> attachmentItems = collectComposeItems(session.inventory());
+            List<ItemStack> attachmentItems = collectComposeItems(session);
             MailOperationResult attachmentValidation = validateAttachmentItems(attachmentItems);
             if (!attachmentValidation.success()) {
                 pushComposeQuote(player, MailSendQuote.failure(attachmentValidation.message(), session.feeCurrency()));
@@ -2009,10 +1977,9 @@ public final class MailService implements Listener {
             touchProfile(player, true);
             appendLog(player.getUniqueId(), "send", "寄给 " + recipient.lastKnownName() + " 的邮件: " + subject);
             session.sent = true;
-            session.inventory().clear();
+            session.attachments().clear();
             composeSessions.remove(player.getUniqueId());
             composePasswordPanels.remove(player.getUniqueId());
-            player.closeInventory();
             AxsScheduler.runTask(plugin, () -> {
                 if (player.isOnline()) {
                     openInbox(player);
@@ -2053,8 +2020,152 @@ public final class MailService implements Listener {
         return MailOperationResult.failure(message("player.compose-password-invalid"));
     }
 
+    private MailOperationResult handleComposeAddAttachment(Player player, int slot, String countStr) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        if (session == null || session.sent()) {
+            return MailOperationResult.failure(message("player.compose-not-open"));
+        }
+        if (slot < 0 || slot >= 35) {
+            return MailOperationResult.failure("无效槽位");
+        }
+        ItemStack item = player.getInventory().getItem(slot);
+        if (item == null || item.getType().isAir()) {
+            return MailOperationResult.failure("该槽位没有物品");
+        }
+        if (session.attachments().size() >= configuration.playerSend().maxAttachments()) {
+            return MailOperationResult.failure(message("player.attachment-slot-limit", configuration.playerSend().maxAttachments()));
+        }
+        int count = "all".equalsIgnoreCase(countStr) ? item.getAmount() : 1;
+        count = Math.min(count, item.getAmount());
+        // 验证物品
+        ItemStack toAdd = item.clone();
+        toAdd.setAmount(count);
+        List<ItemStack> singleItem = new ArrayList<>();
+        singleItem.add(toAdd);
+        MailOperationResult validation = validateAttachmentItems(singleItem);
+        if (!validation.success()) {
+            return validation;
+        }
+        // 从玩家背包移除
+        item.setAmount(item.getAmount() - count);
+        if (item.getAmount() <= 0) {
+            player.getInventory().setItem(slot, null);
+        } else {
+            player.getInventory().setItem(slot, item);
+        }
+        // 添加到附件列表
+        session.attachments().add(toAdd);
+        // 刷新 UI
+        refreshCompose(player, false);
+        return MailOperationResult.success("");
+    }
+
+    private MailOperationResult handleComposeRemoveAttachment(Player player, int index) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        if (session == null || session.sent()) {
+            return MailOperationResult.failure(message("player.compose-not-open"));
+        }
+        if (index < 0 || index >= session.attachments().size()) {
+            return MailOperationResult.failure("无效附件索引");
+        }
+        ItemStack item = session.attachments().remove(index);
+        if (item != null && !item.getType().isAir()) {
+            HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+            for (ItemStack leftover : leftovers.values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            }
+        }
+        refreshCompose(player, false);
+        return MailOperationResult.success("");
+    }
+
+    private MailOperationResult handleAdminAddAttachment(Player player, int slot, String countStr) {
+        AdminEditSession session = adminEditSessions.get(player.getUniqueId());
+        if (session == null) {
+            return MailOperationResult.failure("Admin 编辑会话不存在");
+        }
+        if (slot < 0 || slot >= 35) {
+            return MailOperationResult.failure("无效槽位");
+        }
+        ItemStack item = player.getInventory().getItem(slot);
+        if (item == null || item.getType().isAir()) {
+            return MailOperationResult.failure("该槽位没有物品");
+        }
+        if (session.attachments().size() >= ADMIN_ATTACHMENT_SLOTS) {
+            return MailOperationResult.failure("附件槽位已满");
+        }
+        int count = "all".equalsIgnoreCase(countStr) ? item.getAmount() : 1;
+        count = Math.min(count, item.getAmount());
+        ItemStack toAdd = item.clone();
+        toAdd.setAmount(count);
+        // 从玩家背包移除
+        item.setAmount(item.getAmount() - count);
+        if (item.getAmount() <= 0) {
+            player.getInventory().setItem(slot, null);
+        } else {
+            player.getInventory().setItem(slot, item);
+        }
+        // 添加到附件列表
+        session.attachments().add(toAdd);
+        // 刷新 admin UI
+        refreshAdminAttachments(player);
+        return MailOperationResult.success("");
+    }
+
+    private MailOperationResult handleAdminRemoveAttachment(Player player, int index) {
+        AdminEditSession session = adminEditSessions.get(player.getUniqueId());
+        if (session == null) {
+            return MailOperationResult.failure("Admin 编辑会话不存在");
+        }
+        if (index < 0 || index >= session.attachments().size()) {
+            return MailOperationResult.failure("无效附件索引");
+        }
+        ItemStack item = session.attachments().remove(index);
+        if (item != null && !item.getType().isAir() && !isTemplateItem(item)) {
+            HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+            for (ItemStack leftover : leftovers.values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            }
+        }
+        refreshAdminAttachments(player);
+        return MailOperationResult.success("");
+    }
+
+    /**
+     * 刷新 compose UI：发送 update 包，含报价、附件和背包数据。
+     */
+    private void refreshCompose(Player player, boolean initPacket) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        if (session == null) return;
+        MailSendQuote quote = calculateComposeQuote(
+            configuration.playerSend(),
+            Map.of(),
+            session.attachments().size(),
+            session.feeCurrency()
+        );
+        pushComposeQuote(player, quote);
+    }
+
+    /**
+     * 刷新 admin UI 附件区域：发送 attachment-count + attachment_jsons + backpack_jsons。
+     */
+    private void refreshAdminAttachments(Player player) {
+        AdminEditSession session = adminEditSessions.get(player.getUniqueId());
+        if (session == null) return;
+        int count = session.attachments().size();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("itemAttachmentCount", count);
+        payload.put("attachment_jsons", serializeAttachments(session.attachments()));
+        payload.put("backpack_jsons", serializeBackpack(player));
+        bridge.sendPacket(player, adminUiId, "attachment-count", payload);
+    }
+
     private String requiredUiForAction(String action) {
-        if ("compose-send".equals(action) || "password-unlock".equals(action) || "change-fee-currency".equals(action)) {
+        if ("compose-send".equals(action)
+            || "password-unlock".equals(action)
+            || "change-fee-currency".equals(action)
+            || "compose-add-attachment".equals(action)
+            || "compose-remove-attachment".equals(action)) {
             return composeUiId;
         }
         if ("claim".equals(action)
@@ -2073,7 +2184,7 @@ public final class MailService implements Listener {
 
     private MailSendQuote calculateCurrentComposeQuote(Player player) {
         ComposeSession session = composeSessions.get(player.getUniqueId());
-        int attachmentCount = session == null ? 0 : collectComposeItems(session.inventory()).size();
+        int attachmentCount = session == null ? 0 : session.attachments().size();
         return calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount, session != null ? session.feeCurrency() : configuration.playerSend().feeCurrency());
     }
 
@@ -2533,33 +2644,22 @@ public final class MailService implements Listener {
         return false;
     }
 
-    private List<ItemStack> collectComposeItems(Inventory inventory) {
-        List<ItemStack> result = new ArrayList<>();
-        int maxAttachments = effectiveAttachmentSlots(inventory);
-        for (int slot = 0; slot < maxAttachments; slot++) {
-            ItemStack itemStack = inventory.getItem(slot);
-            if (isRealItem(itemStack)) {
-                result.add(itemStack.clone());
+    private List<ItemStack> collectComposeItems(ComposeSession session) {
+        List<ItemStack> items = new ArrayList<>();
+        if (session == null) return List.of();
+        for (ItemStack item : session.attachments()) {
+            if (isRealItem(item)) {
+                items.add(item.clone());
             }
         }
-        return List.copyOf(result);
-    }
-
-    private boolean hasItemsOutsideAttachmentSlots(Inventory inventory, int allowedSlots) {
-        for (int slot = Math.max(0, allowedSlots); slot < inventory.getSize(); slot++) {
-            if (isRealItem(inventory.getItem(slot))) {
-                return true;
-            }
-        }
-        return false;
+        return List.copyOf(items);
     }
 
     private void pushComposeQuote(Player player, MailSendQuote quote) {
         if (player != null && player.isOnline()) {
             ComposeSession session = composeSessions.get(player.getUniqueId());
-            Inventory inventory = session == null ? null : session.inventory();
-            int maxAttachments = effectiveAttachmentSlots(inventory);
-            int attachmentCount = inventory == null ? 0 : collectComposeItems(inventory).size();
+            int maxAttachments = configuration.playerSend().maxAttachments();
+            int attachmentCount = session == null ? 0 : session.attachments().size();
             Map<String, Object> composeUpdatePacket = MailComposePacketFactory.buildQuote(
                 configuration,
                 currencyBridgeManager,
@@ -2571,6 +2671,11 @@ public final class MailService implements Listener {
                 session == null ? null : session.actionToken()
             );
             composeUpdatePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
+            // 序列化附件和背包
+            if (session != null) {
+                composeUpdatePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
+            }
+            composeUpdatePacket.put("backpack_jsons", serializeBackpack(player));
             bridge.sendPacket(
                 player,
                 composeUiId,
@@ -2589,14 +2694,9 @@ public final class MailService implements Listener {
             if (session == null) {
                 return;
             }
-            int attachmentCount = collectComposeItems(session.inventory()).size();
+            int attachmentCount = session.attachments().size();
             pushComposeQuote(player, calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount, session.feeCurrency()));
         });
-    }
-
-    private int effectiveAttachmentSlots(Inventory inventory) {
-        int inventorySize = inventory == null ? configuration.playerSend().maxAttachments() : inventory.getSize();
-        return effectiveAttachmentSlots(configuration.playerSend().maxAttachments(), inventorySize);
     }
 
     static int effectiveAttachmentSlots(int configuredMaxAttachments, int inventorySize) {
@@ -2985,16 +3085,16 @@ public final class MailService implements Listener {
     private static final class ComposeSession {
         private final UUID sessionId;
         private final UUID playerUuid;
-        private final Inventory inventory;
+        private final List<ItemStack> attachments;
         private final String actionToken;
         private boolean tokenInFlight;
         private boolean sent;
         private String feeCurrency;
 
-        private ComposeSession(UUID sessionId, UUID playerUuid, Inventory inventory, boolean sent, String feeCurrency) {
+        private ComposeSession(UUID sessionId, UUID playerUuid, boolean sent, String feeCurrency) {
             this.sessionId = sessionId;
             this.playerUuid = playerUuid;
-            this.inventory = inventory;
+            this.attachments = new ArrayList<>();
             this.actionToken = UUID.randomUUID().toString();
             this.sent = sent;
             this.feeCurrency = feeCurrency;
@@ -3008,8 +3108,8 @@ public final class MailService implements Listener {
             return playerUuid;
         }
 
-        public Inventory inventory() {
-            return inventory;
+        public List<ItemStack> attachments() {
+            return attachments;
         }
 
         public String actionToken() {
@@ -3029,23 +3129,14 @@ public final class MailService implements Listener {
         }
     }
 
-    private static final class ComposeInventoryHolder implements InventoryHolder {
-        private Inventory inventory;
-
-        @Override
-        public Inventory getInventory() {
-            return inventory;
-        }
-    }
-
     private static final class AdminEditSession {
         private final UUID playerUuid;
-        private final Inventory inventory;
+        private final List<ItemStack> attachments;
         private String editingPresetId;
 
-        private AdminEditSession(UUID playerUuid, Inventory inventory, String editingPresetId) {
+        private AdminEditSession(UUID playerUuid, String editingPresetId) {
             this.playerUuid = playerUuid;
-            this.inventory = inventory;
+            this.attachments = new ArrayList<>();
             this.editingPresetId = editingPresetId;
         }
 
@@ -3053,8 +3144,8 @@ public final class MailService implements Listener {
             return playerUuid;
         }
 
-        public Inventory inventory() {
-            return inventory;
+        public List<ItemStack> attachments() {
+            return attachments;
         }
 
         public String editingPresetId() {
@@ -3062,59 +3153,52 @@ public final class MailService implements Listener {
         }
     }
 
-    private static final class AdminEditInventoryHolder implements InventoryHolder {
-        private Inventory inventory;
-
-        @Override
-        public Inventory getInventory() {
-            return inventory;
-        }
-    }
-
-    // ─── Admin Container Helpers ─────────────────────────────────
+    // ─── Admin Attachment Helpers ─────────────────────────────────
 
     private void populateAdminContainer(Player player, String presetId) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
         if (session == null) return;
 
-        // 先归还旧物品并清空
+        // 先归还旧物品并清空附件列表
         returnAdminItems(player, session);
-        session.inventory.clear();
+        session.attachments().clear();
         session.editingPresetId = safe(presetId).trim().toLowerCase(Locale.ROOT);
 
         MailPresetDefinition def = getPreset(presetId);
-        if (def == null || def.attachments() == null) return;
+        if (def == null || def.attachments() == null) {
+            refreshAdminAttachments(player);
+            return;
+        }
 
-        int slot = 0;
         for (MailAttachment att : def.attachments()) {
-            if (!att.isItem() || slot >= ADMIN_ATTACHMENT_SLOTS) break;
+            if (!att.isItem() || session.attachments().size() >= ADMIN_ATTACHMENT_SLOTS) break;
             try {
                 ItemStack item = MailItemSerializer.deserialize(att.itemData());
                 if (isRealItem(item)) {
                     markAsTemplateItem(item);
-                    session.inventory.setItem(slot++, item);
+                    session.attachments().add(item);
                 }
             } catch (Exception exception) {
                 this.logger.warning("Admin UI 反序列化物品附件失败: " + exception.getMessage());
             }
         }
 
-        scheduleAdminAttachmentCountRefresh(player);
+        refreshAdminAttachments(player);
     }
 
     private void clearAdminContainer(Player player) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
         if (session == null) return;
         returnAdminItems(player, session);
-        session.inventory.clear();
+        session.attachments().clear();
         session.editingPresetId = null;
-        scheduleAdminAttachmentCountRefresh(player);
+        refreshAdminAttachments(player);
     }
 
     private void returnAdminItems(Player player, AdminEditSession session) {
-        if (player == null || session == null || session.inventory() == null) return;
+        if (player == null || session == null) return;
         PlayerInventory playerInventory = player.getInventory();
-        for (ItemStack itemStack : session.inventory().getContents()) {
+        for (ItemStack itemStack : session.attachments()) {
             if (!isRealItem(itemStack)) continue;
             if (isTemplateItem(itemStack)) continue;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack.clone());
@@ -3124,10 +3208,10 @@ public final class MailService implements Listener {
         }
     }
 
-    private List<ItemStack> collectAdminItems(Inventory inventory) {
+    private List<ItemStack> collectAdminItems(AdminEditSession session) {
         List<ItemStack> result = new ArrayList<>();
-        for (int slot = 0; slot < ADMIN_ATTACHMENT_SLOTS && slot < inventory.getSize(); slot++) {
-            ItemStack itemStack = inventory.getItem(slot);
+        if (session == null) return List.of();
+        for (ItemStack itemStack : session.attachments()) {
             if (isRealItem(itemStack)) {
                 result.add(itemStack.clone());
             }
@@ -3140,10 +3224,7 @@ public final class MailService implements Listener {
             if (player == null || !player.isOnline()) return;
             AdminEditSession session = adminEditSessions.get(player.getUniqueId());
             if (session == null) return;
-            int count = collectAdminItems(session.inventory()).size();
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("itemAttachmentCount", count);
-            bridge.sendPacket(player, adminUiId, "attachment-count", payload);
+            refreshAdminAttachments(player);
         });
     }
 

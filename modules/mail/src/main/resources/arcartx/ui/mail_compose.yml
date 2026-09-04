@@ -2,21 +2,31 @@
 # 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
 # 布局: 左导航(收件箱/日志/写信/兑换码/管理) + 内容区(左:附件+背包槽位 右:表单输入 底:发送/返回)
 # 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
-# 特殊: match 替换物品栏界面，through:true 让槽位可交互，background:false 无遮罩
 # 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
 
 ui:
-  match:
-    - AXS Mail Compose
   isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
   background: false
   escClose: true
   closeDied: true
   show: true
-  through: true
-  screenScale: true
   level: 8
   itemSize: 16
+  screenScale: true
   action:
     seconds: |-
       if(var.actionBusy){
@@ -54,6 +64,9 @@ ui:
       var.feeCurrency = ''
       var.totalFeeCurrency = ''
       var.isAdmin = false
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.attachmentJsons = none
+      var.backpackJsons = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -115,6 +128,8 @@ ui:
       var.feeCurrency = packet['fee_currency']
       var.totalFeeCurrency = packet['total_fee_currency']
       var.isAdmin = packet['is_admin']
+      var.attachmentJsons = packet['attachment_jsons']
+      var.backpackJsons = packet['backpack_jsons']
       if(var.currencies != none){
         while(val.currency_list.childrenCount() > 1){
           val.currency_list.get(1).remove()
@@ -147,6 +162,8 @@ ui:
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.totalFeeCurrency = packet['total_fee_currency']
       var.isAdmin = packet['is_admin']
+      var.attachmentJsons = packet['attachment_jsons']
+      var.backpackJsons = packet['backpack_jsons']
       var.actionBusy = false
 
 # ─── 控件树 ────────────────────────────────────────────────────────
@@ -418,7 +435,9 @@ controls:
               x: 20
               y: 362
               texts:
-                - "~&f将物品拖入附件槽"
+                - "~&f左键背包物品放入1个"
+                - "~&f右键背包物品放入整组"
+                - "~&f左键附件退回背包"
                 - "~&f关闭界面物品自动退回"
                 - "~&f填写收件人与标题后发送"
               fontSize: 32
@@ -481,7 +500,7 @@ controls:
                   point: ~top_left
                   x: 16
                   y: 48
-                  texts: "~&f拖入物品作为附件"
+                  texts: "~&f左键放入1个 右键放整组"
                   fontSize: 32
               槽位网格:
                 type: HGrid
@@ -509,9 +528,13 @@ controls:
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
-                      slotType: ~Container
+                      slotType: ~Icon
                       id: 0
                       visible: "self.id < var.maxAttachments"
+                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.id] != none && var.attachmentJsons[self.id] != '' ? var.attachmentJsons[self.id] : var.air)"
+                    action:
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'compose-remove-attachment', self.id)
                     effect:
                       stroke:
                         width: 2
@@ -559,7 +582,7 @@ controls:
                   create: |-
                     for(i in range(1,35)){
                       slot = self['槽位0'].copy('slot' + i)
-                      slot.id = i + 27
+                      slot.id = i
                     }
                 children:
                   槽位0:
@@ -572,8 +595,14 @@ controls:
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
-                      slotType: ~Backpack
-                      id: 27
+                      slotType: ~Icon
+                      id: 0
+                      seticon: "self.setItemIcon(var.backpackJsons != none && var.backpackJsons[self.id] != none && var.backpackJsons[self.id] != '' ? var.backpackJsons[self.id] : var.air)"
+                    action:
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'compose-add-attachment', self.id, '1')
+                      clickRight: |-
+                        Packet.send('AXS_MAIL', 'compose-add-attachment', self.id, 'all')
                     effect:
                       stroke:
                         width: 2

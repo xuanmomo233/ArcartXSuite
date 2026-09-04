@@ -2,21 +2,31 @@
 # 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
 # 布局: 左导航(收件箱/日志/写信/兑换码/管理) + 内容区(列表视图/编辑视图 切换)
 # 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
-# 特殊: match 替换物品栏界面，through:true 让槽位可交互，background:false 无遮罩
 # 逻辑: packetHandler 接收 preset-list/preset-detail/attachment-count/result；var.view 控制列表/编辑切换
 
 ui:
-  match:
-    - AXS Mail Admin
   isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
   background: false
   escClose: true
   closeDied: true
   show: true
-  through: true
-  screenScale: true
   level: 8
   itemSize: 16
+  screenScale: true
   action:
     load: |-
       var.view = 'list'
@@ -24,6 +34,9 @@ ui:
       var.editItemCount = 0
       var.maxPresetCount = 0
       var.isAdmin = false
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.attachmentJsons = none
+      var.backpackJsons = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -78,10 +91,14 @@ ui:
       var.editFound = packet['found']
       var.view = 'edit'
       var.resultMsg = none
+      var.attachmentJsons = packet['attachment_jsons']
+      var.backpackJsons = packet['backpack_jsons']
     # packetHandler: attachment-count
-    # 包字段: itemAttachmentCount
+    # 包字段: itemAttachmentCount/attachment_jsons/backpack_jsons
     attachment-count: |-
       var.editItemCount = packet['itemAttachmentCount'].round()
+      var.attachmentJsons = packet['attachment_jsons']
+      var.backpackJsons = packet['backpack_jsons']
     # packetHandler: result
     # 包字段: success/message
     result: |-
@@ -1133,7 +1150,9 @@ controls:
                       x: 14
                       y: 48
                       texts:
-                        - "~&f拖入物品作为模板"
+                        - "~&f左键背包物品放入1个"
+                        - "~&f右键背包物品放入整组"
+                        - "~&f左键附件退回背包"
                         - "~&f模板物品保存后不消耗"
                       fontSize: 32
                   附件槽位网格:
@@ -1162,8 +1181,12 @@ controls:
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
-                          slotType: ~Container
+                          slotType: ~Icon
                           id: 0
+                          seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.id] != none && var.attachmentJsons[self.id] != '' ? var.attachmentJsons[self.id] : var.air)"
+                        action:
+                          clickLeft: |-
+                            Packet.send('AXS_MAIL', 'admin-remove-attachment', self.id)
                         effect:
                           stroke:
                             width: 2
@@ -1210,7 +1233,7 @@ controls:
                       create: |-
                         for(i in range(1,35)){
                           slot = self['背包槽位0'].copy('bp_slot' + i)
-                          slot.id = i + 27
+                          slot.id = i
                         }
                     children:
                       背包槽位0:
@@ -1223,8 +1246,14 @@ controls:
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
-                          slotType: ~Backpack
-                          id: 27
+                          slotType: ~Icon
+                          id: 0
+                          seticon: "self.setItemIcon(var.backpackJsons != none && var.backpackJsons[self.id] != none && var.backpackJsons[self.id] != '' ? var.backpackJsons[self.id] : var.air)"
+                        action:
+                          clickLeft: |-
+                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.id, '1')
+                          clickRight: |-
+                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.id, 'all')
                         effect:
                           stroke:
                             width: 2
