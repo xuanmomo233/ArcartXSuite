@@ -60,6 +60,8 @@ ui:
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.syncMode = -> {
+        // 保存旧数量，用于判断是否需要重建货币列表
+        oldMaxCurrencyCount = var.maxCurrencyCount
         if(var.selectedMode == 'auction'){
           var.activeCurrencies = var.auctionCurrencies
           var.maxCurrencyCount = var.auctionMaxCurrencyCount
@@ -75,13 +77,16 @@ ui:
           var.priceMax = var.pshopPriceMax
           var.messageMaxLength = var.pshopMessageMaxLength
         }
-        while(val.货币滚动['货币列表'].childrenCount() > 1){
-          val.货币滚动['货币列表'].get(1).remove()
-        }
-        for(i in range(1, var.maxCurrencyCount)){
-          key = i.round()
-          e = val.货币滚动['货币列表']['货币项'].copy('货币项' + key)
-          e.entryKey = key
+        // ── 货币列表：仅在数量变化时重建 ──
+        if(var.maxCurrencyCount != oldMaxCurrencyCount){
+          while(val.货币滚动['货币列表'].childrenCount() > 1){
+            val.货币滚动['货币列表'].get(1).remove()
+          }
+          for(i in range(1, var.maxCurrencyCount)){
+            key = i.round()
+            e = val.货币滚动['货币列表']['货币项'].copy('货币项' + key)
+            e.entryKey = key
+          }
         }
       }
     open: "Packet.send(var.packetId, 'sell_open')"

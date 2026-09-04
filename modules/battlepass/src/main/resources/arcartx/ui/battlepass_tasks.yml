@@ -73,7 +73,9 @@ ui:
         e.entryKey = key
       }
     # packetHandler: update
-    # 数据更新时接收服务端任务数据包，刷新 UI 变量并重建任务列表子元素（字段与 init 相同）
+    # 数据更新时接收服务端任务数据包，刷新 UI 变量（字段与 init 相同）
+    # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
+    # 任务项子控件通过 entry: 数据绑定自动刷新，无需重建即可更新文本/进度/颜色
     update: |-
       var.packetId = packet['packetId']
       var.dailyTasks = packet['dailyTasks']
@@ -86,32 +88,46 @@ ui:
       var.dailyCompletedCount = packet['dailyCompletedCount']
       var.weeklyCompletedCount = packet['weeklyCompletedCount']
       var.seasonCompletedCount = packet['seasonCompletedCount']
+      // 保存旧数量，用于判断是否需要重建列表
+      oldMaxDailyCount = var.maxDailyCount
+      oldMaxWeeklyCount = var.maxWeeklyCount
+      oldMaxSeasonCount = var.maxSeasonCount
+      // 更新数量
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
-      while(val.每日任务列表.childrenCount() > 1){
-        val.每日任务列表.get(1).remove()
+      // ── 每日任务列表：仅在数量变化时重建 ──
+      if(var.maxDailyCount != oldMaxDailyCount){
+        while(val.每日任务列表.childrenCount() > 1){
+          val.每日任务列表.get(1).remove()
+        }
+        for(i in range(1, var.maxDailyCount - 1)){
+          key = i.round()
+          e = val.每日任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
-      for(i in range(1, var.maxDailyCount - 1)){
-        key = i.round()
-        e = val.每日任务列表['任务项'].copy('任务项' + key)
-        e.entryKey = key
+      // ── 每周任务列表：仅在数量变化时重建 ──
+      if(var.maxWeeklyCount != oldMaxWeeklyCount){
+        while(val.每周任务列表.childrenCount() > 1){
+          val.每周任务列表.get(1).remove()
+        }
+        for(i in range(1, var.maxWeeklyCount - 1)){
+          key = i.round()
+          e = val.每周任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
-      while(val.每周任务列表.childrenCount() > 1){
-        val.每周任务列表.get(1).remove()
-      }
-      for(i in range(1, var.maxWeeklyCount - 1)){
-        key = i.round()
-        e = val.每周任务列表['任务项'].copy('任务项' + key)
-        e.entryKey = key
-      }
-      while(val.赛季任务列表.childrenCount() > 1){
-        val.赛季任务列表.get(1).remove()
-      }
-      for(i in range(1, var.maxSeasonCount - 1)){
-        key = i.round()
-        e = val.赛季任务列表['任务项'].copy('任务项' + key)
-        e.entryKey = key
+      // ── 赛季任务列表：仅在数量变化时重建 ──
+      if(var.maxSeasonCount != oldMaxSeasonCount){
+        while(val.赛季任务列表.childrenCount() > 1){
+          val.赛季任务列表.get(1).remove()
+        }
+        for(i in range(1, var.maxSeasonCount - 1)){
+          key = i.round()
+          e = val.赛季任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
     progress: |-
       var.packetId = packet['packetId']
@@ -385,7 +401,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~232,180,90,230
+                    color: ~255,255,255,230
               任务高亮条:
                 type: Texture
                 attribute:
@@ -471,13 +487,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.taskFilter == 'all' ? '245,205,130,180' : '62,66,74,210'"
+                  normal: "var.taskFilter == 'all' ? '245,205,130,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.taskFilter == 'all' ? '245,205,130,255' : '255,255,255,230'"
+                    color: ~255,255,255,230
               全部文字:
                 type: Text
                 attribute:
@@ -504,13 +520,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.taskFilter == 'daily' ? '232,180,90,180' : '62,66,74,210'"
+                  normal: "var.taskFilter == 'daily' ? '232,180,90,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.taskFilter == 'daily' ? '232,180,90,255' : '255,255,255,230'"
+                    color: ~255,255,255,230
               每日完成名:
                 type: Text
                 attribute:
@@ -571,13 +587,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.taskFilter == 'weekly' ? '150,180,210,180' : '62,66,74,210'"
+                  normal: "var.taskFilter == 'weekly' ? '150,180,210,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.taskFilter == 'weekly' ? '150,180,210,255' : '255,255,255,230'"
+                    color: ~255,255,255,230
               每周完成名:
                 type: Text
                 attribute:
@@ -638,13 +654,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.taskFilter == 'season' ? '186,140,232,180' : '62,66,74,210'"
+                  normal: "var.taskFilter == 'season' ? '186,140,232,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.taskFilter == 'season' ? '186,140,232,255' : '255,255,255,230'"
+                    color: ~255,255,255,230
               赛季完成名:
                 type: Text
                 attribute:

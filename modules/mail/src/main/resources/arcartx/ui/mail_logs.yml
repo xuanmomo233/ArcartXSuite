@@ -170,7 +170,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -199,7 +199,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~60,64,82,220
+                color: ~255,255,255,230
           导航收件箱:
             type: Canvas
             attribute:
@@ -224,7 +224,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               收件箱文字:
                 type: Text
                 attribute:
@@ -253,7 +253,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~80,180,120,230
+                    color: ~255,255,255,230
               日志高亮条:
                 type: Texture
                 attribute:
@@ -295,46 +295,13 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               写信文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
                   texts: "~&f写信"
-                  fontSize: 36
-                  through: true
-          导航兑换码:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'open')
-            children:
-              兑换码底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
-              兑换码文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f兑换码"
                   fontSize: 36
                   through: true
           导航管理:
@@ -362,7 +329,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               管理文字:
                 type: Text
                 attribute:
@@ -394,7 +361,7 @@ controls:
               point: ~top_left
               x: 20
               y: 428
-              texts: "'&7总日志 &f' + var.totalCount.round()"
+              texts: "'&f总日志 &b' + var.totalCount.round()"
               fontSize: 32
           摘要页码:
             type: Text
@@ -402,10 +369,11 @@ controls:
               point: ~top_left
               x: 20
               y: 468
-              texts: "'&7当前页 &f' + var.page.round() + '&7/&f' + var.maxPage.round()"
+              texts: "'&f当前页 &b' + var.page.round() + '&f/&b' + var.maxPage.round()"
               fontSize: 32
 
       # ── 内容区 ──────────────────────────────────────────
+      # 范式: 大白毛玻璃底(255,255,255,100) + 暗色面板分区(36,38,48,210)
       内容区:
         type: Canvas
         attribute:
@@ -415,27 +383,40 @@ controls:
           width: "var.contentW"
           height: "var.viewH - 144"
         children:
-          # 日志列表区
+          # 内容区大白毛玻璃底
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          # 日志列表区（暗色面板）
           日志列表区:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 0
-              width: "var.contentW"
-              height: "var.viewH - 144 - 72"
+              x: 24
+              y: 24
+              width: "var.contentW - 48"
+              height: "var.viewH - 144 - 48 - 72"
             children:
               列表底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               日志滑轨:
                 type: Texture
                 attribute:
@@ -509,7 +490,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: ~60,64,82,220
+                                color: ~255,255,255,230
                           类型标签:
                             type: Canvas
                             attribute:
@@ -540,7 +521,7 @@ controls:
                               point: ~top_left
                               x: 108
                               y: 18
-                              texts: "'&7' + self.parent.entry['created_at']"
+                              texts: "'&f' + self.parent.entry['created_at']"
                               fontSize: 32
                           内容文字:
                             type: Text
@@ -581,7 +562,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   上一页文字:
                     type: Text
                     attribute:
@@ -593,7 +574,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_left
-                  texts: "'&7第 &f' + var.page.round() + ' &7页 / 共 &f' + var.maxPage.round() + ' &7页'"
+                  texts: "'&f第 &b' + var.page.round() + ' &f页 / 共 &b' + var.maxPage.round() + ' &f页'"
                   fontSize: 36
               下一页按钮:
                 type: Canvas
@@ -616,7 +597,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   下一页文字:
                     type: Text
                     attribute:

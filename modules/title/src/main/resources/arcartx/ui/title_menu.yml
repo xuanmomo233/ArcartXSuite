@@ -297,7 +297,14 @@ ui:
     # packetHandler: update
     # 后端推送更新时执行，字段与 init 完全相同，用于刷新界面变量。
     # 包字段: 同 init（titles/groups/qualities/sets/equipped_by_group/filter_modes/selected_* 等全部字段）
+    # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
+      // 保存旧数量，用于判断是否需要重建列表
+      oldMaxTitleCount = var.maxTitleCount
+      oldMaxGroupCount = var.maxGroupCount
+      oldMaxQualityCount = var.maxQualityCount
+      oldMaxSetCount = var.maxSetCount
+      oldMaxEquippedCount = var.maxEquippedCount
       var.titles = packet['titles']
       var.groups = packet['groups']
       var.qualities = packet['qualities']
@@ -347,9 +354,9 @@ ui:
       var.maxQualityCount = packet['max_quality_count']
       var.maxSetCount = packet['max_set_count']
       var.maxEquippedCount = packet['max_equipped_count']
-      称号数 = var.maxTitleCount.round()
-      现有称号数 = val.title_list.childrenCount() - 1
-      if(现有称号数 != 称号数 - 1){
+      // ── 称号列表：仅在数量变化时重建 ──
+      if(var.maxTitleCount != oldMaxTitleCount){
+        称号数 = var.maxTitleCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.title_list.childrenCount() > 1){
           val.title_list.get(1).remove()
@@ -361,9 +368,9 @@ ui:
           }
         }
       }
-      分组数 = var.maxGroupCount.round()
-      现有分组数 = val.group_list.childrenCount() - 1
-      if(现有分组数 != 分组数 - 1){
+      // ── 分组列表：仅在数量变化时重建 ──
+      if(var.maxGroupCount != oldMaxGroupCount){
+        分组数 = var.maxGroupCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.group_list.childrenCount() > 1){
           val.group_list.get(1).remove()
@@ -375,9 +382,9 @@ ui:
           }
         }
       }
-      品质数 = var.maxQualityCount.round()
-      现有品质数 = val.quality_list.childrenCount() - 1
-      if(现有品质数 != 品质数 - 1){
+      // ── 品质列表：仅在数量变化时重建 ──
+      if(var.maxQualityCount != oldMaxQualityCount){
+        品质数 = var.maxQualityCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.quality_list.childrenCount() > 1){
           val.quality_list.get(1).remove()
@@ -389,9 +396,9 @@ ui:
           }
         }
       }
-      套装数 = var.maxSetCount.round()
-      现有套装数 = val.set_list.childrenCount() - 1
-      if(现有套装数 != 套装数 - 1){
+      // ── 套装列表：仅在数量变化时重建 ──
+      if(var.maxSetCount != oldMaxSetCount){
+        套装数 = var.maxSetCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.set_list.childrenCount() > 1){
           val.set_list.get(1).remove()
@@ -403,9 +410,9 @@ ui:
           }
         }
       }
-      已装备数 = var.maxEquippedCount.round()
-      现有已装备数 = val.equipped_list.childrenCount() - 1
-      if(现有已装备数 != 已装备数 - 1){
+      // ── 已装备列表：仅在数量变化时重建 ──
+      if(var.maxEquippedCount != oldMaxEquippedCount){
+        已装备数 = var.maxEquippedCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.equipped_list.childrenCount() > 1){
           val.equipped_list.get(1).remove()

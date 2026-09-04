@@ -68,6 +68,9 @@ ui:
     #   - maxManageCount: 可管理仓库最大数量（用于动态创建控件）
     #   - maxMemberCount: 成员最大数量
     update: |-
+      // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
+      oldMaxManageCount = var.maxManageCount != none ? var.maxManageCount : 0
+      oldMaxMemberCount = var.maxMemberCount != none ? var.maxMemberCount : 0
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.ownerType = packet['ownerType']
@@ -105,29 +108,27 @@ ui:
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
-      共享数 = var.maxManageCount
-      现有共享数 = val.共享列表.childrenCount() - 1
-      if(现有共享数 != 共享数 - 1){
+      // ── 共享列表：仅在数量变化时重建 ──
+      if(var.maxManageCount != oldMaxManageCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.共享列表.childrenCount() > 1){
           val.共享列表.get(1).remove()
         }
-        if(共享数 > 1){
-          for(序号 in range(1, 共享数)){
+        if(var.maxManageCount > 1){
+          for(序号 in range(1, var.maxManageCount - 1)){
             项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      成员数 = var.maxMemberCount
-      现有成员数 = val.成员列表.childrenCount() - 1
-      if(现有成员数 != 成员数 - 1){
+      // ── 成员列表：仅在数量变化时重建 ──
+      if(var.maxMemberCount != oldMaxMemberCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.成员列表.childrenCount() > 1){
           val.成员列表.get(1).remove()
         }
-        if(成员数 > 1){
-          for(序号 in range(1, 成员数)){
+        if(var.maxMemberCount > 1){
+          for(序号 in range(1, var.maxMemberCount - 1)){
             项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }

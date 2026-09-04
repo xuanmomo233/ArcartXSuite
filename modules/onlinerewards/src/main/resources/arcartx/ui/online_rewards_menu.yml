@@ -143,10 +143,11 @@ ui:
         }
       }
       var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
+      // 日历网格固定创建 31 个格子（最大天数），通过 visible 自动隐藏超出当月天数的格子
       while(val.日历网格.childrenCount() > 1){
         val.日历网格.get(1).remove()
       }
-      for(i in range(1, var.calendarCount - 1)){
+      for(i in range(1, 31)){
         key = i.round()
         e = val.日历网格['日历模板'].copy('日历项_' + key)
         e.entryKey = key
@@ -219,6 +220,7 @@ ui:
       var.actionBusy = false
     # packetHandler: update
     # 包字段: 同 init（实时刷新菜单数据）
+    # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']
@@ -240,7 +242,6 @@ ui:
       var.signInTotal = packet['signInTotal']
       var.makeupCardCount = packet['makeupCardCount']
       var.calendarMonthText = packet['calendarMonthText']
-      var.calendarCount = packet['calendarCount']
       var.calendarMonthOffset = packet['calendarMonthOffset']
       var.selectedDateText = packet['selectedDateText']
       var.selectedCanMakeup = packet['selectedCanMakeup']
@@ -255,12 +256,18 @@ ui:
       var.serverSignInGoalEnabled = packet['serverSignInGoalEnabled']
       var.serverSignInGoalCurrent = packet['serverSignInGoalCurrent']
       var.serverSignInGoalNext = packet['serverSignInGoalNext']
+      var.actionToken = packet['action_token']
+      // 保存旧数量，用于判断是否需要重建列表（日历网格固定 31 个，无需重建）
+      oldMaxRewardCount = var.maxRewardCount
+      oldMaxPeriodicCount = var.maxPeriodicCount
+      oldMaxSigninRewardCount = var.maxSigninRewardCount
+      oldMaxSelectedRewardCount = var.maxSelectedRewardCount
+      // 更新数量
+      var.calendarCount = packet['calendarCount']
       var.maxRewardCount = packet['maxRewardCount']
       var.maxPeriodicCount = packet['maxPeriodicCount']
       var.maxSigninRewardCount = packet['maxSigninRewardCount']
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
-      var.calendarSignedCount = 0
-      var.actionToken = packet['action_token']
       // 解析阶段奖励图标
       var.rewardIconJsons = {}
       if(var.maxRewardCount > 0){
@@ -294,6 +301,8 @@ ui:
           }
         }
       }
+      // 统计已签到天数
+      var.calendarSignedCount = 0
       if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
@@ -303,23 +312,18 @@ ui:
         }
       }
       var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
-      while(val.日历网格.childrenCount() > 1){
-        val.日历网格.get(1).remove()
+      // ── 阶段奖励堆叠：仅在数量变化时重建 ──
+      if(var.maxRewardCount != oldMaxRewardCount){
+        while(val.阶段堆叠.childrenCount() > 1){
+          val.阶段堆叠.get(1).remove()
+        }
+        for(i in range(1, var.maxRewardCount - 1)){
+          key = i.round()
+          e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
+          e.entryKey = key
+        }
       }
-      for(i in range(1, var.calendarCount - 1)){
-        key = i.round()
-        e = val.日历网格['日历模板'].copy('日历项_' + key)
-        e.entryKey = key
-      }
-      while(val.阶段堆叠.childrenCount() > 1){
-        val.阶段堆叠.get(1).remove()
-      }
-      for(i in range(1, var.maxRewardCount - 1)){
-        key = i.round()
-        e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
-        e.entryKey = key
-      }
-      // 触发阶段奖励图标 seticon
+      // 重新触发阶段奖励图标 seticon（数据变了但 seticon 不会自动刷新）
       if(val.阶段堆叠['阶段奖励项'] != none && val.阶段堆叠['阶段奖励项']['图标'] != none){
         val.阶段堆叠['阶段奖励项']['图标'].seticon()
       }
@@ -330,15 +334,18 @@ ui:
           e['图标'].seticon()
         }
       }
-      while(val.周期堆叠.childrenCount() > 1){
-        val.周期堆叠.get(1).remove()
+      // ── 周期奖励堆叠：仅在数量变化时重建 ──
+      if(var.maxPeriodicCount != oldMaxPeriodicCount){
+        while(val.周期堆叠.childrenCount() > 1){
+          val.周期堆叠.get(1).remove()
+        }
+        for(i in range(1, var.maxPeriodicCount - 1)){
+          key = i.round()
+          e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
+          e.entryKey = key
+        }
       }
-      for(i in range(1, var.maxPeriodicCount - 1)){
-        key = i.round()
-        e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
-        e.entryKey = key
-      }
-      // 触发周期奖励图标 seticon
+      // 重新触发周期奖励图标 seticon
       if(val.周期堆叠['周期奖励项'] != none && val.周期堆叠['周期奖励项']['图标'] != none){
         val.周期堆叠['周期奖励项']['图标'].seticon()
       }
@@ -349,15 +356,18 @@ ui:
           e['图标'].seticon()
         }
       }
-      while(val.签到堆叠.childrenCount() > 1){
-        val.签到堆叠.get(1).remove()
+      // ── 签到奖励堆叠：仅在数量变化时重建 ──
+      if(var.maxSigninRewardCount != oldMaxSigninRewardCount){
+        while(val.签到堆叠.childrenCount() > 1){
+          val.签到堆叠.get(1).remove()
+        }
+        for(i in range(1, var.maxSigninRewardCount - 1)){
+          key = i.round()
+          e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
+          e.entryKey = key
+        }
       }
-      for(i in range(1, var.maxSigninRewardCount - 1)){
-        key = i.round()
-        e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
-        e.entryKey = key
-      }
-      // 触发签到奖励图标 seticon
+      // 重新触发签到奖励图标 seticon
       if(val.签到堆叠['签到奖励项'] != none && val.签到堆叠['签到奖励项']['图标'] != none){
         val.签到堆叠['签到奖励项']['图标'].seticon()
       }
@@ -368,13 +378,16 @@ ui:
           e['图标'].seticon()
         }
       }
-      while(val.选中奖励堆叠.childrenCount() > 1){
-        val.选中奖励堆叠.get(1).remove()
-      }
-      for(i in range(1, var.maxSelectedRewardCount - 1)){
-        key = i.round()
-        e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
-        e.entryKey = key
+      // ── 选中奖励堆叠：仅在数量变化时重建 ──
+      if(var.maxSelectedRewardCount != oldMaxSelectedRewardCount){
+        while(val.选中奖励堆叠.childrenCount() > 1){
+          val.选中奖励堆叠.get(1).remove()
+        }
+        for(i in range(1, var.maxSelectedRewardCount - 1)){
+          key = i.round()
+          e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
+          e.entryKey = key
+        }
       }
       var.actionBusy = false
   action:
@@ -1160,6 +1173,21 @@ controls:
                       visible: "var.selectedRewardRows.size() == 0"
                       texts: "~&7该日期暂无奖励预览"
                       fontSize: 30
+                  选中奖励滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      x: -16
+                      y: 228
+                      width: 12
+                      height: "var.viewH - 446"
+                      normal: ~15,25,38,220
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,200,220,240
                   选中奖励滑块:
                     type: Texture
                     val: 选中奖励滑块
@@ -1167,10 +1195,12 @@ controls:
                       point: ~top_right
                       x: -16
                       y: 228
-                      width: 4
-                      height: 40
-                      normal: ~120,120,120,200
-                      maxDragY: "var.viewH - 446"
+                      width: 12
+                      height: 60
+                      normal: ~50,170,200,220
+                      maxDragY: "var.viewH - 506"
+                      shape: ~round_rect
+                      radius: 6
                   选中奖励滚动区:
                     type: Scroll
                     attribute:

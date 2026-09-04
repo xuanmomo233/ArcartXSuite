@@ -284,7 +284,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~232,180,90,230
+                    color: ~255,255,255,230
               总览高亮条:
                 type: Texture
                 attribute:

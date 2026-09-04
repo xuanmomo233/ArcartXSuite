@@ -75,6 +75,11 @@ ui:
     #   - maxSharedCount: 共享仓库最大数量
     #   - maxCategoryCount: 分类最大数量
     update: |-
+      // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
+      oldMaxPersonalCount = var.maxPersonalCount != none ? var.maxPersonalCount : 0
+      oldMaxSharedCount = var.maxSharedCount != none ? var.maxSharedCount : 0
+      oldMaxCategoryCount = var.maxCategoryCount != none ? var.maxCategoryCount : 0
+      oldPageSize = var.pageSize != none ? var.pageSize : 0
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.ownerType = packet['ownerType']
@@ -119,44 +124,40 @@ ui:
       var.maxPersonalCount = packet['maxPersonalCount']
       var.maxSharedCount = packet['maxSharedCount']
       var.maxCategoryCount = packet['maxCategoryCount']
-      // 模板保留在索引 0，只有复制出来的控件才是数据行。
-      个人仓库数 = var.maxPersonalCount.round()
-      现有个人仓库数 = val.个人仓库列表.childrenCount() - 1
-      if(现有个人仓库数 != 个人仓库数 - 1){
+      // ── 个人仓库列表：仅在数量变化时重建 ──
+      if(var.maxPersonalCount != oldMaxPersonalCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.个人仓库列表.childrenCount() > 1){
           val.个人仓库列表.get(1).remove()
         }
-        if(个人仓库数 > 1){
-          for(序号 in range(1, 个人仓库数 - 1)){
+        if(var.maxPersonalCount > 1){
+          for(序号 in range(1, var.maxPersonalCount - 1)){
             项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      共享仓库数 = var.maxSharedCount.round()
-      现有共享仓库数 = val.共享仓库列表.childrenCount() - 1
-      if(现有共享仓库数 != 共享仓库数 - 1){
+      // ── 共享仓库列表：仅在数量变化时重建 ──
+      if(var.maxSharedCount != oldMaxSharedCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.共享仓库列表.childrenCount() > 1){
           val.共享仓库列表.get(1).remove()
         }
-        if(共享仓库数 > 1){
-          for(序号 in range(1, 共享仓库数 - 1)){
+        if(var.maxSharedCount > 1){
+          for(序号 in range(1, var.maxSharedCount - 1)){
             项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      分类数 = var.maxCategoryCount.round()
-      现有分类数 = val.分类列表.childrenCount() - 1
-      if(现有分类数 != 分类数 - 1){
+      // ── 分类列表：仅在数量变化时重建 ──
+      if(var.maxCategoryCount != oldMaxCategoryCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.分类列表.childrenCount() > 1){
           val.分类列表.get(1).remove()
         }
-        if(分类数 > 1){
-          for(序号 in range(1, 分类数 - 1)){
+        if(var.maxCategoryCount > 1){
+          for(序号 in range(1, var.maxCategoryCount - 1)){
             项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
@@ -174,21 +175,21 @@ ui:
           }
         }
       }
-      仓库槽位数 = var.pageSize.round()
-      现有仓库槽位数 = val.仓库网格.childrenCount() - 1
-      if(现有仓库槽位数 != 仓库槽位数 - 1){
+      // ── 仓库网格（Slot 控件）：仅在数量变化时重建 ──
+      if(var.pageSize != oldPageSize){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.仓库网格.childrenCount() > 1){
           val.仓库网格.get(1).remove()
         }
-        if(仓库槽位数 > 1){
-          for(序号 in range(1, 仓库槽位数 - 1)){
+        if(var.pageSize > 1){
+          for(序号 in range(1, var.pageSize - 1)){
             slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
             slot.entryKey = 序号.round()
           }
         }
       }
-      for(i in range(0, 仓库槽位数 - 1)){
+      // 对已存在的 Slot 控件重新调用 seticon（数据变了但 seticon 不会自动刷新）
+      for(i in range(0, var.pageSize - 1)){
         icon = val.仓库网格.get(i.round())
         if(icon != none){
           icon.seticon()

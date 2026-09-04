@@ -167,7 +167,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -196,7 +196,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~60,64,82,220
+                color: ~255,255,255,230
           导航收件箱:
             type: Canvas
             attribute:
@@ -221,7 +221,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               收件箱文字:
                 type: Text
                 attribute:
@@ -254,7 +254,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               日志文字:
                 type: Text
                 attribute:
@@ -287,46 +287,13 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               写信文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
                   texts: "~&f写信"
-                  fontSize: 36
-                  through: true
-          导航兑换码:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'open')
-            children:
-              兑换码底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
-              兑换码文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f兑换码"
                   fontSize: 36
                   through: true
           # 当前页：管理
@@ -350,7 +317,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~80,180,120,230
+                    color: ~255,255,255,230
               管理高亮条:
                 type: Texture
                 attribute:
@@ -410,7 +377,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               刷新列表文字:
                 type: Text
                 attribute:
@@ -456,7 +423,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: ~80,180,120,230
+                    color: ~255,255,255,230
               新建预设文字:
                 type: Text
                 attribute:
@@ -476,6 +443,18 @@ controls:
           width: "var.contentW"
           height: "var.viewH - 144"
         children:
+          # 内容区大白毛玻璃底
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
           # ── 列表视图 ───────────────────────────────────
           列表视图:
             type: Canvas
@@ -487,13 +466,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               # 表头
               表头:
                 type: Canvas
@@ -514,7 +494,7 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
                   编号列:
                     type: Text
                     attribute:
@@ -626,7 +606,7 @@ controls:
                             effect:
                               stroke:
                                 width: 2
-                                color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                                color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                           行编号:
                             type: Text
                             attribute:
@@ -677,7 +657,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                               编辑文字:
                                 type: Text
                                 attribute:
@@ -707,7 +687,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: ~80,180,120,230
+                                    color: ~255,255,255,230
                               发送文字:
                                 type: Text
                                 attribute:
@@ -737,7 +717,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '235,100,100,255' : '60,64,82,220'"
+                                    color: "self.isHovered() ? '235,100,100,255' : '255,255,255,230'"
                               删除文字:
                                 type: Text
                                 attribute:
@@ -750,7 +730,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&8暂无预设，点击左侧新建预设开始创建"
+                  texts: "~&f暂无预设，点击左侧新建预设开始创建"
                   fontSize: 36
                   visible: "var.presets == none || var.total == 0"
               # 结果提示
@@ -774,13 +754,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               # 返回按钮
               返回按钮:
                 type: Canvas
@@ -807,7 +788,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   返回文字:
                     type: Text
                     attribute:
@@ -849,7 +830,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               显示名标签:
                 type: Text
                 attribute:
@@ -874,7 +855,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               启用标签:
                 type: Text
                 attribute:
@@ -938,7 +919,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               正文标签:
                 type: Text
                 attribute:
@@ -963,7 +944,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               过期标签:
                 type: Text
                 attribute:
@@ -988,7 +969,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               货币附件标签:
                 type: Text
                 attribute:
@@ -1013,7 +994,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               命令标签:
                 type: Text
                 attribute:
@@ -1038,14 +1019,14 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               编辑摘要:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 632
-                  texts: "'&7物品附件 &f' + var.editItemCount + ' &7个  &7货币格式 currency:amount:desc  &7命令用 | 分隔'"
+                  texts: "'&f物品附件 &b' + var.editItemCount + ' &f个  &f货币格式 currency:amount:desc  &f命令用 | 分隔'"
                   fontSize: 32
               # 保存/取消按钮
               保存按钮:
@@ -1073,7 +1054,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: ~80,180,120,230
+                        color: ~255,255,255,230
                   保存文字:
                     type: Text
                     attribute:
@@ -1107,7 +1088,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   取消文字:
                     type: Text
                     attribute:
@@ -1129,20 +1110,21 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~Frosted:30;255,255,255,60
+                      through: true
+                      normal: ~36,38,48,210
                       shape: ~round_rect
-                      radius: 14
+                      radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
                   附件标题:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 14
                       y: 12
-                      texts: "'&f物品附件 &7' + var.editItemCount + '/6'"
+                      texts: "'&f物品附件 &b' + var.editItemCount + '&f/6'"
                       fontSize: 36
                   附件提示:
                     type: Text
@@ -1151,8 +1133,8 @@ controls:
                       x: 14
                       y: 48
                       texts:
-                        - "~&7拖入物品作为模板"
-                        - "~&7模板物品保存后不消耗"
+                        - "~&f拖入物品作为模板"
+                        - "~&f模板物品保存后不消耗"
                       fontSize: 32
                   附件槽位网格:
                     type: HGrid
@@ -1185,7 +1167,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~60,64,82,220
+                            color: ~255,255,255,230
               管理背包:
                 type: Canvas
                 attribute:
@@ -1199,13 +1181,14 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~Frosted:30;255,255,255,60
+                      through: true
+                      normal: ~36,38,48,210
                       shape: ~round_rect
-                      radius: 14
+                      radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
                   背包标题:
                     type: Text
                     attribute:
@@ -1245,7 +1228,7 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~60,64,82,220
+                            color: ~255,255,255,230
               # 编辑视图结果提示
               编辑结果提示:
                 type: Text

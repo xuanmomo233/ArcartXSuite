@@ -46,6 +46,10 @@ ui:
     #   - maxFixedCount: 定期存款条目最大数量
     #   - selectedCurrency: 当前选中的货币 ID
     update: |-
+      // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
+      oldMaxBalanceCount = var.maxBalanceCount != none ? var.maxBalanceCount : 0
+      oldMaxProductCount = var.maxProductCount != none ? var.maxProductCount : 0
+      oldMaxFixedCount = var.maxFixedCount != none ? var.maxFixedCount : 0
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.warehouseName = packet['warehouseName']
@@ -61,43 +65,40 @@ ui:
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
       var.selectedCurrency = packet['selectedCurrency']
-      余额数 = var.maxBalanceCount
-      现有余额数 = val.余额列表.childrenCount() - 1
-      if(现有余额数 != 余额数 - 1){
+      // ── 余额列表：仅在数量变化时重建 ──
+      if(var.maxBalanceCount != oldMaxBalanceCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.余额列表.childrenCount() > 1){
           val.余额列表.get(1).remove()
         }
-        if(余额数 > 1){
-          for(序号 in range(1, 余额数)){
+        if(var.maxBalanceCount > 1){
+          for(序号 in range(1, var.maxBalanceCount - 1)){
             项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      产品数 = var.maxProductCount
-      现有产品数 = val.产品列表.childrenCount() - 1
-      if(现有产品数 != 产品数 - 1){
+      // ── 产品列表：仅在数量变化时重建 ──
+      if(var.maxProductCount != oldMaxProductCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.产品列表.childrenCount() > 1){
           val.产品列表.get(1).remove()
         }
-        if(产品数 > 1){
-          for(序号 in range(1, 产品数)){
+        if(var.maxProductCount > 1){
+          for(序号 in range(1, var.maxProductCount - 1)){
             项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       }
-      定期数 = var.maxFixedCount
-      现有定期数 = val.定期列表.childrenCount() - 1
-      if(现有定期数 != 定期数 - 1){
+      // ── 定期列表：仅在数量变化时重建 ──
+      if(var.maxFixedCount != oldMaxFixedCount){
         var.刷新轮次 = (var.刷新轮次 + 1).round()
         while(val.定期列表.childrenCount() > 1){
           val.定期列表.get(1).remove()
         }
-        if(定期数 > 1){
-          for(序号 in range(1, 定期数)){
+        if(var.maxFixedCount > 1){
+          for(序号 in range(1, var.maxFixedCount - 1)){
             项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次.round() + '_' + 序号.round())
             项.entryKey = 序号.round()
           }

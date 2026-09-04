@@ -226,7 +226,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -255,7 +255,7 @@ controls:
             effect:
               stroke:
                 width: 3
-                color: ~60,64,82,220
+                color: ~255,255,255,230
           导航收件箱:
             type: Canvas
             attribute:
@@ -280,7 +280,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               收件箱文字:
                 type: Text
                 attribute:
@@ -313,7 +313,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               日志文字:
                 type: Text
                 attribute:
@@ -342,7 +342,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~80,180,120,230
+                    color: ~255,255,255,230
               写信高亮条:
                 type: Texture
                 attribute:
@@ -360,39 +360,6 @@ controls:
                   x: 28
                   texts: "~&0写信"
                   fontSize: 36
-          导航兑换码:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'open')
-            children:
-              兑换码底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
-              兑换码文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f兑换码"
-                  fontSize: 36
-                  through: true
           导航管理:
             type: Canvas
             attribute:
@@ -418,7 +385,7 @@ controls:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
               管理文字:
                 type: Text
                 attribute:
@@ -451,9 +418,9 @@ controls:
               x: 20
               y: 428
               texts:
-                - "~&7将物品拖入附件槽"
-                - "~&7关闭界面物品自动退回"
-                - "~&7填写收件人与标题后发送"
+                - "~&f将物品拖入附件槽"
+                - "~&f关闭界面物品自动退回"
+                - "~&f填写收件人与标题后发送"
               fontSize: 32
 
       # ── 内容区 ──────────────────────────────────────────
@@ -466,13 +433,25 @@ controls:
           width: "var.contentW"
           height: "var.viewH - 144"
         children:
+          # 内容区大白毛玻璃底
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
           # 左列：附件 + 背包槽位
           附件面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 0
+              x: 24
+              y: 24
               width: 480
               height: 200
             children:
@@ -480,20 +459,21 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               附件标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 12
-                  texts: "'&f物品附件 &7' + var.attachmentCount.round() + '/' + var.maxAttachments.round()"
+                  texts: "'&f物品附件 &b' + var.attachmentCount.round() + '&f/' + var.maxAttachments.round()"
                   fontSize: 36
               附件提示:
                 type: Text
@@ -501,7 +481,7 @@ controls:
                   point: ~top_left
                   x: 16
                   y: 48
-                  texts: "~&7拖入物品作为附件"
+                  texts: "~&f拖入物品作为附件"
                   fontSize: 32
               槽位网格:
                 type: HGrid
@@ -535,14 +515,14 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
 
           背包面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 216
+              x: 24
+              y: 240
               width: 480
               height: "var.viewH - 144 - 216 - 72"
             children:
@@ -550,13 +530,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               背包标题:
                 type: Text
                 attribute:
@@ -596,15 +577,15 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
 
           # 右列：表单输入区
           表单区:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 504
-              y: 0
+              x: 528
+              y: 24
               width: "var.contentW - 504"
               height: "var.viewH - 144 - 72"
             children:
@@ -612,13 +593,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,60
+                  through: true
+                  normal: ~36,38,48,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               收件人标签:
                 type: Text
                 attribute:
@@ -636,7 +618,7 @@ controls:
                   width: 320
                   height: 40
                   length: 32
-                  emptyText: "~&7输入玩家名"
+                  emptyText: "~&f输入玩家名"
                   fontSize: 36
                   background: ~36,38,48,245
                   shape: ~round_rect
@@ -647,7 +629,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               标题标签:
                 type: Text
                 attribute:
@@ -665,7 +647,7 @@ controls:
                   width: "self.parent.width - 380"
                   height: 40
                   length: 48
-                  emptyText: "~&7输入邮件标题"
+                  emptyText: "~&f输入邮件标题"
                   fontSize: 36
                   background: ~36,38,48,245
                   shape: ~round_rect
@@ -676,7 +658,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               正文标签:
                 type: Text
                 attribute:
@@ -695,7 +677,7 @@ controls:
                   height: 240
                   length: 400
                   allowNewLine: true
-                  emptyText: "~&7支持多行正文"
+                  emptyText: "~&f支持多行正文"
                   fontSize: 36
                   background: ~36,38,48,245
                   shape: ~round_rect
@@ -706,14 +688,14 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               字数统计:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 396
-                  texts: "'&7标题上限 &f' + var.subjectMax.round() + '  &7正文上限 &f' + var.bodyMax.round()"
+                  texts: "'&f标题上限 &b' + var.subjectMax.round() + '  &f正文上限 &b' + var.bodyMax.round()"
                   fontSize: 32
               邮费货币标签:
                 type: Text
@@ -755,7 +737,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                       货币文字:
                         type: Text
                         attribute:
@@ -781,7 +763,7 @@ controls:
                   width: 360
                   height: 40
                   length: 24
-                  emptyText: "~&7填写金币附件数量"
+                  emptyText: "~&f填写金币附件数量"
                   fontSize: 36
                   background: ~36,38,48,245
                   shape: ~round_rect
@@ -793,14 +775,14 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~60,64,82,220
+                    color: ~255,255,255,230
               费用汇总:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 536
-                  texts: "'&7总费用 &f' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + '  &7手续费 &f' + var.itemFee + (var.quoteMessage == none ? '' : '  &7提示 &f' + var.quoteMessage)"
+                  texts: "'&f总费用 &b' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + '  &f手续费 &b' + var.itemFee + (var.quoteMessage == none ? '' : '  &f提示 &b' + var.quoteMessage)"
                   fontSize: 32
               # 二级密码面板（条件显示）
               二级密码面板:
@@ -841,7 +823,7 @@ controls:
                       width: 300
                       height: 32
                       length: 64
-                      emptyText: "~&7输入二级密码"
+                      emptyText: "~&f输入二级密码"
                       fontSize: 32
                       background: ~28,30,40,245
                       shape: ~round_rect
@@ -852,7 +834,7 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: ~60,64,82,220
+                        color: ~255,255,255,230
                   密码确认按钮:
                     type: Canvas
                     attribute:
@@ -877,7 +859,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: ~80,180,120,230
+                            color: ~255,255,255,230
                       确认文字:
                         type: Text
                         attribute:
@@ -891,8 +873,8 @@ controls:
             type: HStack
             attribute:
               point: ~bottom_left
-              x: 0
-              y: -12
+              x: 24
+              y: -36
               spaceBetween: 16
             children:
               发送按钮:
@@ -918,7 +900,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '80,180,120,230'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   发送文字:
                     type: Text
                     attribute:
@@ -947,7 +929,7 @@ controls:
                       ripple:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
                   返回文字:
                     type: Text
                     attribute:

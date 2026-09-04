@@ -479,6 +479,8 @@ public final class MailService implements Listener {
             returnAdminItems(player, previous);
         }
 
+        closeOtherMailUis(player, adminUiId);
+
         AdminEditInventoryHolder holder = new AdminEditInventoryHolder();
         Inventory inventory = Bukkit.createInventory(holder, 9, ADMIN_INVENTORY_TITLE);
         holder.inventory = inventory;
@@ -564,11 +566,30 @@ public final class MailService implements Listener {
         return result;
     }
 
+    /**
+     * 关闭除 keepOpen 之外的所有邮件 ArcartX UI，并关闭 Bukkit 容器（compose/admin 会话）。
+     * 在打开任意邮件 UI 之前调用，确保同一时刻只有一个邮件界面处于打开状态。
+     */
+    private void closeOtherMailUis(Player player, String keepOpen) {
+        if (bridge == null) return;
+        // 关闭 Bukkit 容器（compose / admin 会话）
+        if (composeSessions.containsKey(player.getUniqueId())
+            || adminEditSessions.containsKey(player.getUniqueId())) {
+            player.closeInventory();
+        }
+        // 关闭其他 ArcartX UI
+        if (inboxUiId != null && !inboxUiId.equals(keepOpen)) bridge.closeUi(player, inboxUiId);
+        if (logsUiId != null && !logsUiId.equals(keepOpen)) bridge.closeUi(player, logsUiId);
+        if (composeUiId != null && !composeUiId.equals(keepOpen)) bridge.closeUi(player, composeUiId);
+        if (adminUiId != null && !adminUiId.equals(keepOpen)) bridge.closeUi(player, adminUiId);
+    }
+
     public MailOperationResult openInbox(Player player) {
         if (player == null || !player.isOnline()) {
             return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
+            closeOtherMailUis(player, inboxUiId);
             touchProfile(player, false);
             inboxQueries.putIfAbsent(player.getUniqueId(), new MailInboxQuery(MailInboxFilter.ALL, 1, INBOX_PAGE_SIZE));
             inboxViewers.add(player.getUniqueId());
@@ -593,6 +614,7 @@ public final class MailService implements Listener {
             returnComposeItems(player, previous);
         }
 
+        closeOtherMailUis(player, composeUiId);
         inboxViewers.remove(player.getUniqueId());
         logViewers.remove(player.getUniqueId());
 
@@ -1059,9 +1081,6 @@ public final class MailService implements Listener {
         }
         switch (action) {
             case "open" -> {
-                if (composeSessions.containsKey(player.getUniqueId())) {
-                    player.closeInventory();
-                }
                 openInbox(player);
                 return true;
             }
@@ -1737,6 +1756,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
+            closeOtherMailUis(player, logsUiId);
             touchProfile(player, false);
             logPages.putIfAbsent(player.getUniqueId(), 1);
             logViewers.add(player.getUniqueId());
