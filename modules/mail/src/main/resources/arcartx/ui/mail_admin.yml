@@ -816,9 +816,9 @@ controls:
               编辑标题:
                 type: Text
                 attribute:
-                  point: ~middle_left
+                  point: ~top_left
                   x: 130
-                  y: 12
+                  y: 14
                   texts: "var.editFound ? '&f编辑预设: &f' + var.editId : '&f新建预设'"
                   fontSize: 36
               # 左侧表单
@@ -1121,7 +1121,7 @@ controls:
                   x: 800
                   y: 72
                   width: "self.parent.width - 816"
-                  height: 200
+                  height: 300
                 children:
                   附件底:
                     type: Texture
@@ -1160,7 +1160,7 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 14
-                      y: 96
+                      y: 232
                       spaceBetweenX: 6
                       spaceBetweenY: 6
                       column: 6
@@ -1196,9 +1196,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 800
-                  y: 288
+                  y: 388
                   width: "self.parent.width - 816"
-                  height: "self.parent.height - 300"
+                  height: "self.parent.height - 400"
                 children:
                   背包底:
                     type: Texture

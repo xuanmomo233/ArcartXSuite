@@ -84,7 +84,6 @@ public final class MailComposePacketFactory {
         payload.put("attachment_count", Math.max(0, attachmentCount));
         payload.put("fee_currency", configuration.playerSend().feeCurrency());
         payload.put("currencies", currencies(currencyBridgeManager, messages));
-        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
         payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
         payload.put("password_panel", passwordPanel(passwordPanelVisible));
         applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
@@ -167,7 +166,6 @@ public final class MailComposePacketFactory {
         payload.put("action_token", actionToken == null ? "" : actionToken);
         payload.put("max_attachments", Math.max(0, maxAttachments));
         payload.put("attachment_count", Math.max(0, attachmentCount));
-        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
         payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
         payload.put("password_panel", passwordPanel(passwordPanelVisible));
         applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
@@ -247,9 +245,5 @@ public final class MailComposePacketFactory {
             result.put(entry.getKey(), currencyBridgeManager.format(entry.getKey(), entry.getValue()));
         }
         return result;
-    }
-
-    private static String trimRate(double rawRate) {
-        return BigDecimal.valueOf(Math.max(0.0D, rawRate)).stripTrailingZeros().toPlainString();
     }
 }

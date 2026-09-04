@@ -73,11 +73,6 @@ public record MailModuleConfiguration(
 
         ConfigurationSection playerSendSection = configuration.getConfigurationSection("player-send");
         Map<String, Double> attachmentTaxRates = loadTaxRates(playerSendSection == null ? null : playerSendSection.getConfigurationSection("attachment-tax-rates"));
-        if (playerSendSection != null && playerSendSection.contains("vault-tax-rate")) {
-            LinkedHashMap<String, Double> adjustedRates = new LinkedHashMap<>(attachmentTaxRates);
-            adjustedRates.put("money", Math.max(0.0D, playerSendSection.getDouble("vault-tax-rate", 0.0D)));
-            attachmentTaxRates = Map.copyOf(adjustedRates);
-        }
         MailPlayerSendConfiguration playerSend = new MailPlayerSendConfiguration(
             playerSendSection == null || playerSendSection.getBoolean("enabled", true),
             playerSendSection == null || playerSendSection.getBoolean("require-permission", true),

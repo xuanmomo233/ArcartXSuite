@@ -49,13 +49,4 @@ public record MailPlayerSendConfiguration(
         Double rate = attachmentTaxRates.get(currencyId == null ? "" : currencyId.trim().toLowerCase(java.util.Locale.ROOT));
         return rate == null ? 0.0D : Math.max(0.0D, rate);
     }
-
-    /**
-     * 查询 Vault 货币（{@code money}）的附件税率。
-     *
-     * @return Vault 税率，未配置时返回 {@code 0.0}
-     */
-    public double vaultTaxRate() {
-        return attachmentTaxRate("money");
-    }
 }

@@ -91,9 +91,6 @@ player-send:
   # base-fee / item-fee 使用的货币 ID；需在 currencies 中存在。
   fee-currency: money
 
-  # 旧版兼容键；等价于 attachment-tax-rates.money。
-  vault-tax-rate: 0.05
-
   # 各货币附件税率；发送附件时会按货币 ID 读取对应倍率。
   attachment-tax-rates:
     money: 0.05
@@ -117,9 +114,25 @@ player-send:
 
 moderation:
   # 命中时禁止发送；支持敏感词、正则、物品材质和 Lore 正则。
-  blocked-words: []
+  blocked-words:
+    - sb
+    - nm
+    - 傻逼
+    - 你妈
+    - 屎
+    - 艹
+    - 操你
+    - 草你
   # 屏蔽正则表达式列表；邮件标题/正文命中则禁止发送。
-  blocked-patterns: []
+  blocked-patterns:
+    - sb
+    - nm
+    - 傻逼
+    - 你妈
+    - 屎
+    - 艹
+    - 操你
+    - 草你
   blocked-materials:
     - BEDROCK
     - COMMAND_BLOCK

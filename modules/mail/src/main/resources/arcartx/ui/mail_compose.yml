@@ -44,7 +44,6 @@ ui:
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.baseFee = '0'
-      var.vaultTaxRate = '0'
       var.allowVault = true
       var.quoteSuccess = true
       var.quoteMessage = none
@@ -89,7 +88,6 @@ ui:
     #   - session_id: 写信会话 ID
     #   - action_token: 操作令牌（防重放）
     #   - base_fee: 基础邮费金额
-    #   - vault_tax_rate: 金币附件税率
     #   - allow_vault: 是否允许附带金币附件
     #   - quote_success: 费用报价是否成功
     #   - quote_message: 报价提示信息
@@ -108,7 +106,6 @@ ui:
       var.sessionId = packet['session_id']
       var.actionToken = packet['action_token']
       var.baseFee = packet['base_fee']
-      var.vaultTaxRate = packet['vault_tax_rate']
       var.allowVault = packet['allow_vault']
       var.quoteSuccess = packet['quote_success']
       var.quoteMessage = packet['quote_message']
@@ -146,12 +143,11 @@ ui:
       var.actionBusy = false
     # packetHandler: update
     # 包字段:
-    #   - base_fee / vault_tax_rate / allow_vault / quote_success / quote_message
+    #   - base_fee / allow_vault / quote_success / quote_message
     #   - item_fee / total_fee / max_attachments / attachment_count
     #   - password_panel / total_fee_currency / is_admin
     update: |-
       var.baseFee = packet['base_fee']
-      var.vaultTaxRate = packet['vault_tax_rate']
       var.allowVault = packet['allow_vault']
       var.quoteSuccess = packet['quote_success']
       var.quoteMessage = packet['quote_message']
@@ -547,7 +543,7 @@ controls:
               x: 24
               y: 240
               width: 480
-              height: "var.viewH - 144 - 216 - 72"
+              height: "var.viewH - 144 - 240 - 72"
             children:
               背包底:
                 type: Texture
@@ -615,8 +611,8 @@ controls:
               point: ~top_left
               x: 528
               y: 24
-              width: "var.contentW - 504"
-              height: "var.viewH - 144 - 72"
+              width: "var.contentW - 552"
+              height: "var.viewH - 144 - 96"
             children:
               表单底:
                 type: Texture
@@ -963,7 +959,7 @@ controls:
             attribute:
               point: ~bottom_left
               x: 24
-              y: -36
+              y: -12
               spaceBetween: 16
             children:
               发送按钮:

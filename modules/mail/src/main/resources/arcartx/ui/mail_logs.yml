@@ -476,7 +476,7 @@ controls:
                           entryKey: 0.round()
                           entry: var.logs[self.entryKey]
                           width: "self.parent.width"
-                          height: 80
+                          height: 100
                           visible: "self.entry != none"
                         children:
                           项目底:
@@ -537,7 +537,7 @@ controls:
             type: HStack
             attribute:
               point: ~bottom_left
-              x: 0
+              x: 24
               y: -12
               spaceBetween: 12
             children:

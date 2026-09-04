@@ -755,7 +755,7 @@ controls:
                     val: mail_list
                     type: VStack
                     attribute:
-                      width: 520
+                      width: "self.parent.width - 20"
                       spaceBetween: 8
                     children:
                       邮件项目:
@@ -763,7 +763,7 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           entry: var.messages[self.entryKey]
-                          width: 520
+                          width: "self.parent.width"
                           height: 88
                           visible: "self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread'] == true) || (var.filterMode == 'claimable' && self.entry['claimable'] == true) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk'))"
                         action:
