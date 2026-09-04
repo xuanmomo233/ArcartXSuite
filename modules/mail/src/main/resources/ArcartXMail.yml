@@ -126,6 +126,20 @@ moderation:
     - BARRIER
   # 屏蔽 Lore 正则表达式列表；附件物品 Lore 命中则禁止发送。
   blocked-lore-patterns: []
+  # 屏蔽物品自定义名称（displayName）正则表达式列表；附件物品名称命中则禁止发送。
+  # 大小写不敏感匹配。
+  blocked-displayname-patterns: []
+  # 屏蔽 NBT/PDC 键列表；附件物品存在任一指定键则禁止发送。
+  # 仅检测 PersistentDataContainer（PDC）键，匹配键名（忽略命名空间）或完整键（namespace:key）。
+  blocked-nbt-keys: []
+  # 屏蔽 NBT/PDC 键值对；附件物品的指定键值匹配则禁止发送。
+  # 键为 PDC 键名（忽略命名空间），值为期望的字符串/数值。
+  # 支持数值比较（如 1 == 1.0）和字符串比较（忽略大小写）。
+  blocked-nbt-values: {}
+  # 示例:
+  #   blocked-nbt-values:
+  #     item_category: weapon
+  #     custom_tag: soulbound
 
 retention:
   # 自动清理周期，单位 tick。

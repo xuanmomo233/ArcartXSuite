@@ -99,7 +99,10 @@ public record MailModuleConfiguration(
             lowerList(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-words")),
             compilePatterns(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-patterns"), logger, "moderation.blocked-patterns"),
             upperList(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-materials")),
-            compilePatterns(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-lore-patterns"), logger, "moderation.blocked-lore-patterns")
+            compilePatterns(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-lore-patterns"), logger, "moderation.blocked-lore-patterns"),
+            compilePatterns(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-displayname-patterns"), logger, "moderation.blocked-displayname-patterns"),
+            lowerList(moderationSection == null ? List.of() : moderationSection.getStringList("blocked-nbt-keys")),
+            loadNbtValues(moderationSection == null ? null : moderationSection.getConfigurationSection("blocked-nbt-values"))
         );
 
         ConfigurationSection retentionSection = configuration.getConfigurationSection("retention");
@@ -168,6 +171,20 @@ public record MailModuleConfiguration(
             }
         }
         return List.copyOf(result);
+    }
+
+    private static Map<String, String> loadNbtValues(ConfigurationSection section) {
+        if (section == null) {
+            return Map.of();
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            String value = section.getString(key);
+            if (value != null && !value.isBlank()) {
+                result.put(key.trim().toLowerCase(Locale.ROOT), value.trim());
+            }
+        }
+        return Map.copyOf(result);
     }
 
     private static Map<String, Double> loadTaxRates(ConfigurationSection section) {

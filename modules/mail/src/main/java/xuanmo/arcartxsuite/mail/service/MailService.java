@@ -2605,15 +2605,88 @@ public final class MailService implements Listener {
                 return MailOperationResult.failure(message("player.attachment-blocked-material", itemStack.getType().name()));
             }
             ItemMeta meta = itemStack.getItemMeta();
-            if (meta != null && meta.getLore() != null) {
-                for (String line : meta.getLore()) {
-                    if (matchesBlockedLore(line)) {
-                        return MailOperationResult.failure(message("player.attachment-blocked-lore"));
+            if (meta != null) {
+                // displayName 检测
+                if (meta.hasDisplayName()) {
+                    String displayName = meta.getDisplayName();
+                    for (Pattern pattern : configuration.moderation().blockedDisplaynamePatterns()) {
+                        if (pattern.matcher(displayName).find()) {
+                            return MailOperationResult.failure(message("player.attachment-blocked-displayname"));
+                        }
+                    }
+                }
+                // Lore 检测
+                if (meta.getLore() != null) {
+                    for (String line : meta.getLore()) {
+                        if (matchesBlockedLore(line)) {
+                            return MailOperationResult.failure(message("player.attachment-blocked-lore"));
+                        }
+                    }
+                }
+                // NBT/PDC 键存在检测
+                org.bukkit.persistence.PersistentDataContainer pdc = meta.getPersistentDataContainer();
+                for (String blockedKey : configuration.moderation().blockedNbtKeys()) {
+                    for (NamespacedKey existingKey : pdc.getKeys()) {
+                        if (existingKey.getKey().equalsIgnoreCase(blockedKey)
+                            || existingKey.toString().equalsIgnoreCase(blockedKey)) {
+                            return MailOperationResult.failure(message("player.attachment-blocked-nbt-key", blockedKey));
+                        }
+                    }
+                }
+                // NBT/PDC 键值检测
+                for (Map.Entry<String, String> entry : configuration.moderation().blockedNbtValues().entrySet()) {
+                    String expectedKey = entry.getKey();
+                    String expectedValue = entry.getValue();
+                    String actualValue = readPdcValue(pdc, expectedKey);
+                    if (actualValue != null && valuesEqual(expectedValue, actualValue)) {
+                        return MailOperationResult.failure(message("player.attachment-blocked-nbt-value", expectedKey));
                     }
                 }
             }
         }
         return MailOperationResult.success("");
+    }
+
+    private String readPdcValue(org.bukkit.persistence.PersistentDataContainer pdc, String configuredKey) {
+        // 先尝试 plugin 命名空间
+        NamespacedKey pluginKey = new NamespacedKey(plugin, configuredKey);
+        String value = readPdcValueByKey(pdc, pluginKey);
+        if (value != null) {
+            return value;
+        }
+        // 遍历所有键，匹配 key 部分（忽略命名空间）或完整键
+        for (NamespacedKey key : pdc.getKeys()) {
+            if (key.getKey().equalsIgnoreCase(configuredKey)
+                || key.toString().equalsIgnoreCase(configuredKey)) {
+                return readPdcValueByKey(pdc, key);
+            }
+        }
+        return null;
+    }
+
+    private String readPdcValueByKey(org.bukkit.persistence.PersistentDataContainer pdc, NamespacedKey key) {
+        String stringValue = pdc.get(key, PersistentDataType.STRING);
+        if (stringValue != null) return stringValue;
+        Integer integerValue = pdc.get(key, PersistentDataType.INTEGER);
+        if (integerValue != null) return String.valueOf(integerValue);
+        Long longValue = pdc.get(key, PersistentDataType.LONG);
+        if (longValue != null) return String.valueOf(longValue);
+        Byte byteValue = pdc.get(key, PersistentDataType.BYTE);
+        if (byteValue != null) return String.valueOf(byteValue);
+        Double doubleValue = pdc.get(key, PersistentDataType.DOUBLE);
+        return doubleValue == null ? null : String.valueOf(doubleValue);
+    }
+
+    private static boolean valuesEqual(String expected, String actual) {
+        // 尝试数值比较
+        try {
+            java.math.BigDecimal expectedNum = new java.math.BigDecimal(expected.trim());
+            java.math.BigDecimal actualNum = new java.math.BigDecimal(actual.trim());
+            return expectedNum.compareTo(actualNum) == 0;
+        } catch (NumberFormatException ignored) {
+            // 非数值，走字符串比较
+        }
+        return expected.trim().equalsIgnoreCase(actual.trim());
     }
 
     private boolean containsBlockedText(String value) {
