@@ -639,26 +639,38 @@ controls:
                   texts: "~&f收件人"
                   fontSize: 36
               收件人输入框:
-                type: TextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 52
                   width: 320
                   height: 40
-                  length: 32
-                  emptyText: "~&f输入玩家名"
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                action:
-                  textChange: |-
-                    var.composeRecipient = self.getContent()
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  收件人输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  收件人输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 300
+                      height: 32
+                      length: 32
+                      emptyText: "~&f输入玩家名"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.composeRecipient = self.getContent()
               标题标签:
                 type: Text
                 attribute:
@@ -668,26 +680,38 @@ controls:
                   texts: "~&f标题"
                   fontSize: 36
               标题输入框:
-                type: TextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 360
                   y: 52
                   width: "self.parent.width - 380"
                   height: 40
-                  length: 48
-                  emptyText: "~&f输入邮件标题"
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                action:
-                  textChange: |-
-                    var.composeSubject = self.getContent()
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  标题输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  标题输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: "self.parent.width - 20"
+                      height: 32
+                      length: 48
+                      emptyText: "~&f输入邮件标题"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.composeSubject = self.getContent()
               正文标签:
                 type: Text
                 attribute:
@@ -697,27 +721,39 @@ controls:
                   texts: "~&f正文"
                   fontSize: 36
               正文输入框:
-                type: TextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 144
                   width: "self.parent.width - 40"
                   height: 240
-                  length: 400
-                  allowNewLine: true
-                  emptyText: "~&f支持多行正文"
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                action:
-                  textChange: |-
-                    var.composeBody = self.getContent()
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  正文输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  正文输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: "self.parent.width - 20"
+                      height: 228
+                      length: 400
+                      allowNewLine: true
+                      emptyText: "~&f支持多行正文"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.composeBody = self.getContent()
               字数统计:
                 type: Text
                 attribute:
@@ -784,27 +820,39 @@ controls:
                   fontSize: 36
                   visible: "val.currency_list.childrenCount() <= 1"
               金币输入框:
-                type: TextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 484
                   width: 360
                   height: 40
-                  length: 24
-                  emptyText: "~&f填写金币附件数量"
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
                   visible: "var.allowVault == true"
-                action:
-                  textChange: |-
-                    var.composeVault = self.getContent()
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  金币输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  金币输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 340
+                      height: 32
+                      length: 24
+                      emptyText: "~&f填写金币附件数量"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.composeVault = self.getContent()
               费用汇总:
                 type: Text
                 attribute:
@@ -844,26 +892,38 @@ controls:
                       texts: "~&e请输入二级密码解锁后重试"
                       fontSize: 32
                   密码输入框:
-                    type: TextBox
+                    type: Canvas
                     attribute:
                       point: ~top_left
                       x: 14
                       y: 40
                       width: 300
                       height: 32
-                      length: 64
-                      emptyText: "~&f输入二级密码"
-                      fontSize: 32
-                      background: ~28,30,40,245
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      textChange: |-
-                        var.passwordText = self.getContent()
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
+                    children:
+                      密码输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~28,30,40,245
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
+                      密码输入框文本:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 2
+                          width: 284
+                          height: 28
+                          length: 64
+                          emptyText: "~&f输入二级密码"
+                          fontSize: 32
+                        action:
+                          textChange: |-
+                            var.passwordText = self.getContent()
                   密码确认按钮:
                     type: Canvas
                     attribute:

@@ -1085,23 +1085,35 @@ controls:
                       fontSize: 36
                       through: true
               兑换码输入框:
-                type: TextBox
+                type: Canvas
                 attribute:
                   width: 300
                   height: 48
-                  length: 18
-                  emptyText: "~&f输入CDK兑换"
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                action:
-                  textChange: |-
-                    var.cdkCode = self.getContent()
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  兑换码输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  兑换码输入框文本:
+                    type: TextBox
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: 280
+                      height: 36
+                      length: 18
+                      emptyText: "~&f输入CDK兑换"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.cdkCode = self.getContent()
               兑换按钮:
                 type: Canvas
                 attribute:
