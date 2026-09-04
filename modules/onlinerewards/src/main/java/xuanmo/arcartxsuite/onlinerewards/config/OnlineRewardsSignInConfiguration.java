@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.onlinerewards.config;
 
 import java.util.List;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 签到子系统配置。
@@ -16,6 +18,7 @@ import java.util.List;
  * @param baseMailPresetIds    每次签到基础发送的邮件预设 id 列表
  * @param baseRewardText       基础签到奖励描述文本
  * @param baseItemRewards      每次签到基础通过 ItemSourceRegistry 发放的物品奖励列表
+ * @param baseIcon             基础签到 UI 展示图标，为 null 时使用默认图标
  * @param makeup               补签功能配置
  * @param streakRewards        连续签到里程碑奖励列表
  * @param totalRewards         累计签到里程碑奖励列表
@@ -32,6 +35,7 @@ public record OnlineRewardsSignInConfiguration(
     List<String> baseMailPresetIds,
     String baseRewardText,
     List<OnlineRewardsItemReward> baseItemRewards,
+    @Nullable IconDefinition baseIcon,
     OnlineRewardsMakeupConfiguration makeup,
     List<OnlineRewardsMilestoneReward> streakRewards,
     List<OnlineRewardsMilestoneReward> totalRewards,

@@ -605,21 +605,23 @@ public final class MailService implements Listener {
 
         AxsScheduler.runTask(plugin, () -> {
             if (player.isOnline()) {
+                Map<String, Object> composePacket = MailComposePacketFactory.buildInit(
+                    session.sessionId(),
+                    configuration,
+                    currencyBridgeManager,
+                    messages,
+                    calculateComposeQuote(configuration.playerSend(), Map.of(), 0, configuration.playerSend().feeCurrency()),
+                    effectiveAttachmentSlots(inventory),
+                    0,
+                    composePasswordPanels.contains(player.getUniqueId()),
+                    session.actionToken()
+                );
+                composePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
                 bridge.sendPacket(
                     player,
                     composeUiId,
                     "init",
-                    MailComposePacketFactory.buildInit(
-                        session.sessionId(),
-                        configuration,
-                        currencyBridgeManager,
-                        messages,
-                        calculateComposeQuote(configuration.playerSend(), Map.of(), 0, configuration.playerSend().feeCurrency()),
-                        effectiveAttachmentSlots(inventory),
-                        0,
-                        composePasswordPanels.contains(player.getUniqueId()),
-                        session.actionToken()
-                    )
+                    composePacket
                 );
             }
         });
@@ -1166,6 +1168,11 @@ public final class MailService implements Listener {
                 changeLogPage(player, 1);
                 return true;
             }
+            case "admin" -> {
+                if (!player.hasPermission("arcartxsuite.admin")) return true;
+                openAdminUi(player);
+                return true;
+            }
             // ─── Admin Preset Management (UI) ────────────────────
             case "admin-preset-list" -> {
                 if (!player.hasPermission("arcartxsuite.admin")) return true;
@@ -1237,6 +1244,7 @@ public final class MailService implements Listener {
         payload.put("presets", list);
         payload.put("total", definitions.size());
         payload.put("maxPresetCount", definitions.size());
+        payload.put("is_admin", player.hasPermission("arcartxsuite.admin"));
         bridge.sendPacket(player, adminUiId, "preset-list", payload);
     }
 
@@ -1705,11 +1713,13 @@ public final class MailService implements Listener {
 
             int claimableCount = (int) page.entries().stream().filter(MailMessage::claimable).count();
             MailMailboxStats stats = repository.loadStats(player.getUniqueId());
+            Map<String, Object> inboxPacket = MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages);
+            inboxPacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
             bridge.sendPacket(
                 player,
                 inboxUiId,
                 initPacket ? "init" : "update",
-                MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages)
+                inboxPacket
             );
         } catch (Exception exception) {
             this.logger.warning("刷新邮箱界面失败: " + exception.getMessage());
@@ -1725,7 +1735,9 @@ public final class MailService implements Listener {
             int requestedPage = Math.max(1, logPages.getOrDefault(player.getUniqueId(), 1));
             MailPage<MailLogEntry> page = repository.loadLogPage(player.getUniqueId(), requestedPage, LOG_PAGE_SIZE);
             logPages.put(player.getUniqueId(), page.page());
-            bridge.sendPacket(player, logsUiId, initPacket ? "init" : "update", MailLogsPacketFactory.build(page, messages));
+            Map<String, Object> logsPacket = MailLogsPacketFactory.build(page, messages);
+            logsPacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
+            bridge.sendPacket(player, logsUiId, initPacket ? "init" : "update", logsPacket);
         } catch (Exception exception) {
             this.logger.warning("刷新日志界面失败: " + exception.getMessage());
         }
@@ -2541,20 +2553,22 @@ public final class MailService implements Listener {
             Inventory inventory = session == null ? null : session.inventory();
             int maxAttachments = effectiveAttachmentSlots(inventory);
             int attachmentCount = inventory == null ? 0 : collectComposeItems(inventory).size();
+            Map<String, Object> composeUpdatePacket = MailComposePacketFactory.buildQuote(
+                configuration,
+                currencyBridgeManager,
+                messages,
+                quote,
+                maxAttachments,
+                attachmentCount,
+                composePasswordPanels.contains(player.getUniqueId()),
+                session == null ? null : session.actionToken()
+            );
+            composeUpdatePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
             bridge.sendPacket(
                 player,
                 composeUiId,
                 "update",
-                MailComposePacketFactory.buildQuote(
-                    configuration,
-                    currencyBridgeManager,
-                    messages,
-                    quote,
-                    maxAttachments,
-                    attachmentCount,
-                    composePasswordPanels.contains(player.getUniqueId()),
-                    session == null ? null : session.actionToken()
-                )
+                composeUpdatePacket
             );
         }
     }

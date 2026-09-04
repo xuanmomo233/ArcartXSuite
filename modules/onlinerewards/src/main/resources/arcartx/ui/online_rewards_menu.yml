@@ -1,4 +1,4 @@
-# AXS 资源说明
+﻿# AXS 资源说明
 # 用途: OnlineRewards 模块默认菜单，battlepass 玻璃风格三段式布局。
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（签到/进度/奖励）+ 内容区
 # 视觉规范:
@@ -101,6 +101,39 @@ ui:
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
       var.actionToken = packet['action_token']
+      // 解析阶段奖励图标
+      var.rewardIconJsons = {}
+      if(var.maxRewardCount > 0){
+        for(i in range(0, var.maxRewardCount)){
+          key = i.round
+          json = packet['rewardIconJson' + key]
+          if(json != none && json != ''){
+            var.rewardIconJsons[key] = json
+          }
+        }
+      }
+      // 解析周期奖励图标
+      var.periodicIconJsons = {}
+      if(var.maxPeriodicCount > 0){
+        for(i in range(0, var.maxPeriodicCount)){
+          key = i.round
+          json = packet['periodicIconJson' + key]
+          if(json != none && json != ''){
+            var.periodicIconJsons[key] = json
+          }
+        }
+      }
+      // 解析签到奖励图标
+      var.signinIconJsons = {}
+      if(var.maxSigninRewardCount > 0){
+        for(i in range(0, var.maxSigninRewardCount)){
+          key = i.round
+          json = packet['signinIconJson' + key]
+          if(json != none && json != ''){
+            var.signinIconJsons[key] = json
+          }
+        }
+      }
       if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
@@ -126,6 +159,17 @@ ui:
         e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
         e.entryKey = key
       }
+      // 触发阶段奖励图标 seticon
+      if(val.阶段堆叠['阶段奖励项'] != none && val.阶段堆叠['阶段奖励项']['图标'] != none){
+        val.阶段堆叠['阶段奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxRewardCount - 1)){
+        key = i.round()
+        e = val.阶段堆叠['阶段奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
+      }
       while(val.周期堆叠.childrenCount() > 1){
         val.周期堆叠.get(1).remove()
       }
@@ -134,6 +178,17 @@ ui:
         e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
         e.entryKey = key
       }
+      // 触发周期奖励图标 seticon
+      if(val.周期堆叠['周期奖励项'] != none && val.周期堆叠['周期奖励项']['图标'] != none){
+        val.周期堆叠['周期奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxPeriodicCount - 1)){
+        key = i.round()
+        e = val.周期堆叠['周期奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
+      }
       while(val.签到堆叠.childrenCount() > 1){
         val.签到堆叠.get(1).remove()
       }
@@ -141,6 +196,17 @@ ui:
         key = i.round()
         e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
         e.entryKey = key
+      }
+      // 触发签到奖励图标 seticon
+      if(val.签到堆叠['签到奖励项'] != none && val.签到堆叠['签到奖励项']['图标'] != none){
+        val.签到堆叠['签到奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxSigninRewardCount - 1)){
+        key = i.round()
+        e = val.签到堆叠['签到奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
       }
       while(val.选中奖励堆叠.childrenCount() > 1){
         val.选中奖励堆叠.get(1).remove()
@@ -195,6 +261,39 @@ ui:
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
       var.actionToken = packet['action_token']
+      // 解析阶段奖励图标
+      var.rewardIconJsons = {}
+      if(var.maxRewardCount > 0){
+        for(i in range(0, var.maxRewardCount)){
+          key = i.round
+          json = packet['rewardIconJson' + key]
+          if(json != none && json != ''){
+            var.rewardIconJsons[key] = json
+          }
+        }
+      }
+      // 解析周期奖励图标
+      var.periodicIconJsons = {}
+      if(var.maxPeriodicCount > 0){
+        for(i in range(0, var.maxPeriodicCount)){
+          key = i.round
+          json = packet['periodicIconJson' + key]
+          if(json != none && json != ''){
+            var.periodicIconJsons[key] = json
+          }
+        }
+      }
+      // 解析签到奖励图标
+      var.signinIconJsons = {}
+      if(var.maxSigninRewardCount > 0){
+        for(i in range(0, var.maxSigninRewardCount)){
+          key = i.round
+          json = packet['signinIconJson' + key]
+          if(json != none && json != ''){
+            var.signinIconJsons[key] = json
+          }
+        }
+      }
       if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
@@ -220,6 +319,17 @@ ui:
         e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
         e.entryKey = key
       }
+      // 触发阶段奖励图标 seticon
+      if(val.阶段堆叠['阶段奖励项'] != none && val.阶段堆叠['阶段奖励项']['图标'] != none){
+        val.阶段堆叠['阶段奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxRewardCount - 1)){
+        key = i.round()
+        e = val.阶段堆叠['阶段奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
+      }
       while(val.周期堆叠.childrenCount() > 1){
         val.周期堆叠.get(1).remove()
       }
@@ -228,6 +338,17 @@ ui:
         e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
         e.entryKey = key
       }
+      // 触发周期奖励图标 seticon
+      if(val.周期堆叠['周期奖励项'] != none && val.周期堆叠['周期奖励项']['图标'] != none){
+        val.周期堆叠['周期奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxPeriodicCount - 1)){
+        key = i.round()
+        e = val.周期堆叠['周期奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
+      }
       while(val.签到堆叠.childrenCount() > 1){
         val.签到堆叠.get(1).remove()
       }
@@ -235,6 +356,17 @@ ui:
         key = i.round()
         e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
         e.entryKey = key
+      }
+      // 触发签到奖励图标 seticon
+      if(val.签到堆叠['签到奖励项'] != none && val.签到堆叠['签到奖励项']['图标'] != none){
+        val.签到堆叠['签到奖励项']['图标'].seticon()
+      }
+      for(i in range(1, var.maxSigninRewardCount - 1)){
+        key = i.round()
+        e = val.签到堆叠['签到奖励项_' + key]
+        if(e != none && e['图标'] != none){
+          e['图标'].seticon()
+        }
       }
       while(val.选中奖励堆叠.childrenCount() > 1){
         val.选中奖励堆叠.get(1).remove()
@@ -258,6 +390,8 @@ ui:
       }
     load: |-
       var.currentPage = 'signin'
+      var.currentRewardTab = 'stage'
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxRewardCount = 0
       var.maxPeriodicCount = 0
       var.maxSigninRewardCount = 0
@@ -508,6 +642,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  through: true
                   normal: "var.currentPage == 'signin' ? '90,150,250,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
@@ -522,6 +657,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
+                  through: true
                   normal: ~90,150,250,255
                   shape: ~round_rect
                   radius: 2
@@ -1041,7 +1177,7 @@ controls:
                       point: ~top_left
                       x: 28
                       y: 228
-                      width: "var.cardW - 56"
+                      width: "var.cardW - 54"
                       height: "var.viewH - 446"
                       moveY: "self.parent['选中奖励滑块'].getDragYRatio()"
                     action:
@@ -1261,7 +1397,7 @@ controls:
                   x: 32
                   y: 544
                   width: "var.contentW - 64"
-                  height: 112
+                  height: 126
                   visible: var.serverSignInGoalEnabled
                 children:
                   目标卡底:
@@ -1298,10 +1434,10 @@ controls:
                       x: 28
                       y: 92
                       width: "var.contentW - 120"
-                      height: 12
+                      height: 16
                       normal: ~62,66,74,210
                       shape: ~round_rect
-                      radius: 6
+                      radius: 8
                     effect:
                       stroke:
                         width: 2
@@ -1313,11 +1449,11 @@ controls:
                       x: 28
                       y: 92
                       width: "var.contentW - 120"
-                      height: 12
+                      height: 16
                       texture: ~124,196,142,255
                       progress: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext).min(1) : 0"
                       shape: ~round_rect
-                      radius: 6
+                      radius: 8
 
           # ════════ 奖励页 ════════
           奖励页:
@@ -1326,54 +1462,157 @@ controls:
               point: ~stretch_all
               visible: "var.currentPage == 'rewards'"
             children:
-              # ── 阶段奖励卡片 ──
-              阶段奖励卡片:
+              # ── 子页签栏 ──
+              子页签栏:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 32
                   y: 24
                   width: "var.contentW - 64"
-                  height: 290
+                  height: 60
                 children:
-                  阶段奖卡底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  阶段奖卡标题:
-                    type: Text
+                  阶段页签:
+                    type: Canvas
                     attribute:
                       point: ~top_left
-                      x: 28
-                      y: 20
-                      texts: "~&f在线阶段奖励"
-                      fontSize: 36
+                      x: 0
+                      y: 0
+                      width: "(var.contentW - 64) / 3"
+                      height: 60
+                    action:
+                      clickLeft: |-
+                        var.currentRewardTab = 'stage'
+                    children:
+                      阶段页签底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.currentRewardTab == 'stage' ? '90,150,250,255' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "var.currentRewardTab == 'stage' ? '120,180,255,255' : '255,255,255,230'"
+                      阶段页签文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f阶段奖励"
+                          fontSize: 36
+                          through: true
+                  周期页签:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "(var.contentW - 64) / 3 + 8"
+                      y: 0
+                      width: "(var.contentW - 64) / 3"
+                      height: 60
+                    action:
+                      clickLeft: |-
+                        var.currentRewardTab = 'periodic'
+                    children:
+                      周期页签底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.currentRewardTab == 'periodic' ? '90,150,250,255' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "var.currentRewardTab == 'periodic' ? '120,180,255,255' : '255,255,255,230'"
+                      周期页签文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f周期奖励"
+                          fontSize: 36
+                          through: true
+                  签到页签:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "((var.contentW - 64) / 3 + 8) * 2"
+                      y: 0
+                      width: "(var.contentW - 64) / 3"
+                      height: 60
+                    action:
+                      clickLeft: |-
+                        var.currentRewardTab = 'signin'
+                    children:
+                      签到页签底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.currentRewardTab == 'signin' ? '90,150,250,255' : '62,66,74,210'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "var.currentRewardTab == 'signin' ? '120,180,255,255' : '255,255,255,230'"
+                      签到页签文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f签到奖励"
+                          fontSize: 36
+                          through: true
+
+              # ── 阶段奖励区 ──
+              阶段奖励区:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 32
+                  y: 96
+                  width: "var.contentW - 64"
+                  height: "var.viewH - 204"
+                  visible: "var.currentRewardTab == 'stage'"
+                children:
+                  阶段奖滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: "var.viewH - 204"
+                      normal: ~15,25,38,220
+                      shape: ~round_rect
+                      radius: 6
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,200,220,240
                   阶段奖滑块:
                     type: Texture
                     val: 阶段奖滑块
                     attribute:
                       point: ~top_right
-                      x: -16
-                      y: 64
-                      width: 4
-                      height: 40
-                      normal: ~120,120,120,200
-                      maxDragY: 200
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: 60
+                      normal: ~50,170,200,220
+                      maxDragY: "var.viewH - 264"
+                      shape: ~round_rect
+                      radius: 6
                   阶段奖滚动区:
                     type: Scroll
                     attribute:
                       point: ~top_left
-                      x: 28
-                      y: 64
-                      width: "var.contentW - 120"
-                      height: 202
+                      x: 0
+                      y: 0
+                      width: "var.contentW - 64"
+                      height: "var.viewH - 204"
                       moveY: "self.parent['阶段奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1388,106 +1627,118 @@ controls:
                         val: 阶段堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 120"
+                          width: "var.contentW - 64"
                           spaceBetween: 8
                         children:
                           阶段奖励项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.rewardRows[self.entryKey]
-                              width: "var.contentW - 120"
-                              height: 64
-                              normal: "self.entry != none && self.entry['current'] ? '90,150,250,210' : (self.entry != none && self.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
-                              shape: ~round_rect
-                              radius: 10
+                              width: "var.contentW - 64"
+                              height: 110
                               visible: self.entry != none
-                            effect:
-                              stroke:
-                                width: 2
-                                color: "self.entry != none && self.entry['current'] ? '120,180,255,255' : (self.entry != none && self.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
                             children:
+                              阶段奖项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['current'] ? '90,150,250,210' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                                  shape: ~round_rect
+                                  radius: 12
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.parent.entry != none && self.parent.entry['current'] ? '120,180,255,255' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                              图标:
+                                type: Slot
+                                attribute:
+                                  x: 16
+                                  y: 15
+                                  width: 80
+                                  height: 80
+                                  normal: ~18,28,40,180
+                                  shape: ~round_rect
+                                  radius: 10
+                                  slotType: ~Icon
+                                  itemScale: 0.85
+                                  overwriteText: "~"
+                                  seticon: "self.setItemIcon(var.rewardIconJsons[self.parent.entryKey] != none ? var.rewardIconJsons[self.parent.entryKey] : var.emptyItemJson)"
                               阶段奖项名称:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 16
-                                  y: 8
+                                  x: 112
+                                  y: 18
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
-                                  fontSize: 30
+                                  fontSize: 36
+                                  through: true
                               阶段奖项信息:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 16
-                                  y: 36
+                                  x: 112
+                                  y: 62
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['thresholdText'] + '   &f' + self.parent.entry['rewardText'] : none"
-                                  fontSize: 26
+                                  fontSize: 32
+                                  through: true
                               阶段奖项状态:
                                 type: Text
                                 attribute:
                                   point: ~middle_right
                                   x: -16
                                   texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : none"
-                                  fontSize: 30
+                                  fontSize: 36
+                                  through: true
 
-              # ── 周期奖励卡片 ──
-              周期奖励卡片:
+              # ── 周期奖励区 ──
+              周期奖励区:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 32
-                  y: 338
+                  y: 96
                   width: "var.contentW - 64"
-                  height: 250
+                  height: "var.viewH - 204"
+                  visible: "var.currentRewardTab == 'periodic'"
                 children:
-                  周期奖卡底:
+                  周期奖滑轨:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,210
+                      point: ~top_right
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: "var.viewH - 204"
+                      normal: ~15,25,38,220
                       shape: ~round_rect
-                      radius: 12
+                      radius: 6
                     effect:
                       stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  周期奖卡标题:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 20
-                      texts: "~&f周/月周期奖励"
-                      fontSize: 36
-                  周期奖空提示:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 64
-                      visible: "var.periodicRewardRows.size() == 0"
-                      texts: "~&7暂无周期奖励"
-                      fontSize: 30
+                        width: 2
+                        color: ~80,200,220,240
                   周期奖滑块:
                     type: Texture
                     val: 周期奖滑块
                     attribute:
                       point: ~top_right
-                      x: -16
-                      y: 64
-                      width: 4
-                      height: 40
-                      normal: ~120,120,120,200
-                      maxDragY: 160
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: 60
+                      normal: ~50,170,200,220
+                      maxDragY: "var.viewH - 264"
+                      shape: ~round_rect
+                      radius: 6
                   周期奖滚动区:
                     type: Scroll
                     attribute:
                       point: ~top_left
-                      x: 28
-                      y: 64
-                      width: "var.contentW - 120"
-                      height: 162
+                      x: 0
+                      y: 0
+                      width: "var.contentW - 64"
+                      height: "var.viewH - 204"
                       moveY: "self.parent['周期奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1502,106 +1753,118 @@ controls:
                         val: 周期堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 120"
-                          spaceBetween: 6
+                          width: "var.contentW - 64"
+                          spaceBetween: 8
                         children:
                           周期奖励项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.periodicRewardRows[self.entryKey]
-                              width: "var.contentW - 120"
-                              height: 52
-                              normal: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '90,150,250,210' : (self.entry != none && self.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
-                              shape: ~round_rect
-                              radius: 10
+                              width: "var.contentW - 64"
+                              height: 110
                               visible: self.entry != none
-                            effect:
-                              stroke:
-                                width: 2
-                                color: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '120,180,255,255' : (self.entry != none && self.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
                             children:
+                              周期奖项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['reached'] && !self.parent.entry['claimed'] ? '90,150,250,210' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                                  shape: ~round_rect
+                                  radius: 12
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.parent.entry != none && self.parent.entry['reached'] && !self.parent.entry['claimed'] ? '120,180,255,255' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                              图标:
+                                type: Slot
+                                attribute:
+                                  x: 16
+                                  y: 15
+                                  width: 80
+                                  height: 80
+                                  normal: ~18,28,40,180
+                                  shape: ~round_rect
+                                  radius: 10
+                                  slotType: ~Icon
+                                  itemScale: 0.85
+                                  overwriteText: "~"
+                                  seticon: "self.setItemIcon(var.periodicIconJsons[self.parent.entryKey] != none ? var.periodicIconJsons[self.parent.entryKey] : var.emptyItemJson)"
                               周期奖项名称:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 14
-                                  y: 4
+                                  x: 112
+                                  y: 18
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &7(' + self.parent.entry['periodLabel'] + ')' : none"
-                                  fontSize: 28
+                                  fontSize: 36
+                                  through: true
                               周期奖项信息:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 14
-                                  y: 28
+                                  x: 112
+                                  y: 62
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['thresholdText'] + '   &f' + self.parent.entry['rewardText'] : none"
-                                  fontSize: 24
+                                  fontSize: 32
+                                  through: true
                               周期奖项状态:
                                 type: Text
                                 attribute:
                                   point: ~middle_right
-                                  x: -14
+                                  x: -16
                                   texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : none"
-                                  fontSize: 28
+                                  fontSize: 36
+                                  through: true
 
-              # ── 签到奖励卡片 ──
-              签到奖励卡片:
+              # ── 签到奖励区 ──
+              签到奖励区:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 32
-                  y: 612
+                  y: 96
                   width: "var.contentW - 64"
-                  height: "var.viewH - 748"
+                  height: "var.viewH - 204"
+                  visible: "var.currentRewardTab == 'signin'"
                 children:
-                  签到奖卡底:
+                  签到奖滑轨:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,210
+                      point: ~top_right
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: "var.viewH - 204"
+                      normal: ~15,25,38,220
                       shape: ~round_rect
-                      radius: 12
+                      radius: 6
                     effect:
                       stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  签到奖卡标题:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 20
-                      texts: "~&f签到奖励"
-                      fontSize: 36
-                  签到奖空提示:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 64
-                      visible: "var.signInRewardRows.size() == 0"
-                      texts: "~&7暂无签到奖励"
-                      fontSize: 30
+                        width: 2
+                        color: ~80,200,220,240
                   签到奖滑块:
                     type: Texture
                     val: 签到奖滑块
                     attribute:
                       point: ~top_right
-                      x: -16
-                      y: 64
-                      width: 4
-                      height: 40
-                      normal: ~120,120,120,200
-                      maxDragY: "var.viewH - 824"
+                      x: -8
+                      y: 0
+                      width: 12
+                      height: 60
+                      normal: ~50,170,200,220
+                      maxDragY: "var.viewH - 264"
+                      shape: ~round_rect
+                      radius: 6
                   签到奖滚动区:
                     type: Scroll
                     attribute:
                       point: ~top_left
-                      x: 28
-                      y: 64
-                      width: "var.contentW - 120"
-                      height: "var.viewH - 824"
+                      x: 0
+                      y: 0
+                      width: "var.contentW - 64"
+                      height: "var.viewH - 204"
                       moveY: "self.parent['签到奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1616,38 +1879,59 @@ controls:
                         val: 签到堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 120"
-                          spaceBetween: 6
+                          width: "var.contentW - 64"
+                          spaceBetween: 8
                         children:
                           签到奖励项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.signInRewardRows[self.entryKey]
-                              width: "var.contentW - 120"
-                              height: 52
-                              normal: ~62,66,74,210
-                              shape: ~round_rect
-                              radius: 10
+                              width: "var.contentW - 64"
+                              height: 110
                               visible: self.entry != none
-                            effect:
-                              stroke:
-                                width: 2
-                                color: ~255,255,255,230
                             children:
+                              签到奖项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~62,66,74,210
+                                  shape: ~round_rect
+                                  radius: 12
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              图标:
+                                type: Slot
+                                attribute:
+                                  x: 16
+                                  y: 15
+                                  width: 80
+                                  height: 80
+                                  normal: ~18,28,40,180
+                                  shape: ~round_rect
+                                  radius: 10
+                                  slotType: ~Icon
+                                  itemScale: 0.85
+                                  overwriteText: "~"
+                                  seticon: "self.setItemIcon(var.signinIconJsons[self.parent.entryKey] != none ? var.signinIconJsons[self.parent.entryKey] : var.emptyItemJson)"
                               签到奖项名称:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 14
-                                  y: 4
+                                  x: 112
+                                  y: 18
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['title'] : none"
-                                  fontSize: 28
-                              签到奖项条件:
+                                  fontSize: 36
+                                  through: true
+                              签到奖项信息:
                                 type: Text
                                 attribute:
                                   point: ~top_left
-                                  x: 14
-                                  y: 28
+                                  x: 112
+                                  y: 62
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['trigger'] + '   &f' + self.parent.entry['rewardText'] : none"
-                                  fontSize: 24
+                                  fontSize: 32
+                                  through: true

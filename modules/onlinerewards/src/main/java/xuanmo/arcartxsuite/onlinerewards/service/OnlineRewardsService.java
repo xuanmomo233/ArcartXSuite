@@ -130,6 +130,7 @@ public class OnlineRewardsService implements Listener {
     private java.util.List<String> registeredMenuUiIds = java.util.List.of();
     private xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
     private xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
+    private xuanmo.arcartxsuite.api.icon.IconResolver iconResolver;
 
     public OnlineRewardsService(
         JavaPlugin plugin,
@@ -231,6 +232,11 @@ public class OnlineRewardsService implements Listener {
     /** 注入调度器，用于底层定时任务和时刻奖励调度。 */
     public void setScheduler(SchedulerAPI scheduler) {
         this.scheduler = scheduler;
+    }
+
+    /** 注入图标解析器，用于菜单 packet 中解析奖励图标为 itemJson。 */
+    public void setIconResolver(xuanmo.arcartxsuite.api.icon.IconResolver iconResolver) {
+        this.iconResolver = iconResolver;
     }
 
     /**
@@ -1027,7 +1033,8 @@ public class OnlineRewardsService implements Listener {
         int goalCurrent = todaySignInCount();
         int goalNext = nextServerSignInGoalRequired();
         Map<String, Object> payload = OnlineRewardsMenuPacketFactory.build(
-            configuration, snapshot, buildCalendarView(player, snapshot.state()), goalCurrent, goalNext);
+            configuration, snapshot, buildCalendarView(player, snapshot.state()), goalCurrent, goalNext,
+            player, iconResolver);
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
         packetBridge.sendPacketToAll(
             player,

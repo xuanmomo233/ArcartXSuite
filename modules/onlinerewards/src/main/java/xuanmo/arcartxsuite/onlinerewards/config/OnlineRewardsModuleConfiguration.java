@@ -7,8 +7,10 @@ import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
 
 /**
@@ -104,7 +106,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(entry.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(entry);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(entry);
-            rewards.add(new OnlineRewardDefinition(Math.max(0, minutes), name, rewardText, commands, mailPresetIds, itemRewards));
+            IconDefinition icon = loadIconFromMap(entry);
+            rewards.add(new OnlineRewardDefinition(Math.max(0, minutes), name, rewardText, commands, mailPresetIds, itemRewards, icon));
         }
 
         FileConfiguration signInCfg = (signInFile != null && signInFile.isFile())
@@ -149,6 +152,7 @@ public record OnlineRewardsModuleConfiguration(
             readMailPresetIdsFromSection(external, "base"),
             nullToDefault(external.getString("base-rewardText"), ""),
             readItemRewardsFromSection(external, "base"),
+            IconDefinition.load(external, "base.icon"),
             loadMakeupFromSection(external),
             loadMilestoneRewards(external.getMapList("streak-rewards"), "days"),
             loadMilestoneRewards(external.getMapList("total-rewards"), "days"),
@@ -184,7 +188,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
-            rewards.add(new OnlineRewardsPermissionBonusReward(permission, priority, rewardText, commands, mailPresetIds, itemRewards));
+            IconDefinition icon = loadIconFromMap(value);
+            rewards.add(new OnlineRewardsPermissionBonusReward(permission, priority, rewardText, commands, mailPresetIds, itemRewards, icon));
         }
         return List.copyOf(rewards);
     }
@@ -199,7 +204,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
-            rewards.add(new OnlineRewardsHolidayReward(month, day, name, rewardText, commands, mailPresetIds, itemRewards));
+            IconDefinition icon = loadIconFromMap(value);
+            rewards.add(new OnlineRewardsHolidayReward(month, day, name, rewardText, commands, mailPresetIds, itemRewards, icon));
         }
         return List.copyOf(rewards);
     }
@@ -212,7 +218,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
-            rewards.add(new OnlineRewardsMilestoneReward(threshold, rewardText, commands, mailPresetIds, itemRewards));
+            IconDefinition icon = loadIconFromMap(value);
+            rewards.add(new OnlineRewardsMilestoneReward(threshold, rewardText, commands, mailPresetIds, itemRewards, icon));
         }
         return List.copyOf(rewards);
     }
@@ -225,7 +232,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
-            rewards.add(new OnlineRewardsDayOfMonthReward(day, rewardText, commands, mailPresetIds, itemRewards));
+            IconDefinition icon = loadIconFromMap(value);
+            rewards.add(new OnlineRewardsDayOfMonthReward(day, rewardText, commands, mailPresetIds, itemRewards, icon));
         }
         return List.copyOf(rewards);
     }
@@ -279,6 +287,66 @@ public record OnlineRewardsModuleConfiguration(
             }
         }
         return List.of();
+    }
+
+    /**
+     * 从配置 Map 中解析 icon 图标定义。
+     * <p>
+     * 配置格式与 {@link IconDefinition#load(ConfigurationSection)} 一致，支持 material / source+id /
+     * json / texture / skull-texture / color 等字段。icon 节不存在或无有效图标时返回 null。
+     *
+     * @param entry 包含 "icon" 键的配置 Map
+     * @return 解析后的图标定义，无有效图标时返回 null
+     */
+    @Nullable
+    private static IconDefinition loadIconFromMap(Map<?, ?> entry) {
+        Object iconObj = entry.get("icon");
+        if (iconObj == null) {
+            return null;
+        }
+        if (iconObj instanceof String str) {
+            return IconDefinition.load(str);
+        }
+        if (!(iconObj instanceof Map<?, ?> iconMap)) {
+            return null;
+        }
+        String material = nullToDefault(iconMap.get("material"), "");
+        int amount = Math.max(1, parseInt(iconMap.get("amount"), 1));
+        String name = nullToDefault(iconMap.get("name"), "");
+        List<String> lore = toStringList(iconMap.get("lore"));
+        int customModelData = parseInt(iconMap.get("custom-model-data"), parseInt(iconMap.get("customModelData"), 0));
+        String source = nullToDefault(iconMap.get("source"), "");
+        String sourceId = nullToDefault(iconMap.get("id"), nullToDefault(iconMap.get("item-id"), ""));
+        String mmoType = nullToDefault(iconMap.get("mmo-type"), "");
+        String mmoId = nullToDefault(iconMap.get("mmo-id"), "");
+        String json = nullToDefault(iconMap.get("json"), "");
+        String texture = nullToDefault(iconMap.get("texture"), "");
+        String textureUrl = nullToDefault(iconMap.get("texture-url"), nullToDefault(iconMap.get("url"), ""));
+        boolean glow = parseBoolean(iconMap.get("glow"), false);
+        String skullTexture = nullToDefault(iconMap.get("skull-texture"), nullToDefault(iconMap.get("skullTexture"), ""));
+        String color = nullToDefault(iconMap.get("color"), "");
+        // nbt 可以是 Map（键值对）或 String（整段 SNBT）
+        java.util.Map<String, String> nbt = java.util.Map.of();
+        String nbtString = "";
+        Object nbtRaw = iconMap.get("nbt");
+        if (nbtRaw instanceof Map<?, ?> nbtMap) {
+            java.util.Map<String, String> nbtResult = new java.util.LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : nbtMap.entrySet()) {
+                if (e.getValue() != null) {
+                    nbtResult.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+                }
+            }
+            nbt = nbtResult;
+        } else if (nbtRaw != null) {
+            nbtString = String.valueOf(nbtRaw);
+        }
+        IconDefinition icon = new IconDefinition(
+            material, amount, name, lore, customModelData,
+            source, sourceId, mmoType, mmoId, json,
+            texture, textureUrl, nbt, nbtString,
+            glow, skullTexture, color
+        );
+        return icon.hasIcon() ? icon : null;
     }
 
     /**
@@ -369,7 +437,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> mailPresetIds = readMailPresetIds(value);
             boolean repeat = parseBoolean(value.get("repeat"), false);
             List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
-            rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat, itemRewards));
+            IconDefinition icon = loadIconFromMap(value);
+            rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat, itemRewards, icon));
             index++;
         }
         return List.copyOf(rewards);

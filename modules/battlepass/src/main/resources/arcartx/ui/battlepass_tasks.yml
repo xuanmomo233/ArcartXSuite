@@ -152,6 +152,7 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
+      var.taskFilter = 'all'
     # open action 不发任何包：数据由服务端 openTasks() 延迟2tick推送（修复 Java bug 后）
     open: |-
       {}
@@ -452,35 +453,73 @@ controls:
               y: 314
               texts: "~&f完成度"
               fontSize: 30
-          # 每日完成度
-          每日完成度:
+          # 全部任务筛选按钮（重置筛选，显示三类全部任务）
+          全部按钮:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
               y: 348
               width: 272
-              height: 62
+              height: 50
+            action:
+              clickLeft: |-
+                var.taskFilter = 'all'
             children:
-              每日完成底:
+              全部底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~62,66,74,210
+                  through: true
+                  normal: "var.taskFilter == 'all' ? '245,205,130,180' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: "var.taskFilter == 'all' ? '245,205,130,255' : '255,255,255,230'"
+              全部文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 20
+                  texts: "var.taskFilter == 'all' ? '&0全部任务' : '&f全部任务'"
+                  fontSize: 32
+                  through: true
+          # 每日完成度（点击筛选每日任务）
+          每日完成度:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 410
+              width: 272
+              height: 62
+            action:
+              clickLeft: |-
+                var.taskFilter = 'daily'
+            children:
+              每日完成底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.taskFilter == 'daily' ? '232,180,90,180' : '62,66,74,210'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "var.taskFilter == 'daily' ? '232,180,90,255' : '255,255,255,230'"
               每日完成名:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 10
-                  texts: "~&f每日"
+                  texts: "var.taskFilter == 'daily' ? '&0每日' : '&f每日'"
                   fontSize: 32
+                  through: true
               每日完成数:
                 type: Text
                 attribute:
@@ -489,6 +528,7 @@ controls:
                   y: 12
                   texts: "'&f' + var.dailyCompletedCount + '&f/' + var.dailyTaskCount"
                   fontSize: 30
+                  through: true
               每日完成条底:
                 type: Texture
                 attribute:
@@ -500,6 +540,7 @@ controls:
                   normal: ~62,66,74,210
                   shape: ~round_rect
                   radius: 4
+                  through: true
               每日完成条:
                 type: Texture
                 attribute:
@@ -511,35 +552,41 @@ controls:
                   normal: ~232,180,90,255
                   shape: ~round_rect
                   radius: 4
-          # 每周完成度
+                  through: true
+          # 每周完成度（点击筛选每周任务）
           每周完成度:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 422
+              y: 484
               width: 272
               height: 62
+            action:
+              clickLeft: |-
+                var.taskFilter = 'weekly'
             children:
               每周完成底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~62,66,74,210
+                  through: true
+                  normal: "var.taskFilter == 'weekly' ? '150,180,210,180' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: "var.taskFilter == 'weekly' ? '150,180,210,255' : '255,255,255,230'"
               每周完成名:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 10
-                  texts: "~&f每周"
+                  texts: "var.taskFilter == 'weekly' ? '&0每周' : '&f每周'"
                   fontSize: 32
+                  through: true
               每周完成数:
                 type: Text
                 attribute:
@@ -548,6 +595,7 @@ controls:
                   y: 12
                   texts: "'&f' + var.weeklyCompletedCount + '&f/' + var.weeklyTaskCount"
                   fontSize: 30
+                  through: true
               每周完成条底:
                 type: Texture
                 attribute:
@@ -559,6 +607,7 @@ controls:
                   normal: ~62,66,74,210
                   shape: ~round_rect
                   radius: 4
+                  through: true
               每周完成条:
                 type: Texture
                 attribute:
@@ -570,35 +619,41 @@ controls:
                   normal: ~150,180,210,255
                   shape: ~round_rect
                   radius: 4
-          # 赛季完成度
+                  through: true
+          # 赛季完成度（点击筛选赛季任务）
           赛季完成度:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 496
+              y: 558
               width: 272
               height: 62
+            action:
+              clickLeft: |-
+                var.taskFilter = 'season'
             children:
               赛季完成底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~62,66,74,210
+                  through: true
+                  normal: "var.taskFilter == 'season' ? '186,140,232,180' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: "var.taskFilter == 'season' ? '186,140,232,255' : '255,255,255,230'"
               赛季完成名:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 10
-                  texts: "~&f赛季"
+                  texts: "var.taskFilter == 'season' ? '&0赛季' : '&f赛季'"
                   fontSize: 32
+                  through: true
               赛季完成数:
                 type: Text
                 attribute:
@@ -607,6 +662,7 @@ controls:
                   y: 12
                   texts: "'&f' + var.seasonCompletedCount + '&f/' + var.seasonTaskCount"
                   fontSize: 30
+                  through: true
               赛季完成条底:
                 type: Texture
                 attribute:
@@ -618,6 +674,7 @@ controls:
                   normal: ~62,66,74,210
                   shape: ~round_rect
                   radius: 4
+                  through: true
               赛季完成条:
                 type: Texture
                 attribute:
@@ -629,6 +686,7 @@ controls:
                   normal: ~186,140,232,255
                   shape: ~round_rect
                   radius: 4
+                  through: true
           # 刷新按钮
           刷新按钮:
             type: Canvas
@@ -764,7 +822,7 @@ controls:
                     attribute:
                       width: "var.contentW - 80"
                       height: "var.dailyTaskCount > 0 ? (var.dailyTaskCount * 96 + 64) : 0"
-                      visible: var.dailyTaskCount > 0
+                      visible: "(var.taskFilter == 'all' || var.taskFilter == 'daily') && var.dailyTaskCount > 0"
                     children:
                       每日区底:
                         type: Texture
@@ -954,7 +1012,7 @@ controls:
                     attribute:
                       width: "var.contentW - 80"
                       height: "var.weeklyTaskCount > 0 ? (var.weeklyTaskCount * 96 + 64) : 0"
-                      visible: var.weeklyTaskCount > 0
+                      visible: "(var.taskFilter == 'all' || var.taskFilter == 'weekly') && var.weeklyTaskCount > 0"
                     children:
                       每周区底:
                         type: Texture
@@ -1141,7 +1199,7 @@ controls:
                     attribute:
                       width: "var.contentW - 80"
                       height: "var.seasonTaskCount > 0 ? (var.seasonTaskCount * 96 + 64) : 0"
-                      visible: var.seasonTaskCount > 0
+                      visible: "(var.taskFilter == 'all' || var.taskFilter == 'season') && var.seasonTaskCount > 0"
                     children:
                       赛季区底:
                         type: Texture
@@ -1326,7 +1384,7 @@ controls:
                     attribute:
                       width: "var.contentW - 80"
                       height: 120
-                      visible: var.totalTaskCount == 0
+                      visible: "(var.taskFilter == 'all' && var.totalTaskCount == 0) || (var.taskFilter == 'daily' && var.dailyTaskCount == 0) || (var.taskFilter == 'weekly' && var.weeklyTaskCount == 0) || (var.taskFilter == 'season' && var.seasonTaskCount == 0)"
                     children:
                       空状态底:
                         type: Texture

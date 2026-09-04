@@ -128,12 +128,15 @@ rewards-file: "rewards.yml"
 
 # 每周累计在线时长奖励。每周期自动重置，repeat: true 表示每周期都可重复领取一次。
 # 字段: id=奖励ID, minutes=所需在线分钟, name=名称, rewardText=描述,
-#       commands=达成后执行的命令, mail.presets=邮件预设ID列表, repeat=是否可重复领取
+#       icon=UI展示图标(可选), commands=达成后执行的命令, mail.presets=邮件预设ID列表, repeat=是否可重复领取
 weekly-rewards:
   - id: "weekly_2h"
     minutes: 120
     name: "本周活跃 2 小时"
     rewardText: ""
+    icon:
+      material: CLOCK
+      name: "&b本周活跃 2 小时"
     commands: []
     mail:
       presets: []
@@ -142,6 +145,9 @@ weekly-rewards:
     minutes: 300
     name: "本周活跃 5 小时"
     rewardText: ""
+    icon:
+      material: COMPASS
+      name: "&6本周活跃 5 小时"
     commands: []
     mail:
       presets: []
@@ -154,6 +160,9 @@ monthly-rewards:
     minutes: 600
     name: "本月活跃 10 小时"
     rewardText: ""
+    icon:
+      material: NETHER_STAR
+      name: "&b本月活跃 10 小时"
     commands: []
     mail:
       presets: []
@@ -162,6 +171,9 @@ monthly-rewards:
     minutes: 1800
     name: "本月活跃 30 小时"
     rewardText: ""
+    icon:
+      material: DRAGON_EGG
+      name: "&5本月活跃 30 小时"
     commands: []
     mail:
       presets: []

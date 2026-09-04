@@ -9,9 +9,22 @@
 #   minutes      - 达到该阶段所需的今日累计在线分钟数
 #   name         - 阶段名称
 #   rewardText   - 奖励描述文本（显示在 UI 中）
+#   icon         - UI 展示图标定义（可选，不配置时使用默认图标）
 #   mail.presets - 邮件预设 ID 列表（对应 Mail 模块的 preset.id）
 #   commands     - 达成阶段后执行的命令列表（支持 {player} 变量）
 #   item-rewards - 物品奖励列表（通过 ItemSourceRegistry 生成，统一发放）
+#
+# icon 配置（完整字段见 battlepass/fishing 模块）:
+#   material:          原版材质名（如 DIAMOND）
+#   source + id:       外部物品库图标（mythic/neige/overture/mmoitems）
+#   name:              图标悬浮名称（支持 & 颜色码）
+#   amount:            图标显示数量（默认1，大于1时图标右下角显示数字）
+#   lore:              图标描述（列表）
+#   custom-model-data: 自定义模型数据
+#   glow:              是否附魔发光
+#   texture:           ArcartX 自定义贴图（写入 icon NBT）
+#   texture-url:       贴图 URL（写入 url NBT）
+#   nbt:               自定义 NBT（键值对或 SNBT 字符串）
 #
 # item-rewards 字段说明:
 #   source: 物品来源（minecraft/mythic/neige/overture/mmoitems）
@@ -23,6 +36,10 @@ rewards:
   - minutes: 1
     name: "第一阶段"
     rewardText: "这里是第一阶段的奖励描述"
+    icon:
+      material: DIAMOND
+      name: "&b第一阶段奖励"
+      amount: 1
     mail:
       presets: []
     commands:
@@ -35,6 +52,10 @@ rewards:
   - minutes: 5
     name: "第二阶段"
     rewardText: "这里是第二阶段的奖励描述"
+    icon:
+      material: GOLD_INGOT
+      name: "&6第二阶段奖励"
+      amount: 1
     mail:
       presets: []
     commands:
@@ -43,6 +64,10 @@ rewards:
   - minutes: 10
     name: "第三阶段"
     rewardText: "这里是第三阶段的奖励描述"
+    icon:
+      material: EMERALD
+      name: "&a第三阶段奖励"
+      amount: 1
     mail:
       presets: []
     commands:

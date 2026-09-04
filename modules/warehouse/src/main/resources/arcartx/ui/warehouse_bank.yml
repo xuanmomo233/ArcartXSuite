@@ -515,7 +515,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~100,110,120,220
+                color: ~255,255,255,230
           余额滑块:
             type: Texture
             val: 余额滑块
@@ -928,7 +928,7 @@ controls:
                 effect:
                   stroke:
                     width: 2
-                    color: ~100,110,120,220
+                    color: ~255,255,255,230
               定期滑块:
                 type: Texture
                 val: 定期滑块
@@ -1053,7 +1053,7 @@ controls:
                 effect:
                   stroke:
                     width: 2
-                    color: ~100,110,120,220
+                    color: ~255,255,255,230
               产品滑块:
                 type: Texture
                 val: 产品滑块

@@ -6,11 +6,17 @@ import java.util.List;
 import java.util.Map;
 import java.time.LocalDate;
 import java.util.Set;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardDefinition;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsDayOfMonthReward;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsHolidayReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsMilestoneReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPermissionBonusReward;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
 /**
@@ -32,6 +38,8 @@ public final class OnlineRewardsMenuPacketFactory {
      * @param calendarView            签到日历视图
      * @param serverSignInGoalCurrent 当前全服签到人数
      * @param serverSignInGoalNext    下一个全服签到目标所需人数
+     * @param player                  玩家（用于解析图标，可为 null）
+     * @param iconResolver            图标解析器（用于解析图标，可为 null）
      * @return 菜单 payload 映射
      */
     public static Map<String, Object> build(
@@ -39,7 +47,9 @@ public final class OnlineRewardsMenuPacketFactory {
         OnlineRewardsPlayerSnapshot snapshot,
         OnlineRewardsCalendarView calendarView,
         int serverSignInGoalCurrent,
-        int serverSignInGoalNext
+        int serverSignInGoalNext,
+        @Nullable Player player,
+        @Nullable IconResolver iconResolver
     ) {
         OnlineRewardsPlayerState state = snapshot.state();
         OnlineRewardsProgressSnapshot progress = snapshot.progress();
@@ -73,6 +83,8 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("selectedActionText", selectedActionText(configuration, snapshot, calendarView));
         payload.put("selectedActionEnabled", selectedActionEnabled(configuration, snapshot, calendarView));
         payload.put("rewardRows", buildRewardRows(configuration, state));
+        // 阶段奖励图标（扁平字段 rewardIconJson0, rewardIconJson1, ...）
+        appendRewardIconJson(payload, configuration, player, iconResolver);
         LinkedHashMap<String, Object> periodicRows = new LinkedHashMap<>();
         periodicRows.putAll(buildPeriodicRewardRows(configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds(), "本周"));
         int weeklySize = periodicRows.size();
@@ -83,7 +95,11 @@ public final class OnlineRewardsMenuPacketFactory {
             index++;
         }
         payload.put("periodicRewardRows", periodicRows);
+        // 周期奖励图标（扁平字段 periodicIconJson0, periodicIconJson1, ...）
+        appendPeriodicIconJson(payload, configuration, player, iconResolver);
         payload.put("signInRewardRows", buildSignInRewardRows(configuration));
+        // 签到奖励图标（扁平字段 signinIconJson0, signinIconJson1, ...）
+        appendSignInIconJson(payload, configuration, player, iconResolver);
         payload.put("serverSignInGoalEnabled", configuration.serverSignInGoal().enabled());
         payload.put("serverSignInGoalCurrent", serverSignInGoalCurrent);
         payload.put("serverSignInGoalNext", serverSignInGoalNext);
@@ -120,7 +136,7 @@ public final class OnlineRewardsMenuPacketFactory {
             List.of(),
             false
         );
-        return build(configuration, snapshot, calendarView, 0, 0);
+        return build(configuration, snapshot, calendarView, 0, 0, null, null);
     }
 
     private static Map<String, Object> buildRewardRows(
@@ -340,5 +356,83 @@ public final class OnlineRewardsMenuPacketFactory {
             parts.add("邮件 " + mailPresetCount);
         }
         return String.join(" / ", parts);
+    }
+
+    /**
+     * 解析单个图标定义为 itemJson 字符串。player 或 iconResolver 为 null 时返回空串。
+     */
+    private static String resolveIconJson(@Nullable Player player, @Nullable IconResolver iconResolver, @Nullable IconDefinition icon) {
+        if (player == null || iconResolver == null || icon == null) {
+            return "";
+        }
+        try {
+            return iconResolver.resolveItemJson(player, icon);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    /**
+     * 为阶段奖励追加 iconJson 扁平字段（rewardIconJson0, rewardIconJson1, ...）。
+     */
+    private static void appendRewardIconJson(
+        Map<String, Object> payload,
+        OnlineRewardsModuleConfiguration configuration,
+        @Nullable Player player,
+        @Nullable IconResolver iconResolver
+    ) {
+        List<OnlineRewardDefinition> rewards = configuration.rewards();
+        for (int i = 0; i < rewards.size(); i++) {
+            String json = resolveIconJson(player, iconResolver, rewards.get(i).icon());
+            payload.put("rewardIconJson" + i, json);
+        }
+    }
+
+    /**
+     * 为周期奖励追加 iconJson 扁平字段（periodicIconJson0, periodicIconJson1, ...）。
+     * 索引顺序：先 weekly 后 monthly，与 periodicRewardRows 一致。
+     */
+    private static void appendPeriodicIconJson(
+        Map<String, Object> payload,
+        OnlineRewardsModuleConfiguration configuration,
+        @Nullable Player player,
+        @Nullable IconResolver iconResolver
+    ) {
+        int idx = 0;
+        for (OnlineRewardsPeriodicReward reward : configuration.weeklyRewards()) {
+            payload.put("periodicIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            idx++;
+        }
+        for (OnlineRewardsPeriodicReward reward : configuration.monthlyRewards()) {
+            payload.put("periodicIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            idx++;
+        }
+    }
+
+    /**
+     * 为签到奖励追加 iconJson 扁平字段（signinIconJson0, signinIconJson1, ...）。
+     * 索引顺序：base → streak → total → dayOfMonth，与 signInRewardRows 一致。
+     */
+    private static void appendSignInIconJson(
+        Map<String, Object> payload,
+        OnlineRewardsModuleConfiguration configuration,
+        @Nullable Player player,
+        @Nullable IconResolver iconResolver
+    ) {
+        int idx = 0;
+        payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, configuration.signIn().baseIcon()));
+        idx++;
+        for (OnlineRewardsMilestoneReward reward : configuration.signIn().streakRewards()) {
+            payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            idx++;
+        }
+        for (OnlineRewardsMilestoneReward reward : configuration.signIn().totalRewards()) {
+            payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            idx++;
+        }
+        for (OnlineRewardsDayOfMonthReward reward : configuration.signIn().dayOfMonthRewards()) {
+            payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            idx++;
+        }
     }
 }

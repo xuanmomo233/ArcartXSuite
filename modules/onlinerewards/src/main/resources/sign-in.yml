@@ -34,12 +34,16 @@ base-commands:
 # 基础签到奖励描述文本
 base-rewardText: "命令 1"
 # 基础签到邮件预设列表
+# base.icon: 基础签到 UI 展示图标（可选，不配置时使用默认图标）
 # base.item-rewards: 基础签到物品奖励列表（通过 ItemSourceRegistry 生成，统一发放）
 #   source: 物品来源（minecraft/mythic/neige/overture/mmoitems）
 #   id:     物品 ID（mmoitems 格式为 "类型ID;物品ID"）
 #   amount: 数量
 #   nbt:    可选，自定义 NBT（SNBT 字符串，仅 minecraft 源有效）
 base:
+  icon:
+    material: WRITABLE_BOOK
+    name: "&f每日签到"
   mail:
     presets: []
   # item-rewards:
@@ -63,16 +67,22 @@ makeup:
   already-signed: "§e该日期已经签到过了。"
 
 # 连续签到奖励，仅在连续天数"恰好等于" days 时触发
-# 字段: days=连续天数, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
+# 字段: days=连续天数, rewardText=描述, icon=UI图标(可选), mail.presets=邮件预设, commands=执行的命令
 streak-rewards:
   - days: 3
     rewardText: "这里是连续签到 3 天的奖励描述"
+    icon:
+      material: IRON_INGOT
+      name: "&f连续签到 3 天"
     mail:
       presets: []
     commands:
       - "say [签到] {player} 达成连续签到 {streak} 天"
   - days: 7
     rewardText: "这里是连续签到 7 天的奖励描述"
+    icon:
+      material: GOLD_INGOT
+      name: "&6连续签到 7 天"
     mail:
       presets: []
     commands:
@@ -83,28 +93,40 @@ streak-rewards:
 total-rewards:
   - days: 10
     rewardText: "这里是累计签到 10 天的奖励描述"
+    icon:
+      material: DIAMOND
+      name: "&b累计签到 10 天"
     mail:
       presets: []
     commands:
       - "say [签到] {player} 达成累计签到 {total} 天"
   - days: 30
     rewardText: "这里是累计签到 30 天的奖励描述"
+    icon:
+      material: NETHER_STAR
+      name: "&d累计签到 30 天"
     mail:
       presets: []
     commands:
       - "say [签到] {player} 达成累计签到 {total} 天"
 
 # 每月指定日期签到奖励，仅在当月的指定 day 当天签到时触发
-# 字段: day=每月几号, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
+# 字段: day=每月几号, rewardText=描述, icon=UI图标(可选), mail.presets=邮件预设, commands=执行的命令
 day-of-month-rewards:
   - day: 1
     rewardText: "这里是每月 1 号的奖励描述"
+    icon:
+      material: SUNFLOWER
+      name: "&e每月 1 号签到"
     mail:
       presets: []
     commands:
       - "say [签到] {player} 完成每月 1 号签到"
   - day: 15
     rewardText: "这里是每月 15 号的奖励描述"
+    icon:
+      material: REDSTONE
+      name: "&c每月 15 号签到"
     mail:
       presets: []
     commands:

@@ -1,31 +1,59 @@
-# AXS 资源说明
-# 用途: Mail 模块管理 UI，支持预设新增/编辑/删除/派发。
-# 前置依赖: ArcartX；Mail 模块启用后自动注册。
-# 打开方式: /axs mail admin
-# 重载命令: /axs mail reload
-# 数据交互: packetHandler 接收 preset-list / preset-detail / result 三种服务端推送；
-#             客户端通过 Packet.send('AXS_MAIL', ...) 发送操作指令。
+# AXS Mail 管理后台（翠绿信使重写版）
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
+# 布局: 左导航(收件箱/日志/写信/兑换码/管理) + 内容区(列表视图/编辑视图 切换)
+# 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
+# 特殊: match 替换物品栏界面，through:true 让槽位可交互，background:false 无遮罩
+# 逻辑: packetHandler 接收 preset-list/preset-detail/attachment-count/result；var.view 控制列表/编辑切换
 
 ui:
   match:
     - AXS Mail Admin
+  isHud: false
   background: false
   escClose: true
   closeDied: true
   show: true
   through: true
   screenScale: true
+  level: 8
+  itemSize: 16
   action:
-    open: |-
+    load: |-
       var.view = 'list'
       var.resultMsg = none
       var.editItemCount = 0
       var.maxPresetCount = 0
+      var.isAdmin = false
+      // 视口换算
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+    open: |-
+      Packet.send('AXS_MAIL', 'admin-preset-list')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
   packetHandler:
+    # packetHandler: preset-list
+    # 包字段:
+    #   - presets: 预设列表（Map，键为索引，每项含 id/displayName/subject/enabled/attachmentCount/commandCount）
+    #   - total: 预设总数
+    #   - maxPresetCount: 预设列表最大显示条数
+    #   - is_admin: 当前玩家是否为管理员
     preset-list: |-
       var.presets = packet['presets']
       var.total = packet['total']
       var.maxPresetCount = packet['maxPresetCount']
+      var.isAdmin = packet['is_admin']
       while(val.preset_data.childrenCount() > 1){
         val.preset_data.get(1).remove()
       }
@@ -34,6 +62,8 @@ ui:
         e = val.preset_data['预设行'].copy('预设行' + key)
         e.entryKey = key
       }
+    # packetHandler: preset-detail
+    # 包字段: id/enabled/displayName/subject/body/expiresAfterDays/currencyAttachments/itemAttachmentCount/claimCommands/claimConditions/found
     preset-detail: |-
       var.editId = packet['id']
       var.editEnabled = packet['enabled']
@@ -48,746 +78,1088 @@ ui:
       var.editFound = packet['found']
       var.view = 'edit'
       var.resultMsg = none
+    # packetHandler: attachment-count
+    # 包字段: itemAttachmentCount
     attachment-count: |-
       var.editItemCount = packet['itemAttachmentCount'].round()
+    # packetHandler: result
+    # 包字段: success/message
     result: |-
       var.resultMsg = packet['message']
       if(packet['success']){
         var.view = 'list'
       }
 
+# ─── 控件树 ────────────────────────────────────────────────────────
+# 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项) + 内容区(列表/编辑切换)
+# 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 描边60,64,82 强调80,180,120
+# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
 controls:
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;30,32,38,110
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      主面板:
-        type: Texture
+      # ── 顶栏 ──────────────────────────────────────────
+      顶栏:
+        type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1500
-          height: 920
-          normal: ~30,30,35,235
-          shape: ~round_rect
-          radius: 16
-        effect:
-          stroke:
-            width: 2
-            color: ~80,180,255,180
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
-          # 标题栏
-          标题栏:
+          顶栏底:
             type: Texture
             attribute:
-              x: 0
-              y: 0
-              width: 1500
-              height: 72
-              normal: ~40,40,50,255
-              shape: ~round_rect
-              radius: 16
-            effect:
-              stroke:
-                width: 2
-                color: ~80,180,255,180
-            children:
-              标题文字:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 24
-                  fontSize: 49
-                  texts: "~&bAXS Mail Admin &8- &7预设管理"
-              标题按钮区:
-                type: HStack
-                attribute:
-                  x: 1220
-                  y: 12
-                  spaceBetween: 14
-                children:
-                  刷新按钮:
-                    type: Canvas
-                    attribute:
-                      width: 120
-                      height: 48
-                    action:
-                      click: |-
-                        var.view = 'list'
-                        Packet.send('AXS_MAIL', 'admin-preset-list')
-                    children:
-                      刷新背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~60,130,200,200
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~80,180,255,180
-                      刷新文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 120
-                          texts: ~&f刷新
-                          fontSize: 49
-                          through: true
-                  新建按钮:
-                    type: Canvas
-                    attribute:
-                      width: 120
-                      height: 48
-                    action:
-                      click: |-
-                        var.editId = none
-                        var.editEnabled = true
-                        var.editDisplayName = none
-                        var.editSubject = none
-                        var.editBody = none
-                        var.editExpiresDays = 15
-                        var.editCurrencies = none
-                        var.editItemCount = 0
-                        var.editCommands = none
-                        var.editConditions = none
-                        var.editFound = false
-                        var.view = 'edit'
-                        var.resultMsg = none
-                        Packet.send('AXS_MAIL', 'admin-preset-new')
-                    children:
-                      新建背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~50,180,80,200
-                          shape: ~round_rect
-                          radius: 8
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~80,180,255,180
-                      新建文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 120
-                          texts: ~&f新建
-                          fontSize: 49
-                          through: true
-          # 结果提示
-          结果栏:
-            type: Text
-            attribute:
-              x: 28
-              y: 884
-              fontSize: 28
-              texts: "~&e{var.resultMsg}"
-
-          # 列表表头（固定，不随滚动）
-          列表标题:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
             type: Texture
             attribute:
-              x: 20
-              y: 84
-              width: 1460
-              height: 44
-              normal: ~50,50,60,255
-              shape: ~round_rect
-              radius: 6
-              visible: "var.view == 'list' || var.view == none"
-            children:
-              编号列:
-                type: Text
-                attribute:
-                  x: 16
-                  y: 12
-                  fontSize: 36
-                  texts: "~&bID"
-              名称列:
-                type: Text
-                attribute:
-                  x: 300
-                  y: 12
-                  fontSize: 36
-                  texts: "~&b显示名"
-              主题列:
-                type: Text
-                attribute:
-                  x: 600
-                  y: 12
-                  fontSize: 36
-                  texts: "~&b标题"
-              启用列:
-                type: Text
-                attribute:
-                  x: 920
-                  y: 12
-                  fontSize: 36
-                  texts: "~&b启用"
-              操作列:
-                type: Text
-                attribute:
-                  x: 1080
-                  y: 12
-                  fontSize: 36
-                  texts: "~&b操作"
-
-          预设滑块:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~60,64,82,220
+          标题色块:
             type: Texture
-            val: 预设滑块
             attribute:
-              x: 1474
-              y: 132
+              point: ~middle_left
+              x: 48
               width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 670
-          # 预设列表区域（可滚动）
-          列表区域:
-            type: Scroll
-            attribute:
-              x: 20
-              y: 132
-              width: 1460
-              height: 720
-              visible: "var.view == 'list' || var.view == none"
-              moveY: "self.parent['预设滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              preset_stack:
-                val: preset_data
-                type: VStack
-                attribute:
-                  x: 0
-                  y: 0
-                  width: 1460
-                  spaceBetween: 4
-                children:
-                  预设行:
-                    type: Texture
-                    attribute:
-                      entryKey: 0.round()
-                      entry: var.presets[self.entryKey]
-                      width: 1460
-                      height: 52
-                      normal: ~45,45,55,220
-                      shape: ~round_rect
-                      radius: 6
-                      visible: self.entry != none
-                    action:
-                      enter: |-
-                        self.normal = '60,60,75,200'
-                      leave: |-
-                        self.normal = '45,45,55,220'
-                    children:
-                      行编号:
-                        type: Text
-                        attribute:
-                          x: 16
-                          y: 16
-                          width: 270
-                          fontSize: 36
-                          texts: "~&f{self.parent.entry['id']}"
-                      行名称:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 16
-                          width: 290
-                          fontSize: 36
-                          texts: "~&7{self.parent.entry['displayName']}"
-                      行主题:
-                        type: Text
-                        attribute:
-                          x: 600
-                          y: 16
-                          width: 310
-                          fontSize: 36
-                          texts: "~&7{self.parent.entry['subject']}"
-                      行启用:
-                        type: Text
-                        attribute:
-                          x: 920
-                          y: 16
-                          fontSize: 36
-                          texts: "~{self.parent.entry['enabled'] ? '&a✔' : '&c✖'}"
-                      编辑按钮:
-                        type: Texture
-                        attribute:
-                          x: 1080
-                          y: 6
-                          width: 80
-                          height: 40
-                          normal: ~60,130,200,200
-                          shape: ~round_rect
-                          radius: 6
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,80
-                        action:
-                          click: |-
-                            Packet.send('AXS_MAIL', 'admin-preset-get', self.parent.entry['id'])
-                        children:
-                          编辑按钮文字:
-                            type: Text
-                            attribute:
-                              x: 40
-                              y: 10
-                              through: true
-                              center: true
-                              fontSize: 36
-                              texts: "~&f编辑"
-                      发送按钮:
-                        type: Texture
-                        attribute:
-                          x: 1170
-                          y: 6
-                          width: 80
-                          height: 40
-                          normal: ~50,160,80,200
-                          shape: ~round_rect
-                          radius: 6
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,80
-                        action:
-                          click: |-
-                            Packet.send('AXS_MAIL', 'admin-preset-send', self.parent.entry['id'], 'all-online')
-                        children:
-                          发送按钮文字:
-                            type: Text
-                            attribute:
-                              x: 40
-                              y: 10
-                              through: true
-                              center: true
-                              fontSize: 36
-                              texts: "~&f派发"
-                      删除按钮:
-                        type: Texture
-                        attribute:
-                          x: 1340
-                          y: 6
-                          width: 80
-                          height: 40
-                          normal: ~200,60,60,200
-                          shape: ~round_rect
-                          radius: 6
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,80
-                        action:
-                          click: |-
-                            Packet.send('AXS_MAIL', 'admin-preset-delete', self.parent.entry['id'])
-                        children:
-                          删除按钮文字:
-                            type: Text
-                            attribute:
-                              x: 40
-                              y: 10
-                              through: true
-                              center: true
-                              fontSize: 36
-                              texts: "~&f删除"
-          # 空列表提示
-          空状态提示:
+              height: 36
+              normal: ~80,180,120,255
+              shape: ~round_rect
+              radius: 3
+          标题:
             type: Text
             attribute:
-              x: 600
-              y: 300
-              center: true
-              fontSize: 64
-              visible: "var.presets == none || var.total == 0"
-              texts: "~&8暂无预设，点击右上角 &a新建 &8开始创建"
-
-          # 编辑表单区域
-          编辑区域:
-            type: Texture
+              point: ~middle_left
+              x: 68
+              texts: "~&f邮件管理"
+              fontSize: 48
+          关闭按钮:
+            type: Canvas
             attribute:
-              x: 20
-              y: 84
-              width: 1460
-              height: 788
-              visible: "var.view == 'edit'"
-              normal: ~40,40,50,200
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 2
-                color: ~80,180,255,180
+              point: ~middle_right
+              x: -48
+              width: 48
+              height: 48
+            action:
+              clickLeft: |-
+                Screen.close()
             children:
-              # 顶部: 返回 + 标题
-              返回按钮:
+              关闭背景:
                 type: Texture
                 attribute:
-                  x: 0
-                  y: 0
-                  width: 100
-                  height: 40
-                  normal: ~80,80,95,200
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
+
+      # ── 左侧导航 ──────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~60,64,82,220
+          导航收件箱:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'open')
+            children:
+              收件箱底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              收件箱文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f收件箱"
+                  fontSize: 36
+                  through: true
+          导航日志:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'logs')
+            children:
+              日志底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              日志文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f日志"
+                  fontSize: 36
+                  through: true
+          导航写信:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'compose')
+            children:
+              写信底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              写信文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f写信"
+                  fontSize: 36
+                  through: true
+          导航兑换码:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send('AXS_MAIL', 'open')
+            children:
+              兑换码底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              兑换码文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f兑换码"
+                  fontSize: 36
+                  through: true
+          # 当前页：管理
+          导航管理:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 58
+              visible: "var.isAdmin == true"
+            children:
+              管理底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~80,180,120,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~80,180,120,230
+              管理高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~80,180,120,255
+                  shape: ~round_rect
+                  radius: 2
+              管理文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0管理"
+                  fontSize: 36
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 364
+              width: 264
+              height: 2
+              normal: ~60,64,82,220
+          操作标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 382
+              texts: "~&f快捷操作"
+              fontSize: 36
+          刷新列表按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 428
+              width: 272
+              height: 48
+            action:
+              clickLeft: |-
+                var.view = 'list'
+                Packet.send('AXS_MAIL', 'admin-preset-list')
+            children:
+              刷新列表底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~36,38,48,245
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+              刷新列表文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f刷新列表"
+                  fontSize: 36
+                  through: true
+          新建预设按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 488
+              width: 272
+              height: 48
+            action:
+              clickLeft: |-
+                var.editId = none
+                var.editEnabled = true
+                var.editDisplayName = none
+                var.editSubject = none
+                var.editBody = none
+                var.editExpiresDays = 15
+                var.editCurrencies = none
+                var.editItemCount = 0
+                var.editCommands = none
+                var.editConditions = none
+                var.editFound = false
+                var.view = 'edit'
+                var.resultMsg = none
+                Packet.send('AXS_MAIL', 'admin-preset-new')
+            children:
+              新建预设底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,120,230
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: ~80,180,120,230
+              新建预设文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0新建预设"
+                  fontSize: 36
+                  through: true
+
+      # ── 内容区 ──────────────────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          # ── 列表视图 ───────────────────────────────────
+          列表视图:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.view == 'list' || var.view == none"
+            children:
+              列表底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:30;255,255,255,60
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~60,64,82,220
+              # 表头
+              表头:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 12
+                  width: "self.parent.width - 32"
+                  height: 40
+                children:
+                  表头底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~60,64,82,220
+                  编号列:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "~&fID"
+                      fontSize: 32
+                  名称列:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 200
+                      texts: "~&f显示名"
+                      fontSize: 32
+                  主题列:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 440
+                      texts: "~&f标题"
+                      fontSize: 32
+                  启用列:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 700
+                      texts: "~&f启用"
+                      fontSize: 32
+                  操作列:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 820
+                      texts: "~&f操作"
+                      fontSize: 32
+              # 预设滑轨
+              预设滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 64
+                  width: 10
+                  height: "self.parent.height - 80"
+                  normal: ~40,44,52,225
+                  shape: ~round_rect
+                  radius: 5
                 effect:
                   stroke:
                     width: 2
-                    color: ~255,255,255,60
+                    color: ~120,220,160,230
+              # 预设滑块
+              预设滑块:
+                type: Texture
+                val: 预设滑块
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 64
+                  width: 10
+                  height: 50
+                  normal: ~80,180,120,230
+                  maxDragY: "self.parent.height - 130"
+                  shape: ~round_rect
+                  radius: 5
+              # 预设列表
+              列表滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 64
+                  width: "self.parent.width - 44"
+                  height: "self.parent.height - 80"
+                  moveY: "self.parent.parent['预设滑块'].getDragYRatio()"
                 action:
-                  click: |-
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  preset_stack:
+                    val: preset_data
+                    type: VStack
+                    attribute:
+                      width: "self.parent.width - 24"
+                      spaceBetween: 6
+                    children:
+                      预设行:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.presets[self.entryKey]
+                          width: "self.parent.width"
+                          height: 56
+                          visible: "self.entry != none"
+                        children:
+                          行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~36,38,48,245
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                          行编号:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 14
+                              texts: "self.parent.entry['id']"
+                              fontSize: 32
+                          行名称:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 200
+                              texts: "self.parent.entry['displayName']"
+                              fontSize: 32
+                          行主题:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 440
+                              texts: "self.parent.entry['subject']"
+                              fontSize: 32
+                          行启用:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 700
+                              texts: "self.parent.entry['enabled'] ? '&a✔' : '&c✖'"
+                              fontSize: 32
+                          编辑按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_left
+                              x: 820
+                              width: 72
+                              height: 36
+                            action:
+                              clickLeft: |-
+                                Packet.send('AXS_MAIL', 'admin-preset-get', self.parent.entry['id'])
+                            children:
+                              编辑底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,38,48,245
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                              编辑文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f编辑"
+                                  fontSize: 32
+                                  through: true
+                          发送按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_left
+                              x: 900
+                              width: 72
+                              height: 36
+                            action:
+                              clickLeft: |-
+                                Packet.send('AXS_MAIL', 'admin-preset-send', self.parent.entry['id'], 'all-online')
+                            children:
+                              发送底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~80,180,120,230
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~80,180,120,230
+                              发送文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&0派发"
+                                  fontSize: 32
+                                  through: true
+                          删除按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_left
+                              x: 980
+                              width: 72
+                              height: 36
+                            action:
+                              clickLeft: |-
+                                Packet.send('AXS_MAIL', 'admin-preset-delete', self.parent.entry['id'])
+                            children:
+                              删除底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,38,48,245
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: "self.isHovered() ? '235,100,100,255' : '60,64,82,220'"
+                              删除文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f删除"
+                                  fontSize: 32
+                                  through: true
+              # 空列表提示
+              空状态提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&8暂无预设，点击左侧新建预设开始创建"
+                  fontSize: 36
+                  visible: "var.presets == none || var.total == 0"
+              # 结果提示
+              结果提示:
+                type: Text
+                attribute:
+                  point: ~bottom_left
+                  x: 16
+                  y: -8
+                  texts: "var.resultMsg != none ? '&e' + var.resultMsg : ''"
+                  fontSize: 32
+
+          # ── 编辑视图 ───────────────────────────────────
+          编辑视图:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.view == 'edit'"
+            children:
+              编辑底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:30;255,255,255,60
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~60,64,82,220
+              # 返回按钮
+              返回按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 12
+                  width: 100
+                  height: 40
+                action:
+                  clickLeft: |-
                     var.view = 'list'
                     Packet.send('AXS_MAIL', 'admin-preset-cancel')
                     Packet.send('AXS_MAIL', 'admin-preset-list')
                 children:
-                  返回按钮文字:
+                  返回底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                  返回文字:
                     type: Text
                     attribute:
-                      x: 50
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&f返回"
-
+                      fontSize: 36
+                      through: true
               编辑标题:
                 type: Text
                 attribute:
-                  x: 120
-                  y: 10
+                  point: ~middle_left
+                  x: 130
+                  y: 12
+                  texts: "var.editFound ? '&f编辑预设: &f' + var.editId : '&f新建预设'"
                   fontSize: 36
-                  texts: "~{var.editFound ? '&b编辑预设: &f' : '&a新建预设'}{var.editId}"
-
-              # 第一行: ID / 显示名 / 启用 (label 在 input 上方)
-              编号文字:
+              # 左侧表单
+              编号标签:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 52
-                  fontSize: 36
-                  texts: "~&7预设 ID"
+                  point: ~top_left
+                  x: 16
+                  y: 72
+                  texts: "~&f预设 ID"
+                  fontSize: 32
               输入编号框:
                 type: ChatTextBox
                 attribute:
-                  x: 0
-                  y: 84
-                  width: 350
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  point: ~top_left
+                  x: 16
+                  y: 104
+                  width: 320
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editId
-                  lock: |-
-                    var.editFound == true
+                  lock: "var.editFound == true"
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              显示名文字:
+                    width: 3
+                    color: ~60,64,82,220
+              显示名标签:
                 type: Text
                 attribute:
-                  x: 380
-                  y: 52
-                  fontSize: 36
-                  texts: "~&7显示名"
+                  point: ~top_left
+                  x: 360
+                  y: 72
+                  texts: "~&f显示名"
+                  fontSize: 32
               输入显示名框:
                 type: ChatTextBox
                 attribute:
-                  x: 380
-                  y: 84
-                  width: 350
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  point: ~top_left
+                  x: 360
+                  y: 104
+                  width: 320
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editDisplayName
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              启用文字:
+                    width: 3
+                    color: ~60,64,82,220
+              启用标签:
                 type: Text
                 attribute:
-                  x: 760
-                  y: 52
-                  fontSize: 36
-                  texts: "~&7启用"
-              切换按钮:
-                type: Texture
+                  point: ~top_left
+                  x: 704
+                  y: 72
+                  texts: "~&f启用"
+                  fontSize: 32
+              启用切换按钮:
+                type: Canvas
                 attribute:
-                  x: 760
-                  y: 84
-                  width: 70
-                  height: 36
-                  normal: |-
-                    ~{var.editEnabled ? '50,180,80,200' : '200,60,60,200'}
-                  shape: ~round_rect
-                  radius: 6
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,80
+                  point: ~top_left
+                  x: 704
+                  y: 104
+                  width: 72
+                  height: 40
                 action:
-                  click: |-
+                  clickLeft: |-
                     var.editEnabled = !var.editEnabled
                 children:
-                  切换文字:
+                  启用底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                  启用文字:
                     type: Text
                     attribute:
-                      x: 35
-                      y: 8
-                      through: true
-                      center: true
+                      point: ~middle_center
+                      texts: "var.editEnabled ? '&0开' : '&f关'"
                       fontSize: 36
-                      texts: "~{var.editEnabled ? '&f开' : '&f关'}"
-
-              # 第二行: 标题 (宽输入，模仿 compose 的 subject)
-              主题文字:
+                      through: true
+              主题标签:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 134
-                  fontSize: 36
-                  texts: "~&7标题"
+                  point: ~top_left
+                  x: 16
+                  y: 160
+                  texts: "~&f标题"
+                  fontSize: 32
               输入主题框:
                 type: ChatTextBox
                 attribute:
-                  x: 0
-                  y: 166
-                  width: 800
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  point: ~top_left
+                  x: 16
+                  y: 192
+                  width: 760
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editSubject
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              # 第三行: 正文 (大面积输入区，模仿 compose 的 body)
-              正文文字:
+                    width: 3
+                    color: ~60,64,82,220
+              正文标签:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 216
-                  fontSize: 36
-                  texts: "~&7正文"
+                  point: ~top_left
+                  x: 16
+                  y: 248
+                  texts: "~&f正文"
+                  fontSize: 32
               输入正文框:
                 type: ChatTextBox
                 attribute:
-                  x: 0
-                  y: 248
-                  width: 800
-                  height: 140
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  point: ~top_left
+                  x: 16
+                  y: 280
+                  width: 760
+                  height: 160
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editBody
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              # 第四行: 过期 / 货币附件
-              过期时间文字:
+                    width: 3
+                    color: ~60,64,82,220
+              过期标签:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 402
-                  fontSize: 36
-                  texts: "~&7过期(天)"
-              输入过期时间框:
+                  point: ~top_left
+                  x: 16
+                  y: 456
+                  texts: "~&f过期(天)"
+                  fontSize: 32
+              输入过期框:
                 type: ChatTextBox
                 attribute:
-                  x: 0
-                  y: 434
+                  point: ~top_left
+                  x: 16
+                  y: 488
                   width: 160
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editExpiresDays
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              货币文字:
+                    width: 3
+                    color: ~60,64,82,220
+              货币附件标签:
                 type: Text
                 attribute:
+                  point: ~top_left
                   x: 200
-                  y: 402
-                  fontSize: 36
-                  texts: "~&7货币附件"
+                  y: 456
+                  texts: "~&f货币附件"
+                  fontSize: 32
               输入货币框:
                 type: ChatTextBox
                 attribute:
+                  point: ~top_left
                   x: 200
-                  y: 434
-                  width: 600
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  y: 488
+                  width: 576
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editCurrencies
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              # 第五行: 领取命令
-              命令文字:
+                    width: 3
+                    color: ~60,64,82,220
+              命令标签:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 484
-                  fontSize: 36
-                  texts: "~&7领取命令"
+                  point: ~top_left
+                  x: 16
+                  y: 544
+                  texts: "~&f领取命令"
+                  fontSize: 32
               输入命令框:
                 type: ChatTextBox
                 attribute:
-                  x: 0
-                  y: 516
-                  width: 800
-                  height: 36
-                  fontSize: 28
-                  background: ~60,60,70,255
+                  point: ~top_left
+                  x: 16
+                  y: 576
+                  width: 760
+                  height: 40
+                  fontSize: 36
+                  background: ~36,38,48,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 10
                   val: var.editCommands
                 effect:
                   stroke:
-                    width: 1
-                    color: ~80,180,255,100
-
-              # 底部信息 + 操作按钮
+                    width: 3
+                    color: ~60,64,82,220
               编辑摘要:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 564
-                  fontSize: 22
-                  texts: "~&8物品附件: &f{var.editItemCount} &8个   &8货币格式: currency:amount:desc   &8命令用 | 分隔"
-
+                  point: ~top_left
+                  x: 16
+                  y: 632
+                  texts: "'&7物品附件 &f' + var.editItemCount + ' &7个  &7货币格式 currency:amount:desc  &7命令用 | 分隔'"
+                  fontSize: 32
+              # 保存/取消按钮
               保存按钮:
-                type: Texture
+                type: Canvas
                 attribute:
-                  x: 0
-                  y: 584
+                  point: ~top_left
+                  x: 16
+                  y: 680
                   width: 160
-                  height: 40
-                  normal: ~50,180,80,230
-                  shape: ~round_rect
-                  radius: 8
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,80
+                  height: 48
                 action:
-                  click: |-
+                  clickLeft: |-
                     var.resultMsg = '&e保存中...'
                     Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, var.editCurrencies, var.editCommands)
                 children:
-                  保存按钮文字:
+                  保存底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~80,180,120,230
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: ~80,180,120,230
+                  保存文字:
                     type: Text
                     attribute:
-                      x: 80
-                      y: 10
-                      through: true
-                      center: true
+                      point: ~middle_center
+                      texts: "~&0保存"
                       fontSize: 36
-                      texts: "~&f保存"
-
+                      through: true
               取消按钮:
-                type: Texture
+                type: Canvas
                 attribute:
-                  x: 180
-                  y: 584
+                  point: ~top_left
+                  x: 192
+                  y: 680
                   width: 120
-                  height: 40
-                  normal: ~120,120,130,200
-                  shape: ~round_rect
-                  radius: 8
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,60
+                  height: 48
                 action:
-                  click: |-
+                  clickLeft: |-
                     var.view = 'list'
                     Packet.send('AXS_MAIL', 'admin-preset-cancel')
                     Packet.send('AXS_MAIL', 'admin-preset-list')
                 children:
-                  取消按钮文字:
+                  取消底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '120,220,160,255' : '60,64,82,220'"
+                  取消文字:
                     type: Text
                     attribute:
-                      x: 60
-                      y: 10
-                      through: true
-                      center: true
-                      fontSize: 36
+                      point: ~middle_center
                       texts: "~&f取消"
-
-              # ─── 右侧: 物品附件面板 ───
+                      fontSize: 36
+                      through: true
+              # 右侧：物品附件 + 背包
               附件面板:
-                type: Texture
+                type: Canvas
                 attribute:
-                  x: 860
-                  y: 52
-                  width: 580
-                  height: 170
-                  normal: ~50,50,60,230
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~80,180,255,120
+                  point: ~top_left
+                  x: 800
+                  y: 72
+                  width: "self.parent.width - 816"
+                  height: 200
                 children:
+                  附件底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~Frosted:30;255,255,255,60
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~60,64,82,220
                   附件标题:
                     type: Text
                     attribute:
+                      point: ~top_left
                       x: 14
-                      y: 10
-                      fontSize: 36
+                      y: 12
                       texts: "'&f物品附件 &7' + var.editItemCount + '/6'"
+                      fontSize: 36
                   附件提示:
                     type: Text
                     attribute:
+                      point: ~top_left
                       x: 14
-                      y: 42
-                      fontSize: 28
+                      y: 48
                       texts:
-                        - "~&7将物品拖入下方槽位"
+                        - "~&7拖入物品作为模板"
                         - "~&7模板物品保存后不消耗"
+                      fontSize: 32
                   附件槽位网格:
                     type: HGrid
                     attribute:
+                      point: ~top_left
                       x: 14
-                      y: 80
+                      y: 96
                       spaceBetweenX: 6
                       spaceBetweenY: 6
                       column: 6
@@ -803,8 +1175,8 @@ controls:
                         attribute:
                           width: 54
                           height: 54
-                          normal: "~Frosted:0;95,95,95,255"
-                          hover: "~Frosted:0;255,255,255,255"
+                          normal: "~Frosted:0;36,38,48,245"
+                          hover: "~Frosted:0;60,64,82,245"
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
@@ -813,29 +1185,41 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~0,0,0,255
-
-              # ─── 右侧: 背包面板 ───
+                            color: ~60,64,82,220
               管理背包:
-                type: Texture
+                type: Canvas
                 attribute:
-                  x: 860
-                  y: 230
-                  width: 580
-                  height: 396
-                  normal: ~50,50,60,230
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~80,180,255,120
+                  point: ~top_left
+                  x: 800
+                  y: 288
+                  width: "self.parent.width - 816"
+                  height: "self.parent.height - 300"
                 children:
+                  背包底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~Frosted:30;255,255,255,60
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~60,64,82,220
+                  背包标题:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 14
+                      y: 12
+                      texts: "~&f我的背包"
+                      fontSize: 36
                   背包槽位网格:
                     type: HGrid
                     attribute:
+                      point: ~top_left
                       x: 14
-                      y: 14
+                      y: 56
                       spaceBetweenX: 6
                       spaceBetweenY: 6
                       column: 6
@@ -851,8 +1235,8 @@ controls:
                         attribute:
                           width: 54
                           height: 54
-                          normal: "~Frosted:0;95,95,95,255"
-                          hover: "~Frosted:0;255,255,255,255"
+                          normal: "~Frosted:0;36,38,48,245"
+                          hover: "~Frosted:0;60,64,82,245"
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
@@ -861,4 +1245,13 @@ controls:
                         effect:
                           stroke:
                             width: 2
-                            color: ~0,0,0,255
+                            color: ~60,64,82,220
+              # 编辑视图结果提示
+              编辑结果提示:
+                type: Text
+                attribute:
+                  point: ~bottom_left
+                  x: 16
+                  y: -8
+                  texts: "var.resultMsg != none ? '&e' + var.resultMsg : ''"
+                  fontSize: 32
