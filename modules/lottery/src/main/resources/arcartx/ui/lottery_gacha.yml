@@ -5,15 +5,28 @@
 # 抽奖流程为「包驱动」: 点击只发请求并进入等待态，result / batch_result 到达后才展示结果；
 # 若服务端只回 update（消耗不足等失败情形），等待态会被自动解除。
 ui:
-  match:
-    - "AXS:lottery_gacha"  # 匹配的界面 ID
-  isHud: false  # 非 HUD，为弹出式菜单界面
-  through: false  # 不穿透点击
-  escClose: true  # 按 ESC 可关闭界面
-  background: false  # 不渲染原版背景
-  closeDied: false  # 玩家死亡时不关闭界面
-  show: true  # 界面可见
-  screenScale: true  # 启用屏幕等比缩放
+  isHud: false
+  defaultOpen: false
+  hide:
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  level: 8
+  itemSize: 16
+  screenScale: true
   packetHandler:
     # packetHandler: init
     # 包字段:
