@@ -585,12 +585,13 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
-            closeOtherMailUis(player);
             touchProfile(player, false);
             inboxQueries.putIfAbsent(player.getUniqueId(), new MailInboxQuery(MailInboxFilter.ALL, 1, INBOX_PAGE_SIZE));
             inboxViewers.add(player.getUniqueId());
             logViewers.remove(player.getUniqueId());
+            // 先打开 ArcartX UI（不鼠标重置），再延迟关闭 Bukkit 容器（compose/admin 会话）
             bridge.openUi(player, inboxUiId);
+            AxsScheduler.runTask(plugin, () -> closeOtherMailUis(player));
             refreshInbox(player, true);
             return MailOperationResult.success(message("player.mailbox-opened"));
         } catch (Exception exception) {
@@ -1752,12 +1753,13 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
-            closeOtherMailUis(player);
             touchProfile(player, false);
             logPages.putIfAbsent(player.getUniqueId(), 1);
             logViewers.add(player.getUniqueId());
             inboxViewers.remove(player.getUniqueId());
+            // 先打开 ArcartX UI（不鼠标重置），再延迟关闭 Bukkit 容器（compose/admin 会话）
             bridge.openUi(player, logsUiId);
+            AxsScheduler.runTask(plugin, () -> closeOtherMailUis(player));
             refreshLogs(player, true);
             return MailOperationResult.success(message("player.logs-opened"));
         } catch (Exception exception) {
