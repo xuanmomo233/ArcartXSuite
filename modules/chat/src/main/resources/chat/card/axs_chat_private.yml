@@ -1,16 +1,17 @@
 # ArcartXSuite Chat — 私聊通知卡片模板
 # 收到或发送私聊消息时显示此卡片
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
 卡片根布局:
   type: Card
   attribute:
-    width: "self.data['cardWidth'] + 0"
-    height: "self.data['cardHeight'] + 0"
+    width: "Math.max(val.标题文字.width, val.消息文字.width) + 200 < 500 ? 500 : Math.max(val.标题文字.width, val.消息文字.width) + 200"
+    height: "Math.max(100, val.消息文字.y + val.消息文字.height + 20)"
   children:
     卡片背景:
       type: Texture
       attribute:
-        width: "self.parent.data['cardWidth'] + 0"
-        height: "self.parent.data['cardHeight'] + 0"
+        width: "self.parent.width"
+        height: "self.parent.height"
         normal: ~25,25,35,200
       action:
         click: |-
@@ -20,11 +21,12 @@
       attribute:
         fontSize: 260
         x: 15
-        y: "self.parent.data['cardHeight']/2 - 10"
+        y: "self.parent.height/2 - 10"
         texts: "'§d✎'"
         through: true
     标题文字:
       type: Text
+      val: 标题文字
       attribute:
         fontSize: 64
         x: 160
@@ -33,6 +35,7 @@
         through: true
     消息文字:
       type: Text
+      val: 消息文字
       attribute:
         fontSize: 64
         x: 160

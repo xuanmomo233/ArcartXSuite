@@ -84,18 +84,8 @@ cards:
   char-width-full: 31
   # 半角字符（英文/数字等）占位宽度，这里我已经调到默认配置最佳值
   char-width-half: 18
-  # 每行文字高度
-  line-height: 36
   # 文字区最大宽度（超过此值自动换行）
   max-line-width: 750
-  # 文字区 X 偏移（图标区宽度）
-  text-offset-x: 170
-  # 右侧内边距
-  pad-right: 40
-  # 卡片单行基础高度
-  base-height: 100
-  # 卡片最小宽度
-  min-width: 500
 
 # ── 功能开关 ─────────────────────────────────────────
 function:

@@ -68,12 +68,7 @@ public record MailModuleConfiguration(
             uiSection == null ? "axs_mail_notify" : string(uiSection.getString("notify-card-id", "axs_mail_notify")),
             uiSection == null ? 26 : uiSection.getInt("notify-char-width-full", 26),
             uiSection == null ? 14 : uiSection.getInt("notify-char-width-half", 14),
-            uiSection == null ? 45 : uiSection.getInt("notify-line-height", 45),
-            uiSection == null ? 320 : uiSection.getInt("notify-max-line-width", 320),
-            uiSection == null ? 160 : uiSection.getInt("notify-text-offset-x", 160),
-            uiSection == null ? 20 : uiSection.getInt("notify-pad-right", 20),
-            uiSection == null ? 100 : uiSection.getInt("notify-base-height", 100),
-            uiSection == null ? 300 : uiSection.getInt("notify-min-width", 300)
+            uiSection == null ? 320 : uiSection.getInt("notify-max-line-width", 320)
         );
 
         ConfigurationSection playerSendSection = configuration.getConfigurationSection("player-send");

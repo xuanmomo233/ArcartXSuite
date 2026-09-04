@@ -85,12 +85,7 @@ public record ChatModuleConfiguration(
             cardSection == null ? "" : string(cardSection.getString("item-preview-card-id", "")),
             cardSection == null ? 26 : cardSection.getInt("char-width-full", 26),
             cardSection == null ? 14 : cardSection.getInt("char-width-half", 14),
-            cardSection == null ? 45 : cardSection.getInt("line-height", 45),
-            cardSection == null ? 320 : cardSection.getInt("max-line-width", 320),
-            cardSection == null ? 160 : cardSection.getInt("text-offset-x", 160),
-            cardSection == null ? 20 : cardSection.getInt("pad-right", 20),
-            cardSection == null ? 100 : cardSection.getInt("base-height", 100),
-            cardSection == null ? 300 : cardSection.getInt("min-width", 300)
+            cardSection == null ? 320 : cardSection.getInt("max-line-width", 320)
         );
 
         ConfigurationSection functionSection = configuration.getConfigurationSection("function");

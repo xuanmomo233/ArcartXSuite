@@ -1346,12 +1346,10 @@ public final class ChatService implements Listener {
         payload.put("senderDisplayName", envelope.senderDisplayName());
         payload.put("channel", channel.displayName());
         payload.put("channelId", channel.id());
-        CardLayout layout = computeCardLayout(envelope.rawMessage());
-        for (int i = 0; i < layout.lines().size(); i++) {
-            payload.put("msg" + i, layout.lines().get(i));
+        List<String> lines = wrapMessage(envelope.rawMessage());
+        for (int i = 0; i < lines.size(); i++) {
+            payload.put("msg" + i, lines.get(i));
         }
-        payload.put("cardWidth", String.valueOf(layout.cardWidth()));
-        payload.put("cardHeight", String.valueOf(layout.cardHeight()));
         return packetBridge.sendChatCard(recipient, cardId, payload);
     }
 
@@ -1360,17 +1358,15 @@ public final class ChatService implements Listener {
         if (cardId.isBlank()) {
             return false;
         }
-        CardLayout layout = computeCardLayout(envelope.rawMessage());
+        List<String> lines = wrapMessage(envelope.rawMessage());
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("senderName", envelope.senderName());
         payload.put("senderDisplayName", envelope.senderDisplayName());
         payload.put("targetName", envelope.targetName());
         payload.put("direction", senderSide ? "sender" : "recipient");
-        for (int i = 0; i < layout.lines().size(); i++) {
-            payload.put("msg" + i, layout.lines().get(i));
+        for (int i = 0; i < lines.size(); i++) {
+            payload.put("msg" + i, lines.get(i));
         }
-        payload.put("cardWidth", String.valueOf(layout.cardWidth()));
-        payload.put("cardHeight", String.valueOf(layout.cardHeight()));
         return packetBridge.sendChatCard(recipient, cardId, payload);
     }
 
@@ -1383,13 +1379,8 @@ public final class ChatService implements Listener {
             return false;
         }
         String itemName = ChatColor.stripColor(envelope.itemPreview().displayText());
-        String senderLine = envelope.senderDisplayName() + " 展示了一件物品";
-        String longestLine = senderLine.length() >= itemName.length() ? senderLine : itemName;
-        CardLayout layout = computeCardLayout(longestLine);
 
         Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("cardWidth", String.valueOf(layout.cardWidth()));
-        payload.put("cardHeight", String.valueOf(layout.cardHeight()));
         payload.put("senderName", envelope.senderName());
         payload.put("senderDisplayName", envelope.senderDisplayName());
         payload.put("itemName", itemName);
@@ -1410,16 +1401,6 @@ public final class ChatService implements Listener {
         }
         Map<String, String> payload = new LinkedHashMap<>(values);
         payload.put("type", type);
-        String widthText;
-        if ("mute".equals(type)) {
-            String remaining = values.getOrDefault("remaining", "永久");
-            widthText = "剩余时间: " + remaining;
-        } else {
-            widthText = values.getOrDefault("message", "内容违规");
-        }
-        CardLayout layout = computeCardLayout(widthText);
-        payload.put("cardWidth", String.valueOf(layout.cardWidth()));
-        payload.put("cardHeight", String.valueOf(layout.cardHeight()));
         return packetBridge.sendChatCard(recipient, cardId, payload);
     }
 
@@ -1790,27 +1771,17 @@ public final class ChatService implements Listener {
     private record DuplicateStamp(String normalizedMessage, long atMillis) {
     }
 
-    private record CardLayout(int cardWidth, int cardHeight, List<String> lines) {}
-
     /**
-     * 计算卡片布局：先扩宽度适配文字，超过 maxLineWidth 后换行扩高度。
-     * 所有尺寸参数均来自 config，Java 只做加法。
+     * 按配置的 maxLineWidth 换行消息文本，返回各行列表。
+     * 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应。
      */
-    private CardLayout computeCardLayout(String text) {
+    private List<String> wrapMessage(String text) {
         ChatCardConfiguration c = configuration.cards();
         int textWidth = measureTextWidth(text, c.charWidthFull(), c.charWidthHalf());
-        int maxLineWidth = c.maxLineWidth();
-
-        if (textWidth <= maxLineWidth) {
-            // 单行：卡片宽度 = textOffsetX + 文字宽度 + padRight
-            int cardWidth = Math.max(c.minWidth(), c.textOffsetX() + textWidth + c.padRight());
-            return new CardLayout(cardWidth, c.baseHeight(), List.of(text));
+        if (textWidth <= c.maxLineWidth()) {
+            return List.of(text);
         }
-        // 多行：固定宽度 = textOffsetX + maxLineWidth + padRight，换行扩高
-        int cardWidth = Math.max(c.minWidth(), c.textOffsetX() + maxLineWidth + c.padRight());
-        List<String> wrappedLines = wrapText(text, maxLineWidth, c.charWidthFull(), c.charWidthHalf());
-        int cardHeight = c.baseHeight() + (wrappedLines.size() - 1) * c.lineHeight();
-        return new CardLayout(cardWidth, cardHeight, wrappedLines);
+        return wrapText(text, c.maxLineWidth(), c.charWidthFull(), c.charWidthHalf());
     }
 
     /**

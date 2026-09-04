@@ -1,17 +1,18 @@
 # ArcartXSuite Chat — 系统提示卡片模板
 # 禁言提示、敏感词拦截等系统通知时显示此卡片
 # data['type'] 可能的值: mute, filter
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
 卡片根布局:
   type: Card
   attribute:
-    width: "self.data['cardWidth'] + 0"
-    height: "self.data['cardHeight'] + 0"
+    width: "Math.max(val.标题文字.width, val.详情文字.width) + 200 < 500 ? 500 : Math.max(val.标题文字.width, val.详情文字.width) + 200"
+    height: "Math.max(100, val.详情文字.y + val.详情文字.height + 20)"
   children:
     卡片背景:
       type: Texture
       attribute:
-        width: "self.parent.data['cardWidth'] + 0"
-        height: "self.parent.data['cardHeight'] + 0"
+        width: "self.parent.width"
+        height: "self.parent.height"
         normal: ~25,25,35,200
     图标文字:
       type: Text
@@ -23,6 +24,7 @@
         through: true
     标题文字:
       type: Text
+      val: 标题文字
       attribute:
         fontSize: 64
         x: 160
@@ -31,6 +33,7 @@
         through: true
     详情文字:
       type: Text
+      val: 详情文字
       attribute:
         fontSize: 64
         x: 160

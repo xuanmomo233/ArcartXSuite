@@ -1,9 +1,10 @@
 package xuanmo.arcartxsuite.mail.config;
 
 /**
- * 邮件 UI 配置，定义收件箱/写信/日志/管理界面的 UI ID、注册策略与通知卡片渲染参数。
+ * 邮件 UI 配置，定义收件箱/写信/日志/管理界面的 UI ID、注册策略与通知卡片换行参数。
  * <p>
  * 关联模块：mail。由 {@link MailModuleConfiguration#load} 从 {@code ui} 节解析。
+ * 卡片的宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应，Java 不再计算。
  *
  * @param inboxUiId            收件箱 UI ID
  * @param composeUiId          写信 UI ID
@@ -13,14 +14,9 @@ package xuanmo.arcartxsuite.mail.config;
  * @param overwriteUiFiles      是否覆盖用户已修改的 UI 文件
  * @param composeInventoryTitle 写信界面物品栏标题
  * @param notifyCardId          通知卡片 ID
- * @param charWidthFull         全角字符宽度（像素）
- * @param charWidthHalf         半角字符宽度（像素）
- * @param lineHeight            行高（像素）
- * @param maxLineWidth          最大行宽（像素）
- * @param textOffsetX           文本 X 轴偏移
- * @param padRight              右侧内边距
- * @param baseHeight            基础高度
- * @param minWidth              最小宽度
+ * @param charWidthFull         全角字符宽度（像素），用于换行测算
+ * @param charWidthHalf         半角字符宽度（像素），用于换行测算
+ * @param maxLineWidth          最大行宽（像素），超出则自动换行
  */
 public record MailUiConfiguration(
     String inboxUiId,
@@ -33,11 +29,6 @@ public record MailUiConfiguration(
     String notifyCardId,
     int charWidthFull,
     int charWidthHalf,
-    int lineHeight,
-    int maxLineWidth,
-    int textOffsetX,
-    int padRight,
-    int baseHeight,
-    int minWidth
+    int maxLineWidth
 ) {
 }

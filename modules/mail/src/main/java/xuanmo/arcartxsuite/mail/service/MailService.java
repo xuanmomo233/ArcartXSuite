@@ -1619,20 +1619,11 @@ public final class MailService implements Listener {
             MailUiConfiguration ui = configuration.ui();
             String subject = message.subject() == null ? "" : message.subject();
             int textWidth = measureTextWidth(subject, ui.charWidthFull(), ui.charWidthHalf());
-            int maxLineWidth = ui.maxLineWidth();
-            int cardWidth;
-            int cardHeight;
             List<String> lines;
-            if (textWidth <= maxLineWidth) {
-                // 单行：宽度跟随文字
-                cardWidth = Math.max(ui.minWidth(), ui.textOffsetX() + textWidth + ui.padRight());
-                cardHeight = ui.baseHeight();
+            if (textWidth <= ui.maxLineWidth()) {
                 lines = List.of(subject);
             } else {
-                // 多行：固定宽度，换行扩高
-                cardWidth = Math.max(ui.minWidth(), ui.textOffsetX() + maxLineWidth + ui.padRight());
-                lines = wrapText(subject, maxLineWidth, ui.charWidthFull(), ui.charWidthHalf());
-                cardHeight = ui.baseHeight() + (lines.size() - 1) * ui.lineHeight();
+                lines = wrapText(subject, ui.maxLineWidth(), ui.charWidthFull(), ui.charWidthHalf());
             }
             Map<String, String> payload = new LinkedHashMap<>();
             payload.put("senderName", message.senderName() == null ? "系统" : message.senderName());
@@ -1641,8 +1632,6 @@ public final class MailService implements Listener {
             for (int i = 0; i < lines.size(); i++) {
                 payload.put("msg" + i, lines.get(i));
             }
-            payload.put("cardWidth", String.valueOf(cardWidth));
-            payload.put("cardHeight", String.valueOf(cardHeight));
             bridge.sendChatCard(recipient, cardId, payload);
         } catch (Exception exception) {
             if (configuration.debug()) {

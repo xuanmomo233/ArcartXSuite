@@ -68,18 +68,8 @@ ui:
   notify-char-width-full: 31
   # 半角字符占位宽度
   notify-char-width-half: 18
-  # 每行文字高度
-  notify-line-height: 36
   # 文字区最大宽度（超过此值换行）
   notify-max-line-width: 750
-  # 文字区 X 偏移
-  notify-text-offset-x: 170
-  # 右侧内边距
-  notify-pad-right: 100
-  # 卡片单行基础高度
-  notify-base-height: 100
-  # 卡片最小宽度
-  notify-min-width: 550
 
 player-send:
   # 玩家写信功能总开关。
