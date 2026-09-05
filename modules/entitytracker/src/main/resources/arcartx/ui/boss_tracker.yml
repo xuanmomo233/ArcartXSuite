@@ -173,6 +173,7 @@ controls:
           point: ~top_center
           x: -240
           y: 58
+          width: 480
           spaceBetween: 8           # 卡片间距 8 像素
           visible: var.isVisible
         children:

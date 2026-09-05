@@ -92,7 +92,7 @@ public final class MailService implements Listener {
     private static final int ADMIN_ATTACHMENT_SLOTS = 6;
     private static final String STARTER_PRESET_RESOURCE_PATH = "mail/presets/starter.yml";
     private static final int INBOX_PAGE_SIZE = 6;
-    private static final int LOG_PAGE_SIZE = 10;
+    private static final int LOG_PAGE_SIZE = 200;
     private static final String MESSAGE_PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .withZone(ZoneId.systemDefault());
@@ -642,6 +642,11 @@ public final class MailService implements Listener {
     }
 
     private void sendComposeInitPacket(Player player, ComposeSession session) {
+        // 初始化时检查二级密码状态：已设置且未解锁则直接显示密码面板
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordAccess();
+        if (passwordAccess != null && passwordAccess.isPasswordSet(player) && !passwordAccess.isUnlocked(player)) {
+            composePasswordPanels.add(player.getUniqueId());
+        }
         Map<String, Object> composePacket = MailComposePacketFactory.buildInit(
             session.sessionId(),
             configuration,
@@ -675,7 +680,7 @@ public final class MailService implements Listener {
     private Map<String, Object> serializeBackpack(Player player) {
         Map<String, Object> jsons = new LinkedHashMap<>();
         ItemStack[] contents = player.getInventory().getContents();
-        for (int i = 0; i < Math.min(35, contents.length); i++) {
+        for (int i = 0; i < Math.min(36, contents.length); i++) {
             ItemStack item = contents[i];
             if (item != null && !item.getType().isAir()) {
                 jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
@@ -1064,17 +1069,6 @@ public final class MailService implements Listener {
                 }
                 return true;
             }
-            case "change-fee-currency" -> {
-                if (data != null && data.size() >= 2) {
-                    String currencyId = safe(data.get(1));
-                    ComposeSession session = composeSessions.get(player.getUniqueId());
-                    if (session != null && currencyId != null && !currencyId.isBlank()) {
-                        session.setFeeCurrency(currencyId);
-                        pushComposeQuote(player, calculateCurrentComposeQuote(player));
-                    }
-                }
-                return true;
-            }
             case "compose-add-attachment" -> {
                 if (data != null && data.size() >= 3) {
                     int slot = (int) parseLong(data.get(1), -1);
@@ -1147,14 +1141,6 @@ public final class MailService implements Listener {
             }
             case "logs" -> {
                 sendPlayerResult(player, openLogs(player));
-                return true;
-            }
-            case "logs-prev" -> {
-                changeLogPage(player, -1);
-                return true;
-            }
-            case "logs-next" -> {
-                changeLogPage(player, 1);
                 return true;
             }
             case "admin" -> {
@@ -1252,22 +1238,28 @@ public final class MailService implements Listener {
             payload.put("subject", safe(def.subject()));
             payload.put("body", safe(def.body()));
             payload.put("expiresAfterDays", def.expiresAfter() != null ? def.expiresAfter().toDays() : 15);
-            List<Map<String, Object>> currencies = new ArrayList<>();
+            // 货币附件序列化为 "currency:amount:desc|currency:amount:desc" 字符串，供 UI 输入框直接显示
+            StringBuilder currencyStr = new StringBuilder();
             if (def.attachments() != null) {
                 for (MailAttachment att : def.attachments()) {
                     if (att.isCurrency()) {
-                        Map<String, Object> c = new LinkedHashMap<>();
-                        c.put("currency", att.currencyId());
-                        c.put("amount", att.amount());
-                        c.put("description", att.description());
-                        currencies.add(c);
+                        if (currencyStr.length() > 0) currencyStr.append("|");
+                        currencyStr.append(att.currencyId()).append(":").append(att.amount()).append(":").append(att.description());
                     }
                 }
             }
-            payload.put("currencyAttachments", currencies);
+            payload.put("currencyAttachments", currencyStr.toString());
             long itemCount = def.attachments() == null ? 0 : def.attachments().stream().filter(MailAttachment::isItem).count();
             payload.put("itemAttachmentCount", itemCount);
-            payload.put("claimCommands", def.claimCommands() != null ? def.claimCommands() : List.of());
+            // 领取命令序列化为 "cmd1|cmd2" 字符串，供 UI 输入框直接显示
+            StringBuilder cmdStr = new StringBuilder();
+            if (def.claimCommands() != null) {
+                for (String cmd : def.claimCommands()) {
+                    if (cmdStr.length() > 0) cmdStr.append("|");
+                    cmdStr.append(cmd);
+                }
+            }
+            payload.put("claimCommands", cmdStr.toString());
             List<String> condStrings = new ArrayList<>();
             if (def.claimConditions() != null) {
                 for (ScriptCondition cond : def.claimConditions()) {
@@ -1686,7 +1678,7 @@ public final class MailService implements Listener {
 
             int claimableCount = (int) page.entries().stream().filter(MailMessage::claimable).count();
             MailMailboxStats stats = repository.loadStats(player.getUniqueId());
-            Map<String, Object> inboxPacket = MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages);
+            Map<String, Object> inboxPacket = MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages, configuration.ui().inboxPreviewMaxChars());
             inboxPacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
             bridge.sendPacket(
                 player,
@@ -1734,13 +1726,6 @@ public final class MailService implements Listener {
             this.logger.warning("打开邮件日志失败: " + exception.getMessage());
             return MailOperationResult.failure(message("player.logs-open-failed"));
         }
-    }
-
-    private void changeLogPage(Player player, int delta) {
-        UUID playerUuid = player.getUniqueId();
-        int nextPage = Math.max(1, logPages.getOrDefault(playerUuid, 1) + delta);
-        logPages.put(playerUuid, nextPage);
-        refreshLogs(player, false);
     }
 
     private void selectMail(Player player, long mailId) {
@@ -2084,7 +2069,7 @@ public final class MailService implements Listener {
         if (session == null) {
             return MailOperationResult.failure("Admin 编辑会话不存在");
         }
-        if (slot < 0 || slot >= 35) {
+        if (slot < 0 || slot >= 36) {
             return MailOperationResult.failure("无效槽位");
         }
         ItemStack item = player.getInventory().getItem(slot);
@@ -2163,7 +2148,6 @@ public final class MailService implements Listener {
     private String requiredUiForAction(String action) {
         if ("compose-send".equals(action)
             || "password-unlock".equals(action)
-            || "change-fee-currency".equals(action)
             || "compose-add-attachment".equals(action)
             || "compose-remove-attachment".equals(action)) {
             return composeUiId;

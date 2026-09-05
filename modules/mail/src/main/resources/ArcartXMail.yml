@@ -64,6 +64,9 @@ ui:
   # 新邮件到达时在聊天栏显示的 ArcartX 卡片 ID；留空则不发送通知卡片。
   notify-card-id: "axs_mail_notify"
 
+  # 收件箱列表预览文字的最大字符数（超过则截断并追加 "..."）。
+  inbox-preview-max-chars: 40
+
   # 全角字符占位宽度
   notify-char-width-full: 31
   # 半角字符占位宽度

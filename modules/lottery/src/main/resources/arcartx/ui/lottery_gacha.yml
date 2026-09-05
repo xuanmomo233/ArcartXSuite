@@ -1031,6 +1031,7 @@ controls:
                   point: ~top_left
                   x: 66
                   y: 278
+                  height: 2
                   spaceBetween: 9
                 children:
                   点1:
@@ -1320,6 +1321,7 @@ controls:
                     attribute:
                       point: ~bottom_center
                       y: -102
+                      height: 60
                       spaceBetween: 4
                     children:
                       星1:
@@ -3226,6 +3228,7 @@ controls:
               point: ~top_left
               x: 24
               y: 76
+              height: 60
               spaceBetween: 28
             action:
               create: |-

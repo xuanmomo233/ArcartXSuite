@@ -651,6 +651,7 @@ controls:
                   x: 24
                   y: 68
                   width: "var.contentW - 112"
+                  height: 96
                   spaceBetween: 12
                 children:
                   # 队列槽模板（索引0）

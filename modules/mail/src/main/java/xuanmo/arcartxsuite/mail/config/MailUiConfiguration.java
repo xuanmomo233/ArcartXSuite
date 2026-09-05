@@ -17,6 +17,7 @@ package xuanmo.arcartxsuite.mail.config;
  * @param charWidthFull         全角字符宽度（像素），用于换行测算
  * @param charWidthHalf         半角字符宽度（像素），用于换行测算
  * @param maxLineWidth          最大行宽（像素），超出则自动换行
+ * @param inboxPreviewMaxChars  收件箱列表预览文字最大字符数
  */
 public record MailUiConfiguration(
     String inboxUiId,
@@ -29,6 +30,7 @@ public record MailUiConfiguration(
     String notifyCardId,
     int charWidthFull,
     int charWidthHalf,
-    int maxLineWidth
+    int maxLineWidth,
+    int inboxPreviewMaxChars
 ) {
 }

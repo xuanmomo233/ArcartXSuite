@@ -33,7 +33,7 @@ public final class MailInboxPacketFactory {
         MailInboxFilter filter,
         int pageClaimableCount
     ) {
-        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, null);
+        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, null, 40);
     }
 
     public static Map<String, Object> build(
@@ -43,6 +43,18 @@ public final class MailInboxPacketFactory {
         MailInboxFilter filter,
         int pageClaimableCount,
         MessageProvider messages
+    ) {
+        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, messages, 40);
+    }
+
+    public static Map<String, Object> build(
+        MailPage<MailMessage> mailPage,
+        long selectedMailId,
+        MailMailboxStats stats,
+        MailInboxFilter filter,
+        int pageClaimableCount,
+        MessageProvider messages,
+        int inboxPreviewMaxChars
     ) {
         Map<String, Object> packet = new LinkedHashMap<>();
         Map<String, Object> entries = new LinkedHashMap<>();
@@ -64,7 +76,7 @@ public final class MailInboxPacketFactory {
             entry.put("status_text", statusText(message.status(), messages));
             entry.put("created_at_text", TIME_FORMATTER.format(message.createdAt()));
             entry.put("expires_at_text", message.expiresAt() == null ? message(messages, "ui.expires-never", "永久") : TIME_FORMATTER.format(message.expiresAt()));
-            entry.put("preview", preview(message.body()));
+            entry.put("preview", preview(message.body(), inboxPreviewMaxChars));
             entry.put("attachment_summary", attachmentSummary(message.attachments(), messages));
             entry.put("claimable", message.claimable());
             entry.put("unread", message.unread());
@@ -100,12 +112,12 @@ public final class MailInboxPacketFactory {
         return packet;
     }
 
-    private static String preview(String text) {
+    private static String preview(String text, int maxChars) {
         if (text == null || text.isBlank()) {
             return "";
         }
         String singleLine = text.replace('\n', ' ').trim();
-        return singleLine.length() > 42 ? singleLine.substring(0, 42) + "..." : singleLine;
+        return singleLine.length() > maxChars ? singleLine.substring(0, maxChars) + "..." : singleLine;
     }
 
     private static List<String> bodyLines(String text, MessageProvider messages) {
@@ -114,7 +126,7 @@ public final class MailInboxPacketFactory {
         }
         return text.lines()
             .map(String::stripTrailing)
-            .map(line -> line.isBlank() ? " " : "&0" + line)
+            .map(line -> line.isBlank() ? " " : line)
             .toList();
     }
 

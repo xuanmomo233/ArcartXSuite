@@ -17,7 +17,7 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     compileOnly("org.black_ixx:playerpoints:3.3.5")
     compileOnly(files("../libs/XConomy-Paper-2.26.3.jar"))
-    compileOnly(files("../libs/Rondo-1.0.0-SNAPSHOT.jar"))
+    compileOnly(files("../libs/Rondo-1.1.0-SNAPSHOT.jar"))
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")

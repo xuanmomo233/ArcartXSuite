@@ -70,7 +70,7 @@ ui:
       while(val.preset_data.childrenCount() > 1){
         val.preset_data.get(1).remove()
       }
-      for(i in range(1, var.maxPresetCount - 1)){
+      for(i in range(1, var.maxPresetCount)){
         key = i.round()
         e = val.preset_data['预设行'].copy('预设行' + key)
         e.entryKey = key
@@ -93,12 +93,46 @@ ui:
       var.resultMsg = none
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
+      // 数据就绪后设置输入框初始内容（ChatTextBox 不会自动绑定变量）
+      val.编辑编号框.setContent(var.editId != none ? var.editId : '')
+      val.编辑显示名框.setContent(var.editDisplayName != none ? var.editDisplayName : '')
+      val.编辑主题框.setContent(var.editSubject != none ? var.editSubject : '')
+      val.编辑正文框.setContent(var.editBody != none ? var.editBody : '')
+      val.编辑过期框.setContent(var.editExpiresDays != none ? var.editExpiresDays + '' : '')
+      val.编辑货币框.setContent(var.editCurrencies != none ? var.editCurrencies : '')
+      val.编辑命令框.setContent(var.editCommands != none ? var.editCommands : '')
+      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      for(i in range(0, 6)){
+        slot = val.管理附件网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
+      for(i in range(0, 36)){
+        slot = val.管理背包网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
     # packetHandler: attachment-count
     # 包字段: itemAttachmentCount/attachment_jsons/backpack_jsons
     attachment-count: |-
       var.editItemCount = packet['itemAttachmentCount'].round()
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
+      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      for(i in range(0, 6)){
+        slot = val.管理附件网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
+      for(i in range(0, 36)){
+        slot = val.管理背包网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
     # packetHandler: result
     # 包字段: success/message
     result: |-
@@ -426,6 +460,14 @@ controls:
                 var.editFound = false
                 var.view = 'edit'
                 var.resultMsg = none
+                // 清空输入框内容
+                val.编辑编号框.setContent('')
+                val.编辑显示名框.setContent('')
+                val.编辑主题框.setContent('')
+                val.编辑正文框.setContent('')
+                val.编辑过期框.setContent('15')
+                val.编辑货币框.setContent('')
+                val.编辑命令框.setContent('')
                 Packet.send('AXS_MAIL', 'admin-preset-new')
             children:
               新建预设底:
@@ -586,14 +628,14 @@ controls:
                   y: 64
                   width: "self.parent.width - 44"
                   height: "self.parent.height - 80"
-                  moveY: "self.parent.parent['预设滑块'].getDragYRatio()"
+                  moveY: "self.parent['预设滑块'].getDragYRatio()"
                 action:
                   wheel: |-
                     if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                     }
                     if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                     }
                 children:
                   preset_stack:
@@ -831,23 +873,38 @@ controls:
                   texts: "~&f预设 ID"
                   fontSize: 32
               输入编号框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 104
                   width: 320
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editId
-                  lock: "var.editFound == true"
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  编号输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  编号输入框文本:
+                    type: ChatTextBox
+                    val: 编辑编号框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 300
+                      height: 32
+                      fontSize: 36
+                      editable: "var.editFound != true"
+                    action:
+                      textChange: |-
+                        var.editId = self.getContent()
               显示名标签:
                 type: Text
                 attribute:
@@ -857,22 +914,37 @@ controls:
                   texts: "~&f显示名"
                   fontSize: 32
               输入显示名框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 360
                   y: 104
                   width: 320
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editDisplayName
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  显示名输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  显示名输入框文本:
+                    type: ChatTextBox
+                    val: 编辑显示名框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 300
+                      height: 32
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.editDisplayName = self.getContent()
               启用标签:
                 type: Text
                 attribute:
@@ -921,22 +993,37 @@ controls:
                   texts: "~&f标题"
                   fontSize: 32
               输入主题框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 192
                   width: 760
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editSubject
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  主题输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  主题输入框文本:
+                    type: ChatTextBox
+                    val: 编辑主题框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 740
+                      height: 32
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.editSubject = self.getContent()
               正文标签:
                 type: Text
                 attribute:
@@ -946,22 +1033,38 @@ controls:
                   texts: "~&f正文"
                   fontSize: 32
               输入正文框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 280
                   width: 760
                   height: 160
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editBody
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  正文输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  正文输入框文本:
+                    type: ChatTextBox
+                    val: 编辑正文框
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: 740
+                      height: 148
+                      fontSize: 36
+                      allowNewLine: true
+                    action:
+                      textChange: |-
+                        var.editBody = self.getContent()
               过期标签:
                 type: Text
                 attribute:
@@ -971,22 +1074,37 @@ controls:
                   texts: "~&f过期(天)"
                   fontSize: 32
               输入过期框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 488
                   width: 160
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editExpiresDays
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  过期输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  过期输入框文本:
+                    type: ChatTextBox
+                    val: 编辑过期框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 140
+                      height: 32
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.editExpiresDays = self.getContent()
               货币附件标签:
                 type: Text
                 attribute:
@@ -996,22 +1114,37 @@ controls:
                   texts: "~&f货币附件"
                   fontSize: 32
               输入货币框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 200
                   y: 488
                   width: 576
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editCurrencies
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  货币输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  货币输入框文本:
+                    type: ChatTextBox
+                    val: 编辑货币框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 556
+                      height: 32
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.editCurrencies = self.getContent()
               命令标签:
                 type: Text
                 attribute:
@@ -1021,22 +1154,37 @@ controls:
                   texts: "~&f领取命令"
                   fontSize: 32
               输入命令框:
-                type: ChatTextBox
+                type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
                   y: 576
                   width: 760
                   height: 40
-                  fontSize: 36
-                  background: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                  val: var.editCommands
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                children:
+                  命令输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  命令输入框文本:
+                    type: ChatTextBox
+                    val: 编辑命令框
+                    attribute:
+                      x: 10
+                      y: 4
+                      width: 740
+                      height: 32
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.editCommands = self.getContent()
               编辑摘要:
                 type: Text
                 attribute:
@@ -1157,32 +1305,33 @@ controls:
                       fontSize: 32
                   附件槽位网格:
                     type: HGrid
+                    val: "管理附件网格"
                     attribute:
                       point: ~top_left
                       x: 14
-                      y: 232
+                      y: 220
                       spaceBetweenX: 6
                       spaceBetweenY: 6
                       column: 6
                     action:
                       create: |-
-                        for(i in range(1,5)){
+                        for(i in range(1,6)){
                           slot = self['管理槽位0'].copy('slot' + i)
-                          slot.id = i
+                          slot.id = i.round
                         }
                     children:
                       管理槽位0:
                         type: Slot
                         attribute:
-                          width: 54
-                          height: 54
+                          width: 70
+                          height: 70
                           normal: "~Frosted:0;36,38,48,245"
                           hover: "~Frosted:0;60,64,82,245"
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
                           slotType: ~Icon
-                          id: 0
+                          id: 0.round()
                           seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.id] != none && var.attachmentJsons[self.id] != '' ? var.attachmentJsons[self.id] : var.air)"
                         action:
                           clickLeft: |-
@@ -1198,7 +1347,7 @@ controls:
                   x: 800
                   y: 388
                   width: "self.parent.width - 816"
-                  height: "self.parent.height - 400"
+                  height: "self.parent.height - 388 - 16"
                 children:
                   背包底:
                     type: Texture
@@ -1222,6 +1371,7 @@ controls:
                       fontSize: 36
                   背包槽位网格:
                     type: HGrid
+                    val: "管理背包网格"
                     attribute:
                       point: ~top_left
                       x: 14
@@ -1231,23 +1381,23 @@ controls:
                       column: 6
                     action:
                       create: |-
-                        for(i in range(1,35)){
+                        for(i in range(1,36)){
                           slot = self['背包槽位0'].copy('bp_slot' + i)
-                          slot.id = i
+                          slot.id = i.round
                         }
                     children:
                       背包槽位0:
                         type: Slot
                         attribute:
-                          width: 54
-                          height: 54
+                          width: 70
+                          height: 70
                           normal: "~Frosted:0;36,38,48,245"
                           hover: "~Frosted:0;60,64,82,245"
                           shape: ~round_rect
                           radius: 6
                           itemScale: 0.72
                           slotType: ~Icon
-                          id: 0
+                          id: 0.round()
                           seticon: "self.setItemIcon(var.backpackJsons != none && var.backpackJsons[self.id] != none && var.backpackJsons[self.id] != '' ? var.backpackJsons[self.id] : var.air)"
                         action:
                           clickLeft: |-

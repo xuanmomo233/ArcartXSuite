@@ -1,12 +1,10 @@
 package xuanmo.arcartxsuite.mail.service;
 
 import java.math.BigDecimal;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
-import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
 import xuanmo.arcartxsuite.mail.model.MailSendQuote;
@@ -83,7 +81,6 @@ public final class MailComposePacketFactory {
         payload.put("max_attachments", Math.max(0, maxAttachments));
         payload.put("attachment_count", Math.max(0, attachmentCount));
         payload.put("fee_currency", configuration.playerSend().feeCurrency());
-        payload.put("currencies", currencies(currencyBridgeManager, messages));
         payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
         payload.put("password_panel", passwordPanel(passwordPanelVisible));
         applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
@@ -217,23 +214,6 @@ public final class MailComposePacketFactory {
         payload.put("total_fee_currency", effectiveQuote.feeCurrencyId());
         payload.put("attachment_amounts", stringMap(effectiveQuote.attachmentAmounts(), currencyBridgeManager));
         payload.put("attachment_taxes", stringMap(effectiveQuote.attachmentTaxes(), currencyBridgeManager));
-    }
-
-    private static Map<String, Object> currencies(CurrencyBridgeAPI currencyBridgeManager, MessageProvider messages) {
-        Map<String, Object> entries = new LinkedHashMap<>();
-        Collection<CurrencyDefinition> definitions = currencyBridgeManager.definitions();
-        for (CurrencyDefinition definition : definitions) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            var bridge = currencyBridgeManager.bridge(definition.id());
-            item.put("id", definition.id());
-            item.put("display_name", definition.displayName());
-            item.put("available", bridge != null && bridge.available());
-            item.put("unavailable_reason", bridge == null
-                ? (messages == null ? "未配置桥接" : messages.get("ui.currency-bridge-unavailable", definition.id()))
-                : bridge.unavailableReason());
-            entries.put(definition.id(), item);
-        }
-        return entries;
     }
 
     private static Map<String, Object> stringMap(Map<String, BigDecimal> values, CurrencyBridgeAPI currencyBridgeManager) {

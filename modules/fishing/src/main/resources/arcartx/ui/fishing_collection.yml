@@ -599,6 +599,7 @@ controls:
               point: ~top_left
               x: 24
               y: 116
+              height: 50
               spaceBetween: 12
             children:
               标签_全部:

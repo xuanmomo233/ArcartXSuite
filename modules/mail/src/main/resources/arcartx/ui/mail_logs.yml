@@ -363,14 +363,6 @@ controls:
               y: 362
               texts: "'&f总日志 &b' + var.totalCount.round()"
               fontSize: 32
-          摘要页码:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 402
-              texts: "'&f当前页 &b' + var.page.round() + '&f/&b' + var.maxPage.round()"
-              fontSize: 32
 
       # ── 内容区 ──────────────────────────────────────────
       # 范式: 大白毛玻璃底(255,255,255,100) + 暗色面板分区(36,38,48,210)
@@ -403,7 +395,7 @@ controls:
               x: 24
               y: 24
               width: "var.contentW - 48"
-              height: "var.viewH - 144 - 48 - 72"
+              height: "var.viewH - 144 - 48"
             children:
               列表底:
                 type: Texture
@@ -531,77 +523,3 @@ controls:
                               y: 50
                               texts: "'&f' + self.parent.entry['content']"
                               fontSize: 32
-
-          # 分页按钮栏
-          分页栏:
-            type: HStack
-            attribute:
-              point: ~bottom_left
-              x: 24
-              y: -12
-              spaceBetween: 12
-            children:
-              上一页按钮:
-                type: Canvas
-                attribute:
-                  width: 120
-                  height: 48
-                action:
-                  clickLeft: |-
-                    Packet.send('AXS_MAIL', 'logs-prev')
-                children:
-                  上一页底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  上一页文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f上一页"
-                      fontSize: 36
-                      through: true
-              页码显示:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  texts: "'&f第 &b' + var.page.round() + ' &f页 / 共 &b' + var.maxPage.round() + ' &f页'"
-                  fontSize: 36
-              下一页按钮:
-                type: Canvas
-                attribute:
-                  width: 120
-                  height: 48
-                action:
-                  clickLeft: |-
-                    Packet.send('AXS_MAIL', 'logs-next')
-                children:
-                  下一页底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  下一页文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f下一页"
-                      fontSize: 36
-                      through: true

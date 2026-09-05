@@ -311,6 +311,7 @@ controls:
             attribute:
               x: 36
               y: 680
+              height: 48
               spaceBetween: 20
             children:
               上一页按钮:
@@ -364,6 +365,7 @@ controls:
             attribute:
               x: 520
               y: 680
+              height: 48
               spaceBetween: 20
             children:
               页脚行:

@@ -121,26 +121,24 @@ ui:
       var.composeVault = '0'
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.passwordText = ''
-      var.currencies = packet['currencies']
-      var.feeCurrency = packet['fee_currency']
       var.totalFeeCurrency = packet['total_fee_currency']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
-      if(var.currencies != none){
-        while(val.currency_list.childrenCount() > 1){
-          val.currency_list.get(1).remove()
-        }
-        for(key in var.currencies.keys()){
-          entry = var.currencies[key]
-          if(entry != none && entry['available'] == true){
-            btn = val.currency_list['货币按钮'].copy('货币按钮' + key)
-            btn.currencyId = key
-            btn.currencyName = entry['display_name'] != none && entry['display_name'] != '' ? entry['display_name'] : key
-          }
+      var.actionBusy = false
+      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      for(i in range(0, 5)){
+        slot = val.附件网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
         }
       }
-      var.actionBusy = false
+      for(i in range(0, 35)){
+        slot = val.背包网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
     # packetHandler: update
     # 包字段:
     #   - base_fee / allow_vault / quote_success / quote_message
@@ -161,6 +159,19 @@ ui:
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
       var.actionBusy = false
+      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      for(i in range(0, 5)){
+        slot = val.附件网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
+      for(i in range(0, 35)){
+        slot = val.背包网格.get(i.round)
+        if(slot != none){
+          slot.seticon()
+        }
+      }
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 # 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项) + 内容区(左:槽位 右:表单 底:按钮)
@@ -500,6 +511,7 @@ controls:
                   fontSize: 32
               槽位网格:
                 type: HGrid
+                val: "附件网格"
                 attribute:
                   point: ~top_left
                   x: 16
@@ -511,21 +523,21 @@ controls:
                   create: |-
                     for(i in range(1,5)){
                       slot = self['槽位0'].copy('slot' + i)
-                      slot.id = i
+                      slot.id = i.round
                     }
                 children:
                   槽位0:
                     type: Slot
                     attribute:
-                      width: 54
-                      height: 54
+                      width: 70
+                      height: 70
                       normal: "~Frosted:0;36,38,48,245"
                       hover: "~Frosted:0;60,64,82,245"
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
                       slotType: ~Icon
-                      id: 0
+                      id: 0.round()
                       visible: "self.id < var.maxAttachments"
                       seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.id] != none && var.attachmentJsons[self.id] != '' ? var.attachmentJsons[self.id] : var.air)"
                     action:
@@ -567,6 +579,7 @@ controls:
                   fontSize: 36
               背包网格:
                 type: HGrid
+                val: "背包网格"
                 attribute:
                   point: ~top_left
                   x: 16
@@ -578,21 +591,21 @@ controls:
                   create: |-
                     for(i in range(1,35)){
                       slot = self['槽位0'].copy('slot' + i)
-                      slot.id = i
+                      slot.id = i.round
                     }
                 children:
                   槽位0:
                     type: Slot
                     attribute:
-                      width: 54
-                      height: 54
+                      width: 70
+                      height: 70
                       normal: "~Frosted:0;36,38,48,245"
                       hover: "~Frosted:0;60,64,82,245"
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
                       slotType: ~Icon
-                      id: 0
+                      id: 0.round()
                       seticon: "self.setItemIcon(var.backpackJsons != none && var.backpackJsons[self.id] != none && var.backpackJsons[self.id] != '' ? var.backpackJsons[self.id] : var.air)"
                     action:
                       clickLeft: |-
@@ -603,6 +616,45 @@ controls:
                       stroke:
                         width: 2
                         color: ~255,255,255,230
+              # ── 分界线（带标题） ──
+              分界线左:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 524
+                  width: 120
+                  height: 2
+                  normal: ~60,64,82,220
+              分界线标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 514
+                  texts: "~&7邮寄注意事项"
+                  fontSize: 32
+              分界线右:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 524
+                  width: 120
+                  height: 2
+                  normal: ~60,64,82,220
+              注意事项:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 540
+                  texts:
+                    - "~&f• 言语文明，请勿在邮件中发送辱骂、骚扰或违规内容"
+                    - "~&f• 左键背包物品放入1个，右键放入整组"
+                    - "~&f• 左键附件槽位可退回物品到背包"
+                    - "~&f• 金币附件需填写数额，发送时一并扣除"
+                    - "~&f• 关闭界面时物品与金币将自动退回"
+                  fontSize: 36
 
           # 右列：表单输入区
           表单区:
@@ -663,7 +715,7 @@ controls:
                       height: 32
                       length: 32
                       emptyText: "~&f输入玩家名"
-                      fontSize: 36
+                      fontSize: 50
                     action:
                       textChange: |-
                         var.composeRecipient = self.getContent()
@@ -704,7 +756,7 @@ controls:
                       height: 32
                       length: 48
                       emptyText: "~&f输入邮件标题"
-                      fontSize: 36
+                      fontSize: 50
                     action:
                       textChange: |-
                         var.composeSubject = self.getContent()
@@ -746,7 +798,7 @@ controls:
                       length: 400
                       allowNewLine: true
                       emptyText: "~&f支持多行正文"
-                      fontSize: 36
+                      fontSize: 50
                     action:
                       textChange: |-
                         var.composeBody = self.getContent()
@@ -758,70 +810,23 @@ controls:
                   y: 396
                   texts: "'&f标题上限 &b' + var.subjectMax.round() + '  &f正文上限 &b' + var.bodyMax.round()"
                   fontSize: 32
-              邮费货币标签:
+              # ── 金币附件区 ──
+              金币附件标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 436
-                  texts: "~&f邮费货币"
+                  y: 440
+                  texts: "~&f邮寄金币数额:"
                   fontSize: 36
-              货币选择栏:
-                val: currency_list
-                type: HStack
-                attribute:
-                  point: ~top_left
-                  x: 160
-                  y: 436
-                  spaceBetween: 8
-                children:
-                  货币按钮:
-                    type: Canvas
-                    attribute:
-                      width: 120
-                      height: 40
-                      currencyId: ''
-                      currencyName: ''
-                      visible: "self.currencyId != '' && self.currencyId != var.totalFeeCurrency"
-                    action:
-                      clickLeft: |-
-                        Packet.send('AXS_MAIL', 'change-fee-currency', self.currencyId)
-                    children:
-                      货币背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~36,38,48,245
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 3
-                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                      货币文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: "self.parent.currencyName != none ? self.parent.currencyName : ''"
-                          fontSize: 32
-                          through: true
-              当前货币显示:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 160
-                  y: 436
-                  texts: "(var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币')"
-                  fontSize: 36
-                  visible: "val.currency_list.childrenCount() <= 1"
+                  visible: "var.allowVault == true"
               金币输入框:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 484
-                  width: 360
+                  width: "self.parent.width - 40"
                   height: 40
                   visible: "var.allowVault == true"
                 children:
@@ -839,31 +844,48 @@ controls:
                   金币输入框文本:
                     type: TextBox
                     attribute:
-                      x: 10
+                      x: 12
                       y: 4
-                      width: 340
+                      width: "self.parent.width - 24"
                       height: 32
                       length: 24
-                      emptyText: "~&f填写金币附件数量"
-                      fontSize: 36
+                      emptyText: "~&7填写金币附件数量"
+                      fontSize: 50
                     action:
                       textChange: |-
                         var.composeVault = self.getContent()
+              # ── 费用汇总区 ──
+              费用汇总底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 548
+                  width: "self.parent.width - 40"
+                  height: 44
+                  through: true
+                  normal: ~28,30,40,200
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~60,64,82,200
               费用汇总:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 20
-                  y: 536
-                  texts: "'&f总费用 &b' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + '  &f手续费 &b' + var.itemFee + (var.quoteMessage == none ? '' : '  &f提示 &b' + var.quoteMessage)"
+                  x: 36
+                  y: 560
+                  texts: "'&f邮费 &a' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + ' &7(含手续费 &a' + var.itemFee + ')' + (var.quoteMessage == none ? '' : '  &e' + var.quoteMessage)"
                   fontSize: 32
-              # 二级密码面板（条件显示）
+              # ── 二级密码面板（条件显示） ──
               二级密码面板:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 580
+                  y: 608
                   width: "self.parent.width - 40"
                   height: 80
                   visible: "var.passwordPanelVisible == true"
@@ -872,7 +894,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,38,48,245
+                      normal: ~48,36,28,220
                       shape: ~round_rect
                       radius: 10
                     effect:
@@ -883,18 +905,18 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 10
+                      x: 16
+                      y: 6
                       texts: "~&e请输入二级密码解锁后重试"
-                      fontSize: 32
+                      fontSize: 28
                   密码输入框:
                     type: Canvas
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 40
-                      width: 300
-                      height: 32
+                      x: 16
+                      y: 34
+                      width: "self.parent.width - 140"
+                      height: 40
                     children:
                       密码输入底:
                         type: Texture
@@ -902,32 +924,33 @@ controls:
                           point: ~stretch_all
                           normal: ~28,30,40,245
                           shape: ~round_rect
-                          radius: 8
+                          radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                            width: 3
+                            color: ~255,255,255,180
                       密码输入框文本:
                         type: TextBox
                         attribute:
-                          x: 8
-                          y: 2
-                          width: 284
-                          height: 28
+                          x: 12
+                          y: 4
+                          width: "self.parent.width - 24"
+                          height: 32
                           length: 64
-                          emptyText: "~&f输入二级密码"
-                          fontSize: 32
+                          emptyText: "~&7输入二级密码"
+                          passwordChar: "*"
+                          fontSize: 50
                         action:
                           textChange: |-
                             var.passwordText = self.getContent()
                   密码确认按钮:
                     type: Canvas
                     attribute:
-                      point: ~top_left
-                      x: 328
-                      y: 40
+                      point: ~top_right
+                      x: -16
+                      y: 34
                       width: 100
-                      height: 32
+                      height: 40
                     action:
                       clickLeft: |-
                         Packet.send('AXS_MAIL', 'password-unlock', var.passwordText)
@@ -940,17 +963,17 @@ controls:
                           through: true
                           normal: ~80,180,120,230
                           shape: ~round_rect
-                          radius: 8
+                          radius: 10
                         effect:
                           stroke:
                             width: 3
-                            color: ~255,255,255,230
+                            color: ~255,255,255,200
                       确认文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0解锁"
-                          fontSize: 32
+                          texts: "~&f解锁"
+                          fontSize: 36
                           through: true
 
           # 底部按钮栏
@@ -959,7 +982,8 @@ controls:
             attribute:
               point: ~bottom_left
               x: 24
-              y: -12
+              y: -16
+              height: 48
               spaceBetween: 16
             children:
               发送按钮:
