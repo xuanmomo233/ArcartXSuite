@@ -136,11 +136,17 @@ public final class PickupService implements Listener {
      * 客户端初始化完成回调：为该玩家打开常驻通知 HUD。
      * 由 PickupModule#createInitializedHandler() 调用，
      * 覆盖「插件启动后才进服」的玩家。
+     * <p>
+     * 客户端初始化完成是 HUD 就绪的可靠信号。在此之前，PlayerJoinEvent 的
+     * ensureUiOpen 可能在客户端未就绪时执行，openUi 返回 true 但客户端未真正渲染，
+     * openedPlayers 已被标记。此处清除标记并强制重新打开，确保 HUD 一定显示。
      */
     public void onClientInitialized(Player player) {
         if (!active || player == null || !player.isOnline()) {
             return;
         }
+        UUID playerId = player.getUniqueId();
+        openedPlayers.remove(playerId);
         ensureUiOpen(player);
     }
 
