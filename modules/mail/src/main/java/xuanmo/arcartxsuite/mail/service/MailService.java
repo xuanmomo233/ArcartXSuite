@@ -89,7 +89,7 @@ public final class MailService implements Listener {
     private static final String COMPOSE_UI_FILE_PATH = "ui/mail_compose.yml";
     private static final String LOGS_UI_FILE_PATH = "ui/mail_logs.yml";
     private static final String ADMIN_UI_FILE_PATH = "ui/mail_admin.yml";
-    private static final int ADMIN_ATTACHMENT_SLOTS = 6;
+    private static final int ADMIN_ATTACHMENT_SLOTS_DEFAULT = 9;
     private static final String STARTER_PRESET_RESOURCE_PATH = "mail/presets/starter.yml";
     private static final int INBOX_PAGE_SIZE = 6;
     private static final int LOG_PAGE_SIZE = 200;
@@ -397,6 +397,12 @@ public final class MailService implements Listener {
 
     public String adminUiId() {
         return adminUiId;
+    }
+
+    /** 管理员 UI 预设编辑的最大物品附件槽位数（来自配置，默认 9）。 */
+    public int adminAttachmentSlots() {
+        int configured = configuration.adminMaxAttachments();
+        return configured > 0 ? configured : ADMIN_ATTACHMENT_SLOTS_DEFAULT;
     }
 
     public int presetCount() {
@@ -1220,6 +1226,7 @@ public final class MailService implements Listener {
         payload.put("total", definitions.size());
         payload.put("maxPresetCount", definitions.size());
         payload.put("is_admin", player.hasPermission("arcartxsuite.admin"));
+        payload.put("adminAttachmentSlots", adminAttachmentSlots());
         bridge.sendPacket(player, adminUiId, "preset-list", payload);
     }
 
@@ -1230,6 +1237,10 @@ public final class MailService implements Listener {
             payload.put("found", false);
             payload.put("id", safe(presetId));
             payload.put("itemAttachmentCount", 0);
+            payload.put("currencyAttachments", "");
+            payload.put("claimCommands", "");
+            payload.put("claimConditions", "");
+            payload.put("cdks", "");
         } else {
             payload.put("found", true);
             payload.put("id", def.id());
@@ -1251,28 +1262,46 @@ public final class MailService implements Listener {
             payload.put("currencyAttachments", currencyStr.toString());
             long itemCount = def.attachments() == null ? 0 : def.attachments().stream().filter(MailAttachment::isItem).count();
             payload.put("itemAttachmentCount", itemCount);
-            // 领取命令序列化为 "cmd1|cmd2" 字符串，供 UI 输入框直接显示
+            // 领取命令序列化为每行一条的字符串，供 UI 多行输入框直接显示
             StringBuilder cmdStr = new StringBuilder();
             if (def.claimCommands() != null) {
                 for (String cmd : def.claimCommands()) {
-                    if (cmdStr.length() > 0) cmdStr.append("|");
+                    if (cmd == null || cmd.isBlank()) continue;
+                    if (cmdStr.length() > 0) cmdStr.append("\n");
                     cmdStr.append(cmd);
                 }
             }
             payload.put("claimCommands", cmdStr.toString());
-            List<String> condStrings = new ArrayList<>();
+            // 领取条件序列化为每行一条的字符串，供 UI 多行输入框直接显示
+            // 优先使用 raw（inline 格式如 %ph% >= 10），fallback 到 serialize()
+            StringBuilder condStr = new StringBuilder();
             if (def.claimConditions() != null) {
                 for (ScriptCondition cond : def.claimConditions()) {
-                    condStrings.add(cond.serialize());
+                    String display = cond.raw() != null && !cond.raw().isBlank() ? cond.raw() : cond.serialize();
+                    if (display != null && !display.isBlank()) {
+                        if (condStr.length() > 0) condStr.append("\n");
+                        condStr.append(display);
+                    }
                 }
             }
-            payload.put("claimConditions", condStrings);
+            payload.put("claimConditions", condStr.toString());
+            // CDK 只发送 code 列表，每行一个码（enabled/max-claims/expires-after 保持原配置不变）
+            StringBuilder cdkStr = new StringBuilder();
+            if (def.cdks() != null) {
+                for (MailPresetCdkDefinition cdk : def.cdks()) {
+                    if (cdk.code() != null && !cdk.code().isBlank()) {
+                        if (cdkStr.length() > 0) cdkStr.append("\n");
+                        cdkStr.append(cdk.code());
+                    }
+                }
+            }
+            payload.put("cdks", cdkStr.toString());
         }
         bridge.sendPacket(player, adminUiId, "preset-detail", payload);
     }
 
     private void handleAdminPresetSave(Player player, List<String> data) {
-        // data: [action, id, enabled, displayName, subject, body, expiresAfterDays, currencyAttachments, claimCommands]
+        // data: [action, id, enabled, displayName, subject, body, expiresAfterDays, currencyAttachments, claimCommands, claimConditions, cdks]
         if (data == null || data.size() < 7) {
             sendAdminResult(player, MailOperationResult.failure(message("player.admin-save-args-incomplete")));
             return;
@@ -1322,14 +1351,62 @@ public final class MailService implements Listener {
                 }
             }
 
-            List<String> claimCommands = List.of();
+            // 领取命令: 每行一条
+            List<String> claimCommands = new ArrayList<>();
             if (data.size() > 8 && !safe(data.get(8)).isBlank()) {
-                claimCommands = List.of(safe(data.get(8)).split("\\|"));
+                for (String line : safe(data.get(8)).split("\\R")) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty()) {
+                        claimCommands.add(trimmed);
+                    }
+                }
             }
 
             MailPresetDefinition existing = getPreset(id);
-            List<ScriptCondition> claimConditions = existing != null ? existing.claimConditions() : List.of();
-            List<MailPresetCdkDefinition> cdks = existing != null ? existing.cdks() : List.of();
+            // 领取条件: 每行一条（格式 %placeholder% >= value 或 aria:/js: 前缀）
+            List<ScriptCondition> claimConditions = new ArrayList<>();
+            if (data.size() > 9 && !safe(data.get(9)).isBlank()) {
+                for (String line : safe(data.get(9)).split("\\R")) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty()) {
+                        try {
+                            ScriptCondition parsed = ScriptCondition.deserialize(trimmed);
+                            if (parsed != null) {
+                                claimConditions.add(parsed);
+                            }
+                        } catch (Exception e) {
+                            this.logger.warning("Admin 预设保存: 无法解析领取条件 '" + trimmed + "': " + e.getMessage());
+                        }
+                    }
+                }
+            }
+            // CDK: 每行一个 code，enabled/max-claims/expires-after 从已有配置保留
+            List<MailPresetCdkDefinition> cdks = new ArrayList<>();
+            if (data.size() > 10 && !safe(data.get(10)).isBlank()) {
+                // 保留已有 CDK 的配置映射（按 code 索引）
+                java.util.Map<String, MailPresetCdkDefinition> existingCdks = new java.util.LinkedHashMap<>();
+                if (existing != null && existing.cdks() != null) {
+                    for (MailPresetCdkDefinition c : existing.cdks()) {
+                        existingCdks.put(c.code(), c);
+                    }
+                }
+                for (String line : safe(data.get(10)).split("\\R")) {
+                    String code = line.trim();
+                    if (code.isEmpty()) continue;
+                    String normalizedCode = normalizeCdkCode(code);
+                    if (normalizedCode.isBlank()) continue;
+                    MailPresetCdkDefinition existingCdk = existingCdks.get(normalizedCode);
+                    if (existingCdk != null) {
+                        // 保留原配置
+                        cdks.add(existingCdk);
+                    } else {
+                        // 新 CDK 使用默认值: enabled=true, max-claims=100, expires-after=30d
+                        cdks.add(new MailPresetCdkDefinition(
+                            normalizedCode, true, 100, null, java.time.Duration.ofDays(30)
+                        ));
+                    }
+                }
+            }
 
             MailPresetDefinition newPreset = new MailPresetDefinition(
                 id, enabled, displayName.isBlank() ? id : displayName, subject, body,
@@ -1359,6 +1436,15 @@ public final class MailService implements Listener {
         payload.put("message", result.message());
         bridge.sendPacket(player, adminUiId, "result", payload);
         player.sendMessage(MESSAGE_PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+    }
+
+    /** 将 Duration 格式化为简短字符串（如 30d、12h、30m）。 */
+    private static String formatDuration(java.time.Duration duration) {
+        long seconds = duration.getSeconds();
+        if (seconds % 86400 == 0) return (seconds / 86400) + "d";
+        if (seconds % 3600 == 0) return (seconds / 3600) + "h";
+        if (seconds % 60 == 0) return (seconds / 60) + "m";
+        return seconds + "s";
     }
 
     static MailSendQuote calculateComposeQuote(
@@ -1427,7 +1513,9 @@ public final class MailService implements Listener {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
         }
         exportBundledPresetIfMissing(directory);
-        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), itemSourceRegistry, vanillaItemNameBridge, iconResolver));
+        // 预设加载使用 admin 附件上限（取 admin 和 playerSend 的较大值，确保 admin 保存的附件不被截断）
+        int presetMaxAttachments = Math.max(adminAttachmentSlots(), configuration.playerSend().maxAttachments());
+        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, presetMaxAttachments, itemSourceRegistry, vanillaItemNameBridge, iconResolver));
     }
 
     private void syncPresetCdks() throws Exception {
@@ -2010,7 +2098,7 @@ public final class MailService implements Listener {
         if (session == null || session.sent()) {
             return MailOperationResult.failure(message("player.compose-not-open"));
         }
-        if (slot < 0 || slot >= 35) {
+        if (slot < 0 || slot >= 36) {
             return MailOperationResult.failure("无效槽位");
         }
         ItemStack item = player.getInventory().getItem(slot);
@@ -2076,7 +2164,7 @@ public final class MailService implements Listener {
         if (item == null || item.getType().isAir()) {
             return MailOperationResult.failure("该槽位没有物品");
         }
-        if (session.attachments().size() >= ADMIN_ATTACHMENT_SLOTS) {
+        if (session.attachments().size() >= adminAttachmentSlots()) {
             return MailOperationResult.failure("附件槽位已满");
         }
         int count = "all".equalsIgnoreCase(countStr) ? item.getAmount() : 1;
@@ -3228,7 +3316,7 @@ public final class MailService implements Listener {
         }
 
         for (MailAttachment att : def.attachments()) {
-            if (!att.isItem() || session.attachments().size() >= ADMIN_ATTACHMENT_SLOTS) break;
+            if (!att.isItem() || session.attachments().size() >= adminAttachmentSlots()) break;
             try {
                 ItemStack item = MailItemSerializer.deserialize(att.itemData());
                 if (isRealItem(item)) {

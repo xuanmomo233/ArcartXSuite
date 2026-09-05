@@ -70,9 +70,14 @@ preset:
   claim-commands:
     - "tell <player> 你领取了示例邮件奖励。"
 
-  # 领取条件格式: placeholder::operator::expected
-  # 例如: %player_level%::gte::10
+  # 领取条件（与 AXS 本体 ScriptCondition 同一套，详见 axs-api/condition/ScriptCondition.java）：
+  #   内联:  "%placeholder% <op> <value>"   op ∈ == != >= <= > < contains regex
+  #   Aria:  "aria: <expression>"            （global.player.* 门面可用，Suite 自动补 return）
+  #   JS:    "js: <script>"
+  #   也可写成 Map 列表 / 嵌套配置节: type: papi|aria|js + placeholder/operator/value
+  # 例如: "%player_level% >= 10"
   claim-conditions: []
+  # - "%player_level% >= 10"
 
   # 可选: 随预设同步到数据库的 CDK。
   # 执行 /axs mail reload 后会创建或更新固定 code；已有领取次数不会清零。

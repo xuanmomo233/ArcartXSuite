@@ -345,7 +345,7 @@ controls:
                           create: |-
                             for(i in range(1, 40)){
                               row = self['标志行'].copy('标志行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           标志行:
@@ -441,7 +441,7 @@ controls:
                           create: |-
                             for(i in range(1, 40)){
                               row = self['我的区域行'].copy('我的区域行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           我的区域行:
@@ -675,7 +675,7 @@ controls:
                           create: |-
                             for(i in range(1, 20)){
                               row = self['所有者项目'].copy('所有者项目' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           所有者项目:
@@ -734,7 +734,7 @@ controls:
                           create: |-
                             for(i in range(1, 20)){
                               row = self['成员项目'].copy('成员项目' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           成员项目:
@@ -793,7 +793,7 @@ controls:
                           create: |-
                             for(i in range(1, 40)){
                               row = self['详情标志行'].copy('详情标志行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           详情标志行:

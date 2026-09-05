@@ -34,6 +34,7 @@ ui:
       var.editItemCount = 0
       var.maxPresetCount = 0
       var.isAdmin = false
+      var.adminAttachmentSlots = 9
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.attachmentJsons = none
       var.backpackJsons = none
@@ -67,16 +68,19 @@ ui:
       var.total = packet['total']
       var.maxPresetCount = packet['maxPresetCount']
       var.isAdmin = packet['is_admin']
+      var.adminAttachmentSlots = packet['adminAttachmentSlots']
       while(val.preset_data.childrenCount() > 1){
         val.preset_data.get(1).remove()
       }
-      for(i in range(1, var.maxPresetCount)){
+      for(i in range(1, var.maxPresetCount - 1)){
         key = i.round()
         e = val.preset_data['预设行'].copy('预设行' + key)
         e.entryKey = key
       }
     # packetHandler: preset-detail
     # 包字段: id/enabled/displayName/subject/body/expiresAfterDays/currencyAttachments/itemAttachmentCount/claimCommands/claimConditions/found
+    # 注意: setContent 和 seticon 必须推迟到下一帧执行，因为 var.view = 'edit' 的 visible
+    # 属性表达式要到下一帧才重新求值，同帧调用 setContent 会被渲染引擎丢弃（控件尚未可见）。
     preset-detail: |-
       var.editId = packet['id']
       var.editEnabled = packet['enabled']
@@ -88,32 +92,36 @@ ui:
       var.editItemCount = packet['itemAttachmentCount'].round()
       var.editCommands = packet['claimCommands']
       var.editConditions = packet['claimConditions']
+      var.editCdks = packet['cdks']
       var.editFound = packet['found']
       var.view = 'edit'
       var.resultMsg = none
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
-      // 数据就绪后设置输入框初始内容（ChatTextBox 不会自动绑定变量）
-      val.编辑编号框.setContent(var.editId != none ? var.editId : '')
-      val.编辑显示名框.setContent(var.editDisplayName != none ? var.editDisplayName : '')
-      val.编辑主题框.setContent(var.editSubject != none ? var.editSubject : '')
-      val.编辑正文框.setContent(var.editBody != none ? var.editBody : '')
-      val.编辑过期框.setContent(var.editExpiresDays != none ? var.editExpiresDays + '' : '')
-      val.编辑货币框.setContent(var.editCurrencies != none ? var.editCurrencies : '')
-      val.编辑命令框.setContent(var.editCommands != none ? var.editCommands : '')
-      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
-      for(i in range(0, 6)){
-        slot = val.管理附件网格.get(i.round)
-        if(slot != none){
-          slot.seticon()
+      // 推迟到下一帧再 setContent/seticon，确保编辑视图已可见、控件已就绪
+      scheduler.delay(50, -> {
+        val.编辑编号框.setContent(var.editId != none ? var.editId : '')
+        val.编辑显示名框.setContent(var.editDisplayName != none ? var.editDisplayName : '')
+        val.编辑主题框.setContent(var.editSubject != none ? var.editSubject : '')
+        val.编辑正文框.setContent(var.editBody != none ? var.editBody : '')
+        val.编辑过期框.setContent(var.editExpiresDays != none ? var.editExpiresDays + '' : '')
+        val.编辑货币框.setContent(var.editCurrencies != none ? var.editCurrencies : '')
+        val.编辑命令框.setContent(var.editCommands != none ? var.editCommands : '')
+        val.编辑领取条件框.setContent(var.editConditions != none ? var.editConditions : '')
+        val.编辑CDK框.setContent(var.editCdks != none ? var.editCdks : '')
+        for(i in range(0, var.adminAttachmentSlots - 1)){
+          slot = val.管理附件网格.get(i.round())
+          if(slot != none){
+            slot.seticon()
+          }
         }
-      }
-      for(i in range(0, 36)){
-        slot = val.管理背包网格.get(i.round)
-        if(slot != none){
-          slot.seticon()
+        for(i in range(0, 35)){
+          slot = val.管理背包网格.get(i.round())
+          if(slot != none){
+            slot.seticon()
+          }
         }
-      }
+      })
     # packetHandler: attachment-count
     # 包字段: itemAttachmentCount/attachment_jsons/backpack_jsons
     attachment-count: |-
@@ -121,14 +129,14 @@ ui:
       var.attachmentJsons = packet['attachment_jsons']
       var.backpackJsons = packet['backpack_jsons']
       // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
-      for(i in range(0, 6)){
-        slot = val.管理附件网格.get(i.round)
+      for(i in range(0, var.adminAttachmentSlots - 1)){
+        slot = val.管理附件网格.get(i.round())
         if(slot != none){
           slot.seticon()
         }
       }
-      for(i in range(0, 36)){
-        slot = val.管理背包网格.get(i.round)
+      for(i in range(0, 35)){
+        slot = val.管理背包网格.get(i.round())
         if(slot != none){
           slot.seticon()
         }
@@ -460,14 +468,18 @@ controls:
                 var.editFound = false
                 var.view = 'edit'
                 var.resultMsg = none
-                // 清空输入框内容
-                val.编辑编号框.setContent('')
-                val.编辑显示名框.setContent('')
-                val.编辑主题框.setContent('')
-                val.编辑正文框.setContent('')
-                val.编辑过期框.setContent('15')
-                val.编辑货币框.setContent('')
-                val.编辑命令框.setContent('')
+                // 推迟到下一帧再清空输入框，确保编辑视图已可见（与 preset-detail 同理）
+                scheduler.delay(50, -> {
+                  val.编辑编号框.setContent('')
+                  val.编辑显示名框.setContent('')
+                  val.编辑主题框.setContent('')
+                  val.编辑正文框.setContent('')
+                  val.编辑过期框.setContent('15')
+                  val.编辑货币框.setContent('')
+                  val.编辑命令框.setContent('')
+                  val.编辑领取条件框.setContent('')
+                  val.编辑CDK框.setContent('')
+                })
                 Packet.send('AXS_MAIL', 'admin-preset-new')
             children:
               新建预设底:
@@ -1039,7 +1051,7 @@ controls:
                   x: 16
                   y: 280
                   width: 760
-                  height: 160
+                  height: 140
                 children:
                   正文输入底:
                     type: Texture
@@ -1059,7 +1071,7 @@ controls:
                       x: 10
                       y: 6
                       width: 740
-                      height: 148
+                      height: 128
                       fontSize: 36
                       allowNewLine: true
                     action:
@@ -1070,7 +1082,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 456
+                  y: 436
                   texts: "~&f过期(天)"
                   fontSize: 32
               输入过期框:
@@ -1078,7 +1090,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 488
+                  y: 468
                   width: 160
                   height: 40
                 children:
@@ -1110,15 +1122,15 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 200
-                  y: 456
-                  texts: "~&f货币附件"
+                  y: 436
+                  texts: "~&f货币附件 (currency:amount:desc)"
                   fontSize: 32
               输入货币框:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 200
-                  y: 488
+                  y: 468
                   width: 576
                   height: 40
                 children:
@@ -1150,17 +1162,17 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 544
-                  texts: "~&f领取命令"
+                  y: 524
+                  texts: "~&f领取命令 (每行一条)"
                   fontSize: 32
               输入命令框:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 576
+                  y: 556
                   width: 760
-                  height: 40
+                  height: 80
                 children:
                   命令输入底:
                     type: Texture
@@ -1178,34 +1190,109 @@ controls:
                     val: 编辑命令框
                     attribute:
                       x: 10
-                      y: 4
+                      y: 6
                       width: 740
-                      height: 32
+                      height: 68
                       fontSize: 36
+                      allowNewLine: true
                     action:
                       textChange: |-
                         var.editCommands = self.getContent()
-              编辑摘要:
+              领取条件标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 632
-                  texts: "'&f物品附件 &b' + var.editItemCount + ' &f个  &f货币格式 currency:amount:desc  &f命令用 | 分隔'"
+                  y: 652
+                  texts: "~&f领取条件 (每行一条, 格式: %placeholder% >= value)"
                   fontSize: 32
+              输入领取条件框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 684
+                  width: 760
+                  height: 80
+                children:
+                  领取条件输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  领取条件输入框文本:
+                    type: ChatTextBox
+                    val: 编辑领取条件框
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: 740
+                      height: 68
+                      fontSize: 36
+                      allowNewLine: true
+                    action:
+                      textChange: |-
+                        var.editConditions = self.getContent()
+              CDK标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 780
+                  texts: "~&fCDK 兑换码 (每行一个码, enabled/max-claims/expires-after 保持原配置)"
+                  fontSize: 32
+              输入CDK框:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 16
+                  y: 812
+                  width: 760
+                  height: 80
+                children:
+                  CDK输入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  CDK输入框文本:
+                    type: ChatTextBox
+                    val: 编辑CDK框
+                    attribute:
+                      x: 10
+                      y: 6
+                      width: 740
+                      height: 68
+                      fontSize: 36
+                      allowNewLine: true
+                    action:
+                      textChange: |-
+                        var.editCdks = self.getContent()
               # 保存/取消按钮
               保存按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 16
-                  y: 680
+                  y: 908
                   width: 160
                   height: 48
                 action:
                   clickLeft: |-
                     var.resultMsg = '&e保存中...'
-                    Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, var.editCurrencies, var.editCommands)
+                    Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, var.editCurrencies, var.editCommands, var.editConditions, var.editCdks)
                 children:
                   保存底:
                     type: Texture
@@ -1232,7 +1319,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 192
-                  y: 680
+                  y: 908
                   width: 120
                   height: 48
                 action:
@@ -1266,9 +1353,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 800
+                  x: 784
                   y: 72
-                  width: "self.parent.width - 816"
+                  width: "self.parent.width - 800"
                   height: 300
                 children:
                   附件底:
@@ -1289,7 +1376,7 @@ controls:
                       point: ~top_left
                       x: 14
                       y: 12
-                      texts: "'&f物品附件 &b' + var.editItemCount + '&f/6'"
+                      texts: "'&f物品附件 &b' + var.editItemCount + '&f/' + var.adminAttachmentSlots"
                       fontSize: 36
                   附件提示:
                     type: Text
@@ -1312,12 +1399,12 @@ controls:
                       y: 220
                       spaceBetweenX: 6
                       spaceBetweenY: 6
-                      column: 6
+                      column: 9
                     action:
                       create: |-
-                        for(i in range(1,6)){
+                        for(i in range(1, var.adminAttachmentSlots - 1)){
                           slot = self['管理槽位0'].copy('slot' + i)
-                          slot.id = i.round
+                          slot.id = i.round()
                         }
                     children:
                       管理槽位0:
@@ -1344,9 +1431,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 800
+                  x: 784
                   y: 388
-                  width: "self.parent.width - 816"
+                  width: "self.parent.width - 800"
                   height: "self.parent.height - 388 - 16"
                 children:
                   背包底:
@@ -1381,9 +1468,9 @@ controls:
                       column: 6
                     action:
                       create: |-
-                        for(i in range(1,36)){
+                        for(i in range(1,35)){
                           slot = self['背包槽位0'].copy('bp_slot' + i)
-                          slot.id = i.round
+                          slot.id = i.round()
                         }
                     children:
                       背包槽位0:

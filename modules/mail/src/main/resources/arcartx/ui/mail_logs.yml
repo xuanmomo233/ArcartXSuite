@@ -445,14 +445,14 @@ controls:
                   y: 12
                   width: "self.parent.width - 40"
                   height: "self.parent.height - 24"
-                  moveY: "self.parent.parent['日志滑块'].getDragYRatio()"
+                  moveY: "self.parent['日志滑块'].getDragYRatio()"
                 action:
                   wheel: |-
                     if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                     }
                     if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                     }
                 children:
                   log_stack:

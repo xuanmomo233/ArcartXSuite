@@ -329,7 +329,7 @@ controls:
                           create: |-
                             for(i in range(1, 50)){
                               row = self['区域行'].copy('区域行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           区域行:
@@ -579,7 +579,7 @@ controls:
                           create: |-
                             for(i in range(1, 30)){
                               row = self['成员行'].copy('成员行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           成员行:
@@ -685,7 +685,7 @@ controls:
                           create: |-
                             for(i in range(1, 40)){
                               row = self['标志行'].copy('标志行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           标志行:
@@ -897,7 +897,7 @@ controls:
                           create: |-
                             for(i in range(1, 30)){
                               row = self['世界规则行'].copy('世界规则行' + i.round)
-                              row.entryKey = i.round
+                              row.entryKey = i.round()
                             }
                         children:
                           世界规则行:

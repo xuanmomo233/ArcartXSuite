@@ -267,7 +267,7 @@ ui:
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != none){
           for(raw in range(9,44)){
-            control = raw == 9 ? val.背包网格['背包槽'] : val.背包网格['背包槽' + (raw - 9).round]
+            control = raw == 9 ? val.背包网格['背包槽'] : val.背包网格['背包槽' + (raw - 9).round()]
             entry = var.backpack[raw.round()]
             if(control != none){
               amountText = none

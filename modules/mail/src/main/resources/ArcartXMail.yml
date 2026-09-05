@@ -192,3 +192,6 @@ presets:
   # 预设邮件可在 preset.cdks 中声明固定 CDK；执行 /axs mail reload 后同步到数据库。
   # CDK 可通过 /axs mail cdk list [page] 查看当前 code、预设、领取次数和过期时间。
   directory: presets
+  # 管理员 UI 预设编辑的最大物品附件槽位数（独立于 player-send.max-attachments）。
+  # 预设加载时也使用此值作为上限，确保 admin 保存的附件不会被截断。
+  admin-max-attachments: 9

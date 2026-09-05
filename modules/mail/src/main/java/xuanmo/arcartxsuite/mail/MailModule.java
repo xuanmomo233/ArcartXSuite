@@ -85,6 +85,9 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                 // 玩家发送附件上限至少为 1
                 ValidationRule.of("player-send.max-attachments", ValueType.INT)
                     .withRange(1, 64),
+                // 管理员预设附件上限至少为 1
+                ValidationRule.of("presets.admin-max-attachments", ValueType.INT)
+                    .withRange(1, 64),
                 // 保留天数必须为正
                 ValidationRule.of("retention.completed-days", ValueType.INT)
                     .withRange(1, null)

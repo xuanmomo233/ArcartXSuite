@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  * @param retention       保留策略配置
  * @param cdk             CDK 兑换安全配置
  * @param presetsDirectory 预设邮件模板目录名
+ * @param adminMaxAttachments 管理员 UI 预设编辑的最大物品附件槽位数
  */
 public record MailModuleConfiguration(
     boolean debug,
@@ -37,7 +38,8 @@ public record MailModuleConfiguration(
     MailModerationConfiguration moderation,
     MailRetentionConfiguration retention,
     MailCdkConfiguration cdk,
-    String presetsDirectory
+    String presetsDirectory,
+    int adminMaxAttachments
 ) {
 
     /**
@@ -112,6 +114,7 @@ public record MailModuleConfiguration(
 
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
         String presetsDirectory = presetsSection == null ? "presets" : string(presetsSection.getString("directory", "presets"));
+        int adminMaxAttachments = presetsSection == null ? 9 : Math.max(1, presetsSection.getInt("admin-max-attachments", 9));
 
         ConfigurationSection cdkSection = configuration.getConfigurationSection("cdk");
         MailCdkConfiguration cdk = new MailCdkConfiguration(
@@ -121,7 +124,7 @@ public record MailModuleConfiguration(
             cdkSection == null ? 5 : Math.max(1, cdkSection.getInt("lockout-minutes", 5))
         );
 
-        return new MailModuleConfiguration(debug, storage, crossServer, ui, playerSend, moderation, retention, cdk, presetsDirectory);
+        return new MailModuleConfiguration(debug, storage, crossServer, ui, playerSend, moderation, retention, cdk, presetsDirectory, adminMaxAttachments);
     }
 
     private static String string(String value) {
