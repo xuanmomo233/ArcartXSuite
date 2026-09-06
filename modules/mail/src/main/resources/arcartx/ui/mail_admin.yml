@@ -34,7 +34,7 @@ ui:
       var.editItemCount = 0
       var.maxPresetCount = 0
       var.isAdmin = false
-      var.adminAttachmentSlots = 9
+      var.adminAttachmentSlots = 18
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.attachmentJsons = none
       var.presetDetailLoaded = false
@@ -225,7 +225,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~60,64,82,220
+              normal: ~255,255,255,230
           标题色块:
             type: Texture
             attribute:
@@ -441,7 +441,7 @@ controls:
               y: 298
               width: 264
               height: 2
-              normal: ~60,64,82,220
+              normal: ~255,255,255,230
           操作标题:
             type: Text
             attribute:
@@ -1187,6 +1187,15 @@ controls:
                   y: 468
                   width: 576
                   height: 180
+                  moveY: "self.parent['货币附件滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   货币附件列表:
                     val: 货币附件滚动区
@@ -1210,6 +1219,10 @@ controls:
                               normal: ~36,38,48,245
                               shape: ~round_rect
                               radius: 8
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
                           货币输入:
                             type: TextBox
                             attribute:
@@ -1219,6 +1232,14 @@ controls:
                               height: 32
                               fontSize: 32
                               emptyText: "~&7货币"
+                          货币金额分割线:
+                            type: Texture
+                            attribute:
+                              x: 132
+                              y: 12
+                              width: 2
+                              height: 32
+                              normal: ~255,255,255,230
                           金额输入:
                             type: TextBox
                             attribute:
@@ -1228,6 +1249,14 @@ controls:
                               height: 32
                               fontSize: 32
                               emptyText: "~&7金额"
+                          金额描述分割线:
+                            type: Texture
+                            attribute:
+                              x: 220
+                              y: 12
+                              width: 2
+                              height: 32
+                              normal: ~255,255,255,230
                           描述输入:
                             type: TextBox
                             attribute:
@@ -1263,6 +1292,17 @@ controls:
                                   texts: "~&f✕"
                                   fontSize: 32
                                   through: true
+              货币附件滑块:
+                type: Texture
+                val: 货币附件滑块
+                attribute:
+                  point: ~top_left
+                  x: 770
+                  y: 468
+                  width: 6
+                  height: 60
+                  normal: ~120,120,120,200
+                  maxDragY: 120
               添加货币按钮:
                 type: Canvas
                 attribute:
@@ -1516,8 +1556,8 @@ controls:
                     val: "管理附件网格"
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 220
+                      x: 10
+                      y: 140
                       spaceBetweenX: 6
                       spaceBetweenY: 6
                       column: 9
@@ -1637,12 +1677,21 @@ controls:
                   y: 802
                   width: "var.contentW - 800"
                   height: 180
+                  moveY: "self.parent['CDK滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   CDK列表:
                     val: CDK滚动区
                     type: VStack
                     attribute:
-                      width: "self.parent.width"
+                      width: "self.parent.width - 6"
                       spaceBetween: 6
                     children:
                       CDK行模板:
@@ -1661,6 +1710,10 @@ controls:
                               normal: ~36,38,48,245
                               shape: ~round_rect
                               radius: 8
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
                           CDK码输入:
                             type: TextBox
                             attribute:
@@ -1696,6 +1749,14 @@ controls:
                                   texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
                                   fontSize: 32
                                   through: true
+                          启用次数分割线:
+                            type: Texture
+                            attribute:
+                              x: 236
+                              y: 12
+                              width: 2
+                              height: 32
+                              normal: ~255,255,255,230
                           最大领取输入:
                             type: TextBox
                             attribute:
@@ -1705,6 +1766,14 @@ controls:
                               height: 32
                               fontSize: 32
                               emptyText: "~&7次数"
+                          次数过期分割线:
+                            type: Texture
+                            attribute:
+                              x: 324
+                              y: 12
+                              width: 2
+                              height: 32
+                              normal: ~255,255,255,230
                           过期输入:
                             type: TextBox
                             attribute:
@@ -1740,6 +1809,17 @@ controls:
                                   texts: "~&f✕"
                                   fontSize: 32
                                   through: true
+              CDK滑块:
+                type: Texture
+                val: CDK滑块
+                attribute:
+                  point: ~top_left
+                  x: "var.contentW - 20"
+                  y: 802
+                  width: 6
+                  height: 60
+                  normal: ~120,120,120,200
+                  maxDragY: 120
               添加CDK按钮:
                 type: Canvas
                 attribute:

@@ -1007,34 +1007,6 @@ controls:
                       maxDragY: "self.parent.height - 100"
                       shape: ~round_rect
                       radius: 5
-                  详情横滑轨:
-                    type: Texture
-                    attribute:
-                      point: ~bottom_left
-                      x: 20
-                      y: -12
-                      width: "self.parent.width - 52"
-                      height: 10
-                      normal: ~40,44,52,225
-                      shape: ~round_rect
-                      radius: 5
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~120,220,160,230
-                  详情横滑块:
-                    type: Texture
-                    val: 详情横滑块
-                    attribute:
-                      point: ~bottom_left
-                      x: 20
-                      y: -12
-                      width: 50
-                      height: 10
-                      normal: ~80,180,120,230
-                      maxDragX: "self.parent.width - 102"
-                      shape: ~round_rect
-                      radius: 5
                   详情滚动栏:
                     type: Scroll
                     attribute:
@@ -1043,7 +1015,6 @@ controls:
                       y: 20
                       width: "self.parent.width - 52"
                       height: "self.parent.height - 50"
-                      moveX: "self.parent['详情横滑块'].getDragXRatio()"
                       moveY: "self.parent['详情滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1057,7 +1028,7 @@ controls:
                       详情内容:
                         type: VStack
                         attribute:
-                          width: "self.parent.width * 2"
+                          width: "self.parent.width"
                           spaceBetween: 16
                         children:
                           详情主题:
@@ -1090,7 +1061,7 @@ controls:
                                   entryKey: none
                                   entry: var.selectedAttachments[self.entryKey]
                                   visible: self.entryKey != none && self.entry != none
-                                  width: "self.parent.width"
+                                  width: "self.parent.width - 6"
                                   height: 72
                                 children:
                                   附件背景:

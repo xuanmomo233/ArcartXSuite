@@ -95,7 +95,7 @@ public final class MailService implements Listener {
     private static final String COMPOSE_UI_FILE_PATH = "ui/mail_compose.yml";
     private static final String LOGS_UI_FILE_PATH = "ui/mail_logs.yml";
     private static final String ADMIN_UI_FILE_PATH = "ui/mail_admin.yml";
-    private static final int ADMIN_ATTACHMENT_SLOTS_DEFAULT = 9;
+    private static final int ADMIN_ATTACHMENT_SLOTS_DEFAULT = 18;
     private static final String STARTER_PRESET_RESOURCE_PATH = "mail/presets/starter.yml";
     private static final int INBOX_PAGE_SIZE = 6;
     private static final int LOG_PAGE_SIZE = 200;

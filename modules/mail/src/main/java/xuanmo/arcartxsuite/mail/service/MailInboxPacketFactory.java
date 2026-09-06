@@ -198,7 +198,9 @@ public final class MailInboxPacketFactory {
     /**
      * 将单个附件序列化为 UI 可渲染的 itemJson 字符串。
      * <p>
-     * 物品附件：反序列化 Base64 itemData 后通过 IconResolver.itemToJson 序列化。
+     * 物品附件：反序列化 Base64 itemData 后重建为 CraftItemStack，再通过 IconResolver.itemToJson 序列化。
+     * 重建步骤是必要的——Bukkit 反序列化得到的 ItemStack 不是 CraftItemStack，
+     * native item2json 无法读取其 ItemMeta 中的 displayName/lore，会导致 UI 悬浮显示原版名称而非自定义名称。
      * 货币附件：通过 IconResolver.resolveItemJson 解析 IconDefinition（支持完整 menu 风格 icon 配置）。
      * 货币附件无 IconDefinition 时回退为纸片 + 描述文本。
      */
@@ -209,7 +211,30 @@ public final class MailInboxPacketFactory {
         try {
             if (attachment.isItem() && attachment.itemData() != null && !attachment.itemData().isBlank()) {
                 ItemStack stack = MailItemSerializer.deserialize(attachment.itemData());
-                return iconResolver.itemToJson(stack);
+                // 重建为 CraftItemStack，确保 item2json 能正确序列化 ItemMeta 中的 displayName/lore
+                ItemStack fresh = new ItemStack(stack.getType(), stack.getAmount());
+                ItemMeta srcMeta = stack.getItemMeta();
+                if (srcMeta != null) {
+                    ItemMeta freshMeta = fresh.getItemMeta();
+                    if (freshMeta != null) {
+                        if (srcMeta.hasDisplayName()) {
+                            freshMeta.setDisplayName(srcMeta.getDisplayName());
+                        }
+                        if (srcMeta.hasLore()) {
+                            freshMeta.setLore(srcMeta.getLore());
+                        }
+                        if (srcMeta.hasCustomModelData()) {
+                            freshMeta.setCustomModelData(srcMeta.getCustomModelData());
+                        }
+                        if (srcMeta.hasEnchants()) {
+                            for (org.bukkit.enchantments.Enchantment ench : srcMeta.getEnchants().keySet()) {
+                                freshMeta.addEnchant(ench, srcMeta.getEnchantLevel(ench), true);
+                            }
+                        }
+                        fresh.setItemMeta(freshMeta);
+                    }
+                }
+                return iconResolver.itemToJson(fresh);
             } else if (attachment.isCurrency()) {
                 // 货币附件：优先使用 IconDefinition（menu 风格完整图标配置）
                 if (attachment.icon() != null && attachment.icon().hasIcon()) {

@@ -33,9 +33,9 @@ preset:
     - currency: money
       amount: 88
       description: 新手金币礼包
-      # icon:
-      #   material: GOLD_INGOT
-      #   name: "&6金币"
+      icon:
+        material: GOLD_INGOT
+        name: "&6金币"
       # 示例（资源包自定义贴图）：
       # icon:
       #   material: PAPER

@@ -126,6 +126,31 @@ public final class MailPresetLoader {
             if (attachments.size() >= maxAttachments) {
                 break;
             }
+            // 优先使用 item-data（完整 Base64 物品数据，保留 customModelData/附魔/PDC/自定义 NBT 等）
+            String itemData = mapString(rawItem, "item-data", "");
+            if (!itemData.isBlank()) {
+                try {
+                    ItemStack itemStack = MailItemSerializer.deserialize(itemData);
+                    if (itemStack != null && !itemStack.getType().isAir()) {
+                        attachments.add(
+                            new MailAttachment(
+                                0L,
+                                attachments.size(),
+                                MailAttachmentType.ITEM,
+                                itemData,
+                                "",
+                                0.0D,
+                                resolveDescription(itemStack, vanillaItemNameBridge),
+                                null
+                            )
+                        );
+                        continue;
+                    }
+                } catch (IOException exception) {
+                    logger.warning("邮件预设 '" + presetId + "' 的物品附件 item-data 反序列化失败，回退到 source+id 路径: " + exception.getMessage());
+                }
+            }
+            // 回退：从 source+id+amount+name+lore 生成物品（兼容旧格式 YAML）
             String source = mapString(rawItem, "source", "minecraft").trim().toLowerCase(Locale.ROOT);
             String itemId = mapString(rawItem, "id", "");
             // 向后兼容：旧配置使用 material 字段，新配置使用 source+id
@@ -278,7 +303,7 @@ public final class MailPresetLoader {
             section.set("currency-attachments", currencyList);
         }
 
-        // item attachments（保存为 source+id 新格式；管理员 UI 创建的物品统一保存为 minecraft 源）
+        // item attachments（保存 source+id+amount+name+lore 供管理员阅读，同时保存 item-data Base64 保留完整 NBT）
         List<Map<String, Object>> itemList = new ArrayList<>();
         for (MailAttachment att : preset.attachments()) {
             if (att.isItem() && att.itemData() != null && !att.itemData().isBlank()) {
@@ -295,6 +320,8 @@ public final class MailPresetLoader {
                     if (meta != null && meta.getLore() != null && !meta.getLore().isEmpty()) {
                         map.put("lore", meta.getLore());
                     }
+                    // 保存完整 Base64 物品数据，加载时优先使用以恢复 customModelData/附魔/PDC/自定义 NBT 等字段
+                    map.put("item-data", att.itemData());
                     itemList.add(map);
                 } catch (Exception ignored) {
                     // 无法反序列化的物品跳过

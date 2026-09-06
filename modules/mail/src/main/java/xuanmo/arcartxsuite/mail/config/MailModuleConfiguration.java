@@ -115,7 +115,7 @@ public record MailModuleConfiguration(
 
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
         String presetsDirectory = presetsSection == null ? "presets" : string(presetsSection.getString("directory", "presets"));
-        int adminMaxAttachments = presetsSection == null ? 9 : Math.max(1, presetsSection.getInt("admin-max-attachments", 9));
+        int adminMaxAttachments = presetsSection == null ? 18 : Math.max(1, presetsSection.getInt("admin-max-attachments", 18));
 
         ConfigurationSection cdkSection = configuration.getConfigurationSection("cdk");
         MailCdkConfiguration cdk = new MailCdkConfiguration(
