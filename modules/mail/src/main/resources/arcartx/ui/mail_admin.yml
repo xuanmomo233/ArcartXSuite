@@ -1595,6 +1595,7 @@ controls:
                         for(i in range(1,35)){
                           slot = self['背包槽位0'].copy('bp_slot' + i)
                           slot.id = (9 + i).round()
+                          slot.entryKey = (9 + i).round()
                         }
                     children:
                       背包槽位0:
@@ -1610,11 +1611,12 @@ controls:
                           slotType: ~Backpack
                           lock: true
                           id: 9.round()
+                          entryKey: 9.round()
                         action:
                           clickLeft: |-
-                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.id, '1')
+                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, '1')
                           clickRight: |-
-                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.id, 'all')
+                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, 'all')
                         effect:
                           stroke:
                             width: 2
