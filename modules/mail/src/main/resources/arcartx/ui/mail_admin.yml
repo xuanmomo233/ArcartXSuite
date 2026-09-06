@@ -116,26 +116,41 @@ ui:
         val.编辑过期框.setContent(tmpExpiresDays)
         val.编辑命令框.setContent(tmpCommands)
         val.编辑领取条件框.setContent(tmpConditions)
-        // 重建货币附件行
+        // 重建货币附件行：模板作为第 0 行，再复制 size-1 个
         while(val.货币附件滚动区.childrenCount() > 1){
           val.货币附件滚动区.get(1).remove()
         }
-        for(i in range(0, var.editCurrencyList.size() - 1)){
+        if(var.editCurrencyList.size() > 0){
+          row = val.货币附件滚动区['货币行模板']
+          row.entryKey = 0
+          row['货币输入'].setContent(var.editCurrencyList[0.round()]['currency'] != none ? var.editCurrencyList[0.round()]['currency'] : '')
+          row['金额输入'].setContent(var.editCurrencyList[0.round()]['amount'] != none ? var.editCurrencyList[0.round()]['amount'] + '' : '')
+          row['描述输入'].setContent(var.editCurrencyList[0.round()]['description'] != none ? var.editCurrencyList[0.round()]['description'] : '')
+        }
+        for(i in range(1, var.editCurrencyList.size() - 1)){
           row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
           row.entryKey = i.round()
           row['货币输入'].setContent(var.editCurrencyList[i.round()]['currency'] != none ? var.editCurrencyList[i.round()]['currency'] : '')
           row['金额输入'].setContent(var.editCurrencyList[i.round()]['amount'] != none ? var.editCurrencyList[i.round()]['amount'] + '' : '')
           row['描述输入'].setContent(var.editCurrencyList[i.round()]['description'] != none ? var.editCurrencyList[i.round()]['description'] : '')
         }
-        // 重建 CDK 行
+        // 重建 CDK 行：模板作为第 0 行，再复制 size-1 个
         while(val.CDK滚动区.childrenCount() > 1){
           val.CDK滚动区.get(1).remove()
         }
-        for(i in range(0, var.editCdkList.size() - 1)){
+        if(var.editCdkList.size() > 0){
+          row = val.CDK滚动区['CDK行模板']
+          row.entryKey = 0
+          row.cdkEnabled = var.editCdkList[0.round()]['enabled'] != false
+          row['CDK码输入'].setContent(var.editCdkList[0.round()]['code'] != none ? var.editCdkList[0.round()]['code'] : '')
+          row['最大领取输入'].setContent(var.editCdkList[0.round()]['maxClaims'] != none ? var.editCdkList[0.round()]['maxClaims'] + '' : '100')
+          row['过期输入'].setContent(var.editCdkList[0.round()]['expiresAfter'] != none ? var.editCdkList[0.round()]['expiresAfter'] : '30d')
+        }
+        for(i in range(1, var.editCdkList.size() - 1)){
           row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
           row.entryKey = i.round()
-          row['CDK码输入'].setContent(var.editCdkList[i.round()]['code'] != none ? var.editCdkList[i.round()]['code'] : '')
           row.cdkEnabled = var.editCdkList[i.round()]['enabled'] != false
+          row['CDK码输入'].setContent(var.editCdkList[i.round()]['code'] != none ? var.editCdkList[i.round()]['code'] : '')
           row['最大领取输入'].setContent(var.editCdkList[i.round()]['maxClaims'] != none ? var.editCdkList[i.round()]['maxClaims'] + '' : '100')
           row['过期输入'].setContent(var.editCdkList[i.round()]['expiresAfter'] != none ? var.editCdkList[i.round()]['expiresAfter'] : '30d')
         }
@@ -506,9 +521,18 @@ controls:
                   while(val.货币附件滚动区.childrenCount() > 1){
                     val.货币附件滚动区.get(1).remove()
                   }
+                  row = val.货币附件滚动区['货币行模板']
+                  row['货币输入'].setContent('')
+                  row['金额输入'].setContent('')
+                  row['描述输入'].setContent('')
                   while(val.CDK滚动区.childrenCount() > 1){
                     val.CDK滚动区.get(1).remove()
                   }
+                  row = val.CDK滚动区['CDK行模板']
+                  row.cdkEnabled = true
+                  row['CDK码输入'].setContent('')
+                  row['最大领取输入'].setContent('100')
+                  row['过期输入'].setContent('30d')
                 })
                 Packet.send('AXS_MAIL', 'admin-preset-new')
             children:
@@ -1157,80 +1181,88 @@ controls:
                   fontSize: 36
               货币附件滚动区:
                 type: Scroll
-                val: 货币附件滚动区
                 attribute:
                   point: ~top_left
                   x: 200
                   y: 468
                   width: 576
                   height: 180
-                  moveX: 0
                 children:
-                  货币行模板:
-                    type: Canvas
+                  货币附件列表:
+                    val: 货币附件滚动区
+                    type: VStack
                     attribute:
-                      entryKey: 0.round()
-                      width: 560
-                      height: 56
+                      width: "self.parent.width"
+                      spaceBetween: 6
                     children:
-                      货币行底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~36,38,48,245
-                          shape: ~round_rect
-                          radius: 8
-                      货币输入:
-                        type: TextBox
-                        attribute:
-                          x: 8
-                          y: 12
-                          width: 120
-                          height: 32
-                          fontSize: 32
-                      金额输入:
-                        type: TextBox
-                        attribute:
-                          x: 136
-                          y: 12
-                          width: 80
-                          height: 32
-                          fontSize: 32
-                      描述输入:
-                        type: TextBox
-                        attribute:
-                          x: 224
-                          y: 12
-                          width: 280
-                          height: 32
-                          fontSize: 32
-                      货币删除按钮:
+                      货币行模板:
                         type: Canvas
                         attribute:
-                          x: 512
-                          y: 8
-                          width: 40
-                          height: 40
-                        action:
-                          clickLeft: |-
-                            self.parent.remove()
+                          entryKey: 0.round()
+                          width: "self.parent.width - 16"
+                          height: 56
                         children:
-                          货币删除底:
+                          货币行底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~235,100,100,230
+                              normal: ~36,38,48,245
                               shape: ~round_rect
                               radius: 8
-                          货币删除文字:
-                            type: Text
+                          货币输入:
+                            type: TextBox
                             attribute:
-                              point: ~middle_center
-                              texts: "~&f✕"
+                              x: 8
+                              y: 12
+                              width: 120
+                              height: 32
                               fontSize: 32
-                              through: true
+                              emptyText: "~&7货币"
+                          金额输入:
+                            type: TextBox
+                            attribute:
+                              x: 136
+                              y: 12
+                              width: 80
+                              height: 32
+                              fontSize: 32
+                              emptyText: "~&7金额"
+                          描述输入:
+                            type: TextBox
+                            attribute:
+                              x: 224
+                              y: 12
+                              width: 280
+                              height: 32
+                              fontSize: 32
+                              emptyText: "~&7描述"
+                          货币删除按钮:
+                            type: Canvas
+                            attribute:
+                              x: 512
+                              y: 8
+                              width: 40
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                self.parent.remove()
+                            children:
+                              货币删除底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~235,100,100,230
+                                  shape: ~round_rect
+                                  radius: 8
+                              货币删除文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f✕"
+                                  fontSize: 32
+                                  through: true
               添加货币按钮:
                 type: Canvas
                 attribute:
@@ -1359,7 +1391,7 @@ controls:
                     var.resultMsg = '&e保存中...'
                     // 收集货币附件行数据为 JSON
                     curList = []
-                    for(i in range(1, val.货币附件滚动区.childrenCount())){
+                    for(i in range(0, val.货币附件滚动区.childrenCount() - 1)){
                       row = val.货币附件滚动区.get(i.round())
                       if(row != none){
                         cur = row['货币输入'].getContent()
@@ -1372,7 +1404,7 @@ controls:
                     }
                     // 收集 CDK 行数据为 JSON
                     cdkList = []
-                    for(i in range(1, val.CDK滚动区.childrenCount())){
+                    for(i in range(0, val.CDK滚动区.childrenCount() - 1)){
                       row = val.CDK滚动区.get(i.round())
                       if(row != none){
                         code = row['CDK码输入'].getContent()
@@ -1408,7 +1440,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 192
-                  y: 908
+                  y: 896
                   width: 120
                   height: 48
                 action:
@@ -1526,7 +1558,7 @@ controls:
                   x: 784
                   y: 388
                   width: "var.contentW - 800"
-                  height: 240
+                  height: 370
                 children:
                   背包底:
                     type: Texture
@@ -1577,7 +1609,7 @@ controls:
                           itemScale: 0.72
                           slotType: ~Backpack
                           lock: true
-                          id: 9
+                          id: 9.round()
                         action:
                           clickLeft: |-
                             Packet.send('AXS_MAIL', 'admin-add-attachment', self.id, '1')
@@ -1592,118 +1624,126 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 784
-                  y: 636
+                  y: 766
                   texts: "~&fCDK 兑换码"
                   fontSize: 36
               CDK滚动区:
                 type: Scroll
-                val: CDK滚动区
                 attribute:
                   point: ~top_left
                   x: 784
-                  y: 668
+                  y: 802
                   width: "var.contentW - 800"
                   height: 180
-                  moveX: 0
                 children:
-                  CDK行模板:
-                    type: Canvas
+                  CDK列表:
+                    val: CDK滚动区
+                    type: VStack
                     attribute:
-                      entryKey: 0.round()
-                      cdkEnabled: true
-                      width: "var.contentW - 816"
-                      height: 56
+                      width: "self.parent.width"
+                      spaceBetween: 6
                     children:
-                      CDK行底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~36,38,48,245
-                          shape: ~round_rect
-                          radius: 8
-                      CDK码输入:
-                        type: TextBox
-                        attribute:
-                          x: 8
-                          y: 12
-                          width: 160
-                          height: 32
-                          fontSize: 32
-                      CDK启用按钮:
+                      CDK行模板:
                         type: Canvas
                         attribute:
-                          x: 176
-                          y: 8
-                          width: 56
-                          height: 40
-                        action:
-                          clickLeft: |-
-                            self.parent.cdkEnabled = !(self.parent.cdkEnabled != false)
+                          entryKey: 0.round()
+                          cdkEnabled: true
+                          width: "self.parent.width - 16"
+                          height: 56
                         children:
-                          CDK启用底:
+                          CDK行底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.parent.cdkEnabled != false ? '80,180,120,230' : '235,100,100,230'"
+                              normal: ~36,38,48,245
                               shape: ~round_rect
                               radius: 8
-                          CDK启用文字:
-                            type: Text
+                          CDK码输入:
+                            type: TextBox
                             attribute:
-                              point: ~middle_center
-                              texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
+                              x: 8
+                              y: 12
+                              width: 160
+                              height: 32
                               fontSize: 32
-                              through: true
-                      最大领取输入:
-                        type: TextBox
-                        attribute:
-                          x: 240
-                          y: 12
-                          width: 80
-                          height: 32
-                          fontSize: 32
-                      过期输入:
-                        type: TextBox
-                        attribute:
-                          x: 328
-                          y: 12
-                          width: 80
-                          height: 32
-                          fontSize: 32
-                      CDK删除按钮:
-                        type: Canvas
-                        attribute:
-                          x: 416
-                          y: 8
-                          width: 40
-                          height: 40
-                        action:
-                          clickLeft: |-
-                            self.parent.remove()
-                        children:
-                          CDK删除底:
-                            type: Texture
+                              emptyText: "~&7CDK码"
+                          CDK启用按钮:
+                            type: Canvas
                             attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~235,100,100,230
-                              shape: ~round_rect
-                              radius: 8
-                          CDK删除文字:
-                            type: Text
+                              x: 176
+                              y: 8
+                              width: 56
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                self.parent.cdkEnabled = !(self.parent.cdkEnabled != false)
+                            children:
+                              CDK启用底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.parent.cdkEnabled != false ? '80,180,120,230' : '235,100,100,230'"
+                                  shape: ~round_rect
+                                  radius: 8
+                              CDK启用文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
+                                  fontSize: 32
+                                  through: true
+                          最大领取输入:
+                            type: TextBox
                             attribute:
-                              point: ~middle_center
-                              texts: "~&f✕"
+                              x: 240
+                              y: 12
+                              width: 80
+                              height: 32
                               fontSize: 32
-                              through: true
+                              emptyText: "~&7次数"
+                          过期输入:
+                            type: TextBox
+                            attribute:
+                              x: 328
+                              y: 12
+                              width: 80
+                              height: 32
+                              fontSize: 32
+                              emptyText: "~&7时长"
+                          CDK删除按钮:
+                            type: Canvas
+                            attribute:
+                              x: 416
+                              y: 8
+                              width: 40
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                self.parent.remove()
+                            children:
+                              CDK删除底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~235,100,100,230
+                                  shape: ~round_rect
+                                  radius: 8
+                              CDK删除文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: "~&f✕"
+                                  fontSize: 32
+                                  through: true
               添加CDK按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 784
-                  y: 852
+                  y: 990
                   width: 120
                   height: 40
                 action:

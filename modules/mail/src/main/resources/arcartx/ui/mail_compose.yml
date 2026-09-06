@@ -592,7 +592,7 @@ controls:
                       itemScale: 0.72
                       slotType: ~Backpack
                       lock: true
-                      id: 9
+                      id: 9.round()
                     action:
                       clickLeft: |-
                         Packet.send('AXS_MAIL', 'compose-add-attachment', self.id, '1')

@@ -2133,7 +2133,9 @@ public final class MailService implements Listener {
         if (slot < 9 || slot > 44) {
             return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
-        ItemStack item = player.getInventory().getItem(slot);
+        // ArcartX Backpack slot id（9~44）需转换为 Bukkit PlayerInventory slot index
+        int bukkitSlot = arcartxSlotToBukkit(slot);
+        ItemStack item = player.getInventory().getItem(bukkitSlot);
         if (item == null || item.getType().isAir()) {
             return MailOperationResult.failure(message("player.attachment-slot-empty"));
         }
@@ -2154,9 +2156,9 @@ public final class MailService implements Listener {
         // 从玩家背包移除
         item.setAmount(item.getAmount() - count);
         if (item.getAmount() <= 0) {
-            player.getInventory().setItem(slot, null);
+            player.getInventory().setItem(bukkitSlot, null);
         } else {
-            player.getInventory().setItem(slot, item);
+            player.getInventory().setItem(bukkitSlot, item);
         }
         // 添加到附件列表
         session.attachments().add(toAdd);
@@ -2192,7 +2194,9 @@ public final class MailService implements Listener {
         if (slot < 9 || slot > 44) {
             return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
-        ItemStack item = player.getInventory().getItem(slot);
+        // ArcartX Backpack slot id（9~44）需转换为 Bukkit PlayerInventory slot index
+        int bukkitSlot = arcartxSlotToBukkit(slot);
+        ItemStack item = player.getInventory().getItem(bukkitSlot);
         if (item == null || item.getType().isAir()) {
             return MailOperationResult.failure(message("player.attachment-slot-empty"));
         }
@@ -2206,9 +2210,9 @@ public final class MailService implements Listener {
         // 从玩家背包移除
         item.setAmount(item.getAmount() - count);
         if (item.getAmount() <= 0) {
-            player.getInventory().setItem(slot, null);
+            player.getInventory().setItem(bukkitSlot, null);
         } else {
-            player.getInventory().setItem(slot, item);
+            player.getInventory().setItem(bukkitSlot, item);
         }
         // 添加到附件列表
         session.attachments().add(toAdd);
@@ -3201,6 +3205,23 @@ public final class MailService implements Listener {
         } catch (NumberFormatException exception) {
             return fallback;
         }
+    }
+
+    /**
+     * 将 ArcartX Backpack slot id 转换为 Bukkit {@link PlayerInventory} slot index。
+     * <p>ArcartX UI 的 Backpack 槽位 id 映射与原版 Bukkit 不同：
+     * <ul>
+     *   <li>ArcartX 9~35 = 背包主区 → Bukkit 9~35（一致）</li>
+     *   <li>ArcartX 36~44 = 快捷栏   → Bukkit 0~8（需转换）</li>
+     * </ul>
+     *
+     * @param arcartxSlot ArcartX UI Backpack 槽位 id（9~44）
+     * @return Bukkit PlayerInventory slot index，无效范围返回 -1
+     */
+    private static int arcartxSlotToBukkit(int arcartxSlot) {
+        if (arcartxSlot >= 9 && arcartxSlot <= 35) return arcartxSlot;
+        if (arcartxSlot >= 36 && arcartxSlot <= 44) return arcartxSlot - 36;
+        return -1;
     }
 
     private static boolean isRealItem(ItemStack itemStack) {
