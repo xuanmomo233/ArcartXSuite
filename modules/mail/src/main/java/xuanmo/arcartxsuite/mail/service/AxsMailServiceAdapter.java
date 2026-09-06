@@ -289,13 +289,13 @@ public final class AxsMailServiceAdapter implements AxsMailService {
         for (ItemStack item : request.items()) {
             if (item == null) continue;
             String itemData = xuanmo.arcartxsuite.mail.util.MailItemSerializer.serialize(item);
-            attachments.add(new MailAttachment(0L, sortOrder++, MailAttachmentType.ITEM, itemData, "", 0.0D, ""));
+            attachments.add(new MailAttachment(0L, sortOrder++, MailAttachmentType.ITEM, itemData, "", 0.0D, "", null));
         }
         for (AxsMailRequest.CurrencyAttachment currency : request.currencies()) {
             String currencyId = currency.provider();
             MailAttachmentType type = "money".equalsIgnoreCase(currencyId)
                 ? MailAttachmentType.VAULT : MailAttachmentType.CURRENCY;
-            attachments.add(new MailAttachment(0L, sortOrder++, type, "", currencyId, currency.amount(), currency.displayName()));
+            attachments.add(new MailAttachment(0L, sortOrder++, type, "", currencyId, currency.amount(), currency.displayName(), null));
         }
         return attachments;
     }

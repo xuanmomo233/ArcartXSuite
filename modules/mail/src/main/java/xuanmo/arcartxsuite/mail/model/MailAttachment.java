@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.mail.model;
 
 import java.util.Locale;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 邮件附件，表示一封邮件中携带的物品或货币附件。
@@ -14,6 +16,7 @@ import java.util.Locale;
  * @param currencyId  货币 ID（仅货币类附件有效）
  * @param amount      数量
  * @param description 附件展示描述
+ * @param icon        货币附件的图标定义（支持 material / custom-model-data / texture 等，与 menu 模块 IconDefinition 一致），物品附件为 null
  */
 public record MailAttachment(
     long id,
@@ -22,7 +25,8 @@ public record MailAttachment(
     String itemData,
     String currencyId,
     double amount,
-    String description
+    String description,
+    @Nullable IconDefinition icon
 ) {
     /**
      * 判断该附件是否为物品类型。

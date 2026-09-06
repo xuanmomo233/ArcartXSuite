@@ -852,9 +852,9 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.selectedMode == 'auction'){
-                      Screen.open("AXS:market_auction")
+                      Packet.send(var.packetId, 'auction_ui_open')
                     } else {
-                      Screen.open("AXS:market_player_shop")
+                      Packet.send(var.packetId, 'pshop_ui_open')
                     }
                 children:
                   返回背景:

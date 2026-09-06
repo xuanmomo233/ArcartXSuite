@@ -164,7 +164,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             () -> getCapability(SecondaryPasswordAccess.class),
             itemSourceRegistry,
             vanillaItemNameBridge,
-            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry)
+            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry),
+            itemStackBridge
         );
         service.start();
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
@@ -187,7 +188,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                             String itemData = xuanmo.arcartxsuite.mail.util.MailItemSerializer.serialize(item);
                             attachments.add(new xuanmo.arcartxsuite.mail.model.MailAttachment(
                                 0L, sortOrder++, xuanmo.arcartxsuite.mail.model.MailAttachmentType.ITEM,
-                                itemData, "", 0.0D, ""));
+                                itemData, "", 0.0D, "", null));
                         } else if (spec.type() == MailAttachmentSpec.Type.CURRENCY) {
                             String currencyId = spec.currencyId();
                             if (currencyId == null || currencyId.isBlank()) continue;
@@ -198,7 +199,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                                     ? xuanmo.arcartxsuite.mail.model.MailAttachmentType.VAULT
                                     : xuanmo.arcartxsuite.mail.model.MailAttachmentType.CURRENCY;
                             attachments.add(new xuanmo.arcartxsuite.mail.model.MailAttachment(
-                                0L, sortOrder++, type, "", currencyId, amount, ""));
+                                0L, sortOrder++, type, "", currencyId, amount, "", null));
                         }
                     }
                     String logContent = buildLogContent(request.sourceModule(), request.sourceDetail());

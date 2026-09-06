@@ -28,11 +28,21 @@ preset:
   expires-after-days: 15
 
   # 货币附件；可定义多种货币附件。
-  # currency-attachments:
-  #   - currency: money
-  #     amount: 88
-  #     description: 新手金币礼包
+  # icon 字段可选，与 menu 模块的 icon 配置一致，支持 material / custom-model-data / texture / texture-url / name / lore 等。
+  currency-attachments:
+    - currency: money
+      amount: 88
+      description: 新手金币礼包
+      # icon:
+      #   material: GOLD_INGOT
+      #   name: "&6金币"
+      # 示例（资源包自定义贴图）：
+      # icon:
+      #   material: PAPER
+      #   texture: "mail/icon_money"
+      #   custom-model-data: 10001
 
+  # 物品附件
   item-attachments:
     - source: minecraft
       id: APPLE
@@ -76,8 +86,8 @@ preset:
   #   JS:    "js: <script>"
   #   也可写成 Map 列表 / 嵌套配置节: type: papi|aria|js + placeholder/operator/value
   # 例如: "%player_level% >= 10"
-  claim-conditions: []
-  # - "%player_level% >= 10"
+  claim-conditions:
+    - "%player_level% >= 0"
 
   # 可选: 随预设同步到数据库的 CDK。
   # 执行 /axs mail reload 后会创建或更新固定 code；已有领取次数不会清零。

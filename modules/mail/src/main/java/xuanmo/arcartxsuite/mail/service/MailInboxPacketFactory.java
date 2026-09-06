@@ -2,9 +2,16 @@ package xuanmo.arcartxsuite.mail.service;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailInboxFilter;
@@ -13,6 +20,7 @@ import xuanmo.arcartxsuite.mail.model.MailMessage;
 import xuanmo.arcartxsuite.mail.model.MailPage;
 import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
+import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
 
 /**
  * 收件箱界面数据包工厂，构建发送给客户端的收件箱列表与选中邮件详情数据包。
@@ -33,7 +41,7 @@ public final class MailInboxPacketFactory {
         MailInboxFilter filter,
         int pageClaimableCount
     ) {
-        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, null, 40);
+        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, null, 40, null);
     }
 
     public static Map<String, Object> build(
@@ -44,7 +52,7 @@ public final class MailInboxPacketFactory {
         int pageClaimableCount,
         MessageProvider messages
     ) {
-        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, messages, 40);
+        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, messages, 40, null);
     }
 
     public static Map<String, Object> build(
@@ -55,6 +63,19 @@ public final class MailInboxPacketFactory {
         int pageClaimableCount,
         MessageProvider messages,
         int inboxPreviewMaxChars
+    ) {
+        return build(mailPage, selectedMailId, stats, filter, pageClaimableCount, messages, inboxPreviewMaxChars, null);
+    }
+
+    public static Map<String, Object> build(
+        MailPage<MailMessage> mailPage,
+        long selectedMailId,
+        MailMailboxStats stats,
+        MailInboxFilter filter,
+        int pageClaimableCount,
+        MessageProvider messages,
+        int inboxPreviewMaxChars,
+        @Nullable IconResolver iconResolver
     ) {
         Map<String, Object> packet = new LinkedHashMap<>();
         Map<String, Object> entries = new LinkedHashMap<>();
@@ -107,6 +128,7 @@ public final class MailInboxPacketFactory {
         packet.put("selected_expires_at", selected == null ? "" : (selected.expiresAt() == null ? message(messages, "ui.expires-never", "永久") : TIME_FORMATTER.format(selected.expiresAt())));
         packet.put("selected_body", bodyLines(selected == null ? "" : selected.body(), messages));
         packet.put("selected_attachment_summary", selected == null ? message(messages, "ui.no-attachments", "无附件") : attachmentSummary(selected.attachments(), messages));
+        packet.put("selected_attachments", buildAttachmentList(selected, iconResolver, messages));
         packet.put("selected_claimable", selected != null && selected.claimable());
         packet.put("maxMailCount", mailPage.pageSize());
         return packet;
@@ -142,6 +164,71 @@ public final class MailInboxPacketFactory {
             builder.append(attachment.description().isBlank() ? attachment.type().name() : attachment.description());
         }
         return builder.toString();
+    }
+
+    /**
+     * 构建选中邮件的附件列表数据，供 UI 端用 Slot 控件展示物品图标。
+     * <p>
+     * 物品附件：反序列化 itemData 后通过 IconResolver 序列化为 UI 可识别的 itemJson。
+     * 货币附件：通过 IconResolver.resolveItemJson 解析 IconDefinition（支持 material / custom-model-data / texture 等）。
+     *
+     * @param selected     选中邮件，为 null 时返回空列表
+     * @param iconResolver 图标解析器，为 null 时 itemJson 为空
+     * @param messages     消息提供者
+     * @return 附件列表，每项含 type/itemJson/description/amount 字段
+     */
+    private static Map<String, Object> buildAttachmentList(MailMessage selected, @Nullable IconResolver iconResolver, MessageProvider messages) {
+        if (selected == null || selected.attachments() == null || selected.attachments().isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        int index = 0;
+        for (MailAttachment attachment : selected.attachments()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("type", attachment.type().name());
+            entry.put("description", attachment.description().isBlank() ? attachment.type().name() : attachment.description());
+            entry.put("amount", attachment.amount());
+            entry.put("itemJson", buildAttachmentItemJson(attachment, iconResolver));
+            result.put(Integer.toString(index), entry);
+            index++;
+        }
+        return result;
+    }
+
+    /**
+     * 将单个附件序列化为 UI 可渲染的 itemJson 字符串。
+     * <p>
+     * 物品附件：反序列化 Base64 itemData 后通过 IconResolver.itemToJson 序列化。
+     * 货币附件：通过 IconResolver.resolveItemJson 解析 IconDefinition（支持完整 menu 风格 icon 配置）。
+     * 货币附件无 IconDefinition 时回退为纸片 + 描述文本。
+     */
+    private static String buildAttachmentItemJson(MailAttachment attachment, @Nullable IconResolver iconResolver) {
+        if (iconResolver == null) {
+            return "";
+        }
+        try {
+            if (attachment.isItem() && attachment.itemData() != null && !attachment.itemData().isBlank()) {
+                ItemStack stack = MailItemSerializer.deserialize(attachment.itemData());
+                return iconResolver.itemToJson(stack);
+            } else if (attachment.isCurrency()) {
+                // 货币附件：优先使用 IconDefinition（menu 风格完整图标配置）
+                if (attachment.icon() != null && attachment.icon().hasIcon()) {
+                    return iconResolver.resolveItemJson(null, attachment.icon());
+                }
+                // 回退：纸片 + 描述文本
+                ItemStack stack = new ItemStack(Material.PAPER, 1);
+                ItemMeta meta = stack.getItemMeta();
+                if (meta != null) {
+                    String desc = attachment.description().isBlank() ? attachment.currencyId() : attachment.description();
+                    meta.setDisplayName(desc);
+                    stack.setItemMeta(meta);
+                }
+                return iconResolver.itemToJson(stack);
+            }
+            return "";
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private static String sourceText(MailSourceType type, MessageProvider messages) {

@@ -1,5 +1,5 @@
 # 配置文件版本号；迁移系统据此自动升级配置结构。
-config-version: 2
+config-version: 3
 # AXS Mail
 # 作用: 收件箱、写信、附件、领取命令、预设邮件、CDK、跨服刷新、邮件日志和 Mail UI；可被 OnlineRewards 等模块调用预设邮件发奖。
 # 依赖: ArcartX；Vault、PlayerPoints、PlaceholderAPI、Redis 按功能选用。
@@ -55,7 +55,7 @@ ui:
   admin-ui-id: AXS:mail_admin
   # 模块启用时是否自动注册 UI 配置文件。
   register-ui-on-enable: true
-  # 是否覆盖玩家已有的同名 UI 文件（false 则保留玩家自定义修改）。
+  # 是否覆盖已有的同名 UI 文件（false 则保留自定义修改）。
   overwrite-ui-files: false
 
   # 玩家打开写信背包时显示的标题。
@@ -114,6 +114,20 @@ player-send:
   subject-max-length: 48
   # 邮件正文最大长度。
   body-max-length: 400
+
+  # 玩家发送的 Vault 货币附件在收件箱 UI 中展示的默认图标。
+  # 与 menu 模块的 icon 配置一致，支持 material / custom-model-data / texture / texture-url / name / lore / source / id / nbt / glow / skull-texture / color 等。
+  # 留空或不配置时使用默认纸片图标。
+  # 示例（原版材质）：
+  vault-default-icon:
+    material: GOLD_INGOT
+    name: "&6金币"
+  # 示例（资源包自定义贴图）：
+  # vault-default-icon:
+  #   material: PAPER
+  #   texture: "mail/icon_vault"
+  #   custom-model-data: 10001
+  #   name: "&6金币"
 
 moderation:
   # 命中时禁止发送；支持敏感词、正则、物品材质和 Lore 正则。

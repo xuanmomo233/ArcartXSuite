@@ -65,7 +65,6 @@ ui:
       var.isAdmin = false
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.attachmentJsons = none
-      var.backpackJsons = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -124,17 +123,10 @@ ui:
       var.totalFeeCurrency = packet['total_fee_currency']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
-      var.backpackJsons = packet['backpack_jsons']
       var.actionBusy = false
-      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        slot = val.附件网格.get(i.round)
-        if(slot != none){
-          slot.seticon()
-        }
-      }
-      for(i in range(0, 35)){
-        slot = val.背包网格.get(i.round)
+        slot = val.附件网格.get(i.round())
         if(slot != none){
           slot.seticon()
         }
@@ -157,17 +149,10 @@ ui:
       var.totalFeeCurrency = packet['total_fee_currency']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
-      var.backpackJsons = packet['backpack_jsons']
       var.actionBusy = false
-      // 数据就绪后触发槽位图标刷新（seticon 不会随数据变化自动刷新）
+      // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        slot = val.附件网格.get(i.round)
-        if(slot != none){
-          slot.seticon()
-        }
-      }
-      for(i in range(0, 35)){
-        slot = val.背包网格.get(i.round)
+        slot = val.附件网格.get(i.round())
         if(slot != none){
           slot.seticon()
         }
@@ -523,7 +508,7 @@ controls:
                   create: |-
                     for(i in range(1,5)){
                       slot = self['槽位0'].copy('slot' + i)
-                      slot.id = i.round()
+                      slot.entryKey = i.round()
                     }
                 children:
                   槽位0:
@@ -537,12 +522,13 @@ controls:
                       radius: 6
                       itemScale: 0.72
                       slotType: ~Icon
-                      id: 0.round()
-                      visible: "self.id < var.maxAttachments"
-                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.id] != none && var.attachmentJsons[self.id] != '' ? var.attachmentJsons[self.id] : var.air)"
+                      lock: true
+                      entryKey: 0.round()
+                      visible: "self.entryKey < var.maxAttachments"
+                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey + ''] != none && var.attachmentJsons[self.entryKey + ''] != '' ? var.attachmentJsons[self.entryKey + ''] : var.air)"
                     action:
                       clickLeft: |-
-                        Packet.send('AXS_MAIL', 'compose-remove-attachment', self.id)
+                        Packet.send('AXS_MAIL', 'compose-remove-attachment', self.entryKey)
                     effect:
                       stroke:
                         width: 2
@@ -591,7 +577,7 @@ controls:
                   create: |-
                     for(i in range(1,35)){
                       slot = self['槽位0'].copy('slot' + i)
-                      slot.id = i.round()
+                      slot.id = (9 + i).round()
                     }
                 children:
                   槽位0:
@@ -604,9 +590,9 @@ controls:
                       shape: ~round_rect
                       radius: 6
                       itemScale: 0.72
-                      slotType: ~Icon
-                      id: 0.round()
-                      seticon: "self.setItemIcon(var.backpackJsons != none && var.backpackJsons[self.id] != none && var.backpackJsons[self.id] != '' ? var.backpackJsons[self.id] : var.air)"
+                      slotType: ~Backpack
+                      lock: true
+                      id: 9
                     action:
                       clickLeft: |-
                         Packet.send('AXS_MAIL', 'compose-add-attachment', self.id, '1')
@@ -938,7 +924,7 @@ controls:
                           height: 32
                           length: 64
                           emptyText: "~&7输入二级密码"
-                          passwordChar: "*"
+                          passwordChar: ~*
                           fontSize: 50
                         action:
                           textChange: |-

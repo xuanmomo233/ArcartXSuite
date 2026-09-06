@@ -17,6 +17,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +49,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
@@ -130,6 +136,7 @@ public final class MailService implements Listener {
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
     private final xuanmo.arcartxsuite.api.icon.IconResolver iconResolver;
+    private final ItemBridgeAPI itemStackBridge;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -170,7 +177,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null);
     }
 
     public MailService(
@@ -189,7 +196,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null);
     }
 
     public MailService(
@@ -226,6 +233,7 @@ public final class MailService implements Listener {
             null,
             itemSourceRegistry,
             vanillaItemNameBridge,
+            null,
             null
         );
     }
@@ -247,7 +255,8 @@ public final class MailService implements Listener {
         Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
-        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver
+        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver,
+        ItemBridgeAPI itemStackBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -266,6 +275,7 @@ public final class MailService implements Listener {
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.itemSourceRegistry = itemSourceRegistry;
         this.iconResolver = iconResolver;
+        this.itemStackBridge = itemStackBridge;
     }
 
     private String message(String key, Object... args) {
@@ -665,9 +675,8 @@ public final class MailService implements Listener {
             session.actionToken()
         );
         composePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
-        // 序列化附件和背包
+        // 序列化附件（背包槽位使用 ~Backpack 类型，由客户端自动显示，无需发送 backpack_jsons）
         composePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
-        composePacket.put("backpack_jsons", serializeBackpack(player));
         bridge.sendPacket(player, composeUiId, "init", composePacket);
     }
 
@@ -676,18 +685,6 @@ public final class MailService implements Listener {
         if (attachments == null) return jsons;
         for (int i = 0; i < attachments.size(); i++) {
             ItemStack item = attachments.get(i);
-            if (item != null && !item.getType().isAir()) {
-                jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
-            }
-        }
-        return jsons;
-    }
-
-    private Map<String, Object> serializeBackpack(Player player) {
-        Map<String, Object> jsons = new LinkedHashMap<>();
-        ItemStack[] contents = player.getInventory().getContents();
-        for (int i = 0; i < Math.min(36, contents.length); i++) {
-            ItemStack item = contents[i];
             if (item != null && !item.getType().isAir()) {
                 jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
             }
@@ -1095,7 +1092,7 @@ public final class MailService implements Listener {
                 if (data != null && data.size() >= 3) {
                     int slot = (int) parseLong(data.get(1), -1);
                     String countStr = safe(data.get(2));
-                    sendAdminResult(player, handleAdminAddAttachment(player, slot, countStr));
+                    sendAdminResult(player, handleAdminAddAttachment(player, slot, countStr), false);
                 }
                 return true;
             }
@@ -1103,7 +1100,7 @@ public final class MailService implements Listener {
                 if (!player.hasPermission("arcartxsuite.admin")) return true;
                 if (data != null && data.size() >= 2) {
                     int index = (int) parseLong(data.get(1), -1);
-                    sendAdminResult(player, handleAdminRemoveAttachment(player, index));
+                    sendAdminResult(player, handleAdminRemoveAttachment(player, index), false);
                 }
                 return true;
             }
@@ -1249,17 +1246,20 @@ public final class MailService implements Listener {
             payload.put("subject", safe(def.subject()));
             payload.put("body", safe(def.body()));
             payload.put("expiresAfterDays", def.expiresAfter() != null ? def.expiresAfter().toDays() : 15);
-            // 货币附件序列化为 "currency:amount:desc|currency:amount:desc" 字符串，供 UI 输入框直接显示
-            StringBuilder currencyStr = new StringBuilder();
+            // 货币附件：发送结构化列表供 UI 动态行使用
+            List<Map<String, Object>> currencyList = new java.util.ArrayList<>();
             if (def.attachments() != null) {
                 for (MailAttachment att : def.attachments()) {
                     if (att.isCurrency()) {
-                        if (currencyStr.length() > 0) currencyStr.append("|");
-                        currencyStr.append(att.currencyId()).append(":").append(att.amount()).append(":").append(att.description());
+                        Map<String, Object> entry = new java.util.LinkedHashMap<>();
+                        entry.put("currency", att.currencyId());
+                        entry.put("amount", att.amount());
+                        entry.put("description", att.description() != null ? att.description() : "");
+                        currencyList.add(entry);
                     }
                 }
             }
-            payload.put("currencyAttachments", currencyStr.toString());
+            payload.put("currencyAttachmentsList", currencyList);
             long itemCount = def.attachments() == null ? 0 : def.attachments().stream().filter(MailAttachment::isItem).count();
             payload.put("itemAttachmentCount", itemCount);
             // 领取命令序列化为每行一条的字符串，供 UI 多行输入框直接显示
@@ -1285,17 +1285,24 @@ public final class MailService implements Listener {
                 }
             }
             payload.put("claimConditions", condStr.toString());
-            // CDK 只发送 code 列表，每行一个码（enabled/max-claims/expires-after 保持原配置不变）
-            StringBuilder cdkStr = new StringBuilder();
+            // CDK：发送结构化列表供 UI 动态行使用
+            List<Map<String, Object>> cdkList = new java.util.ArrayList<>();
             if (def.cdks() != null) {
                 for (MailPresetCdkDefinition cdk : def.cdks()) {
                     if (cdk.code() != null && !cdk.code().isBlank()) {
-                        if (cdkStr.length() > 0) cdkStr.append("\n");
-                        cdkStr.append(cdk.code());
+                        Map<String, Object> entry = new java.util.LinkedHashMap<>();
+                        entry.put("code", cdk.code());
+                        entry.put("enabled", cdk.enabled());
+                        entry.put("maxClaims", cdk.maxClaims());
+                        entry.put("expiresAfter", cdk.expiresAfter() != null ? cdk.expiresAfter().toDays() + "d" : "");
+                        cdkList.add(entry);
                     }
                 }
             }
-            payload.put("cdks", cdkStr.toString());
+            payload.put("cdkList", cdkList);
+            // 物品附件图标 JSON：直接从预设定义反序列化并序列化为 UI 图标 JSON
+            // 不依赖 populateAdminContainer 的 session（该 session 可能因反序列化环境差异为空）
+            payload.put("attachment_jsons", serializeAttachments(deserializePresetItems(def)));
         }
         bridge.sendPacket(player, adminUiId, "preset-detail", payload);
     }
@@ -1330,24 +1337,30 @@ public final class MailService implements Listener {
                     ItemStack clean = stripTemplateTag(itemStack);
                     attachments.add(new MailAttachment(
                         0L, order++, MailAttachmentType.ITEM,
-                        MailItemSerializer.serialize(clean), "", 0.0D, resolveItemDescription(clean)
+                        MailItemSerializer.serialize(clean), "", 0.0D, resolveItemDescription(clean), null
                     ));
                 }
             }
 
-            // 解析 currency attachments: "currency:amount:desc|currency:amount:desc"
+            // 解析 currency attachments: JSON 数组 [{"currency":"money","amount":88,"description":"..."}]
             if (data.size() > 7 && !safe(data.get(7)).isBlank()) {
-                String[] parts = safe(data.get(7)).split("\\|");
-                for (String part : parts) {
-                    String[] fields = part.split(":", 3);
-                    if (fields.length >= 2) {
-                        String currencyId = fields[0].trim().toLowerCase(Locale.ROOT);
-                        double amount;
-                        try { amount = Double.parseDouble(fields[1].trim()); } catch (NumberFormatException e) { continue; }
+                try {
+                    JsonArray curArray = JsonParser.parseString(safe(data.get(7))).getAsJsonArray();
+                    for (JsonElement elem : curArray) {
+                        if (!elem.isJsonObject()) continue;
+                        JsonObject obj = elem.getAsJsonObject();
+                        String currencyId = obj.has("currency") ? obj.get("currency").getAsString().trim().toLowerCase(Locale.ROOT) : "";
+                        if (currencyId.isBlank()) continue;
+                        double amount = 0;
+                        if (obj.has("amount")) {
+                            try { amount = obj.get("amount").getAsDouble(); } catch (Exception e) { continue; }
+                        }
                         if (amount <= 0) continue;
-                        String desc = fields.length >= 3 ? fields[2].trim() : currencyId + " " + amount;
-                        attachments.add(new MailAttachment(0L, order++, MailAttachmentType.CURRENCY, "", currencyId, amount, desc));
+                        String desc = obj.has("description") ? obj.get("description").getAsString().trim() : currencyId + " " + amount;
+                        attachments.add(new MailAttachment(0L, order++, MailAttachmentType.CURRENCY, "", currencyId, amount, desc, null));
                     }
+                } catch (Exception e) {
+                    this.logger.warning("Admin 预设保存: 货币附件 JSON 解析失败: " + e.getMessage());
                 }
             }
 
@@ -1380,31 +1393,39 @@ public final class MailService implements Listener {
                     }
                 }
             }
-            // CDK: 每行一个 code，enabled/max-claims/expires-after 从已有配置保留
+            // CDK: JSON 数组 [{"code":"STARTER2026","enabled":true,"maxClaims":100,"expiresAfter":"30d"}]
             List<MailPresetCdkDefinition> cdks = new ArrayList<>();
             if (data.size() > 10 && !safe(data.get(10)).isBlank()) {
-                // 保留已有 CDK 的配置映射（按 code 索引）
-                java.util.Map<String, MailPresetCdkDefinition> existingCdks = new java.util.LinkedHashMap<>();
-                if (existing != null && existing.cdks() != null) {
-                    for (MailPresetCdkDefinition c : existing.cdks()) {
-                        existingCdks.put(c.code(), c);
+                try {
+                    JsonArray cdkArray = JsonParser.parseString(safe(data.get(10))).getAsJsonArray();
+                    for (JsonElement elem : cdkArray) {
+                        if (!elem.isJsonObject()) continue;
+                        JsonObject obj = elem.getAsJsonObject();
+                        String code = obj.has("code") ? obj.get("code").getAsString().trim() : "";
+                        if (code.isEmpty()) continue;
+                        String normalizedCode = normalizeCdkCode(code);
+                        if (normalizedCode.isBlank()) continue;
+                        boolean cdkEnabled = !obj.has("enabled") || obj.get("enabled").getAsBoolean();
+                        int maxClaims = obj.has("maxClaims") ? obj.get("maxClaims").getAsInt() : 100;
+                        if (maxClaims < 1) maxClaims = 100;
+                        java.time.Duration expiresAfterDur = null;
+                        if (obj.has("expiresAfter") && !obj.get("expiresAfter").getAsString().isBlank()) {
+                            String eaStr = obj.get("expiresAfter").getAsString().trim();
+                            try {
+                                if (eaStr.endsWith("d")) {
+                                    expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr.substring(0, eaStr.length() - 1)));
+                                } else {
+                                    expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr));
+                                }
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        if (expiresAfterDur == null) {
+                            expiresAfterDur = java.time.Duration.ofDays(30);
+                        }
+                        cdks.add(new MailPresetCdkDefinition(normalizedCode, cdkEnabled, maxClaims, null, expiresAfterDur));
                     }
-                }
-                for (String line : safe(data.get(10)).split("\\R")) {
-                    String code = line.trim();
-                    if (code.isEmpty()) continue;
-                    String normalizedCode = normalizeCdkCode(code);
-                    if (normalizedCode.isBlank()) continue;
-                    MailPresetCdkDefinition existingCdk = existingCdks.get(normalizedCode);
-                    if (existingCdk != null) {
-                        // 保留原配置
-                        cdks.add(existingCdk);
-                    } else {
-                        // 新 CDK 使用默认值: enabled=true, max-claims=100, expires-after=30d
-                        cdks.add(new MailPresetCdkDefinition(
-                            normalizedCode, true, 100, null, java.time.Duration.ofDays(30)
-                        ));
-                    }
+                } catch (Exception e) {
+                    this.logger.warning("Admin 预设保存: CDK JSON 解析失败: " + e.getMessage());
                 }
             }
 
@@ -1430,10 +1451,16 @@ public final class MailService implements Listener {
     }
 
     private void sendAdminResult(Player player, MailOperationResult result) {
+        sendAdminResult(player, result, true);
+    }
+
+    /** @param closeView true=操作完成后切回列表视图（保存/删除）；false=留在编辑视图（附件增删） */
+    private void sendAdminResult(Player player, MailOperationResult result, boolean closeView) {
         if (player == null || !player.isOnline() || result == null) return;
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("success", result.success());
         payload.put("message", result.message());
+        payload.put("closeView", closeView);
         bridge.sendPacket(player, adminUiId, "result", payload);
         player.sendMessage(MESSAGE_PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
@@ -1633,15 +1660,20 @@ public final class MailService implements Listener {
 
     private void returnComposeItems(Player player, ComposeSession session) {
         if (player == null || session == null) return;
+        boolean returned = false;
         PlayerInventory playerInventory = player.getInventory();
         for (ItemStack itemStack : session.attachments()) {
             if (!isRealItem(itemStack)) continue;
+            returned = true;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack);
             for (ItemStack leftover : leftovers.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             }
         }
         session.attachments().clear();
+        if (returned && player.isOnline()) {
+            player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.compose-attachments-returned"));
+        }
     }
 
     private String crop(String rawValue, int maxLength) {
@@ -1766,7 +1798,7 @@ public final class MailService implements Listener {
 
             int claimableCount = (int) page.entries().stream().filter(MailMessage::claimable).count();
             MailMailboxStats stats = repository.loadStats(player.getUniqueId());
-            Map<String, Object> inboxPacket = MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages, configuration.ui().inboxPreviewMaxChars());
+            Map<String, Object> inboxPacket = MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages, configuration.ui().inboxPreviewMaxChars(), iconResolver);
             inboxPacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
             bridge.sendPacket(
                 player,
@@ -2098,12 +2130,12 @@ public final class MailService implements Listener {
         if (session == null || session.sent()) {
             return MailOperationResult.failure(message("player.compose-not-open"));
         }
-        if (slot < 0 || slot >= 36) {
-            return MailOperationResult.failure("无效槽位");
+        if (slot < 9 || slot > 44) {
+            return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
         ItemStack item = player.getInventory().getItem(slot);
         if (item == null || item.getType().isAir()) {
-            return MailOperationResult.failure("该槽位没有物品");
+            return MailOperationResult.failure(message("player.attachment-slot-empty"));
         }
         if (session.attachments().size() >= configuration.playerSend().maxAttachments()) {
             return MailOperationResult.failure(message("player.attachment-slot-limit", configuration.playerSend().maxAttachments()));
@@ -2139,7 +2171,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.compose-not-open"));
         }
         if (index < 0 || index >= session.attachments().size()) {
-            return MailOperationResult.failure("无效附件索引");
+            return MailOperationResult.failure(message("player.attachment-index-invalid"));
         }
         ItemStack item = session.attachments().remove(index);
         if (item != null && !item.getType().isAir()) {
@@ -2155,17 +2187,17 @@ public final class MailService implements Listener {
     private MailOperationResult handleAdminAddAttachment(Player player, int slot, String countStr) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
         if (session == null) {
-            return MailOperationResult.failure("Admin 编辑会话不存在");
+            return MailOperationResult.failure(message("player.admin-session-missing"));
         }
-        if (slot < 0 || slot >= 36) {
-            return MailOperationResult.failure("无效槽位");
+        if (slot < 9 || slot > 44) {
+            return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
         ItemStack item = player.getInventory().getItem(slot);
         if (item == null || item.getType().isAir()) {
-            return MailOperationResult.failure("该槽位没有物品");
+            return MailOperationResult.failure(message("player.attachment-slot-empty"));
         }
         if (session.attachments().size() >= adminAttachmentSlots()) {
-            return MailOperationResult.failure("附件槽位已满");
+            return MailOperationResult.failure(message("player.admin-attachment-slot-full"));
         }
         int count = "all".equalsIgnoreCase(countStr) ? item.getAmount() : 1;
         count = Math.min(count, item.getAmount());
@@ -2188,10 +2220,10 @@ public final class MailService implements Listener {
     private MailOperationResult handleAdminRemoveAttachment(Player player, int index) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
         if (session == null) {
-            return MailOperationResult.failure("Admin 编辑会话不存在");
+            return MailOperationResult.failure(message("player.admin-session-missing"));
         }
         if (index < 0 || index >= session.attachments().size()) {
-            return MailOperationResult.failure("无效附件索引");
+            return MailOperationResult.failure(message("player.attachment-index-invalid"));
         }
         ItemStack item = session.attachments().remove(index);
         if (item != null && !item.getType().isAir() && !isTemplateItem(item)) {
@@ -2220,7 +2252,7 @@ public final class MailService implements Listener {
     }
 
     /**
-     * 刷新 admin UI 附件区域：发送 attachment-count + attachment_jsons + backpack_jsons。
+     * 刷新 admin UI 附件区域：发送 attachment-count + attachment_jsons。
      */
     private void refreshAdminAttachments(Player player) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
@@ -2229,7 +2261,6 @@ public final class MailService implements Listener {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("itemAttachmentCount", count);
         payload.put("attachment_jsons", serializeAttachments(session.attachments()));
-        payload.put("backpack_jsons", serializeBackpack(player));
         bridge.sendPacket(player, adminUiId, "attachment-count", payload);
     }
 
@@ -2816,11 +2847,10 @@ public final class MailService implements Listener {
                 session == null ? null : session.actionToken()
             );
             composeUpdatePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
-            // 序列化附件和背包
+            // 序列化附件（背包槽位使用 ~Backpack 类型，由客户端自动显示，无需发送 backpack_jsons）
             if (session != null) {
                 composeUpdatePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
             }
-            composeUpdatePacket.put("backpack_jsons", serializeBackpack(player));
             bridge.sendPacket(
                 player,
                 composeUiId,
@@ -2938,7 +2968,8 @@ public final class MailService implements Listener {
                     MailItemSerializer.serialize(itemStack),
                     "",
                     0.0D,
-                    resolveItemDescription(itemStack)
+                    resolveItemDescription(itemStack),
+                    null
                 )
             );
         }
@@ -2948,6 +2979,7 @@ public final class MailService implements Listener {
                 continue;
             }
             String currencyId = normalizeCurrencyId(entry.getKey());
+            xuanmo.arcartxsuite.api.icon.IconDefinition vaultIcon = "money".equals(currencyId) ? configuration.playerSend().vaultDefaultIcon() : null;
             attachments.add(
                 new MailAttachment(
                     0L,
@@ -2956,7 +2988,8 @@ public final class MailService implements Listener {
                     "",
                     currencyId,
                     amount.doubleValue(),
-                    currencyDisplay(currencyId) + " " + trimDecimal(amount)
+                    currencyDisplay(currencyId) + " " + trimDecimal(amount),
+                    vaultIcon
                 )
             );
         }
@@ -3300,6 +3333,31 @@ public final class MailService implements Listener {
 
     // ─── Admin Attachment Helpers ─────────────────────────────────
 
+    /**
+     * 从预设定义中反序列化所有物品附件，标记为模板物品并返回列表。
+     * 供 sendAdminPresetDetail（序列化为 UI 图标 JSON）和 populateAdminContainer（填充 session）共用。
+     */
+    private List<ItemStack> deserializePresetItems(MailPresetDefinition def) {
+        List<ItemStack> items = new ArrayList<>();
+        if (def == null || def.attachments() == null) return items;
+        for (MailAttachment att : def.attachments()) {
+            if (!att.isItem() || att.itemData() == null || att.itemData().isBlank()) continue;
+            try {
+                ItemStack item = MailItemSerializer.deserialize(att.itemData());
+                if (isRealItem(item)) {
+                    markAsTemplateItem(item);
+                    items.add(item);
+                } else {
+                    this.logger.warning("Admin UI 预设附件反序列化后非真实物品: preset=" + def.id()
+                        + " itemData=" + att.itemData().substring(0, Math.min(60, att.itemData().length())));
+                }
+            } catch (Exception exception) {
+                this.logger.warning("Admin UI 预设附件反序列化异常: preset=" + def.id() + " | " + exception.getMessage());
+            }
+        }
+        return items;
+    }
+
     private void populateAdminContainer(Player player, String presetId) {
         AdminEditSession session = adminEditSessions.get(player.getUniqueId());
         if (session == null) return;
@@ -3315,17 +3373,9 @@ public final class MailService implements Listener {
             return;
         }
 
-        for (MailAttachment att : def.attachments()) {
-            if (!att.isItem() || session.attachments().size() >= adminAttachmentSlots()) break;
-            try {
-                ItemStack item = MailItemSerializer.deserialize(att.itemData());
-                if (isRealItem(item)) {
-                    markAsTemplateItem(item);
-                    session.attachments().add(item);
-                }
-            } catch (Exception exception) {
-                this.logger.warning("Admin UI 反序列化物品附件失败: " + exception.getMessage());
-            }
+        for (ItemStack item : deserializePresetItems(def)) {
+            if (session.attachments().size() >= adminAttachmentSlots()) break;
+            session.attachments().add(item);
         }
 
         refreshAdminAttachments(player);
@@ -3342,14 +3392,19 @@ public final class MailService implements Listener {
 
     private void returnAdminItems(Player player, AdminEditSession session) {
         if (player == null || session == null) return;
+        boolean returned = false;
         PlayerInventory playerInventory = player.getInventory();
         for (ItemStack itemStack : session.attachments()) {
             if (!isRealItem(itemStack)) continue;
             if (isTemplateItem(itemStack)) continue;
+            returned = true;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack.clone());
             for (ItemStack leftover : leftovers.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             }
+        }
+        if (returned && player.isOnline()) {
+            player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.admin-edits-returned"));
         }
     }
 

@@ -418,6 +418,9 @@ public class MarketService {
             case "recycle_preview" -> handleRecyclePreviewPacket(player);
             case "history_list" -> handleHistoryListPacket(player, data);
             case "sell_open" -> handleSellOpenPacket(player);
+            case "sell_ui_open" -> openSellUi(player);
+            case "auction_ui_open" -> openAuctionUi(player);
+            case "pshop_ui_open" -> openPlayerShopUi(player);
             case "pshop_list" -> handlePlayerShopListPacket(player, data);
             case "pshop_sellers" -> handlePlayerShopSellersPacket(player, data);
             case "pshop_buy" -> handlePlayerShopBuyPacket(player, data);

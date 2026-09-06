@@ -155,7 +155,7 @@ controls:
               width: 130
               height: 48
             action:
-              clickLeft: Screen.open("AXS:market_sell")
+              clickLeft: Packet.send(var.packetId, 'sell_ui_open')
             children:
               上架背景:
                 type: Texture
@@ -185,7 +185,7 @@ controls:
               width: 130
               height: 48
             action:
-              clickLeft: Screen.open("AXS:market_auction")
+              clickLeft: Packet.send(var.packetId, 'auction_ui_open')
             children:
               拍卖行背景:
                 type: Texture

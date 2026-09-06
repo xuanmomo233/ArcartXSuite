@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.mail.config;
 
 import java.util.Map;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 玩家发送邮件配置，控制发送开关、冷却、手续费、附件上限与审核策略。
@@ -20,6 +22,7 @@ import java.util.Map;
  * @param maxAttachments      单封邮件最大附件数
  * @param subjectMaxLength    主题最大长度
  * @param bodyMaxLength       正文最大长度
+ * @param vaultDefaultIcon    玩家发送的 Vault 货币附件默认图标定义（与 menu 模块 IconDefinition 配置一致），为 null 时使用默认纸片图标
  */
 public record MailPlayerSendConfiguration(
     boolean enabled,
@@ -34,7 +37,8 @@ public record MailPlayerSendConfiguration(
     boolean allowVaultAttachment,
     int maxAttachments,
     int subjectMaxLength,
-    int bodyMaxLength
+    int bodyMaxLength,
+    @Nullable IconDefinition vaultDefaultIcon
 ) {
     /**
      * 查询指定货币的附件税率。

@@ -328,7 +328,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'auction_sell_ui_open')
+                Packet.send(var.packetId, 'sell_ui_open')
             children:
               我要上架背景:
                 type: Texture

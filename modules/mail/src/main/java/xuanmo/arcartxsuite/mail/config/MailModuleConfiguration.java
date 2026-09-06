@@ -89,7 +89,8 @@ public record MailModuleConfiguration(
             playerSendSection == null || playerSendSection.getBoolean("allow-vault-attachment", true),
             playerSendSection == null ? 5 : Math.max(1, playerSendSection.getInt("max-attachments", 5)),
             playerSendSection == null ? 48 : Math.max(1, playerSendSection.getInt("subject-max-length", 48)),
-            playerSendSection == null ? 400 : Math.max(1, playerSendSection.getInt("body-max-length", 400))
+            playerSendSection == null ? 400 : Math.max(1, playerSendSection.getInt("body-max-length", 400)),
+            playerSendSection == null ? null : xuanmo.arcartxsuite.api.icon.IconDefinition.load(playerSendSection, "vault-default-icon")
         );
 
         ConfigurationSection moderationSection = configuration.getConfigurationSection("moderation");

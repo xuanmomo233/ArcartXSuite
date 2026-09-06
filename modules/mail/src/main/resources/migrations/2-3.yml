@@ -1,0 +1,7 @@
+from-version: 2
+to-version: 3
+description: "player-send 新增 vault-default-icon 配置项（IconDefinition 配置节），用于玩家发送的 Vault 货币附件在收件箱 UI 中的默认图标；mail_attachments 表新增 icon 列存储货币附件图标定义"
+operations:
+  - type: set-if-missing
+    path: player-send.vault-default-icon
+    value: ""

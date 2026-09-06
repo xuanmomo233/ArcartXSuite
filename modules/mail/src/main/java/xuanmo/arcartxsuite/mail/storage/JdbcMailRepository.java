@@ -168,6 +168,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                             attachmentStatement.setString(6, nullToEmpty(attachment.normalizedCurrencyId()));
                             attachmentStatement.setDouble(7, attachment.amount());
                             attachmentStatement.setString(8, nullToEmpty(attachment.description()));
+                            attachmentStatement.setString(9, xuanmo.arcartxsuite.mail.util.MailIconCodec.toYamlString(attachment.icon()));
                             attachmentStatement.addBatch();
                         }
                         attachmentStatement.executeBatch();
@@ -669,6 +670,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                         currency_id TEXT NULL,
                         currency_amount DOUBLE NOT NULL DEFAULT 0,
                         description TEXT NOT NULL,
+                        icon TEXT NOT NULL DEFAULT '',
                         FOREIGN KEY(mail_id) REFERENCES mail_entries(id) ON DELETE CASCADE
                     );
                     """);
@@ -751,6 +753,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                         currency_id VARCHAR(64) NULL,
                         currency_amount DOUBLE NOT NULL DEFAULT 0,
                         description TEXT NOT NULL,
+                        icon VARCHAR(255) NOT NULL DEFAULT '',
                         INDEX idx_mail_attachments_mail_id (mail_id, sort_order),
                         CONSTRAINT fk_mail_attachments_mail_id FOREIGN KEY(mail_id) REFERENCES mail_entries(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -799,6 +802,9 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
             if (!columnExists(connection, "mail_attachments", "currency_amount")) {
                 statement.execute(alterTableAddColumnSql("mail_attachments", "currency_amount", "DOUBLE NOT NULL DEFAULT 0"));
                 statement.execute("UPDATE mail_attachments SET currency_amount = vault_amount WHERE attachment_type = 'VAULT'");
+            }
+            if (!columnExists(connection, "mail_attachments", "icon")) {
+                statement.execute(alterTableAddColumnSql("mail_attachments", "icon", isMysql() ? "VARCHAR(255) NOT NULL DEFAULT ''" : "TEXT NOT NULL DEFAULT ''"));
             }
             if (!tableExists(connection, "mail_logs")) {
                 createTables(connection);
@@ -872,7 +878,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     private List<MailAttachment> loadAttachments(Connection connection, long mailId) throws SQLException {
         List<MailAttachment> attachments = new ArrayList<>();
         try (PreparedStatement statement = connection.prepareStatement(
-            "SELECT id, sort_order, attachment_type, item_data, vault_amount, currency_id, currency_amount, description "
+            "SELECT id, sort_order, attachment_type, item_data, vault_amount, currency_id, currency_amount, description, icon "
                 + "FROM mail_attachments WHERE mail_id = ? ORDER BY sort_order ASC, id ASC"
         )) {
             statement.setLong(1, mailId);
@@ -896,7 +902,8 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
                             nullToEmpty(resultSet.getString("item_data")),
                             currencyId,
                             amount,
-                            nullToEmpty(resultSet.getString("description"))
+                            nullToEmpty(resultSet.getString("description")),
+                            xuanmo.arcartxsuite.mail.util.MailIconCodec.fromYamlString(resultSet.getString("icon"))
                         )
                     );
                 }
@@ -977,8 +984,8 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     private String attachmentInsertSql() {
         return """
-            INSERT INTO mail_attachments (mail_id, sort_order, attachment_type, item_data, vault_amount, currency_id, currency_amount, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO mail_attachments (mail_id, sort_order, attachment_type, item_data, vault_amount, currency_id, currency_amount, description, icon)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     }
 

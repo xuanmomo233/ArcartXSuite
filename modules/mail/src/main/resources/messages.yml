@@ -99,7 +99,6 @@ admin:
     info-preset: "&7预设: &f{0}"
     info-claims: "&7领取: &f{0}/{1}"
     info-expires: "&7过期: &f{0}"
-    info-expires-default: "默认"
     info-expires-never: "&7永不"
     info-enabled: "&7启用: &f{0}"
     list-empty: "&7第 {0} 页无 CDK。"
@@ -154,10 +153,12 @@ player:
   logs-open-failed: "&c打开邮件日志失败。"
   compose-session-missing: "&c当前没有写信会话。"
   compose-session-expired: "&c写信会话已失效，请重新打开。"
+  compose-not-open: "&c请先打开写信界面。"
   compose-password-unavailable: "&c二级密码服务不可用，当前无法寄信。"
   compose-password-required: "&c请先解锁二级密码后再寄信。"
   compose-password-invalid: "&c二级密码错误，请重试。"
   ui-required: "&c请先打开对应的邮箱界面。"
+  # 已废弃：token 检查失败时静默丢弃，不再提示（对正常玩家是误报）。保留键以兼容旧配置。
   compose-token-invalid: "&c写信操作令牌无效，请刷新写信界面后重试。"
   compose-password-unlocked: "&a二级密码已解锁，请重新点击发送邮件。"
   compose-disabled: "&c当前服务器已关闭玩家寄信。"
@@ -166,6 +167,11 @@ player:
   subject-required: "&c邮件标题不能为空。"
   body-blocked: "&c邮件内容包含敏感词或被屏蔽的正则。"
   attachment-slot-limit: "&c仅允许在前 {0} 个槽位放置附件。"
+  attachment-slot-invalid: "&c无效槽位。"
+  attachment-slot-empty: "&c该槽位没有物品。"
+  attachment-index-invalid: "&c无效附件索引。"
+  admin-session-missing: "&cAdmin 编辑会话不存在。"
+  admin-attachment-slot-full: "&c附件槽位已满。"
   recipient-not-found: "&c未找到玩家: {0}"
   compose-self-not-allowed: "&c当前配置不允许给自己寄信。"
   compose-offline-not-allowed: "&c当前配置不允许给离线玩家寄信。"
@@ -204,8 +210,6 @@ player:
 # ── ui ─────────────────────────────────────────────────
 # 以下为 UI 界面中使用的显示文本（来源标签、状态标签、日志类型等）。
 ui:
-  # 货币桥接不可用时 UI 显示的提示。
-  currency-bridge-unavailable: "&c未配置桥接: {0}"
   # 邮件永久有效时的到期显示文本。
   expires-never: "永久"
   # 无附件时的摘要文本。

@@ -117,7 +117,8 @@ public final class MailPresetLoader {
                 continue;
             }
             String description = mapString(rawCurrency, "description", currencyId + " " + trimDecimal(amount));
-            attachments.add(new MailAttachment(0L, attachments.size(), MailAttachmentType.CURRENCY, "", currencyId, amount, description));
+            xuanmo.arcartxsuite.api.icon.IconDefinition icon = xuanmo.arcartxsuite.mail.util.MailIconCodec.loadIcon(rawCurrency.get("icon"));
+            attachments.add(new MailAttachment(0L, attachments.size(), MailAttachmentType.CURRENCY, "", currencyId, amount, description, icon));
         }
 
         List<Map<?, ?>> rawItems = presetSection.getMapList("item-attachments");
@@ -153,7 +154,8 @@ public final class MailPresetLoader {
                         MailItemSerializer.serialize(itemStack),
                         "",
                         0.0D,
-                        resolveDescription(itemStack, vanillaItemNameBridge)
+                        resolveDescription(itemStack, vanillaItemNameBridge),
+                        null
                     )
                 );
             } catch (IOException exception) {
@@ -263,6 +265,12 @@ public final class MailPresetLoader {
                 map.put("currency", att.currencyId());
                 map.put("amount", att.amount());
                 map.put("description", att.description());
+                if (att.icon() != null && att.icon().hasIcon()) {
+                    Map<String, Object> iconMap = xuanmo.arcartxsuite.mail.util.MailIconCodec.toMap(att.icon());
+                    if (!iconMap.isEmpty()) {
+                        map.put("icon", iconMap);
+                    }
+                }
                 currencyList.add(map);
             }
         }
