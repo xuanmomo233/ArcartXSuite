@@ -95,7 +95,7 @@ ui:
       var.view = 'edit'
       var.resultMsg = none
       var.attachmentJsons = packet['attachment_jsons']
-      // 货币附件和 CDK 结构化列表
+      // 货币附件和 CDK 结构化字典（Java 端以索引字符串为 key）
       var.editCurrencyList = packet['currencyAttachmentsList'] != none ? packet['currencyAttachmentsList'] : []
       var.editCdkList = packet['cdkList'] != none ? packet['cdkList'] : []
       // 标记 preset-detail 已加载，attachment-count 到达时跳过覆盖（session 为空）
@@ -123,16 +123,17 @@ ui:
         if(var.editCurrencyList.size() > 0){
           row = val.货币附件滚动区['货币行模板']
           row.entryKey = 0
-          row['货币输入'].setContent(var.editCurrencyList[0.round()]['currency'] != none ? var.editCurrencyList[0.round()]['currency'] : '')
-          row['金额输入'].setContent(var.editCurrencyList[0.round()]['amount'] != none ? var.editCurrencyList[0.round()]['amount'] + '' : '')
-          row['描述输入'].setContent(var.editCurrencyList[0.round()]['description'] != none ? var.editCurrencyList[0.round()]['description'] : '')
+          row['货币输入'].setContent(var.editCurrencyList['0']['currency'] != none ? var.editCurrencyList['0']['currency'] : '')
+          row['金额输入'].setContent(var.editCurrencyList['0']['amount'] != none ? var.editCurrencyList['0']['amount'] + '' : '')
+          row['描述输入'].setContent(var.editCurrencyList['0']['description'] != none ? var.editCurrencyList['0']['description'] : '')
         }
         for(i in range(1, var.editCurrencyList.size() - 1)){
           row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
           row.entryKey = i.round()
-          row['货币输入'].setContent(var.editCurrencyList[i.round()]['currency'] != none ? var.editCurrencyList[i.round()]['currency'] : '')
-          row['金额输入'].setContent(var.editCurrencyList[i.round()]['amount'] != none ? var.editCurrencyList[i.round()]['amount'] + '' : '')
-          row['描述输入'].setContent(var.editCurrencyList[i.round()]['description'] != none ? var.editCurrencyList[i.round()]['description'] : '')
+          row.isTemplate = false
+          row['货币输入'].setContent(var.editCurrencyList[i.round() + '']['currency'] != none ? var.editCurrencyList[i.round() + '']['currency'] : '')
+          row['金额输入'].setContent(var.editCurrencyList[i.round() + '']['amount'] != none ? var.editCurrencyList[i.round() + '']['amount'] + '' : '')
+          row['描述输入'].setContent(var.editCurrencyList[i.round() + '']['description'] != none ? var.editCurrencyList[i.round() + '']['description'] : '')
         }
         // 重建 CDK 行：模板作为第 0 行，再复制 size-1 个
         while(val.CDK滚动区.childrenCount() > 1){
@@ -141,18 +142,19 @@ ui:
         if(var.editCdkList.size() > 0){
           row = val.CDK滚动区['CDK行模板']
           row.entryKey = 0
-          row.cdkEnabled = var.editCdkList[0.round()]['enabled'] != false
-          row['CDK码输入'].setContent(var.editCdkList[0.round()]['code'] != none ? var.editCdkList[0.round()]['code'] : '')
-          row['最大领取输入'].setContent(var.editCdkList[0.round()]['maxClaims'] != none ? var.editCdkList[0.round()]['maxClaims'] + '' : '100')
-          row['过期输入'].setContent(var.editCdkList[0.round()]['expiresAfter'] != none ? var.editCdkList[0.round()]['expiresAfter'] : '30d')
+          row.cdkEnabled = var.editCdkList['0']['enabled'] != false
+          row['CDK码输入'].setContent(var.editCdkList['0']['code'] != none ? var.editCdkList['0']['code'] : '')
+          row['最大领取输入'].setContent(var.editCdkList['0']['maxClaims'] != none ? var.editCdkList['0']['maxClaims'] + '' : '100')
+          row['过期输入'].setContent(var.editCdkList['0']['expiresAfter'] != none ? var.editCdkList['0']['expiresAfter'] : '30d')
         }
         for(i in range(1, var.editCdkList.size() - 1)){
           row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
           row.entryKey = i.round()
-          row.cdkEnabled = var.editCdkList[i.round()]['enabled'] != false
-          row['CDK码输入'].setContent(var.editCdkList[i.round()]['code'] != none ? var.editCdkList[i.round()]['code'] : '')
-          row['最大领取输入'].setContent(var.editCdkList[i.round()]['maxClaims'] != none ? var.editCdkList[i.round()]['maxClaims'] + '' : '100')
-          row['过期输入'].setContent(var.editCdkList[i.round()]['expiresAfter'] != none ? var.editCdkList[i.round()]['expiresAfter'] : '30d')
+          row.isTemplate = false
+          row.cdkEnabled = var.editCdkList[i.round() + '']['enabled'] != false
+          row['CDK码输入'].setContent(var.editCdkList[i.round() + '']['code'] != none ? var.editCdkList[i.round() + '']['code'] : '')
+          row['最大领取输入'].setContent(var.editCdkList[i.round() + '']['maxClaims'] != none ? var.editCdkList[i.round() + '']['maxClaims'] + '' : '100')
+          row['过期输入'].setContent(var.editCdkList[i.round() + '']['expiresAfter'] != none ? var.editCdkList[i.round() + '']['expiresAfter'] : '30d')
         }
         // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
         for(i in range(0, var.adminAttachmentSlots - 1)){
@@ -1208,6 +1210,7 @@ controls:
                         type: Canvas
                         attribute:
                           entryKey: 0.round()
+                          isTemplate: true
                           width: "self.parent.width - 16"
                           height: 56
                         children:
@@ -1273,6 +1276,7 @@ controls:
                               y: 8
                               width: 40
                               height: 40
+                              visible: "self.parent.isTemplate != true"
                             action:
                               clickLeft: |-
                                 self.parent.remove()
@@ -1316,6 +1320,7 @@ controls:
                     idx = val.货币附件滚动区.childrenCount() - 1
                     row = val.货币附件滚动区['货币行模板'].copy('货币行' + idx.round())
                     row.entryKey = idx.round()
+                    row.isTemplate = false
                     row['货币输入'].setContent('')
                     row['金额输入'].setContent('')
                     row['描述输入'].setContent('')
@@ -1698,6 +1703,7 @@ controls:
                         type: Canvas
                         attribute:
                           entryKey: 0.round()
+                          isTemplate: true
                           cdkEnabled: true
                           width: "self.parent.width - 16"
                           height: 56
@@ -1790,6 +1796,7 @@ controls:
                               y: 8
                               width: 40
                               height: 40
+                              visible: "self.parent.isTemplate != true"
                             action:
                               clickLeft: |-
                                 self.parent.remove()
@@ -1833,6 +1840,7 @@ controls:
                     idx = val.CDK滚动区.childrenCount() - 1
                     row = val.CDK滚动区['CDK行模板'].copy('CDK行' + idx.round())
                     row.entryKey = idx.round()
+                    row.isTemplate = false
                     row.cdkEnabled = true
                     row['CDK码输入'].setContent('')
                     row['最大领取输入'].setContent('100')

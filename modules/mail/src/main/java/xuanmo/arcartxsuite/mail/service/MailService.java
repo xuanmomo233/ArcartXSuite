@@ -1246,20 +1246,22 @@ public final class MailService implements Listener {
             payload.put("subject", safe(def.subject()));
             payload.put("body", safe(def.body()));
             payload.put("expiresAfterDays", def.expiresAfter() != null ? def.expiresAfter().toDays() : 15);
-            // 货币附件：发送结构化列表供 UI 动态行使用
-            List<Map<String, Object>> currencyList = new java.util.ArrayList<>();
+            // 货币附件：发送结构化字典供 UI 动态行使用（key 为索引字符串，避免 ARIA 对 Java List 的索引访问限制）
+            Map<String, Map<String, Object>> currencyMap = new java.util.LinkedHashMap<>();
             if (def.attachments() != null) {
+                int curIdx = 0;
                 for (MailAttachment att : def.attachments()) {
                     if (att.isCurrency()) {
                         Map<String, Object> entry = new java.util.LinkedHashMap<>();
                         entry.put("currency", att.currencyId());
                         entry.put("amount", att.amount());
                         entry.put("description", att.description() != null ? att.description() : "");
-                        currencyList.add(entry);
+                        currencyMap.put(String.valueOf(curIdx), entry);
+                        curIdx++;
                     }
                 }
             }
-            payload.put("currencyAttachmentsList", currencyList);
+            payload.put("currencyAttachmentsList", currencyMap);
             long itemCount = def.attachments() == null ? 0 : def.attachments().stream().filter(MailAttachment::isItem).count();
             payload.put("itemAttachmentCount", itemCount);
             // 领取命令序列化为每行一条的字符串，供 UI 多行输入框直接显示
@@ -1285,9 +1287,10 @@ public final class MailService implements Listener {
                 }
             }
             payload.put("claimConditions", condStr.toString());
-            // CDK：发送结构化列表供 UI 动态行使用
-            List<Map<String, Object>> cdkList = new java.util.ArrayList<>();
+            // CDK：发送结构化字典供 UI 动态行使用（key 为索引字符串）
+            Map<String, Map<String, Object>> cdkMap = new java.util.LinkedHashMap<>();
             if (def.cdks() != null) {
+                int cdkIdx = 0;
                 for (MailPresetCdkDefinition cdk : def.cdks()) {
                     if (cdk.code() != null && !cdk.code().isBlank()) {
                         Map<String, Object> entry = new java.util.LinkedHashMap<>();
@@ -1295,11 +1298,12 @@ public final class MailService implements Listener {
                         entry.put("enabled", cdk.enabled());
                         entry.put("maxClaims", cdk.maxClaims());
                         entry.put("expiresAfter", cdk.expiresAfter() != null ? cdk.expiresAfter().toDays() + "d" : "");
-                        cdkList.add(entry);
+                        cdkMap.put(String.valueOf(cdkIdx), entry);
+                        cdkIdx++;
                     }
                 }
             }
-            payload.put("cdkList", cdkList);
+            payload.put("cdkList", cdkMap);
             // 物品附件图标 JSON：直接从预设定义反序列化并序列化为 UI 图标 JSON
             // 不依赖 populateAdminContainer 的 session（该 session 可能因反序列化环境差异为空）
             payload.put("attachment_jsons", serializeAttachments(deserializePresetItems(def)));
