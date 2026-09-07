@@ -341,7 +341,9 @@ public final class MailPresetLoader {
         if (preset.claimConditions() != null && !preset.claimConditions().isEmpty()) {
             List<String> condList = new ArrayList<>();
             for (ScriptCondition cond : preset.claimConditions()) {
-                condList.add(cond.serialize());
+                // 优先使用 raw（可读内联格式如 %player_level% >= 0），fallback 到 serialize()
+                String display = cond.raw() != null && !cond.raw().isBlank() ? cond.raw() : cond.serialize();
+                condList.add(display);
             }
             section.set("claim-conditions", condList);
         }
