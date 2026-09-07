@@ -54,12 +54,12 @@ ui:
       var.poolName = packet['poolName']
       var.poolType = packet['poolType']
       var.poolDescription = packet['poolDescription']
-      var.poolList = packet['poolList'] != none ? packet['poolList'] : {}
-      var.currentPoolIndex = packet['currentPoolIndex'] != none ? packet['currentPoolIndex'] : 0
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
       var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
       var.upItemName = packet['upItemName']
-      var.upItemStar = packet['upItemStar'] != none ? packet['upItemStar'] : 0
+      var.upItemStar = packet['upItemStar']
       var.upItemDesc = packet['upItemDesc']
       var.guaranteedUp = packet['guaranteedUp']
       var.guaranteedUpText = packet['guaranteedUpText']
@@ -67,15 +67,15 @@ ui:
       var.guaranteedUnknownText = packet['guaranteedUnknownText']
       var.guaranteedStatusText = packet['guaranteedStatusText']
       var.upItemIcon = packet['upItemIcon']
-      var.pity4 = packet['pity4'] != none ? packet['pity4'] : 0
-      var.pity5 = packet['pity5'] != none ? packet['pity5'] : 0
-      var.pity4Limit = packet['pity4Limit'] != none ? packet['pity4Limit'] : 0
-      var.pity5Limit = packet['pity5Limit'] != none ? packet['pity5Limit'] : 0
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.pity4Limit = packet['pity4Limit']
+      var.pity5Limit = packet['pity5Limit']
       var.guaranteeDesc = packet['guaranteeDesc']
-      var.costRows = packet['costRows'] != none ? packet['costRows'] : {}
-      var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
+      var.costRows = packet['costRows']
+      var.costTenRows = packet['costTenRows']
       var.tenAvailable = packet['tenAvailable'] == true
-      var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
+      var.resourceRows = packet['resourceRows']
       // UP 物品图标
       val.UP物品槽.seticon()
       // 卡池导航按钮
@@ -111,12 +111,12 @@ ui:
       var.poolName = packet['poolName']
       var.poolType = packet['poolType']
       var.poolDescription = packet['poolDescription']
-      var.poolList = packet['poolList'] != none ? packet['poolList'] : {}
-      var.currentPoolIndex = packet['currentPoolIndex'] != none ? packet['currentPoolIndex'] : 0
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
       var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
       var.upItemName = packet['upItemName']
-      var.upItemStar = packet['upItemStar'] != none ? packet['upItemStar'] : 0
+      var.upItemStar = packet['upItemStar']
       var.upItemDesc = packet['upItemDesc']
       var.guaranteedUp = packet['guaranteedUp']
       var.guaranteedUpText = packet['guaranteedUpText']
@@ -124,15 +124,15 @@ ui:
       var.guaranteedUnknownText = packet['guaranteedUnknownText']
       var.guaranteedStatusText = packet['guaranteedStatusText']
       var.upItemIcon = packet['upItemIcon']
-      var.pity4 = packet['pity4'] != none ? packet['pity4'] : 0
-      var.pity5 = packet['pity5'] != none ? packet['pity5'] : 0
-      var.pity4Limit = packet['pity4Limit'] != none ? packet['pity4Limit'] : 0
-      var.pity5Limit = packet['pity5Limit'] != none ? packet['pity5Limit'] : 0
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.pity4Limit = packet['pity4Limit']
+      var.pity5Limit = packet['pity5Limit']
       var.guaranteeDesc = packet['guaranteeDesc']
-      var.costRows = packet['costRows'] != none ? packet['costRows'] : {}
-      var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
+      var.costRows = packet['costRows']
+      var.costTenRows = packet['costTenRows']
       var.tenAvailable = packet['tenAvailable'] == true
-      var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
+      var.resourceRows = packet['resourceRows']
       val.UP物品槽.seticon()
       for(i in range(0, 4)){
         key = i.round()
@@ -166,16 +166,16 @@ ui:
     #   - pity4 / pity5: 抽后的保底计数
     #   - highestStar: 本次最高星级
     result: |-
-      var.resultCount = packet['resultCount'] != none ? packet['resultCount'] : 0
-      var.resultItemJsons = packet['resultItemJsons'] != none ? packet['resultItemJsons'] : {}
-      var.resultItemNames = packet['resultItemNames'] != none ? packet['resultItemNames'] : {}
-      var.resultItemStars = packet['resultItemStars'] != none ? packet['resultItemStars'] : {}
-      var.resultItemUps = packet['resultItemUps'] != none ? packet['resultItemUps'] : {}
+      var.resultCount = packet['resultCount']
+      var.resultItemJsons = packet['resultItemJsons']
+      var.resultItemNames = packet['resultItemNames']
+      var.resultItemStars = packet['resultItemStars']
+      var.resultItemUps = packet['resultItemUps']
       var.guaranteed = packet['guaranteed'] == true
       var.fatePointTriggered = packet['fatePointTriggered'] == true
-      var.pity4 = packet['pity4'] != none ? packet['pity4'] : var.pity4
-      var.pity5 = packet['pity5'] != none ? packet['pity5'] : var.pity5
-      var.highestStar = packet['highestStar'] != none ? packet['highestStar'] : 0
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.highestStar = packet['highestStar']
       var.resultPending = true
       val.单抽结果卡片['物品槽'].seticon()
       async {
@@ -187,16 +187,16 @@ ui:
       }
     # packetHandler: batch_result（十连结果，字段与 result 相同）
     batch_result: |-
-      var.resultCount = packet['resultCount'] != none ? packet['resultCount'] : 0
-      var.resultItemJsons = packet['resultItemJsons'] != none ? packet['resultItemJsons'] : {}
-      var.resultItemNames = packet['resultItemNames'] != none ? packet['resultItemNames'] : {}
-      var.resultItemStars = packet['resultItemStars'] != none ? packet['resultItemStars'] : {}
-      var.resultItemUps = packet['resultItemUps'] != none ? packet['resultItemUps'] : {}
+      var.resultCount = packet['resultCount']
+      var.resultItemJsons = packet['resultItemJsons']
+      var.resultItemNames = packet['resultItemNames']
+      var.resultItemStars = packet['resultItemStars']
+      var.resultItemUps = packet['resultItemUps']
       var.guaranteed = packet['guaranteed'] == true
       var.fatePointTriggered = packet['fatePointTriggered'] == true
-      var.pity4 = packet['pity4'] != none ? packet['pity4'] : var.pity4
-      var.pity5 = packet['pity5'] != none ? packet['pity5'] : var.pity5
-      var.highestStar = packet['highestStar'] != none ? packet['highestStar'] : 0
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.highestStar = packet['highestStar']
       var.resultPending = true
       for(i in range(1, 11)){
         key = i.round()
@@ -220,8 +220,8 @@ ui:
     # 说明: 界面只使用服务端格式化好的 timeText 与 summary，不在客户端解析时间戳。
     history: |-
       var.historyPoolName = packet['historyPoolName']
-      var.historyCount = packet['historyCount'] != none ? packet['historyCount'] : 0
-      var.historyRows = packet['historyRows'] != none ? packet['historyRows'] : {}
+      var.historyCount = packet['historyCount']
+      var.historyRows = packet['historyRows']
       val.历史面板.visible = true
     # packetHandler: details（卡池详情）
     # 包字段:
@@ -230,8 +230,8 @@ ui:
     #   - detailBase5Rate / detailBase4Rate / detailUpRate: 基础概率与 UP 概率
     details: |-
       var.detailPoolName = packet['detailPoolName']
-      var.detailCount = packet['detailCount'] != none ? packet['detailCount'] : 0
-      var.detailRows = packet['detailRows'] != none ? packet['detailRows'] : {}
+      var.detailCount = packet['detailCount']
+      var.detailRows = packet['detailRows']
       var.detailPity5 = packet['detailPity5']
       var.detailPity4 = packet['detailPity4']
       var.detailBase5Rate = packet['detailBase5Rate']
@@ -244,9 +244,9 @@ ui:
     #   - exchangeCount: 商品数量
     #   - exchangeRows: 商品行（含 id/name/icon/costRows/limit/used/remaining/canExchange）
     exchange: |-
-      var.pointBalanceRows = packet['pointBalanceRows'] != none ? packet['pointBalanceRows'] : {}
-      var.exchangeCount = packet['exchangeCount'] != none ? packet['exchangeCount'] : 0
-      var.exchangeRows = packet['exchangeRows'] != none ? packet['exchangeRows'] : {}
+      var.pointBalanceRows = packet['pointBalanceRows']
+      var.exchangeCount = packet['exchangeCount']
+      var.exchangeRows = packet['exchangeRows']
       for(i in range(0, 4)){
         key = i.round()
         p = val.积分余额栏['积分条目' + key]
@@ -3283,7 +3283,7 @@ controls:
                       point: ~middle_left
                       x: 60
                       y: 14
-                      texts: "var.pointBalanceRows != none && var.pointBalanceRows[self.entryKey] != none ? '&6' + ((var.pointBalanceRows[self.entryKey]['amount'] != none ? var.pointBalanceRows[self.entryKey]['amount'] : 0) != none ? (var.pointBalanceRows[self.entryKey]['amount'] != none ? var.pointBalanceRows[self.entryKey]['amount'] : 0) : 0) : ''"
+                      texts: "'&6' + var.pointBalanceRows[self.entryKey]['amount'].round()"
                       fontSize: 36
           兑换滑块:
             type: Texture
@@ -3382,7 +3382,7 @@ controls:
                           point: ~middle_left
                           x: 96
                           y: 18
-                          texts: "var.exchangeRows == none || var.exchangeRows[self.entryKey] == none || var.exchangeRows[self.entryKey]['costRows'] == none || var.exchangeRows[self.entryKey]['costRows'][0] == none ? '' : ('&7消耗 &6' + (var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] != none ? var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] : '') + ' x' + (var.exchangeRows[self.entryKey]['costRows'][0]['amount'] != none ? var.exchangeRows[self.entryKey]['costRows'][0]['amount'] : 0) + (var.exchangeRows[self.entryKey]['costRows'][1] != none ? ' &7+ &6' + (var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] != none ? var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] : '') + ' x' + (var.exchangeRows[self.entryKey]['costRows'][1]['amount'] != none ? var.exchangeRows[self.entryKey]['costRows'][1]['amount'] : 0) : ''))"
+                          texts: "'&7消耗 &6' + var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][0]['amount'].round() + (var.exchangeRows[self.entryKey]['costRows'][1] != none ? ' &7+ &6' + var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][1]['amount'].round() : '')"
                           fontSize: 32
                       限购文本:
                         type: Text

@@ -102,7 +102,7 @@ ui:
     #   - is_admin: 当前玩家是否为管理员（控制管理导航项显隐）
     init: |-
       var.messages = packet['messages']
-      var.filterMode = packet['filter_mode'] != none ? packet['filter_mode'] : 'all'
+      var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
       var.unreadCount = packet['unread_count']
       var.claimableCount = packet['claimable_count']
@@ -115,7 +115,7 @@ ui:
       var.selectedExpiresAt = packet['selected_expires_at']
       var.selectedBody = packet['selected_body']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
-      var.selectedAttachments = packet['selected_attachments'] != none ? packet['selected_attachments'] : {}
+      var.selectedAttachments = packet['selected_attachments']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
@@ -178,7 +178,7 @@ ui:
       // 保存旧数量，用于判断是否需要重建列表
       oldMaxMailCount = var.maxMailCount
       var.messages = packet['messages']
-      var.filterMode = packet['filter_mode'] != none ? packet['filter_mode'] : var.filterMode
+      var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
       var.unreadCount = packet['unread_count']
       var.claimableCount = packet['claimable_count']
@@ -191,7 +191,7 @@ ui:
       var.selectedExpiresAt = packet['selected_expires_at']
       var.selectedBody = packet['selected_body']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
-      var.selectedAttachments = packet['selected_attachments'] != none ? packet['selected_attachments'] : {}
+      var.selectedAttachments = packet['selected_attachments']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
@@ -212,7 +212,7 @@ ui:
         }
       }
       // ── 附件槽位：构建 itemJsons 字典 + 数量变化时重建 ──
-      oldAttCount = var.oldAttCount != none ? var.oldAttCount : 0
+      oldAttCount = var.oldAttCount
       var.aKeys = var.selectedAttachments.keys()
       var.attachmentItemJsons = {}
       for(key in var.aKeys){
@@ -1088,13 +1088,13 @@ controls:
                                       normal: ~36,38,48,180
                                       shape: ~round_rect
                                       radius: 8
-                                      seticon: "self.setItemIcon(var.attachmentItemJsons[self.parent.entryKey] != none ? var.attachmentItemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                                      seticon: "self.setItemIcon(var.attachmentItemJsons[self.parent.entryKey])"
                                   附件描述:
                                     type: Text
                                     attribute:
                                       point: ~middle_left
                                       x: 76
-                                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
+                                      texts: "'&f' + self.parent.entry['description']"
                                       fontSize: 32
                                       through: true
                           详情正文:

@@ -591,7 +591,7 @@ controls:
                               x: 170
                               y: 116
                               center: true
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                              texts: "'&f' + self.parent.entry['name']"
                               fontSize: 28
                               through: true
                           价格:
@@ -600,7 +600,7 @@ controls:
                               x: 170
                               y: 148
                               center: true
-                              texts: "self.parent.entry != none ? '&e价格: &f' + self.parent.entry['price'] : none"
+                              texts: "'&e价格: &f' + self.parent.entry['price'].round()"
                               fontSize: 24
                               through: true
                           库存:
@@ -609,7 +609,7 @@ controls:
                               x: 170
                               y: 180
                               center: true
-                              texts: "self.parent.entry != none ? '&7库存: &f' + self.parent.entry['stock'] : none"
+                              texts: "'&7库存: &f' + self.parent.entry['stock'].round()"
                               fontSize: 20
                               through: true
                           限购:
@@ -618,7 +618,7 @@ controls:
                               x: 170
                               y: 206
                               center: true
-                              texts: "self.parent.entry != none && self.parent.entry['limitText'] != none ? '&c' + self.parent.entry['limitText'] : none"
+                              texts: "'&c' + self.parent.entry['limitText']"
                               fontSize: 18
                               through: true
                           购买按钮:

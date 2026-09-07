@@ -688,7 +688,7 @@ controls:
                               x: 187
                               y: 126
                               center: true
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                              texts: "'&f' + self.parent.entry['name']"
                               fontSize: 30
                               through: true
                           卖家:
@@ -697,7 +697,7 @@ controls:
                               x: 187
                               y: 158
                               center: true
-                              texts: "self.parent.entry != none ? '&7卖家: &b' + self.parent.entry['seller'] : none"
+                              texts: "'&7卖家: &b' + self.parent.entry['seller']"
                               fontSize: 20
                               through: true
                           价格:
@@ -707,7 +707,7 @@ controls:
                               y: 186
                               center: true
                               visible: "self.parent.entry != none && self.parent.entry['canBuyNow']"
-                              texts: "self.parent.entry != none ? '&e一口价: &f' + self.parent.entry['price'] : none"
+                              texts: "'&e一口价: &f' + self.parent.entry['price'].round()"
                               fontSize: 26
                               through: true
                           竞价:
@@ -717,7 +717,7 @@ controls:
                               y: 216
                               center: true
                               visible: "self.parent.entry != none && self.parent.entry['canBid']"
-                              texts: "self.parent.entry != none ? '&7当前出价: &f' + self.parent.entry['bid'] : none"
+                              texts: "'&7当前出价: &f' + self.parent.entry['bid']"
                               fontSize: 20
                               through: true
                           剩余时间:
@@ -726,7 +726,7 @@ controls:
                               x: 110
                               y: 242
                               center: true
-                              texts: "self.parent.entry != none ? '&a' + self.parent.entry['timeLeft'] : none"
+                              texts: "'&a' + self.parent.entry['timeLeft']"
                               fontSize: 20
                               through: true
                           货币:
@@ -735,7 +735,7 @@ controls:
                               x: 264
                               y: 242
                               center: true
-                              texts: "self.parent.entry != none ? '&7' + self.parent.entry['currencyName'] : none"
+                              texts: "'&7' + self.parent.entry['currencyName']"
                               fontSize: 20
                               through: true
                           出价按钮:

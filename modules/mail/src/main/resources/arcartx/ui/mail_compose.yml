@@ -525,7 +525,7 @@ controls:
                       lock: true
                       entryKey: 0.round()
                       visible: "self.entryKey < var.maxAttachments"
-                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey + ''] != none && var.attachmentJsons[self.entryKey + ''] != '' ? var.attachmentJsons[self.entryKey + ''] : var.air)"
+                      seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey] != none && var.attachmentJsons[self.entryKey] != '' ? var.attachmentJsons[self.entryKey] : var.air)"
                     action:
                       clickLeft: |-
                         Packet.send('AXS_MAIL', 'compose-remove-attachment', self.entryKey)

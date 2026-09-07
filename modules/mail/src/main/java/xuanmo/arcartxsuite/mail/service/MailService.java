@@ -58,6 +58,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailPlayerSendConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailUiConfiguration;
@@ -1256,6 +1257,15 @@ public final class MailService implements Listener {
                         entry.put("currency", att.currencyId());
                         entry.put("amount", att.amount());
                         entry.put("description", att.description() != null ? att.description() : "");
+                        // icon 字段：发送结构化字段供 UI 副面板编辑
+                        if (att.icon() != null && att.icon().hasIcon()) {
+                            entry.put("iconMaterial", att.icon().material() != null ? att.icon().material() : "");
+                            entry.put("iconCustomModelData", att.icon().customModelData());
+                            entry.put("iconTexture", att.icon().texture() != null ? att.icon().texture() : "");
+                            entry.put("iconTextureUrl", att.icon().textureUrl() != null ? att.icon().textureUrl() : "");
+                            entry.put("iconName", att.icon().name() != null ? att.icon().name() : "");
+                            entry.put("iconLore", att.icon().lore() != null ? att.icon().lore() : java.util.List.of());
+                        }
                         currencyMap.put(String.valueOf(curIdx), entry);
                         curIdx++;
                     }
@@ -1298,6 +1308,10 @@ public final class MailService implements Listener {
                         entry.put("enabled", cdk.enabled());
                         entry.put("maxClaims", cdk.maxClaims());
                         entry.put("expiresAfter", cdk.expiresAfter() != null ? cdk.expiresAfter().toDays() + "d" : "");
+                        // expiresAt：绝对过期时间（UTC ISO 字符串），与 expiresAfter 互斥
+                        entry.put("expiresAt", cdk.expiresAt() != null ? cdk.expiresAt().toString() : "");
+                        // 过期模式：absolute=绝对时间 / relative=相对时长 / none=不过期
+                        entry.put("expireMode", cdk.expiresAt() != null ? "absolute" : (cdk.expiresAfter() != null ? "relative" : "none"));
                         cdkMap.put(String.valueOf(cdkIdx), entry);
                         cdkIdx++;
                     }
@@ -1361,7 +1375,39 @@ public final class MailService implements Listener {
                         }
                         if (amount <= 0) continue;
                         String desc = obj.has("description") ? obj.get("description").getAsString().trim() : currencyId + " " + amount;
-                        attachments.add(new MailAttachment(0L, order++, MailAttachmentType.CURRENCY, "", currencyId, amount, desc, null));
+                        // 解析 icon 字段：material/custom-model-data/texture/texture-url/name/lore
+                        IconDefinition icon = null;
+                        String iconMaterial = obj.has("iconMaterial") ? obj.get("iconMaterial").getAsString().trim() : "";
+                        if (!iconMaterial.isBlank()) {
+                            int iconCustomModelData = obj.has("iconCustomModelData") ? obj.get("iconCustomModelData").getAsInt() : 0;
+                            String iconTexture = obj.has("iconTexture") ? obj.get("iconTexture").getAsString().trim() : "";
+                            String iconTextureUrl = obj.has("iconTextureUrl") ? obj.get("iconTextureUrl").getAsString().trim() : "";
+                            String iconName = obj.has("iconName") ? obj.get("iconName").getAsString().trim() : "";
+                            List<String> iconLore = new ArrayList<>();
+                            if (obj.has("iconLore")) {
+                                if (obj.get("iconLore").isJsonArray()) {
+                                    for (JsonElement loreElem : obj.get("iconLore").getAsJsonArray()) {
+                                        iconLore.add(loreElem.getAsString());
+                                    }
+                                } else {
+                                    String loreStr = obj.get("iconLore").getAsString();
+                                    if (!loreStr.isBlank()) {
+                                        for (String line : loreStr.split("\\R")) {
+                                            String trimmed = line.trim();
+                                            if (!trimmed.isEmpty()) {
+                                                iconLore.add(trimmed);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            icon = new IconDefinition(
+                                iconMaterial, 1, iconName, iconLore, iconCustomModelData,
+                                "", "", "", "", "", iconTexture, iconTextureUrl,
+                                java.util.Map.of(), "", false, "", ""
+                            );
+                        }
+                        attachments.add(new MailAttachment(0L, order++, MailAttachmentType.CURRENCY, "", currencyId, amount, desc, icon));
                     }
                 } catch (Exception e) {
                     this.logger.warning("Admin 预设保存: 货币附件 JSON 解析失败: " + e.getMessage());
@@ -1412,21 +1458,34 @@ public final class MailService implements Listener {
                         boolean cdkEnabled = !obj.has("enabled") || obj.get("enabled").getAsBoolean();
                         int maxClaims = obj.has("maxClaims") ? obj.get("maxClaims").getAsInt() : 100;
                         if (maxClaims < 1) maxClaims = 100;
-                        java.time.Duration expiresAfterDur = null;
-                        if (obj.has("expiresAfter") && !obj.get("expiresAfter").getAsString().isBlank()) {
-                            String eaStr = obj.get("expiresAfter").getAsString().trim();
+                        // expiresAt：绝对过期时间（UTC ISO 字符串），与 expiresAfter 互斥
+                        // 优先级：expireMode == "absolute" 且 expiresAt 非空 → 使用 expiresAt
+                        //         expireMode == "relative" 或 expiresAfter 非空 → 使用 expiresAfter
+                        //         否则默认 30 天
+                        java.time.Instant expiresAtInstant = null;
+                        String expireMode = obj.has("expireMode") ? obj.get("expireMode").getAsString().trim() : "relative";
+                        if ("absolute".equals(expireMode) && obj.has("expiresAt") && !obj.get("expiresAt").getAsString().isBlank()) {
                             try {
-                                if (eaStr.endsWith("d")) {
-                                    expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr.substring(0, eaStr.length() - 1)));
-                                } else {
-                                    expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr));
-                                }
-                            } catch (NumberFormatException ignored) {}
+                                expiresAtInstant = java.time.Instant.parse(obj.get("expiresAt").getAsString().trim());
+                            } catch (Exception ignored) {}
                         }
-                        if (expiresAfterDur == null) {
-                            expiresAfterDur = java.time.Duration.ofDays(30);
+                        java.time.Duration expiresAfterDur = null;
+                        if (expiresAtInstant == null) {
+                            if (obj.has("expiresAfter") && !obj.get("expiresAfter").getAsString().isBlank()) {
+                                String eaStr = obj.get("expiresAfter").getAsString().trim();
+                                try {
+                                    if (eaStr.endsWith("d")) {
+                                        expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr.substring(0, eaStr.length() - 1)));
+                                    } else {
+                                        expiresAfterDur = java.time.Duration.ofDays(Long.parseLong(eaStr));
+                                    }
+                                } catch (NumberFormatException ignored) {}
+                            }
+                            if (expiresAfterDur == null) {
+                                expiresAfterDur = java.time.Duration.ofDays(30);
+                            }
                         }
-                        cdks.add(new MailPresetCdkDefinition(normalizedCode, cdkEnabled, maxClaims, null, expiresAfterDur));
+                        cdks.add(new MailPresetCdkDefinition(normalizedCode, cdkEnabled, maxClaims, expiresAtInstant, expiresAfterDur));
                     }
                 } catch (Exception e) {
                     this.logger.warning("Admin 预设保存: CDK JSON 解析失败: " + e.getMessage());

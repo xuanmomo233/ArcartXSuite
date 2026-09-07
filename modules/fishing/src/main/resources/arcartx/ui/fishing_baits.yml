@@ -732,7 +732,7 @@ controls:
                           point: ~bottom_right
                           x: -5
                           y: -5
-                          texts: "self.parent.queueEntry != none ? '&f' + self.parent.queueEntry['amount'].round() : none"
+                          texts: "'&f' + self.parent.queueEntry['amount'].round()"
                           fontSize: 32
                           through: true
                       队列槽空标:

@@ -283,7 +283,7 @@ controls:
                               x: 580
                               y: 14
                               width: 280
-                              texts: "self.parent.entry != none ? '&e' + self.parent.entry['amount'] : none"
+                              texts: "'&e' + self.parent.entry['amount'].round()"
                               fontSize: 32
                               through: true
                           时间:

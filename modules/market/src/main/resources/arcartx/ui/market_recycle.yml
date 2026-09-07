@@ -358,7 +358,7 @@ controls:
                               x: 84
                               y: 38
                               width: 120
-                              texts: "self.parent.entry != none ? '&7x' + self.parent.entry['amount'] : none"
+                              texts: "'&7x' + self.parent.entry['amount'].round()"
                               fontSize: 22
                               through: true
                           单价:
@@ -390,7 +390,7 @@ controls:
                             action:
                               clickLeft: |-
                                 var.actionBusy = true
-                                Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'] + '', var.actionToken)
+                                Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'], var.actionToken)
                             children:
                               回收背景:
                                 type: Texture

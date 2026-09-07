@@ -693,7 +693,7 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: "self.parent.entry != none ? self.parent.entry['name'] : ''"
+                              texts: "self.parent.entry['name']"
                               fontSize: 24
                               through: true
               # 右列：上架时长 + 按钮

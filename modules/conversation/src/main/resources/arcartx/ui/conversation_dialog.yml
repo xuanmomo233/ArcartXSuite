@@ -281,7 +281,7 @@ controls:
                               point: ~middle_right
                               x: -14
                               y: 0
-                              texts: "self.parent.entry != none ? '&8' + ((self.parent.entry['index']+1).round() + '') : none"
+                              texts: "'&8' + (self.parent.entry['index']+1).round()"
                               fontSize: 36
                               through: true
 
@@ -337,6 +337,6 @@ controls:
           #             point: ~middle_right
           #             x: -14
           #             y: 0
-          #             texts: "self.parent.entry != none ? '&8' + ((self.parent.entry['index']+1).round() + '') : none"
+          #             texts: "'&8' + (self.parent.entry['index']+1).round()"
           #             fontSize: 36
           #             through: true

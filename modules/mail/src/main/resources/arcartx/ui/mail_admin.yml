@@ -30,6 +30,7 @@ ui:
   action:
     load: |-
       var.view = 'list'
+      var.subView = ''
       var.resultMsg = none
       var.editItemCount = 0
       var.maxPresetCount = 0
@@ -93,22 +94,23 @@ ui:
       var.editConditions = packet['claimConditions']
       var.editFound = packet['found']
       var.view = 'edit'
+      var.subView = ''
       var.resultMsg = none
       var.attachmentJsons = packet['attachment_jsons']
       // 货币附件和 CDK 结构化字典（Java 端以索引字符串为 key）
-      var.editCurrencyList = packet['currencyAttachmentsList'] != none ? packet['currencyAttachmentsList'] : []
-      var.editCdkList = packet['cdkList'] != none ? packet['cdkList'] : []
+      var.editCurrencyList = packet['currencyAttachmentsList']
+      var.editCdkList = packet['cdkList']
       // 标记 preset-detail 已加载，attachment-count 到达时跳过覆盖（session 为空）
       var.presetDetailLoaded = true
       // 推迟到下一帧再 setContent/seticon/动态行，确保编辑视图已可见、控件已就绪
       scheduler.delay(50, -> {
-        tmpId = var.editId != none ? var.editId : ''
-        tmpDisplayName = var.editDisplayName != none ? var.editDisplayName : ''
-        tmpSubject = var.editSubject != none ? var.editSubject : ''
-        tmpBody = var.editBody != none ? var.editBody : ''
-        tmpExpiresDays = var.editExpiresDays != none ? var.editExpiresDays + '' : ''
-        tmpCommands = var.editCommands != none ? var.editCommands : ''
-        tmpConditions = var.editConditions != none ? var.editConditions : ''
+        tmpId = var.editId
+        tmpDisplayName = var.editDisplayName
+        tmpSubject = var.editSubject
+        tmpBody = var.editBody
+        tmpExpiresDays = var.editExpiresDays.round()
+        tmpCommands = var.editCommands
+        tmpConditions = var.editConditions
         val.编辑编号框.setContent(tmpId)
         val.编辑显示名框.setContent(tmpDisplayName)
         val.编辑主题框.setContent(tmpSubject)
@@ -123,17 +125,52 @@ ui:
         if(var.editCurrencyList.size() > 0){
           row = val.货币附件滚动区['货币行模板']
           row.entryKey = 0
-          row['货币输入'].setContent(var.editCurrencyList['0']['currency'] != none ? var.editCurrencyList['0']['currency'] : '')
-          row['金额输入'].setContent(var.editCurrencyList['0']['amount'] != none ? var.editCurrencyList['0']['amount'] + '' : '')
-          row['描述输入'].setContent(var.editCurrencyList['0']['description'] != none ? var.editCurrencyList['0']['description'] : '')
+          entry = var.editCurrencyList['0']
+          row['货币输入'].setContent(entry['currency'])
+          row['金额输入'].setContent(entry['amount'].round())
+          row['描述输入'].setContent(entry['description'])
+          // icon 字段
+          row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+          row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+          row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+          row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+          row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+          // iconLore 是 List，拼接为多行文本
+          loreText = ''
+          if(entry['iconLore'] != none){
+            for(j in range(0, entry['iconLore'].size() - 1)){
+              if(loreText != ''){
+                loreText = loreText + '\n'
+              }
+              loreText = loreText + entry['iconLore'][j.round()]
+            }
+          }
+          row['图标描述输入'].setContent(loreText)
         }
         for(i in range(1, var.editCurrencyList.size() - 1)){
           row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
           row.entryKey = i.round()
           row.isTemplate = false
-          row['货币输入'].setContent(var.editCurrencyList[i.round() + '']['currency'] != none ? var.editCurrencyList[i.round() + '']['currency'] : '')
-          row['金额输入'].setContent(var.editCurrencyList[i.round() + '']['amount'] != none ? var.editCurrencyList[i.round() + '']['amount'] + '' : '')
-          row['描述输入'].setContent(var.editCurrencyList[i.round() + '']['description'] != none ? var.editCurrencyList[i.round() + '']['description'] : '')
+          entry = var.editCurrencyList[i.round()]
+          row['货币输入'].setContent(entry['currency'])
+          row['金额输入'].setContent(entry['amount'].round())
+          row['描述输入'].setContent(entry['description'])
+          // icon 字段
+          row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+          row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+          row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+          row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+          row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+          loreText = ''
+          if(entry['iconLore'] != none){
+            for(j in range(0, entry['iconLore'].size() - 1)){
+              if(loreText != ''){
+                loreText = loreText + '\n'
+              }
+              loreText = loreText + entry['iconLore'][j.round()]
+            }
+          }
+          row['图标描述输入'].setContent(loreText)
         }
         // 重建 CDK 行：模板作为第 0 行，再复制 size-1 个
         while(val.CDK滚动区.childrenCount() > 1){
@@ -142,19 +179,34 @@ ui:
         if(var.editCdkList.size() > 0){
           row = val.CDK滚动区['CDK行模板']
           row.entryKey = 0
-          row.cdkEnabled = var.editCdkList['0']['enabled'] != false
-          row['CDK码输入'].setContent(var.editCdkList['0']['code'] != none ? var.editCdkList['0']['code'] : '')
-          row['最大领取输入'].setContent(var.editCdkList['0']['maxClaims'] != none ? var.editCdkList['0']['maxClaims'] + '' : '100')
-          row['过期输入'].setContent(var.editCdkList['0']['expiresAfter'] != none ? var.editCdkList['0']['expiresAfter'] : '30d')
+          entry = var.editCdkList['0']
+          row.cdkEnabled = entry['enabled']
+          row['CDK码输入'].setContent(entry['code'])
+          row['最大领取输入'].setContent(entry['maxClaims'].round())
+          // 过期模式：absolute=绝对时间 / relative=相对时长 / none=不过期
+          mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+          row.expireMode = mode
+          if(mode == 'absolute'){
+            row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+          } else {
+            row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+          }
         }
         for(i in range(1, var.editCdkList.size() - 1)){
           row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
           row.entryKey = i.round()
           row.isTemplate = false
-          row.cdkEnabled = var.editCdkList[i.round() + '']['enabled'] != false
-          row['CDK码输入'].setContent(var.editCdkList[i.round() + '']['code'] != none ? var.editCdkList[i.round() + '']['code'] : '')
-          row['最大领取输入'].setContent(var.editCdkList[i.round() + '']['maxClaims'] != none ? var.editCdkList[i.round() + '']['maxClaims'] + '' : '100')
-          row['过期输入'].setContent(var.editCdkList[i.round() + '']['expiresAfter'] != none ? var.editCdkList[i.round() + '']['expiresAfter'] : '30d')
+          entry = var.editCdkList[i.round()]
+          row.cdkEnabled = entry['enabled']
+          row['CDK码输入'].setContent(entry['code'])
+          row['最大领取输入'].setContent(entry['maxClaims'].round())
+          mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+          row.expireMode = mode
+          if(mode == 'absolute'){
+            row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+          } else {
+            row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+          }
         }
         // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
         for(i in range(0, var.adminAttachmentSlots - 1)){
@@ -173,7 +225,7 @@ ui:
         var.presetDetailLoaded = false
       } else {
         var.attachmentJsons = packet['attachment_jsons']
-        var.editItemCount = (var.attachmentJsons != none ? var.attachmentJsons.size() : 0).round()
+        var.editItemCount = var.attachmentJsons.size().round()
       }
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, var.adminAttachmentSlots - 1)){
@@ -509,6 +561,7 @@ controls:
                 var.editCurrencyList = []
                 var.editCdkList = []
                 var.view = 'edit'
+                var.subView = ''
                 var.resultMsg = none
                 // 推迟到下一帧再清空输入框，确保编辑视图已可见（与 preset-detail 同理）
                 scheduler.delay(50, -> {
@@ -527,11 +580,19 @@ controls:
                   row['货币输入'].setContent('')
                   row['金额输入'].setContent('')
                   row['描述输入'].setContent('')
+                  // 清空 icon 字段
+                  row['图标材质输入'].setContent('')
+                  row['图标CMD输入'].setContent('')
+                  row['图标纹理输入'].setContent('')
+                  row['图标URL输入'].setContent('')
+                  row['图标名称输入'].setContent('')
+                  row['图标描述输入'].setContent('')
                   while(val.CDK滚动区.childrenCount() > 1){
                     val.CDK滚动区.get(1).remove()
                   }
                   row = val.CDK滚动区['CDK行模板']
                   row.cdkEnabled = true
+                  row.expireMode = 'relative'
                   row['CDK码输入'].setContent('')
                   row['最大领取输入'].setContent('100')
                   row['过期输入'].setContent('30d')
@@ -557,6 +618,301 @@ controls:
                   point: ~middle_left
                   x: 28
                   texts: "var.view == 'edit' ? '&0新建预设' : '&f新建预设'"
+                  fontSize: 36
+                  through: true
+          # ── 编辑模式副面板入口（仅编辑视图显示） ────────
+          编辑分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 498
+              width: 264
+              height: 2
+              normal: ~255,255,255,230
+              visible: "var.view == 'edit'"
+          编辑操作标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 516
+              texts: "~&f编辑面板"
+              fontSize: 36
+              visible: "var.view == 'edit'"
+          货币附件入口:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 562
+              width: 272
+              height: 48
+              visible: "var.view == 'edit'"
+            action:
+              clickLeft: |-
+                var.subView = 'currency'
+                // 副面板可见后重建货币行（setContent 需要控件可见才生效）
+                scheduler.delay(50, -> {
+                  while(val.货币附件滚动区.childrenCount() > 1){
+                    val.货币附件滚动区.get(1).remove()
+                  }
+                  if(var.editCurrencyList != none && var.editCurrencyList.size() > 0){
+                    row = val.货币附件滚动区['货币行模板']
+                    row.entryKey = 0
+                    entry = var.editCurrencyList['0']
+                    row['货币输入'].setContent(entry['currency'])
+                    row['金额输入'].setContent(entry['amount'].round())
+                    row['描述输入'].setContent(entry['description'])
+                    row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+                    row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+                    row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+                    row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+                    row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+                    loreText = ''
+                    if(entry['iconLore'] != none){
+                      for(j in range(0, entry['iconLore'].size() - 1)){
+                        if(loreText != ''){
+                          loreText = loreText + '\n'
+                        }
+                        loreText = loreText + entry['iconLore'][j.round()]
+                      }
+                    }
+                    row['图标描述输入'].setContent(loreText)
+                  }
+                  for(i in range(1, var.editCurrencyList.size() - 1)){
+                    row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
+                    row.entryKey = i.round()
+                    row.isTemplate = false
+                    entry = var.editCurrencyList[i.round()]
+                    row['货币输入'].setContent(entry['currency'])
+                    row['金额输入'].setContent(entry['amount'].round())
+                    row['描述输入'].setContent(entry['description'])
+                    row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+                    row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+                    row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+                    row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+                    row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+                    loreText = ''
+                    if(entry['iconLore'] != none){
+                      for(j in range(0, entry['iconLore'].size() - 1)){
+                        if(loreText != ''){
+                          loreText = loreText + '\n'
+                        }
+                        loreText = loreText + entry['iconLore'][j.round()]
+                      }
+                    }
+                    row['图标描述输入'].setContent(loreText)
+                  }
+                })
+            children:
+              货币附件入口底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.subView == 'currency' ? '80,180,120,230' : '36,38,48,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.subView == 'currency' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+              货币附件入口文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.subView == 'currency' ? '&0货币附件' : '&f货币附件'"
+                  fontSize: 36
+                  through: true
+          物品附件入口:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 620
+              width: 272
+              height: 48
+              visible: "var.view == 'edit'"
+            action:
+              clickLeft: |-
+                var.subView = 'item'
+                // 副面板可见后刷新附件槽位图标
+                scheduler.delay(50, -> {
+                  for(i in range(0, var.adminAttachmentSlots - 1)){
+                    slot = val.管理附件网格.get(i.round())
+                    if(slot != none){
+                      slot.seticon()
+                    }
+                  }
+                })
+            children:
+              物品附件入口底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.subView == 'item' ? '80,180,120,230' : '36,38,48,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.subView == 'item' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+              物品附件入口文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.subView == 'item' ? '&0物品附件' : '&f物品附件'"
+                  fontSize: 36
+                  through: true
+          CDK入口:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 678
+              width: 272
+              height: 48
+              visible: "var.view == 'edit'"
+            action:
+              clickLeft: |-
+                var.subView = 'cdk'
+                // 副面板可见后重建 CDK 行
+                scheduler.delay(50, -> {
+                  while(val.CDK滚动区.childrenCount() > 1){
+                    val.CDK滚动区.get(1).remove()
+                  }
+                  if(var.editCdkList != none && var.editCdkList.size() > 0){
+                    row = val.CDK滚动区['CDK行模板']
+                    row.entryKey = 0
+                    entry = var.editCdkList['0']
+                    row.cdkEnabled = entry['enabled']
+                    row['CDK码输入'].setContent(entry['code'])
+                    row['最大领取输入'].setContent(entry['maxClaims'].round())
+                    mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+                    row.expireMode = mode
+                    if(mode == 'absolute'){
+                      row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                    } else {
+                      row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                    }
+                  }
+                  for(i in range(1, var.editCdkList.size() - 1)){
+                    row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
+                    row.entryKey = i.round()
+                    row.isTemplate = false
+                    entry = var.editCdkList[i.round()]
+                    row.cdkEnabled = entry['enabled']
+                    row['CDK码输入'].setContent(entry['code'])
+                    row['最大领取输入'].setContent(entry['maxClaims'].round())
+                    mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+                    row.expireMode = mode
+                    if(mode == 'absolute'){
+                      row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                    } else {
+                      row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                    }
+                  }
+                })
+            children:
+              CDK入口底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.subView == 'cdk' ? '80,180,120,230' : '36,38,48,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.subView == 'cdk' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+              CDK入口文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.subView == 'cdk' ? '&0CDK 兑换码' : '&fCDK 兑换码'"
+                  fontSize: 36
+                  through: true
+          领取命令入口:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 736
+              width: 272
+              height: 48
+              visible: "var.view == 'edit'"
+            action:
+              clickLeft: |-
+                var.subView = 'commands'
+                scheduler.delay(50, -> {
+                  val.编辑命令框.setContent(var.editCommands != none ? var.editCommands : '')
+                })
+            children:
+              领取命令入口底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.subView == 'commands' ? '80,180,120,230' : '36,38,48,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.subView == 'commands' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+              领取命令入口文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.subView == 'commands' ? '&0领取命令' : '&f领取命令'"
+                  fontSize: 36
+                  through: true
+          领取条件入口:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 794
+              width: 272
+              height: 48
+              visible: "var.view == 'edit'"
+            action:
+              clickLeft: |-
+                var.subView = 'conditions'
+                scheduler.delay(50, -> {
+                  val.编辑领取条件框.setContent(var.editConditions != none ? var.editConditions : '')
+                })
+            children:
+              领取条件入口底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.subView == 'conditions' ? '80,180,120,230' : '36,38,48,245'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "var.subView == 'conditions' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+              领取条件入口文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "var.subView == 'conditions' ? '&0领取条件' : '&f领取条件'"
                   fontSize: 36
                   through: true
 
@@ -867,10 +1223,10 @@ controls:
                   point: ~bottom_left
                   x: 16
                   y: -8
-                  texts: "var.resultMsg != none ? '&e' + var.resultMsg : ''"
+                  texts: "'&e' + var.resultMsg"
                   fontSize: 36
 
-          # ── 编辑视图 ───────────────────────────────────
+          # ── 编辑视图（主面板 + 5 个副面板） ────────────────
           编辑视图:
             type: Canvas
             attribute:
@@ -889,984 +1245,1353 @@ controls:
                   stroke:
                     width: 3
                     color: ~255,255,255,230
-              # 返回按钮
-              返回按钮:
+              # ══ 主面板（文字部分 + 保存/取消） ════════════════
+              主面板:
                 type: Canvas
                 attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 12
-                  width: 100
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.view = 'list'
-                    Packet.send('AXS_MAIL', 'admin-preset-cancel')
-                    Packet.send('AXS_MAIL', 'admin-preset-list')
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == '' || var.subView == none"
                 children:
-                  返回底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  返回文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f返回"
-                      fontSize: 36
-                      through: true
-              编辑标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 130
-                  y: 14
-                  texts: "var.editFound ? '&f编辑预设: ' + var.editId : '&f新建预设'"
-                  fontSize: 36
-              # 左侧表单
-              编号标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 72
-                  texts: "~&f预设 ID"
-                  fontSize: 36
-              输入编号框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 104
-                  width: 320
-                  height: 40
-                children:
-                  编号输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  编号输入框文本:
-                    type: TextBox
-                    val: 编辑编号框
-                    attribute:
-                      x: 10
-                      y: 4
-                      width: 300
-                      height: 32
-                      fontSize: 36
-                      editable: "var.editFound != true"
-                    action:
-                      textChange: |-
-                        var.editId = self.getContent()
-              显示名标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 360
-                  y: 72
-                  texts: "~&f显示名"
-                  fontSize: 36
-              输入显示名框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 360
-                  y: 104
-                  width: 320
-                  height: 40
-                children:
-                  显示名输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  显示名输入框文本:
-                    type: TextBox
-                    val: 编辑显示名框
-                    attribute:
-                      x: 10
-                      y: 4
-                      width: 300
-                      height: 32
-                      fontSize: 36
-                    action:
-                      textChange: |-
-                        var.editDisplayName = self.getContent()
-              启用标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 704
-                  y: 72
-                  texts: "~&f启用"
-                  fontSize: 36
-              启用切换按钮:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 704
-                  y: 104
-                  width: 72
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.editEnabled = !var.editEnabled
-                children:
-                  启用底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
-                  启用文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.editEnabled ? '&0开' : '&f关'"
-                      fontSize: 36
-                      through: true
-              主题标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 160
-                  texts: "~&f标题"
-                  fontSize: 36
-              输入主题框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 192
-                  width: 760
-                  height: 40
-                children:
-                  主题输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  主题输入框文本:
-                    type: TextBox
-                    val: 编辑主题框
-                    attribute:
-                      x: 10
-                      y: 4
-                      width: 740
-                      height: 32
-                      fontSize: 36
-                    action:
-                      textChange: |-
-                        var.editSubject = self.getContent()
-              正文标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 248
-                  texts: "~&f正文"
-                  fontSize: 36
-              输入正文框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 280
-                  width: 760
-                  height: 140
-                children:
-                  正文输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  正文输入框文本:
-                    type: TextBox
-                    val: 编辑正文框
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 740
-                      height: 128
-                      fontSize: 36
-                      allowNewLine: true
-                    action:
-                      textChange: |-
-                        var.editBody = self.getContent()
-              过期标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 436
-                  texts: "~&f过期(天)"
-                  fontSize: 36
-              输入过期框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 468
-                  width: 160
-                  height: 40
-                children:
-                  过期输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  过期输入框文本:
-                    type: TextBox
-                    val: 编辑过期框
-                    attribute:
-                      x: 10
-                      y: 4
-                      width: 140
-                      height: 32
-                      fontSize: 36
-                    action:
-                      textChange: |-
-                        var.editExpiresDays = self.getContent()
-              货币附件标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 200
-                  y: 436
-                  texts: "~&f货币附件"
-                  fontSize: 36
-              货币附件滚动区:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 200
-                  y: 468
-                  width: 576
-                  height: 180
-                  moveY: "self.parent['货币附件滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  货币附件列表:
-                    val: 货币附件滚动区
-                    type: VStack
-                    attribute:
-                      width: "self.parent.width"
-                      spaceBetween: 6
-                    children:
-                      货币行模板:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          isTemplate: true
-                          width: "self.parent.width - 16"
-                          height: 56
-                        children:
-                          货币行底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~36,38,48,245
-                              shape: ~round_rect
-                              radius: 8
-                            effect:
-                              stroke:
-                                width: 2
-                                color: ~255,255,255,230
-                          货币输入:
-                            type: TextBox
-                            attribute:
-                              x: 8
-                              y: 12
-                              width: 120
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7货币"
-                          货币金额分割线:
-                            type: Texture
-                            attribute:
-                              x: 132
-                              y: 12
-                              width: 2
-                              height: 32
-                              normal: ~255,255,255,230
-                          金额输入:
-                            type: TextBox
-                            attribute:
-                              x: 136
-                              y: 12
-                              width: 80
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7金额"
-                          金额描述分割线:
-                            type: Texture
-                            attribute:
-                              x: 220
-                              y: 12
-                              width: 2
-                              height: 32
-                              normal: ~255,255,255,230
-                          描述输入:
-                            type: TextBox
-                            attribute:
-                              x: 224
-                              y: 12
-                              width: 280
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7描述"
-                          货币删除按钮:
-                            type: Canvas
-                            attribute:
-                              x: 512
-                              y: 8
-                              width: 40
-                              height: 40
-                              visible: "self.parent.isTemplate != true"
-                            action:
-                              clickLeft: |-
-                                self.parent.remove()
-                            children:
-                              货币删除底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~235,100,100,230
-                                  shape: ~round_rect
-                                  radius: 8
-                              货币删除文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f✕"
-                                  fontSize: 32
-                                  through: true
-              货币附件滑块:
-                type: Texture
-                val: 货币附件滑块
-                attribute:
-                  point: ~top_left
-                  x: 770
-                  y: 468
-                  width: 6
-                  height: 60
-                  normal: ~120,120,120,200
-                  maxDragY: 120
-              添加货币按钮:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 200
-                  y: 652
-                  width: 120
-                  height: 40
-                action:
-                  clickLeft: |-
-                    idx = val.货币附件滚动区.childrenCount() - 1
-                    row = val.货币附件滚动区['货币行模板'].copy('货币行' + idx.round())
-                    row.entryKey = idx.round()
-                    row.isTemplate = false
-                    row['货币输入'].setContent('')
-                    row['金额输入'].setContent('')
-                    row['描述输入'].setContent('')
-                children:
-                  添加货币底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~80,180,120,230
-                      shape: ~round_rect
-                      radius: 10
-                  添加货币文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&0+ 添加"
-                      fontSize: 32
-                      through: true
-              命令标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 696
-                  texts: "~&f领取命令 (每行一条)"
-                  fontSize: 36
-              输入命令框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 728
-                  width: 760
-                  height: 64
-                children:
-                  命令输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  命令输入框文本:
-                    type: TextBox
-                    val: 编辑命令框
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 740
-                      height: 68
-                      fontSize: 36
-                      allowNewLine: true
-                    action:
-                      textChange: |-
-                        var.editCommands = self.getContent()
-              领取条件标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 796
-                  texts: "~&f领取条件 (每行一条, 格式: %placeholder% >= value)"
-                  fontSize: 36
-              输入领取条件框:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 828
-                  width: 760
-                  height: 64
-                children:
-                  领取条件输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  领取条件输入框文本:
-                    type: TextBox
-                    val: 编辑领取条件框
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 740
-                      height: 68
-                      fontSize: 36
-                      allowNewLine: true
-                    action:
-                      textChange: |-
-                        var.editConditions = self.getContent()
-              # 保存/取消按钮
-              保存按钮:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 16
-                  y: 896
-                  width: 160
-                  height: 48
-                action:
-                  clickLeft: |-
-                    var.resultMsg = '&e保存中...'
-                    // 收集货币附件行数据为 JSON
-                    curList = []
-                    for(i in range(0, val.货币附件滚动区.childrenCount() - 1)){
-                      row = val.货币附件滚动区.get(i.round())
-                      if(row != none){
-                        cur = row['货币输入'].getContent()
-                        amt = row['金额输入'].getContent()
-                        desc = row['描述输入'].getContent()
-                        if(cur != none && cur != '' && amt != none && amt != ''){
-                          curList.add({'currency': cur, 'amount': amt, 'description': desc != none ? desc : ''})
-                        }
-                      }
-                    }
-                    // 收集 CDK 行数据为 JSON
-                    cdkList = []
-                    for(i in range(0, val.CDK滚动区.childrenCount() - 1)){
-                      row = val.CDK滚动区.get(i.round())
-                      if(row != none){
-                        code = row['CDK码输入'].getContent()
-                        if(code != none && code != ''){
-                          cdkList.add({'code': code, 'enabled': row.cdkEnabled != false, 'maxClaims': row['最大领取输入'].getContent(), 'expiresAfter': row['过期输入'].getContent()})
-                        }
-                      }
-                    }
-                    Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, json.stringify(curList), var.editCommands, var.editConditions, json.stringify(cdkList))
-                children:
-                  保存底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~80,180,120,230
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  保存文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&0保存"
-                      fontSize: 36
-                      through: true
-              取消按钮:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 192
-                  y: 896
-                  width: 120
-                  height: 48
-                action:
-                  clickLeft: |-
-                    var.view = 'list'
-                    Packet.send('AXS_MAIL', 'admin-preset-cancel')
-                    Packet.send('AXS_MAIL', 'admin-preset-list')
-                children:
-                  取消底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  取消文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f取消"
-                      fontSize: 36
-                      through: true
-              # 右侧：物品附件 + 背包
-              附件面板:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 784
-                  y: 72
-                  width: "var.contentW - 800"
-                  height: 300
-                children:
-                  附件底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,210
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  附件标题:
-                    type: Text
+                  返回按钮:
+                    type: Canvas
                     attribute:
                       point: ~top_left
-                      x: 14
+                      x: 16
                       y: 12
-                      texts: "'&f物品附件 &b' + var.editItemCount + '&f/' + var.adminAttachmentSlots.round()"
-                      fontSize: 36
-                  附件提示:
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.view = 'list'
+                        Packet.send('AXS_MAIL', 'admin-preset-cancel')
+                        Packet.send('AXS_MAIL', 'admin-preset-list')
+                    children:
+                      返回底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      返回文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  编辑标题:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 48
-                      texts:
-                        - "~&f左键背包物品放入1个"
-                        - "~&f右键背包物品放入整组"
-                        - "~&f左键附件退回背包"
-                        - "~&f模板物品保存后不消耗"
+                      x: 130
+                      y: 14
+                      texts: "var.editFound ? '&f编辑预设: ' + var.editId : '&f新建预设'"
                       fontSize: 36
-                  附件槽位网格:
-                    type: HGrid
-                    val: "管理附件网格"
+                  编号标签:
+                    type: Text
                     attribute:
                       point: ~top_left
-                      x: 10
-                      y: 140
-                      spaceBetweenX: 6
-                      spaceBetweenY: 6
-                      column: 9
-                    action:
-                      create: |-
-                        for(i in range(1, var.adminAttachmentSlots - 1)){
-                          slot = self['管理槽位0'].copy('slot' + i)
-                          slot.entryKey = i.round()
-                        }
+                      x: 16
+                      y: 72
+                      texts: "~&f预设 ID"
+                      fontSize: 36
+                  输入编号框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 104
+                      width: 320
+                      height: 40
                     children:
-                      管理槽位0:
-                        type: Slot
+                      编号输入底:
+                        type: Texture
                         attribute:
-                          width: 70
-                          height: 70
-                          normal: "~Frosted:0;36,38,48,245"
-                          hover: "~Frosted:0;60,64,82,245"
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
                           shape: ~round_rect
-                          radius: 6
-                          itemScale: 0.72
-                          slotType: ~Icon
-                          lock: true
-                          entryKey: 0.round()
-                          seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey + ''] != none && var.attachmentJsons[self.entryKey + ''] != '' ? var.attachmentJsons[self.entryKey + ''] : var.air)"
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      编号输入框文本:
+                        type: TextBox
+                        val: 编辑编号框
+                        attribute:
+                          x: 10
+                          y: 4
+                          width: 300
+                          height: 32
+                          fontSize: 49
+                          editable: "var.editFound != true"
                         action:
-                          clickLeft: |-
-                            if(var.attachmentJsons != none && var.attachmentJsons[self.entryKey + ''] != none && var.attachmentJsons[self.entryKey + ''] != var.air){
-                              Packet.send('AXS_MAIL', 'admin-remove-attachment', self.entryKey)
+                          textChange: |-
+                            var.editId = self.getContent()
+                  显示名标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 360
+                      y: 72
+                      texts: "~&f显示名"
+                      fontSize: 36
+                  输入显示名框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 360
+                      y: 104
+                      width: 320
+                      height: 40
+                    children:
+                      显示名输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      显示名输入框文本:
+                        type: TextBox
+                        val: 编辑显示名框
+                        attribute:
+                          x: 10
+                          y: 4
+                          width: 300
+                          height: 32
+                          fontSize: 49
+                        action:
+                          textChange: |-
+                            var.editDisplayName = self.getContent()
+                  启用标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 704
+                      y: 72
+                      texts: "~&f启用"
+                      fontSize: 36
+                  启用切换按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 704
+                      y: 104
+                      width: 72
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.editEnabled = !var.editEnabled
+                    children:
+                      启用底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                      启用文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editEnabled ? '&0开' : '&f关'"
+                          fontSize: 36
+                          through: true
+                  主题标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 160
+                      texts: "~&f标题"
+                      fontSize: 36
+                  输入主题框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 192
+                      width: 760
+                      height: 40
+                    children:
+                      主题输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      主题输入框文本:
+                        type: TextBox
+                        val: 编辑主题框
+                        attribute:
+                          x: 10
+                          y: 4
+                          width: 740
+                          height: 32
+                          fontSize: 49
+                        action:
+                          textChange: |-
+                            var.editSubject = self.getContent()
+                  正文标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 248
+                      texts: "~&f正文"
+                      fontSize: 36
+                  输入正文框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 280
+                      width: 760
+                      height: 240
+                    children:
+                      正文输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      正文输入框文本:
+                        type: TextBox
+                        val: 编辑正文框
+                        attribute:
+                          x: 10
+                          y: 6
+                          width: 740
+                          height: 228
+                          fontSize: 49
+                          allowNewLine: true
+                        action:
+                          textChange: |-
+                            var.editBody = self.getContent()
+                  过期标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 536
+                      texts: "~&f过期(天)"
+                      fontSize: 36
+                  输入过期框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 568
+                      width: 160
+                      height: 40
+                    children:
+                      过期输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      过期输入框文本:
+                        type: TextBox
+                        val: 编辑过期框
+                        attribute:
+                          x: 10
+                          y: 4
+                          width: 140
+                          height: 32
+                          fontSize: 49
+                        action:
+                          textChange: |-
+                            var.editExpiresDays = self.getContent()
+                  保存按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 896
+                      width: 160
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.resultMsg = '&e保存中...'
+                        // 收集货币附件行数据为 JSON（含 icon 字段）
+                        curList = []
+                        for(i in range(0, val.货币附件滚动区.childrenCount() - 1)){
+                          row = val.货币附件滚动区.get(i.round())
+                          if(row != none){
+                            cur = row['货币输入'].getContent()
+                            amt = row['金额输入'].getContent()
+                            desc = row['描述输入'].getContent()
+                            if(cur != none && cur != '' && amt != none && amt != ''){
+                              entry = {'currency': cur, 'amount': amt, 'description': desc}
+                              // 收集 icon 字段
+                              iconMat = row['图标材质输入'].getContent()
+                              if(iconMat != none && iconMat != ''){
+                                entry['iconMaterial'] = iconMat
+                                iconCmd = row['图标CMD输入'].getContent()
+                                entry['iconCustomModelData'] = iconCmd != none && iconCmd != '' ? iconCmd : '0'
+                                entry['iconTexture'] = row['图标纹理输入'].getContent()
+                                entry['iconTextureUrl'] = row['图标URL输入'].getContent()
+                                entry['iconName'] = row['图标名称输入'].getContent()
+                                entry['iconLore'] = row['图标描述输入'].getContent()
+                              }
+                              curList.add(entry)
                             }
+                          }
+                        }
+                        // Fallback: 如果 UI 行为空（用户未访问货币副面板），使用 var.editCurrencyList
+                        if(curList.size() == 0 && var.editCurrencyList != none && var.editCurrencyList.size() > 0){
+                          for(i in range(0, var.editCurrencyList.size() - 1)){
+                            src = var.editCurrencyList[i.round()]
+                            if(src != none){
+                              entry = {'currency': src['currency'], 'amount': src['amount'], 'description': src['description'] != none ? src['description'] : ''}
+                              if(src['iconMaterial'] != none && src['iconMaterial'] != ''){
+                                entry['iconMaterial'] = src['iconMaterial']
+                                entry['iconCustomModelData'] = src['iconCustomModelData'] != none ? src['iconCustomModelData'] : '0'
+                                entry['iconTexture'] = src['iconTexture'] != none ? src['iconTexture'] : ''
+                                entry['iconTextureUrl'] = src['iconTextureUrl'] != none ? src['iconTextureUrl'] : ''
+                                entry['iconName'] = src['iconName'] != none ? src['iconName'] : ''
+                                entry['iconLore'] = src['iconLore'] != none ? src['iconLore'] : ''
+                              }
+                              curList.add(entry)
+                            }
+                          }
+                        }
+                        // 收集 CDK 行数据为 JSON（含 expiresAt/expireMode）
+                        cdkList = []
+                        for(i in range(0, val.CDK滚动区.childrenCount() - 1)){
+                          row = val.CDK滚动区.get(i.round())
+                          if(row != none){
+                            code = row['CDK码输入'].getContent()
+                            if(code != none && code != ''){
+                              mode = row.expireMode != none ? row.expireMode : 'relative'
+                              expInput = row['过期输入'].getContent()
+                              cdkEntry = {'code': code, 'enabled': row.cdkEnabled != false, 'maxClaims': row['最大领取输入'].getContent(), 'expireMode': mode}
+                              if(mode == 'absolute'){
+                                cdkEntry['expiresAt'] = expInput != none ? expInput : ''
+                                cdkEntry['expiresAfter'] = ''
+                              } else {
+                                cdkEntry['expiresAfter'] = expInput != none ? expInput : ''
+                                cdkEntry['expiresAt'] = ''
+                              }
+                              cdkList.add(cdkEntry)
+                            }
+                          }
+                        }
+                        // Fallback: 如果 UI 行为空（用户未访问 CDK 副面板），使用 var.editCdkList
+                        if(cdkList.size() == 0 && var.editCdkList != none && var.editCdkList.size() > 0){
+                          for(i in range(0, var.editCdkList.size() - 1)){
+                            src = var.editCdkList[i.round()]
+                            if(src != none){
+                              mode = src['expireMode'] != none ? src['expireMode'] : 'relative'
+                              cdkEntry = {'code': src['code'], 'enabled': src['enabled'], 'maxClaims': src['maxClaims'], 'expireMode': mode}
+                              if(mode == 'absolute'){
+                                cdkEntry['expiresAt'] = src['expiresAt'] != none ? src['expiresAt'] : ''
+                                cdkEntry['expiresAfter'] = ''
+                              } else {
+                                cdkEntry['expiresAfter'] = src['expiresAfter'] != none ? src['expiresAfter'] : ''
+                                cdkEntry['expiresAt'] = ''
+                              }
+                              cdkList.add(cdkEntry)
+                            }
+                          }
+                        }
+                        Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, json.stringify(curList), var.editCommands, var.editConditions, json.stringify(cdkList))
+                    children:
+                      保存底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,120,230
+                          shape: ~round_rect
+                          radius: 10
                         effect:
+                          ripple:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~255,255,255,230
-              管理背包:
+                      保存文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0保存"
+                          fontSize: 36
+                          through: true
+                  取消按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 192
+                      y: 896
+                      width: 120
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.view = 'list'
+                        Packet.send('AXS_MAIL', 'admin-preset-cancel')
+                        Packet.send('AXS_MAIL', 'admin-preset-list')
+                    children:
+                      取消底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          ripple:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      取消文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f取消"
+                          fontSize: 36
+                          through: true
+                  编辑结果提示:
+                    type: Text
+                    attribute:
+                      point: ~bottom_left
+                      x: 16
+                      y: -8
+                      texts: "'&e' + var.resultMsg"
+                      fontSize: 36
+              # ══ 货币附件副面板 ════════════════════════════════
+              货币附件副面板:
                 type: Canvas
                 attribute:
-                  point: ~top_left
-                  x: 784
-                  y: 388
-                  width: "var.contentW - 800"
-                  height: 370
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == 'currency'"
                 children:
-                  背包底:
-                    type: Texture
+                  副面板返回_货币:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,210
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  背包标题:
+                      point: ~top_left
+                      x: 16
+                      y: 12
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.subView = ''
+                    children:
+                      副面板返回底_货币:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      副面板返回文字_货币:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  副面板标题_货币:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 12
-                      texts: "~&f我的背包"
+                      x: 130
+                      y: 14
+                      texts: "~&f货币附件"
                       fontSize: 36
-                  背包槽位网格:
-                    type: HGrid
-                    val: "管理背包网格"
+                  货币附件滚动区:
+                    type: Scroll
                     attribute:
                       point: ~top_left
-                      x: 14
-                      y: 56
-                      spaceBetweenX: 6
-                      spaceBetweenY: 6
-                      column: 9
+                      x: 16
+                      y: 72
+                      width: "var.contentW - 44"
+                      height: "var.viewH - 144 - 120"
+                      moveY: "self.parent['货币附件滑块'].getDragYRatio()"
                     action:
-                      create: |-
-                        for(i in range(1,35)){
-                          slot = self['背包槽位0'].copy('bp_slot' + i)
-                          slot.id = (9 + i).round()
-                          slot.entryKey = (9 + i).round()
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['货币附件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                         }
                     children:
-                      背包槽位0:
-                        type: Slot
+                      货币附件列表:
+                        val: 货币附件滚动区
+                        type: VStack
                         attribute:
-                          width: 70
-                          height: 70
-                          normal: "~Frosted:0;36,38,48,245"
-                          hover: "~Frosted:0;60,64,82,245"
+                          width: "self.parent.width"
+                          spaceBetween: 6
+                        children:
+                          货币行模板:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              isTemplate: true
+                              width: "self.parent.width - 16"
+                              height: 130
+                            children:
+                              货币行底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,38,48,245
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              货币输入:
+                                type: TextBox
+                                attribute:
+                                  x: 8
+                                  y: 6
+                                  width: 100
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7货币种类"
+                              货币金额分割线:
+                                type: Texture
+                                attribute:
+                                  x: 112
+                                  y: 6
+                                  width: 2
+                                  height: 32
+                                  normal: ~255,255,255,230
+                              金额输入:
+                                type: TextBox
+                                attribute:
+                                  x: 116
+                                  y: 6
+                                  width: 70
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7金额"
+                              金额描述分割线:
+                                type: Texture
+                                attribute:
+                                  x: 190
+                                  y: 6
+                                  width: 2
+                                  height: 32
+                                  normal: ~255,255,255,230
+                              描述输入:
+                                type: TextBox
+                                attribute:
+                                  x: 194
+                                  y: 6
+                                  width: 200
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7描述"
+                              货币删除按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 402
+                                  y: 2
+                                  width: 36
+                                  height: 36
+                                  visible: "self.parent.isTemplate != true"
+                                action:
+                                  clickLeft: |-
+                                    self.parent.remove()
+                                children:
+                                  货币删除底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: ~235,100,100,230
+                                      shape: ~round_rect
+                                      radius: 8
+                                  货币删除文字:
+                                      type: Text
+                                      attribute:
+                                        point: ~middle_center
+                                        texts: "~&f✕"
+                                        fontSize: 32
+                                        through: true
+                              图标配置标签:
+                                type: Text
+                                attribute:
+                                  x: 8
+                                  y: 44
+                                  texts: "~&f图标配置（可选）"
+                                  fontSize: 36
+                              图标材质输入:
+                                type: TextBox
+                                attribute:
+                                  x: 8
+                                  y: 76
+                                  width: 120
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7材质名(如GOLD_INGOT)"
+                              图标CMD输入:
+                                type: TextBox
+                                attribute:
+                                  x: 134
+                                  y: 76
+                                  width: 70
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7CMD"
+                              图标纹理输入:
+                                type: TextBox
+                                attribute:
+                                  x: 210
+                                  y: 76
+                                  width: 120
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7纹理标识"
+                              图标URL输入:
+                                type: TextBox
+                                attribute:
+                                  x: 8
+                                  y: 112
+                                  width: 140
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7纹理URL"
+                              图标名称输入:
+                                type: TextBox
+                                attribute:
+                                  x: 154
+                                  y: 112
+                                  width: 120
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7图标名称"
+                              图标描述输入:
+                                type: TextBox
+                                attribute:
+                                  x: 280
+                                  y: 112
+                                  width: 200
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7图标描述(每行一条)"
+                                  allowNewLine: true
+                  货币附件滑块:
+                    type: Texture
+                    val: 货币附件滑块
+                    attribute:
+                      point: ~top_left
+                      x: "var.contentW - 26"
+                      y: 72
+                      width: 6
+                      height: 60
+                      normal: ~120,120,120,200
+                      maxDragY: 120
+                  添加货币按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: "var.viewH - 144 - 48"
+                      width: 120
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        idx = val.货币附件滚动区.childrenCount() - 1
+                        row = val.货币附件滚动区['货币行模板'].copy('货币行' + idx.round())
+                        row.entryKey = idx.round()
+                        row.isTemplate = false
+                        row['货币输入'].setContent('')
+                        row['金额输入'].setContent('')
+                        row['描述输入'].setContent('')
+                        row['图标材质输入'].setContent('')
+                        row['图标CMD输入'].setContent('')
+                        row['图标纹理输入'].setContent('')
+                        row['图标URL输入'].setContent('')
+                        row['图标名称输入'].setContent('')
+                        row['图标描述输入'].setContent('')
+                    children:
+                      添加货币底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,120,230
                           shape: ~round_rect
-                          radius: 6
-                          itemScale: 0.72
-                          slotType: ~Backpack
-                          lock: true
-                          id: 9.round()
-                          entryKey: 9.round()
-                        action:
-                          clickLeft: |-
-                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, '1')
-                          clickRight: |-
-                            Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, 'all')
+                          radius: 10
+                      添加货币文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0+ 添加"
+                          fontSize: 32
+                          through: true
+              # ══ 物品附件副面板 ════════════════════════════════
+              物品附件副面板:
+                type: Canvas
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == 'item'"
+                children:
+                  副面板返回_物品:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 12
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.subView = ''
+                    children:
+                      副面板返回底_物品:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
-              CDK标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 784
-                  y: 766
-                  texts: "~&fCDK 兑换码"
-                  fontSize: 36
-              CDK滚动区:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 784
-                  y: 802
-                  width: "var.contentW - 800"
-                  height: 180
-                  moveY: "self.parent['CDK滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  CDK列表:
-                    val: CDK滚动区
-                    type: VStack
-                    attribute:
-                      width: "self.parent.width - 6"
-                      spaceBetween: 6
-                    children:
-                      CDK行模板:
-                        type: Canvas
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      副面板返回文字_物品:
+                        type: Text
                         attribute:
-                          entryKey: 0.round()
-                          isTemplate: true
-                          cdkEnabled: true
-                          width: "self.parent.width - 16"
-                          height: 56
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  副面板标题_物品:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 130
+                      y: 14
+                      texts: "~&f物品附件"
+                      fontSize: 36
+                  附件面板:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 72
+                      width: "var.contentW - 32"
+                      height: 400
+                    children:
+                      附件底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      附件标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 14
+                          y: 12
+                          texts: "'&f物品附件 &b' + var.editItemCount + '&f/' + var.adminAttachmentSlots.round()"
+                          fontSize: 36
+                      附件提示:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 14
+                          y: 48
+                          texts:
+                            - "~&f左键背包物品放入1个"
+                            - "~&f右键背包物品放入整组"
+                            - "~&f左键附件退回背包"
+                            - "~&f模板物品保存后不消耗"
+                          fontSize: 36
+                      附件槽位网格:
+                        type: HGrid
+                        val: "管理附件网格"
+                        attribute:
+                          point: ~top_left
+                          x: 10
+                          y: 140
+                          spaceBetweenX: 6
+                          spaceBetweenY: 6
+                          column: 9
+                        action:
+                          create: |-
+                            for(i in range(1, var.adminAttachmentSlots - 1)){
+                              slot = self['管理槽位0'].copy('slot' + i)
+                              slot.entryKey = i.round()
+                            }
                         children:
-                          CDK行底:
-                            type: Texture
+                          管理槽位0:
+                            type: Slot
                             attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~36,38,48,245
+                              width: 70
+                              height: 70
+                              normal: "~Frosted:0;36,38,48,245"
+                              hover: "~Frosted:0;60,64,82,245"
                               shape: ~round_rect
-                              radius: 8
+                              radius: 6
+                              itemScale: 0.72
+                              slotType: ~Icon
+                              lock: true
+                              entryKey: 0.round()
+                              seticon: "self.setItemIcon(var.attachmentJsons != none && var.attachmentJsons[self.entryKey] != none && var.attachmentJsons[self.entryKey] != '' ? var.attachmentJsons[self.entryKey] : var.air)"
+                            action:
+                              clickLeft: |-
+                                if(var.attachmentJsons != none && var.attachmentJsons[self.entryKey] != none && var.attachmentJsons[self.entryKey] != var.air){
+                                  Packet.send('AXS_MAIL', 'admin-remove-attachment', self.entryKey)
+                                }
                             effect:
                               stroke:
                                 width: 2
                                 color: ~255,255,255,230
-                          CDK码输入:
-                            type: TextBox
+                  管理背包:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 488
+                      width: "var.contentW - 32"
+                      height: "var.viewH - 144 - 504"
+                    children:
+                      背包底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      背包标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 14
+                          y: 12
+                          texts: "~&f我的背包"
+                          fontSize: 36
+                      背包槽位网格:
+                        type: HGrid
+                        val: "管理背包网格"
+                        attribute:
+                          point: ~top_left
+                          x: 14
+                          y: 56
+                          spaceBetweenX: 6
+                          spaceBetweenY: 6
+                          column: 9
+                        action:
+                          create: |-
+                            for(i in range(1,35)){
+                              slot = self['背包槽位0'].copy('bp_slot' + i)
+                              slot.id = (9 + i).round()
+                              slot.entryKey = (9 + i).round()
+                            }
+                        children:
+                          背包槽位0:
+                            type: Slot
                             attribute:
-                              x: 8
-                              y: 12
-                              width: 160
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7CDK码"
-                          CDK启用按钮:
-                            type: Canvas
-                            attribute:
-                              x: 176
-                              y: 8
-                              width: 56
-                              height: 40
+                              width: 70
+                              height: 70
+                              normal: "~Frosted:0;36,38,48,245"
+                              hover: "~Frosted:0;60,64,82,245"
+                              shape: ~round_rect
+                              radius: 6
+                              itemScale: 0.72
+                              slotType: ~Backpack
+                              lock: true
+                              id: 9.round()
+                              entryKey: 9.round()
                             action:
                               clickLeft: |-
-                                self.parent.cdkEnabled = !(self.parent.cdkEnabled != false)
-                            children:
-                              CDK启用底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: "self.parent.parent.cdkEnabled != false ? '80,180,120,230' : '235,100,100,230'"
-                                  shape: ~round_rect
-                                  radius: 8
-                              CDK启用文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
-                                  fontSize: 32
-                                  through: true
-                          启用次数分割线:
-                            type: Texture
-                            attribute:
-                              x: 236
-                              y: 12
-                              width: 2
-                              height: 32
-                              normal: ~255,255,255,230
-                          最大领取输入:
-                            type: TextBox
-                            attribute:
-                              x: 240
-                              y: 12
-                              width: 80
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7次数"
-                          次数过期分割线:
-                            type: Texture
-                            attribute:
-                              x: 324
-                              y: 12
-                              width: 2
-                              height: 32
-                              normal: ~255,255,255,230
-                          过期输入:
-                            type: TextBox
-                            attribute:
-                              x: 328
-                              y: 12
-                              width: 80
-                              height: 32
-                              fontSize: 32
-                              emptyText: "~&7时长"
-                          CDK删除按钮:
-                            type: Canvas
-                            attribute:
-                              x: 416
-                              y: 8
-                              width: 40
-                              height: 40
-                              visible: "self.parent.isTemplate != true"
-                            action:
-                              clickLeft: |-
-                                self.parent.remove()
-                            children:
-                              CDK删除底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~235,100,100,230
-                                  shape: ~round_rect
-                                  radius: 8
-                              CDK删除文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f✕"
-                                  fontSize: 32
-                                  through: true
-              CDK滑块:
-                type: Texture
-                val: CDK滑块
-                attribute:
-                  point: ~top_left
-                  x: "var.contentW - 20"
-                  y: 802
-                  width: 6
-                  height: 60
-                  normal: ~120,120,120,200
-                  maxDragY: 120
-              添加CDK按钮:
+                                Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, '1')
+                              clickRight: |-
+                                Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, 'all')
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+              # ══ CDK 副面板 ════════════════════════════════════
+              CDK副面板:
                 type: Canvas
                 attribute:
-                  point: ~top_left
-                  x: 784
-                  y: 990
-                  width: 120
-                  height: 40
-                action:
-                  clickLeft: |-
-                    idx = val.CDK滚动区.childrenCount() - 1
-                    row = val.CDK滚动区['CDK行模板'].copy('CDK行' + idx.round())
-                    row.entryKey = idx.round()
-                    row.isTemplate = false
-                    row.cdkEnabled = true
-                    row['CDK码输入'].setContent('')
-                    row['最大领取输入'].setContent('100')
-                    row['过期输入'].setContent('30d')
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == 'cdk'"
                 children:
-                  添加CDK底:
-                    type: Texture
+                  副面板返回_CDK:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~80,180,120,230
-                      shape: ~round_rect
-                      radius: 10
-                  添加CDK文字:
+                      point: ~top_left
+                      x: 16
+                      y: 12
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.subView = ''
+                    children:
+                      副面板返回底_CDK:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      副面板返回文字_CDK:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  副面板标题_CDK:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: "~&0+ 添加"
-                      fontSize: 32
-                      through: true
-              # 编辑视图结果提示
-              编辑结果提示:
-                type: Text
+                      point: ~top_left
+                      x: 130
+                      y: 14
+                      texts: "~&fCDK 兑换码"
+                      fontSize: 36
+                  CDK滚动区:
+                    type: Scroll
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 72
+                      width: "var.contentW - 44"
+                      height: "var.viewH - 144 - 120"
+                      moveY: "self.parent['CDK滑块'].getDragYRatio()"
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['CDK滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                    children:
+                      CDK列表:
+                        val: CDK滚动区
+                        type: VStack
+                        attribute:
+                          width: "self.parent.width - 6"
+                          spaceBetween: 6
+                        children:
+                          CDK行模板:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              isTemplate: true
+                              cdkEnabled: true
+                              expireMode: 'relative'
+                              width: "self.parent.width - 16"
+                              height: 56
+                            children:
+                              CDK行底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~36,38,48,245
+                                  shape: ~round_rect
+                                  radius: 8
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~255,255,255,230
+                              CDK码输入:
+                                type: TextBox
+                                attribute:
+                                  x: 8
+                                  y: 12
+                                  width: 160
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7CDK码"
+                              CDK启用按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 176
+                                  y: 8
+                                  width: 56
+                                  height: 40
+                                action:
+                                  clickLeft: |-
+                                    self.parent.cdkEnabled = !(self.parent.cdkEnabled != false)
+                                children:
+                                  CDK启用底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.parent.cdkEnabled != false ? '80,180,120,230' : '235,100,100,230'"
+                                      shape: ~round_rect
+                                      radius: 8
+                                  CDK启用文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
+                                      fontSize: 32
+                                      through: true
+                              启用次数分割线:
+                                type: Texture
+                                attribute:
+                                  x: 236
+                                  y: 12
+                                  width: 2
+                                  height: 32
+                                  normal: ~255,255,255,230
+                              最大领取输入:
+                                type: TextBox
+                                attribute:
+                                  x: 240
+                                  y: 12
+                                  width: 80
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&7最大领取"
+                              次数过期分割线:
+                                type: Texture
+                                attribute:
+                                  x: 324
+                                  y: 12
+                                  width: 2
+                                  height: 32
+                                  normal: ~255,255,255,230
+                              过期模式按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 328
+                                  y: 8
+                                  width: 72
+                                  height: 40
+                                action:
+                                  clickLeft: |-
+                                    self.parent.expireMode = self.parent.expireMode == 'absolute' ? 'relative' : 'absolute'
+                                    self.parent['过期输入'].setContent('')
+                                children:
+                                  过期模式底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.parent.expireMode == 'absolute' ? '100,160,220,230' : '80,180,120,230'"
+                                      shape: ~round_rect
+                                      radius: 8
+                                  过期模式文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "self.parent.parent.expireMode == 'absolute' ? '&0绝对' : '&0相对'"
+                                      fontSize: 32
+                                      through: true
+                              过期模式分割线:
+                                type: Texture
+                                attribute:
+                                  x: 404
+                                  y: 12
+                                  width: 2
+                                  height: 32
+                                  normal: ~255,255,255,230
+                              过期输入:
+                                type: TextBox
+                                attribute:
+                                  x: 408
+                                  y: 12
+                                  width: 160
+                                  height: 32
+                                  fontSize: 49
+                                  emptyText: "~&730d 或 ISO时间"
+                              CDK删除按钮:
+                                type: Canvas
+                                attribute:
+                                  x: 576
+                                  y: 8
+                                  width: 40
+                                  height: 40
+                                  visible: "self.parent.isTemplate != true"
+                                action:
+                                  clickLeft: |-
+                                    self.parent.remove()
+                                children:
+                                  CDK删除底:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: ~235,100,100,230
+                                      shape: ~round_rect
+                                      radius: 8
+                                  CDK删除文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "~&f✕"
+                                      fontSize: 32
+                                      through: true
+                  CDK滑块:
+                    type: Texture
+                    val: CDK滑块
+                    attribute:
+                      point: ~top_left
+                      x: "var.contentW - 26"
+                      y: 72
+                      width: 6
+                      height: 60
+                      normal: ~120,120,120,200
+                      maxDragY: 120
+                  添加CDK按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: "var.viewH - 144 - 48"
+                      width: 120
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        idx = val.CDK滚动区.childrenCount() - 1
+                        row = val.CDK滚动区['CDK行模板'].copy('CDK行' + idx.round())
+                        row.entryKey = idx.round()
+                        row.isTemplate = false
+                        row.cdkEnabled = true
+                        row.expireMode = 'relative'
+                        row['CDK码输入'].setContent('')
+                        row['最大领取输入'].setContent('100')
+                        row['过期输入'].setContent('30d')
+                    children:
+                      添加CDK底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,120,230
+                          shape: ~round_rect
+                          radius: 10
+                      添加CDK文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0+ 添加"
+                          fontSize: 32
+                          through: true
+              # ══ 领取命令副面板 ════════════════════════════════
+              领取命令副面板:
+                type: Canvas
                 attribute:
-                  point: ~bottom_left
-                  x: 16
-                  y: -8
-                  texts: "var.resultMsg != none ? '&e' + var.resultMsg : ''"
-                  fontSize: 36
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == 'commands'"
+                children:
+                  副面板返回_命令:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 12
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.subView = ''
+                    children:
+                      副面板返回底_命令:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      副面板返回文字_命令:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  副面板标题_命令:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 130
+                      y: 14
+                      texts: "~&f领取命令 (每行一条)"
+                      fontSize: 36
+                  输入命令框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 72
+                      width: "var.contentW - 32"
+                      height: "var.viewH - 144 - 88"
+                    children:
+                      命令输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      命令输入框文本:
+                        type: TextBox
+                        val: 编辑命令框
+                        attribute:
+                          x: 10
+                          y: 6
+                          width: "var.contentW - 52"
+                          height: "var.viewH - 144 - 100"
+                          fontSize: 49
+                          allowNewLine: true
+                        action:
+                          textChange: |-
+                            var.editCommands = self.getContent()
+              # ══ 领取条件副面板 ════════════════════════════════
+              领取条件副面板:
+                type: Canvas
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  visible: "var.subView == 'conditions'"
+                children:
+                  副面板返回_条件:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 12
+                      width: 100
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.subView = ''
+                    children:
+                      副面板返回底_条件:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                      副面板返回文字_条件:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f返回"
+                          fontSize: 36
+                          through: true
+                  副面板标题_条件:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 130
+                      y: 14
+                      texts: "~&f领取条件 (每行一条, 格式: %placeholder% >= value)"
+                      fontSize: 36
+                  输入领取条件框:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 16
+                      y: 72
+                      width: "var.contentW - 32"
+                      height: "var.viewH - 144 - 88"
+                    children:
+                      领取条件输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~36,38,48,245
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~255,255,255,230
+                      领取条件输入框文本:
+                        type: TextBox
+                        val: 编辑领取条件框
+                        attribute:
+                          x: 10
+                          y: 6
+                          width: "var.contentW - 52"
+                          height: "var.viewH - 144 - 100"
+                          fontSize: 49
+                          allowNewLine: true
+                        action:
+                          textChange: |-
+                            var.editConditions = self.getContent()

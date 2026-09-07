@@ -330,7 +330,7 @@ controls:
                             attribute:
                               x: 16
                               y: 8
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : ''"
+                              texts: "'&f' + self.parent.entry['name']"
                               fontSize: 28
                               through: true
                           卖家项数量:
@@ -338,7 +338,7 @@ controls:
                             attribute:
                               x: 16
                               y: 34
-                              texts: "self.parent.entry != none ? '&7在售 ' + self.parent.entry['activeCount'] + ' 件' : ''"
+                              texts: "'&7在售 ' + self.parent.entry['activeCount'] + ' 件'"
                               fontSize: 20
                               through: true
               卖家滑块:
@@ -611,7 +611,7 @@ controls:
                             attribute:
                               x: 90
                               y: 8
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['itemDisplayName'] : ''"
+                              texts: "'&f' + self.parent.entry['itemDisplayName']"
                               fontSize: 26
                               through: true
                           商品卖家:
@@ -619,7 +619,7 @@ controls:
                             attribute:
                               x: 90
                               y: 38
-                              texts: "self.parent.entry != none ? '&7卖家: &f' + self.parent.entry['sellerName'] : ''"
+                              texts: "'&7卖家: &f' + self.parent.entry['sellerName']"
                               fontSize: 20
                               through: true
                           商品留言:
@@ -635,7 +635,7 @@ controls:
                             attribute:
                               x: 680
                               y: 16
-                              texts: "self.parent.entry != none ? '&e' + self.parent.entry['price'] + ' ' + self.parent.entry['currency'] : ''"
+                              texts: "'&e' + self.parent.entry['price'].round() + ' ' + self.parent.entry['currency']"
                               fontSize: 28
                               center: true
                               through: true

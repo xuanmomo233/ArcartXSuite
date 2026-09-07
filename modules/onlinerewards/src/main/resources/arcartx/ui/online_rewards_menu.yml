@@ -3,7 +3,7 @@
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（签到/进度/奖励）+ 内容区
 # 视觉规范:
 #   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片 62,66,74,210  描边 255,255,255,230
+#   卡片 62,66,74,240  描边 255,255,255,230
 #   主色（天青蓝）90,150,250  已签到 124,196,142  过期 210,120,120  进行中 232,180,90
 # 前置依赖: ArcartX；OnlineRewards 模块启用后会自动注册或导出。
 # 关联文件: ArcartXOnlineRewards.yml
@@ -519,7 +519,7 @@ controls:
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~62,66,74,210
+              normal: ~62,66,74,240
           标题色块:
             type: Texture
             attribute:
@@ -544,7 +544,7 @@ controls:
               x: 220
               width: 1
               height: 30
-              normal: ~62,66,74,210
+              normal: ~62,66,74,240
           签到状态:
             type: Text
             attribute:
@@ -569,7 +569,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~62,66,74,240
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -601,7 +601,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~62,66,74,240
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -656,13 +656,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentPage == 'signin' ? '90,150,250,210' : '62,66,74,210'"
+                  normal: "var.currentPage == 'signin' ? '90,150,250,240' : '62,66,74,240'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.currentPage == 'signin' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+                    color: "var.currentPage == 'signin' ? '255,255,255,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
               签到高亮条:
                 type: Texture
                 attribute:
@@ -701,14 +701,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentPage == 'progress' ? '90,150,250,210' : '62,66,74,210'"
+                  normal: "var.currentPage == 'progress' ? '90,150,250,240' : '62,66,74,240'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "var.currentPage == 'progress' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+                    color: "var.currentPage == 'progress' ? '255,255,255,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
               进度高亮条:
                 type: Texture
                 attribute:
@@ -746,14 +746,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentPage == 'rewards' ? '90,150,250,210' : '62,66,74,210'"
+                  normal: "var.currentPage == 'rewards' ? '90,150,250,240' : '62,66,74,240'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "var.currentPage == 'rewards' ? '90,150,250,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
+                    color: "var.currentPage == 'rewards' ? '255,255,255,230' : (self.isHovered() ? '120,180,255,255' : '255,255,255,230')"
               奖励高亮条:
                 type: Texture
                 attribute:
@@ -866,7 +866,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -907,12 +907,12 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~62,66,74,210
+                          normal: ~62,66,74,240
                           shape: ~round_rect
                           radius: 8
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
                       上月文字:
                         type: Text
@@ -920,7 +920,7 @@ controls:
                           point: ~middle_center
                           width: 40
                           texts: "~&f<"
-                          fontSize: 32
+                          fontSize: 48
                           through: true
                   本月按钮:
                     type: Canvas
@@ -939,12 +939,12 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~62,66,74,210
+                          normal: ~62,66,74,240
                           shape: ~round_rect
                           radius: 8
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
                       本月文字:
                         type: Text
@@ -971,12 +971,12 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~62,66,74,210
+                          normal: ~62,66,74,240
                           shape: ~round_rect
                           radius: 8
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: "self.isHovered() ? '120,180,255,255' : '255,255,255,230'"
                       下月文字:
                         type: Text
@@ -1017,12 +1017,12 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '124,196,142,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : (self.parent.entry['status'] == 'future' ? '62,66,74,210' : '90,150,250,230')))"
+                              normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '124,196,142,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : (self.parent.entry['status'] == 'future' ? '62,66,74,240' : '90,150,250,230')))"
                               shape: ~round_rect
                               radius: 8
                             effect:
                               stroke:
-                                width: 2
+                                width: 3
                                 color: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['date'] == var.selectedDateText ? '120,180,255,255' : '255,255,255,230')"
                           日历文字:
                             type: Text
@@ -1091,7 +1091,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -1139,7 +1139,7 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.selectedActionEnabled ? '90,150,250,235' : '62,66,74,210'"
+                          normal: "var.selectedActionEnabled ? '90,150,250,235' : '62,66,74,240'"
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -1186,8 +1186,8 @@ controls:
                       radius: 6
                     effect:
                       stroke:
-                        width: 2
-                        color: ~80,200,220,240
+                        width: 3
+                        color: ~255,255,255,230
                   选中奖励滑块:
                     type: Texture
                     val: 选中奖励滑块
@@ -1223,7 +1223,7 @@ controls:
                         val: 选中奖励堆叠
                         type: VStack
                         attribute:
-                          width: "var.cardW - 56"
+                          width: "var.cardW - 62"
                           spaceBetween: 8
                         children:
                           选中奖励项:
@@ -1231,15 +1231,15 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               entry: var.selectedRewardRows[self.entryKey]
-                              width: "var.cardW - 56"
+                              width: "var.cardW - 62"
                               height: 64
-                              normal: ~62,66,74,210
+                              normal: ~62,66,74,240
                               shape: ~round_rect
                               radius: 10
                               visible: self.entry != none
                             effect:
                               stroke:
-                                width: 2
+                                width: 3
                                 color: ~255,255,255,230
                             children:
                               选中奖励名称:
@@ -1280,7 +1280,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -1351,7 +1351,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -1390,12 +1390,12 @@ controls:
                       y: 116
                       width: "var.contentW - 120"
                       height: 16
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 8
                     effect:
                       stroke:
-                        width: 2
+                        width: 3
                         color: ~255,255,255,230
                   阶段进度条填充:
                     type: Progress
@@ -1434,7 +1434,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -1465,12 +1465,12 @@ controls:
                       y: 92
                       width: "var.contentW - 120"
                       height: 16
-                      normal: ~62,66,74,210
+                      normal: ~62,66,74,240
                       shape: ~round_rect
                       radius: 8
                     effect:
                       stroke:
-                        width: 2
+                        width: 3
                         color: ~255,255,255,230
                   目标进度条填充:
                     type: Progress
@@ -1519,13 +1519,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.currentRewardTab == 'stage' ? '90,150,250,255' : '62,66,74,210'"
+                          normal: "var.currentRewardTab == 'stage' ? '90,150,250,255' : '62,66,74,240'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: "var.currentRewardTab == 'stage' ? '120,180,255,255' : '255,255,255,230'"
+                            width: 3
+                            color: "var.currentRewardTab == 'stage' ? '255,255,255,230' : '255,255,255,230'"
                       阶段页签文字:
                         type: Text
                         attribute:
@@ -1550,13 +1550,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.currentRewardTab == 'periodic' ? '90,150,250,255' : '62,66,74,210'"
+                          normal: "var.currentRewardTab == 'periodic' ? '90,150,250,255' : '62,66,74,240'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: "var.currentRewardTab == 'periodic' ? '120,180,255,255' : '255,255,255,230'"
+                            width: 3
+                            color: "var.currentRewardTab == 'periodic' ? '255,255,255,230' : '255,255,255,230'"
                       周期页签文字:
                         type: Text
                         attribute:
@@ -1581,13 +1581,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.currentRewardTab == 'signin' ? '90,150,250,255' : '62,66,74,210'"
+                          normal: "var.currentRewardTab == 'signin' ? '90,150,250,255' : '62,66,74,240'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: "var.currentRewardTab == 'signin' ? '120,180,255,255' : '255,255,255,230'"
+                            width: 3
+                            color: "var.currentRewardTab == 'signin' ? '255,255,255,230' : '255,255,255,230'"
                       签到页签文字:
                         type: Text
                         attribute:
@@ -1604,35 +1604,35 @@ controls:
                   x: 32
                   y: 96
                   width: "var.contentW - 64"
-                  height: "var.viewH - 204"
+                  height: "var.viewH - 264"
                   visible: "var.currentRewardTab == 'stage'"
                 children:
                   阶段奖滑轨:
                     type: Texture
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       normal: ~15,25,38,220
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 2
-                        color: ~80,200,220,240
+                        width: 3
+                        color: ~255,255,255,230
                   阶段奖滑块:
                     type: Texture
                     val: 阶段奖滑块
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
                       height: 60
                       normal: ~50,170,200,220
-                      maxDragY: "var.viewH - 264"
+                      maxDragY: "var.viewH - 324"
                       shape: ~round_rect
                       radius: 6
                   阶段奖滚动区:
@@ -1642,7 +1642,7 @@ controls:
                       x: 0
                       y: 0
                       width: "var.contentW - 64"
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       moveY: "self.parent['阶段奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1657,7 +1657,7 @@ controls:
                         val: 阶段堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 64"
+                          width: "var.contentW - 70"
                           spaceBetween: 8
                         children:
                           阶段奖励项:
@@ -1665,7 +1665,7 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               entry: var.rewardRows[self.entryKey]
-                              width: "var.contentW - 64"
+                              width: "var.contentW - 70"
                               height: 110
                               visible: self.entry != none
                             children:
@@ -1674,16 +1674,26 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['current'] ? '90,150,250,210' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                                  normal: "self.parent.entry != none && self.parent.entry['current'] ? '90,150,250,240' : '62,66,74,240'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.parent.entry != none && self.parent.entry['current'] ? '120,180,255,255' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                                    width: 3
+                                    color: "self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230'"
+                              已领取角标:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -12
+                                  y: 12
+                                  texts: "self.parent.entry != none && self.parent.entry['claimed'] ? '&a✔' : none"
+                                  fontSize: 30
+                                  through: true
                               图标:
                                 type: Slot
                                 attribute:
+                                  point: ~top_left
                                   x: 16
                                   y: 15
                                   width: 80
@@ -1730,35 +1740,35 @@ controls:
                   x: 32
                   y: 96
                   width: "var.contentW - 64"
-                  height: "var.viewH - 204"
+                  height: "var.viewH - 264"
                   visible: "var.currentRewardTab == 'periodic'"
                 children:
                   周期奖滑轨:
                     type: Texture
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       normal: ~15,25,38,220
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 2
-                        color: ~80,200,220,240
+                        width: 3
+                        color: ~255,255,255,230
                   周期奖滑块:
                     type: Texture
                     val: 周期奖滑块
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
                       height: 60
                       normal: ~50,170,200,220
-                      maxDragY: "var.viewH - 264"
+                      maxDragY: "var.viewH - 324"
                       shape: ~round_rect
                       radius: 6
                   周期奖滚动区:
@@ -1768,7 +1778,7 @@ controls:
                       x: 0
                       y: 0
                       width: "var.contentW - 64"
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       moveY: "self.parent['周期奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1783,7 +1793,7 @@ controls:
                         val: 周期堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 64"
+                          width: "var.contentW - 70"
                           spaceBetween: 8
                         children:
                           周期奖励项:
@@ -1791,7 +1801,7 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               entry: var.periodicRewardRows[self.entryKey]
-                              width: "var.contentW - 64"
+                              width: "var.contentW - 70"
                               height: 110
                               visible: self.entry != none
                             children:
@@ -1800,16 +1810,26 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['reached'] && !self.parent.entry['claimed'] ? '90,150,250,210' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,210' : '62,66,74,210')"
+                                  normal: "self.parent.entry != none && self.parent.entry['reached'] && !self.parent.entry['claimed'] ? '90,150,250,240' : '62,66,74,240'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.parent.entry != none && self.parent.entry['reached'] && !self.parent.entry['claimed'] ? '120,180,255,255' : (self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230')"
+                                    width: 3
+                                    color: "self.parent.entry != none && self.parent.entry['claimed'] ? '124,196,142,230' : '255,255,255,230'"
+                              已领取角标:
+                                type: Text
+                                attribute:
+                                  point: ~top_right
+                                  x: -12
+                                  y: 12
+                                  texts: "self.parent.entry != none && self.parent.entry['claimed'] ? '&a✔' : none"
+                                  fontSize: 30
+                                  through: true
                               图标:
                                 type: Slot
                                 attribute:
+                                  point: ~top_left
                                   x: 16
                                   y: 15
                                   width: 80
@@ -1856,35 +1876,35 @@ controls:
                   x: 32
                   y: 96
                   width: "var.contentW - 64"
-                  height: "var.viewH - 204"
+                  height: "var.viewH - 264"
                   visible: "var.currentRewardTab == 'signin'"
                 children:
                   签到奖滑轨:
                     type: Texture
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       normal: ~15,25,38,220
                       shape: ~round_rect
                       radius: 6
                     effect:
                       stroke:
-                        width: 2
-                        color: ~80,200,220,240
+                        width: 3
+                        color: ~255,255,255,230
                   签到奖滑块:
                     type: Texture
                     val: 签到奖滑块
                     attribute:
                       point: ~top_right
-                      x: -8
+                      x: 17
                       y: 0
                       width: 12
                       height: 60
                       normal: ~50,170,200,220
-                      maxDragY: "var.viewH - 264"
+                      maxDragY: "var.viewH - 324"
                       shape: ~round_rect
                       radius: 6
                   签到奖滚动区:
@@ -1894,7 +1914,7 @@ controls:
                       x: 0
                       y: 0
                       width: "var.contentW - 64"
-                      height: "var.viewH - 204"
+                      height: "var.viewH - 264"
                       moveY: "self.parent['签到奖滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1909,7 +1929,7 @@ controls:
                         val: 签到堆叠
                         type: VStack
                         attribute:
-                          width: "var.contentW - 64"
+                          width: "var.contentW - 70"
                           spaceBetween: 8
                         children:
                           签到奖励项:
@@ -1917,7 +1937,7 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               entry: var.signInRewardRows[self.entryKey]
-                              width: "var.contentW - 64"
+                              width: "var.contentW - 70"
                               height: 110
                               visible: self.entry != none
                             children:
@@ -1926,16 +1946,17 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~62,66,74,210
+                                  normal: ~62,66,74,240
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
-                                    width: 2
+                                    width: 3
                                     color: ~255,255,255,230
                               图标:
                                 type: Slot
                                 attribute:
+                                  point: ~top_left
                                   x: 16
                                   y: 15
                                   width: 80

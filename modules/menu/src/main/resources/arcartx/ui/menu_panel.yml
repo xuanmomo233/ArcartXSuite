@@ -303,7 +303,7 @@ controls:
                           through: true
                           x: "self.parent.entry != none && self.parent.entry['hasIcon'] ? 138 : 109"
                           y: 18
-                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
+                          texts: "self.parent.entry['text']"
                           center: true
                           fontSize: 48
           导航栏:
@@ -424,7 +424,7 @@ controls:
                           through: true
                           x: "self.parent.entry != none && self.parent.entry['hasIcon'] ? 118 : 90"
                           y: 12
-                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
+                          texts: "self.parent.entry['text']"
                           center: true
                           fontSize: 48
 

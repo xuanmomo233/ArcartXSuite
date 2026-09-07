@@ -807,7 +807,7 @@ controls:
                           x: 124
                           y: 12
                           width: 180
-                          texts: "self.parent.entry != none ? (self.parent.rarityTag + self.parent.entry['name']) : none"
+                          texts: "self.parent.rarityTag + self.parent.entry['name']"
                           fontSize: 32
                           through: true
                       # 稀有度标签
@@ -817,7 +817,7 @@ controls:
                           x: 124
                           y: 48
                           width: 180
-                          texts: "self.parent.entry != none ? (self.parent.rarityTag + '◆ ' + self.parent.rarityLabel) : none"
+                          texts: "self.parent.rarityTag + '◆ ' + self.parent.rarityLabel"
                           fontSize: 30
                           through: true
                       # 捕获次数

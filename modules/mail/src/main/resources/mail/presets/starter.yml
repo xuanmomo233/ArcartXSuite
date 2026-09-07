@@ -97,3 +97,5 @@ preset:
       enabled: true
       max-claims: 100     #CDK 全局共享的最大领取次数（所有玩家共用，领完即止；每玩家仅可领一次）
       expires-after: 30d  #CDK 本身的过期时长（从 CDK 首次创建时间算起，过期后任何人都无法领取）
+      # expires-at: 2026-12-31T23:59:59Z  #可选；绝对过期时刻（UTC ISO 时间），优先级高于 expires-after/ttl
+      # ttl: 30d                          #可选；expires-after 的别名，二者填其一即可

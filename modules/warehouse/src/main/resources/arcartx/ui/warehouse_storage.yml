@@ -76,10 +76,10 @@ ui:
     #   - maxCategoryCount: 分类最大数量
     update: |-
       // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
-      oldMaxPersonalCount = var.maxPersonalCount != none ? var.maxPersonalCount : 0
-      oldMaxSharedCount = var.maxSharedCount != none ? var.maxSharedCount : 0
-      oldMaxCategoryCount = var.maxCategoryCount != none ? var.maxCategoryCount : 0
-      oldPageSize = var.pageSize != none ? var.pageSize : 0
+      oldMaxPersonalCount = var.maxPersonalCount
+      oldMaxSharedCount = var.maxSharedCount
+      oldMaxCategoryCount = var.maxCategoryCount
+      oldPageSize = var.pageSize
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
       var.ownerType = packet['ownerType']
