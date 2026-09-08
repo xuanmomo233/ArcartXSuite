@@ -112,6 +112,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             throw new IllegalStateException("非法表前缀（仅允许字母数字下划线）: " + prefix);
         }
         createTables(conn);
+        migrateListingMessage(conn);
         initFullTextIndex(conn);
         logger.info("" + (!isMysql() ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix
             + (ftsAvailable ? "，全文索引: 已启用" : "，全文索引: 不可用（降级 LIKE）"));
@@ -205,6 +206,16 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         }
     }
 
+    /** 为已有的拍卖表添加 message 列（旧版本建表时无此列）。 */
+    private void migrateListingMessage(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("ALTER TABLE " + tListings + " ADD COLUMN message TEXT NOT NULL DEFAULT ''");
+            logger.info("[Market] 拍卖表已迁移：添加 message 列");
+        } catch (SQLException e) {
+            // 列已存在则忽略
+        }
+    }
+
     private void createTablesSqlite(Statement stmt) throws SQLException {
         stmt.executeUpdate("""
             CREATE TABLE IF NOT EXISTS %s (
@@ -215,6 +226,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 item_display_name TEXT NOT NULL,
                 pinyin TEXT NOT NULL DEFAULT '',
                 initials TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
                 category TEXT NOT NULL DEFAULT 'other',
                 buy_now_price REAL NOT NULL DEFAULT 0,
                 starting_bid REAL NOT NULL DEFAULT 0,
@@ -376,6 +388,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
                 item_display_name VARCHAR(256) NOT NULL,
                 pinyin VARCHAR(512) NOT NULL DEFAULT '',
                 initials VARCHAR(512) NOT NULL DEFAULT '',
+                message VARCHAR(256) NOT NULL DEFAULT '',
                 category VARCHAR(64) NOT NULL DEFAULT 'other',
                 buy_now_price DOUBLE NOT NULL DEFAULT 0,
                 starting_bid DOUBLE NOT NULL DEFAULT 0,
@@ -673,8 +686,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     @Override
     public boolean insertListing(AuctionListing listing) {
         String sql = "INSERT INTO " + tListings
-            + " (seller, seller_name, item_data, item_display_name, pinyin, initials, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
-            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            + " (seller, seller_name, item_data, item_display_name, pinyin, initials, message, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, listing.getSeller().toString());
@@ -683,16 +696,17 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.setString(4, listing.getItemDisplayName());
             ps.setString(5, listing.getPinyin());
             ps.setString(6, listing.getInitials());
-            ps.setString(7, listing.getCategory());
-            ps.setDouble(8, listing.getBuyNowPrice());
-            ps.setDouble(9, listing.getStartingBid());
-            ps.setDouble(10, listing.getCurrentBid());
-            ps.setString(11, listing.getHighestBidder() == null ? null : listing.getHighestBidder().toString());
-            ps.setString(12, listing.getCurrency());
-            ps.setString(13, listing.getType().name());
-            ps.setString(14, listing.getStatus().name());
-            ps.setLong(15, listing.getCreatedAt());
-            ps.setLong(16, listing.getExpiresAt());
+            ps.setString(7, listing.getMessage());
+            ps.setString(8, listing.getCategory());
+            ps.setDouble(9, listing.getBuyNowPrice());
+            ps.setDouble(10, listing.getStartingBid());
+            ps.setDouble(11, listing.getCurrentBid());
+            ps.setString(12, listing.getHighestBidder() == null ? null : listing.getHighestBidder().toString());
+            ps.setString(13, listing.getCurrency());
+            ps.setString(14, listing.getType().name());
+            ps.setString(15, listing.getStatus().name());
+            ps.setLong(16, listing.getCreatedAt());
+            ps.setLong(17, listing.getExpiresAt());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) listing.setId(rs.getLong(1));
@@ -1521,7 +1535,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private AuctionListing mapListing(ResultSet rs) throws SQLException {
         String bidderStr = rs.getString("highest_bidder");
         UUID bidder = parseUuidSafe(bidderStr, "listing.highest_bidder");
-        return new AuctionListing(
+        AuctionListing listing = new AuctionListing(
             rs.getLong("id"),
             parseUuidSafe(rs.getString("seller"), "listing.seller"),
             rs.getString("seller_name"),
@@ -1540,6 +1554,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             rs.getLong("created_at"),
             rs.getLong("expires_at")
         );
+        listing.setMessage(rs.getString("message"));
+        return listing;
     }
 
     private AuctionBid mapBid(ResultSet rs) throws SQLException {

@@ -1000,8 +1000,7 @@ controls:
                         attribute:
                           x: 123
                           y: 88
-                          visible: "self.parent.entry != none && self.parent.entry['canBuyNow']"
-                          texts: "'&e一口价: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
+                          texts: "self.parent.entry['canBuyNow'] ? '&e一口价: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName'] : '&e一口价: &f不支持'"
                           fontSize: 32
                           through: true
                       当前出价:
@@ -1009,15 +1008,22 @@ controls:
                         attribute:
                           x: 123
                           y: 124
-                          visible: "self.parent.entry != none && self.parent.entry['canBid']"
-                          texts: "'&7当前出价: &f' + self.parent.entry['bid'] + ' &7' + self.parent.entry['currencyName']"
+                          texts: "self.parent.entry['canBid'] ? '&7当前出价: &f' + self.parent.entry['bid'] + ' &7' + self.parent.entry['currencyName'] : '&7当前出价: &f无'"
+                          fontSize: 32
+                          through: true
+                      留言:
+                        type: Text
+                        attribute:
+                          x: 123
+                          y: 160
+                          texts: "'&7留言: &f' + (self.parent.entry['message'] != none && self.parent.entry['message'] != '' ? self.parent.entry['message'] : '无')"
                           fontSize: 32
                           through: true
                       剩余时间:
                         type: Text
                         attribute:
                           x: 15
-                          y: 168
+                          y: 196
                           texts: "'&a' + self.parent.entry['timeLeft']"
                           fontSize: 32
                           through: true
