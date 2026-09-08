@@ -172,6 +172,8 @@ player:
   attachment-index-invalid: "&c无效附件索引。"
   admin-session-missing: "&cAdmin 编辑会话不存在。"
   admin-attachment-slot-full: "&c附件槽位已满。"
+  admin-attachment-added: "&a附件已添加。"
+  admin-attachment-removed: "&a附件已移除。"
   recipient-not-found: "&c未找到玩家: {0}"
   compose-self-not-allowed: "&c当前配置不允许给自己寄信。"
   compose-offline-not-allowed: "&c当前配置不允许给离线玩家寄信。"

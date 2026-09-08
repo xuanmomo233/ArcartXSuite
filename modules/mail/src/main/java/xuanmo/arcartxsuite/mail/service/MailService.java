@@ -2281,7 +2281,7 @@ public final class MailService implements Listener {
         session.attachments().add(toAdd);
         // 刷新 admin UI
         refreshAdminAttachments(player);
-        return MailOperationResult.success("");
+        return MailOperationResult.success(message("player.admin-attachment-added"));
     }
 
     private MailOperationResult handleAdminRemoveAttachment(Player player, int index) {
@@ -2300,7 +2300,7 @@ public final class MailService implements Listener {
             }
         }
         refreshAdminAttachments(player);
-        return MailOperationResult.success("");
+        return MailOperationResult.success(message("player.admin-attachment-removed"));
     }
 
     /**

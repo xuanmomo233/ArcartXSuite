@@ -212,6 +212,10 @@ public final class MailComposePacketFactory {
         payload.put("item_fee", currencyBridgeManager.format(effectiveQuote.feeCurrencyId(), effectiveQuote.itemFee()));
         payload.put("total_fee", currencyBridgeManager.format(effectiveQuote.feeCurrencyId(), effectiveQuote.totalFee()));
         payload.put("total_fee_currency", effectiveQuote.feeCurrencyId());
+        var feeCurrencyDef = currencyBridgeManager.definition(effectiveQuote.feeCurrencyId());
+        payload.put("total_fee_currency_name",
+            feeCurrencyDef != null && feeCurrencyDef.displayName() != null && !feeCurrencyDef.displayName().isEmpty()
+                ? feeCurrencyDef.displayName() : effectiveQuote.feeCurrencyId());
         payload.put("attachment_amounts", stringMap(effectiveQuote.attachmentAmounts(), currencyBridgeManager));
         payload.put("attachment_taxes", stringMap(effectiveQuote.attachmentTaxes(), currencyBridgeManager));
     }

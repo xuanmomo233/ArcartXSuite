@@ -588,7 +588,7 @@ controls:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          itemScale: 0.8
+                          itemScale: 0.72
                           x: 8
                           y: 8
                           width: 40
@@ -762,7 +762,7 @@ controls:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          itemScale: 1.2
+                          itemScale: 0.72
                           x: 12
                           y: 16
                           width: 96

@@ -578,7 +578,7 @@ controls:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          itemScale: 1.0
+                          itemScale: 0.72
                           x: 12
                           y: 12
                           width: 76
@@ -617,7 +617,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~top_right
-                          x: "var.scrollW - 24"
+                          x: -24
                           y: 12
                           texts: "'&e' + self.parent.entry['amount']"
                           fontSize: 36
@@ -626,7 +626,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~top_right
-                          x: "var.scrollW - 24"
+                          x: -24
                           y: 56
                           texts: "'&7' + self.parent.entry['time']"
                           fontSize: 32

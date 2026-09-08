@@ -756,6 +756,7 @@ public class MarketService {
             item.put("itemDisplayName", listing.getItemDisplayName());
             item.put("price", listing.getPrice());
             item.put("currency", listing.getCurrency());
+            item.put("currencyName", currencyDisplayName(listing.getCurrency()));
             item.put("message", listing.getMessage());
             item.put("createdAt", listing.getCreatedAt());
             item.put("expiresAt", listing.getExpiresAt());
@@ -1128,7 +1129,7 @@ public class MarketService {
             row.put("isFavorite", favoriteIds.contains(listing.getId()));
             row.put("bid", listing.getCurrentBid() > 0 ? formatPrice(listing.getCurrentBid()) : formatPrice(listing.getStartingBid()));
             row.put("timeLeft", formatTimeLeft(listing.getExpiresAt()));
-            row.put("currencyName", listing.getCurrency());
+            row.put("currencyName", currencyDisplayName(listing.getCurrency()));
             row.put("message", listing.getMessage());
             row.put("canCancel", listing.getSeller().equals(player.getUniqueId()));
             listingsMap.put(key, row);
@@ -1318,7 +1319,7 @@ public class MarketService {
             row.put("typeColor", typeColor);
             row.put("itemName", h.itemDisplayName());
             row.put("counterpart", counterpart);
-            row.put("amount", formatPrice(h.price()) + " " + h.currency());
+            row.put("amount", formatPrice(h.price()) + " " + currencyDisplayName(h.currency()));
             row.put("time", TIME_FMT.format(new Date(h.timestamp())));
             records.put(key, row);
 
@@ -1331,6 +1332,13 @@ public class MarketService {
     }
 
     // ─── 辅助方法 ─────────────────────────────────────────────
+
+    /** 将货币 ID 解析为显示名，找不到定义时回退为原始 ID。 */
+    private String currencyDisplayName(String currencyId) {
+        var def = currencyManager.definition(currencyId);
+        return def != null && def.displayName() != null && !def.displayName().isEmpty()
+            ? def.displayName() : currencyId;
+    }
 
     private String formatShopStock(Player player, String shopId, String itemKey, ShopService.ShopItem shopItem) {
         if ("unlimited".equalsIgnoreCase(shopItem.stockMode())) {

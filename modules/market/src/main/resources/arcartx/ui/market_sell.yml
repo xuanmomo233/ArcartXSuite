@@ -691,7 +691,7 @@ controls:
                           id: 9
                           entryKey: 9.round()
                           slotType: ~Backpack
-                          itemScale: 0.74
+                          itemScale: 0.72
                           width: 72
                           height: 72
                           through: false
@@ -774,7 +774,7 @@ controls:
                 type: Slot
                 attribute:
                   slotType: ~Icon
-                  itemScale: 1.5
+                  itemScale: 0.72
                   x: 20
                   y: 64
                   width: 120

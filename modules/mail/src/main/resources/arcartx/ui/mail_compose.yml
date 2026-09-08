@@ -62,6 +62,7 @@ ui:
       var.currencies = none
       var.feeCurrency = ''
       var.totalFeeCurrency = ''
+      var.totalFeeCurrencyName = ''
       var.isAdmin = false
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.attachmentJsons = none
@@ -121,6 +122,7 @@ ui:
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.passwordText = ''
       var.totalFeeCurrency = packet['total_fee_currency']
+      var.totalFeeCurrencyName = packet['total_fee_currency_name']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
       var.actionBusy = false
@@ -147,6 +149,7 @@ ui:
       var.attachmentCount = packet['attachment_count']
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.totalFeeCurrency = packet['total_fee_currency']
+      var.totalFeeCurrencyName = packet['total_fee_currency_name']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
       var.actionBusy = false
@@ -865,7 +868,7 @@ controls:
                   point: ~top_left
                   x: 36
                   y: 560
-                  texts: "'&f邮费 &a' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + ' &7(含手续费 &a' + var.itemFee + ')' + (var.quoteMessage == none ? '' : '  &e' + var.quoteMessage)"
+                  texts: "'&f邮费 &a' + var.totalFee + ' ' + (var.totalFeeCurrencyName != none && var.totalFeeCurrencyName != '' ? var.totalFeeCurrencyName : '金币') + ' &7(含手续费 &a' + var.itemFee + ')' + (var.quoteMessage == none ? '' : '  &e' + var.quoteMessage)"
                   fontSize: 32
               # ── 二级密码面板（条件显示） ──
               二级密码面板:
