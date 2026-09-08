@@ -111,7 +111,7 @@ ui:
       var.selectedItemName = none
       var.selectedItemAmount = 0
       var.selectedItemLore = none
-      var.selectedItemJson = none
+      var.selectedItemJson = var.emptyItemJson
       var.auctionCurrencies = {}
       var.auctionMaxCurrencyCount = 0
       var.auctionDefaultCurrency = none
@@ -708,7 +708,7 @@ controls:
                                 var.selectedItemName = none
                                 var.selectedItemAmount = 0
                                 var.selectedItemLore = none
-                                var.selectedItemJson = none
+                                var.selectedItemJson = var.emptyItemJson
                               } else {
                                 var.selectedSlot = self.entryKey
                                 var.selectedItemName = item.getName()
@@ -783,7 +783,7 @@ controls:
                   shape: ~round_rect
                   radius: 12
                   through: true
-                  seticon: "self.setItemIcon(var.selectedItemJson != none ? var.selectedItemJson : var.emptyItemJson)"
+                  seticon: "self.setItemIcon(var.selectedItemJson)"
               物品名称:
                 type: Text
                 attribute:
@@ -798,7 +798,7 @@ controls:
                   x: 152
                   y: 112
                   visible: "var.selectedSlot != none"
-                  texts: "'&7数量: &f' + var.selectedItemAmount"
+                  texts: "'&7数量: &f' + var.selectedItemAmount.round()"
                   fontSize: 32
                   through: true
               物品槽位:
@@ -995,7 +995,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 160
-                  texts: "'&f价格 (&7' + var.priceMin + '~' + var.priceMax + '&f)'"
+                  texts: "'&f价格 (&7' + var.priceMin.round() + '~' + var.priceMax.round() + '&f)'"
                   fontSize: 32
                   through: true
               价格输入框:

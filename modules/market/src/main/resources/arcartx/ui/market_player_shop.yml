@@ -931,7 +931,7 @@ controls:
                         attribute:
                           x: 123
                           y: 88
-                          texts: "'&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
+                          texts: "'&e价格: &f' + self.parent.entry['price'].round() + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       留言:

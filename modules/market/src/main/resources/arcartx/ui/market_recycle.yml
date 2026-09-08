@@ -726,7 +726,7 @@ controls:
                         attribute:
                           x: 123
                           y: 52
-                          texts: "'&7数量: &f' + self.parent.entry['amount']"
+                          texts: "'&7数量: &f' + self.parent.entry['amount'].round()"
                           fontSize: 32
                           through: true
                       单价:
