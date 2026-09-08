@@ -751,8 +751,8 @@ public class MarketService {
             item.put("id", listing.getId());
             item.put("seller", listing.getSeller().toString());
             item.put("sellerName", listing.getSellerName());
-            // itemJson 分离模式：itemData 放在 packet 顶层 itemJson{key}，减小嵌套 packet 体积
-            packet.put("itemJson" + key, listing.getItemData());
+            // itemJson 分离模式：itemData 反序列化为 ItemStack 再转 JSON，减小嵌套 packet 体积
+            packet.put("itemJson" + key, pshopItemJson(listing));
             item.put("itemDisplayName", listing.getItemDisplayName());
             item.put("price", listing.getPrice());
             item.put("currency", listing.getCurrency());
@@ -1193,6 +1193,7 @@ public class MarketService {
                     row.put("key", itemEntry.getKey());
                     row.put("name", shopItem.displayName());
                     row.put("price", formatPrice(shopItem.buyPrice()));
+                    row.put("currencyName", currencyDisplayName(shopItem.currency()));
                     row.put("stock", formatShopStock(player, activeShopId, itemEntry.getKey(), shopItem));
                     row.put("limitText", shopItem.limitPerPlayer() > 0 ? "限购 " + shopItem.limitPerPlayer() + " 个" : "");
                     items.put(key, row);
@@ -1238,6 +1239,7 @@ public class MarketService {
             row.put("amount", item.getAmount());
             row.put("unitPrice", formatPrice(unitPrice));
             row.put("totalPrice", formatPrice(total));
+            row.put("currencyName", currencyDisplayName(itemCurrency));
             recyclables.put(key, row);
             packet.put("recycleItemJson" + idx, itemToJson(item));
             idx++;
@@ -1367,6 +1369,15 @@ public class MarketService {
     }
 
     private String listingItemJson(AuctionListing listing) {
+        try {
+            ItemStack item = itemSerializer.deserialize(listing.getItemData());
+            return item != null ? itemToJson(item) : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String pshopItemJson(PlayerShopListing listing) {
         try {
             ItemStack item = itemSerializer.deserialize(listing.getItemData());
             return item != null ? itemToJson(item) : "";

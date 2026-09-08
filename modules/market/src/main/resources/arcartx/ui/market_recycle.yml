@@ -681,7 +681,7 @@ controls:
                       entry: var.recyclables[self.entryKey]
                       visible: self.entry != none
                       width: "var.cardW"
-                      height: 200
+                      height: 220
                     children:
                       卡片底:
                         type: Texture
@@ -690,7 +690,7 @@ controls:
                           x: 3
                           y: 0
                           width: "var.cardW - 6"
-                          height: 200
+                          height: 220
                           through: true
                           normal: ~42,50,66,210
                           shape: ~round_rect
@@ -704,8 +704,8 @@ controls:
                         attribute:
                           slotType: ~Icon
                           itemScale: 0.72
-                          x: 12
-                          y: 16
+                          x: 15
+                          y: 12
                           width: 96
                           height: 96
                           normal: ~36,42,54,220
@@ -716,41 +716,41 @@ controls:
                       物品名称:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 28
+                          x: 123
+                          y: 16
                           texts: "'&f' + self.parent.entry['name']"
                           fontSize: 36
                           through: true
                       数量:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 64
+                          x: 123
+                          y: 52
                           texts: "'&7数量: &f' + self.parent.entry['amount']"
                           fontSize: 32
                           through: true
                       单价:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 100
-                          texts: "'&7单价: &e' + self.parent.entry['unitPrice']"
+                          x: 123
+                          y: 88
+                          texts: "'&7单价: &e' + self.parent.entry['unitPrice'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       总价:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 136
-                          texts: "'&a总价: &f' + self.parent.entry['totalPrice']"
+                          x: 123
+                          y: 124
+                          texts: "'&a总价: &f' + self.parent.entry['totalPrice'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       回收按钮:
                         type: Canvas
                         attribute:
-                          x: 12
-                          y: 150
-                          width: "var.cardW - 24"
+                          x: 15
+                          y: 168
+                          width: "var.cardW - 30"
                           height: 40
                           enable: "!var.actionBusy && var.actionToken != ''"
                         action:
@@ -764,7 +764,7 @@ controls:
                               point: ~top_left
                               x: 3
                               y: 0
-                              width: "var.cardW - 30"
+                              width: "var.cardW - 36"
                               height: 40
                               through: true
                               normal: ~220,150,50,230

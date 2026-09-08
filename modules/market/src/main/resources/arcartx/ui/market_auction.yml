@@ -558,7 +558,7 @@ controls:
               x: -10
               y: 488
               width: 8
-              height: "var.viewH - 632"
+              height: "var.viewH - 652"
               normal: ~42,50,66,225
               shape: ~round_rect
               radius: 4
@@ -576,7 +576,7 @@ controls:
               width: 8
               height: 60
               normal: ~140,200,255,255
-              maxDragY: "var.viewH - 692"
+              maxDragY: "var.viewH - 712"
               shape: ~round_rect
               radius: 4
           分类滚动:
@@ -587,7 +587,7 @@ controls:
               x: 20
               y: 488
               width: 260
-              height: "var.viewH - 632"
+              height: "var.viewH - 652"
               moveY: "self.parent['分类滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -936,8 +936,8 @@ controls:
                         attribute:
                           slotType: ~Icon
                           itemScale: 0.72
-                          x: 12
-                          y: 16
+                          x: 15
+                          y: 12
                           width: 96
                           height: 96
                           normal: ~36,42,54,220
@@ -948,8 +948,8 @@ controls:
                       收藏按钮:
                         type: Canvas
                         attribute:
-                          x: "var.cardW - 44"
-                          y: 14
+                          x: "var.cardW - 45"
+                          y: 12
                           width: 30
                           height: 30
                         action:
@@ -982,67 +982,58 @@ controls:
                       名称:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 28
+                          x: 123
+                          y: 16
                           texts: "'&f' + self.parent.entry['name']"
                           fontSize: 36
                           through: true
                       卖家:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 64
+                          x: 123
+                          y: 52
                           texts: "'&7卖家: &f' + self.parent.entry['seller']"
                           fontSize: 32
                           through: true
                       一口价:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 100
+                          x: 123
+                          y: 88
                           visible: "self.parent.entry != none && self.parent.entry['canBuyNow']"
-                          texts: "'&e一口价: &f' + self.parent.entry['price']"
+                          texts: "'&e一口价: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       当前出价:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 136
+                          x: 123
+                          y: 124
                           visible: "self.parent.entry != none && self.parent.entry['canBid']"
-                          texts: "'&7当前出价: &f' + self.parent.entry['bid']"
+                          texts: "'&7当前出价: &f' + self.parent.entry['bid'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       剩余时间:
                         type: Text
                         attribute:
-                          x: 12
-                          y: 176
+                          x: 15
+                          y: 168
                           texts: "'&a' + self.parent.entry['timeLeft']"
-                          fontSize: 32
-                          through: true
-                      货币:
-                        type: Text
-                        attribute:
-                          point: ~top_right
-                          x: -12
-                          y: 176
-                          texts: "'&7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       按钮组:
                         type: HStack
                         attribute:
-                          x: 12
-                          y: 230
-                          width: "var.cardW - 24"
+                          x: 15
+                          y: 248
+                          width: "var.cardW - 30"
                           height: 40
                           spaceBetween: 12
                         children:
                           出价按钮:
                             type: Canvas
                             attribute:
-                              width: "(var.cardW - 48) / 3"
+                              width: "(var.cardW - 54) / 3"
                               height: 40
                               visible: "self.parent.parent.entry != none && self.parent.parent.entry['canBid']"
                               enable: "!var.actionBusy && var.actionToken != ''"
@@ -1057,7 +1048,7 @@ controls:
                                   point: ~top_left
                                   x: 3
                                   y: 0
-                                  width: "(var.cardW - 48) / 3 - 6"
+                                  width: "(var.cardW - 54) / 3 - 6"
                                   height: 40
                                   through: true
                                   normal: ~220,150,50,230
@@ -1078,7 +1069,7 @@ controls:
                           购买按钮:
                             type: Canvas
                             attribute:
-                              width: "(var.cardW - 48) / 3"
+                              width: "(var.cardW - 54) / 3"
                               height: 40
                               visible: "self.parent.parent.entry != none && self.parent.parent.entry['canBuyNow']"
                               enable: "!var.actionBusy && var.actionToken != ''"
@@ -1093,7 +1084,7 @@ controls:
                                   point: ~top_left
                                   x: 3
                                   y: 0
-                                  width: "(var.cardW - 48) / 3 - 6"
+                                  width: "(var.cardW - 54) / 3 - 6"
                                   height: 40
                                   through: true
                                   normal: ~80,200,120,230
@@ -1114,7 +1105,7 @@ controls:
                           取消按钮:
                             type: Canvas
                             attribute:
-                              width: "(var.cardW - 48) / 3"
+                              width: "(var.cardW - 54) / 3"
                               height: 40
                               visible: "self.parent.parent.entry != none && self.parent.parent.entry['canCancel']"
                               enable: "!var.actionBusy && var.actionToken != ''"
@@ -1129,7 +1120,7 @@ controls:
                                   point: ~top_left
                                   x: 3
                                   y: 0
-                                  width: "(var.cardW - 48) / 3 - 6"
+                                  width: "(var.cardW - 54) / 3 - 6"
                                   height: 40
                                   through: true
                                   normal: ~220,90,90,230

@@ -39,6 +39,9 @@ ui:
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.attachmentJsons = none
       var.presetDetailLoaded = false
+      var.showDispatchConfirm = false
+      var.dispatchPresetId = none
+      var.dispatchTargetName = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -1164,7 +1167,9 @@ controls:
                               height: 36
                             action:
                               clickLeft: |-
-                                Packet.send('AXS_MAIL', 'admin-preset-send', self.parent.entry['id'], 'all-online')
+                                var.dispatchPresetId = self.parent.entry['id']
+                                var.dispatchTargetName = ''
+                                var.showDispatchConfirm = true
                             children:
                               发送底:
                                 type: Texture
@@ -2618,3 +2623,213 @@ controls:
                         action:
                           textChange: |-
                             var.editConditions = self.getContent()
+          # ── 派发确认弹窗 ───────────────────────────────────
+          派发弹窗:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.showDispatchConfirm == true"
+            children:
+              派发遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~0,0,0,180
+              派发面板:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: 560
+                  height: 440
+                children:
+                  派发面板底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~36,38,48,245
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~255,255,255,230
+                  派发标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 24
+                      texts: "~&f派发预设邮件"
+                      fontSize: 48
+                      through: true
+                  预设ID显示:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 80
+                      texts: "'&7预设: ' + var.dispatchPresetId"
+                      fontSize: 36
+                      through: true
+                  # 在线玩家按钮
+                  在线派发按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_center
+                      y: 140
+                      width: 400
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.showDispatchConfirm = false
+                        Packet.send('AXS_MAIL', 'admin-preset-send', var.dispatchPresetId, 'all-online')
+                    children:
+                      在线派发底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,120,230
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
+                      在线派发文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0发送给在线玩家"
+                          fontSize: 36
+                          through: true
+                  # 全服玩家按钮
+                  全服派发按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_center
+                      y: 200
+                      width: 400
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.showDispatchConfirm = false
+                        Packet.send('AXS_MAIL', 'admin-preset-send', var.dispatchPresetId, 'all-registered')
+                    children:
+                      全服派发底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,140,200,230
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
+                      全服派发文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&0发送给全服玩家"
+                          fontSize: 36
+                          through: true
+                  # 指定玩家输入区
+                  指定玩家区:
+                    type: Canvas
+                    attribute:
+                      point: ~top_center
+                      y: 260
+                      width: 400
+                      height: 48
+                    children:
+                      指定玩家输入底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~36,42,50,225
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
+                      指定玩家输入框:
+                        type: TextBox
+                        attribute:
+                          x: 10
+                          y: 6
+                          width: 280
+                          height: 36
+                          length: 32
+                          emptyText: "~&7输入玩家名"
+                          fontSize: 36
+                        action:
+                          textChange: |-
+                            var.dispatchTargetName = self.getContent()
+                      指定玩家发送按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: 300
+                          y: 6
+                          width: 90
+                          height: 36
+                        action:
+                          clickLeft: |-
+                            if(var.dispatchTargetName != none && var.dispatchTargetName != ''){
+                              var.showDispatchConfirm = false
+                              Packet.send('AXS_MAIL', 'admin-preset-send', var.dispatchPresetId, var.dispatchTargetName)
+                            }
+                        children:
+                          指定玩家发送底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~80,180,120,230
+                              shape: ~round_rect
+                              radius: 8
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,255,255,230
+                          指定玩家发送文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "~&0发送"
+                              fontSize: 36
+                              through: true
+                  # 取消按钮
+                  派发取消按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_center
+                      y: 340
+                      width: 200
+                      height: 48
+                    action:
+                      clickLeft: |-
+                        var.showDispatchConfirm = false
+                    children:
+                      派发取消底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~60,60,60,230
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
+                      派发取消文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&f取消"
+                          fontSize: 36
+                          through: true

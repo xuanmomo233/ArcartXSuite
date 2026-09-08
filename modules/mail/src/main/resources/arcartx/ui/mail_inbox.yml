@@ -511,7 +511,7 @@ controls:
             attribute:
               point: ~top_left
               x: 18
-              y: 298
+              y: "var.isAdmin == true ? 298 : 216"
               width: 264
               height: 2
               normal: ~60,64,82,220
@@ -520,7 +520,7 @@ controls:
             attribute:
               point: ~top_left
               x: 20
-              y: 316
+              y: "var.isAdmin == true ? 316 : 234"
               texts: "~&f邮箱概览"
               fontSize: 36
           摘要总数:
@@ -528,7 +528,7 @@ controls:
             attribute:
               point: ~top_left
               x: 20
-              y: 362
+              y: "var.isAdmin == true ? 362 : 280"
               texts: "'&f总数 &b' + var.totalCount.round()"
               fontSize: 32
           摘要未读:
@@ -536,7 +536,7 @@ controls:
             attribute:
               point: ~top_left
               x: 20
-              y: 402
+              y: "var.isAdmin == true ? 402 : 320"
               texts: "'&f未读 &b' + var.unreadCount.round()"
               fontSize: 32
           摘要可领取:
@@ -544,7 +544,7 @@ controls:
             attribute:
               point: ~top_left
               x: 20
-              y: 442
+              y: "var.isAdmin == true ? 442 : 360"
               texts: "'&f可领取 &b' + var.claimableCount.round()"
               fontSize: 32
 

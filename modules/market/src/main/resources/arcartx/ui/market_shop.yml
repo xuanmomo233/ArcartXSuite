@@ -509,7 +509,7 @@ controls:
               x: -10
               y: 488
               width: 8
-              height: "var.viewH - 632"
+              height: "var.viewH - 652"
               normal: ~42,50,66,225
               shape: ~round_rect
               radius: 4
@@ -527,7 +527,7 @@ controls:
               width: 8
               height: 60
               normal: ~140,200,255,255
-              maxDragY: "var.viewH - 692"
+              maxDragY: "var.viewH - 712"
               shape: ~round_rect
               radius: 4
           商店滚动:
@@ -538,7 +538,7 @@ controls:
               x: 20
               y: 488
               width: 260
-              height: "var.viewH - 632"
+              height: "var.viewH - 652"
               moveY: "self.parent['商店滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -763,8 +763,8 @@ controls:
                         attribute:
                           slotType: ~Icon
                           itemScale: 0.72
-                          x: 12
-                          y: 16
+                          x: 15
+                          y: 12
                           width: 96
                           height: 96
                           normal: ~36,42,54,220
@@ -775,32 +775,32 @@ controls:
                       商品名称:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 28
+                          x: 123
+                          y: 16
                           texts: "'&f' + self.parent.entry['name']"
                           fontSize: 36
                           through: true
                       价格:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 64
-                          texts: "'&e价格: &f' + self.parent.entry['price']"
+                          x: 123
+                          y: 52
+                          texts: "'&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       库存:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 100
+                          x: 123
+                          y: 88
                           texts: "'&7库存: &f' + self.parent.entry['stock']"
                           fontSize: 32
                           through: true
                       限购:
                         type: Text
                         attribute:
-                          x: 120
-                          y: 136
+                          x: 123
+                          y: 124
                           visible: "self.parent.entry != none && self.parent.entry['limitText'] != ''"
                           texts: "'&c' + self.parent.entry['limitText']"
                           fontSize: 32
@@ -808,9 +808,9 @@ controls:
                       购买按钮:
                         type: Canvas
                         attribute:
-                          x: 12
-                          y: 170
-                          width: "var.cardW - 24"
+                          x: 15
+                          y: 168
+                          width: "var.cardW - 30"
                           height: 40
                           enable: "!var.actionBusy && var.actionToken != ''"
                         action:
@@ -824,7 +824,7 @@ controls:
                               point: ~top_left
                               x: 3
                               y: 0
-                              width: "var.cardW - 30"
+                              width: "var.cardW - 36"
                               height: 40
                               through: true
                               normal: ~80,200,120,230
