@@ -1,12 +1,24 @@
 # AXS Market — 回收商店界面
-# 打开方式: /market recycle
-# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+# 打开方式: /market recycle 或导航跳转
+# 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航+回收信息) + 内容区(可回收物品列表+操作)
+# 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
+# 数据交互: packetHandler update
 
 ui:
   isHud: false
   defaultOpen: false
   hide:
-    - HUD
+    - hotbar
+    - experience_bar
+    - crosshair
+    - item_name
+    - jump_bar
+    - mount_health
+    - player_state
+    - player_health
+    - armor_level
+    - food_level
+    - air_level
   through: false
   background: false
   escClose: true
@@ -17,112 +29,59 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    # packetHandler: init
-    # 首次收到服务端数据包时执行，初始化回收界面所有变量和动态控件
-    # 包字段:
-    #   - packetId: 数据包通信 ID（用于客户端 Packet.send 回传）
-    #   - multiplier: 回收价格倍率（如 1.2 表示 VIP 加成 20%）
-    #   - recyclables: 可回收物品字典（key=序号, value=回收条目含 name/amount/unitPrice/totalPrice/slot 等）
-    #   - recycleItemJson{key}: 各回收物品的 NBT JSON 字符串（如 recycleItemJson0、recycleItemJson1...）
-    #   - maxRecycleCount: 最大回收条目数量（用于动态复制回收项控件）
-    #   - earningsTitle: 收益区标题（单货币="可回收总价值:"，多货币="可回收收益明细:"）
-    #   - earningsTexts: 分货币收益文本字典（key=序号, value=已格式化的收益字符串如"金币: 100.00"）
-    #   - maxEarningsCount: 货币种类数量（用于动态复制收益项控件）
-    #   - action_token: 操作令牌（防重放攻击，回收时回传）
-    init: |-
-      var.packetId = packet['packetId']
-      var.multiplier = packet['multiplier']
-      var.recyclables = packet['recyclables']
-      var.itemJsons = {}
-      var.maxRecycleCount = packet['maxRecycleCount']
-      var.earningsTitle = packet['earningsTitle']
-      var.earningsTexts = packet['earningsTexts']
-      var.maxEarningsCount = packet['maxEarningsCount']
-      var.actionToken = packet['action_token']
-      var.batchConfirm = packet['batchConfirm']
-      for(key in var.recyclables.keys()){
-        json = packet['recycleItemJson' + key]
-        if(json != none){
-          var.itemJsons[key] = json
-        } else {
-          var.itemJsons[key] = var.emptyItemJson
-        }
-      }
-      while(val.回收列表.childrenCount() > 1){
-        val.回收列表.get(1).remove()
-      }
-      for(i in range(1, var.maxRecycleCount - 1)){
-        key = i.round()
-        e = val.回收列表['回收项'].copy('回收项' + key)
-        e.entryKey = key
-      }
-      for(i in range(0, var.maxRecycleCount - 1)){
-        key = i.round()
-        e = val.回收列表.get(i.round())
-        if(e != none && e['物品图标'] != none){
-          e['物品图标'].entryKey = key
-          e['物品图标'].seticon()
-        }
-      }
-      while(val.收益列表.childrenCount() > 1){
-        val.收益列表.get(1).remove()
-      }
-      for(i in range(1, var.maxEarningsCount - 1)){
-        key = i.round()
-        e = val.收益列表['收益项'].copy('收益项' + key)
-        e.entryKey = key
-      }
-      var.actionBusy = false
-      var.confirmPending = false
     # packetHandler: update
-    # 服务端推送更新时执行，字段与 init 完全相同，用于刷新回收列表数据
-    # 包字段: 同 init（packetId/multiplier/recyclables/recycleItemJson{key}/maxRecycleCount/
-    #   earningsTitle/earningsTexts/maxEarningsCount/action_token/batchConfirm）
+    # 接收服务端推送的可回收物品数据
+    # 包字段:
+    #   - packetId: 数据包通信 ID
+    #   - recyclables: 可回收物品字典（key=序号, value=物品对象含 slot/name/amount/unitPrice/totalPrice）
+    #   - recycleItemJson{key}: 各物品的 NBT JSON
+    #   - earningsTitle: 收益标题
+    #   - earningsTexts: 收益文本字典
+    #   - maxEarningsCount: 收益条目最大数量
+    #   - multiplier: 回收倍率
+    #   - maxRecycleCount: 可回收物品最大数量
+    #   - batchConfirm: 是否需要批量确认
+    #   - action_token: 操作令牌
     update: |-
+      oldMaxRecycleCount = var.maxRecycleCount
       var.packetId = packet['packetId']
-      var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
-      var.itemJsons = {}
-      var.maxRecycleCount = packet['maxRecycleCount']
       var.earningsTitle = packet['earningsTitle']
       var.earningsTexts = packet['earningsTexts']
       var.maxEarningsCount = packet['maxEarningsCount']
-      var.actionToken = packet['action_token']
+      var.multiplier = packet['multiplier']
+      var.maxRecycleCount = packet['maxRecycleCount']
       var.batchConfirm = packet['batchConfirm']
+      var.actionToken = packet['action_token']
+      var.itemJsons = {}
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
-        if(json != none){
+        if(json != none && json != ''){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
         }
       }
-      while(val.回收列表.childrenCount() > 1){
-        val.回收列表.get(1).remove()
-      }
-      for(i in range(1, var.maxRecycleCount - 1)){
-        key = i.round()
-        e = val.回收列表['回收项'].copy('回收项' + key)
-        e.entryKey = key
+      if(var.maxRecycleCount != oldMaxRecycleCount){
+        while(val.回收列表.childrenCount() > 1){
+          val.回收列表.get(1).remove()
+        }
+        if(var.maxRecycleCount > 1){
+          for(i in range(1, var.maxRecycleCount - 1)){
+            key = i.round()
+            e = val.回收列表['回收卡片'].copy('回收卡片' + key)
+            e.entryKey = key
+          }
+        }
       }
       for(i in range(0, var.maxRecycleCount - 1)){
         key = i.round()
-        e = val.回收列表.get(i.round())
+        e = val.回收列表.get(key)
         if(e != none && e['物品图标'] != none){
-          e['物品图标'].entryKey = key
           e['物品图标'].seticon()
         }
       }
-      while(val.收益列表.childrenCount() > 1){
-        val.收益列表.get(1).remove()
-      }
-      for(i in range(1, var.maxEarningsCount - 1)){
-        key = i.round()
-        e = val.收益列表['收益项'].copy('收益项' + key)
-        e.entryKey = key
-      }
       var.actionBusy = false
-      var.confirmPending = false
   action:
     seconds: |-
       if(var.actionBusy){
@@ -134,385 +93,692 @@ ui:
       }else{
         var.actionBusySeconds = 0
       }
-      if(var.confirmPending){
-        var.confirmPendingSeconds = var.confirmPendingSeconds + 1
-        if(var.confirmPendingSeconds >= 3){
-          var.confirmPending = false
-          var.confirmPendingSeconds = 0
-        }
-      }else{
-        var.confirmPendingSeconds = 0
-      }
-    # action: open
-    # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求回收预览数据
-    # 发送数据包: Packet.send(packetId, 'recycle_preview')
-    open: |-
+    load: |-
       var.packetId = 'AXS_MARKET'
-      var.multiplier = '1.0'
       var.recyclables = {}
-      var.itemJsons = {}
-      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxRecycleCount = 0
       var.earningsTitle = '可回收总价值:'
       var.earningsTexts = {}
       var.maxEarningsCount = 0
-      var.actionToken = ''
+      var.multiplier = '1.0'
+      var.maxRecycleCount = 0
       var.batchConfirm = false
-      var.confirmPending = false
-      var.confirmPendingSeconds = 0
+      var.itemJsons = {}
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.scrollW = var.contentW - 72
+      var.cardW = (var.scrollW - 32) / 3
+    open: |-
       Packet.send(var.packetId, 'recycle_preview')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.scrollW = var.contentW - 72
+      var.cardW = (var.scrollW - 32) / 3
 
 controls:
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;20,28,42,110
+
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      主面板:
+      顶栏:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1400
-          height: 860
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
-          背景:
+          顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~32,32,42,238
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~62,66,74,210
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~70,150,250,255
               shape: ~round_rect
-              radius: 24
-            effect:
-              stroke:
-                width: 2
-                color: ~80,255,140,180
-              shadow:
-                xOffset: 0
-                yOffset: 4
-                blur: 12
-                color: ~0,0,0,140
-
+              radius: 3
           标题:
             type: Text
             attribute:
-              x: 42
-              y: 24
-              texts: "~&a回收商店"
-              fontSize: 100
+              point: ~middle_left
+              x: 68
+              texts: "~&f全球市场"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 232
+              width: 1
+              height: 30
+              normal: ~62,66,74,210
           副标题:
             type: Text
             attribute:
-              x: 42
-              y: 78
-              texts: "~&7回收倍率: &e{var.multiplier}x"
-              fontSize: 32
-
+              point: ~middle_left
+              x: 252
+              texts: "~&7回收商店"
+              fontSize: 36
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
-              x: 1332
-              y: 28
+              point: ~middle_right
+              x: -48
               width: 48
               height: 48
-              normal: ~180,70,70,210
-              hover: ~Frosted:0;220,90,90,230
-              shape: ~round_rect
-              radius: 12
             action:
               clickLeft: |-
                 Screen.close()
-            effect:
-              stroke:
-                width: 1
-                color: ~255,130,130,120
             children:
-              文字:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 9
-                  through: true
-                  center: true
-                  fontSize: 48
-                  texts: "~&f✕"
-
-          # ── 物品列表 ──────────────────────────────────
-          列表卡片:
-            type: Canvas
-            attribute:
-              x: 32
-              y: 120
-              width: 1336
-              height: 600
-            children:
-              列表卡片背景:
+              关闭背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~42,45,58,220
+                  normal: ~62,66,74,210
                   shape: ~round_rect
-                  radius: 20
+                  radius: 10
                 effect:
                   stroke:
-                    width: 2
-                    color: ~80,255,140,100
-              列表卡片文字:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 1336
-                  texts: ~&8暂无可回收物品
-                  fontSize: 100
-                  through: true
-              列表标题:
-                type: Text
-                attribute:
-                  x: 20
-                  y: 12
-                  texts: "~&7可回收物品"
-                  fontSize: 32
-              列表纵向滑块:
-                type: Texture
-                val: 列表纵向滑块
-                attribute:
-                  x: 1320
-                  y: 48
-                  width: 6
-                  height: 50
-                  normal: ~120,120,120,200
-                  maxDragY: 460
-              列表滚动:
-                type: Scroll
-                val: 列表滚动
-                attribute:
-                  x: 30
-                  y: 48
-                  width: 1280
-                  height: 510
-                  moveY: "self.parent['列表纵向滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  回收列表:
-                    val: 回收列表
-                    type: VStack
-                    attribute:
-                      width: 1280
-                      spaceBetween: 8
-                    children:
-                      回收项:
-                        type: Texture
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.recyclables[self.entryKey]
-                          visible: self.entry != none
-                          width: 1280
-                          height: 64
-                          normal: ~50,53,66,220
-                          hover: ~Frosted:0;80,255,140,80
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,255,140,60
-                        children:
-                          物品图标:
-                            type: Slot
-                            attribute:
-                              entryKey: 0.round()
-                              slotType: ~Icon
-                              itemScale: 1.0
-                              x: 12
-                              y: 4
-                              width: 56
-                              height: 56
-                              normal: ~40,42,54,220
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 84
-                              y: 8
-                              width: 400
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
-                              fontSize: 34
-                              through: true
-                          数量:
-                            type: Text
-                            attribute:
-                              x: 84
-                              y: 38
-                              width: 120
-                              texts: "'&7x' + self.parent.entry['amount'].round()"
-                              fontSize: 22
-                              through: true
-                          单价:
-                            type: Text
-                            attribute:
-                              x: 540
-                              y: 14
-                              width: 240
-                              texts: "self.parent.entry != none ? '&e单价: &f' + self.parent.entry['unitPrice'] : none"
-                              fontSize: 28
-                              through: true
-                          总价:
-                            type: Text
-                            attribute:
-                              x: 800
-                              y: 14
-                              width: 340
-                              texts: "self.parent.entry != none ? '&a总计: &f' + self.parent.entry['totalPrice'] : none"
-                              fontSize: 28
-                              through: true
-                          回收按钮:
-                            type: Canvas
-                            attribute:
-                              x: 1150
-                              y: 6
-                              width: 120
-                              height: 52
-                              enable: "!var.actionBusy && var.actionToken != ''"
-                            action:
-                              clickLeft: |-
-                                var.actionBusy = true
-                                Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'], var.actionToken)
-                            children:
-                              回收背景:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~60,180,100,200
-                                  hover: ~Frosted:0;80,220,120,80
-                                  shape: ~round_rect
-                                  radius: 10
-                                effect:
-                                  stroke:
-                                    width: 1
-                                    color: ~80,255,140,120
-                              回收文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  width: 120
-                                  texts: "~&f回收"
-                                  fontSize: 28
-                                  through: true
-
-          # ── 底部操作栏 ──────────────────────────────
-          收益标题:
-            type: Text
-            attribute:
-              x: 42
-              y: 750
-              texts: "~&7{var.earningsTitle}"
-              fontSize: 36
-              through: true
-
-          收益列表:
-            val: 收益列表
-            type: VStack
-            attribute:
-              x: 154
-              y: 750
-              width: 600
-              spaceBetween: 4
-            children:
-              收益项:
-                type: Text
-                attribute:
-                  entryKey: 0.round()
-                  entry: var.earningsTexts[self.entryKey]
-                  visible: self.entry != none
-                  texts: "'&a▪ &f' + self.entry"
-                  fontSize: 28
+                  texts: "~&f✕"
+                  fontSize: 36
                   through: true
 
-          一键回收:
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          导航拍卖行:
             type: Canvas
             attribute:
-              x: 1040
-              y: 750
-              width: 240
-              height: 56
-              enable: "!var.actionBusy && var.actionToken != ''"
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
             action:
               clickLeft: |-
-                if(var.batchConfirm && !var.confirmPending){
-                  var.confirmPending = true
-                  var.confirmPendingSeconds = 0
-                }else{
-                  var.confirmPending = false
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'recycle_all', var.actionToken)
-                }
+                Packet.send(var.packetId, 'auction_ui_open')
             children:
-              一键回收背景:
+              拍卖行底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.confirmPending ? '200,80,80,220' : '60,200,100,220'"
-                  hover: ~Frosted:0;80,240,120,80
+                  normal: ~62,66,74,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              拍卖行文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f拍卖行"
+                  fontSize: 36
+                  through: true
+          导航玩家商店:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'pshop_ui_open')
+            children:
+              玩家商店底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              玩家商店文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f玩家商店"
+                  fontSize: 36
+                  through: true
+          导航系统商店:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'shop_ui_open')
+            children:
+              系统商店底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              系统商店文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f系统商店"
+                  fontSize: 36
+                  through: true
+          导航回收:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            children:
+              回收底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~70,150,250,210
+                  shape: ~round_rect
+                  radius: 10
                 effect:
                   stroke:
-                    width: 2
-                    color: ~80,255,140,160
+                    width: 3
+                    color: ~255,255,255,230
+              回收高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~70,150,250,255
+                  shape: ~round_rect
+                  radius: 2
+                  through: true
+              回收文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0回收商店"
+                  fontSize: 36
+                  through: true
+          导航交易历史:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'history_ui_open')
+            children:
+              交易历史底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              交易历史文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f交易历史"
+                  fontSize: 36
+                  through: true
+          导航上架:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 348
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'sell_ui_open')
+            children:
+              上架底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+              上架文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f物品上架"
+                  fontSize: 36
+                  through: true
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 420
+              width: 272
+              height: 1
+              normal: ~62,66,74,210
+              through: true
+          # ── 回收信息面板 ──────────────────────────
+          倍率标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 440
+              texts: "~&f回收倍率"
+              fontSize: 36
+              through: true
+          倍率值:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 480
+              texts: "'&e' + var.multiplier + 'x'"
+              fontSize: 48
+              through: true
+          收益标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 540
+              texts: "'&f' + var.earningsTitle"
+              fontSize: 36
+              through: true
+          收益列表容器:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 580
+              width: 272
+              height: "var.viewH - 724"
+            children:
+              收益列表:
+                type: VStack
+                attribute:
+                  width: 272
+                  spaceBetween: 6
+                children:
+                  收益项:
+                    type: Text
+                    attribute:
+                      entryKey: 0.round()
+                      visible: "var.earningsTexts[self.entryKey] != none"
+                      texts: "'&a' + var.earningsTexts[self.entryKey]"
+                      fontSize: 32
+                      through: true
+          # ── 一键回收按钮 ──────────────────────────
+          一键回收按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: "var.viewH - 132"
+              width: 272
+              height: 48
+              enable: "!var.actionBusy && var.actionToken != '' && var.maxRecycleCount > 0"
+            action:
+              clickLeft: |-
+                var.actionBusy = true
+                Packet.send(var.packetId, 'recycle_all', var.actionToken)
+            children:
+              一键回收底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,200,120,230
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '120,220,140,255' : '255,255,255,230'"
               一键回收文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 240
-                  texts: "var.confirmPending ? '~&f确认回收?' : '~&f一键回收全部'"
-                  fontSize: 42
+                  texts: "~&f一键回收"
+                  fontSize: 36
                   through: true
-
           刷新按钮:
             type: Canvas
             attribute:
-              x: 1300
-              y: 750
-              width: 68
-              height: 56
+              point: ~top_left
+              x: 14
+              y: "var.viewH - 76"
+              width: 272
+              height: 48
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_preview')
             children:
-              刷新背景:
+              刷新底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~56,58,70,220
-                  hover: ~Frosted:0;255,255,255,80
+                  normal: ~62,66,74,210
                   shape: ~round_rect
-                  radius: 14
+                  radius: 10
                 effect:
+                  ripple:
                   stroke:
-                    width: 2
-                    color: ~80,255,140,120
+                    width: 3
+                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
               刷新文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 68
-                  texts: "~&f刷新"
-                  fontSize: 42
+                  texts: "~&f刷新预览"
+                  fontSize: 36
                   through: true
+
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          内容标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 24
+              texts: "~&f可回收物品"
+              fontSize: 48
+          空物品提示:
+            type: Text
+            attribute:
+              point: ~middle_center
+              x: 0
+              y: -40
+              fontSize: 64
+              visible: "var.recyclables == none || var.recyclables.keys().length == 0"
+              texts: "~&8背包中没有可回收物品"
+              through: true
+          物品滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -18
+              y: 88
+              width: 8
+              height: "var.viewH - 232"
+              normal: ~42,50,66,225
+              shape: ~round_rect
+              radius: 4
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
+          物品滑块:
+            type: Texture
+            val: 物品滑块
+            attribute:
+              point: ~top_right
+              x: -18
+              y: 88
+              width: 8
+              height: 80
+              normal: ~140,200,255,255
+              maxDragY: "var.viewH - 312"
+              shape: ~round_rect
+              radius: 4
+          物品滚动:
+            type: Scroll
+            val: 物品滚动
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 88
+              width: "var.scrollW"
+              height: "var.viewH - 232"
+              moveY: "self.parent['物品滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['物品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['物品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+            children:
+              回收列表:
+                val: 回收列表
+                type: HGrid
+                attribute:
+                  width: "var.scrollW"
+                  column: 3
+                  spaceBetweenX: 16
+                  spaceBetweenY: 16
+                children:
+                  回收卡片:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.recyclables[self.entryKey]
+                      visible: self.entry != none
+                      width: "var.cardW"
+                      height: 200
+                    children:
+                      卡片底:
+                        type: Texture
+                        attribute:
+                          point: ~top_left
+                          x: 3
+                          y: 0
+                          width: "var.cardW - 6"
+                          height: 200
+                          through: true
+                          normal: ~42,50,66,210
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                      物品图标:
+                        type: Slot
+                        attribute:
+                          slotType: ~Icon
+                          itemScale: 1.2
+                          x: 12
+                          y: 16
+                          width: 96
+                          height: 96
+                          normal: ~36,42,54,220
+                          shape: ~round_rect
+                          radius: 12
+                          through: true
+                          seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                      物品名称:
+                        type: Text
+                        attribute:
+                          x: 120
+                          y: 28
+                          texts: "'&f' + self.parent.entry['name']"
+                          fontSize: 36
+                          through: true
+                      数量:
+                        type: Text
+                        attribute:
+                          x: 120
+                          y: 64
+                          texts: "'&7数量: &f' + self.parent.entry['amount']"
+                          fontSize: 32
+                          through: true
+                      单价:
+                        type: Text
+                        attribute:
+                          x: 120
+                          y: 100
+                          texts: "'&7单价: &e' + self.parent.entry['unitPrice']"
+                          fontSize: 32
+                          through: true
+                      总价:
+                        type: Text
+                        attribute:
+                          x: 120
+                          y: 136
+                          texts: "'&a总价: &f' + self.parent.entry['totalPrice']"
+                          fontSize: 32
+                          through: true
+                      回收按钮:
+                        type: Canvas
+                        attribute:
+                          x: 12
+                          y: 150
+                          width: "var.cardW - 24"
+                          height: 40
+                          enable: "!var.actionBusy && var.actionToken != ''"
+                        action:
+                          clickLeft: |-
+                            var.actionBusy = true
+                            Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'].round(), var.actionToken)
+                        children:
+                          回收单底:
+                            type: Texture
+                            attribute:
+                              point: ~top_left
+                              x: 3
+                              y: 0
+                              width: "var.cardW - 30"
+                              height: 40
+                              through: true
+                              normal: ~220,150,50,230
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              ripple:
+                              stroke:
+                                width: 3
+                                color: "self.isHovered() ? '255,180,60,255' : '255,255,255,230'"
+                          回收单文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "~&f回收此物品"
+                              fontSize: 32
+                              through: true

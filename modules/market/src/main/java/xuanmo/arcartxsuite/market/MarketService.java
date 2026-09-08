@@ -421,6 +421,9 @@ public class MarketService {
             case "sell_ui_open" -> openSellUi(player);
             case "auction_ui_open" -> openAuctionUi(player);
             case "pshop_ui_open" -> openPlayerShopUi(player);
+            case "shop_ui_open" -> openShopUi(player);
+            case "recycle_ui_open" -> openRecycleUi(player);
+            case "history_ui_open" -> openHistoryUi(player);
             case "pshop_list" -> handlePlayerShopListPacket(player, data);
             case "pshop_sellers" -> handlePlayerShopSellersPacket(player, data);
             case "pshop_buy" -> handlePlayerShopBuyPacket(player, data);
