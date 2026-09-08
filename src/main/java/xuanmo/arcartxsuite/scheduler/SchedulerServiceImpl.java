@@ -364,13 +364,11 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
             if (!leaderTable.matches("[a-zA-Z0-9_]*")) {
                 throw new IllegalStateException("非法选主表名: " + leaderTable);
             }
-            stmt.executeUpdate("""
-                CREATE TABLE IF NOT EXISTS """ + leaderTable + """
-                (
-                    task_key VARCHAR(128) PRIMARY KEY,
-                    node_id VARCHAR(64) NOT NULL,
-                    heartbeat_at BIGINT NOT NULL
-                )""");
+            stmt.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS " + leaderTable + " (" +
+                "task_key VARCHAR(128) PRIMARY KEY, " +
+                "node_id VARCHAR(64) NOT NULL, " +
+                "heartbeat_at BIGINT NOT NULL)");
         }
     }
 
