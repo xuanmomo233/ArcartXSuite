@@ -910,6 +910,10 @@ controls:
                           radius: 12
                           through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
                       商品名称:
                         type: Text
                         attribute:

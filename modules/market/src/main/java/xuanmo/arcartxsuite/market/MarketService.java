@@ -566,7 +566,7 @@ public class MarketService {
         String mode = data.size() > 6 && data.get(6) != null ? data.get(6) : "pshop";
 
         if ("auction".equalsIgnoreCase(mode)) {
-            // 拍卖行模式：price 作为一口价，起拍价为 0（纯一口价拍卖）
+            // 拍卖行模式：price 作为起拍价，无一口价（纯竞价拍卖）
             handleAuctionModeCreate(player, rawSlot, price, message, duration, currency);
             return;
         }
@@ -616,11 +616,11 @@ public class MarketService {
     /**
      * 统一上架 UI 的拍卖行模式处理。
      * <p>
-     * 与 {@link #handleAuctionListCreatePacket} 不同，此方法使用 sell UI 的 token
-     * （而非 AUCTION_SELL_UI_ID），且 price 作为一口价（buyNowPrice），起拍价为 0。
+     * 与 {@link #handleAuctionListCreatePacket} 不同，此方法使用 sell UI 的 token。
+     * price 作为起拍价（startingBid），无一口价（纯竞价拍卖）。
      * 上架成功后打开拍卖行 UI 供玩家查看。
      */
-    private void handleAuctionModeCreate(Player player, int rawSlot, double buyNowPrice,
+    private void handleAuctionModeCreate(Player player, int rawSlot, double startingBid,
                                           String message, long duration, String currency) {
         if (auctionService == null) return;
         if (rawSlot < 9 || rawSlot > 44) {
@@ -628,7 +628,7 @@ public class MarketService {
             return;
         }
         int slot = toBukkitBackpackSlot(rawSlot);
-        if (buyNowPrice < config.auction().minPrice() || buyNowPrice > config.auction().maxPrice()) {
+        if (startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice()) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.auction().minPrice()),
                 formatPrice(config.auction().maxPrice())));
@@ -652,9 +652,9 @@ public class MarketService {
             player.sendMessage(messages.get("player.sell.invalid-currency"));
             return;
         }
-        // price 作为一口价，起拍价为 0（纯一口价拍卖）
+        // price 作为起拍价，无一口价（纯竞价拍卖）
         var result = auctionService.createListing(
-            player, slot, buyNowPrice, 0, currencyOption.id(), duration, message);
+            player, slot, 0, startingBid, currencyOption.id(), duration, message);
         if (!result.success()) {
             player.sendMessage(ChatColor.RED + result.error());
             return;
@@ -1114,17 +1114,16 @@ public class MarketService {
             double currentHighest = listing.getCurrentBid() > 0 ? listing.getCurrentBid() : listing.getStartingBid();
             double minIncrement = Math.max(currentHighest * config.auction().minBidIncrementRatio(), config.auction().minBidIncrementAbsolute());
             double minBid = listing.getCurrentBid() > 0 ? currentHighest + minIncrement : listing.getStartingBid();
-            boolean canBuyNow = listing.getBuyNowPrice() > 0 && (listing.getType() == AuctionListing.ListingType.BUY_NOW || listing.getType() == AuctionListing.ListingType.BOTH);
             boolean canBid = listing.getType() == AuctionListing.ListingType.AUCTION || listing.getType() == AuctionListing.ListingType.BOTH;
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", listing.getId());
             row.put("name", listing.getItemDisplayName());
             row.put("seller", listing.getSellerName());
-            row.put("price", canBuyNow ? formatPrice(listing.getBuyNowPrice()) : "-");
+            row.put("price", formatPrice(listing.getStartingBid()));
             row.put("minBid", minBid);
             row.put("type", listing.getType().name());
-            row.put("canBuyNow", canBuyNow);
+            row.put("canBuyNow", false);
             row.put("canBid", canBid);
             row.put("isFavorite", favoriteIds.contains(listing.getId()));
             row.put("bid", listing.getCurrentBid() > 0 ? formatPrice(listing.getCurrentBid()) : formatPrice(listing.getStartingBid()));

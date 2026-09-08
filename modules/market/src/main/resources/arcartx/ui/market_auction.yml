@@ -945,6 +945,10 @@ controls:
                           radius: 12
                           through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
                       收藏按钮:
                         type: Canvas
                         attribute:
@@ -995,12 +999,12 @@ controls:
                           texts: "'&7卖家: &f' + self.parent.entry['seller']"
                           fontSize: 32
                           through: true
-                      一口价:
+                      低价:
                         type: Text
                         attribute:
                           x: 123
                           y: 88
-                          texts: "self.parent.entry['canBuyNow'] ? '&e一口价: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName'] : '&e一口价: &f不支持'"
+                          texts: "'&e低价: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
                           fontSize: 32
                           through: true
                       当前出价:
@@ -1039,9 +1043,9 @@ controls:
                           出价按钮:
                             type: Canvas
                             attribute:
-                              width: "(var.cardW - 54) / 3"
+                              width: "var.cardW - 30"
                               height: 40
-                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['canBid']"
+                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['canBid'] && !self.parent.parent.entry['canCancel']"
                               enable: "!var.actionBusy && var.actionToken != ''"
                             action:
                               clickLeft: |-
@@ -1054,7 +1058,7 @@ controls:
                                   point: ~top_left
                                   x: 3
                                   y: 0
-                                  width: "(var.cardW - 54) / 3 - 6"
+                                  width: "var.cardW - 36"
                                   height: 40
                                   through: true
                                   normal: ~220,150,50,230
@@ -1072,46 +1076,10 @@ controls:
                                   texts: "~&f出价"
                                   fontSize: 32
                                   through: true
-                          购买按钮:
-                            type: Canvas
-                            attribute:
-                              width: "(var.cardW - 54) / 3"
-                              height: 40
-                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['canBuyNow']"
-                              enable: "!var.actionBusy && var.actionToken != ''"
-                            action:
-                              clickLeft: |-
-                                var.actionBusy = true
-                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'].round(), var.actionToken)
-                            children:
-                              购买底:
-                                type: Texture
-                                attribute:
-                                  point: ~top_left
-                                  x: 3
-                                  y: 0
-                                  width: "(var.cardW - 54) / 3 - 6"
-                                  height: 40
-                                  through: true
-                                  normal: ~80,200,120,230
-                                  shape: ~round_rect
-                                  radius: 10
-                                effect:
-                                  ripple:
-                                  stroke:
-                                    width: 3
-                                    color: "self.isHovered() ? '120,220,140,255' : '255,255,255,230'"
-                              购买文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: "~&f购买"
-                                  fontSize: 32
-                                  through: true
                           取消按钮:
                             type: Canvas
                             attribute:
-                              width: "(var.cardW - 54) / 3"
+                              width: "var.cardW - 30"
                               height: 40
                               visible: "self.parent.parent.entry != none && self.parent.parent.entry['canCancel']"
                               enable: "!var.actionBusy && var.actionToken != ''"
@@ -1126,7 +1094,7 @@ controls:
                                   point: ~top_left
                                   x: 3
                                   y: 0
-                                  width: "(var.cardW - 54) / 3 - 6"
+                                  width: "var.cardW - 36"
                                   height: 40
                                   through: true
                                   normal: ~220,90,90,230

@@ -168,9 +168,9 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.sellW1 = 460
-      var.sellW2 = 360
-      var.sellW3 = var.contentW - 48 - var.sellW1 - var.sellW2 - 32
+      var.sellInfoW = 510
+      var.sellLeftW = var.contentW - 48 - var.sellInfoW
+      var.backpackH = 496
     open: |-
       Packet.send(var.packetId, 'sell_open')
     resize: |-
@@ -181,9 +181,9 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.sellW1 = 460
-      var.sellW2 = 360
-      var.sellW3 = var.contentW - 48 - var.sellW1 - var.sellW2 - 32
+      var.sellInfoW = 510
+      var.sellLeftW = var.contentW - 48 - var.sellInfoW
+      var.backpackH = 496
 
 controls:
   全屏玻璃底:
@@ -591,8 +591,8 @@ controls:
               point: ~top_left
               x: 24
               y: 24
-              width: "var.sellW1"
-              height: "var.viewH - 192"
+              width: "var.sellLeftW"
+              height: "var.backpackH"
             children:
               背包区底:
                 type: Texture
@@ -619,125 +619,91 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 56
+                  y: 64
                   texts: "~&7点击选择要上架的物品"
                   fontSize: 32
                   through: true
-              背包滑轨:
-                type: Texture
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 100
-                  width: 8
-                  height: "var.viewH - 292"
-                  normal: ~42,50,66,225
-                  shape: ~round_rect
-                  radius: 4
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,230
-              背包滑块:
-                type: Texture
-                val: 背包滑块
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 100
-                  width: 8
-                  height: 80
-                  normal: ~140,200,255,255
-                  maxDragY: "var.viewH - 372"
-                  shape: ~round_rect
-                  radius: 4
-              背包滚动:
-                type: Scroll
-                val: 背包滚动
+              背包网格:
+                type: HGrid
                 attribute:
                   point: ~top_left
-                  x: 20
-                  y: 100
-                  width: "var.sellW1 - 52"
-                  height: "var.viewH - 292"
-                  moveY: "self.parent['背包滑块'].getDragYRatio()"
+                  x: "(var.sellLeftW - 856) / 2"
+                  y: 108
+                  width: 856
+                  column: 9
+                  spaceBetweenX: 8
+                  spaceBetweenY: 8
                 action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['背包滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['背包滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  create: |-
+                    for(i in range(1, 35)){
+                      slot = self['背包槽'].copy('背包槽' + i.round())
+                      slot.entryKey = (9 + i).round()
+                      slot['背包槽位'].id = 9 + i
                     }
                 children:
-                  背包网格:
-                    type: HGrid
+                  背包槽:
+                    type: Canvas
                     attribute:
-                      width: "var.sellW1 - 52"
-                      column: 5
-                      spaceBetweenX: 12
-                      spaceBetweenY: 12
+                      entryKey: 9.round()
+                      width: 88
+                      height: 88
                     action:
-                      create: |-
-                        for(i in range(1, 35)){
-                          slot = self['背包槽'].copy('背包槽' + i.round())
-                          slot.entryKey = (9 + i).round()
-                          slot.id = 9 + i
-                        }
-                    children:
-                      背包槽:
-                        type: Slot
-                        attribute:
-                          id: 9
-                          entryKey: 9.round()
-                          slotType: ~Backpack
-                          itemScale: 0.72
-                          width: 72
-                          height: 72
-                          through: false
-                          lock: true
-                          normal: "self.entryKey == var.selectedSlot ? '70,150,250,255' : '42,50,66,230'"
-                          shape: ~round_rect
-                          radius: 12
-                        action:
-                          clickLeft: |-
-                            item = self.getSlotItemStack()
-                            if(item != none && item.getType() != 'null' && item.getCount() > 0){
-                              if(var.selectedSlot == self.entryKey){
-                                var.selectedSlot = none
-                                var.selectedItemName = none
-                                var.selectedItemAmount = 0
-                                var.selectedItemLore = none
-                                var.selectedItemJson = var.emptyItemJson
-                              } else {
-                                var.selectedSlot = self.entryKey
-                                var.selectedItemName = item.getName()
-                                var.selectedItemAmount = item.getCount()
-                                var.selectedItemLore = item.getLore()
-                                var.selectedItemJson = item.toJson()
-                              }
-                              preview = val.信息面板['预览槽']
-                              if(preview != none){
-                                preview.seticon()
-                              }
-                              loreList = val.信息面板['介绍列表']
-                              if(loreList != none){
-                                while(loreList.childrenCount() > 1){
-                                  loreList.get(1).remove()
-                                }
-                                if(var.selectedSlot != none && var.selectedItemLore != none){
-                                  loreCount = var.selectedItemLore.length
-                                  for(i in range(1, loreCount - 1)){
-                                    e = loreList['介绍行'].copy('介绍行' + i.round())
-                                    e.entryKey = i.round()
-                                  }
-                                }
+                      clickLeft: |-
+                        item = self['背包槽位'].getSlotItemStack()
+                        if(item != none && item.getType() != 'null' && item.getCount() > 0){
+                          if(var.selectedSlot == self.entryKey){
+                            var.selectedSlot = none
+                            var.selectedItemName = none
+                            var.selectedItemAmount = 0
+                            var.selectedItemLore = none
+                            var.selectedItemJson = var.emptyItemJson
+                          } else {
+                            var.selectedSlot = self.entryKey
+                            var.selectedItemName = item.getName()
+                            var.selectedItemAmount = item.getCount()
+                            var.selectedItemLore = item.getLore()
+                            var.selectedItemJson = item.toJson()
+                          }
+                          preview = val.信息面板['预览槽']
+                          if(preview != none){
+                            preview.seticon()
+                          }
+                          loreList = val.介绍列表
+                          if(loreList != none){
+                            while(loreList.childrenCount() > 1){
+                              loreList.get(1).remove()
+                            }
+                            if(var.selectedSlot != none && var.selectedItemLore != none){
+                              loreCount = var.selectedItemLore.length
+                              for(i in range(1, loreCount - 1)){
+                                e = loreList['介绍行'].copy('介绍行' + i.round())
+                                e.entryKey = i.round()
                               }
                             }
+                          }
+                        }
+                    children:
+                      背包槽底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entryKey == var.selectedSlot ? '70,150,250,255' : '42,50,66,230'"
+                          shape: ~round_rect
+                          radius: 10
                         effect:
                           stroke:
                             width: 2
-                            color: "self.entryKey == var.selectedSlot ? '255,255,255,255' : '62,66,74,210'"
+                            color: "self.parent.entryKey == var.selectedSlot ? '255,255,255,255' : '255,255,255,180'"
+                      背包槽位:
+                        type: Slot
+                        attribute:
+                          id: 9
+                          slotType: ~Backpack
+                          itemScale: 0.72
+                          point: ~stretch_all
+                          through: true
+                          lock: true
 
           # ── 中区：信息面板 ──────────────────────────
           信息面板:
@@ -745,9 +711,9 @@ controls:
             val: 信息面板
             attribute:
               point: ~top_left
-              x: "var.sellW1 + 40"
+              x: "var.sellLeftW + 48"
               y: 24
-              width: "var.sellW2"
+              width: "var.sellInfoW"
               height: "var.viewH - 192"
             children:
               信息面板底:
@@ -784,6 +750,10 @@ controls:
                   radius: 12
                   through: true
                   seticon: "self.setItemIcon(var.selectedItemJson)"
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
               物品名称:
                 type: Text
                 attribute:
@@ -796,7 +766,7 @@ controls:
                 type: Text
                 attribute:
                   x: 152
-                  y: 112
+                  y: 120
                   visible: "var.selectedSlot != none"
                   texts: "'&7数量: &f' + var.selectedItemAmount.round()"
                   fontSize: 32
@@ -805,7 +775,7 @@ controls:
                 type: Text
                 attribute:
                   x: 152
-                  y: 148
+                  y: 160
                   visible: "var.selectedSlot != none"
                   texts: "'&7槽位: &f' + var.selectedSlot"
                   fontSize: 32
@@ -815,7 +785,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 200
+                  y: 208
                   texts: "~&f物品描述"
                   fontSize: 36
                   through: true
@@ -824,9 +794,9 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -12
-                  y: 244
+                  y: 256
                   width: 8
-                  height: "var.viewH - 436"
+                  height: "var.viewH - 460"
                   normal: ~42,50,66,225
                   shape: ~round_rect
                   radius: 4
@@ -840,11 +810,11 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -12
-                  y: 244
+                  y: 256
                   width: 8
                   height: 60
                   normal: ~140,200,255,255
-                  maxDragY: "var.viewH - 496"
+                  maxDragY: "var.viewH - 520"
                   shape: ~round_rect
                   radius: 4
               介绍滚动:
@@ -853,9 +823,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 244
-                  width: "var.sellW2 - 52"
-                  height: "var.viewH - 436"
+                  y: 256
+                  width: "var.sellInfoW - 52"
+                  height: "var.viewH - 460"
                   moveY: "self.parent['介绍滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -870,7 +840,7 @@ controls:
                     val: 介绍列表
                     type: VStack
                     attribute:
-                      width: "var.sellW2 - 52"
+                      width: "var.sellInfoW - 52"
                       spaceBetween: 4
                     children:
                       介绍行:
@@ -882,15 +852,15 @@ controls:
                           fontSize: 32
                           through: true
 
-          # ── 右区：设置面板 ──────────────────────────
+          # ── 下区：设置面板（背包下方）──────────────────
           设置面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.sellW1 + var.sellW2 + 56"
-              y: 24
-              width: "var.sellW3"
-              height: "var.viewH - 192"
+              x: 24
+              y: "var.backpackH + 48"
+              width: "var.sellLeftW"
+              height: "var.viewH - 216 - var.backpackH"
             children:
               设置面板底:
                 type: Texture
@@ -912,7 +882,7 @@ controls:
                   texts: "~&f上架设置"
                   fontSize: 36
                   through: true
-              # ── 模式切换 ──────────────────────────────
+              # ── 左列：模式 + 价格 + 留言 ───────────────
               模式标签:
                 type: Text
                 attribute:
@@ -928,7 +898,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 100
-                  width: "var.sellW3 / 2 - 28"
+                  width: "(var.sellLeftW / 2 - 38) / 2"
                   height: 44
                   visible: "var.auctionEnabled"
                 action:
@@ -959,9 +929,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: "var.sellW3 / 2 + 4"
+                  x: "20 + (var.sellLeftW / 2 - 38) / 2 + 8"
                   y: 100
-                  width: "var.sellW3 / 2 - 24"
+                  width: "(var.sellLeftW / 2 - 38) / 2"
                   height: 44
                   visible: "var.pshopEnabled"
                 action:
@@ -988,14 +958,13 @@ controls:
                       texts: "var.selectedMode == 'pshop' ? '&0玩家商店' : '&f玩家商店'"
                       fontSize: 32
                       through: true
-              # ── 价格输入 ──────────────────────────────
               价格标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 160
-                  texts: "'&f价格 (&7' + var.priceMin.round() + '~' + var.priceMax.round() + '&f)'"
+                  texts: "'&f' + (var.selectedMode == 'auction' ? '起拍价' : '价格') + ' (&7' + var.priceMin.round() + '~' + var.priceMax.round() + '&f)'"
                   fontSize: 32
                   through: true
               价格输入框:
@@ -1004,7 +973,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 196
-                  width: "var.sellW3 - 40"
+                  width: "var.sellLeftW / 2 - 30"
                   height: 48
                 children:
                   价格输入底:
@@ -1023,122 +992,21 @@ controls:
                     attribute:
                       x: 12
                       y: 8
-                      width: "var.sellW3 - 64"
+                      width: "var.sellLeftW / 2 - 54"
                       height: 32
                       length: 16
-                      emptyText: "~&7输入价格..."
+                      emptyText: "var.selectedMode == 'auction' ? '~&7输入起拍价...' : '~&7输入价格...'"
                       fontSize: 36
                     action:
                       textChange: |-
                         var.selectedPrice = self.getContent()
-              # ── 货币选择 ──────────────────────────────
-              货币标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 256
-                  texts: "~&f选择货币"
-                  fontSize: 32
-                  through: true
-              货币滑轨:
-                type: Texture
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 296
-                  width: 8
-                  height: 120
-                  normal: ~42,50,66,225
-                  shape: ~round_rect
-                  radius: 4
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,255,255,230
-              货币滑块:
-                type: Texture
-                val: 货币滑块
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 296
-                  width: 8
-                  height: 50
-                  normal: ~140,200,255,255
-                  maxDragY: 70
-                  shape: ~round_rect
-                  radius: 4
-              货币滚动:
-                type: Scroll
-                val: 货币滚动
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 296
-                  width: "var.sellW3 - 52"
-                  height: 120
-                  moveY: "self.parent['货币滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['货币滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['货币滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  货币列表:
-                    val: 货币列表
-                    type: VStack
-                    attribute:
-                      width: "var.sellW3 - 52"
-                      spaceBetween: 8
-                    children:
-                      货币项:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.activeCurrencies[self.entryKey]
-                          visible: self.entry != none
-                          width: "var.sellW3 - 52"
-                          height: 44
-                        action:
-                          clickLeft: |-
-                            var.selectedCurrency = self.entry['id']
-                        children:
-                          货币项底:
-                            type: Texture
-                            attribute:
-                              point: ~top_left
-                              x: 3
-                              y: 0
-                              width: "var.sellW3 - 58"
-                              height: 44
-                              through: true
-                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '70,150,250,210' : '62,66,74,210'"
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              stroke:
-                                width: 3
-                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
-                          货币项文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_left
-                              x: 16
-                              texts: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
-                              fontSize: 32
-                              through: true
-              # ── 留言输入 ──────────────────────────────
               留言标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 432
-                  texts: "'&f留言 (&7最多' + var.messageMaxLength + '字&f)'"
+                  y: 260
+                  texts: "'&f留言 (&7最多' + var.messageMaxLength.round() + '字&f)'"
                   fontSize: 32
                   through: true
               留言输入框:
@@ -1146,9 +1014,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 468
-                  width: "var.sellW3 - 40"
-                  height: 80
+                  y: 296
+                  width: "var.sellLeftW / 2 - 30"
+                  height: 64
                 children:
                   留言输入底:
                     type: Texture
@@ -1166,8 +1034,8 @@ controls:
                     attribute:
                       x: 12
                       y: 8
-                      width: "var.sellW3 - 64"
-                      height: 64
+                      width: "var.sellLeftW / 2 - 54"
+                      height: 48
                       length: 50
                       emptyText: "~&7输入留言（可选）..."
                       fontSize: 36
@@ -1175,13 +1043,112 @@ controls:
                     action:
                       textChange: |-
                         var.selectedMessage = self.getContent()
-              # ── 上架时长 ──────────────────────────────
+              # ── 右列：货币 + 时长 + 确认 ───────────────
+              货币标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: "var.sellLeftW / 2 + 10"
+                  y: 64
+                  texts: "~&f选择货币"
+                  fontSize: 32
+                  through: true
+              货币滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 100
+                  width: 8
+                  height: 100
+                  normal: ~42,50,66,225
+                  shape: ~round_rect
+                  radius: 4
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
+              货币滑块:
+                type: Texture
+                val: 货币滑块
+                attribute:
+                  point: ~top_right
+                  x: -12
+                  y: 100
+                  width: 8
+                  height: 40
+                  normal: ~140,200,255,255
+                  maxDragY: 60
+                  shape: ~round_rect
+                  radius: 4
+              货币滚动:
+                type: Scroll
+                val: 货币滚动
+                attribute:
+                  point: ~top_left
+                  x: "var.sellLeftW / 2 + 10"
+                  y: 100
+                  width: "var.sellLeftW / 2 - 34"
+                  height: 100
+                  moveY: "self.parent['货币滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['货币滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['货币滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  货币列表:
+                    val: 货币列表
+                    type: VStack
+                    attribute:
+                      width: "var.sellLeftW / 2 - 34"
+                      spaceBetween: 8
+                    children:
+                      货币项:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.activeCurrencies[self.entryKey]
+                          visible: self.entry != none
+                          width: "var.sellLeftW / 2 - 34"
+                          height: 44
+                        action:
+                          clickLeft: |-
+                            var.selectedCurrency = self.entry['id']
+                        children:
+                          货币项底:
+                            type: Texture
+                            attribute:
+                              point: ~top_left
+                              x: 3
+                              y: 0
+                              width: "var.sellLeftW / 2 - 40"
+                              height: 44
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '70,150,250,210' : '62,66,74,210'"
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                          货币项文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
+                              fontSize: 32
+                              through: true
               时长标签:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 20
-                  y: 564
+                  x: "var.sellLeftW / 2 + 10"
+                  y: 216
                   texts: "~&f上架时长"
                   fontSize: 32
                   through: true
@@ -1189,9 +1156,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 20
-                  y: 600
-                  width: 100
+                  x: "var.sellLeftW / 2 + 10"
+                  y: 252
+                  width: 95
                   height: 44
                 action:
                   clickLeft: |-
@@ -1220,9 +1187,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 132
-                  y: 600
-                  width: 100
+                  x: "var.sellLeftW / 2 + 113"
+                  y: 252
+                  width: 95
                   height: 44
                 action:
                   clickLeft: |-
@@ -1251,9 +1218,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 244
-                  y: 600
-                  width: 100
+                  x: "var.sellLeftW / 2 + 216"
+                  y: 252
+                  width: 95
                   height: 44
                 action:
                   clickLeft: |-
@@ -1282,9 +1249,9 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 356
-                  y: 600
-                  width: 100
+                  x: "var.sellLeftW / 2 + 319"
+                  y: 252
+                  width: 95
                   height: 44
                   visible: "var.selectedMode == 'pshop'"
                 action:
@@ -1315,10 +1282,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 20
-                  y: "var.viewH - 280"
-                  width: "var.sellW3 - 40"
-                  height: 56
+                  x: "var.sellLeftW / 2 + 10"
+                  y: 312
+                  width: "var.sellLeftW / 2 - 30"
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != '' && var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''"
                 action:
                   clickLeft: |-

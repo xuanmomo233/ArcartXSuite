@@ -598,6 +598,10 @@ controls:
                           radius: 8
                           through: true
                           seticon: "self.setItemIcon(var.shopIconJsons[self.parent.entryKey] != none ? var.shopIconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
                       商店项文字:
                         type: Text
                         attribute:
@@ -684,7 +688,7 @@ controls:
               x: -18
               y: 88
               width: 8
-              height: "var.viewH - 232"
+              height: "var.viewH - 256"
               normal: ~42,50,66,225
               shape: ~round_rect
               radius: 4
@@ -702,7 +706,7 @@ controls:
               width: 8
               height: 80
               normal: ~140,200,255,255
-              maxDragY: "var.viewH - 312"
+              maxDragY: "var.viewH - 336"
               shape: ~round_rect
               radius: 4
           商品滚动:
@@ -713,7 +717,7 @@ controls:
               x: 24
               y: 88
               width: "var.scrollW"
-              height: "var.viewH - 232"
+              height: "var.viewH - 256"
               moveY: "self.parent['商品滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -772,6 +776,10 @@ controls:
                           radius: 12
                           through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,230
                       商品名称:
                         type: Text
                         attribute:
