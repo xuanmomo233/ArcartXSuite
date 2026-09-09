@@ -995,7 +995,7 @@ controls:
                       width: "var.sellLeftW / 2 - 54"
                       height: 32
                       length: 16
-                      emptyText: "var.selectedMode == 'auction' ? '~&7输入起拍价...' : '~&7输入价格...'"
+                      emptyText: "var.selectedMode == 'auction' ? '&7输入起拍价...' : '&7输入价格...'"
                       fontSize: 36
                     action:
                       textChange: |-
@@ -1016,7 +1016,7 @@ controls:
                   x: 20
                   y: 296
                   width: "var.sellLeftW / 2 - 30"
-                  height: 64
+                  height: 48
                 children:
                   留言输入底:
                     type: Texture
@@ -1035,11 +1035,10 @@ controls:
                       x: 12
                       y: 8
                       width: "var.sellLeftW / 2 - 54"
-                      height: 48
+                      height: 32
                       length: 50
                       emptyText: "~&7输入留言（可选）..."
                       fontSize: 36
-                      allowNewLine: true
                     action:
                       textChange: |-
                         var.selectedMessage = self.getContent()

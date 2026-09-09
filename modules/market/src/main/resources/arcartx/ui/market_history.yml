@@ -586,7 +586,6 @@ controls:
                           normal: ~36,42,54,220
                           shape: ~round_rect
                           radius: 10
-                          through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
                         effect:
                           stroke:

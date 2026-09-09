@@ -58,14 +58,14 @@ player:
     auction: "&7/market&f - 打开拍卖行"
     pshop: "&7/market pshop&f - 玩家商店"
     shop: "&7/market shop [商店ID]&f - 系统商店"
-    sell: "&7/market sell <一口价> [起拍价] [时长] [货币]&f - 上架物品"
+    sell: "&7/market sell <起拍价> [时长] [货币]&f - 上架物品"
     recycle: "&7/market recycle [all]&f - 回收商店"
     history: "&7/market history&f - 交易历史"
     my: "&7/market my&f - 我的上架"
     search: "&7/market search <关键词>&f - 搜索"
     cancel: "&7/market cancel <ID>&f - 取消上架"
   sell:
-    usage: "&e用法: /market sell <一口价> [起拍价] [时长秒] [货币]"
+    usage: "&e用法: /market sell <起拍价> [时长秒] [货币]"
     air: "&c请手持要上架的物品"
     invalid-price: "&c价格格式无效"
     invalid-slot: "&c请选择有效的背包物品"
@@ -80,11 +80,8 @@ player:
   search:
     usage: "&e用法: /market search <关键词>"
 
-# 消息前缀，所有 Market 消息都会自动附加此前缀
-prefix: "&8[&6AXS市场&8] &7"
 # ── 拍卖行消息 ──
 auction-listed: "&a物品已成功上架！"                    # 上架成功提示
-auction-bought: "&a购买成功！"                         # 一口价购买成功
 auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"  # %amount%=出价金额
 auction-outbid: "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"  # 被超越通知，%item%=物品名
 auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"  # 到期退回通知

@@ -238,19 +238,13 @@ public class MarketService {
 
     // ─── 拍卖行操作 ─────────────────────────────────────────
 
-    public void createListing(Player player, ItemStack item, double buyNowPrice, double startingBid, String currency, long duration) {
+    public void createListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
         if (auctionService == null) {
             player.sendMessage(messages.get("player.auction-unavailable"));
             return;
         }
         // 价格范围校验（覆盖命令路径，UI 路径在 handleAuctionListCreatePacket 已校验）
-        if (buyNowPrice < 0 || startingBid < 0) {
-            player.sendMessage(messages.get("player.sell.price-out-of-range",
-                formatPrice(config.auction().minPrice()),
-                formatPrice(config.auction().maxPrice())));
-            return;
-        }
-        if (buyNowPrice > 0 && (buyNowPrice < config.auction().minPrice() || buyNowPrice > config.auction().maxPrice())) {
+        if (startingBid < 0) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.auction().minPrice()),
                 formatPrice(config.auction().maxPrice())));
@@ -273,16 +267,16 @@ public class MarketService {
             return;
         }
         if (duration <= 0) duration = config.auction().defaultDurationSeconds();
-        var result = auctionService.createListing(player, item, buyNowPrice, startingBid, currencyOption.id(), duration);
+        var result = auctionService.createListing(player, item, startingBid, currencyOption.id(), duration);
         if (result.success()) {
             rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
             dispatchSignal("market_listing_created", player, Map.of(
-                "price", String.valueOf(buyNowPrice),
+                "price", String.valueOf(startingBid),
                 "currency", currency != null ? currency : "money"
             ));
             publishEvent("market.listing_created", player, Map.of(
-                "price", String.valueOf(buyNowPrice),
+                "price", String.valueOf(startingBid),
                 "currency", currency != null ? currency : "money"
             ));
         } else {
@@ -407,7 +401,6 @@ public class MarketService {
         if (requiresActionToken(action) && !beginActionToken(player, action, data)) return true;
         switch (action) {
             case "auction_list" -> handleAuctionListPacket(player, data);
-            case "auction_buy" -> handleAuctionBuyPacket(player, data);
             case "auction_bid" -> handleAuctionBidPacket(player, data);
             case "auction_cancel" -> handleAuctionCancelPacket(player, data);
             case "auction_sell_ui_open" -> openAuctionSellUi(player);
@@ -442,7 +435,6 @@ public class MarketService {
 
     // 协议格式: data[0]=action, data[1..n]=参数
     // auction_list: [action, page, category?, keyword?]
-    // auction_buy: [action, listingId]
     // auction_bid: [action, listingId, amount]
     // auction_cancel: [action, listingId]
     // auction_favorite: [action, listingId]
@@ -499,7 +491,7 @@ public class MarketService {
             return;
         }
         var result = auctionService.createListing(
-            player, slot, 0, startingBid, currencyOption.id(), duration, message);
+            player, slot, startingBid, currencyOption.id(), duration, message);
         if (!result.success()) {
             player.sendMessage(ChatColor.RED + result.error());
             return;
@@ -661,9 +653,9 @@ public class MarketService {
             player.sendMessage(messages.get("player.sell.invalid-currency"));
             return;
         }
-        // price 作为起拍价，无一口价（纯竞价拍卖）
+        // price 作为起拍价（纯竞价拍卖）
         var result = auctionService.createListing(
-            player, slot, 0, startingBid, currencyOption.id(), duration, message);
+            player, slot, startingBid, currencyOption.id(), duration, message);
         if (!result.success()) {
             player.sendMessage(ChatColor.RED + result.error());
             return;
@@ -879,30 +871,6 @@ public class MarketService {
         sendUiPacket(player, config.ui().auctionId(), "update", packet);
     }
 
-    private void handleAuctionBuyPacket(Player player, List<String> data) {
-        if (auctionService == null) return;
-        long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
-        if (listingId <= 0) return;
-        var result = auctionService.buyNow(player, listingId);
-        if (result.success()) {
-            rotateToken(player, config.ui().auctionId());
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionBought()));
-            // 触发信号
-            dispatchSignal("market_purchase", player, Map.of(
-                "listing_id", String.valueOf(listingId),
-                "price", String.valueOf(result.price())
-            ));
-            // 发布到事件总线（订阅方自行决定是否播报）
-            publishEvent("market.auction_purchased", player, Map.of(
-                "listing_id", String.valueOf(listingId),
-                "price", String.valueOf(result.price()),
-                "formatted_price", currencyManager.format(result.currency(), BigDecimal.valueOf(result.price()))
-            ));
-        } else {
-            player.sendMessage(ChatColor.RED + result.error());
-        }
-    }
-
     private void handleAuctionBidPacket(Player player, List<String> data) {
         if (auctionService == null) return;
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
@@ -1013,7 +981,7 @@ public class MarketService {
 
     private boolean requiresActionToken(String action) {
         return switch (action) {
-            case "auction_buy", "auction_bid", "auction_cancel", "auction_list_create",
+            case "auction_bid", "auction_cancel", "auction_list_create",
                 "shop_buy", "recycle_all", "recycle_single",
                 "pshop_buy", "pshop_cancel", "pshop_create" -> true;
             default -> false;
@@ -1048,7 +1016,7 @@ public class MarketService {
             default -> config.ui().auctionId();
         };
         int index = switch (action) {
-            case "auction_buy", "auction_cancel" -> 2;
+            case "auction_cancel" -> 2;
             case "auction_bid" -> 3;
             case "auction_list_create" -> 6;
             case "shop_buy" -> 4;

@@ -70,7 +70,7 @@ public class MarketPlayerCommand implements TabExecutor {
             case "auction", "ah" -> service.openAuctionUi(player);
             case "pshop", "playershop" -> service.openPlayerShopUi(player);
             case "sell", "list" -> {
-                // /market sell <一口价> [起拍价] [时长秒]
+                // /market sell <起拍价> [时长秒] [货币]
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.sell.usage"));
                     return true;
@@ -122,11 +122,10 @@ public class MarketPlayerCommand implements TabExecutor {
         }
 
         try {
-            double buyNowPrice = Double.parseDouble(args[1]);
-            double startingBid = args.length > 2 ? Double.parseDouble(args[2]) : 0;
-            long duration = args.length > 3 ? Long.parseLong(args[3]) : 0;
-            String currency = args.length > 4 ? args[4] : "money";
-            service.createListing(player, handItem, buyNowPrice, startingBid, currency, duration);
+            double startingBid = Double.parseDouble(args[1]);
+            long duration = args.length > 2 ? Long.parseLong(args[2]) : 0;
+            String currency = args.length > 3 ? args[3] : "money";
+            service.createListing(player, handItem, startingBid, currency, duration);
         } catch (NumberFormatException e) {
             player.sendMessage(fullMsg("player.sell.invalid-price"));
         }

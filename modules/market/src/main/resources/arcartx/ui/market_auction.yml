@@ -943,7 +943,6 @@ controls:
                           normal: ~36,42,54,220
                           shape: ~round_rect
                           radius: 12
-                          through: true
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
                         effect:
                           stroke:
@@ -1016,19 +1015,39 @@ controls:
                           fontSize: 32
                           through: true
                       留言:
-                        type: Text
+                        type: Scroll
                         attribute:
                           x: 123
                           y: 160
-                          texts: "'&7留言: &f' + (self.parent.entry['message'] != none && self.parent.entry['message'] != '' ? self.parent.entry['message'] : '无')"
-                          fontSize: 32
-                          through: true
+                          width: "var.cardW - 138"
+                          height: 36
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: |-
+                            self.scrollAnim = Lerp(0, 1, 2000)
+                          leave: |-
+                            self.scrollAnim = none
+                        children:
+                          留言布局:
+                            type: HStack
+                            attribute:
+                              height: 36
+                            children:
+                              留言文本:
+                                type: Text
+                                attribute:
+                                  x: 0
+                                  y: 0
+                                  texts: "'&7留言: &f' + (self.parent.parent.parent.entry['message'] != none && self.parent.parent.parent.entry['message'] != '' ? self.parent.parent.parent.entry['message'] : '无')"
+                                  fontSize: 32
+                                  through: true
                       剩余时间:
                         type: Text
                         attribute:
-                          x: 15
+                          x: 123
                           y: 196
-                          texts: "'&a' + self.parent.entry['timeLeft']"
+                          texts: "'&7剩余: &a' + self.parent.entry['timeLeft']"
                           fontSize: 32
                           through: true
                       按钮组:

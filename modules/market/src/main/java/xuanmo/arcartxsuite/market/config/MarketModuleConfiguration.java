@@ -256,7 +256,6 @@ public record MarketModuleConfiguration(
         return new MessagesConfiguration(
             readStr(sec, "prefix", "&8[&6AXS市场&8] &7"),
             readStr(sec, "auction-listed", "&a物品已成功上架！"),
-            readStr(sec, "auction-bought", "&a购买成功！"),
             readStr(sec, "auction-bid-placed", "&a出价成功！当前最高出价: &e%amount%"),
             readStr(sec, "auction-outbid", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"),
             readStr(sec, "auction-expired", "&7您上架的 &e%item% &7已到期，已退回。"),
@@ -481,7 +480,7 @@ public record MarketModuleConfiguration(
     }
 
     public record MessagesConfiguration(
-        String prefix, String auctionListed, String auctionBought,
+        String prefix, String auctionListed,
         String auctionBidPlaced, String auctionOutbid, String auctionExpired,
         String auctionSold, String auctionCancelled,
         String shopBought, String shopLimitReached,
@@ -492,7 +491,7 @@ public record MarketModuleConfiguration(
     ) {
         public static MessagesConfiguration defaults() {
             return new MessagesConfiguration(
-                "&8[&6AXS市场&8] &7", "&a物品已成功上架！", "&a购买成功！",
+                "&8[&6AXS市场&8] &7", "&a物品已成功上架！",
                 "&a出价成功！当前最高出价: &e%amount%", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%",
                 "&7您上架的 &e%item% &7已到期，已退回。", "&a您上架的 &e%item% &a已售出！收入: &e%amount%",
                 "&7已取消上架。", "&a购买成功！花费: &e%amount%", "&c该商品已达购买上限。",

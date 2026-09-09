@@ -100,30 +100,30 @@ public class AuctionService {
     }
 
     /**
-     * 玩家上架物品。
+     * 玩家上架物品（纯竞价，无一口价）。
      */
-    public ListingResult createListing(Player seller, ItemStack item, double buyNowPrice,
+    public ListingResult createListing(Player seller, ItemStack item,
                                        double startingBid, String currency, long durationSeconds) {
-        return createListingInternal(seller, item, buyNowPrice, startingBid, currency, durationSeconds, "", -1);
+        return createListingInternal(seller, item, startingBid, currency, durationSeconds, "", -1);
     }
 
-    public ListingResult createListing(Player seller, int slot, double buyNowPrice,
+    public ListingResult createListing(Player seller, int slot,
                                        double startingBid, String currency, long durationSeconds) {
         if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
             return ListingResult.fail("invalid item slot");
         }
         ItemStack item = seller.getInventory().getItem(slot);
-        return createListingInternal(seller, item, buyNowPrice, startingBid, currency, durationSeconds, "", slot);
+        return createListingInternal(seller, item, startingBid, currency, durationSeconds, "", slot);
     }
 
-    public ListingResult createListing(Player seller, int slot, double buyNowPrice, double startingBid, String currency, long durationSeconds, String message) {
+    public ListingResult createListing(Player seller, int slot, double startingBid, String currency, long durationSeconds, String message) {
         if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
             return ListingResult.fail("invalid item slot");
         }
-        return createListingInternal(seller, seller.getInventory().getItem(slot), buyNowPrice, startingBid, currency, durationSeconds, message, slot);
+        return createListingInternal(seller, seller.getInventory().getItem(slot), startingBid, currency, durationSeconds, message, slot);
     }
 
-    private ListingResult createListingInternal(Player seller, ItemStack item, double buyNowPrice,
+    private ListingResult createListingInternal(Player seller, ItemStack item,
                                                  double startingBid, String currency, long durationSeconds,
                                                  String message, int sourceSlot) {
         if (item == null || item.getType().isAir()) {
@@ -194,16 +194,13 @@ public class AuctionService {
         String pinyin = pinyinTokens[0];
         String initials = pinyinTokens[1];
 
-        // 确定上架类型
-        AuctionListing.ListingType type;
-        if (buyNowPrice > 0 && startingBid > 0) type = AuctionListing.ListingType.BOTH;
-        else if (buyNowPrice > 0) type = AuctionListing.ListingType.BUY_NOW;
-        else type = AuctionListing.ListingType.AUCTION;
+        // 纯竞价拍卖，始终为 AUCTION 类型
+        AuctionListing.ListingType type = AuctionListing.ListingType.AUCTION;
 
         long now = System.currentTimeMillis();
         AuctionListing listing = new AuctionListing(
             0, seller.getUniqueId(), seller.getName(), itemData, displayName,
-            pinyin, initials, category, buyNowPrice, startingBid, 0, null,
+            pinyin, initials, category, 0, startingBid, 0, null,
             currency, type, AuctionListing.ListingStatus.ACTIVE,
             now, now + duration * 1000L
         );
@@ -244,98 +241,12 @@ public class AuctionService {
     }
 
     /**
-     * 一口价购买。
-     */
-    public PurchaseResult buyNow(Player buyer, long listingId) {
-        AuctionListing listing = repository.getListing(listingId);
-        if (listing == null || !listing.isActive()) {
-            return PurchaseResult.fail("该物品已不可购买");
-        }
-        if (listing.getBuyNowPrice() <= 0) {
-            return PurchaseResult.fail("该物品不支持一口价");
-        }
-        if (listing.getSeller().equals(buyer.getUniqueId())) {
-            return PurchaseResult.fail("不能购买自己的物品");
-        }
-
-        double price = listing.getBuyNowPrice();
-        String currency = listing.getCurrency();
-
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
-        if (bridge == null || !bridge.available()) {
-            return PurchaseResult.fail("货币系统不可用");
-        }
-
-        // 先抢占（状态 CAS），保证同一物品不会被并发购买 / 到期任务重复结算
-        if (!repository.compareAndSetListingStatus(listingId,
-                AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.SOLD)) {
-            return PurchaseResult.fail("该物品已不可购买");
-        }
-
-        // 扣买家钱（失败则回滚抢占）
-        CurrencyTransactionResult withdrawResult = bridge.withdraw(buyer, BigDecimal.valueOf(price));
-        if (!withdrawResult.success()) {
-            repository.compareAndSetListingStatus(listingId,
-                AuctionListing.ListingStatus.SOLD, AuctionListing.ListingStatus.ACTIVE);
-            return PurchaseResult.fail(messages.insufficientFunds());
-        }
-
-        // BOTH 类型若已有竞价者，一口价成交需退还其押金（安全发放，离线不丢）
-        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0
-                && !listing.getHighestBidder().equals(buyer.getUniqueId())) {
-            depositSafe(listing.getHighestBidder(), currency, listing.getCurrentBid(), "auction_outbid_refund");
-        }
-
-        // 计算税费
-        double taxRate = getEffectiveTaxRate(listing.getSeller());
-        double tax = price * taxRate;
-        double sellerIncome = price - tax;
-
-        // 给卖家打钱（在线即时 / 离线入待发放队列，绝不丢钱）
-        depositSafe(listing.getSeller(), currency, sellerIncome, "auction_sold_income");
-
-        // 持久化其余字段（状态已是 SOLD）
-        listing.setStatus(AuctionListing.ListingStatus.SOLD);
-        repository.updateListing(listing);
-
-        // 给买家物品（在线即时 / 离线或背包满入队，绝不丢物品）
-        deliverItemSafe(buyer.getUniqueId(), listing, "auction_buynow_item");
-        ItemStack item = itemSerializer.deserialize(listing.getItemData());
-
-        // 记录历史
-        repository.insertHistory(new AuctionHistory(
-            0, listing.getId(), listing.getSeller(), buyer.getUniqueId(),
-            listing.getItemData(), listing.getItemDisplayName(),
-            price, currency, tax, "BUY_NOW", System.currentTimeMillis()
-        ));
-
-        // 通知卖家（仅在线时；主线程安全）
-        Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
-        if (sellerOnline != null) {
-            sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                messages.auctionSold().replace("%item%", listing.getItemDisplayName())
-                    .replace("%amount%", currencyManager.format(currency, BigDecimal.valueOf(sellerIncome)))));
-        }
-
-        // Redis 广播
-        if (redisCache.isAvailable()) {
-            redisCache.invalidateByPrefix("market:listings:");
-            publishCrossServer("LISTING_SOLD:" + listing.getId());
-        }
-
-        return PurchaseResult.success(item, price, tax, currency);
-    }
-
-    /**
      * 竞价。
      */
     public BidResult placeBid(Player bidder, long listingId, double amount) {
         AuctionListing listing = repository.getListing(listingId);
         if (listing == null || !listing.isActive()) {
             return BidResult.fail("该物品已不可竞价");
-        }
-        if (listing.getType() == AuctionListing.ListingType.BUY_NOW) {
-            return BidResult.fail("该物品不支持竞价");
         }
         if (listing.getSeller().equals(bidder.getUniqueId())) {
             return BidResult.fail("不能对自己的物品出价");
@@ -895,11 +806,6 @@ public class AuctionService {
     public record ListingResult(boolean success, @Nullable String error, @Nullable AuctionListing listing) {
         public static ListingResult success(AuctionListing listing) { return new ListingResult(true, null, listing); }
         public static ListingResult fail(String error) { return new ListingResult(false, error, null); }
-    }
-
-    public record PurchaseResult(boolean success, @Nullable String error, @Nullable ItemStack item, double price, double tax, @Nullable String currency) {
-        public static PurchaseResult success(ItemStack item, double price, double tax, String currency) { return new PurchaseResult(true, null, item, price, tax, currency); }
-        public static PurchaseResult fail(String error) { return new PurchaseResult(false, error, null, 0, 0, null); }
     }
 
     public record BidResult(boolean success, @Nullable String error, double amount) {
