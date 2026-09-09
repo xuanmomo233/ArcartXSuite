@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultPendingRewardService;
 import xuanmo.arcartxsuite.bridge.DefaultRondoBridge;
 import xuanmo.arcartxsuite.bridge.DefaultVanillaItemNameBridge;
+import xuanmo.arcartxsuite.bridge.ContentModeratorImpl;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeManager;
 import xuanmo.arcartxsuite.api.item.ItemMatcherSupport;
 import xuanmo.arcartxsuite.condition.DefaultScriptConditionEvaluator;
@@ -56,6 +57,7 @@ final class GlobalBridgeFactory {
     private DefaultAriaBridge ariaBridge;
     private ScriptConditionEvaluator scriptConditionEvaluator;
     private DefaultVanillaItemNameBridge vanillaItemNameBridge;
+    private ContentModeratorImpl contentModerator;
     private AccountTypeServiceImpl accountTypeService;
 
     GlobalBridgeFactory(
@@ -83,6 +85,7 @@ final class GlobalBridgeFactory {
         initScripting();
         initEventBus();
         initAccountTypeService();
+        initContentModerator();
     }
 
     private void initItemSources() {
@@ -111,6 +114,13 @@ final class GlobalBridgeFactory {
             itemSourceRegistry::neigeItemId,
             itemSourceRegistry::overtureItemId
         );
+    }
+
+    private void initContentModerator() {
+        if (contentModerator == null) {
+            contentModerator = new ContentModeratorImpl(plugin);
+        }
+        contentModerator.initialize();
     }
 
     private void initCurrencyAndAttributes() {
@@ -272,6 +282,12 @@ final class GlobalBridgeFactory {
         return scriptConditionEvaluator;
     }
     DefaultVanillaItemNameBridge vanillaItemNameBridge() { return vanillaItemNameBridge; }
+    ContentModeratorImpl contentModerator() {
+        if (contentModerator == null) {
+            initContentModerator();
+        }
+        return contentModerator;
+    }
     AccountTypeServiceImpl accountTypeService() {
         if (accountTypeService == null) {
             initAccountTypeService();

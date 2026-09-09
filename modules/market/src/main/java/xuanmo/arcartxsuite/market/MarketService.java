@@ -56,6 +56,7 @@ public class MarketService {
     private final IconResolver iconResolver;
     private final AuctionItemSerializer itemSerializer;
     private final @Nullable ItemBridgeAPI itemStackBridge;
+    private final xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
@@ -109,7 +110,8 @@ public class MarketService {
                          Logger logger,
                          CrossServerAPI crossServer,
                          SchedulerAPI scheduler,
-                         MessageProvider messages) {
+                         MessageProvider messages,
+                         xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator) {
         this.plugin = plugin;
         this.config = config;
         this.packetBridge = packetBridge;
@@ -126,6 +128,7 @@ public class MarketService {
         this.crossServer = crossServer;
         this.scheduler = scheduler;
         this.messages = messages;
+        this.contentModerator = contentModerator != null ? contentModerator : new xuanmo.arcartxsuite.market.NoopContentModerator();
     }
 
     public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
@@ -485,6 +488,8 @@ public class MarketService {
                 String.valueOf(config.auction().messageMaxLength())));
             return;
         }
+        message = filterMessage(player, message);
+        if (message == null) return;
         var currencyOption = config.auction().currencies().stream()
             .filter(option -> option.id().equalsIgnoreCase(currency))
             .findFirst().orElse(null);
@@ -594,6 +599,8 @@ public class MarketService {
                 String.valueOf(config.playerShop().messageMaxLength())));
             return;
         }
+        message = filterMessage(player, message);
+        if (message == null) return;
         var currencyOption = config.playerShop().currencies().stream()
             .filter(option -> option.id().equalsIgnoreCase(currency))
             .findFirst().orElse(null);
@@ -644,6 +651,8 @@ public class MarketService {
                 String.valueOf(config.auction().messageMaxLength())));
             return;
         }
+        message = filterMessage(player, message);
+        if (message == null) return;
         var currencyOption = config.auction().currencies().stream()
             .filter(option -> option.id().equalsIgnoreCase(currency))
             .findFirst().orElse(null);
@@ -1447,6 +1456,19 @@ public class MarketService {
 
     private static double parseDoubleSafe(String s, double def) {
         try { return Double.parseDouble(s); } catch (NumberFormatException e) { return def; }
+    }
+
+    /**
+     * 对留言执行敏感词过滤。
+     * @return 过滤后的留言；若被拦截则返回 null
+     */
+    private String filterMessage(Player player, String message) {
+        var result = contentModerator.filter(message);
+        if (result.blocked()) {
+            player.sendMessage(messages.get("player.sell.message-filtered"));
+            return null;
+        }
+        return result.text();
     }
 
     // ─── 管理接口 ───────────────────────────────────────────

@@ -73,6 +73,7 @@ player:
     invalid-currency: "&c所选货币不可用"
     price-out-of-range: "&c价格必须在 {0} - {1} 范围内"
     message-too-long: "&c留言不能超过 {0} 个字符"
+    message-filtered: "&c留言包含敏感词，请修改后重试"
   cancel:
     usage: "&e用法: /market cancel <上架ID>"
     invalid-id: "&c无效的上架 ID 格式"

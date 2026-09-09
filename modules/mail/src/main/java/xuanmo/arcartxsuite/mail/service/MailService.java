@@ -129,6 +129,7 @@ public final class MailService implements Listener {
     private final PacketGuardAPI packetGuard;
     private final UiResourceExporter uiResourceExporter;
     private final BundledResourceWriter bundledResourceWriter;
+    private final xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator;
     private final BiConsumer<String, Player> signalDispatcher;
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final CrossServerAPI crossServer;
@@ -178,7 +179,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null, null);
     }
 
     public MailService(
@@ -197,7 +198,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge, null, null, null);
     }
 
     public MailService(
@@ -235,6 +236,7 @@ public final class MailService implements Listener {
             itemSourceRegistry,
             vanillaItemNameBridge,
             null,
+            null,
             null
         );
     }
@@ -257,7 +259,8 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
         xuanmo.arcartxsuite.api.icon.IconResolver iconResolver,
-        ItemBridgeAPI itemStackBridge
+        ItemBridgeAPI itemStackBridge,
+        xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -277,6 +280,7 @@ public final class MailService implements Listener {
         this.itemSourceRegistry = itemSourceRegistry;
         this.iconResolver = iconResolver;
         this.itemStackBridge = itemStackBridge;
+        this.contentModerator = contentModerator != null ? contentModerator : new xuanmo.arcartxsuite.mail.NoopContentModerator();
     }
 
     private String message(String key, Object... args) {
@@ -2860,21 +2864,11 @@ public final class MailService implements Listener {
     }
 
     private boolean containsBlockedText(String value) {
-        String normalized = safe(value).toLowerCase(Locale.ROOT);
-        if (normalized.isBlank()) {
+        if (value == null || value.isBlank()) {
             return false;
         }
-        for (String blockedWord : configuration.moderation().blockedWords()) {
-            if (!blockedWord.isBlank() && normalized.contains(blockedWord)) {
-                return true;
-            }
-        }
-        for (Pattern blockedPattern : configuration.moderation().blockedPatterns()) {
-            if (blockedPattern.matcher(normalized).find()) {
-                return true;
-            }
-        }
-        return false;
+        var result = contentModerator.filter(value);
+        return result.blocked();
     }
 
     private boolean matchesBlockedLore(String value) {

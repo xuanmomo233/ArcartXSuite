@@ -191,6 +191,98 @@ attribute-bridges:
   mythiclib: true
   symphony: true
 
+# ========== 全局内容审核（敏感词过滤）==========
+# 统一管理本地词库、云端词库、标点穿透防护、白名单等过滤规则，
+# 供 chat / market / mail 等模块统一调用。
+# 启用后，玩家在聊天、留言、邮件等场景输入的文本会先经过此过滤器。
+#   - cancel-on-match: true  命中敏感词时直接取消操作（消息不发送 / 留言不提交）
+#   - cancel-on-match: false 命中敏感词时替换为 replacement 字符后继续
+# 标点穿透防护：匹配前先剥离 ignored-punctuations 中的标点，
+#   防止玩家用 f.u.c.k 等方式绕过过滤。
+moderation:
+  # 是否启用全局敏感词过滤。
+  enabled: true
+  # 命中后是否直接取消操作；false 表示替换后继续。
+  cancel-on-match: false
+  # 替换字符或文本。
+  replacement: "*"
+  # 本地屏蔽词列表（不区分大小写）。
+  blocked-words:
+    - "NMSL"
+    - "fuck"
+    - "shit"
+  # 本地屏蔽正则列表（不区分大小写）。
+  blocked-patterns: []
+  # 匹配时忽略的标点符号（匹配前先剥离这些字符，防止插入标点绕过）。
+  ignored-punctuations:
+    - "!"
+    - "."
+    - ","
+    - "#"
+    - "$"
+    - "%"
+    - "&"
+    - "*"
+    - "("
+    - ")"
+    - "|"
+    - "?"
+    - "/"
+    - "@"
+    - "\""
+    - "\\"
+    - ";"
+    - "["
+    - "]"
+    - "{"
+    - "}"
+    - "+"
+    - "~"
+    - "-"
+    - "_"
+    - "="
+    - "^"
+    - "<"
+    - ">"
+    - " "
+    - "　"
+    - "！"
+    - "。"
+    - "，"
+    - "￥"
+    - "（"
+    - "）"
+    - "？"
+    - "、"
+    - "“"
+    - "‘"
+    - "；"
+    - "【"
+    - "】"
+    - "——"
+    - "……"
+    - "《"
+    - "》"
+    - "`"
+  # 敏感词白名单：命中白名单的文本跳过过滤（不区分大小写）。
+  whitelist:
+    - "has been"
+
+  # ── 云端词库 ───────────────────────────────────────
+  cloud:
+    # 远程词库开关；开启后会定期拉取 urls 内容并并入过滤规则。
+    enabled: true
+    # 远程词库地址列表（支持多个 URL，每行一个词，# 开头为注释）。
+    urls:
+      - "https://raw.githubusercontent.com/Yurinann/Filter-Thesaurus-Cloud/main/database.json"
+      # 有时导致误判，自行开启
+      # - "https://raw.githubusercontent.com/konsheng/Sensitive-lexicon/main/ThirdPartyCompatibleFormats/TrChat/SensitiveLexicon.json"
+    # 云端词库中要忽略的词（不区分大小写）。
+    ignored:
+      - "nt"
+    # 远程词库刷新间隔，单位分钟。
+    refresh-minutes: 60
+
 # ========== 全局按键绑定 ==========
 # 由宿主统一注册到 ArcartX 客户端，各模块共享。
 # name: ArcartX 注册名（玩家可在按键设置中看到）

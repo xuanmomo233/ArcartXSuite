@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleContext;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ContentModerator;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
@@ -191,6 +192,11 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge() {
         return registry.vanillaItemNameBridge();
+    }
+
+    @Override
+    public @NotNull ContentModerator contentModerator() {
+        return registry.contentModerator();
     }
 
     @Override

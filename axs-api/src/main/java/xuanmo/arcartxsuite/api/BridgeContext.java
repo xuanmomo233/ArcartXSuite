@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ContentModerator;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI;
@@ -49,6 +50,17 @@ public interface BridgeContext {
 
     @xuanmo.arcartxsuite.api.bridge.ApiStability.Stable
     @NotNull VanillaItemNameBridge vanillaItemNameBridge();
+
+    /**
+     * 内容审核桥接（敏感词过滤）。
+     * <p>
+     * 统一管理本地词库、云端词库、标点穿透防护、白名单等过滤规则，
+     * 供 chat / market / mail 等模块调用。
+     *
+     * @since 1.3.3
+     */
+    @xuanmo.arcartxsuite.api.bridge.ApiStability.Stable
+    @NotNull ContentModerator contentModerator();
 
     @xuanmo.arcartxsuite.api.bridge.ApiStability.Stable
     ItemMatcherAPI itemMatcher();

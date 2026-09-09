@@ -1,11 +1,7 @@
 package xuanmo.arcartxsuite.chat.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,6 +38,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ContentModerator;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.chat.config.ChatCardConfiguration;
@@ -79,6 +76,7 @@ public final class ChatService implements Listener {
     private final ChatRepository repository;
     private final PacketBridgeAPI packetBridge;
     private final ItemBridgeAPI itemStackBridge;
+    private final ContentModerator contentModerator;
     private final ExecutorService ioExecutor;
     private final Map<UUID, ChatPlayerState> states = new ConcurrentHashMap<>();
     private final Map<UUID, ChatPlayerProfile> profiles = new ConcurrentHashMap<>();
@@ -87,7 +85,6 @@ public final class ChatService implements Listener {
     private final Map<UUID, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<UUID, DuplicateStamp> lastDuplicateStamps = new ConcurrentHashMap<>();
     private final Map<String, Long> processedEnvelopeKeys = new ConcurrentHashMap<>();
-    private final Set<String> cloudWords = ConcurrentHashMap.newKeySet();
     // 加载失败的玩家集合：这些玩家的缓存数据不可信，saveStateAsync 必须跳过，避免默认状态覆盖 DB 真实数据
     private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final java.util.function.Supplier<TabRefreshable> tabRefreshableProvider;
@@ -100,7 +97,6 @@ public final class ChatService implements Listener {
 
     private CrossServerChannel crossServerChannel;
     private BukkitTask cleanupTask;
-    private BukkitTask cloudRefreshTask;
     private boolean paperChatEventRegistered;
     private volatile boolean paperChatEventObserved;
     private java.util.function.BiConsumer<Player, Collection<String>> completionAdder;
@@ -120,7 +116,7 @@ public final class ChatService implements Listener {
         PlaceholderResolverAPI placeholderResolver
     ) {
         this(plugin, logger, tabRefreshableProvider, configuration, repository, packetBridge, itemStackBridge,
-            completionUiId, crossServer, placeholderResolver, null, null);
+            completionUiId, crossServer, placeholderResolver, null, null, null);
     }
 
     public ChatService(
@@ -135,7 +131,8 @@ public final class ChatService implements Listener {
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver,
         MessageProvider messages,
-        VanillaItemNameBridge vanillaItemNameBridge
+        VanillaItemNameBridge vanillaItemNameBridge,
+        ContentModerator contentModerator
     ) {
         this.plugin = Objects.requireNonNull(plugin);
         this.logger = logger;
@@ -149,6 +146,7 @@ public final class ChatService implements Listener {
         this.placeholderResolver = placeholderResolver;
         this.messages = messages;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.contentModerator = contentModerator != null ? contentModerator : new NoopContentModerator();
         this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
@@ -191,7 +189,6 @@ public final class ChatService implements Listener {
             currentMute(player.getUniqueId());
         }
         cleanupTask = AxsScheduler.runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
-        scheduleCloudRefresh();
         broadcastCompletionPlayerList();
     }
 
@@ -209,10 +206,6 @@ public final class ChatService implements Listener {
         if (cleanupTask != null) {
             cleanupTask.cancel();
             cleanupTask = null;
-        }
-        if (cloudRefreshTask != null) {
-            cloudRefreshTask.cancel();
-            cloudRefreshTask = null;
         }
         HandlerList.unregisterAll(this);
         paperChatEventRegistered = false;
@@ -235,7 +228,6 @@ public final class ChatService implements Listener {
         lastMessageTimes.clear();
         lastDuplicateStamps.clear();
         processedEnvelopeKeys.clear();
-        cloudWords.clear();
         failedLoads.clear();
     }
 
@@ -598,16 +590,12 @@ public final class ChatService implements Listener {
         }
 
         String processedMessage = applyCustomComponents(message);
-        ChatModerationSupport.ModerationResult moderationResult = ChatModerationSupport.applyFilters(
-            processedMessage,
-            configuration.filter(),
-            List.copyOf(cloudWords)
-        );
+        ContentModerator.ModerationResult moderationResult = contentModerator.filter(processedMessage);
         if (moderationResult.blocked()) {
             boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", message("result.filtered")));
             return cardSent ? ChatOperationResult.failureCardNotified(message("result.filtered")) : ChatOperationResult.failure(message("result.filtered"));
         }
-        processedMessage = moderationResult.message();
+        processedMessage = moderationResult.text();
 
         ProcessedContent processedContent = processContent(sender, processedMessage);
         ChatMentionSupport.MentionResult mentionResult = configuration.functions().mentionEnabled()
@@ -694,16 +682,12 @@ public final class ChatService implements Listener {
         }
 
         String processedMessage = applyCustomComponents(message);
-        ChatModerationSupport.ModerationResult moderationResult = ChatModerationSupport.applyFilters(
-            processedMessage,
-            configuration.filter(),
-            List.copyOf(cloudWords)
-        );
+        ContentModerator.ModerationResult moderationResult = contentModerator.filter(processedMessage);
         if (moderationResult.blocked()) {
             boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", message("result.filtered")));
             return cardSent ? ChatOperationResult.failureCardNotified(message("result.filtered")) : ChatOperationResult.failure(message("result.filtered"));
         }
-        processedMessage = moderationResult.message();
+        processedMessage = moderationResult.text();
 
         ProcessedContent processedContent = processContent(sender, processedMessage);
         Map<String, String> variables = ChatFormatSupport.baseVariables(channel.displayName(), sender, targetProfile.lastKnownName(), processedContent.message());
@@ -1622,37 +1606,6 @@ public final class ChatService implements Listener {
         long now = System.currentTimeMillis();
         lastMessageTimes.put(playerUuid, now);
         lastDuplicateStamps.put(playerUuid, new DuplicateStamp(ChatFormatSupport.normalizeForDuplicateCheck(message), now));
-    }
-
-    private void scheduleCloudRefresh() {
-        if (!configuration.filter().cloudEnabled() || configuration.filter().cloudUrl().isBlank()) {
-            return;
-        }
-        long periodTicks = Math.max(1200L, configuration.filter().cloudRefreshMinutes() * 60L * 20L);
-        cloudRefreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshCloudWords, 20L, periodTicks);
-        AxsScheduler.runAsync(plugin, this::refreshCloudWords);
-    }
-
-    private void refreshCloudWords() {
-        try (BufferedReader reader = new BufferedReader(
-            new InputStreamReader(URI.create(configuration.filter().cloudUrl()).toURL().openStream(), StandardCharsets.UTF_8)
-        )) {
-            LinkedHashSet<String> loaded = new LinkedHashSet<>();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String normalized = line.trim().toLowerCase(Locale.ROOT);
-                if (!normalized.isBlank() && !normalized.startsWith("#")) {
-                    loaded.add(normalized);
-                }
-            }
-            cloudWords.clear();
-            cloudWords.addAll(loaded);
-            if (configuration.debug()) {
-                this.logger.info("ArcartXChat 已刷新云敏感词，共 " + loaded.size() + " 条。");
-            }
-        } catch (Exception exception) {
-            this.logger.warning("刷新聊天云敏感词失败: " + exception.getMessage());
-        }
     }
 
     private void saveStateAsync(ChatPlayerState state) {

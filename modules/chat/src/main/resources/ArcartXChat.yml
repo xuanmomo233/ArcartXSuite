@@ -112,24 +112,19 @@ function:
   custom-components: {}
 
 # ── 敏感词过滤 ───────────────────────────────────────
+# 【已迁移】敏感词过滤已统一到宿主 config.yml 的 moderation 节。
+# 请在 plugins/ArcartXSuite/config.yml 中配置全局敏感词过滤（支持标点穿透防护、白名单、多 URL 云端词库）。
+# 此处配置仅作向后兼容保留，不再生效。
 filter:
-  # 是否启用本地敏感词与正则过滤。
   enabled: false
-
-  # 命中后是否直接取消发言；false 表示替换后继续发送。
   cancel-on-match: false
-
-  # 替换字符或文本。
   replacement: "*"
-  blocked-words: []         # 被屏蔽的敏感词列表
-  blocked-patterns: []      # 被屏蔽的正则表达式列表
-
-  # ── 远程词库 ───────────────────────────────────────
+  blocked-words: []
+  blocked-patterns: []
   cloud:
-    # 远程词库开关；开启后会定期拉取 url 内容并并入过滤规则。
     enabled: false
-    url: ""                  # 远程词库拉取地址
-    refresh-minutes: 60      # 远程词库刷新间隔，单位分钟
+    url: ""
+    refresh-minutes: 60
 
 # 频道定义目录，相对于插件数据目录。
 channels-directory: "chat/channels"

@@ -48,6 +48,7 @@ import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultVanillaItemNameBridge;
+import xuanmo.arcartxsuite.bridge.ContentModeratorImpl;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.condition.DefaultScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
@@ -945,6 +946,11 @@ public final class ModuleRegistry {
     /** 获取原版物品中文名称桥接 */
     public DefaultVanillaItemNameBridge vanillaItemNameBridge() {
         return globalBridgeFactory.vanillaItemNameBridge();
+    }
+
+    /** 获取内容审核桥接 */
+    public ContentModeratorImpl contentModerator() {
+        return globalBridgeFactory.contentModerator();
     }
 
     /** 获取全局物品匹配器 */

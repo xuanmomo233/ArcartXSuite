@@ -165,7 +165,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             itemSourceRegistry,
             vanillaItemNameBridge,
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry),
-            itemStackBridge
+            itemStackBridge,
+            contentModerator
         );
         service.start();
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）

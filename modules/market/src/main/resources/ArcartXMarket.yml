@@ -187,6 +187,10 @@ auction:
     mythic-item-ids: []
     # 禁止的 NeigeItems 物品 ID 列表
     neige-item-ids: []
+    # 禁止的 Overture 物品 ID 列表
+    overture-item-ids: []
+    # 禁止的物品类别列表（如 "mythic"、"neige"、"vanilla"）
+    kinds: []
     # 物品名称包含以下字符串则被禁止（支持 & 颜色码）
     name-contains:
       - "绑定"
@@ -197,6 +201,15 @@ auction:
     name-regex: []
     # 物品 Lore 匹配正则表达式则被禁止
     lore-regex: []
+    # 物品存在以下 NBT/PDC 键则被禁止（匹配键名忽略命名空间，或完整键 namespace:key）
+    nbt-keys: []
+    # 物品的 NBT/PDC 键值匹配则被禁止（键为 PDC 键名忽略命名空间，值为期望的字符串/数值）
+    # 支持数值比较（如 1 == 1.0）和字符串比较（忽略大小写）
+    nbt-values: {}
+    # 示例:
+    #   nbt-values:
+    #     item_category: weapon
+    #     custom_tag: soulbound
   # ═══════════════════════════════════════════════════════════════════════════
   # 拍卖行分类定义
   # ═══════════════════════════════════════════════════════════════════════════
@@ -280,12 +293,16 @@ player-shop:
     material-ids: []
     mythic-item-ids: []
     neige-item-ids: []
+    overture-item-ids: []
+    kinds: []
     name-contains:
       - "绑定"
     lore-contains:
       - "不可交易"
     name-regex: []
     lore-regex: []
+    nbt-keys: []
+    nbt-values: {}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子系统配置 - 系统商店
