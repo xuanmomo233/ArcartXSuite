@@ -6,7 +6,7 @@
 # 若服务端只回 update（消耗不足等失败情形），等待态会被自动解除。
 ui:
   isHud: false
-  defaultOpen: false
+
   hide:
     - hotbar
     - experience_bar
@@ -79,7 +79,7 @@ ui:
       // UP 物品图标
       val.UP物品槽.seticon()
       // 卡池导航按钮
-      for(i in range(0, 12)){
+      for(i in range(0, 11)){
         key = i.round()
         e = val.卡池导航列表['卡池按钮' + key]
         if(e != none){
@@ -87,7 +87,7 @@ ui:
         }
       }
       // 消耗区与资源栏图标
-      for(i in range(0, 4)){
+      for(i in range(0, 3)){
         key = i.round()
         e = val.单抽消耗区['消耗条目' + key]
         if(e != none){
@@ -134,7 +134,7 @@ ui:
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows']
       val.UP物品槽.seticon()
-      for(i in range(0, 4)){
+      for(i in range(0, 3)){
         key = i.round()
         e = val.单抽消耗区['消耗条目' + key]
         if(e != none){
@@ -159,7 +159,8 @@ ui:
     # packetHandler: result（单抽结果）
     # 包字段:
     #   - resultCount: 结果数量
-    #   - resultItemJsons / resultItemNames / resultItemStars / resultItemUps: 结果映射（key 为 "1" 起的数字字符串）
+    #   - resultItemJsonN: 各物品 itemJson（分离模式，N 为序号）
+    #   - resultItemNames / resultItemStars / resultItemUps: 结果映射（key 为 "1" 起的数字字符串）
     #   - resultCountRequested: 请求抽取数量
     #   - guaranteed: 本次是否触发大保底
     #   - fatePointTriggered: 本次是否触发命运点
@@ -167,7 +168,6 @@ ui:
     #   - highestStar: 本次最高星级
     result: |-
       var.resultCount = packet['resultCount']
-      var.resultItemJsons = packet['resultItemJsons']
       var.resultItemNames = packet['resultItemNames']
       var.resultItemStars = packet['resultItemStars']
       var.resultItemUps = packet['resultItemUps']
@@ -177,6 +177,17 @@ ui:
       var.pity5 = packet['pity5']
       var.highestStar = packet['highestStar']
       var.resultPending = true
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
+      var.resultItemJsons = {}
+      for(i in range(1, var.resultCount.round())){
+        key = i.round()
+        json = packet['resultItemJson' + key]
+        if(json != none && json != ''){
+          var.resultItemJsons[key] = json
+        } else {
+          var.resultItemJsons[key] = var.air
+        }
+      }
       val.单抽结果卡片['物品槽'].seticon()
       async {
         Thread.sleep(var.revealMs)
@@ -188,7 +199,6 @@ ui:
     # packetHandler: batch_result（十连结果，字段与 result 相同）
     batch_result: |-
       var.resultCount = packet['resultCount']
-      var.resultItemJsons = packet['resultItemJsons']
       var.resultItemNames = packet['resultItemNames']
       var.resultItemStars = packet['resultItemStars']
       var.resultItemUps = packet['resultItemUps']
@@ -198,7 +208,18 @@ ui:
       var.pity5 = packet['pity5']
       var.highestStar = packet['highestStar']
       var.resultPending = true
-      for(i in range(1, 11)){
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
+      var.resultItemJsons = {}
+      for(i in range(1, var.resultCount.round())){
+        key = i.round()
+        json = packet['resultItemJson' + key]
+        if(json != none && json != ''){
+          var.resultItemJsons[key] = json
+        } else {
+          var.resultItemJsons[key] = var.air
+        }
+      }
+      for(i in range(1, 10)){
         key = i.round()
         e = val.十连网格['十连卡片' + key]
         if(e != none){
@@ -247,14 +268,14 @@ ui:
       var.pointBalanceRows = packet['pointBalanceRows']
       var.exchangeCount = packet['exchangeCount']
       var.exchangeRows = packet['exchangeRows']
-      for(i in range(0, 4)){
+      for(i in range(0, 3)){
         key = i.round()
         p = val.积分余额栏['积分条目' + key]
         if(p != none){
           p['图标'].seticon()
         }
       }
-      for(i in range(0, 20)){
+      for(i in range(0, 19)){
         key = i.round()
         e = val.兑换列表['兑换行' + key]
         if(e != none){
@@ -301,7 +322,6 @@ ui:
       val.历史面板.visible = false
       val.详情面板.visible = false
       val.兑换面板.visible = false
-  defaultOpen: true  # 界面打开时自动触发 open 事件
 
 # ─── 控件树（书写顺序即叠层顺序，弹层写在最后）────────────────────
 controls:
@@ -518,7 +538,7 @@ controls:
                   height: 60
                 action:
                   create: |-
-                    for(i in range(0, 4)){
+                    for(i in range(0, 3)){
                       key = i.round()
                       e = self['资源条目'].copy('资源条目' + key)
                       e.entryKey = key
@@ -654,7 +674,7 @@ controls:
                   spaceBetween: 12
                 action:
                   create: |-
-                    for(i in range(0, 12)){
+                    for(i in range(0, 11)){
                       key = i.round()
                       e = self['卡池按钮'].copy('卡池按钮' + key)
                       e.entryKey = key
@@ -813,7 +833,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~0,0,0,0
+                  normal: ~0,0,0,255
                   shape: ~round_rect
                   radius: 20
                   through: true
@@ -2031,7 +2051,7 @@ controls:
                       height: 34
                     action:
                       create: |-
-                        for(i in range(0, 4)){
+                        for(i in range(0, 3)){
                           key = i.round()
                           e = self['消耗条目'].copy('消耗条目' + key)
                           e.entryKey = key
@@ -2158,7 +2178,7 @@ controls:
                       height: 34
                     action:
                       create: |-
-                        for(i in range(0, 4)){
+                        for(i in range(0, 3)){
                           key = i.round()
                           e = self['消耗条目'].copy('消耗条目' + key)
                           e.entryKey = key
@@ -2366,20 +2386,6 @@ controls:
                   stroke:
                     width: 1
                     color: ~255,246,214,150
-              内高光线:
-                type: Texture
-                attribute:
-                  point: ~middle_center
-                  width: 406
-                  height: 466
-                  normal: ~0,0,0,0
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~255,246,214,150
               星级条:
                 type: Texture
                 attribute:
@@ -2556,7 +2562,7 @@ controls:
               spaceBetweenY: 28
             action:
               create: |-
-                for(i in range(1, 11)){
+                for(i in range(1, 10)){
                   key = i.round()
                   e = self['十连卡片'].copy('十连卡片' + key)
                   e.entryKey = key
@@ -2593,20 +2599,6 @@ controls:
                       stroke:
                         width: 2
                         color: "{var.starColors != none && var.resultItemStars != none && var.resultItemStars[self.entryKey] != none && var.starColors[var.resultItemStars[self.entryKey]] != none ? var.starColors[var.resultItemStars[self.entryKey]] : '128,128,128,255'}"
-                  内高光线:
-                    type: Texture
-                    attribute:
-                      point: ~middle_center
-                      width: 226
-                      height: 286
-                      normal: ~0,0,0,0
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: 1
-                        color: ~255,246,214,150
                   内高光线:
                     type: Texture
                     attribute:
@@ -2863,7 +2855,7 @@ controls:
                   spaceBetweenY: 12
                 action:
                   create: |-
-                    for(i in range(0, 20)){
+                    for(i in range(0, 19)){
                       key = i.round()
                       e = self['历史行'].copy('历史行' + key)
                       e.entryKey = key
@@ -3066,7 +3058,7 @@ controls:
                   spaceBetweenY: 12
                 action:
                   create: |-
-                    for(i in range(0, 60)){
+                    for(i in range(0, 59)){
                       key = i.round()
                       e = self['详情行'].copy('详情行' + key)
                       e.entryKey = key
@@ -3232,7 +3224,7 @@ controls:
               spaceBetween: 28
             action:
               create: |-
-                for(i in range(0, 4)){
+                for(i in range(0, 3)){
                   key = i.round()
                   e = self['积分条目'].copy('积分条目' + key)
                   e.entryKey = key
@@ -3329,7 +3321,7 @@ controls:
                   spaceBetweenY: 12
                 action:
                   create: |-
-                    for(i in range(0, 20)){
+                    for(i in range(0, 19)){
                       key = i.round()
                       e = self['兑换行'].copy('兑换行' + key)
                       e.entryKey = key

@@ -27,7 +27,6 @@ import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
-import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.api.PacketHandlerSpec;
@@ -267,11 +266,5 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 
-    private String msg(String key, Object... args) {
-        MessageProvider mp = messages();
-        if (mp == null) return key;
-        String prefix = mp.get("prefix");
-        return prefix + mp.get(key, args);
-    }
 }
 

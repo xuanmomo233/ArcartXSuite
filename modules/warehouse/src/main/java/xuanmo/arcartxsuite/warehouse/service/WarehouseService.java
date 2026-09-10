@@ -941,8 +941,10 @@ public final class WarehouseService implements Listener {
         if (interceptor != null && interceptor.isAutoPickupIntercepted(player.getUniqueId())) {
             return;
         }
-        ViewState state = viewStates.get(player.getUniqueId());
-        boolean pickup = state != null ? state.autoPickup() : configuration.pickup().autoStoreOnPickup();
+        // 使用 state(player) 而非 viewStates.get()：确保玩家未打开仓库 UI 时也能从数据库加载持久化的自动入库设置，
+        // 否则服务器重启后会回退到 config.yml 的 auto-store-on-pickup 默认值，导致玩家关闭的自动入库被重新开启。
+        ViewState state = state(player);
+        boolean pickup = state.autoPickup();
         if (!pickup) {
             return;
         }
@@ -971,7 +973,7 @@ public final class WarehouseService implements Listener {
                 // 注意：notifyPickup 内部为延迟发包的异步任务，返回 true 仅代表已排入推送队列，
                 // 不代表客户端 HUD 已渲染，因此不能用其返回值决定是否发送聊天栏，否则会出现
                 // HUD 实际未显示且聊天栏被跳过的双重丢失。
-                boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
+                boolean notify = state.autoPickupNotify();
                 if (notify) {
                     player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
                 }

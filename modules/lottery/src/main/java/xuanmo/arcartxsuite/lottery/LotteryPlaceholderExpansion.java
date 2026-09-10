@@ -4,6 +4,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -77,28 +78,34 @@ public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
 
         String type = parts[0].toLowerCase();
         String poolId = parts[1];
+        Player onlinePlayer = player.getPlayer();
 
         switch (type) {
             case "pity5" -> {
-                var state = service.getGachaState(player.getPlayer(), poolId);
+                if (onlinePlayer == null) return "0";
+                var state = service.getGachaState(onlinePlayer, poolId);
                 return String.valueOf(state.pity5star());
             }
             case "pity4" -> {
-                var state = service.getGachaState(player.getPlayer(), poolId);
+                if (onlinePlayer == null) return "0";
+                var state = service.getGachaState(onlinePlayer, poolId);
                 return String.valueOf(state.pity4star());
             }
             case "opens" -> {
-                var state = service.getCaseState(player.getPlayer(), poolId);
+                if (onlinePlayer == null) return "0";
+                var state = service.getCaseState(onlinePlayer, poolId);
                 return String.valueOf(state.openCount());
             }
             case "guaranteed" -> {
-                var state = service.getGachaState(player.getPlayer(), poolId);
+                if (onlinePlayer == null) return service.message("placeholder.guaranteed-no");
+                var state = service.getGachaState(onlinePlayer, poolId);
                 return state.guaranteedUp()
                     ? service.message("placeholder.guaranteed-yes")
                     : service.message("placeholder.guaranteed-no");
             }
             case "fatepoints" -> {
-                var state = service.getGachaState(player.getPlayer(), poolId);
+                if (onlinePlayer == null) return "0";
+                var state = service.getGachaState(onlinePlayer, poolId);
                 return String.valueOf(state.fatePoints());
             }
         }

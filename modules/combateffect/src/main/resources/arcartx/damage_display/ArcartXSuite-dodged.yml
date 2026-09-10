@@ -7,7 +7,7 @@ ArcartXSuite-dodged:
   textureHeight: 66
   randomMin: 0
   randomMax: 0.2
-  # 闪避飘字固定 damage=0，永远不显示小数，因此不配置 decimalPlaces 与小数点贴图。
+  # 闪避飘字固定 damage=0，永远不显示小数，因此不配置 decimalPlaces 与小数点贴图，且只需要将0的贴图（什么图的都行）
   textures:
     - "damage/dodged/0.png"
     - "damage/dodged/1.png"

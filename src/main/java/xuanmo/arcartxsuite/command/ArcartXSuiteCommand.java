@@ -233,7 +233,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage(PREFIX + ChatColor.GRAY + "命令用法:");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " status" + ChatColor.GRAY + " - 查看模块状态");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " reload [all|<module>]" + ChatColor.GRAY + " - 重载模块（onDisable + onEnable）");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " reload [all|<module>]" + ChatColor.GRAY + " - 重载本体配置+模块（all）或仅指定模块");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " load <module>" + ChatColor.GRAY + " - 热加载新模块（从 modules/ 扫描）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " unload <module>" + ChatColor.GRAY + " - 热卸载模块（释放 ClassLoader）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " update <module|all>" + ChatColor.GRAY + " - 从云端强制更新模块到最新版本并热加载");
@@ -358,8 +358,13 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             return true;
         }
         if (args.length < 2 || "all".equalsIgnoreCase(args[1])) {
+            // 先热重载本体 config.yml + 可安全热重载的子系统，再重载全部模块
+            plugin.reloadCoreConfig();
             registry.reloadAll();
-            sender.sendMessage(PREFIX + ChatColor.GREEN + "已重载全部模块。");
+            sender.sendMessage(PREFIX + ChatColor.GREEN + "已重载本体配置及全部模块。");
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "以下配置需重启服务器才能生效: "
+                + ChatColor.GRAY + "数据源切换(storage)、跨服后端(cross-server)、"
+                + "二级密码存储(secondary-password)、多方认证(auth)、ArcartX桥接(tacz-compat)、聊天签名绕过(chat-sign-bypass)");
             return true;
         }
         String moduleId = args[1].toLowerCase(Locale.ROOT);

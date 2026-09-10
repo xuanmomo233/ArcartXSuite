@@ -74,7 +74,7 @@ public class GachaEngine {
             }
 
             if (results.get(results.size() - 1) == null) {
-                return new GachaResult(List.of(), state, state.guaranteedUp(), fateTriggered);
+                results.remove(results.size() - 1);
             }
 
             // 更新 state（使用新的 record 实例）

@@ -334,7 +334,7 @@ public class LotteryService {
         if (result != null && result.item() != null) {
             distributeOrEnqueue(player, poolId, result.item());
         }
-        if (result != null) awardPoints(player, poolDef, List.of(result.item()));
+        if (result != null && result.item() != null) awardPoints(player, poolDef, List.of(result.item()));
 
         return result;
     }
@@ -373,7 +373,7 @@ public class LotteryService {
             }
         });
         for (CaseResult result : results) {
-            if (result != null) awardPoints(player, poolDef, List.of(result.item()));
+            if (result != null && result.item() != null) awardPoints(player, poolDef, List.of(result.item()));
         }
 
         return results;
@@ -422,7 +422,8 @@ public class LotteryService {
      */
     public int claimPending(@NotNull Player player) {
         int claimed = 0;
-        for (LotteryRepository.PendingClaim claim : repository.getPendingClaims(player.getUniqueId())) {
+        List<LotteryRepository.PendingClaim> pending = repository.getPendingClaims(player.getUniqueId());
+        for (LotteryRepository.PendingClaim claim : pending) {
             if (claim.itemData() == null || claim.itemData().isBlank()) {
                 continue;
             }
@@ -449,7 +450,7 @@ public class LotteryService {
         if (claimed > 0) {
             sendMessage(player, "common.pending-claim-claimed", claimed);
         }
-        int remaining = repository.getPendingClaims(player.getUniqueId()).size();
+        int remaining = pending.size() - claimed;
         if (remaining > 0) {
             sendMessage(player, "common.pending-claim-available", remaining);
         }
@@ -780,9 +781,25 @@ public class LotteryService {
     private String resolveSharedPoolId(String poolId) {
         PoolDefinition pool = configuration.pools().get(poolId);
         if (pool == null || pool.type() != PoolType.GACHA || pool.gacha() == null) return poolId;
+        // 优先使用奖池内显式声明的 shared-pity-group
         String group = pool.gacha().sharedPityGroup();
-        if (group == null || group.isBlank()) return poolId;
-        return group; // 以 group name 作为 pool_id 存储
+        if (group != null && !group.isBlank()) return group;
+        // 其次用顶层 shared-pity-groups 通配符匹配
+        Map<String, String> topGroups = configuration.sharedPityGroups();
+        if (topGroups != null) {
+            for (var entry : topGroups.entrySet()) {
+                if (matchesWildcard(poolId, entry.getValue())) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return poolId;
+    }
+
+    private static boolean matchesWildcard(String text, String pattern) {
+        if (pattern == null || pattern.isBlank()) return false;
+        String regex = pattern.replace(".", "\\.").replace("*", ".*");
+        return text.matches(regex);
     }
 
     // ─── 历史记录 ─────────────────────────────────────────

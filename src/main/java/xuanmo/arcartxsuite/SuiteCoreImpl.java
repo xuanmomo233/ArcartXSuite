@@ -614,6 +614,54 @@ public final class SuiteCoreImpl implements SuiteCore {
         clientPacketGuard.start();
     }
 
+    // ─── 本体 config 热重载 ───────────────────────────────────
+
+    /**
+     * 热重载宿主 config.yml 并刷新可安全热重载的子系统。
+     * <p>
+     * 以下子系统会立即生效：
+     * <ul>
+     *   <li>ClientPacketGuard（客户端包频率限制配置）</li>
+     *   <li>KeybindService（全局按键定义 keybinds 节；模块注册的 handler 会在后续 reloadAll 时重新注册）</li>
+     *   <li>多边形选区 wand 物品（selection.wand-item）</li>
+     *   <li>全局桥接（currencies / attribute-bridges，由 ModuleRegistry.reloadAll 内部重新初始化）</li>
+     *   <li>配置诊断（重新跑一轮全量诊断）</li>
+     * </ul>
+     * 以下子系统<strong>不会</strong>热重载，需重启服务器生效：
+     * <ul>
+     *   <li>统一数据源（storage.mode SQLite↔MySQL 切换）</li>
+     *   <li>跨服传输（cross-server Redis/Proxy 后端）</li>
+     *   <li>统一二级密码（security.secondary-password 存储模式）</li>
+     *   <li>多方认证（auth.enabled / auth.mixed-proxy-port / auth.yggdrasil-source）</li>
+     *   <li>ArcartX 桥接（tacz-compat）</li>
+     *   <li>聊天签名绕过（chat-sign-bypass）</li>
+     * </ul>
+     */
+    public void reloadCoreConfig() {
+        // 1. 重新读取 config.yml
+        reloadConfig();
+
+        // 2. ClientPacketGuard
+        reloadClientPacketGuard();
+
+        // 3. KeybindService — 先 shutdown 清理旧按键注册，再 initialize 重新注册
+        if (keybindService != null) {
+            keybindService.shutdown();
+            keybindService.initialize(getConfig());
+        }
+
+        // 4. 多边形选区 wand 物品
+        if (polygonSelectionManager != null) {
+            String selectionWand = getConfig().getString("selection.wand-item", "STICK");
+            polygonSelectionManager.setWandMaterial(selectionWand);
+        }
+
+        // 5. 重新跑一轮全量配置诊断（只报警，不写盘）
+        runConfigDiagnosis(null, false);
+
+        consoleInfo("宿主 config.yml 已热重载（部分子系统需重启生效，详见 /axs reload 提示）。");
+    }
+
     // ─── 资源/输出辅助 ────────────────────────────────────────
 
     private void ensureRootConfigExists() {

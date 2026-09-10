@@ -145,7 +145,6 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         Map<String, Object> payload = new LinkedHashMap<>();
         List<PoolItem> items = result == null ? List.of() : result.items();
         payload.put("resultCount", items.size());
-        Map<String, Object> jsons = new LinkedHashMap<>();
         Map<String, Object> names = new LinkedHashMap<>();
         Map<String, Object> stars = new LinkedHashMap<>();
         Map<String, Object> ups = new LinkedHashMap<>();
@@ -154,13 +153,13 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             PoolItem item = items.get(i);
             String key = Integer.toString(i + 1);
             LotteryService.GachaItemInfo info = service.describeGachaItem(pool, item);
-            jsons.put(key, poolItemJson(player, item));
+            // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.resultItemJsons
+            payload.put("resultItemJson" + key, poolItemJson(player, item));
             names.put(key, item.name());
             stars.put(key, info.star());
             ups.put(key, info.up());
             highest = Math.max(highest, info.star());
         }
-        payload.put("resultItemJsons", jsons);
         payload.put("resultItemNames", names);
         payload.put("resultItemStars", stars);
         payload.put("resultItemUps", ups);
@@ -185,20 +184,19 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private void sendCaseBatch(Player player, List<CaseResult> results, int count) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        Map<String, Object> jsons = new LinkedHashMap<>();
         Map<String, Object> names = new LinkedHashMap<>();
         Map<String, Object> rarities = new LinkedHashMap<>();
         for (int i = 0; i < results.size(); i++) {
             CaseResult result = results.get(i);
             PoolItem item = result == null ? null : result.item();
             String key = Integer.toString(i + 1);
-            jsons.put(key, item == null ? "" : poolItemJson(player, item));
+            // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.batchItemJsons
+            payload.put("batchItemJson" + key, item == null ? "" : poolItemJson(player, item));
             names.put(key, item == null ? "" : item.name());
             rarities.put(key, result == null ? "" : result.rarity());
         }
         payload.put("batchCount", results.size());
         payload.put("batchRequested", count);
-        payload.put("batchItemJsons", jsons);
         payload.put("batchItemNames", names);
         payload.put("batchItemRarities", rarities);
         packetBridge.sendPacket(player, caseUiId, "batch_result", payload);
@@ -262,7 +260,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private List<String> descriptionLines(String description) {
         if (description == null || description.isEmpty()) return List.of();
-        String normalized = description.replace("\n", "\n").replace('\r', '\n');
+        String normalized = description.replace("\\n", "\n").replace('\r', '\n');
         String[] lines = normalized.split("\\\\n|\\n", -1);
         List<String> colored = new ArrayList<>(lines.length);
         for (String line : lines) {
@@ -279,18 +277,17 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resourceRows", resourceRows(player, pool.cost()));
         payload.put("upItemIcon", upItemIconJson(player, pool));
         if (pool.caseConfig() == null) return;
-        Map<String, Object> jsons = new LinkedHashMap<>();
         Map<String, Object> names = new LinkedHashMap<>();
         Map<String, Object> rarities = new LinkedHashMap<>();
         List<PoolItem> items = pool.caseConfig().items();
         for (int i = 0; i < items.size() && i < CASE_PREVIEW_SLOT_LIMIT; i++) {
             PoolItem item = items.get(i);
             String key = Integer.toString(i + 1);
-            jsons.put(key, poolItemJson(player, item));
+            // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.itemJsons
+            payload.put("itemJson" + key, poolItemJson(player, item));
             names.put(key, item.name());
             rarities.put(key, item.rarity() == null ? "" : item.rarity());
         }
-        payload.put("itemJsons", jsons);
         payload.put("itemNames", names);
         payload.put("itemRarities", rarities);
         payload.put("itemCount", Math.min(items.size(), CASE_PREVIEW_SLOT_LIMIT));

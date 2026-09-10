@@ -7,7 +7,7 @@
 # 若服务端只回 update（消耗不足等失败情形），等待态会被自动解除，界面不会卡死。
 ui:
   isHud: false
-  defaultOpen: false
+
   hide:
     - hotbar
     - experience_bar
@@ -40,7 +40,8 @@ ui:
     #   - costTenRows: 十连消耗条目，结构同上
     #   - tenAvailable: 当前奖池是否配置了十连消耗，false 时隐藏十连按钮
     #   - resourceRows: 当前奖池涉及的资源余额（含 displayName/icon/owned）
-    #   - itemJsons / itemNames / itemRarities / itemCount: 奖池预览物品（key 为 "1" 起的数字字符串）
+    #   - itemJsonN: 各预览物品 itemJson（分离模式，N 为序号）
+    #   - itemNames / itemRarities / itemCount: 奖池预览物品（key 为 "1" 起的数字字符串）
     # 说明: owned 为 -1 表示余额未知（外部货币桥不可用），界面显示 "—" 且不判定为不足。
     init: |-
       var.air = '{"id":"minecraft:air","Count":1b}'
@@ -54,10 +55,20 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
-      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
       var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.itemJsons
+      var.itemJsons = {}
+      for(i in range(1, var.itemCount.round())){
+        key = i.round()
+        json = packet['itemJson' + key]
+        if(json != none && json != ''){
+          var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.air
+        }
+      }
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
       目标数 = var.itemCount.round()
@@ -73,7 +84,7 @@ ui:
         val.奖励网格['奖励卡片']['物品槽'].entryKey = 1
         val.奖励网格['奖励卡片']['物品名'].entryKey = 1
         if(目标数 > 1){
-          for(i in range(1, 目标数)){
+          for(i in range(1, 目标数 - 1)){
             e = val.奖励网格['奖励卡片'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
             e.entryKey = (i + 1).round()
             e['卡片底'].entryKey = (i + 1).round()
@@ -83,7 +94,7 @@ ui:
           }
         }
       }
-      for(i in range(1, 目标数 + 1)){
+      for(i in range(1, 目标数)){
         if(i == 1){
           e = val.奖励网格['奖励卡片']
         }elif(val.奖励网格.childrenCount() > i - 1){
@@ -109,7 +120,7 @@ ui:
         动画首项['稀有度条'].entryKey = 1
         动画首项['物品槽'].entryKey = 1
         动画首项['物品名'].entryKey = 1
-        for(i in range(1, 动画带数量)){
+        for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
@@ -124,14 +135,14 @@ ui:
         }
         var.动画带基数 = 目标数
       }
-      for(i in range(1, val.动画卡片带.childrenCount())){
+      for(i in range(1, val.动画卡片带.childrenCount() - 1)){
         e = val.动画卡片带.get(i.round())
         if(e != none){
           e['物品槽'].seticon()
         }
       }
       // 消耗区与资源栏: 刷新图标
-      for(i in range(0, 4)){
+      for(i in range(0, 3)){
         key = i.round()
         e = val.消耗区['消耗条目' + key]
         if(e != none){
@@ -157,10 +168,20 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
-      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
       var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.itemJsons
+      var.itemJsons = {}
+      for(i in range(1, var.itemCount.round())){
+        key = i.round()
+        json = packet['itemJson' + key]
+        if(json != none && json != ''){
+          var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.air
+        }
+      }
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
       目标数 = var.itemCount.round()
@@ -176,7 +197,7 @@ ui:
         val.奖励网格['奖励卡片']['物品槽'].entryKey = 1
         val.奖励网格['奖励卡片']['物品名'].entryKey = 1
         if(目标数 > 1){
-          for(i in range(1, 目标数)){
+          for(i in range(1, 目标数 - 1)){
             e = val.奖励网格['奖励卡片'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
             e.entryKey = (i + 1).round()
             e['卡片底'].entryKey = (i + 1).round()
@@ -186,7 +207,7 @@ ui:
           }
         }
       }
-      for(i in range(1, 目标数 + 1)){
+      for(i in range(1, 目标数)){
         if(i == 1){
           e = val.奖励网格['奖励卡片']
         }elif(val.奖励网格.childrenCount() > i - 1){
@@ -212,7 +233,7 @@ ui:
         动画首项['稀有度条'].entryKey = 1
         动画首项['物品槽'].entryKey = 1
         动画首项['物品名'].entryKey = 1
-        for(i in range(1, 动画带数量)){
+        for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
@@ -227,13 +248,13 @@ ui:
         }
         var.动画带基数 = 目标数
       }
-      for(i in range(1, val.动画卡片带.childrenCount())){
+      for(i in range(1, val.动画卡片带.childrenCount() - 1)){
         e = val.动画卡片带.get(i.round())
         if(e != none){
           e['物品槽'].seticon()
         }
       }
-      for(i in range(0, 4)){
+      for(i in range(0, 3)){
         key = i.round()
         e = val.消耗区['消耗条目' + key]
         if(e != none){
@@ -279,11 +300,22 @@ ui:
     # 包字段:
     #   - batchCount: 实际结果数量
     #   - batchRequested: 请求数量
-    #   - batchItemJsons / batchItemNames / batchItemRarities: 结果映射（key 为 "1" 起的数字字符串）
+    #   - batchItemJsonN: 各物品 itemJson（分离模式，N 为序号）
+    #   - batchItemNames / batchItemRarities: 结果映射（key 为 "1" 起的数字字符串）
     batch_result: |-
       var.batchCount = packet['batchCount'] != none ? packet['batchCount'] : 0
       var.batchRequested = packet['batchRequested'] != none ? packet['batchRequested'] : 0
-      var.batchItemJsons = packet['batchItemJsons'] != none ? packet['batchItemJsons'] : {}
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.batchItemJsons
+      var.batchItemJsons = {}
+      for(i in range(1, var.batchCount.round())){
+        key = i.round()
+        json = packet['batchItemJson' + key]
+        if(json != none && json != ''){
+          var.batchItemJsons[key] = json
+        } else {
+          var.batchItemJsons[key] = var.air
+        }
+      }
       var.batchItemNames = packet['batchItemNames'] != none ? packet['batchItemNames'] : {}
       var.batchItemRarities = packet['batchItemRarities'] != none ? packet['batchItemRarities'] : {}
       var.resultPending = true
@@ -302,7 +334,7 @@ ui:
         val.十连网格['十连卡片']['物品名'].entryKey = 1
         val.十连网格['十连卡片']['稀有度名'].entryKey = 1
         if(目标数 > 1){
-          for(i in range(1, 目标数)){
+          for(i in range(1, 目标数 - 1)){
             e = val.十连网格['十连卡片'].copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
             e.entryKey = (i + 1).round()
             e['卡片底'].entryKey = (i + 1).round()
@@ -313,7 +345,7 @@ ui:
           }
         }
       }
-      for(i in range(1, 目标数 + 1)){
+      for(i in range(1, 目标数)){
         if(i == 1){
           e = val.十连网格['十连卡片']
         }elif(val.十连网格.childrenCount() > i - 1){
@@ -498,7 +530,6 @@ ui:
         val.十连结果层.visible = true
         val.主面板.visible = false
       }
-  defaultOpen: true  # 界面打开时自动触发 open 事件
 
 # ─── 控件树（书写顺序即叠层顺序，弹层写在最后）────────────────────
 controls:
@@ -701,7 +732,7 @@ controls:
                   spaceBetween: 22
                 action:
                   create: |-
-                    for(i in range(0, 4)){
+                    for(i in range(0, 3)){
                       key = i.round()
                       e = self['消耗条目'].copy('消耗条目' + key)
                       e.entryKey = key
@@ -970,7 +1001,7 @@ controls:
               spaceBetween: 24
             action:
               create: |-
-                for(i in range(0, 4)){
+                for(i in range(0, 3)){
                   key = i.round()
                   e = self['资源条目'].copy('资源条目' + key)
                   e.entryKey = key
@@ -1614,7 +1645,7 @@ controls:
                   spaceBetweenY: 12
                 action:
                   create: |-
-                    for(i in range(0, 20)){
+                    for(i in range(0, 19)){
                       key = i.round()
                       e = self['历史行'].copy('历史行' + key)
                       e.entryKey = key
@@ -1774,7 +1805,7 @@ controls:
                   spaceBetweenY: 12
                 action:
                   create: |-
-                    for(i in range(0, 45)){
+                    for(i in range(0, 44)){
                       key = i.round()
                       e = self['详情行'].copy('详情行' + key)
                       e.entryKey = key

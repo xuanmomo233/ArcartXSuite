@@ -579,8 +579,12 @@ public final class ModuleRegistry {
 
     /**
      * 重载所有已启用的模块。
+     * <p>
+     * 重载前先重新初始化全局桥接（currencies / attribute-bridges 等从宿主 config.yml 读取的配置），
+     * 确保本体 config 的变更在 reloadAll 时一并生效。
      */
     public void reloadAll() {
+        initializeGlobalBridges();
         for (LoadedModule loaded : modules.values()) {
             if (loaded.isEnabled()) {
                 reloadModule(loaded.descriptor().id());
