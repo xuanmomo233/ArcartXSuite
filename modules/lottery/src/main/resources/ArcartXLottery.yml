@@ -7,7 +7,7 @@ ui:
   # 是否强制覆盖用户已修改的 UI 文件。
   overwrite-ui-files: false
   # 祈愿（GACHA）界面 UI ID。
-  gacha-ui-id: "AXS:lottery_gacha"
+  gacha-ui-id: "AXS:lottery_wish"
   # 开箱（CASE）界面 UI ID。
   case-ui-id: "AXS:lottery_case"
 
