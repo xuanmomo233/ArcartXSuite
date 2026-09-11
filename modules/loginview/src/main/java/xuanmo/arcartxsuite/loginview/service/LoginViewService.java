@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.loginview.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
+import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -63,6 +64,8 @@ public final class LoginViewService implements Listener {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         .withZone(ZoneId.systemDefault());
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String RANDOM_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -260,6 +263,68 @@ public final class LoginViewService implements Listener {
     public String uiId() {
         return uiId;
     }
+
+    /**
+     * 管理员重置指定玩家的登录密码（仅 standalone 模式）。
+     * <p>
+     * 重置成功后立即删除该玩家的持久化 session 与在线认证状态；
+     * 若玩家在线，会收到提示并被重新弹出登录界面。
+     *
+     * @param playerName  目标玩家名
+     * @param newPassword 新密码；为 null 或空白时自动生成随机密码
+     * @return 重置结果；成功时 detail 为生效密码，ERROR 时 detail 为错误描述
+     */
+    public ResetOutcome adminResetPassword(String playerName, String newPassword) {
+        if (configuration.authMode() == AuthMode.AUTHME) {
+            return new ResetOutcome(ResetStatus.AUTHME_MODE, null);
+        }
+        String effective = (newPassword == null || newPassword.isBlank())
+            ? generateRandomPassword()
+            : newPassword;
+        if (effective.length() < configuration.security().minPasswordLength()) {
+            return new ResetOutcome(ResetStatus.PASSWORD_TOO_SHORT, null);
+        }
+        if (effective.length() > configuration.security().maxPasswordLength()) {
+            return new ResetOutcome(ResetStatus.PASSWORD_TOO_LONG, null);
+        }
+        try {
+            LoginViewAccount account = repository.find(playerName).orElse(null);
+            if (account == null) {
+                return new ResetOutcome(ResetStatus.NOT_REGISTERED, null);
+            }
+            repository.updatePassword(account.realName(), passwordHasher.hash(effective), LoginViewPasswordHasher.AXS_ALGORITHM);
+
+            Player online = Bukkit.getPlayerExact(account.realName());
+            UUID uuid = online != null
+                ? online.getUniqueId()
+                : Bukkit.getOfflinePlayer(account.realName()).getUniqueId();
+            repository.deleteSession(uuid);
+            if (online != null) {
+                authenticatedPlayers.remove(uuid);
+                failedAttempts.remove(uuid);
+                online.sendMessage(color(messages.get("reset-notify-player")));
+                AxsScheduler.runTask(plugin, () -> openFor(online, true));
+            }
+            return new ResetOutcome(ResetStatus.SUCCESS, effective);
+        } catch (SQLException exception) {
+            return new ResetOutcome(ResetStatus.ERROR, exception.getMessage());
+        }
+    }
+
+    private String generateRandomPassword() {
+        int length = Math.min(
+            Math.max(configuration.security().minPasswordLength(), 10),
+            configuration.security().maxPasswordLength());
+        StringBuilder builder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            builder.append(RANDOM_PASSWORD_ALPHABET.charAt(RANDOM.nextInt(RANDOM_PASSWORD_ALPHABET.length())));
+        }
+        return builder.toString();
+    }
+
+    public enum ResetStatus { SUCCESS, AUTHME_MODE, NOT_REGISTERED, PASSWORD_TOO_SHORT, PASSWORD_TOO_LONG, ERROR }
+
+    public record ResetOutcome(ResetStatus status, String detail) {}
 
     public AccountType accountType(OfflinePlayer player) {
         return accountTypeService.resolve(player);

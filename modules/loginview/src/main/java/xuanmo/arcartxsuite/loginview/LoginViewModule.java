@@ -46,7 +46,7 @@ import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
  */
 public final class LoginViewModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "migrate-authme", "migration-commands", "set-spawn");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "migrate-authme", "migration-commands", "set-spawn", "reset-password");
     private LoginViewModuleConfiguration configuration;
     private LoginViewService service;
     private LoginViewRepository repository;
@@ -139,6 +139,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             case "migrate-authme" -> migrateAuthMe(sender, args);
             case "migration-commands" -> sendMigrationCommands(sender);
             case "set-spawn" -> setSpawn(sender);
+            case "reset-password" -> resetPassword(sender, args);
             default -> {
                 sender.sendMessage(msg("common.unknown-command", action));
                 sendHelp(sender, label, args[0]);
@@ -152,7 +153,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         if (args.length == 2) {
             return filter(ACTIONS, args[1]);
         }
-        if (args.length == 3 && "open".equalsIgnoreCase(args[1])) {
+        if (args.length == 3 && ("open".equalsIgnoreCase(args[1]) || "reset-password".equalsIgnoreCase(args[1]))) {
             List<String> names = new ArrayList<>();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 names.add(player.getName());
@@ -292,6 +293,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         sender.sendMessage(msg("help.migrate", commandPrefix));
         sender.sendMessage(msg("help.migration-commands", commandPrefix));
         sender.sendMessage(msg("help.set-spawn", commandPrefix));
+        sender.sendMessage(msg("help.reset-password", commandPrefix));
         sender.sendMessage(msg("help.setup-authlib", commandPrefix));
     }
 
@@ -363,6 +365,28 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         sender.sendMessage(msg("migration.step2"));
         sender.sendMessage(msg("migration.step3"));
         sender.sendMessage(msg("migration.step4"));
+    }
+
+    private void resetPassword(CommandSender sender, String[] args) {
+        if (service == null) {
+            sender.sendMessage(msg("common.service-down"));
+            return;
+        }
+        if (args.length < 3) {
+            sender.sendMessage(msg("reset.usage"));
+            return;
+        }
+        String target = args[2];
+        String newPassword = args.length >= 4 ? args[3] : null;
+        LoginViewService.ResetOutcome outcome = service.adminResetPassword(target, newPassword);
+        switch (outcome.status()) {
+            case SUCCESS -> sender.sendMessage(msg("reset.success", target, outcome.detail()));
+            case AUTHME_MODE -> sender.sendMessage(msg("reset.authme-mode"));
+            case NOT_REGISTERED -> sender.sendMessage(msg("reset.not-registered", target));
+            case PASSWORD_TOO_SHORT -> sender.sendMessage(msg("password-too-short"));
+            case PASSWORD_TOO_LONG -> sender.sendMessage(msg("password-too-long"));
+            case ERROR -> sender.sendMessage(msg("reset.failed", outcome.detail()));
+        }
     }
 
     private void setSpawn(CommandSender sender) {
