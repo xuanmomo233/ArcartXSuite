@@ -12,8 +12,9 @@ description: |-  # 卡池描述文本
   5星保底90抽，4星保底10抽，UP角色概率50%。
 # UP 物品图标
 up-item-icon:
-  source: "mythicmobs"
-  id: "LottoStarCharacter"
+  material: NETHER_STAR
+  name: "星辰"
+up-item-desc: "五星角色「星辰」获取概率大幅提升"
 # 未配置 up-item-icon 时自动使用 UP 5星奖品（CASE 池为最高稀有度奖品）的物品作为图标；up-item-icon 配置可以省略。
 # 奖品未配置 icon 时使用该奖品 item 生成的物品作为图标。
 # 图标配置分为物品库物品与自定义物品，两种写法二选一。
@@ -66,12 +67,12 @@ up-item-icon:
 cost:
   single:
     - type: CURRENCY           # 资源类型：CURRENCY（货币，需填 id）
-      id: "gem"                # 货币 ID
+      id: "gold"               # 货币 ID
       amount: 160              # 扣除数量（正整数）
-      display-name: "原石"      # UI 显示名称
+      display-name: "金币"      # UI 显示名称
       icon:                    # 消耗图标（写法同 up-item-icon）
         material: DIAMOND
-        name: "原石"
+        name: "金币"
     - type: ITEM               # 资源类型：ITEM（物品，需 matcher 匹配背包物品，禁止填 id）
       amount: 1                # 扣除数量（正整数）
       display-name: "纠缠之缘"  # UI 显示名称
@@ -95,16 +96,16 @@ cost:
           - AMETHYST_SHARD
         lore-contains:         # Lore 必须包含"纠缠之缘"（去颜色码后匹配）
           - "纠缠之缘"
-        nbt-values:            # NBT 键值校验：键 axs:lottery_token 的值必须为 intertwined_fate
-          axs:lottery_token: "intertwined_fate"
+        nbt-values:            # NBT 键值校验：键 lottery 的值必须为 intertwined_fate
+          lottery: "intertwined_fate"
   ten:
     - type: CURRENCY           # 资源类型：CURRENCY（同 single 第一条）
-      id: "gem"                # 货币 ID
+      id: "gold"               # 货币 ID
       amount: 1600             # 扣除数量（十连为 1600）
-      display-name: "原石"      # UI 显示名称
+      display-name: "金币"      # UI 显示名称
       icon:                    # 消耗图标（同 single）
         material: DIAMOND
-        name: "原石"
+        name: "金币"
     - type: ITEM               # 资源类型：ITEM（同 single 第二条）
       amount: 10               # 扣除数量（十连为 10）
       display-name: "纠缠之缘"  # UI 显示名称
@@ -117,7 +118,7 @@ cost:
         lore-contains:
           - "纠缠之缘"
         nbt-values:
-          axs:lottery_token: "intertwined_fate"
+          lottery: "intertwined_fate"
 
 # 积分产出规则：gacha 的 rarity key 使用星级（3/4/5），case 使用奖池中定义的 rarity 名称
 points:
@@ -146,9 +147,11 @@ gacha:  # 祈愿机制参数
     star_character:
       name: "星辰"  # 物品显示名称
       item:
-        source: mythicmobs
-        id: "LottoStarCharacter"
-      # 未配置 icon 时使用 item 生成的物品作为图标。
+        source: minecraft
+        id: "minecraft:nether_star"
+      icon:
+        material: NETHER_STAR
+        name: "星辰"
       delivery: DIRECT  # 发放方式：DIRECT（直接发放）
       weight: 1  # 权重（同池内相对概率）
 
@@ -156,8 +159,11 @@ gacha:  # 祈愿机制参数
     moon_character:
       name: "月影"
       item:
-        source: mythicmobs
-        id: "MoonCharacter"
+        source: minecraft
+        id: "minecraft:ender_eye"
+      icon:
+        material: ENDER_EYE
+        name: "月影"
       delivery: DIRECT
       weight: 1
 
@@ -165,8 +171,11 @@ gacha:  # 祈愿机制参数
     star_sword:
       name: "星光剑"
       item:
-        source: neigeitems
-        id: "StarSword"
+        source: minecraft
+        id: "minecraft:golden_sword"
+      icon:
+        material: GOLDEN_SWORD
+        name: "星光剑"
       delivery: DIRECT
       weight: 1
 
@@ -174,8 +183,11 @@ gacha:  # 祈愿机制参数
     wind_bow:
       name: "风之弓"
       item:
-        source: neigeitems
-        id: "WindBow"
+        source: minecraft
+        id: "minecraft:bow"
+      icon:
+        material: BOW
+        name: "风之弓"
       delivery: DIRECT
       weight: 1
 
@@ -185,6 +197,9 @@ gacha:  # 祈愿机制参数
       item:
         source: minecraft
         id: "minecraft:stone"
+      icon:
+        material: STONE
+        name: "普通材料"
       delivery: DIRECT
       weight: 1
 
@@ -195,4 +210,7 @@ gacha:  # 祈愿机制参数
       delivery: COMMAND
       commands:
         - "give {player} minecraft:stone 1"
+      icon:
+        material: STONE
+        name: "命令奖励示例"
       weight: 1

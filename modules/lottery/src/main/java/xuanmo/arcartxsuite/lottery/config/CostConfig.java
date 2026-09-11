@@ -209,8 +209,14 @@ public record CostConfig(
     ) {
         public CostEntry {
             if (amount <= 0) throw new IllegalArgumentException("Cost amount must be positive");
-            if (type == CostMode.ITEM && (matcher == null || matcher.emptyMatcher())) {
-                throw new IllegalArgumentException("ITEM cost requires a non-empty matcher");
+            if (type == CostMode.ITEM) {
+                if (matcher == null || matcher.emptyMatcher()) {
+                    throw new IllegalArgumentException("ITEM cost requires a non-empty matcher");
+                }
+            } else {
+                if (id == null || id.isBlank()) {
+                    throw new IllegalArgumentException(type + " cost requires a non-empty id");
+                }
             }
         }
     }

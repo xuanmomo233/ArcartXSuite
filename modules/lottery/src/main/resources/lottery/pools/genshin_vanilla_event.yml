@@ -13,6 +13,7 @@ description: |-
 up-item-icon:
   material: NETHER_STAR
   name: "星辰之核"
+up-item-desc: "五星物品「星辰之核」获取概率大幅提升"
 
 # 消耗配置：single=单抽消耗条目列表，ten=十连消耗条目列表（十连不做倍数换算，未配置则不提供十连）。
 # 每个条目通过 type 区分资源类型：
@@ -61,7 +62,7 @@ cost:
         lore-contains:
           - "纠缠之缘"
         nbt-values:
-          axs:lottery_token: "intertwined_fate"
+          lottery: "intertwined_fate"
 
 points:
   stardust:

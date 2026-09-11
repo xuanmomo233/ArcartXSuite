@@ -18,12 +18,14 @@ import org.jetbrains.annotations.Nullable;
  * 由 {@link #load} 从主配置 YAML 与奖池目录加载。
  *
  * @param storage          存储配置
+ * @param ui               UI 配置
  * @param poolsDirectory   奖池文件目录相对路径
- * @param sharedPityGroups 共享保底组名到组 ID 的映射
+ * @param sharedPityGroups 共享保底组映射: key 为共享保底池 ID，value 为匹配奖池 ID 的通配符
  * @param pools            奖池 ID 到奖池定义的映射
  */
 public record LotteryModuleConfiguration(
     StorageConfiguration storage,
+    UiConfiguration ui,
     String poolsDirectory,
     String exchangeDirectory,
     boolean overwriteUiFiles,
@@ -48,24 +50,45 @@ public record LotteryModuleConfiguration(
 
         File poolsDirectory = new File(dataFolder, poolsDir);
         Map<String, PoolDefinition> pools = loadPoolsFromDirectory(poolsDirectory, logger);
-        Map<String, PointDefinition> knownPoints = new LinkedHashMap<>();
-        for (PoolDefinition pool : pools.values()) {
-            for (PointDefinition point : pool.points().values()) {
-                PointDefinition previous = knownPoints.putIfAbsent(point.id(), point);
-                if (previous != null && (!previous.displayName().equals(point.displayName())
-                        || !previous.icon().equals(point.icon()))) {
-                    logger.warning("Lottery point definition conflict, keeping first: " + point.id());
-                }
-            }
-        }
         Map<String, ExchangeShopItem> exchangeItems =
             loadExchangeItems(new File(dataFolder, exchangeDir), logger);
 
         boolean overwriteUiFiles = yaml.getBoolean("ui.overwrite-ui-files", false);
+        UiConfiguration ui = UiConfiguration.load(yaml.getConfigurationSection("ui"));
 
-        return new LotteryModuleConfiguration(storage, poolsDir, exchangeDir, overwriteUiFiles, sharedGroups, pools, exchangeItems);
+        return new LotteryModuleConfiguration(storage, ui, poolsDir, exchangeDir, overwriteUiFiles, sharedGroups, pools, exchangeItems);
     }
 
+    /**
+     * UI 子配置。
+     * <p>
+     * 指定祈愿/开箱界面绑定的 UI ID，允许腐竹将 UI 重映射到自定义 ID。
+     *
+     * @param gachaUiId 祈愿（GACHA）界面 UI ID
+     * @param caseUiId  开箱（CASE）界面 UI ID
+     */
+    public record UiConfiguration(
+        String gachaUiId,
+        String caseUiId
+    ) {
+        /**
+         * 从 {@code ui} 配置节加载 UI 配置。
+         *
+         * @param section 配置节，为 {@code null} 时使用默认值
+         * @return 解析后的 {@link UiConfiguration} 实例
+         */
+        public static UiConfiguration load(@Nullable ConfigurationSection section) {
+            if (section == null) {
+                return new UiConfiguration("AXS:lottery_gacha", "AXS:lottery_case");
+            }
+            return new UiConfiguration(
+                section.getString("gacha-ui-id", "AXS:lottery_gacha"),
+                section.getString("case-ui-id", "AXS:lottery_case")
+            );
+        }
+    }
+
+    /** 加载共享保底组配置: key = 共享保底池 ID，value = 匹配奖池 ID 的通配符。 */
     private static Map<String, String> loadSharedPityGroups(@Nullable ConfigurationSection section) {
         Map<String, String> result = new LinkedHashMap<>();
         if (section == null) return result;

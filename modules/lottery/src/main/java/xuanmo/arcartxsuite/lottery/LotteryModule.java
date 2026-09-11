@@ -99,8 +99,8 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
         UiBinding gachaBinding = getUiBinding(GACHA_UI_FILE);
         UiBinding caseBinding = getUiBinding(CASE_UI_FILE);
-        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : "AXS:lottery_gacha";
-        String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : "AXS:lottery_case";
+        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : configuration.ui().gachaUiId();
+        String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : configuration.ui().caseUiId();
         packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, caseUiId);
         return PacketHandlerSpec.of(packetHandler, 0, null, null);
     }
@@ -164,8 +164,8 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         service.start();
 
         // UI 注册
-        registerModuleUi(GACHA_UI_FILE, "AXS:lottery_gacha", true);
-        registerModuleUi(CASE_UI_FILE, "AXS:lottery_case", true);
+        registerModuleUi(GACHA_UI_FILE, configuration.ui().gachaUiId(), true);
+        registerModuleUi(CASE_UI_FILE, configuration.ui().caseUiId(), true);
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "lottery"; }

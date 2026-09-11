@@ -77,6 +77,25 @@ ui:
           var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
+      // 资源充足检查（owned < 0 表示余额未知，不判定为不足）
+      var.canPull = true
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          row = var.costRows[key]
+          if(row != none && row['owned'] != none && row['owned'] >= 0 && row['amount'] != none && row['owned'] < row['amount']){
+            var.canPull = false
+          }
+        }
+      }
+      var.canPullTen = true
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          row = var.costTenRows[key]
+          if(row != none && row['owned'] != none && row['owned'] >= 0 && row['amount'] != none && row['owned'] < row['amount']){
+            var.canPullTen = false
+          }
+        }
+      }
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
       var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
@@ -166,11 +185,11 @@ ui:
       // 消耗区与资源栏: 刷新图标
       for(i in range(0, 3)){
         key = i.round()
-        e = val.消耗区['消耗条目' + key]
+        e = val.消耗区.get(key)
         if(e != none){
           e['图标'].seticon()
         }
-        r = val.资源栏['资源条目' + key]
+        r = val.资源栏.get(key)
         if(r != none){
           r['图标'].seticon()
         }
@@ -210,6 +229,25 @@ ui:
         for(key in var.resourceRows.keys()){
           json = packet['resourceIconJson' + key]
           var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      // 资源充足检查（owned < 0 表示余额未知，不判定为不足）
+      var.canPull = true
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          row = var.costRows[key]
+          if(row != none && row['owned'] != none && row['owned'] >= 0 && row['amount'] != none && row['owned'] < row['amount']){
+            var.canPull = false
+          }
+        }
+      }
+      var.canPullTen = true
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          row = var.costTenRows[key]
+          if(row != none && row['owned'] != none && row['owned'] >= 0 && row['amount'] != none && row['owned'] < row['amount']){
+            var.canPullTen = false
+          }
         }
       }
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
@@ -300,11 +338,11 @@ ui:
       }
       for(i in range(0, 3)){
         key = i.round()
-        e = val.消耗区['消耗条目' + key]
+        e = val.消耗区.get(key)
         if(e != none){
           e['图标'].seticon()
         }
-        r = val.资源栏['资源条目' + key]
+        r = val.资源栏.get(key)
         if(r != none){
           r['图标'].seticon()
         }
@@ -328,7 +366,7 @@ ui:
       // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
       var.resultItemJsons = {}
       json = packet['resultItemJson1']
-      var.resultItemJsons[1] = json != none && json != '' ? json : var.air
+      var.resultItemJsons[1.round()] = json != none && json != '' ? json : var.air
       var.resultItemName = packet['resultItemName']
       var.resultRarity = packet['resultRarity']
       var.resultPending = true
@@ -404,10 +442,11 @@ ui:
           e['物品槽'].seticon()
         }
       }
-            var.spinTarget = 0.82 + math.random() * 0.04
+      var.spinTarget = 0.82 + math.random() * 0.04
       var.滚动起点 = val.开箱滚动条.moveX
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
+      Sound.self('minecraft:entity.player.levelup', 1.1, 20)
     # packetHandler: history（开箱历史）
     # 包字段:
     #   - historyPoolName: 奖池名称
@@ -417,6 +456,22 @@ ui:
       var.historyPoolName = packet['historyPoolName']
       var.historyCount = packet['historyCount'] != none ? packet['historyCount'] : 0
       var.historyRows = packet['historyRows'] != none ? packet['historyRows'] : {}
+      // 根据实际历史条目数动态创建行
+      for(i in range(0, var.historyCount)){
+        key = i.round()
+        if(i > 0){
+          existing = val.历史列表['历史行' + key]
+          if(existing == none){
+            e = val.历史列表['历史行'].copy('历史行' + key)
+            e['时间'].entryKey = key
+            e['摘要'].entryKey = key
+          }
+        }
+        row = val.历史列表.get(key)
+        if(row != none){
+          row.entryKey = key
+        }
+      }
       val.历史面板.visible = true
     # packetHandler: details（奖池详情）
     # 包字段:
@@ -427,6 +482,23 @@ ui:
       var.detailPoolName = packet['detailPoolName']
       var.detailCount = packet['detailCount'] != none ? packet['detailCount'] : 0
       var.detailRows = packet['detailRows'] != none ? packet['detailRows'] : {}
+      // 根据实际详情条目数动态创建行
+      for(i in range(0, var.detailCount)){
+        key = i.round()
+        if(i > 0){
+          existing = val.详情列表['详情行' + key]
+          if(existing == none){
+            e = val.详情列表['详情行'].copy('详情行' + key)
+            e['名称'].entryKey = key
+            e['稀有度'].entryKey = key
+            e['权重'].entryKey = key
+          }
+        }
+        row = val.详情列表.get(key)
+        if(row != none){
+          row.entryKey = key
+        }
+      }
       val.详情面板.visible = true
   action:
     seconds: |-
@@ -510,6 +582,7 @@ ui:
       val.十连结果层.visible = false
       val.历史面板.visible = false
       val.详情面板.visible = false
+      val.资源不足提示.visible = false
     # tick 事件: 预热、有限减速、命中冲击和结果层表现动画
     tick: |-
       if(var.rolling != none && var.rolling == true && val.开箱滚动条 != none){
@@ -631,7 +704,7 @@ controls:
                 type: Text
                 attribute:
                   through: true
-                  texts: "'&f解锁  ' + (var.poolName != none ? var.poolName : '')"
+                  texts: "'&f解锁  ' + var.poolName"
                   center: false
                   y: 110
                   fontSize: 50
@@ -759,7 +832,7 @@ controls:
                               entryKey: 1.round()
                               point: ~bottom_left
                               through: true
-                              texts: "var.itemNames != none && var.itemNames[self.entryKey] != none ? '&8' + var.itemNames[self.entryKey] : ''"
+                              texts: "var.itemNames[self.entryKey] != none ? '&8' + var.itemNames[self.entryKey] : ''"
                               fontSize: 36
           按键总布局:
             type: Canvas
@@ -779,7 +852,7 @@ controls:
                   spaceBetween: 22
                 action:
                   create: |-
-                    for(i in range(0, 3)){
+                    for(i in range(1, 3)){
                       key = i.round()
                       e = self['消耗条目'].copy('消耗条目' + key)
                       e.entryKey = key
@@ -794,7 +867,7 @@ controls:
                       entryKey: 0.round()
                       width: 260
                       height: 96
-                      visible: "var.costRows != none && var.costRows[self.entryKey] != none"
+                      visible: "var.costRows[self.entryKey] != none"
                     children:
                       图标:
                         type: Slot
@@ -814,7 +887,7 @@ controls:
                           point: ~middle_left
                           x: 110
                           y: -22
-                          texts: "var.costRows != none && var.costRows[self.entryKey] != none && var.costRows[self.entryKey]['displayName'] != none ? '&7' + var.costRows[self.entryKey]['displayName'] : ''"
+                          texts: "var.costRows[self.entryKey] != none ? '&7' + var.costRows[self.entryKey]['displayName'] : ''"
                           fontSize: 40
                       数量:
                         type: Text
@@ -824,7 +897,7 @@ controls:
                           point: ~middle_left
                           x: 110
                           y: 24
-                          texts: "var.costRows != none && var.costRows[self.entryKey] != none ? '&f×' + (var.costRows[self.entryKey]['amount'] != none ? var.costRows[self.entryKey]['amount'].round() : 1) : ''"
+                          texts: "var.costRows[self.entryKey] != none ? '&f×' + var.costRows[self.entryKey]['amount'].round() : ''"
                           fontSize: 49
               开箱按钮:
                 type: Canvas
@@ -838,22 +911,26 @@ controls:
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
-                      var.rolling = true
-                      var.resultPending = false
-                      var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
-                      var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
-                      var.加速 = Expo(0.15, 1.0, 0, 700)
-                      var.滚动起点 = 0.0005
-                      var.滚动曲线 = none
-                      var.中线闪 = Blink(0.45, 1, 400)
-                      var.命中已触发 = false
-                      var.spinV = 1
-                      var.spinTarget = 1
-                      val.开箱滚动条.moveX = 0.0005
-                      val.主面板.visible = false
-                      val.开箱动画层.visible = true
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'open_case', var.actionToken)
+                      if(var.canPull){
+                        var.rolling = true
+                        var.resultPending = false
+                        var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
+                        var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
+                        var.加速 = Expo(0.15, 1.0, 0, 700)
+                        var.滚动起点 = 0.0005
+                        var.滚动曲线 = none
+                        var.中线闪 = Blink(0.45, 1, 400)
+                        var.命中已触发 = false
+                        var.spinV = 1
+                        var.spinTarget = 1
+                        val.开箱滚动条.moveX = 0.0005
+                        val.主面板.visible = false
+                        val.开箱动画层.visible = true
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'open_case', var.actionToken)
+                      } else {
+                        val.资源不足提示.visible = true
+                      }
                     }
                 children:
                   开箱背景:
@@ -886,22 +963,26 @@ controls:
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
-                      var.rolling = true
-                      var.resultPending = false
-                      var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
-                      var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
-                      var.加速 = Expo(0.15, 1.0, 0, 700)
-                      var.滚动起点 = 0.0005
-                      var.滚动曲线 = none
-                      var.中线闪 = Blink(0.45, 1, 400)
-                      var.命中已触发 = false
-                      var.spinV = 1
-                      var.spinTarget = 1
-                      val.开箱滚动条.moveX = 0.0005
-                      val.主面板.visible = false
-                      val.开箱动画层.visible = true
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
+                      if(var.canPullTen){
+                        var.rolling = true
+                        var.resultPending = false
+                        var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
+                        var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
+                        var.加速 = Expo(0.15, 1.0, 0, 700)
+                        var.滚动起点 = 0.0005
+                        var.滚动曲线 = none
+                        var.中线闪 = Blink(0.45, 1, 400)
+                        var.命中已触发 = false
+                        var.spinV = 1
+                        var.spinTarget = 1
+                        val.开箱滚动条.moveX = 0.0005
+                        val.主面板.visible = false
+                        val.开箱动画层.visible = true
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'open_case_batch', '10', var.actionToken)
+                      } else {
+                        val.资源不足提示.visible = true
+                      }
                     }
                 children:
                   十连背景:
@@ -1017,7 +1098,7 @@ controls:
                   through: true
                   point: ~middle_center
                   y: 0
-                  texts: "var.currentPoolIndex != none && var.poolList != none ? '&7' + (var.currentPoolIndex + 1).round() + ' / ' + var.poolList.size().round() : ''"
+                  texts: "'&7' + (var.currentPoolIndex + 1).round() + ' / ' + var.poolList.size().round()"
                   fontSize: 50
           底部分界线总布局:
             type: Canvas
@@ -1048,7 +1129,7 @@ controls:
               spaceBetween: 24
             action:
               create: |-
-                for(i in range(0, 3)){
+                for(i in range(1, 3)){
                   key = i.round()
                   e = self['资源条目'].copy('资源条目' + key)
                   e.entryKey = key
@@ -1063,7 +1144,7 @@ controls:
                   entryKey: 0.round()
                   width: 220
                   height: 60
-                  visible: "var.resourceRows != none && var.resourceRows[self.entryKey] != none"
+                  visible: "var.resourceRows[self.entryKey] != none"
                 children:
                   图标:
                     type: Slot
@@ -1083,7 +1164,7 @@ controls:
                       point: ~middle_left
                       x: 58
                       y: -16
-                      texts: "var.resourceRows != none && var.resourceRows[self.entryKey] != none && var.resourceRows[self.entryKey]['displayName'] != none ? '&7' + var.resourceRows[self.entryKey]['displayName'] : ''"
+                      texts: "var.resourceRows[self.entryKey] != none ? '&7' + var.resourceRows[self.entryKey]['displayName'] : ''"
                       fontSize: 40
                   余额:
                     type: Text
@@ -1093,7 +1174,7 @@ controls:
                       point: ~middle_left
                       x: 58
                       y: 16
-                      texts: "var.resourceRows != none && var.resourceRows[self.entryKey] != none && var.resourceRows[self.entryKey]['owned'] != none ? (var.resourceRows[self.entryKey]['owned'] < 0 ? '&7—' : '&f' + var.resourceRows[self.entryKey]['owned'].round()) : ''"
+                      texts: "var.resourceRows[self.entryKey] != none ? (var.resourceRows[self.entryKey]['owned'] < 0 ? '&7—' : '&f' + var.resourceRows[self.entryKey]['owned'].round()) : ''"
                       fontSize: 40
           功能按钮栏:
             type: Canvas
@@ -1262,7 +1343,7 @@ controls:
                           entryKey: 1.round()
                           point: ~bottom_center
                           y: -8
-                          texts: "var.itemNames != none && var.itemNames[self.entryKey] != none ? '&f' + var.itemNames[self.entryKey] : ''"
+                          texts: "var.itemNames[self.entryKey] != none ? '&f' + var.itemNames[self.entryKey] : ''"
                           fontSize: 24
                           scale: 1.5
           抽奖幕布:
@@ -1316,7 +1397,7 @@ controls:
                   through: true
                   point: ~top_center
                   y: 74
-                  texts: "var.resultItemName != none ? '&f' + var.resultItemName : ''"
+                  texts: "'&f' + var.resultItemName"
                   fontSize: 64
               结果稀有度名:
                 type: Text
@@ -1324,7 +1405,7 @@ controls:
                   through: true
                   point: ~top_center
                   y: 148
-                  texts: "var.resultRarity != none && var.rarityNames != none && var.rarityNames[var.resultRarity] != none ? '&7' + var.rarityNames[var.resultRarity] : (var.rarityNames != none && var.rarityNames['UNKNOWN'] != none ? '&7' + var.rarityNames['UNKNOWN'] : '')"
+                  texts: "var.rarityNames[var.resultRarity] != none ? '&7' + var.rarityNames[var.resultRarity] : '&7' + var.rarityNames['UNKNOWN']"
                   fontSize: 36
               结果稀有度条:
                 type: Texture
@@ -1353,7 +1434,7 @@ controls:
                       height: 280
                       normal: ~0,0,0,0
                       itemScale: "var.出货开始 != none && var.出货开始 > 0 && Time.currentTime() - var.出货开始 < 900 ? (var.出货缩放 != none ? var.出货缩放.get() : 1) : (var.待机呼吸 != none ? var.待机呼吸.get() : 1)"
-                      seticon: "self.setItemIcon(var.resultItemJsons[1])"
+                      seticon: "self.setItemIcon(var.resultItemJsons[1.round()])"
           继续按钮:
             type: Canvas
             attribute:
@@ -1399,22 +1480,26 @@ controls:
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
-                  var.rolling = true
-                  var.resultPending = false
-                  var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
-                  var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
-                  var.加速 = Expo(0.15, 1.0, 0, 700)
-                  var.滚动起点 = 0.0005
-                  var.滚动曲线 = none
-                  var.中线闪 = Blink(0.45, 1, 400)
-                  var.命中已触发 = false
-                  var.spinV = 1
-                  var.spinTarget = 1
-                  val.开箱滚动条.moveX = 0.0005
-                  val.单抽结果层.visible = false
-                  val.开箱动画层.visible = true
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'open_case', var.actionToken)
+                  if(var.canPull){
+                    var.rolling = true
+                    var.resultPending = false
+                    var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
+                    var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
+                    var.加速 = Expo(0.15, 1.0, 0, 700)
+                    var.滚动起点 = 0.0005
+                    var.滚动曲线 = none
+                    var.中线闪 = Blink(0.45, 1, 400)
+                    var.命中已触发 = false
+                    var.spinV = 1
+                    var.spinTarget = 1
+                    val.开箱滚动条.moveX = 0.0005
+                    val.单抽结果层.visible = false
+                    val.开箱动画层.visible = true
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'open_case', var.actionToken)
+                  } else {
+                    val.资源不足提示.visible = true
+                  }
                 }
             children:
               再开一次背景:
@@ -1453,7 +1538,7 @@ controls:
               through: true
               point: ~top_center
               y: 90
-              texts: "'&6本次开出 ' + (var.batchCount != none ? var.batchCount.round() : 0) + ' 件物品'"
+              texts: "'&6本次开出 ' + var.batchCount.round() + ' 件物品"
               fontSize: 52
           十连网格:
             type: HGrid
@@ -1519,7 +1604,7 @@ controls:
                       entryKey: 1.round()
                       point: ~bottom_center
                       y: -44
-                      texts: "var.batchItemNames != none && var.batchItemNames[self.entryKey] != none ? '&f' + (var.batchItemNames[self.entryKey] != none ? var.batchItemNames[self.entryKey] : '') : ''"
+                      texts: "var.batchItemNames[self.entryKey] != none ? '&f' + var.batchItemNames[self.entryKey] : ''"
                       fontSize: 32
                   稀有度名:
                     type: Text
@@ -1528,7 +1613,7 @@ controls:
                       entryKey: 1.round()
                       point: ~bottom_center
                       y: -16
-                      texts: "var.batchItemRarities != none && var.batchItemRarities[self.entryKey] != none && var.rarityNames != none && var.rarityNames[var.batchItemRarities[self.entryKey]] != none ? '&7' + var.rarityNames[var.batchItemRarities[self.entryKey]] : (var.rarityNames != none && var.rarityNames['UNKNOWN'] != none ? '&7' + var.rarityNames['UNKNOWN'] : '')"
+                      texts: "var.rarityNames[var.batchItemRarities[self.entryKey]] != none ? '&7' + var.rarityNames[var.batchItemRarities[self.entryKey]] : '&7' + var.rarityNames['UNKNOWN']"
                       fontSize: 30
           十连继续按钮:
             type: Canvas
@@ -1575,22 +1660,26 @@ controls:
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
-                  var.rolling = true
-                  var.resultPending = false
-                  var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
-                  var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
-                  var.加速 = Expo(0.15, 1.0, 0, 700)
-                  var.滚动起点 = 0.0005
-                  var.滚动曲线 = none
-                  var.中线闪 = Blink(0.45, 1, 400)
-                  var.命中已触发 = false
-                  var.spinV = 1
-                  var.spinTarget = 1
-                  val.开箱滚动条.moveX = 0.0005
-                  val.十连结果层.visible = false
-                  val.开箱动画层.visible = true
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
+                  if(var.canPullTen){
+                    var.rolling = true
+                    var.resultPending = false
+                    var.箱子抖动 = Shake(0, 6, 400, 40, 8, true)
+                    var.箱子缩放 = TwoLerp(1, 0.94, 1, 400, 250)
+                    var.加速 = Expo(0.15, 1.0, 0, 700)
+                    var.滚动起点 = 0.0005
+                    var.滚动曲线 = none
+                    var.中线闪 = Blink(0.45, 1, 400)
+                    var.命中已触发 = false
+                    var.spinV = 1
+                    var.spinTarget = 1
+                    val.开箱滚动条.moveX = 0.0005
+                    val.十连结果层.visible = false
+                    val.开箱动画层.visible = true
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
+                  } else {
+                    val.资源不足提示.visible = true
+                  }
                 }
             children:
               十连再开一次背景:
@@ -1638,7 +1727,7 @@ controls:
               point: ~top_left
               x: 24
               y: 20
-              texts: "'&f开箱记录 · ' + (var.historyPoolName != none ? var.historyPoolName : '')"
+              texts: "'&f开箱记录 · ' + var.historyPoolName"
               fontSize: 52
           记录条数:
             type: Text
@@ -1647,7 +1736,7 @@ controls:
               point: ~top_left
               x: 24
               y: 64
-              texts: "'&7共 ' + (var.historyCount != none ? var.historyCount.round() : 0) + ' 条记录'"
+              texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
               fontSize: 30
           历史滑块:
             type: Texture
@@ -1688,17 +1777,8 @@ controls:
               历史列表:
                 type: VGrid
                 attribute:
-                  column: 1
+                  row: 20
                   spaceBetweenY: 12
-                action:
-                  create: |-
-                    for(i in range(0, 19)){
-                      key = i.round()
-                      e = self['历史行'].copy('历史行' + key)
-                      e.entryKey = key
-                      e['时间'].entryKey = key
-                      e['摘要'].entryKey = key
-                    }
                 children:
                   历史行:
                     type: Canvas
@@ -1706,7 +1786,7 @@ controls:
                       entryKey: 0.round()
                       width: 800
                       height: 66
-                      visible: "var.historyRows != none && var.historyRows[self.entryKey] != none"
+                      visible: "var.historyRows[self.entryKey] != none"
                     children:
                       行背景:
                         type: Texture
@@ -1722,7 +1802,7 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 16
-                          texts: "var.historyRows != none && var.historyRows[self.entryKey] != none ? '&7' + (var.historyRows[self.entryKey]['timeText'] != none ? var.historyRows[self.entryKey]['timeText'] : '') : ''"
+                          texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
                           fontSize: 30
                       摘要:
                         type: Text
@@ -1731,7 +1811,7 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 220
-                          texts: "var.historyRows != none && var.historyRows[self.entryKey] != none ? '&f' + (var.historyRows[self.entryKey]['summary'] != none ? var.historyRows[self.entryKey]['summary'] : '') : ''"
+                          texts: "var.historyRows[self.entryKey] != none ? '&f' + var.historyRows[self.entryKey]['summary'] : ''"
                           fontSize: 34
           历史空态:
             type: Text
@@ -1797,7 +1877,7 @@ controls:
               point: ~top_left
               x: 24
               y: 20
-              texts: "'&f概率详情 · ' + (var.detailPoolName != none ? var.detailPoolName : '')"
+              texts: "'&f概率详情 · ' + var.detailPoolName"
               fontSize: 52
           表头:
             type: Text
@@ -1848,18 +1928,8 @@ controls:
               详情列表:
                 type: VGrid
                 attribute:
-                  column: 1
+                  row: 45
                   spaceBetweenY: 12
-                action:
-                  create: |-
-                    for(i in range(0, 44)){
-                      key = i.round()
-                      e = self['详情行'].copy('详情行' + key)
-                      e.entryKey = key
-                      e['名称'].entryKey = key
-                      e['稀有度'].entryKey = key
-                      e['权重'].entryKey = key
-                    }
                 children:
                   详情行:
                     type: Canvas
@@ -1867,7 +1937,7 @@ controls:
                       entryKey: 0.round()
                       width: 800
                       height: 58
-                      visible: "var.detailRows != none && var.detailRows[self.entryKey] != none"
+                      visible: "var.detailRows[self.entryKey] != none"
                     children:
                       行背景:
                         type: Texture
@@ -1883,7 +1953,7 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 16
-                          texts: "var.detailRows != none && var.detailRows[self.entryKey] != none ? '&f' + (var.detailRows[self.entryKey]['name'] != none ? var.detailRows[self.entryKey]['name'] : '') : ''"
+                          texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
                           fontSize: 32
                       稀有度:
                         type: Text
@@ -1892,7 +1962,7 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 460
-                          texts: "var.detailRows != none && var.detailRows[self.entryKey] != none && var.rarityNames != none && var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? '&7' + var.rarityNames[var.detailRows[self.entryKey]['rarity']] : (var.rarityNames != none && var.rarityNames['UNKNOWN'] != none ? '&7' + var.rarityNames['UNKNOWN'] : '')"
+                          texts: "var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? '&7' + var.rarityNames[var.detailRows[self.entryKey]['rarity']] : '&7' + var.rarityNames['UNKNOWN']"
                           fontSize: 32
                       权重:
                         type: Text
@@ -1901,7 +1971,7 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 680
-                          texts: "var.detailRows != none && var.detailRows[self.entryKey] != none ? '&7' + (var.detailRows[self.entryKey]['weight'] != none ? var.detailRows[self.entryKey]['weight'] : '') : ''"
+                          texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['weight'].round() : ''"
                           fontSize: 32
           详情空态:
             type: Text
@@ -1938,4 +2008,78 @@ controls:
                   width: 200
                   texts: ~&b关闭
                   fontSize: 34
+                  through: true
+      # 资源不足提示: 开箱时资源不够的提示面板
+      资源不足提示:
+        type: Canvas
+        val: 资源不足提示
+        attribute:
+          point: ~middle_center
+          width: 600
+          height: 400
+          visible: false
+        children:
+          提示背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~26,30,44,244
+              shape: ~round_rect
+              radius: 12
+            effect:
+              gradient:
+                color1: ~38,46,72,255
+                color2: ~30,40,64,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~110,148,204,150
+          提示标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 40
+              texts:
+                - ~&c&l资源不足
+              fontSize: 56
+          提示内容:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -20
+              texts:
+                - "~&7您没有足够的开箱资源"
+                - "~&7请获取对应道具后再次尝试"
+              fontSize: 36
+          提示关闭:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              y: -24
+              width: 200
+              height: 56
+            action:
+              click: "val.资源不足提示.visible = false"
+            children:
+              提示关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,48,74,240
+                  hover: ~62,78,120,245
+                  shape: ~round_rect
+                  radius: 26
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~226,196,132,235
+              提示关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f知道了"
+                  fontSize: 36
                   through: true

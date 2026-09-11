@@ -55,6 +55,13 @@ public record CasePoolConfig(
         if (raritySettings.isEmpty()) {
             throw new IllegalArgumentException("CASE 奖池没有包含奖品的有效稀有度");
         }
+        // 反向校验: 每个物品的 rarity 必须匹配已配置的稀有度
+        for (PoolItem item : items) {
+            if (item.rarity() == null || !raritySettings.containsKey(item.rarity().toUpperCase())) {
+                logger.warning("CASE 奖品 " + item.key() + " 的 rarity '" + item.rarity()
+                    + "' 不匹配任何稀有度配置，该物品将无法被抽出");
+            }
+        }
 
         return new CasePoolConfig(raritySettings, items);
     }

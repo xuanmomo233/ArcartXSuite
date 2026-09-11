@@ -83,8 +83,10 @@ cost:
       #   name-regex         — 显示名称正则列表（大小写不敏感，无效正则记录警告并跳过）
       #   lore-regex         — Lore 正则列表（大小写不敏感，无效正则记录警告并跳过）
       matcher:                # 物品匹配器（仅 ITEM 类型需要）
-        mythic-item-ids:      # 匹配 MythicMobs 内部 ID 为 CaseKey 的物品
-          - "CaseKey"
+        material-ids:         # 匹配材质为 TRIPWIRE_HOOK 的物品
+          - TRIPWIRE_HOOK
+        nbt-values:           # NBT 键值校验
+          lottery: "case_key"
   ten:
     - type: ITEM              # 资源类型：ITEM（同 single）
       amount: 10              # 扣除数量（十连为 10）
@@ -93,8 +95,10 @@ cost:
         material: TRIPWIRE_HOOK
         name: "CaseKey"
       matcher:                # 物品匹配器（字段同 single.matcher）
-        mythic-item-ids:
-          - "CaseKey"
+        material-ids:
+          - TRIPWIRE_HOOK
+        nbt-values:
+          lottery: "case_key"
 
 points:
   dust:
@@ -137,55 +141,75 @@ case:  # 开箱机制参数
       name: "P250 | 沙漠风暴"       # 物品显示名称
       rarity: COMMON               # 稀有度等级（消费级）
       item:
-        source: neigeitems         # 物品库类型
-        id: "LottoP250SandDune"    # 物品库的物品id
+        source: minecraft
+        id: "minecraft:stone"
+      icon:
+        material: STONE
+        name: "P250 | 沙漠风暴"
       delivery: DIRECT             # 发放方式：DIRECT（直接发放）
 
     skin_mp9_storm:
       name: "MP9 | 风暴"
       rarity: UNCOMMON  # 稀有度等级（工业级）
       item:
-        source: neigeitems
-        id: "MP9_Storm"
+        source: minecraft
+        id: "minecraft:iron_ingot"
+      icon:
+        material: IRON_INGOT
+        name: "MP9 | 风暴"
       delivery: DIRECT
 
     skin_m4a4_cyber:
       name: "M4A4 | 赛博危情"
       rarity: RARE  # 稀有度等级（军规级）
       item:
-        source: neigeitems
-        id: "M4A4_CyberSecurity"
+        source: minecraft
+        id: "minecraft:diamond"
+      icon:
+        material: DIAMOND
+        name: "M4A4 | 赛博危情"
       delivery: DIRECT
 
     skin_usps_printstream:
       name: "USP-S | 印花集"
       rarity: EPIC  # 稀有度等级（受限级）
       item:
-        source: neigeitems
-        id: "USPS_Printstream"
+        source: minecraft
+        id: "minecraft:emerald"
+      icon:
+        material: EMERALD
+        name: "USP-S | 印花集"
       delivery: DIRECT
 
     skin_ak47_redline:
       name: "AK-47 | 红线"  # 物品显示名称
       rarity: LEGENDARY  # 稀有度等级
       item:
-        source: neigeitems
-        id: "AK47_Redline"
+        source: minecraft
+        id: "minecraft:netherite_ingot"
+      icon:
+        material: NETHERITE_INGOT
+        name: "AK-47 | 红线"
       delivery: DIRECT  # 发放方式：DIRECT（直接发放）
 
     skin_awp_dragon:
       name: "AWP | 巨龙传说"
       rarity: MYTHIC  # 神话级（金色）
       item:
-        source: neigeitems
-        id: "AWP_DragonLore"
+        source: minecraft
+        id: "minecraft:nether_star"
+      icon:
+        material: NETHER_STAR
+        name: "AWP | 巨龙传说"
       delivery: DIRECT
 
     skin_karambit_fade:
       name: "★ 爪子刀 | 渐变"
       rarity: SPECIAL  # 特殊级（罕见特殊，刀/手套）
       item:
-        source: overture
-        id: "LottoKarambitFade"
-      # 未配置 icon 时使用 item 生成的物品作为图标。
+        source: minecraft
+        id: "minecraft:dragon_egg"
+      icon:
+        material: DRAGON_EGG
+        name: "★ 爪子刀 | 渐变"
       delivery: DIRECT

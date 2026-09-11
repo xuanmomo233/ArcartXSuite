@@ -46,7 +46,7 @@ cost:
           - TRIPWIRE_HOOK
         lore-contains:          # Lore 必须包含"武器箱钥匙"（去颜色码后匹配）
           - "武器箱钥匙"
-        nbt-values:             # NBT 键值校验：键 axs:lottery_token 的值必须为 case_key
+        nbt-values:             # NBT 键值校验：键 lottery 的值必须为 case_key
           lottery: "case_key"
   ten:
     - type: ITEM                # 资源类型：ITEM（同 single）
@@ -61,7 +61,7 @@ cost:
         lore-contains:
           - "武器箱钥匙"
         nbt-values:
-          axs:lottery_token: "case_key"
+          lottery: "case_key"
 
 points:
   dust:

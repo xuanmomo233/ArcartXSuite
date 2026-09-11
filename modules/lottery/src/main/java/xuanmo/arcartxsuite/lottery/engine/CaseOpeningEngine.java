@@ -77,6 +77,15 @@ public class CaseOpeningEngine {
 
     private PoolItem randomFrom(List<PoolItem> items) {
         if (items == null || items.isEmpty()) return null;
-        return items.get(ThreadLocalRandom.current().nextInt(items.size()));
+        if (items.size() == 1) return items.get(0);
+        int totalWeight = items.stream().mapToInt(PoolItem::weight).sum();
+        if (totalWeight <= 0) return items.get(ThreadLocalRandom.current().nextInt(items.size()));
+        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
+        int current = 0;
+        for (PoolItem item : items) {
+            current += item.weight();
+            if (roll < current) return item;
+        }
+        return items.get(items.size() - 1);
     }
 }

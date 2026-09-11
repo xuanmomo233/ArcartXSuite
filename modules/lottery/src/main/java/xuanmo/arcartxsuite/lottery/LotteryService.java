@@ -262,9 +262,8 @@ public class LotteryService {
      *
      * @param player 玩家
      * @param poolId 奖池 ID
-     * @return 开箱结果，锁繁忙时返回空结果
+     * @return 开箱结果，锁繁忙或费用不足时返回空结果
      * @throws IllegalArgumentException 当奖池不存在或类型错误时抛出
-     * @throws IllegalStateException    当扣除开箱费用失败时抛出
      */
     @NotNull
     public CaseResult openCase(@NotNull Player player, @NotNull String poolId) {
@@ -288,9 +287,8 @@ public class LotteryService {
      * @param player 玩家
      * @param poolId 奖池 ID
      * @param count  开箱次数
-     * @return 开箱结果列表，锁繁忙时返回空列表
+     * @return 开箱结果列表，锁繁忙或费用不足时返回空列表
      * @throws IllegalArgumentException 当奖池不存在或类型错误时抛出
-     * @throws IllegalStateException    当扣除开箱费用失败时抛出
      */
     @NotNull
     public List<CaseResult> openCaseBatch(@NotNull Player player, @NotNull String poolId, int count) {
@@ -313,7 +311,7 @@ public class LotteryService {
         }
 
         if (!deductCost(player, poolDef.cost(), 1)) {
-            throw new IllegalStateException("扣除开箱费用失败: " + poolId);
+            return new CaseResult(null, "");
         }
 
         CaseResult result = caseEngine.openCase(poolDef.caseConfig());
@@ -346,7 +344,7 @@ public class LotteryService {
         }
 
         if (!deductCost(player, poolDef.cost(), count)) {
-            throw new IllegalStateException("扣除开箱费用失败: " + poolId);
+            return List.of();
         }
 
         List<CaseResult> results = new ArrayList<>();
@@ -525,10 +523,13 @@ public class LotteryService {
                 case CURRENCY -> hasCurrency(player, entry.id(), amount);
             };
             if (!enough) {
-                sendMessage(player, entry.type() == CostConfig.CostMode.POINT
+                String insufficientKey = entry.type() == CostConfig.CostMode.POINT
                     ? "common.insufficient-point"
                     : entry.type() == CostConfig.CostMode.ITEM
-                        ? "common.insufficient-item" : "common.insufficient-currency", entry.id());
+                        ? "common.insufficient-item" : "common.insufficient-currency";
+                String insufficientArg = entry.type() == CostConfig.CostMode.ITEM && entry.displayName() != null
+                    ? entry.displayName() : entry.id();
+                sendMessage(player, insufficientKey, insufficientArg);
                 return CostTransaction.failed();
             }
         }

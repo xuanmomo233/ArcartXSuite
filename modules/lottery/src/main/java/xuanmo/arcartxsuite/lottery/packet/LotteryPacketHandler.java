@@ -309,9 +309,13 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     /** 构建单抽或十连的消耗条目数据，供界面展示。 */
     private Map<String, Object> costRows(Player player, CostConfig cost, boolean ten, Map<String, Object> payload) {
+        return costRows(player, cost, ten, payload, ten ? "costTenIconJson" : "costIconJson");
+    }
+
+    /** 构建消耗条目数据，使用自定义图标前缀，避免循环调用时 key 覆盖。 */
+    private Map<String, Object> costRows(Player player, CostConfig cost, boolean ten, Map<String, Object> payload, String iconPrefix) {
         Map<String, Object> rows = new LinkedHashMap<>();
         List<CostConfig.CostEntry> entries = ten ? cost.ten() : cost.single();
-        String prefix = ten ? "costTenIconJson" : "costIconJson";
         for (int i = 0; i < entries.size(); i++) {
             CostConfig.CostEntry entry = entries.get(i);
             String key = Integer.toString(i);
@@ -325,7 +329,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("owned", owned(player, entry));
             rows.put(key, row);
             // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
-            payload.put(prefix + key, icon(player, entry, point));
+            payload.put(iconPrefix + key, icon(player, entry, point));
         }
         return rows;
     }
@@ -435,20 +439,24 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         Map<String, Object> rows = new LinkedHashMap<>();
         if (pool.type() == PoolType.GACHA) {
             List<LotteryRepository.GachaLogEntry> entries =
-                service.getGachaHistory(player.getUniqueId(), pool.id(), 20);
-            for (int i = 0; i < entries.size(); i++) {
-                LotteryRepository.GachaLogEntry entry = entries.get(i);
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("pullTime", entry.pullTime());
-                row.put("pullCount", entry.pullCount());
-                row.put("itemsJson", entry.itemsJson());
-                row.put("pityAtPull", entry.pityAtPull());
-                row.put("guaranteed", entry.guaranteed());
-                row.put("timeText", time(entry.pullTime()));
-                row.put("summary", service.message("packet.history-gacha",
-                    entry.pullCount(), entry.guaranteed()
-                        ? service.message("packet.guaranteed") : ""));
-                rows.put(Integer.toString(i), row);
+                service.getGachaHistory(player.getUniqueId(), pool.id(), 100);
+            Map<String, PoolItem> itemMap = gachaItemMap(pool);
+            int index = 0;
+            for (LotteryRepository.GachaLogEntry entry : entries) {
+                if (index >= 100) break;
+                String timeText = time(entry.pullTime());
+                for (String key : parseItemKeys(entry.itemsJson())) {
+                    if (index >= 100) break;
+                    PoolItem item = itemMap.get(key);
+                    int star = gachaStarOf(pool, key);
+                    String name = item != null ? item.name() : key;
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("timeText", timeText);
+                    row.put("star", star);
+                    row.put("summary", starColor(star) + name
+                        + (entry.guaranteed() && star >= 5 ? " &6·保底" : ""));
+                    rows.put(Integer.toString(index++), row);
+                }
             }
         } else {
             List<LotteryRepository.CaseLogEntry> entries =
@@ -538,7 +546,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", item.id());
             row.put("name", item.displayName());
-            row.put("costRows", costRows(player, new CostConfig(item.cost(), item.cost()), false, payload));
+            row.put("costRows", costRows(player, new CostConfig(item.cost(), item.cost()), false, payload, "exchangeCostIconJson" + key + "_"));
             row.put("limit", item.limit());
             row.put("used", used);
             row.put("remaining", item.limit() == 0 ? -1 : Math.max(0, item.limit() - used));
@@ -639,6 +647,59 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         }
         return itemId;
     }
+
+    /** 解析日志中 itemsJson（形如 [key1,key2,...]）为奖品 key 列表。 */
+    private List<String> parseItemKeys(String itemsJson) {
+        String body = itemsJson == null ? "" : itemsJson.trim();
+        if (body.startsWith("[")) body = body.substring(1);
+        if (body.endsWith("]")) body = body.substring(0, body.length() - 1);
+        List<String> keys = new ArrayList<>();
+        for (String part : body.split(",")) {
+            String key = part.trim();
+            if (!key.isEmpty() && !"null".equals(key)) keys.add(key);
+        }
+        return keys;
+    }
+
+    /** 建立 GACHA 奖池的 key → PoolItem 映射。 */
+    private Map<String, PoolItem> gachaItemMap(PoolDefinition pool) {
+        Map<String, PoolItem> map = new LinkedHashMap<>();
+        GachaPoolConfig gacha = pool.gacha();
+        if (gacha == null) return map;
+        for (List<PoolItem> items : List.of(gacha.up5starItems(), gacha.standard5starItems(),
+            gacha.up4starItems(), gacha.standard4starItems(), gacha.star3Items())) {
+            for (PoolItem item : items) {
+                map.putIfAbsent(item.key(), item);
+            }
+        }
+        return map;
+    }
+
+    /** 查询奖品 key 在 GACHA 奖池中的星级，未命中返回 0。 */
+    private int gachaStarOf(PoolDefinition pool, String key) {
+        GachaPoolConfig gacha = pool.gacha();
+        if (gacha == null || key == null) return 0;
+        if (containsItemKey(gacha.up5starItems(), key) || containsItemKey(gacha.standard5starItems(), key)) return 5;
+        if (containsItemKey(gacha.up4starItems(), key) || containsItemKey(gacha.standard4starItems(), key)) return 4;
+        if (containsItemKey(gacha.star3Items(), key)) return 3;
+        return 0;
+    }
+
+    private boolean containsItemKey(List<PoolItem> items, String key) {
+        for (PoolItem item : items) {
+            if (item.key().equals(key)) return true;
+        }
+        return false;
+    }
+
+    private String starColor(int star) {
+        return switch (star) {
+            case 5 -> "&6";
+            case 4 -> "&5";
+            case 3 -> "&b";
+            default -> "&f";
+        };
+    }
     /** 取奖池中优先展示的 UP 物品。 */
     private PoolItem firstUp(GachaPoolConfig gacha) {
         if (gacha == null) return null;
@@ -654,9 +715,13 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     /** 读取数据包中的整数参数，缺失或非法时返回默认值。 */
     private int parseInt(List<String> data, int index, int fallback) {
         if (data.size() <= index) return fallback;
+        String s = data.get(index);
         try {
-            return Integer.parseInt(data.get(index));
-        } catch (NumberFormatException exception) {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException ignored) {}
+        try {
+            return (int) Double.parseDouble(s);
+        } catch (NumberFormatException e) {
             return fallback;
         }
     }

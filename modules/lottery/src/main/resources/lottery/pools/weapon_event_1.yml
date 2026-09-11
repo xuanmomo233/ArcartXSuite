@@ -12,8 +12,9 @@ description: |-  # 卡池描述文本
   5星保底80抽，4星保底10抽，UP武器概率75%，命定值上限2点。
 # UP 物品图标
 up-item-icon:
-  source: "neigeitems"
-  id: "LottoLegendBlade"
+  material: DIAMOND_SWORD
+  name: "传说之刃"
+up-item-desc: "五星武器「传说之刃」获取概率大幅提升"
 # 未配置 up-item-icon 时自动使用 UP 5星奖品（CASE 池为最高稀有度奖品）的物品作为图标；up-item-icon 配置可以省略。
 # 奖品未配置 icon 时使用该奖品 item 生成的物品作为图标。
 # 图标配置分为物品库物品与自定义物品，两种写法二选一。
@@ -77,12 +78,12 @@ up-item-icon:
 cost:
   single:
     - type: CURRENCY           # 资源类型：CURRENCY（货币，需填 id）
-      id: "gem"                # 货币 ID
+      id: "gold"               # 货币 ID
       amount: 160              # 扣除数量（正整数）
-      display-name: "原石"      # UI 显示名称
+      display-name: "金币"      # UI 显示名称
       icon:                    # 消耗图标（写法同 up-item-icon）
         material: DIAMOND
-        name: "原石"
+        name: "金币"
     - type: POINT              # 资源类型：POINT（积分，需填 id 对应下方 points 块）
       id: "stardust"           # 积分点 ID（对应下方 points.stardust）
       amount: 1                # 扣除数量（正整数）
@@ -92,12 +93,12 @@ cost:
         name: "星尘"
   ten:
     - type: CURRENCY           # 资源类型：CURRENCY（同 single 第一条）
-      id: "gem"                # 货币 ID
+      id: "gold"               # 货币 ID
       amount: 1600             # 扣除数量（十连为 1600）
-      display-name: "原石"      # UI 显示名称
+      display-name: "金币"      # UI 显示名称
       icon:                    # 消耗图标（同 single）
         material: DIAMOND
-        name: "原石"
+        name: "金币"
     - type: POINT              # 资源类型：POINT（同 single 第二条）
       id: "stardust"           # 积分点 ID（对应下方 points.stardust）
       amount: 10               # 扣除数量（十连为 10）
@@ -134,9 +135,11 @@ gacha:  # 祈愿机制参数
     legend_blade:
       name: "传说之刃"  # 物品显示名称
       item:
-        source: neigeitems
-        id: "LottoLegendBlade"
-      # 未配置 icon 时使用 item 生成的物品作为图标。
+        source: minecraft
+        id: "minecraft:diamond_sword"
+      icon:
+        material: DIAMOND_SWORD
+        name: "传说之刃"
       delivery: DIRECT  # 发放方式：DIRECT（直接发放）
       weight: 1  # 权重（同池内相对概率）
 
@@ -144,8 +147,11 @@ gacha:  # 祈愿机制参数
     epic_spear:
       name: "史诗长枪"
       item:
-        source: mythicmobs
-        id: "EpicSpear"
+        source: minecraft
+        id: "minecraft:trident"
+      icon:
+        material: TRIDENT
+        name: "史诗长枪"
       delivery: DIRECT
       weight: 1
 
@@ -153,8 +159,11 @@ gacha:  # 祈愿机制参数
     rare_dagger:
       name: "稀有匕首"
       item:
-        source: neigeitems
-        id: "RareDagger"
+        source: minecraft
+        id: "minecraft:iron_sword"
+      icon:
+        material: IRON_SWORD
+        name: "稀有匕首"
       delivery: DIRECT
       weight: 1
 
@@ -162,8 +171,11 @@ gacha:  # 祈愿机制参数
     fine_staff:
       name: "精良法杖"
       item:
-        source: neigeitems
-        id: "FineStaff"
+        source: minecraft
+        id: "minecraft:stick"
+      icon:
+        material: STICK
+        name: "精良法杖"
       delivery: DIRECT
       weight: 1
 
@@ -173,5 +185,8 @@ gacha:  # 祈愿机制参数
       item:
         source: minecraft
         id: "minecraft:iron_ingot"
+      icon:
+        material: IRON_INGOT
+        name: "铁锭"
       delivery: DIRECT
       weight: 1

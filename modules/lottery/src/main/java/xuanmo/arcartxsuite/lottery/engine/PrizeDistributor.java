@@ -95,41 +95,49 @@ public class PrizeDistributor {
     private DistributionResult executeCommands(Player player, PoolItem item) {
         List<String> commands = item.commands();
         if (commands == null || commands.isEmpty()) return DistributionResult.failure(null, "奖励命令为空");
-        for (String command : commands) dispatchCommand(player, item, command);
-        return DistributionResult.success(null);
+        boolean allSuccess = true;
+        for (String command : commands) {
+            if (!dispatchCommand(player, item, command)) allSuccess = false;
+        }
+        if (allSuccess) return DistributionResult.success(null);
+        return DistributionResult.failure(null, "部分命令执行失败");
     }
 
     private void executeExtraCommands(Player player, PoolItem item) {
         for (String command : item.extraCommands()) dispatchCommand(player, item, command);
     }
 
-    private void dispatchCommand(Player player, PoolItem item, String command) {
-        if (command == null || command.isBlank()) return;
+    private boolean dispatchCommand(Player player, PoolItem item, String command) {
+        if (command == null || command.isBlank()) return true;
         String processed = command.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
             .replace("{uuid}", player.getUniqueId().toString())
             .replace("{amount}", Integer.toString(item.amount()))
             .replace("{item}", item.name());
         String normalized = processed.startsWith("/") ? processed.substring(1) : processed;
+        if (Bukkit.isPrimaryThread()) {
+            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized);
+        }
         AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized));
+        return true;
     }
 
     private DistributionResult sendMail(Player player, PoolItem item) {
         if (item.mailPresets() == null || item.mailPresets().isEmpty()) {
             logger.warning("奖品 " + item.key() + " 配置了 MAIL 但未设置 mail.presets");
-            return DistributionResult.failure(generateItem(item, player), "缺少 mail.presets");
+            return DistributionResult.failure(null, "缺少 mail.presets");
         }
-        ItemStack stack = generateItem(item, player);
         boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
             mailSupplier, player.getName(), item.mailPresets(), "lottery", logger);
         if (allSuccess) {
-            return DistributionResult.mailSent(stack);
+            // MAIL 成功时不携带 generated item，实际奖励来自 mailPresets
+            return DistributionResult.mailSent(null);
         }
-        // MailPresetHelper 返回 false 可能是 mail 不可用或部分失败，检查 mail 是否可用来判断
         MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
         if (mail == null) {
-            return DistributionResult.failure(stack, "邮件能力不可用");
+            return DistributionResult.failure(null, "邮件能力不可用");
         }
-        return DistributionResult.failure(stack, "邮件发送失败");
+        // MAIL 失败时不传 generated item，避免 pending 队列内容与邮件预设不一致
+        return DistributionResult.failure(null, "邮件发送失败");
     }
 
     /**

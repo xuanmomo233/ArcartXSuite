@@ -46,16 +46,21 @@ public class GachaEngine {
                 if (isUp) {
                     if (pool.poolType() == GachaPoolConfig.GachaPoolType.WEAPON && pool.fatePointCap() > 0) {
                         PoolItem selected = resolveWeaponUp(pool, fatePoints, fateTarget);
-                        if (selected != null && !selected.id().equals(fateTarget)) {
-                            fatePoints++;
-                        } else if (selected != null && selected.id().equals(fateTarget)) {
-                            fatePoints = 0;
-                            fateTarget = null;
-                            fateTriggered = true;
+                        if (selected != null && fateTarget != null) {
+                            if (!selected.key().equals(fateTarget)) {
+                                fatePoints++;
+                            } else {
+                                fatePoints = 0;
+                                fateTarget = null;
+                                fateTriggered = true;
+                            }
                         }
                         results.add(selected != null ? selected : randomFrom(pool.up5starItems()));
                     } else {
                         results.add(randomFrom(pool.up5starItems()));
+                    }
+                    if (isGuaranteed) {
+                        guaranteed = true;
                     }
                     isGuaranteed = false;
                 } else {
@@ -65,9 +70,14 @@ public class GachaEngine {
                 currentPity5 = 0;
                 currentPity4 = 0;
             } else if (currentPity4 >= pool.pity4star() || ThreadLocalRandom.current().nextDouble() < pool.base4starRate()) {
-                // 4星
+                // 4星: 按 upRate 分流 UP 与标准
                 currentPity4 = 0;
-                results.add(randomFrom(merge(pool.up4starItems(), pool.standard4starItems())));
+                boolean isUp4 = rollUpChance(pool);
+                if (isUp4) {
+                    results.add(randomFrom(pool.up4starItems().isEmpty() ? pool.standard4starItems() : pool.up4starItems()));
+                } else {
+                    results.add(randomFrom(pool.standard4starItems().isEmpty() ? pool.up4starItems() : pool.standard4starItems()));
+                }
             } else {
                 // 3星
                 results.add(randomFrom(pool.star3Items()));
@@ -84,7 +94,7 @@ public class GachaEngine {
             );
         }
 
-        return new GachaResult(results, state, state.guaranteedUp(), fateTriggered);
+        return new GachaResult(results, state, guaranteed, fateTriggered);
     }
 
     private double calculate5StarProbability(int pity, GachaPoolConfig pool) {
@@ -111,17 +121,10 @@ public class GachaEngine {
         return items.get(items.size() - 1);
     }
 
-    private List<PoolItem> merge(List<PoolItem> a, List<PoolItem> b) {
-        List<PoolItem> merged = new ArrayList<>();
-        if (a != null) merged.addAll(a);
-        if (b != null) merged.addAll(b);
-        return merged;
-    }
-
     private PoolItem resolveWeaponUp(GachaPoolConfig pool, int fatePoints, String fateTarget) {
         if (pool.fatePointCap() > 0 && fatePoints >= pool.fatePointCap() && fateTarget != null) {
             for (PoolItem item : pool.up5starItems()) {
-                if (item.id().equals(fateTarget)) return item;
+                if (item.key().equals(fateTarget)) return item;
             }
         }
         return randomFrom(pool.up5starItems());

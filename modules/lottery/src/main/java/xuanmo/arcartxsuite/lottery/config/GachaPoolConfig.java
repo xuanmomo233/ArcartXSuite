@@ -92,8 +92,10 @@ public record GachaPoolConfig(
         }
         requireItems("star3", star3);
         if (pity4 > 0 || base4 > 0) {
-            requireItems("up4star", up4);
-            requireItems("standard4star", std4);
+            // 4 星 UP 与标准至少有一个非空即可
+            if ((up4 == null || up4.isEmpty()) && (std4 == null || std4.isEmpty())) {
+                throw new IllegalArgumentException("GACHA 4 星配置无效: up4star 与 standard4star 至少需要一个非空");
+            }
         }
         if (pity5 > 0 || base5 > 0) {
             if (upRate > 0) requireItems("up5star", up5);
