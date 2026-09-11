@@ -848,7 +848,7 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           visible: "var.selectedItemLore != none && var.selectedItemLore[self.entryKey] != none"
-                          texts: "var.selectedItemLore != none ? '&7' + var.selectedItemLore[self.entryKey] : none"
+                          texts: "'&7' + var.selectedItemLore[self.entryKey]"
                           fontSize: 32
                           through: true
 
@@ -917,7 +917,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedMode == 'auction' ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedMode == 'auction' ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   拍卖模式文字:
                     type: Text
                     attribute:
@@ -950,7 +950,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedMode == 'pshop' ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedMode == 'pshop' ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   玩家商店模式文字:
                     type: Text
                     attribute:
@@ -1133,7 +1133,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                           货币项文字:
                             type: Text
                             attribute:
@@ -1174,7 +1174,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 86400 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedDuration == 86400 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   时长1天文字:
                     type: Text
                     attribute:
@@ -1205,7 +1205,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 259200 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedDuration == 259200 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   时长3天文字:
                     type: Text
                     attribute:
@@ -1236,7 +1236,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 604800 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedDuration == 604800 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   时长7天文字:
                     type: Text
                     attribute:
@@ -1268,7 +1268,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 2592000 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                        color: "var.selectedDuration == 2592000 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                   时长30天文字:
                     type: Text
                     attribute:

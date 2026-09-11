@@ -583,7 +583,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: "self.parent.entry != none && self.parent.entry['id'] == var.shopId ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                            color: "self.parent.entry != none && self.parent.entry['id'] == var.shopId ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                       商店图标:
                         type: Slot
                         attribute:

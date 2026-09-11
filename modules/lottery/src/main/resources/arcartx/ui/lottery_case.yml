@@ -55,6 +55,28 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.costIconJsons = {}
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          json = packet['costIconJson' + key]
+          var.costIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.costTenIconJsons = {}
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          json = packet['costTenIconJson' + key]
+          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.resourceIconJsons = {}
+      if(var.resourceRows != none){
+        for(key in var.resourceRows.keys()){
+          json = packet['resourceIconJson' + key]
+          var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
       var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
@@ -168,6 +190,28 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows'] != none ? packet['resourceRows'] : {}
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.costIconJsons = {}
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          json = packet['costIconJson' + key]
+          var.costIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.costTenIconJsons = {}
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          json = packet['costTenIconJson' + key]
+          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.resourceIconJsons = {}
+      if(var.resourceRows != none){
+        for(key in var.resourceRows.keys()){
+          json = packet['resourceIconJson' + key]
+          var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
       var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
@@ -276,12 +320,15 @@ ui:
     # packetHandler: result（单抽结果，服务端仅在确实抽到物品时下发）
     # 包字段:
     #   - resultCount: 结果数量
-    #   - resultItemJson: 中奖物品 itemJson
+    #   - resultItemJson1: 中奖物品 itemJson（分离模式，N=1）
     #   - resultItemName: 中奖物品名称
     #   - resultRarity: 中奖物品稀有度
     result: |-
       var.resultCount = packet['resultCount'] != none ? packet['resultCount'] : 0
-      var.resultItemJson = packet['resultItemJson']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
+      var.resultItemJsons = {}
+      json = packet['resultItemJson1']
+      var.resultItemJsons[1] = json != none && json != '' ? json : var.air
       var.resultItemName = packet['resultItemName']
       var.resultRarity = packet['resultRarity']
       var.resultPending = true
@@ -705,7 +752,7 @@ controls:
                               height: 100
                               scale: 0.8
                               normal: ~0,0,0,0
-                              seticon: "self.setItemIcon(var.itemJsons != none && var.itemJsons[self.entryKey] != none && var.itemJsons[self.entryKey] != '' ? var.itemJsons[self.entryKey] : var.air)"
+                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           物品名:
                             type: Text
                             attribute:
@@ -758,7 +805,7 @@ controls:
                           width: 82
                           height: 82
                           normal: ~0,0,0,0
-                          seticon: "self.setItemIcon(var.costRows != none && var.costRows[self.entryKey] != none && var.costRows[self.entryKey]['icon'] != none ? var.costRows[self.entryKey]['icon'] : var.air)"
+                          seticon: "self.setItemIcon(var.costIconJsons[self.entryKey])"
                       名称:
                         type: Text
                         attribute:
@@ -1027,7 +1074,7 @@ controls:
                       width: 48
                       height: 48
                       normal: ~0,0,0,0
-                      seticon: "self.setItemIcon(var.resourceRows != none && var.resourceRows[self.entryKey] != none && var.resourceRows[self.entryKey]['icon'] != none && var.resourceRows[self.entryKey]['icon'] != '' ? var.resourceRows[self.entryKey]['icon'] : var.air)"
+                      seticon: "self.setItemIcon(var.resourceIconJsons[self.entryKey])"
                   名称:
                     type: Text
                     attribute:
@@ -1207,7 +1254,7 @@ controls:
                           scale: 1.5
                           normal: ~0,0,0,0
                           through: true
-                          seticon: "self.setItemIcon(var.itemJsons != none && var.itemJsons[self.entryKey] != none && var.itemJsons[self.entryKey] != '' ? var.itemJsons[self.entryKey] : var.air)"
+                          seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                       物品名:
                         type: Text
                         attribute:
@@ -1306,7 +1353,7 @@ controls:
                       height: 280
                       normal: ~0,0,0,0
                       itemScale: "var.出货开始 != none && var.出货开始 > 0 && Time.currentTime() - var.出货开始 < 900 ? (var.出货缩放 != none ? var.出货缩放.get() : 1) : (var.待机呼吸 != none ? var.待机呼吸.get() : 1)"
-                      seticon: "self.setItemIcon(var.resultItemJson != none && var.resultItemJson != '' ? var.resultItemJson : var.air)"
+                      seticon: "self.setItemIcon(var.resultItemJsons[1])"
           继续按钮:
             type: Canvas
             attribute:
@@ -1464,7 +1511,7 @@ controls:
                       width: 140
                       height: 140
                       normal: ~0,0,0,0
-                      seticon: "self.setItemIcon(var.batchItemJsons != none && var.batchItemJsons[self.entryKey] != none && var.batchItemJsons[self.entryKey] != '' ? var.batchItemJsons[self.entryKey] : var.air)"
+                      seticon: "self.setItemIcon(var.batchItemJsons[self.entryKey])"
                   物品名:
                     type: Text
                     attribute:

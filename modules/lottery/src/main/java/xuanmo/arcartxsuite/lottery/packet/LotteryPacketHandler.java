@@ -176,7 +176,8 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         Map<String, Object> payload = new LinkedHashMap<>();
         PoolItem item = result == null ? null : result.item();
         payload.put("resultCount", item == null ? 0 : 1);
-        payload.put("resultItemJson", item == null ? "" : poolItemJson(player, item));
+        // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.resultItemJsons
+        payload.put("resultItemJson1", item == null ? "" : poolItemJson(player, item));
         payload.put("resultItemName", item == null ? "" : item.name());
         payload.put("resultRarity", result == null ? "" : result.rarity());
         packetBridge.sendPacket(player, caseUiId, "result", payload);
@@ -252,10 +253,10 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("base4Rate", gacha.base4starRate());
         payload.put("guaranteeDesc", service.message("packet.guarantee-desc",
             gacha.pity5star(), gacha.pity4star()));
-        payload.put("costRows", costRows(player, pool.cost(), false));
-        payload.put("costTenRows", costRows(player, pool.cost(), true));
+        payload.put("costRows", costRows(player, pool.cost(), false, payload));
+        payload.put("costTenRows", costRows(player, pool.cost(), true, payload));
         payload.put("tenAvailable", !pool.cost().ten().isEmpty());
-        payload.put("resourceRows", resourceRows(player, pool.cost()));
+        payload.put("resourceRows", resourceRows(player, pool.cost(), payload));
     }
 
     private List<String> descriptionLines(String description) {
@@ -271,10 +272,10 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private void updateCase(Player player, PoolDefinition pool, Map<String, Object> payload) {
         payload.put("rarityNames", caseRarityNames());
-        payload.put("costRows", costRows(player, pool.cost(), false));
-        payload.put("costTenRows", costRows(player, pool.cost(), true));
+        payload.put("costRows", costRows(player, pool.cost(), false, payload));
+        payload.put("costTenRows", costRows(player, pool.cost(), true, payload));
         payload.put("tenAvailable", !pool.cost().ten().isEmpty());
-        payload.put("resourceRows", resourceRows(player, pool.cost()));
+        payload.put("resourceRows", resourceRows(player, pool.cost(), payload));
         payload.put("upItemIcon", upItemIconJson(player, pool));
         if (pool.caseConfig() == null) return;
         Map<String, Object> names = new LinkedHashMap<>();
@@ -307,11 +308,13 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     }
 
     /** 构建单抽或十连的消耗条目数据，供界面展示。 */
-    private Map<String, Object> costRows(Player player, CostConfig cost, boolean ten) {
+    private Map<String, Object> costRows(Player player, CostConfig cost, boolean ten, Map<String, Object> payload) {
         Map<String, Object> rows = new LinkedHashMap<>();
         List<CostConfig.CostEntry> entries = ten ? cost.ten() : cost.single();
+        String prefix = ten ? "costTenIconJson" : "costIconJson";
         for (int i = 0; i < entries.size(); i++) {
             CostConfig.CostEntry entry = entries.get(i);
+            String key = Integer.toString(i);
             Map<String, Object> row = new LinkedHashMap<>();
             var point = entry.type() == CostConfig.CostMode.POINT
                 ? pointDefinition(entry.id()) : null;
@@ -319,15 +322,16 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("id", entry.id());
             row.put("amount", entry.amount());
             row.put("displayName", displayName(entry, point));
-            row.put("icon", icon(player, entry, point));
             row.put("owned", owned(player, entry));
-            rows.put(Integer.toString(i), row);
+            rows.put(key, row);
+            // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+            payload.put(prefix + key, icon(player, entry, point));
         }
         return rows;
     }
 
     /** 汇总当前奖池涉及的资源余额，供界面资源栏展示。 */
-    private Map<String, Object> resourceRows(Player player, CostConfig cost) {
+    private Map<String, Object> resourceRows(Player player, CostConfig cost, Map<String, Object> payload) {
         Map<String, Object> rows = new LinkedHashMap<>();
         List<CostConfig.CostEntry> all = new ArrayList<>(cost.single());
         all.addAll(cost.ten());
@@ -335,13 +339,16 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (CostConfig.CostEntry entry : all) {
             if (!seen.add(entry.type().name() + ":" + entry.id())) continue;
+            String key = Integer.toString(rowIndex);
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("type", entry.type().name());
             row.put("id", entry.id());
             row.put("displayName", entry.displayName() == null ? entry.id() : entry.displayName());
-            row.put("icon", iconResolver.resolveItemJson(player, entry.icon()));
             row.put("owned", owned(player, entry));
-            rows.put(Integer.toString(rowIndex++), row);
+            rows.put(key, row);
+            // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+            payload.put("resourceIconJson" + key, iconResolver.resolveItemJson(player, entry.icon()));
+            rowIndex++;
         }
         return rows;
     }
@@ -510,29 +517,36 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         for (PoolDefinition pool : service.getPools().values()) {
             for (var definition : pool.points().values()) {
                 if (!pointIds.add(definition.id())) continue;
+                String key = Integer.toString(pointIndex);
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", definition.id());
                 row.put("displayName", definition.displayName());
-                row.put("icon", iconResolver.resolveItemJson(player, definition.icon()));
                 row.put("amount", service.getPoint(player.getUniqueId(), definition.id()));
-                pointRows.put(Integer.toString(pointIndex++), row);
+                pointRows.put(key, row);
+                // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+                payload.put("pointIconJson" + key, iconResolver.resolveItemJson(player, definition.icon()));
+                pointIndex++;
             }
         }
         payload.put("pointBalanceRows", pointRows);
+        payload.put("pointBalanceCount", pointRows.size());
         Map<String, Object> rows = new LinkedHashMap<>();
         int rowIndex = 0;
         for (ExchangeShopItem item : service.getExchangeItems().values()) {
             int used = service.getExchangeCount(player.getUniqueId(), item.id());
+            String key = Integer.toString(rowIndex);
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", item.id());
             row.put("name", item.displayName());
-            row.put("icon", iconResolver.resolveItemJson(player, item.icon()));
-            row.put("costRows", costRows(player, new CostConfig(item.cost(), item.cost()), false));
+            row.put("costRows", costRows(player, new CostConfig(item.cost(), item.cost()), false, payload));
             row.put("limit", item.limit());
             row.put("used", used);
             row.put("remaining", item.limit() == 0 ? -1 : Math.max(0, item.limit() - used));
             row.put("canExchange", item.limit() == 0 || used < item.limit());
-            rows.put(Integer.toString(rowIndex++), row);
+            rows.put(key, row);
+            // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+            payload.put("exchangeIconJson" + key, iconResolver.resolveItemJson(player, item.icon()));
+            rowIndex++;
         }
         payload.put("exchangeCount", rows.size());
         payload.put("exchangeRows", rows);

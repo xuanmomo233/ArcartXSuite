@@ -632,7 +632,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: "self.parent.entry != none && self.parent.entry['id'] == var.currentCategory ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                            color: "self.parent.entry != none && self.parent.entry['id'] == var.currentCategory ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
                       分类项高亮条:
                         type: Texture
                         attribute:

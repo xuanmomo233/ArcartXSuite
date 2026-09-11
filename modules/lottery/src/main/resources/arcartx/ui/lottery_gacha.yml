@@ -76,6 +76,28 @@ ui:
       var.costTenRows = packet['costTenRows']
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.costIconJsons = {}
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          json = packet['costIconJson' + key]
+          var.costIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.costTenIconJsons = {}
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          json = packet['costTenIconJson' + key]
+          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.resourceIconJsons = {}
+      if(var.resourceRows != none){
+        for(key in var.resourceRows.keys()){
+          json = packet['resourceIconJson' + key]
+          var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       // UP 物品图标
       val.UP物品槽.seticon()
       // 卡池导航按钮
@@ -133,6 +155,28 @@ ui:
       var.costTenRows = packet['costTenRows']
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.costIconJsons = {}
+      if(var.costRows != none){
+        for(key in var.costRows.keys()){
+          json = packet['costIconJson' + key]
+          var.costIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.costTenIconJsons = {}
+      if(var.costTenRows != none){
+        for(key in var.costTenRows.keys()){
+          json = packet['costTenIconJson' + key]
+          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.resourceIconJsons = {}
+      if(var.resourceRows != none){
+        for(key in var.resourceRows.keys()){
+          json = packet['resourceIconJson' + key]
+          var.resourceIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       val.UP物品槽.seticon()
       for(i in range(0, 3)){
         key = i.round()
@@ -261,13 +305,32 @@ ui:
       val.详情面板.visible = true
     # packetHandler: exchange（积分兑换商店）
     # 包字段:
-    #   - pointBalanceRows: 玩家各类积分余额（含 id/displayName/icon/amount）
+    #   - pointBalanceRows: 玩家各类积分余额（含 id/displayName/amount，不含 icon）
+    #   - pointBalanceCount: 积分类型数量
+    #   - pointIconJsonN: 各积分图标 itemJson（分离模式，N 为序号）
     #   - exchangeCount: 商品数量
-    #   - exchangeRows: 商品行（含 id/name/icon/costRows/limit/used/remaining/canExchange）
+    #   - exchangeRows: 商品行（含 id/name/costRows/limit/used/remaining/canExchange，不含 icon）
+    #   - exchangeIconJsonN: 各商品图标 itemJson（分离模式，N 为序号）
     exchange: |-
       var.pointBalanceRows = packet['pointBalanceRows']
+      var.pointBalanceCount = packet['pointBalanceCount']
       var.exchangeCount = packet['exchangeCount']
       var.exchangeRows = packet['exchangeRows']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.pointIconJsons = {}
+      if(var.pointBalanceRows != none){
+        for(key in var.pointBalanceRows.keys()){
+          json = packet['pointIconJson' + key]
+          var.pointIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
+      var.exchangeIconJsons = {}
+      if(var.exchangeRows != none){
+        for(key in var.exchangeRows.keys()){
+          json = packet['exchangeIconJson' + key]
+          var.exchangeIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       for(i in range(0, 3)){
         key = i.round()
         p = val.积分余额栏['积分条目' + key]
@@ -607,7 +670,7 @@ controls:
                           height: 38
                           normal: ~0,0,0,0
                           through: true
-                          seticon: "self.setItemIcon(var.resourceRows != none && var.resourceRows[self.entryKey] != none && var.resourceRows[self.entryKey]['icon'] != none && var.resourceRows[self.entryKey]['icon'] != '' ? var.resourceRows[self.entryKey]['icon'] : var.air)"
+                          seticon: "self.setItemIcon(var.resourceIconJsons[self.entryKey])"
                       名称:
                         type: Text
                         attribute:
@@ -2085,7 +2148,7 @@ controls:
                               height: 32
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(var.costRows != none && var.costRows[self.entryKey] != none && var.costRows[self.entryKey]['icon'] != none && var.costRows[self.entryKey]['icon'] != '' ? var.costRows[self.entryKey]['icon'] : var.air)"
+                              seticon: "self.setItemIcon(var.costIconJsons[self.entryKey])"
                           数量:
                             type: Text
                             attribute:
@@ -2212,7 +2275,7 @@ controls:
                               height: 32
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(var.costTenRows != none && var.costTenRows[self.entryKey] != none && var.costTenRows[self.entryKey]['icon'] != none && var.costTenRows[self.entryKey]['icon'] != '' ? var.costTenRows[self.entryKey]['icon'] : var.air)"
+                              seticon: "self.setItemIcon(var.costTenIconJsons[self.entryKey])"
                           数量:
                             type: Text
                             attribute:
@@ -2404,7 +2467,7 @@ controls:
                   height: 220
                   normal: ~0,0,0,0
                   itemScale: 1.2
-                  seticon: "self.setItemIcon(var.resultItemJsons[1] != none && var.resultItemJsons[1] != '' ? var.resultItemJsons[1] : var.air)"
+                  seticon: "self.setItemIcon(var.resultItemJsons[1])"
               物品名:
                 type: Text
                 attribute:
@@ -2632,7 +2695,7 @@ controls:
                       width: 140
                       height: 140
                       normal: ~0,0,0,0
-                      seticon: "self.setItemIcon(var.resultItemJsons != none && var.resultItemJsons[self.entryKey] != none && var.resultItemJsons[self.entryKey] != '' ? var.resultItemJsons[self.entryKey] : var.air)"
+                      seticon: "self.setItemIcon(var.resultItemJsons[self.entryKey])"
                   物品名:
                     type: Text
                     attribute:
@@ -3258,7 +3321,7 @@ controls:
                       width: 44
                       height: 44
                       normal: ~0,0,0,0
-                      seticon: "self.setItemIcon(var.pointBalanceRows != none && var.pointBalanceRows[self.entryKey] != none && var.pointBalanceRows[self.entryKey]['icon'] != none && var.pointBalanceRows[self.entryKey]['icon'] != '' ? var.pointBalanceRows[self.entryKey]['icon'] : var.air)"
+                      seticon: "self.setItemIcon(var.pointIconJsons[self.entryKey])"
                   名称:
                     type: Text
                     attribute:
@@ -3357,7 +3420,7 @@ controls:
                           width: 64
                           height: 74
                           normal: ~0,0,0,0
-                          seticon: "self.setItemIcon(var.exchangeRows != none && var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['icon'] != none && var.exchangeRows[self.entryKey]['icon'] != '' ? var.exchangeRows[self.entryKey]['icon'] : var.air)"
+                          seticon: "self.setItemIcon(var.exchangeIconJsons[self.entryKey])"
                       商品名称:
                         type: Text
                         attribute:
