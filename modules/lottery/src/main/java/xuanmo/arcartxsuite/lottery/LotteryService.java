@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
+import xuanmo.arcartxsuite.lottery.config.CaseItemDefinition;
 import xuanmo.arcartxsuite.lottery.config.CostConfig;
 import xuanmo.arcartxsuite.lottery.config.ExchangeShopItem;
 import xuanmo.arcartxsuite.lottery.config.GachaPoolConfig;
@@ -189,6 +190,30 @@ public class LotteryService {
         return repository.loadCaseState(player.getUniqueId(), poolId);
     }
 
+    /**
+     * 根据玩家手持物品查找匹配的 CASE 奖池。
+     * <p>
+     * 遍历所有已启用的 CASE 奖池，用 {@link CaseItemDefinition#matcher()} 匹配手持物品。
+     * 匹配优先级：配置了 case-item 的奖池优先，未配置的不参与匹配。
+     *
+     * @param player 玩家
+     * @param item   玩家手持物品
+     * @return 第一个匹配的奖池定义，无匹配时返回 {@code null}
+     */
+    @Nullable
+    public PoolDefinition findCasePoolByItem(@NotNull Player player, @Nullable org.bukkit.inventory.ItemStack item) {
+        if (item == null || item.getType().isAir()) return null;
+        for (PoolDefinition pool : configuration.pools().values()) {
+            if (!pool.enabled() || pool.type() != PoolType.CASE) continue;
+            CaseItemDefinition caseItem = pool.caseItem();
+            if (caseItem == null) continue;
+            if (itemMatcherSupport.matches(caseItem.matcher(), item)) {
+                return pool;
+            }
+        }
+        return null;
+    }
+
     // ─── Gacha 抽奖 ────────────────────────────────────────
 
     /**
@@ -310,7 +335,8 @@ public class LotteryService {
             throw new IllegalArgumentException("奖池不存在或类型错误: " + poolId);
         }
 
-        if (!deductCost(player, poolDef.cost(), 1)) {
+        CostConfig effectiveCost = buildEffectiveCaseCost(poolDef);
+        if (!deductCost(player, effectiveCost, 1)) {
             return new CaseResult(null, "");
         }
 
@@ -343,7 +369,8 @@ public class LotteryService {
             throw new IllegalArgumentException("奖池不存在或类型错误: " + poolId);
         }
 
-        if (!deductCost(player, poolDef.cost(), count)) {
+        CostConfig effectiveCost = buildEffectiveCaseCost(poolDef);
+        if (!deductCost(player, effectiveCost, count)) {
             return List.of();
         }
 
@@ -473,6 +500,39 @@ public class LotteryService {
     }
 
     // ─── 消耗扣除 ─────────────────────────────────────────
+
+    /**
+     * 构建 CASE 开箱的实际消耗配置。
+     * <p>
+     * 若奖池配置了 {@code case-item}，则消耗 = 箱子 + (requiresKey ? 钥匙 : 空)；
+     * 若未配置 {@code case-item}（向后兼容），退回原始 {@link PoolDefinition#cost()}。
+     *
+     * @param poolDef 奖池定义
+     * @return 合并后的消耗配置
+     */
+    private CostConfig buildEffectiveCaseCost(PoolDefinition poolDef) {
+        if (poolDef.caseItem() == null) {
+            return poolDef.cost();
+        }
+        CaseItemDefinition caseItem = poolDef.caseItem();
+        List<CostConfig.CostEntry> singleEntries = new ArrayList<>();
+        List<CostConfig.CostEntry> tenEntries = new ArrayList<>();
+        // 箱子消耗条目
+        singleEntries.add(new CostConfig.CostEntry(
+            CostConfig.CostMode.ITEM, "", caseItem.amount(),
+            caseItem.displayName(), caseItem.icon(), caseItem.matcher()
+        ));
+        tenEntries.add(new CostConfig.CostEntry(
+            CostConfig.CostMode.ITEM, "", caseItem.amount() * 10,
+            caseItem.displayName(), caseItem.icon(), caseItem.matcher()
+        ));
+        // 钥匙消耗条目（仅有锁时）
+        if (poolDef.requiresKey()) {
+            singleEntries.addAll(poolDef.cost().single());
+            tenEntries.addAll(poolDef.cost().ten());
+        }
+        return new CostConfig(singleEntries, tenEntries);
+    }
 
     /**
      * 一次消耗扣除的结果，成功时携带回滚所需的条目与背包快照。

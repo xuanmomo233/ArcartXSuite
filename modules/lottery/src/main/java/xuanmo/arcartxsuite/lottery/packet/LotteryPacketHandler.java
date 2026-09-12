@@ -277,6 +277,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private void updateCase(Player player, PoolDefinition pool, Map<String, Object> payload) {
         payload.put("rarityNames", caseRarityNames());
+        payload.put("requiresKey", pool.requiresKey());
         payload.put("costRows", costRows(player, pool.cost(), false, payload));
         payload.put("costTenRows", costRows(player, pool.cost(), true, payload));
         payload.put("tenAvailable", !pool.cost().ten().isEmpty());

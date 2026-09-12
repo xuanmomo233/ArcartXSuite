@@ -25,6 +25,9 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param cost        消耗配置
  * @param gacha       GACHA 奖池配置，仅 {@code type == GACHA} 时非空
  * @param caseConfig  CASE 奖池配置，仅 {@code type == CASE} 时非空
+ * @param caseItem    CASE 奖池的箱子物品定义，用于右键识别与箱子消耗；null 表示未配置（向后兼容）
+ * @param requiresKey CASE 奖池是否需要钥匙开启，仅 {@code caseItem != null} 时生效
+ * @param points      积分点定义映射
  */
 public record PoolDefinition(
     @NotNull String id,
@@ -37,6 +40,8 @@ public record PoolDefinition(
     @NotNull CostConfig cost,
     @Nullable GachaPoolConfig gacha,
     @Nullable CasePoolConfig caseConfig,
+    @Nullable CaseItemDefinition caseItem,
+    boolean requiresKey,
     @NotNull Map<String, PointDefinition> points
 ) {
 
@@ -83,14 +88,18 @@ public record PoolDefinition(
 
         GachaPoolConfig gacha = null;
         CasePoolConfig caseConfig = null;
+        CaseItemDefinition caseItem = null;
+        boolean requiresKey = false;
 
         if (type == PoolType.GACHA) {
             gacha = GachaPoolConfig.load(section.getConfigurationSection("gacha"), logger);
         } else {
             caseConfig = CasePoolConfig.load(section.getConfigurationSection("case"), logger);
+            caseItem = CaseItemDefinition.load(section.getConfigurationSection("case-item"), logger, id + ".case-item");
+            requiresKey = section.getBoolean("requires-key", false);
         }
 
         return new PoolDefinition(id, type, enabled, displayName, description, upItemDesc, upItemIcon, cost,
-            gacha, caseConfig, Collections.unmodifiableMap(points));
+            gacha, caseConfig, caseItem, requiresKey, Collections.unmodifiableMap(points));
     }
 }

@@ -9,6 +9,8 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
@@ -241,6 +243,29 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
                 if (packetHandler != null) {
                     packetHandler.onPlayerQuit(event.getPlayer().getUniqueId());
                 }
+            }
+
+            @EventHandler
+            public void onInteract(PlayerInteractEvent event) {
+                // 右键（空气或方块）手持箱子物品时打开对应 CASE 奖池 UI
+                if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+                    return;
+                }
+                if (service == null || packetHandler == null) {
+                    return;
+                }
+                org.bukkit.inventory.ItemStack item = event.getItem();
+                if (item == null || item.getType().isAir()) {
+                    return;
+                }
+                xuanmo.arcartxsuite.lottery.config.PoolDefinition pool = service.findCasePoolByItem(event.getPlayer(), item);
+                if (pool == null) {
+                    return;
+                }
+                // 取消原版交互（防止右键方块触发方块功能）
+                event.setCancelled(true);
+                // 打开对应 CASE 奖池 UI
+                packetHandler.openPoolUi(event.getPlayer(), pool.id());
             }
         });
     }
