@@ -1594,7 +1594,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~12,19,29,250
+              normal: ~10,14,24,236
               shape: ~round_rect
               radius: 12
             effect:
@@ -1608,7 +1608,7 @@ controls:
               point: ~top_left
               x: 24
               y: 20
-              texts: "'&f开箱记录 · ' + var.historyPoolName"
+              texts: "'&e开箱记录 &7· &f' + var.historyPoolName"
               fontSize: 52
           记录条数:
             type: Text
@@ -1619,6 +1619,17 @@ controls:
               y: 64
               texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
               fontSize: 30
+          表头分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 100
+              width: 820
+              height: 2
+              normal: ~226,196,132,180
+              shape: ~round_rect
+              radius: 1
           历史滑轨:
             type: Texture
             attribute:
@@ -1675,41 +1686,64 @@ controls:
                 val: 历史列表
                 attribute:
                   row: 20
-                  spaceBetweenY: 12
+                  spaceBetweenY: 10
                 children:
                   历史行:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
                       width: 800
-                      height: 66
+                      height: 60
                       visible: "var.historyRows[self.entryKey] != none"
                     children:
                       行背景:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~22,31,45,255
+                          normal: ~16,20,30,240
                           shape: ~round_rect
                           radius: 6
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "var.rarityColors != none && var.historyRows[self.entryKey] != none && var.rarityColors[var.historyRows[self.entryKey]['rarity']] != none ? var.rarityColors[var.historyRows[self.entryKey]['rarity']] : '128,128,128,255'"
+                      稀有度条:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 0
+                          width: 4
+                          height: 44
+                          normal: "var.rarityColors != none && var.historyRows[self.entryKey] != none && var.rarityColors[var.historyRows[self.entryKey]['rarity']] != none ? var.rarityColors[var.historyRows[self.entryKey]['rarity']] : '128,128,128,255'"
+                          shape: ~round_rect
+                          radius: 2
                       时间:
                         type: Text
                         attribute:
                           through: true
                           entryKey: 0.round()
                           point: ~middle_left
-                          x: 16
+                          x: 20
                           texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
-                          fontSize: 30
-                      摘要:
+                          fontSize: 28
+                      物品名:
                         type: Text
                         attribute:
                           through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 220
-                          texts: "var.historyRows[self.entryKey] != none ? '&f' + var.historyRows[self.entryKey]['summary'] : ''"
-                          fontSize: 34
+                          texts: "var.historyRows[self.entryKey] != none ? '&f' + var.historyRows[self.entryKey]['itemName'] : ''"
+                          fontSize: 32
+                      稀有度名:
+                        type: Text
+                        attribute:
+                          through: true
+                          entryKey: 0.round()
+                          point: ~middle_right
+                          x: -20
+                          texts: "var.rarityNames != none && var.historyRows[self.entryKey] != none && var.rarityNames[var.historyRows[self.entryKey]['rarity']] != none ? var.rarityNames[var.historyRows[self.entryKey]['rarity']] : ''"
+                          fontSize: 28
           历史空态:
             type: Text
             attribute:
@@ -1734,19 +1768,22 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~22,31,45,255
-                  hover: ~40,56,78,255
+                  normal: ~38,42,52,235
+                  hover: ~60,66,80,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~226,196,132,200
               历史关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
-                  texts: ~&b关闭
-                  fontSize: 34
+                  texts: ~&e关闭
+                  fontSize: 36
                   through: true
-      # 详情面板: details 包的奖池条目与权重
+      # 详情面板: details 包的奖池条目与概率
       详情面板:
         type: Canvas
         val: 详情面板
@@ -1760,7 +1797,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~12,19,29,250
+              normal: ~10,14,24,236
               shape: ~round_rect
               radius: 12
             effect:
@@ -1774,18 +1811,46 @@ controls:
               point: ~top_left
               x: 24
               y: 20
-              texts: "'&f概率详情 · ' + var.detailPoolName"
+              texts: "'&e概率详情 &7· &f' + var.detailPoolName"
               fontSize: 52
-          表头:
+          表头物品:
             type: Text
             attribute:
               through: true
               point: ~top_left
+              x: 44
+              y: 76
+              texts: ~&7物品
+              fontSize: 28
+          表头稀有度:
+            type: Text
+            attribute:
+              through: true
+              point: ~top_left
+              x: 480
+              y: 76
+              texts: ~&7稀有度
+              fontSize: 28
+          表头概率:
+            type: Text
+            attribute:
+              through: true
+              point: ~top_left
+              x: 700
+              y: 76
+              texts: ~&7概率
+              fontSize: 28
+          表头分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
               x: 24
-              y: 72
-              texts:
-                - ~&7物品                                     稀有度                权重
-              fontSize: 30
+              y: 100
+              width: 820
+              height: 2
+              normal: ~226,196,132,180
+              shape: ~round_rect
+              radius: 1
           详情滑轨:
             type: Texture
             attribute:
@@ -1842,32 +1907,46 @@ controls:
                 val: 详情列表
                 attribute:
                   row: 45
-                  spaceBetweenY: 12
+                  spaceBetweenY: 10
                 children:
                   详情行:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
                       width: 800
-                      height: 58
+                      height: 56
                       visible: "var.detailRows[self.entryKey] != none"
                     children:
                       行背景:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~22,31,45,255
+                          normal: ~16,20,30,240
                           shape: ~round_rect
                           radius: 6
+                        effect:
+                          stroke:
+                            width: 2
+                            color: "var.rarityColors != none && var.detailRows[self.entryKey] != none && var.rarityColors[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityColors[var.detailRows[self.entryKey]['rarity']] : '128,128,128,255'"
+                      稀有度条:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 0
+                          width: 4
+                          height: 40
+                          normal: "var.rarityColors != none && var.detailRows[self.entryKey] != none && var.rarityColors[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityColors[var.detailRows[self.entryKey]['rarity']] : '128,128,128,255'"
+                          shape: ~round_rect
+                          radius: 2
                       名称:
                         type: Text
                         attribute:
                           through: true
                           entryKey: 0.round()
                           point: ~middle_left
-                          x: 16
+                          x: 20
                           texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
-                          fontSize: 32
+                          fontSize: 30
                       稀有度:
                         type: Text
                         attribute:
@@ -1875,17 +1954,17 @@ controls:
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 460
-                          texts: "var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? '&7' + var.rarityNames[var.detailRows[self.entryKey]['rarity']] : '&7' + var.rarityNames['UNKNOWN']"
-                          fontSize: 32
-                      权重:
+                          texts: "var.rarityNames != none && var.detailRows[self.entryKey] != none && var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityNames[var.detailRows[self.entryKey]['rarity']] : ''"
+                          fontSize: 28
+                      概率:
                         type: Text
                         attribute:
                           through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 680
-                          texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['weight'].round() : ''"
-                          fontSize: 32
+                          texts: "var.detailRows[self.entryKey] != none ? '&e' + var.detailRows[self.entryKey]['probability'] : ''"
+                          fontSize: 28
           详情空态:
             type: Text
             attribute:
@@ -1910,17 +1989,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~22,31,45,255
-                  hover: ~40,56,78,255
+                  normal: ~38,42,52,235
+                  hover: ~60,66,80,245
                   shape: ~round_rect
-                  radius: 6
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~226,196,132,200
               详情关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
-                  texts: ~&b关闭
-                  fontSize: 34
+                  texts: ~&e关闭
+                  fontSize: 36
                   through: true
       # 资源不足提示: 开箱时资源不够的提示面板
       资源不足提示:

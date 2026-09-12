@@ -473,6 +473,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 row.put("openTime", entry.openTime());
                 row.put("itemId", entry.itemId());
                 row.put("rarity", entry.rarity());
+                row.put("itemName", itemName(pool, entry.itemId()));
                 row.put("timeText", time(entry.openTime()));
                 row.put("summary", service.message("packet.history-case",
                     itemName(pool, entry.itemId()), entry.rarity()));
@@ -493,8 +494,20 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("detailPoolName", pool.displayName());
         Map<String, Object> rows = new LinkedHashMap<>();
         List<PoolItem> items = new ArrayList<>();
+        Map<String, Integer> rarityItemWeightSum = new LinkedHashMap<>();
+        int totalRarityWeight = 0;
         if (pool.type() == PoolType.CASE && pool.caseConfig() != null) {
-            items.addAll(pool.caseConfig().items());
+            CasePoolConfig caseConfig = pool.caseConfig();
+            items.addAll(caseConfig.items());
+            // 计算所有稀有度权重总和
+            totalRarityWeight = caseConfig.raritySettings().values().stream()
+                .mapToInt(CasePoolConfig.RaritySetting::baseWeight).sum();
+            // 计算每个稀有度内物品权重总和
+            for (PoolItem item : items) {
+                if (item.rarity() != null) {
+                    rarityItemWeightSum.merge(item.rarity().toUpperCase(), item.weight(), Integer::sum);
+                }
+            }
         }
         if (pool.type() == PoolType.GACHA && pool.gacha() != null) {
             GachaPoolConfig gacha = pool.gacha();
@@ -515,6 +528,20 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("name", item.name());
             row.put("rarity", item.rarity() == null ? "" : item.rarity());
             row.put("weight", item.weight());
+            // 计算概率百分比：P(物品) = P(稀有度) × P(物品|稀有度)
+            String probabilityText = "";
+            if (pool.type() == PoolType.CASE && pool.caseConfig() != null
+                && item.rarity() != null && totalRarityWeight > 0) {
+                String rarity = item.rarity().toUpperCase();
+                CasePoolConfig.RaritySetting rs = pool.caseConfig().raritySettings().get(rarity);
+                int raritySum = rarityItemWeightSum.getOrDefault(rarity, 1);
+                if (rs != null && raritySum > 0) {
+                    double prob = (double) rs.baseWeight() / totalRarityWeight
+                        * (double) item.weight() / raritySum;
+                    probabilityText = String.format("%.2f%%", prob * 100);
+                }
+            }
+            row.put("probability", probabilityText);
             rows.put(Integer.toString(i), row);
         }
         payload.put("detailCount", rows.size());
