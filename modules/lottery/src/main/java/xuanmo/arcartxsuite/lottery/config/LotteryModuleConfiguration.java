@@ -66,10 +66,12 @@ public record LotteryModuleConfiguration(
      *
      * @param gachaUiId 祈愿（GACHA）界面 UI ID
      * @param caseUiId  开箱（CASE）界面 UI ID
+     * @param wishUiId  祈愿（WISH）界面 UI ID
      */
     public record UiConfiguration(
         String gachaUiId,
-        String caseUiId
+        String caseUiId,
+        String wishUiId
     ) {
         /**
          * 从 {@code ui} 配置节加载 UI 配置。
@@ -79,11 +81,12 @@ public record LotteryModuleConfiguration(
          */
         public static UiConfiguration load(@Nullable ConfigurationSection section) {
             if (section == null) {
-                return new UiConfiguration("AXS:lottery_gacha", "AXS:lottery_case");
+                return new UiConfiguration("AXS:lottery_gacha", "AXS:lottery_case", "AXS:lottery_wish");
             }
             return new UiConfiguration(
                 section.getString("gacha-ui-id", "AXS:lottery_gacha"),
-                section.getString("case-ui-id", "AXS:lottery_case")
+                section.getString("case-ui-id", "AXS:lottery_case"),
+                section.getString("wish-ui-id", "AXS:lottery_wish")
             );
         }
     }

@@ -783,7 +783,7 @@ controls:
                       spaceBetweenY: 30
                       column: 9
                     children:
-                      奖励卡片:
+                      奖励卡片0:
                         type: Canvas
                         attribute:
                           entryKey: 1.round()
@@ -861,7 +861,7 @@ controls:
                       e['数量'].entryKey = key
                     }
                 children:
-                  消耗条目:
+                  消耗条目0:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
@@ -1138,7 +1138,7 @@ controls:
                   e['余额'].entryKey = key
                 }
             children:
-              资源条目:
+              资源条目0:
                 type: Canvas
                 attribute:
                   entryKey: 0.round()
@@ -1288,7 +1288,7 @@ controls:
                       x: 0
                       y: 0
                       scale: 1.5
-                  动画卡片:
+                  动画卡片0:
                     type: Canvas
                     attribute:
                       entryKey: 1.round()
@@ -1776,6 +1776,7 @@ controls:
             children:
               历史列表:
                 type: VGrid
+                val: 历史列表
                 attribute:
                   row: 20
                   spaceBetweenY: 12
@@ -1927,6 +1928,7 @@ controls:
             children:
               详情列表:
                 type: VGrid
+                val: 详情列表
                 attribute:
                   row: 45
                   spaceBetweenY: 12

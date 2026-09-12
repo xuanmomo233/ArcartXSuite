@@ -47,6 +47,8 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     private static final String GACHA_UI_RESOURCE = "arcartx/ui/lottery_gacha.yml";
     private static final String GACHA_UI_FILE = "ui/lottery_gacha.yml";
+    private static final String WISH_UI_RESOURCE = "arcartx/ui/lottery_wish.yml";
+    private static final String WISH_UI_FILE = "ui/lottery_wish.yml";
     private static final String CASE_UI_RESOURCE = "arcartx/ui/lottery_case.yml";
     private static final String CASE_UI_FILE = "ui/lottery_case.yml";
 
@@ -86,6 +88,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     protected @NotNull ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(GACHA_UI_RESOURCE, GACHA_UI_FILE);
+        mappings.put(WISH_UI_RESOURCE, WISH_UI_FILE);
         mappings.put(CASE_UI_RESOURCE, CASE_UI_FILE);
         return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFiles());
     }
@@ -98,10 +101,29 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
         UiBinding gachaBinding = getUiBinding(GACHA_UI_FILE);
+        UiBinding wishBinding = getUiBinding(WISH_UI_FILE);
         UiBinding caseBinding = getUiBinding(CASE_UI_FILE);
-        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : configuration.ui().gachaUiId();
+        // 优先使用配置指定的 UI ID，binding 仅作为 fallback
+        String configuredGachaUiId = configuration.ui().gachaUiId();
+        String gachaUiId;
+        if (configuredGachaUiId != null && !configuredGachaUiId.isBlank()) {
+            gachaUiId = configuredGachaUiId;
+        } else if (gachaBinding != null) {
+            gachaUiId = gachaBinding.runtimeUiId();
+        } else {
+            gachaUiId = "AXS:lottery_gacha";
+        }
+        String configuredWishUiId = configuration.ui().wishUiId();
+        String wishUiId;
+        if (configuredWishUiId != null && !configuredWishUiId.isBlank()) {
+            wishUiId = configuredWishUiId;
+        } else if (wishBinding != null) {
+            wishUiId = wishBinding.runtimeUiId();
+        } else {
+            wishUiId = "AXS:lottery_wish";
+        }
         String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : configuration.ui().caseUiId();
-        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, caseUiId);
+        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, wishUiId, caseUiId);
         return PacketHandlerSpec.of(packetHandler, 0, null, null);
     }
 
@@ -165,6 +187,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
         // UI 注册
         registerModuleUi(GACHA_UI_FILE, configuration.ui().gachaUiId(), true);
+        registerModuleUi(WISH_UI_FILE, configuration.ui().wishUiId(), true);
         registerModuleUi(CASE_UI_FILE, configuration.ui().caseUiId(), true);
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {

@@ -55,6 +55,7 @@ ui:
       var.poolType = packet['poolType']
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList']
+      var.poolUpItemIcons = packet['poolUpItemIcons']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
@@ -126,13 +127,13 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            btn = val.卡池导航列表['卡池按钮'].copy('卡池按钮' + key)
+            btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['名称'].entryKey = key
           }
         }
-        e = val.卡池导航列表.get(key)
+        e = val.卡池导航列表['卡池按钮' + key]
         if(e != none){
           e.entryKey = key
         }
@@ -140,15 +141,15 @@ ui:
       // 消耗区与资源栏图标
       for(i in range(0, 3)){
         key = i.round()
-        e = val.单抽消耗区.get(key)
+        e = val.单抽消耗区['消耗条目' + key]
         if(e != none){
           e['图标'].seticon()
         }
-        t = val.十连消耗区.get(key)
+        t = val.十连消耗区['消耗条目' + key]
         if(t != none){
           t['图标'].seticon()
         }
-        r = val.资源栏.get(key)
+        r = val.资源栏['资源条目' + key]
         if(r != none){
           r['图标'].seticon()
         }
@@ -163,6 +164,7 @@ ui:
       var.poolType = packet['poolType']
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList']
+      var.poolUpItemIcons = packet['poolUpItemIcons']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
@@ -233,13 +235,13 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            btn = val.卡池导航列表['卡池按钮'].copy('卡池按钮' + key)
+            btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['名称'].entryKey = key
           }
         }
-        e = val.卡池导航列表.get(key)
+        e = val.卡池导航列表['卡池按钮' + key]
         if(e != none){
           e.entryKey = key
         }
@@ -247,15 +249,15 @@ ui:
       // 消耗区与资源栏图标
       for(i in range(0, 3)){
         key = i.round()
-        e = val.单抽消耗区.get(key)
+        e = val.单抽消耗区['消耗条目' + key]
         if(e != none){
           e['图标'].seticon()
         }
-        t = val.十连消耗区.get(key)
+        t = val.十连消耗区['消耗条目' + key]
         if(t != none){
           t['图标'].seticon()
         }
-        r = val.资源栏.get(key)
+        r = val.资源栏['资源条目' + key]
         if(r != none){
           r['图标'].seticon()
         }
@@ -335,7 +337,7 @@ ui:
       }
       for(i in range(0, 10)){
         key = i.round()
-        e = val.十连网格.get(key)
+        e = val.十连网格['十连卡片' + key]
         if(e != none){
           e['物品槽'].seticon()
         }
@@ -365,12 +367,12 @@ ui:
         if(i > 0){
           existing = val.历史列表['历史行' + key]
           if(existing == none){
-            e = val.历史列表['历史行'].copy('历史行' + key)
+            e = val.历史列表['历史行0'].copy('历史行' + key)
             e['时间'].entryKey = key
             e['摘要'].entryKey = key
           }
         }
-        row = val.历史列表.get(key)
+        row = val.历史列表['历史行' + key]
         if(row != none){
           row.entryKey = key
         }
@@ -397,13 +399,13 @@ ui:
         if(i > 0){
           existing = val.详情列表['详情行' + key]
           if(existing == none){
-            e = val.详情列表['详情行'].copy('详情行' + key)
+            e = val.详情列表['详情行0'].copy('详情行' + key)
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
             e['权重'].entryKey = key
           }
         }
-        row = val.详情列表.get(key)
+        row = val.详情列表['详情行' + key]
         if(row != none){
           row.entryKey = key
         }
@@ -439,7 +441,7 @@ ui:
       }
       for(i in range(0, 3)){
         key = i.round()
-        p = val.积分余额栏.get(key)
+        p = val.积分余额栏['积分条目' + key]
         if(p != none){
           p['图标'].seticon()
         }
@@ -451,7 +453,7 @@ ui:
         if(i > 0){
           existing = val.兑换列表['兑换行' + key]
           if(existing == none){
-            e = val.兑换列表['兑换行'].copy('兑换行' + key)
+            e = val.兑换列表['兑换行0'].copy('兑换行' + key)
             e['商品图标'].entryKey = key
             e['商品名称'].entryKey = key
             e['消耗文本'].entryKey = key
@@ -459,7 +461,7 @@ ui:
             e['兑换按钮'].entryKey = key
           }
         }
-        row = val.兑换列表.get(key)
+        row = val.兑换列表['兑换行' + key]
         if(row != none){
           row.entryKey = key
           row['商品图标'].seticon()
@@ -569,13 +571,13 @@ controls:
               point: ~middle_center
               width: 1744
               height: 924
-              normal: ~0,0,0,0
+              normal: ~26,30,44,244
               shape: ~round_rect
               radius: 18
               through: true
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~255,246,214,220
           面板顶部霞光:
             type: Texture
@@ -650,7 +652,7 @@ controls:
                   through: true
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               标题星中框:
                 type: Texture
@@ -719,14 +721,14 @@ controls:
                   create: |-
                     for(i in range(1, 3)){
                       key = i.round()
-                      e = self['资源条目'].copy('资源条目' + key)
+                      e = self['资源条目0'].copy('资源条目' + key)
                       e.entryKey = key
                       e['图标'].entryKey = key
                       e['名称'].entryKey = key
                       e['余额'].entryKey = key
                     }
                 children:
-                  资源条目:
+                  资源条目0:
                     type: Canvas
                     attribute:
                       entryKey: 4.round()
@@ -759,7 +761,7 @@ controls:
                             type: 0
                             angleDeg: 90
                           stroke:
-                            width: 1
+                            width: 3
                             color: ~226,196,132,180
                       图标底:
                         type: Texture
@@ -773,7 +775,7 @@ controls:
                           through: true
                         effect:
                           stroke:
-                            width: 1
+                            width: 3
                             color: ~255,238,196,120
                       图标:
                         type: Slot
@@ -829,7 +831,7 @@ controls:
                   through: true
                 effect:
                   stroke:
-                    width: 1
+                    width: 3
                     color: ~226,196,132,120
               导航顶饰:
                 type: Texture
@@ -852,7 +854,7 @@ controls:
                   width: 208
                   spaceBetween: 12
                 children:
-                  卡池按钮:
+                  卡池按钮0:
                     type: Canvas
                     attribute:
                       entryKey: 12.round()
@@ -876,21 +878,18 @@ controls:
                             Packet.send(var.packetId, 'switch_pool', self.entryKey, var.actionToken)
                         effect:
                           stroke:
-                            width: 1
+                            width: 3
                             color: ~110,148,204,120
                       选中描边:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~0,0,0,0
+                          normal: ~26,32,50,238
                           shape: ~round_rect
                           radius: 12
                           through: true
                           visible: "var.currentPoolIndex != none && self.parent.entryKey == var.currentPoolIndex"
                         effect:
-                          stroke:
-                            width: 3
-                            color: ~226,196,132,255
                           neon:
                             color: ~255,238,196,140
                             size: 10
@@ -927,30 +926,20 @@ controls:
                             type: 0
                             angleDeg: 120
                           stroke:
-                            width: 1
+                            width: 3
                             color: ~255,255,255,180
-                      立绘光点:
-                        type: Texture
+                      UP物品槽:
+                        type: Slot
                         attribute:
+                          entryKey: 0.round()
                           point: ~top_center
-                          y: 28
-                          width: 26
-                          height: 26
-                          normal: ~255,255,255,45
-                          shape: ~circle
-                          through: true
-                      立绘折角:
-                        type: Texture
-                        attribute:
-                          point: ~top_right
-                          x: -18
                           y: 10
-                          width: 16
-                          height: 16
-                          normal: ~226,196,132,235
-                          shape: ~round_rect
-                          radius: 4
+                          slotType: ~Icon
+                          width: 176
+                          height: 70
+                          normal: ~0,0,0,0
                           through: true
+                          seticon: "self.setItemIcon(var.poolUpItemIcons[self.entryKey])"
                       名称:
                         type: Text
                         attribute:
@@ -996,7 +985,7 @@ controls:
                     type: 0
                     angleDeg: 90
                   stroke:
-                    width: 1
+                    width: 3
                     color: ~110,148,204,150
                   flow:
                     color: ~255,255,255,14
@@ -1171,7 +1160,7 @@ controls:
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~110,148,204,180
                   菱形外:
                     type: Texture
@@ -1308,7 +1297,7 @@ controls:
                           radius: 8
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~255,246,214,220
                       UP角标文字:
                         type: Text
@@ -1321,7 +1310,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 430
+                      y: 370
                       texts: "'&f' + var.upItemName"
                       fontSize: 52
                       through: true
@@ -1329,7 +1318,7 @@ controls:
                     type: HStack
                     attribute:
                       point: ~top_center
-                      y: 450
+                      y: 400
                       height: 52
                       spaceBetween: 4
                     children:
@@ -1367,7 +1356,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 470
+                      y: 430
                       texts: "'&f' + var.upItemDesc"
                       fontSize: 32
                       limit: 40
@@ -1407,15 +1396,8 @@ controls:
                     type: 0
                     angleDeg: 90
                   stroke:
-                    width: 1
+                    width: 3
                     color: ~226,196,132,180
-              保底标题底:
-                type: Texture
-                attribute:
-                  point: ~horizontal_stretch_top
-                  height: 66
-                  normal: ~0,0,0,0
-                  through: true
               保底标题点:
                 type: Texture
                 attribute:
@@ -1467,7 +1449,7 @@ controls:
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~226,196,132,180
                   左侧色条:
                     type: Texture
@@ -1512,7 +1494,7 @@ controls:
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~110,148,204,150
                   进度条排列:
                     type: HStack
@@ -1526,11 +1508,11 @@ controls:
                       create: |-
                         for(i in range(1, 9)){
                           key = i.round()
-                          e = self['进度格'].copy('进度格' + key)
+                          e = self['进度格0'].copy('进度格' + key)
                           e.entryKey = key
                         }
                     children:
-                      进度格:
+                      进度格0:
                         type: Texture
                         attribute:
                           entryKey: 10.round()
@@ -1560,7 +1542,7 @@ controls:
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~150,124,222,190
                   左侧色条:
                     type: Texture
@@ -1605,7 +1587,7 @@ controls:
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~110,148,204,150
                   进度条排列:
                     type: HStack
@@ -1619,11 +1601,11 @@ controls:
                       create: |-
                         for(i in range(1, 9)){
                           key = i.round()
-                          e = self['进度格'].copy('进度格' + key)
+                          e = self['进度格0'].copy('进度格' + key)
                           e.entryKey = key
                         }
                     children:
-                      进度格:
+                      进度格0:
                         type: Texture
                         attribute:
                           entryKey: 10.round()
@@ -1685,15 +1667,8 @@ controls:
                   radius: 18
                 effect:
                   stroke:
-                    width: 1
+                    width: 3
                     color: ~226,196,132,180
-              信息标题底:
-                type: Texture
-                attribute:
-                  point: ~horizontal_stretch_top
-                  height: 60
-                  normal: ~0,0,0,0
-                  through: true
               信息标题点:
                 type: Texture
                 attribute:
@@ -1847,7 +1822,7 @@ controls:
                           radius: 26
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~226,196,132,235
                       兑换文字:
                         type: Text
@@ -1876,7 +1851,7 @@ controls:
                           radius: 26
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~226,196,132,235
                       详情文字:
                         type: Text
@@ -1905,7 +1880,7 @@ controls:
                           radius: 26
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~226,196,132,235
                       记录文字:
                         type: Text
@@ -1924,18 +1899,6 @@ controls:
                   width: 340
                   height: 84
                 children:
-                  按钮外框:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~226,196,132,220
-                      shape: ~round_rect
-                      radius: 42
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~226,196,132,255
                   按钮底:
                     type: Texture
                     attribute:
@@ -1981,7 +1944,7 @@ controls:
                       point: ~middle_center
                       width: 310
                       height: 56
-                      normal: ~0,0,0,0
+                      normal: ~236,206,140,255
                       shape: ~round_rect
                       radius: 28
                       through: true
@@ -2001,7 +1964,7 @@ controls:
                       create: |-
                         for(i in range(1, 3)){
                           key = i.round()
-                          e = self['消耗条目'].copy('消耗条目' + key)
+                          e = self['消耗条目0'].copy('消耗条目' + key)
                           e.entryKey = key
                           e['图标'].entryKey = key
                           e['数量'].entryKey = key
@@ -2014,7 +1977,7 @@ controls:
                             - ~&0祈愿 1 次
                           fontSize: 64
                           through: true
-                      消耗条目:
+                      消耗条目0:
                         type: Canvas
                         attribute:
                           entryKey: 4.round()
@@ -2052,18 +2015,6 @@ controls:
                   height: 84
                   visible: "var.tenAvailable != false"
                 children:
-                  按钮外框:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~226,196,132,220
-                      shape: ~round_rect
-                      radius: 42
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~226,196,132,255
                   按钮底:
                     type: Texture
                     attribute:
@@ -2108,7 +2059,7 @@ controls:
                       point: ~middle_center
                       width: 310
                       height: 56
-                      normal: ~0,0,0,0
+                      normal: ~236,206,140,255
                       shape: ~round_rect
                       radius: 28
                       through: true
@@ -2128,7 +2079,7 @@ controls:
                       create: |-
                         for(i in range(1, 3)){
                           key = i.round()
-                          e = self['消耗条目'].copy('消耗条目' + key)
+                          e = self['消耗条目0'].copy('消耗条目' + key)
                           e.entryKey = key
                           e['图标'].entryKey = key
                           e['数量'].entryKey = key
@@ -2141,7 +2092,7 @@ controls:
                             - ~&0祈愿 10 次
                           fontSize: 64
                           through: true
-                      消耗条目:
+                      消耗条目0:
                         type: Canvas
                         attribute:
                           entryKey: 4.round()
@@ -2191,7 +2142,7 @@ controls:
                   shape: ~circle
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               关闭文字:
                 type: Text
@@ -2210,33 +2161,17 @@ controls:
           point: ~stretch_all
           visible: false
         children:
-          内侧金线:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~0,0,0,0
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 1
-                color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           等待背景:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,236
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,220
           等待文本:
             type: Text
             attribute:
@@ -2261,33 +2196,17 @@ controls:
           point: ~stretch_all
           visible: false
         children:
-          内侧金线:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~0,0,0,0
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 1
-                color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           结果背景:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,228
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,220
           保底提示:
             type: Text
             attribute:
@@ -2326,13 +2245,13 @@ controls:
                   point: ~middle_center
                   width: 406
                   height: 466
-                  normal: ~0,0,0,0
+                  normal: ~26,30,44,244
                   shape: ~round_rect
                   radius: 10
                   through: true
                 effect:
                   stroke:
-                    width: 1
+                    width: 3
                     color: ~255,246,214,150
               星级条:
                 type: Texture
@@ -2400,7 +2319,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               继续文字:
                 type: Text
@@ -2459,33 +2378,17 @@ controls:
           point: ~stretch_all
           visible: false
         children:
-          内侧金线:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~0,0,0,0
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 1
-                color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           十连背景:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,228
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,220
           十连标题:
             type: Text
             attribute:
@@ -2513,7 +2416,7 @@ controls:
               create: |-
                 for(i in range(1, 10)){
                   key = i.round()
-                  e = self['十连卡片'].copy('十连卡片' + key)
+                  e = self['十连卡片0'].copy('十连卡片' + key)
                   e.entryKey = key
                   e['卡片底'].entryKey = key
                   e['星级条'].entryKey = key
@@ -2523,7 +2426,7 @@ controls:
                   e['UP标记'].entryKey = key
                 }
             children:
-              十连卡片:
+              十连卡片0:
                 type: Canvas
                 attribute:
                   entryKey: 0.round()
@@ -2546,7 +2449,7 @@ controls:
                         type: 0
                         angleDeg: 90
                       stroke:
-                        width: 2
+                        width: 3
                         color: "{var.starColors[var.resultItemStars[self.entryKey]] != none ? var.starColors[var.resultItemStars[self.entryKey]] : '128,128,128,255'}"
                   内高光线:
                     type: Texture
@@ -2554,13 +2457,13 @@ controls:
                       point: ~middle_center
                       width: 226
                       height: 286
-                      normal: ~0,0,0,0
+                      normal: ~26,30,44,244
                       shape: ~round_rect
                       radius: 10
                       through: true
                     effect:
                       stroke:
-                        width: 1
+                        width: 3
                         color: ~255,246,214,150
                   星级条:
                     type: Texture
@@ -2632,7 +2535,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               十连继续文字:
                 type: Text
@@ -2698,54 +2601,43 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~26,30,44,244
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               gradient:
-                color1: ~38,46,72,255
-                color2: ~30,40,64,255
+                color1: ~24,30,48,255
+                color2: ~16,22,36,255
                 type: 0
                 angleDeg: 90
               stroke:
-                width: 2
-                color: ~110,148,204,150
+                width: 3
+                color: ~226,196,132,255
           内高光线:
             type: Texture
             attribute:
               point: ~middle_center
               width: 946
               height: 706
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 10
               through: true
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~255,246,214,150
           内侧金线:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           面板标题:
             type: Text
             attribute:
@@ -2762,6 +2654,21 @@ controls:
               y: 66
               texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
               fontSize: 32
+          历史滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 110
+              width: 10
+              height: 520
+              normal: ~20,24,38,220
+              shape: ~round_rect
+              radius: 4
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,180
           历史滑块:
             type: Texture
             attribute:
@@ -2800,11 +2707,12 @@ controls:
             children:
               历史列表:
                 type: VGrid
+                val: 历史列表
                 attribute:
                   row: 100
                   spaceBetweenY: 12
                 children:
-                  历史行:
+                  历史行0:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
@@ -2864,7 +2772,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               历史关闭文字:
                 type: Text
@@ -2888,54 +2796,43 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~26,30,44,244
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               gradient:
-                color1: ~38,46,72,255
-                color2: ~30,40,64,255
+                color1: ~24,30,48,255
+                color2: ~16,22,36,255
                 type: 0
                 angleDeg: 90
               stroke:
-                width: 2
-                color: ~110,148,204,150
+                width: 3
+                color: ~226,196,132,255
           内高光线:
             type: Texture
             attribute:
               point: ~middle_center
               width: 946
               height: 706
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 10
               through: true
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~255,246,214,150
           内侧金线:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           面板标题:
             type: Text
             attribute:
@@ -2960,6 +2857,21 @@ controls:
               y: 102
               texts: "'&75 星保底 ' + (var.detailPity5 != none ? var.detailPity5.round() : 0) + ' 抽 · 4 星保底 ' + (var.detailPity4 != none ? var.detailPity4.round() : 0) + ' 抽 · UP 概率 ' + ((var.detailUpRate != none ? var.detailUpRate : 0) * 100).round(1) + '%'"
               fontSize: 34
+          详情滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 150
+              width: 10
+              height: 470
+              normal: ~20,24,38,220
+              shape: ~round_rect
+              radius: 4
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,180
           详情滑块:
             type: Texture
             attribute:
@@ -2998,11 +2910,12 @@ controls:
             children:
               详情列表:
                 type: VGrid
+                val: 详情列表
                 attribute:
                   row: 60
                   spaceBetweenY: 12
                 children:
-                  详情行:
+                  详情行0:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
@@ -3070,7 +2983,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               详情关闭文字:
                 type: Text
@@ -3094,54 +3007,43 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~26,30,44,244
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               gradient:
-                color1: ~38,46,72,255
-                color2: ~30,40,64,255
+                color1: ~24,30,48,255
+                color2: ~16,22,36,255
                 type: 0
                 angleDeg: 90
               stroke:
-                width: 2
-                color: ~110,148,204,150
+                width: 3
+                color: ~226,196,132,255
           内高光线:
             type: Texture
             attribute:
               point: ~middle_center
               width: 946
               height: 706
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 10
               through: true
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~255,246,214,150
           内侧金线:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,0
+              normal: ~14,18,30,250
               shape: ~round_rect
               radius: 12
             effect:
               stroke:
-                width: 1
+                width: 3
                 color: ~226,196,132,220
-          标题装饰线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 28
-              y: 78
-              width: 120
-              height: 5
-              normal: ~226,196,132,255
-              shape: ~round_rect
-              radius: 2
           面板标题:
             type: Text
             attribute:
@@ -3165,14 +3067,14 @@ controls:
               create: |-
                 for(i in range(1, 3)){
                   key = i.round()
-                  e = self['积分条目'].copy('积分条目' + key)
+                  e = self['积分条目0'].copy('积分条目' + key)
                   e.entryKey = key
                   e['图标'].entryKey = key
                   e['名称'].entryKey = key
                   e['余额'].entryKey = key
                 }
             children:
-              积分条目:
+              积分条目0:
                 type: Canvas
                 attribute:
                   entryKey: 0.round()
@@ -3216,6 +3118,21 @@ controls:
                       y: 14
                       texts: "'&6' + var.pointBalanceRows[self.entryKey]['amount'].round()"
                       fontSize: 36
+          兑换滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 156
+              width: 10
+              height: 500
+              normal: ~20,24,38,220
+              shape: ~round_rect
+              radius: 4
+            effect:
+              stroke:
+                width: 3
+                color: ~226,196,132,180
           兑换滑块:
             type: Texture
             attribute:
@@ -3259,7 +3176,7 @@ controls:
                   row: 20
                   spaceBetweenY: 12
                 children:
-                  兑换行:
+                  兑换行0:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
@@ -3329,7 +3246,7 @@ controls:
                           enable: "!var.actionBusy && var.actionToken != ''"
                         effect:
                           stroke:
-                            width: 2
+                            width: 3
                             color: ~110,148,204,150
                         action:
                           click: |-
@@ -3366,7 +3283,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               兑换关闭文字:
                 type: Text
@@ -3400,7 +3317,7 @@ controls:
                 type: 0
                 angleDeg: 90
               stroke:
-                width: 2
+                width: 3
                 color: ~110,148,204,150
           提示标题:
             type: Text
@@ -3440,7 +3357,7 @@ controls:
                   radius: 26
                 effect:
                   stroke:
-                    width: 2
+                    width: 3
                     color: ~226,196,132,235
               提示关闭文字:
                 type: Text
