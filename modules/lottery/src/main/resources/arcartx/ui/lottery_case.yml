@@ -90,74 +90,99 @@ ui:
       var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
+      // 注意: get(index)/['name'] 对 packetHandler 中动态创建的子控件不可靠，
+      // 改用 get(0) 获取 YAML 模板，复制时保存引用到 var.奖励卡片列表，seticon 阶段直接用引用。
       目标数 = var.itemCount.round()
       现有数 = val.奖励网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        while(val.奖励网格.childrenCount() > 1){
-          val.奖励网格.get(1).remove()
+        // 用保存的引用移除旧复制卡片
+        if(var.奖励卡片列表 != none){
+          for(key in var.奖励卡片列表.keys()){
+            if(key != 1){
+              old = var.奖励卡片列表[key]
+              if(old != none){
+                old.remove()
+              }
+            }
+          }
         }
-        val.奖励网格['奖励卡片0'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1.round()
+        var.奖励卡片列表 = {}
+        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
+        模板 = val.奖励网格.get(0)
+        var.奖励卡片列表[1.round()] = 模板
+        if(模板 != none){
+          模板.entryKey = 1.round()
+          模板['卡片底'].entryKey = 1.round()
+          模板['稀有度条'].entryKey = 1.round()
+          模板['物品槽'].entryKey = 1.round()
+          模板['物品名'].entryKey = 1.round()
+        }
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
-            e = val.奖励网格['奖励卡片0'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
-            e.entryKey = (i + 1).round()
-            e['卡片底'].entryKey = (i + 1).round()
-            e['稀有度条'].entryKey = (i + 1).round()
-            e['物品槽'].entryKey = (i + 1).round()
-            e['物品名'].entryKey = (i + 1).round()
+            if(模板 != none){
+              e = 模板.copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
+              e.entryKey = (i + 1).round()
+              e['卡片底'].entryKey = (i + 1).round()
+              e['稀有度条'].entryKey = (i + 1).round()
+              e['物品槽'].entryKey = (i + 1).round()
+              e['物品名'].entryKey = (i + 1).round()
+              var.奖励卡片列表[(i + 1).round()] = e
+            }
           }
         }
       }
       for(i in range(1, 目标数)){
-        key = (i - 1).round()
-        if(i == 1){
-          e = val.奖励网格['奖励卡片0']
-        }elif(val.奖励网格.childrenCount() > key){
-          e = val.奖励网格.get(key)
-        }else{
-          e = none
-        }
+        key = i.round()
+        e = var.奖励卡片列表[key]
         if(e != none){
           e['物品槽'].seticon()
         }
       }
       // 开箱动画滚动条: 固定 50 张，按实际奖品数量循环填充
+      // 同样使用引用列表模式
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
-        var.动画带轮次 = (var.动画带轮次 + 1).round()
-        while(val.动画卡片带.childrenCount() > 2){
-          val.动画卡片带.get(2).remove()
+        // 用保存的引用移除旧复制卡片
+        if(var.动画卡片列表 != none){
+          for(key in var.动画卡片列表.keys()){
+            old = var.动画卡片列表[key]
+            if(old != none){
+              old.remove()
+            }
+          }
         }
-        动画首项 = val.动画卡片带['动画卡片0']
-        动画首项.entryKey = 1.round()
-        动画首项['卡片底'].entryKey = 1.round()
-        动画首项['稀有度条'].entryKey = 1.round()
-        动画首项['物品槽'].entryKey = 1.round()
-        动画首项['物品名'].entryKey = 1.round()
+        var.动画卡片列表 = {}
+        var.动画带轮次 = (var.动画带轮次 + 1).round()
+        动画模板 = val.动画卡片带.get(1)
+        var.动画卡片列表[0.round()] = 动画模板
+        if(动画模板 != none){
+          动画模板.entryKey = 1.round()
+          动画模板['卡片底'].entryKey = 1.round()
+          动画模板['稀有度条'].entryKey = 1.round()
+          动画模板['物品槽'].entryKey = 1.round()
+          动画模板['物品名'].entryKey = 1.round()
+        }
         for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
             slot = 1.round()
           }
-          e = val.动画卡片带['动画卡片0'].copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-          e.entryKey = slot
-          e['卡片底'].entryKey = slot
-          e['稀有度条'].entryKey = slot
-          e['物品槽'].entryKey = slot
-          e['物品名'].entryKey = slot
+          if(动画模板 != none){
+            e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
+            e.entryKey = slot
+            e['卡片底'].entryKey = slot
+            e['稀有度条'].entryKey = slot
+            e['物品槽'].entryKey = slot
+            e['物品名'].entryKey = slot
+            var.动画卡片列表[i.round()] = e
+          }
         }
         var.动画带基数 = 目标数
       }
-      for(i in range(1, val.动画卡片带.childrenCount() - 1)){
-        key = i.round()
-        e = val.动画卡片带.get(key)
+      for(key in var.动画卡片列表.keys()){
+        e = var.动画卡片列表[key]
         if(e != none){
           e['物品槽'].seticon()
         }
@@ -222,74 +247,99 @@ ui:
       var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
+      // 注意: get(index)/['name'] 对 packetHandler 中动态创建的子控件不可靠，
+      // 改用 get(0) 获取 YAML 模板，复制时保存引用到 var.奖励卡片列表，seticon 阶段直接用引用。
       目标数 = var.itemCount.round()
       现有数 = val.奖励网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        while(val.奖励网格.childrenCount() > 1){
-          val.奖励网格.get(1).remove()
+        // 用保存的引用移除旧复制卡片
+        if(var.奖励卡片列表 != none){
+          for(key in var.奖励卡片列表.keys()){
+            if(key != 1){
+              old = var.奖励卡片列表[key]
+              if(old != none){
+                old.remove()
+              }
+            }
+          }
         }
-        val.奖励网格['奖励卡片0'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1.round()
-        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1.round()
+        var.奖励卡片列表 = {}
+        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
+        模板 = val.奖励网格.get(0)
+        var.奖励卡片列表[1.round()] = 模板
+        if(模板 != none){
+          模板.entryKey = 1.round()
+          模板['卡片底'].entryKey = 1.round()
+          模板['稀有度条'].entryKey = 1.round()
+          模板['物品槽'].entryKey = 1.round()
+          模板['物品名'].entryKey = 1.round()
+        }
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
-            e = val.奖励网格['奖励卡片0'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
-            e.entryKey = (i + 1).round()
-            e['卡片底'].entryKey = (i + 1).round()
-            e['稀有度条'].entryKey = (i + 1).round()
-            e['物品槽'].entryKey = (i + 1).round()
-            e['物品名'].entryKey = (i + 1).round()
+            if(模板 != none){
+              e = 模板.copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
+              e.entryKey = (i + 1).round()
+              e['卡片底'].entryKey = (i + 1).round()
+              e['稀有度条'].entryKey = (i + 1).round()
+              e['物品槽'].entryKey = (i + 1).round()
+              e['物品名'].entryKey = (i + 1).round()
+              var.奖励卡片列表[(i + 1).round()] = e
+            }
           }
         }
       }
       for(i in range(1, 目标数)){
-        key = (i - 1).round()
-        if(i == 1){
-          e = val.奖励网格['奖励卡片0']
-        }elif(val.奖励网格.childrenCount() > key){
-          e = val.奖励网格.get(key)
-        }else{
-          e = none
-        }
+        key = i.round()
+        e = var.奖励卡片列表[key]
         if(e != none){
           e['物品槽'].seticon()
         }
       }
       // 开箱动画滚动条: 固定 50 张，按实际奖品数量循环填充
+      // 同样使用引用列表模式
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
-        var.动画带轮次 = (var.动画带轮次 + 1).round()
-        while(val.动画卡片带.childrenCount() > 2){
-          val.动画卡片带.get(2).remove()
+        // 用保存的引用移除旧复制卡片
+        if(var.动画卡片列表 != none){
+          for(key in var.动画卡片列表.keys()){
+            old = var.动画卡片列表[key]
+            if(old != none){
+              old.remove()
+            }
+          }
         }
-        动画首项 = val.动画卡片带['动画卡片0']
-        动画首项.entryKey = 1.round()
-        动画首项['卡片底'].entryKey = 1.round()
-        动画首项['稀有度条'].entryKey = 1.round()
-        动画首项['物品槽'].entryKey = 1.round()
-        动画首项['物品名'].entryKey = 1.round()
+        var.动画卡片列表 = {}
+        var.动画带轮次 = (var.动画带轮次 + 1).round()
+        动画模板 = val.动画卡片带.get(1)
+        var.动画卡片列表[0.round()] = 动画模板
+        if(动画模板 != none){
+          动画模板.entryKey = 1.round()
+          动画模板['卡片底'].entryKey = 1.round()
+          动画模板['稀有度条'].entryKey = 1.round()
+          动画模板['物品槽'].entryKey = 1.round()
+          动画模板['物品名'].entryKey = 1.round()
+        }
         for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
             slot = 1.round()
           }
-          e = val.动画卡片带['动画卡片0'].copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-          e.entryKey = slot
-          e['卡片底'].entryKey = slot
-          e['稀有度条'].entryKey = slot
-          e['物品槽'].entryKey = slot
-          e['物品名'].entryKey = slot
+          if(动画模板 != none){
+            e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
+            e.entryKey = slot
+            e['卡片底'].entryKey = slot
+            e['稀有度条'].entryKey = slot
+            e['物品槽'].entryKey = slot
+            e['物品名'].entryKey = slot
+            var.动画卡片列表[i.round()] = e
+          }
         }
         var.动画带基数 = 目标数
       }
-      for(i in range(1, val.动画卡片带.childrenCount() - 1)){
-        key = i.round()
-        e = val.动画卡片带.get(key)
+      for(key in var.动画卡片列表.keys()){
+        e = var.动画卡片列表[key]
         if(e != none){
           e['物品槽'].seticon()
         }
@@ -358,37 +408,47 @@ ui:
       目标数 = var.batchCount.round()
       现有数 = val.十连网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
-        while(val.十连网格.childrenCount() > 1){
-          val.十连网格.get(1).remove()
+        // 用保存的引用移除旧复制卡片
+        if(var.十连卡片列表 != none){
+          for(key in var.十连卡片列表.keys()){
+            if(key != 1){
+              old = var.十连卡片列表[key]
+              if(old != none){
+                old.remove()
+              }
+            }
+          }
         }
-        val.十连网格['十连卡片'].entryKey = 1.round()
-        val.十连网格['十连卡片']['卡片底'].entryKey = 1.round()
-        val.十连网格['十连卡片']['稀有度条'].entryKey = 1.round()
-        val.十连网格['十连卡片']['物品槽'].entryKey = 1.round()
-        val.十连网格['十连卡片']['物品名'].entryKey = 1.round()
-        val.十连网格['十连卡片']['稀有度名'].entryKey = 1.round()
+        var.十连卡片列表 = {}
+        var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
+        十连模板 = val.十连网格.get(0)
+        var.十连卡片列表[1.round()] = 十连模板
+        if(十连模板 != none){
+          十连模板.entryKey = 1.round()
+          十连模板['卡片底'].entryKey = 1.round()
+          十连模板['稀有度条'].entryKey = 1.round()
+          十连模板['物品槽'].entryKey = 1.round()
+          十连模板['物品名'].entryKey = 1.round()
+          十连模板['稀有度名'].entryKey = 1.round()
+        }
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
-            e = val.十连网格['十连卡片'].copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
-            e.entryKey = (i + 1).round()
-            e['卡片底'].entryKey = (i + 1).round()
-            e['稀有度条'].entryKey = (i + 1).round()
-            e['物品槽'].entryKey = (i + 1).round()
-            e['物品名'].entryKey = (i + 1).round()
-            e['稀有度名'].entryKey = (i + 1).round()
+            if(十连模板 != none){
+              e = 十连模板.copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
+              e.entryKey = (i + 1).round()
+              e['卡片底'].entryKey = (i + 1).round()
+              e['稀有度条'].entryKey = (i + 1).round()
+              e['物品槽'].entryKey = (i + 1).round()
+              e['物品名'].entryKey = (i + 1).round()
+              e['稀有度名'].entryKey = (i + 1).round()
+              var.十连卡片列表[(i + 1).round()] = e
+            }
           }
         }
       }
       for(i in range(1, 目标数)){
-        key = (i - 1).round()
-        if(i == 1){
-          e = val.十连网格['十连卡片']
-        }elif(val.十连网格.childrenCount() > key){
-          e = val.十连网格.get(key)
-        }else{
-          e = none
-        }
+        key = i.round()
+        e = var.十连卡片列表[key]
         if(e != none){
           e['物品槽'].seticon()
         }
