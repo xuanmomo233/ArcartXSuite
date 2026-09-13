@@ -86,30 +86,22 @@ ui:
       }
       var.items = packet['items'] != none ? packet['items'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
-      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.itemJsons
-      var.itemJsons = {}
-      for(key in var.items.keys()){
-        json = packet['itemJson' + key]
-        if(json != none && json != ''){
-          var.itemJsons[key] = json
-        } else {
-          var.itemJsons[key] = var.air
-        }
-      }
+      // Java 端直接发送 itemJsons 字典，UI 端无需循环构建
+      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
       目标数 = var.itemCount.round()
       现有数 = val.奖励网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.奖励卡片轮次 = var.奖励卡片轮次 + 1
+        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
         while(val.奖励网格.childrenCount() > 1){
           val.奖励网格.get(1).remove()
         }
-        val.奖励网格['奖励卡片0'].entryKey = 1
-        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1
-        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1
-        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1
-        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1
+        val.奖励网格['奖励卡片0'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1.round()
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
             e = val.奖励网格['奖励卡片0'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
@@ -138,21 +130,21 @@ ui:
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
-        var.动画带轮次 = var.动画带轮次 + 1
+        var.动画带轮次 = (var.动画带轮次 + 1).round()
         while(val.动画卡片带.childrenCount() > 2){
           val.动画卡片带.get(2).remove()
         }
         动画首项 = val.动画卡片带['动画卡片0']
-        动画首项.entryKey = 1
-        动画首项['卡片底'].entryKey = 1
-        动画首项['稀有度条'].entryKey = 1
-        动画首项['物品槽'].entryKey = 1
-        动画首项['物品名'].entryKey = 1
+        动画首项.entryKey = 1.round()
+        动画首项['卡片底'].entryKey = 1.round()
+        动画首项['稀有度条'].entryKey = 1.round()
+        动画首项['物品槽'].entryKey = 1.round()
+        动画首项['物品名'].entryKey = 1.round()
         for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
-            slot = 1
+            slot = 1.round()
           }
           e = val.动画卡片带['动画卡片0'].copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
           e.entryKey = slot
@@ -226,30 +218,22 @@ ui:
       }
       var.items = packet['items'] != none ? packet['items'] : {}
       var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
-      // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.itemJsons
-      var.itemJsons = {}
-      for(key in var.items.keys()){
-        json = packet['itemJson' + key]
-        if(json != none && json != ''){
-          var.itemJsons[key] = json
-        } else {
-          var.itemJsons[key] = var.air
-        }
-      }
+      // Java 端直接发送 itemJsons 字典，UI 端无需循环构建
+      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
       var.rarityNames = packet['rarityNames'] != none ? packet['rarityNames'] : (var.rarityNames != none ? var.rarityNames : {})
       // 奖池预览网格: 按实际奖品数量重建，模板占第 1 条数据
       目标数 = var.itemCount.round()
       现有数 = val.奖励网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.奖励卡片轮次 = var.奖励卡片轮次 + 1
+        var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
         while(val.奖励网格.childrenCount() > 1){
           val.奖励网格.get(1).remove()
         }
-        val.奖励网格['奖励卡片0'].entryKey = 1
-        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1
-        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1
-        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1
-        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1
+        val.奖励网格['奖励卡片0'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['卡片底'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['稀有度条'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['物品槽'].entryKey = 1.round()
+        val.奖励网格['奖励卡片0']['物品名'].entryKey = 1.round()
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
             e = val.奖励网格['奖励卡片0'].copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
@@ -278,21 +262,21 @@ ui:
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
-        var.动画带轮次 = var.动画带轮次 + 1
+        var.动画带轮次 = (var.动画带轮次 + 1).round()
         while(val.动画卡片带.childrenCount() > 2){
           val.动画卡片带.get(2).remove()
         }
         动画首项 = val.动画卡片带['动画卡片0']
-        动画首项.entryKey = 1
-        动画首项['卡片底'].entryKey = 1
-        动画首项['稀有度条'].entryKey = 1
-        动画首项['物品槽'].entryKey = 1
-        动画首项['物品名'].entryKey = 1
+        动画首项.entryKey = 1.round()
+        动画首项['卡片底'].entryKey = 1.round()
+        动画首项['稀有度条'].entryKey = 1.round()
+        动画首项['物品槽'].entryKey = 1.round()
+        动画首项['物品名'].entryKey = 1.round()
         for(i in range(1, 动画带数量 - 1)){
           if(目标数 > 0){
             slot = ((i - 1) % 目标数 + 1).round()
           }else{
-            slot = 1
+            slot = 1.round()
           }
           e = val.动画卡片带['动画卡片0'].copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
           e.entryKey = slot
@@ -320,7 +304,6 @@ ui:
       // 抽奖失败时服务端只回 update: 解除等待态，避免界面永久停在开箱动画
       if(var.rolling != none && var.rolling == true && var.resultPending != none && var.resultPending != true){
         var.rolling = false
-        var.spinV = 0
         val.开箱动画层.visible = false
         val.主面板.visible = true
       }
@@ -342,12 +325,10 @@ ui:
       var.resultPending = true
       var.揭晓类型 = 'single'
       var.出货开始 = 0
-      var.resultBob = none
-      var.resultScale = none
       val.单抽结果卡片['物品浮动容器']['物品槽'].seticon()
       // 结果已到达: 用有限 Q4 曲线减速到服务端决定的落点
       var.spinTarget = 0.82 + math.random() * 0.04
-      var.滚动起点 = val.开箱滚动条.moveX
+      var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
       Sound.self(var.resultRarity == 'LEGENDARY' || var.resultRarity == 'MYTHIC' ? 'minecraft:entity.player.levelup' : (var.resultRarity == 'RARE' || var.resultRarity == 'EPIC' ? 'minecraft:block.note_block.chime' : 'minecraft:entity.item.pickup'), var.resultRarity == 'LEGENDARY' || var.resultRarity == 'MYTHIC' ? 1.15 : (var.resultRarity == 'RARE' || var.resultRarity == 'EPIC' ? 1.05 : 0.95), 20)
@@ -377,16 +358,16 @@ ui:
       目标数 = var.batchCount.round()
       现有数 = val.十连网格.childrenCount() - 1
       if(现有数 != 目标数 - 1){
-        var.十连卡片轮次 = var.十连卡片轮次 + 1
+        var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
         while(val.十连网格.childrenCount() > 1){
           val.十连网格.get(1).remove()
         }
-        val.十连网格['十连卡片'].entryKey = 1
-        val.十连网格['十连卡片']['卡片底'].entryKey = 1
-        val.十连网格['十连卡片']['稀有度条'].entryKey = 1
-        val.十连网格['十连卡片']['物品槽'].entryKey = 1
-        val.十连网格['十连卡片']['物品名'].entryKey = 1
-        val.十连网格['十连卡片']['稀有度名'].entryKey = 1
+        val.十连网格['十连卡片'].entryKey = 1.round()
+        val.十连网格['十连卡片']['卡片底'].entryKey = 1.round()
+        val.十连网格['十连卡片']['稀有度条'].entryKey = 1.round()
+        val.十连网格['十连卡片']['物品槽'].entryKey = 1.round()
+        val.十连网格['十连卡片']['物品名'].entryKey = 1.round()
+        val.十连网格['十连卡片']['稀有度名'].entryKey = 1.round()
         if(目标数 > 1){
           for(i in range(1, 目标数 - 1)){
             e = val.十连网格['十连卡片'].copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
@@ -413,7 +394,7 @@ ui:
         }
       }
       var.spinTarget = 0.82 + math.random() * 0.04
-      var.滚动起点 = val.开箱滚动条.moveX
+      var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
       Sound.self('minecraft:entity.player.levelup', 1.1, 20)
@@ -434,7 +415,10 @@ ui:
           if(existing == none){
             e = val.历史列表['历史行'].copy('历史行' + key)
             e['时间'].entryKey = key
-            e['摘要'].entryKey = key
+            e['物品名'].entryKey = key
+            e['稀有度名'].entryKey = key
+            e['行背景'].entryKey = key
+            e['稀有度条'].entryKey = key
           }
         }
         row = val.历史列表.get(key)
@@ -461,7 +445,9 @@ ui:
             e = val.详情列表['详情行'].copy('详情行' + key)
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
-            e['权重'].entryKey = key
+            e['概率'].entryKey = key
+            e['行背景'].entryKey = key
+            e['稀有度条'].entryKey = key
           }
         }
         row = val.详情列表.get(key)
@@ -495,23 +481,20 @@ ui:
       var.rarityNames = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.spinMs = 2600      // 开箱动画时长（毫秒），结果包到达后再等这么久揭晓
-      var.spinV = 0          // 滚动条当前速度系数
       var.spinTarget = 0.85  // 滚动条停止位置比例
       var.rolling = false        // 是否正在开箱（防连点）
       var.resultPending = false  // 本次开箱是否已收到结果包
-      var.resultBob = none       // 单抽结果物品上下浮动插值器
-      var.resultScale = none     // 单抽结果物品缩放插值器
       var.箱子抖动 = none
       var.箱子缩放 = none
       var.加速 = none
       var.减速 = none
       var.滚动起点 = 0
+      var.滚动位置 = 0
       var.滚动曲线 = none
       var.中线闪 = none
       var.命中抖 = none
       var.白闪 = none
       var.命中已触发 = false
-      var.滚动模式 = none
       var.出货Y = none
       var.出货缩放 = none
       var.出货淡入 = none
@@ -531,13 +514,11 @@ ui:
     open: |-
       var.rolling = false
       var.resultPending = false
-      var.spinV = 0
-      var.resultBob = none
-      var.resultScale = none
       var.箱子抖动 = none
       var.箱子缩放 = none
       var.加速 = none
       var.减速 = none
+      var.滚动位置 = 0
       var.滚动曲线 = none
       var.中线闪 = none
       var.命中抖 = none
@@ -558,10 +539,9 @@ ui:
       if(var.rolling != none && var.rolling == true && val.开箱滚动条 != none){
         if(var.滚动曲线 != none && var.resultPending == true){
           进度 = var.滚动曲线.get()
-          val.开箱滚动条.moveX = var.滚动起点 + (var.spinTarget - var.滚动起点) * 进度
+          var.滚动位置 = var.滚动起点 + (var.spinTarget - var.滚动起点) * 进度
           if(进度 >= 1 && var.命中已触发 != true){
-            val.开箱滚动条.moveX = var.spinTarget
-            var.spinV = 0
+            var.滚动位置 = var.spinTarget
             var.命中已触发 = true
             var.命中抖 = Shake(0, 10, 450, 45, 6, true)
             var.白闪 = Fade(60, 40, 260)
@@ -569,16 +549,13 @@ ui:
           }
         }else{
           加速系数 = var.加速 != none ? var.加速.get() : 1
-          if(val.开箱滚动条.moveX < var.spinTarget){
-            val.开箱滚动条.moveX = val.开箱滚动条.moveX + (0.0003 * 加速系数)
+          if(var.滚动位置 < var.spinTarget){
+            var.滚动位置 = var.滚动位置 + (0.0003 * 加速系数)
           }
         }
       }
       if(var.命中抖 != none && val.开箱动画层 != none){
         val.开箱动画层.x = var.命中抖.get()
-      }
-      if(var.白闪 != none && val.开箱白闪 != none){
-        val.开箱白闪.alpha = var.白闪.get()
       }
       if(var.出货开始 != none && var.出货开始 > 0 && val.单抽结果层 != none){
         if(var.出货淡入 != none && Time.currentTime() - var.出货开始 < 260){
@@ -812,7 +789,7 @@ controls:
                               width: 100
                               height: 100
                               scale: 0.8
-                              normal: ~0,0,0,1
+                              normal: ~255,255,255,255
                               seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           物品名:
                             type: Text
@@ -911,9 +888,8 @@ controls:
                         var.滚动曲线 = none
                         var.中线闪 = Blink(0.45, 1, 400)
                         var.命中已触发 = false
-                        var.spinV = 1
                         var.spinTarget = 1
-                        val.开箱滚动条.moveX = 0.0005
+                        var.滚动位置 = 0.0005
                         val.主面板.visible = false
                         val.开箱动画层.visible = true
                         var.actionBusy = true
@@ -966,9 +942,8 @@ controls:
                         var.滚动曲线 = none
                         var.中线闪 = Blink(0.45, 1, 400)
                         var.命中已触发 = false
-                        var.spinV = 1
                         var.spinTarget = 1
-                        val.开箱滚动条.moveX = 0.0005
+                        var.滚动位置 = 0.0005
                         val.主面板.visible = false
                         val.开箱动画层.visible = true
                         var.actionBusy = true
@@ -1147,7 +1122,7 @@ controls:
               point: ~middle_center
               width: 1780
               height: 150
-              moveX: 0
+              moveX: "var.滚动位置 != none ? var.滚动位置 : 0"
               through: false
               scale: 1.5
             children:
@@ -1158,7 +1133,6 @@ controls:
                   spaceBetween: 100
                   height: 150
                   maxSize: 999999
-                  maxDragX: 999999
                   through: false
                 children:
                   前占位布局:
@@ -1200,7 +1174,7 @@ controls:
                           entryKey: 1.round()
                           point: ~horizontal_stretch_top
                           height: 8
-                          normal: "{var.items[self.entryKey] != none && var.items[self.entryKey]['rarity'] != none ? var.rarityColors[var.items[self.entryKey]['rarity']] : '128,128,128,255'}"
+                          normal: "var.items[self.entryKey] != none && var.items[self.entryKey]['rarity'] != none ? var.rarityColors[var.items[self.entryKey]['rarity']] : '128,128,128,255'"
                           shape: ~round_rect
                           radius: 4
                           through: true
@@ -1251,7 +1225,7 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~255,255,255,255
-              alpha: 0
+              alpha: "var.白闪 != none ? var.白闪.get() : 0"
               through: true
       # 单抽结果层: 展示 result 包的真实中奖物品
       单抽结果层:
@@ -1295,7 +1269,7 @@ controls:
                   y: 202
                   width: 600
                   height: 10
-                  normal: "{var.rarityColors != none && var.resultRarity != none && var.rarityColors[var.resultRarity] != none ? var.rarityColors[var.resultRarity] : '128,128,128,255'}"
+                  normal: "var.rarityColors != none && var.resultRarity != none && var.rarityColors[var.resultRarity] != none ? var.rarityColors[var.resultRarity] : '128,128,128,255'"
                   shape: ~round_rect
                   radius: 5
               物品浮动容器:
@@ -1371,9 +1345,8 @@ controls:
                     var.滚动曲线 = none
                     var.中线闪 = Blink(0.45, 1, 400)
                     var.命中已触发 = false
-                    var.spinV = 1
                     var.spinTarget = 1
-                    val.开箱滚动条.moveX = 0.0005
+                    var.滚动位置 = 0.0005
                     val.单抽结果层.visible = false
                     val.开箱动画层.visible = true
                     var.actionBusy = true
@@ -1419,7 +1392,7 @@ controls:
               through: true
               point: ~top_center
               y: 90
-              texts: "'&6本次开出 ' + var.batchCount.round() + ' 件物品"
+              texts: "'&6本次开出 ' + var.batchCount.round() + ' 件物品'"
               fontSize: 52
           十连网格:
             type: HGrid
@@ -1464,7 +1437,7 @@ controls:
                       entryKey: 1.round()
                       point: ~horizontal_stretch_top
                       height: 6
-                      normal: "{var.rarityColors != none && var.batchItemRarities != none && var.rarityColors[var.batchItemRarities[self.entryKey]] != none ? var.rarityColors[var.batchItemRarities[self.entryKey]] : '128,128,128,255'}"
+                      normal: "var.rarityColors != none && var.batchItemRarities != none && var.rarityColors[var.batchItemRarities[self.entryKey]] != none ? var.rarityColors[var.batchItemRarities[self.entryKey]] : '128,128,128,255'"
                       shape: ~round_rect
                       radius: 4
                   物品槽:
@@ -1551,13 +1524,12 @@ controls:
                     var.滚动曲线 = none
                     var.中线闪 = Blink(0.45, 1, 400)
                     var.命中已触发 = false
-                    var.spinV = 1
                     var.spinTarget = 1
-                    val.开箱滚动条.moveX = 0.0005
+                    var.滚动位置 = 0.0005
                     val.十连结果层.visible = false
                     val.开箱动画层.visible = true
                     var.actionBusy = true
-                    Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
+                    Packet.send(var.packetId, 'open_case_batch', '10', var.actionToken)
                   } else {
                     val.资源不足提示.visible = true
                   }
@@ -1740,6 +1712,7 @@ controls:
                           行背景:
                             type: Texture
                             attribute:
+                              entryKey: 0.round()
                               point: ~stretch_all
                               normal: ~45,50,58,200
                               hover: ~60,66,80,230
@@ -1752,6 +1725,7 @@ controls:
                           稀有度条:
                             type: Texture
                             attribute:
+                              entryKey: 0.round()
                               point: ~middle_left
                               x: 0
                               width: 6
@@ -1974,6 +1948,7 @@ controls:
                           行背景:
                             type: Texture
                             attribute:
+                              entryKey: 0.round()
                               point: ~stretch_all
                               normal: ~45,50,58,200
                               hover: ~60,66,80,230
@@ -1986,6 +1961,7 @@ controls:
                           稀有度条:
                             type: Texture
                             attribute:
+                              entryKey: 0.round()
                               point: ~middle_left
                               x: 0
                               width: 6

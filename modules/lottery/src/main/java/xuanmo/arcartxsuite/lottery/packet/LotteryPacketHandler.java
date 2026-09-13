@@ -285,6 +285,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("upItemIcon", upItemIconJson(player, pool));
         if (pool.caseConfig() == null) return;
         Map<String, Object> items = new LinkedHashMap<>();
+        Map<String, Object> itemJsons = new LinkedHashMap<>();
         List<PoolItem> poolItems = pool.caseConfig().items();
         for (int i = 0; i < poolItems.size() && i < CASE_PREVIEW_SLOT_LIMIT; i++) {
             PoolItem item = poolItems.get(i);
@@ -293,10 +294,10 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             entry.put("name", item.name());
             entry.put("rarity", item.rarity() == null ? "" : item.rarity());
             items.put(key, entry);
-            // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.itemJsons
-            payload.put("itemJson" + key, poolItemJson(player, item));
+            itemJsons.put(key, poolItemJson(player, item));
         }
         payload.put("items", items);
+        payload.put("itemJsons", itemJsons);
         payload.put("itemCount", Math.min(poolItems.size(), CASE_PREVIEW_SLOT_LIMIT));
     }
 
