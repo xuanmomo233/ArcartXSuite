@@ -138,8 +138,6 @@ ui:
           e['物品槽'].seticon()
         }
       }
-      // 开箱动画滚动条: 固定 50 张，按实际奖品数量循环填充
-      // 同样使用引用列表模式
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
@@ -164,11 +162,12 @@ ui:
           动画模板['物品名'].entryKey = 1.round()
         }
         for(i in range(1, 动画带数量 - 1)){
-          if(目标数 > 0){
-            slot = ((i - 1) % 目标数 + 1).round()
-          }else{
-            slot = 1.round()
+          // ARIA 的 % 运算符对浮点数返回 none，用减法循环替代取模
+          idx = i
+          while(idx > 目标数){
+            idx = idx - 目标数
           }
+          slot = idx.round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
             e.entryKey = slot
@@ -295,8 +294,6 @@ ui:
           e['物品槽'].seticon()
         }
       }
-      // 开箱动画滚动条: 固定 50 张，按实际奖品数量循环填充
-      // 同样使用引用列表模式
       动画带数量 = 50
       现有动画数 = val.动画卡片带.childrenCount() - 2
       if(现有动画数 != 动画带数量 - 1 || var.动画带基数 != 目标数){
@@ -321,11 +318,12 @@ ui:
           动画模板['物品名'].entryKey = 1.round()
         }
         for(i in range(1, 动画带数量 - 1)){
-          if(目标数 > 0){
-            slot = ((i - 1) % 目标数 + 1).round()
-          }else{
-            slot = 1.round()
+          // ARIA 的 % 运算符对浮点数返回 none，用减法循环替代取模
+          idx = i
+          while(idx > 目标数){
+            idx = idx - 目标数
           }
+          slot = idx.round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
             e.entryKey = slot
@@ -849,7 +847,7 @@ controls:
                               width: 100
                               height: 100
                               scale: 0.8
-                              normal: ~255,255,255,255
+                              normal: ~0,0,0,0
                               seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           物品名:
                             type: Text

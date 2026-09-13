@@ -60,10 +60,8 @@ up-item-icon:
 # amount 为单次开箱消耗的箱子数量（十连按倍数扣除）。
 case-item:
   matcher:
-    material-ids:
-      - CHEST
-    nbt-values:
-      lottery: "case_box"
+    neige-item-ids:
+      - lottery_case_box
   amount: 1
   display-name: "常规武器箱"
   icon:
@@ -96,10 +94,8 @@ cost:
       #   name-regex         — 显示名称正则列表（大小写不敏感，无效正则记录警告并跳过）
       #   lore-regex         — Lore 正则列表（大小写不敏感，无效正则记录警告并跳过）
       matcher:                # 物品匹配器（仅 ITEM 类型需要）
-        material-ids:         # 匹配材质为 TRIPWIRE_HOOK 的物品
-          - TRIPWIRE_HOOK
-        nbt-values:           # NBT 键值校验
-          lottery: "case_key"
+        neige-item-ids:
+          - lottery_case_key
   ten:
     - type: ITEM              # 资源类型：ITEM（同 single）
       amount: 10              # 扣除数量（十连为 10）
@@ -108,10 +104,8 @@ cost:
         material: TRIPWIRE_HOOK
         name: "CaseKey"
       matcher:                # 物品匹配器（字段同 single.matcher）
-        material-ids:
-          - TRIPWIRE_HOOK
-        nbt-values:
-          lottery: "case_key"
+        neige-item-ids:
+          - lottery_case_key
 
 points:
   dust:
