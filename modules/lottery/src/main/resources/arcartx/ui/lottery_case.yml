@@ -162,12 +162,8 @@ ui:
           动画模板['物品名'].entryKey = 1.round()
         }
         for(i in range(1, 动画带数量 - 1)){
-          // ARIA 的 % 运算符对浮点数返回 none，用减法循环替代取模
-          idx = i
-          while(idx > 目标数){
-            idx = idx - 目标数
-          }
-          slot = idx.round()
+          iInt = i.round()
+          slot = ((iInt - 1) % 目标数 + 1).round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
             e.entryKey = slot
@@ -318,12 +314,8 @@ ui:
           动画模板['物品名'].entryKey = 1.round()
         }
         for(i in range(1, 动画带数量 - 1)){
-          // ARIA 的 % 运算符对浮点数返回 none，用减法循环替代取模
-          idx = i
-          while(idx > 目标数){
-            idx = idx - 目标数
-          }
-          slot = idx.round()
+          iInt = i.round()
+          slot = ((iInt - 1) % 目标数 + 1).round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
             e.entryKey = slot
@@ -362,6 +354,7 @@ ui:
     #   - resultItemJson1: 中奖物品 itemJson（分离模式，N=1）
     #   - resultItemName: 中奖物品名称
     #   - resultRarity: 中奖物品稀有度
+    #   - resultPoolIndex: 中奖物品在奖池中的 1 基索引
     result: |-
       var.resultCount = packet['resultCount'] != none ? packet['resultCount'] : 0
       // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
@@ -374,8 +367,36 @@ ui:
       var.揭晓类型 = 'single'
       var.出货开始 = 0
       val.单抽结果卡片['物品浮动容器']['物品槽'].seticon()
-      // 结果已到达: 用有限 Q4 曲线减速到服务端决定的落点
-      var.spinTarget = 0.82 + math.random() * 0.04
+      // 结果已到达: 根据 resultPoolIndex 计算停止位置，让动画停在中奖物品上
+      var.resultPoolIndex = packet['resultPoolIndex'] != none ? packet['resultPoolIndex'] : -1
+      poolSize = var.itemCount != none ? var.itemCount : 0
+      if(var.resultPoolIndex > 0 && poolSize > 0){
+        // 动画带 50 张卡片，card k (1..49) 的 entryKey = ((k-1) % poolSize) + 1
+        // 在 card 42 附近找到 entryKey = resultPoolIndex 的卡片
+        targetCard = 42
+        while(targetCard >= 1){
+          temp = targetCard - 1
+          while(temp >= poolSize){ temp = temp - poolSize }
+          if(temp + 1 == var.resultPoolIndex){ break }
+          targetCard = targetCard - 1
+        }
+        if(targetCard < 1){
+          targetCard = 43
+          while(targetCard <= 49){
+            temp = targetCard - 1
+            while(temp >= poolSize){ temp = temp - poolSize }
+            if(temp + 1 == var.resultPoolIndex){ break }
+            targetCard = targetCard + 1
+          }
+        }
+        if(targetCard >= 1 && targetCard <= 49){
+          var.spinTarget = targetCard / 49
+        }else{
+          var.spinTarget = 0.82 + math.random() * 0.04
+        }
+      }else{
+        var.spinTarget = 0.82 + math.random() * 0.04
+      }
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速

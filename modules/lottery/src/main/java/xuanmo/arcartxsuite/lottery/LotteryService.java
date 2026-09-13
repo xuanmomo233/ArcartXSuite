@@ -295,7 +295,7 @@ public class LotteryService {
         ReentrantLock lock = playerLocks.computeIfAbsent(player.getUniqueId(), ignored -> new ReentrantLock());
         if (!lock.tryLock()) {
             sendMessage(player, "common.lock-busy");
-            return new CaseResult(null, "");
+            return new CaseResult(null, "", -1);
         }
         try {
             return openCaseLocked(player, poolId);
@@ -337,7 +337,7 @@ public class LotteryService {
 
         CostConfig effectiveCost = buildEffectiveCaseCost(poolDef);
         if (!deductCost(player, effectiveCost, 1)) {
-            return new CaseResult(null, "");
+            return new CaseResult(null, "", -1);
         }
 
         CaseResult result = caseEngine.openCase(poolDef.caseConfig());

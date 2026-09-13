@@ -26,13 +26,14 @@ public class CaseOpeningEngine {
     @NotNull
     public CaseResult openCase(@NotNull CasePoolConfig caseConfig) {
         String selectedRarity = weightedRarity(caseConfig.raritySettings());
-        List<PoolItem> items = itemsByRarity(caseConfig.items(), selectedRarity);
-        PoolItem item = randomFrom(items);
-
-        if (item == null) {
-            return new CaseResult(null, selectedRarity);
+        List<PoolItem> items = caseConfig.items();
+        List<Integer> indices = indicesByRarity(items, selectedRarity);
+        if (indices.isEmpty()) {
+            return new CaseResult(null, selectedRarity, -1);
         }
-        return new CaseResult(item, selectedRarity);
+        int selectedSlot = weightedRandomIndex(items, indices);
+        PoolItem item = items.get(selectedSlot);
+        return new CaseResult(item, selectedRarity, selectedSlot + 1);
     }
 
     /**
@@ -64,28 +65,31 @@ public class CaseOpeningEngine {
         return raritySettings.keySet().iterator().next();
     }
 
-    private List<PoolItem> itemsByRarity(List<PoolItem> items, String rarity) {
-        List<PoolItem> result = new ArrayList<>();
+    private List<Integer> indicesByRarity(List<PoolItem> items, String rarity) {
+        List<Integer> result = new ArrayList<>();
         if (items == null) return result;
-        for (PoolItem item : items) {
-            if (rarity.equalsIgnoreCase(item.rarity())) {
-                result.add(item);
+        for (int i = 0; i < items.size(); i++) {
+            if (rarity.equalsIgnoreCase(items.get(i).rarity())) {
+                result.add(i);
             }
         }
         return result;
     }
 
-    private PoolItem randomFrom(List<PoolItem> items) {
-        if (items == null || items.isEmpty()) return null;
-        if (items.size() == 1) return items.get(0);
-        int totalWeight = items.stream().mapToInt(PoolItem::weight).sum();
-        if (totalWeight <= 0) return items.get(ThreadLocalRandom.current().nextInt(items.size()));
+    private int weightedRandomIndex(List<PoolItem> items, List<Integer> indices) {
+        if (indices.isEmpty()) return -1;
+        if (indices.size() == 1) return indices.get(0);
+        int totalWeight = 0;
+        for (int idx : indices) {
+            totalWeight += items.get(idx).weight();
+        }
+        if (totalWeight <= 0) return indices.get(ThreadLocalRandom.current().nextInt(indices.size()));
         int roll = ThreadLocalRandom.current().nextInt(totalWeight);
         int current = 0;
-        for (PoolItem item : items) {
-            current += item.weight();
-            if (roll < current) return item;
+        for (int idx : indices) {
+            current += items.get(idx).weight();
+            if (roll < current) return idx;
         }
-        return items.get(items.size() - 1);
+        return indices.get(indices.size() - 1);
     }
 }

@@ -6,11 +6,13 @@ import org.jetbrains.annotations.Nullable;
 /**
  * CASE 开箱单次结果。
  *
- * @param item   选中的奖品，无奖品时为 {@code null}
- * @param rarity 选中稀有度名称
+ * @param item      选中的奖品，无奖品时为 {@code null}
+ * @param rarity    选中稀有度名称
+ * @param poolIndex 选中物品在奖池 items 列表中的 1 基索引，无奖品时为 -1
  */
 public record CaseResult(
     @Nullable PoolItem item,
-    @NotNull String rarity
+    @NotNull String rarity,
+    int poolIndex
 ) {
 }

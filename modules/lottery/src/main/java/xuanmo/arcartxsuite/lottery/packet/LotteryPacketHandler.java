@@ -184,6 +184,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resultItemJson1", item == null ? "" : poolItemJson(player, item));
         payload.put("resultItemName", item == null ? "" : item.name());
         payload.put("resultRarity", result == null ? "" : result.rarity());
+        payload.put("resultPoolIndex", result == null ? -1 : result.poolIndex());
         packetBridge.sendPacket(player, caseUiId, "result", payload);
     }
 
