@@ -152,6 +152,15 @@ ui:
         }
         var.动画卡片列表 = {}
         var.动画带轮次 = (var.动画带轮次 + 1).round()
+        // 初始化动画带物品数据为奖池预览数据的副本，让动画卡片创建时就有颜色和图标
+        var.animItems = {}
+        var.animItemJsons = {}
+        for(key in var.items.keys()){
+          var.animItems[key] = var.items[key]
+        }
+        for(key in var.itemJsons.keys()){
+          var.animItemJsons[key] = var.itemJsons[key]
+        }
         动画模板 = val.动画卡片带.get(1)
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
@@ -305,6 +314,15 @@ ui:
         }
         var.动画卡片列表 = {}
         var.动画带轮次 = (var.动画带轮次 + 1).round()
+        // 初始化动画带物品数据为奖池预览数据的副本，让动画卡片创建时就有颜色和图标
+        var.animItems = {}
+        var.animItemJsons = {}
+        for(key in var.items.keys()){
+          var.animItems[key] = var.items[key]
+        }
+        for(key in var.itemJsons.keys()){
+          var.animItemJsons[key] = var.itemJsons[key]
+        }
         动画模板 = val.动画卡片带.get(1)
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
@@ -369,18 +387,20 @@ ui:
       var.揭晓类型 = 'single'
       var.出货开始 = 0
       val.单抽结果卡片['物品浮动容器']['物品槽'].seticon()
-      // 用 Java 端发送的 50 个伪随机物品覆盖 var.itemJsons/var.items，让动画带显示这些物品
+      // 用 Java 端发送的 50 个伪随机物品存入 var.animItems/var.animItemJsons，不覆盖奖池预览的 var.items/var.itemJsons
       animCount = packet['animCount'] != none ? packet['animCount'] : 50
       animNames = packet['animItemNames'] != none ? packet['animItemNames'] : {}
       animRarities = packet['animItemRarities'] != none ? packet['animItemRarities'] : {}
+      var.animItems = {}
+      var.animItemJsons = {}
       for(k in range(1, animCount)){
         key = k.round()
         animJson = packet['animItemJson' + key]
-        var.itemJsons[key] = animJson != none && animJson != '' ? animJson : var.air
+        var.animItemJsons[key] = animJson != none && animJson != '' ? animJson : var.air
         entry = {}
         entry['name'] = animNames[key] != none ? animNames[key] : ''
         entry['rarity'] = animRarities[key] != none ? animRarities[key] : ''
-        var.items[key] = entry
+        var.animItems[key] = entry
       }
       // 把动画卡片 entryKey 改成 1-50，对应 Java 发来的 50 个物品
       for(key in var.动画卡片列表.keys()){
@@ -396,7 +416,7 @@ ui:
         }
       }
       // 结果已到达: 固定 spinTarget 让中线精确对准 card 38（中奖位置）
-      var.spinTarget = 12210 / 14720
+      var.spinTarget = 0.8358
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
@@ -472,7 +492,34 @@ ui:
           e['物品槽'].seticon()
         }
       }
-      var.spinTarget = 0.82 + math.random() * 0.04
+      // 用 Java 端发送的 50 个伪随机物品覆盖动画带
+      animCount = packet['animCount'] != none ? packet['animCount'] : 50
+      animNames = packet['animItemNames'] != none ? packet['animItemNames'] : {}
+      animRarities = packet['animItemRarities'] != none ? packet['animItemRarities'] : {}
+      var.animItems = {}
+      var.animItemJsons = {}
+      for(k in range(1, animCount)){
+        key = k.round()
+        animJson = packet['animItemJson' + key]
+        var.animItemJsons[key] = animJson != none && animJson != '' ? animJson : var.air
+        entry = {}
+        entry['name'] = animNames[key] != none ? animNames[key] : ''
+        entry['rarity'] = animRarities[key] != none ? animRarities[key] : ''
+        var.animItems[key] = entry
+      }
+      for(key in var.动画卡片列表.keys()){
+        e = var.动画卡片列表[key]
+        if(e != none){
+          entryKey = (key + 1).round()
+          e.entryKey = entryKey
+          e['卡片底'].entryKey = entryKey
+          e['稀有度条'].entryKey = entryKey
+          e['物品槽'].entryKey = entryKey
+          e['物品名'].entryKey = entryKey
+          e['物品槽'].seticon()
+        }
+      }
+      var.spinTarget = 0.8358
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
@@ -559,6 +606,8 @@ ui:
       var.rarityColors[none] = '128,128,128,255'         // 默认 - 中灰色
       var.rarityNames = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
+      var.animItems = {}
+      var.animItemJsons = {}
       var.spinMs = 2600      // 开箱动画时长（毫秒），结果包到达后再等这么久揭晓
       var.spinTarget = 0.85  // 滚动条停止位置比例
       var.rolling = false        // 是否正在开箱（防连点）
@@ -1242,7 +1291,7 @@ controls:
                           scale: 1.5
                         effect:
                           gradient:
-                            color1: "var.items[self.entryKey] != none && var.items[self.entryKey]['rarity'] != none ? var.rarityColors[var.items[self.entryKey]['rarity']] : '128,128,128,255'"
+                            color1: "var.animItems[self.entryKey] != none && var.animItems[self.entryKey]['rarity'] != none ? var.rarityColors[var.animItems[self.entryKey]['rarity']] : '128,128,128,255'"
                             color2: ~190,190,190,150
                             type: 0
                             angleDeg: 0
@@ -1253,7 +1302,7 @@ controls:
                           entryKey: 1.round()
                           point: ~horizontal_stretch_top
                           height: 8
-                          normal: "var.items[self.entryKey] != none && var.items[self.entryKey]['rarity'] != none ? var.rarityColors[var.items[self.entryKey]['rarity']] : '128,128,128,255'"
+                          normal: "var.animItems[self.entryKey] != none && var.animItems[self.entryKey]['rarity'] != none ? var.rarityColors[var.animItems[self.entryKey]['rarity']] : '128,128,128,255'"
                           shape: ~round_rect
                           radius: 4
                           through: true
@@ -1269,7 +1318,7 @@ controls:
                           scale: 1.5
                           normal: ~0,0,0,1
                           through: true
-                          seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
+                          seticon: "self.setItemIcon(var.animItemJsons[self.entryKey])"
                       物品名:
                         type: Text
                         attribute:
@@ -1277,7 +1326,7 @@ controls:
                           entryKey: 1.round()
                           point: ~bottom_center
                           y: -8
-                          texts: "var.items[self.entryKey] != none && var.items[self.entryKey]['name'] != none ? '&f' + var.items[self.entryKey]['name'] : ''"
+                          texts: "var.animItems[self.entryKey] != none && var.animItems[self.entryKey]['name'] != none ? '&f' + var.animItems[self.entryKey]['name'] : ''"
                           fontSize: 24
                           scale: 1.5
           抽奖幕布:

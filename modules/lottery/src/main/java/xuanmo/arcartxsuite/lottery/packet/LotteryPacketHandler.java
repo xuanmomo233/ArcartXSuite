@@ -256,7 +256,35 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("batchRequested", count);
         payload.put("batchItemNames", names);
         payload.put("batchItemRarities", rarities);
+        // 十连动画带: 选最高稀有度的中奖物品作为动画停止位置展示
+        PoolItem batchWinner = null;
+        String batchWinnerRarity = "";
+        for (CaseResult r : results) {
+            if (r == null || r.item() == null) continue;
+            if (batchWinner == null || rarityRank(r.rarity()) > rarityRank(batchWinnerRarity)) {
+                batchWinner = r.item();
+                batchWinnerRarity = r.rarity();
+            }
+        }
+        fillAnimationItems(player, payload, batchWinner, batchWinnerRarity);
         packetBridge.sendPacket(player, caseUiId, "batch_result", payload);
+    }
+
+    /**
+     * 稀有度排序权重，数值越大越稀有。
+     */
+    private int rarityRank(String rarity) {
+        if (rarity == null) return 0;
+        switch (rarity) {
+            case "COMMON": return 1;
+            case "UNCOMMON": return 2;
+            case "RARE": return 3;
+            case "EPIC": return 4;
+            case "LEGENDARY": return 5;
+            case "MYTHIC": return 6;
+            case "SPECIAL": return 7;
+            default: return 0;
+        }
     }
 
     private void update(Player player, String packetId, int index) {
