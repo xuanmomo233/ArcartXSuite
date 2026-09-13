@@ -155,22 +155,23 @@ ui:
         动画模板 = val.动画卡片带.get(1)
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
-          动画模板.entryKey = 1.round()
-          动画模板['卡片底'].entryKey = 1.round()
-          动画模板['稀有度条'].entryKey = 1.round()
-          动画模板['物品槽'].entryKey = 1.round()
-          动画模板['物品名'].entryKey = 1.round()
+          随机key = (math.floor(math.random() * 目标数) + 1).round()
+          动画模板.entryKey = 随机key
+          动画模板['卡片底'].entryKey = 随机key
+          动画模板['稀有度条'].entryKey = 随机key
+          动画模板['物品槽'].entryKey = 随机key
+          动画模板['物品名'].entryKey = 随机key
         }
         for(i in range(1, 动画带数量 - 1)){
           iInt = i.round()
-          slot = ((iInt - 1) % 目标数 + 1).round()
+          随机key = (math.floor(math.random() * 目标数) + 1).round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-            e.entryKey = slot
-            e['卡片底'].entryKey = slot
-            e['稀有度条'].entryKey = slot
-            e['物品槽'].entryKey = slot
-            e['物品名'].entryKey = slot
+            e.entryKey = 随机key
+            e['卡片底'].entryKey = 随机key
+            e['稀有度条'].entryKey = 随机key
+            e['物品槽'].entryKey = 随机key
+            e['物品名'].entryKey = 随机key
             var.动画卡片列表[i.round()] = e
           }
         }
@@ -307,22 +308,23 @@ ui:
         动画模板 = val.动画卡片带.get(1)
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
-          动画模板.entryKey = 1.round()
-          动画模板['卡片底'].entryKey = 1.round()
-          动画模板['稀有度条'].entryKey = 1.round()
-          动画模板['物品槽'].entryKey = 1.round()
-          动画模板['物品名'].entryKey = 1.round()
+          随机key = (math.floor(math.random() * 目标数) + 1).round()
+          动画模板.entryKey = 随机key
+          动画模板['卡片底'].entryKey = 随机key
+          动画模板['稀有度条'].entryKey = 随机key
+          动画模板['物品槽'].entryKey = 随机key
+          动画模板['物品名'].entryKey = 随机key
         }
         for(i in range(1, 动画带数量 - 1)){
           iInt = i.round()
-          slot = ((iInt - 1) % 目标数 + 1).round()
+          随机key = (math.floor(math.random() * 目标数) + 1).round()
           if(动画模板 != none){
             e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-            e.entryKey = slot
-            e['卡片底'].entryKey = slot
-            e['稀有度条'].entryKey = slot
-            e['物品槽'].entryKey = slot
-            e['物品名'].entryKey = slot
+            e.entryKey = 随机key
+            e['卡片底'].entryKey = 随机key
+            e['稀有度条'].entryKey = 随机key
+            e['物品槽'].entryKey = 随机key
+            e['物品名'].entryKey = 随机key
             var.动画卡片列表[i.round()] = e
           }
         }
@@ -367,36 +369,34 @@ ui:
       var.揭晓类型 = 'single'
       var.出货开始 = 0
       val.单抽结果卡片['物品浮动容器']['物品槽'].seticon()
-      // 结果已到达: 根据 resultPoolIndex 计算停止位置，让动画停在中奖物品上
-      var.resultPoolIndex = packet['resultPoolIndex'] != none ? packet['resultPoolIndex'] : -1
-      poolSize = var.itemCount != none ? var.itemCount : 0
-      if(var.resultPoolIndex > 0 && poolSize > 0){
-        // 动画带 50 张卡片，card k (1..49) 的 entryKey = ((k-1) % poolSize) + 1
-        // 在 card 42 附近找到 entryKey = resultPoolIndex 的卡片
-        targetCard = 42
-        while(targetCard >= 1){
-          temp = targetCard - 1
-          while(temp >= poolSize){ temp = temp - poolSize }
-          if(temp + 1 == var.resultPoolIndex){ break }
-          targetCard = targetCard - 1
-        }
-        if(targetCard < 1){
-          targetCard = 43
-          while(targetCard <= 49){
-            temp = targetCard - 1
-            while(temp >= poolSize){ temp = temp - poolSize }
-            if(temp + 1 == var.resultPoolIndex){ break }
-            targetCard = targetCard + 1
-          }
-        }
-        if(targetCard >= 1 && targetCard <= 49){
-          var.spinTarget = targetCard / 49
-        }else{
-          var.spinTarget = 0.82 + math.random() * 0.04
-        }
-      }else{
-        var.spinTarget = 0.82 + math.random() * 0.04
+      // 用 Java 端发送的 50 个伪随机物品覆盖 var.itemJsons/var.items，让动画带显示这些物品
+      animCount = packet['animCount'] != none ? packet['animCount'] : 50
+      animNames = packet['animItemNames'] != none ? packet['animItemNames'] : {}
+      animRarities = packet['animItemRarities'] != none ? packet['animItemRarities'] : {}
+      for(k in range(1, animCount)){
+        key = k.round()
+        animJson = packet['animItemJson' + key]
+        var.itemJsons[key] = animJson != none && animJson != '' ? animJson : var.air
+        entry = {}
+        entry['name'] = animNames[key] != none ? animNames[key] : ''
+        entry['rarity'] = animRarities[key] != none ? animRarities[key] : ''
+        var.items[key] = entry
       }
+      // 把动画卡片 entryKey 改成 1-50，对应 Java 发来的 50 个物品
+      for(key in var.动画卡片列表.keys()){
+        e = var.动画卡片列表[key]
+        if(e != none){
+          entryKey = (key + 1).round()
+          e.entryKey = entryKey
+          e['卡片底'].entryKey = entryKey
+          e['稀有度条'].entryKey = entryKey
+          e['物品槽'].entryKey = entryKey
+          e['物品名'].entryKey = entryKey
+          e['物品槽'].seticon()
+        }
+      }
+      // 结果已到达: 固定 spinTarget 让中线精确对准 card 38（中奖位置）
+      var.spinTarget = 12210 / 14720
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速

@@ -184,8 +184,59 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resultItemJson1", item == null ? "" : poolItemJson(player, item));
         payload.put("resultItemName", item == null ? "" : item.name());
         payload.put("resultRarity", result == null ? "" : result.rarity());
-        payload.put("resultPoolIndex", result == null ? -1 : result.poolIndex());
+        // 动画带伪随机物品: 50 个物品填满动画带，第 39 个（card 38）是中奖物品
+        fillAnimationItems(player, payload, item, result == null ? "" : result.rarity());
         packetBridge.sendPacket(player, caseUiId, "result", payload);
+    }
+
+    /**
+     * 生成 50 个伪随机物品填满动画带，不能连续同一个物品相邻，第 39 个（card 38）是中奖物品。
+     */
+    private void fillAnimationItems(Player player, Map<String, Object> payload, PoolItem winner, String rarity) {
+        PoolDefinition pool = currentPool(player, CASE);
+        List<PoolItem> poolItems = pool == null || pool.caseConfig() == null
+            ? java.util.Collections.emptyList() : pool.caseConfig().items();
+        int animCount = 50;
+        int winnerSlot = 38; // card 38 (0-based), 对应 animItemJson39 (1-based)
+        Map<String, Object> names = new LinkedHashMap<>();
+        Map<String, Object> rarities = new LinkedHashMap<>();
+        java.util.Random rng = new java.util.Random();
+        PoolItem prev = null;
+        for (int i = 0; i < animCount; i++) {
+            PoolItem picked;
+            if (i == winnerSlot && winner != null) {
+                picked = winner;
+            } else {
+                // 随机选一个，避免和上一个相同
+                picked = randomItemExcept(poolItems, prev, rng);
+            }
+            String key = Integer.toString(i + 1);
+            payload.put("animItemJson" + key, picked == null ? "" : poolItemJson(player, picked));
+            names.put(key, picked == null ? "" : picked.name());
+            rarities.put(key, picked == null ? "" : (picked.rarity() == null ? "" : picked.rarity()));
+            prev = picked;
+        }
+        payload.put("animItemNames", names);
+        payload.put("animItemRarities", rarities);
+        payload.put("animCount", animCount);
+        payload.put("animWinnerSlot", winnerSlot + 1);
+    }
+
+    private PoolItem randomItemExcept(List<PoolItem> items, PoolItem exclude, java.util.Random rng) {
+        if (items == null || items.isEmpty()) return null;
+        if (items.size() == 1) return items.get(0);
+        PoolItem picked = items.get(rng.nextInt(items.size()));
+        if (picked == exclude) {
+            for (int attempt = 0; attempt < 5 && picked == exclude; attempt++) {
+                picked = items.get(rng.nextInt(items.size()));
+            }
+            if (picked == exclude) {
+                for (PoolItem candidate : items) {
+                    if (candidate != exclude) return candidate;
+                }
+            }
+        }
+        return picked;
     }
 
     private void sendCaseBatch(Player player, List<CaseResult> results, int count) {
