@@ -284,20 +284,20 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resourceRows", resourceRows(player, pool.cost(), payload));
         payload.put("upItemIcon", upItemIconJson(player, pool));
         if (pool.caseConfig() == null) return;
-        Map<String, Object> names = new LinkedHashMap<>();
-        Map<String, Object> rarities = new LinkedHashMap<>();
-        List<PoolItem> items = pool.caseConfig().items();
-        for (int i = 0; i < items.size() && i < CASE_PREVIEW_SLOT_LIMIT; i++) {
-            PoolItem item = items.get(i);
+        Map<String, Object> items = new LinkedHashMap<>();
+        List<PoolItem> poolItems = pool.caseConfig().items();
+        for (int i = 0; i < poolItems.size() && i < CASE_PREVIEW_SLOT_LIMIT; i++) {
+            PoolItem item = poolItems.get(i);
             String key = Integer.toString(i + 1);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", item.name());
+            entry.put("rarity", item.rarity() == null ? "" : item.rarity());
+            items.put(key, entry);
             // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.itemJsons
             payload.put("itemJson" + key, poolItemJson(player, item));
-            names.put(key, item.name());
-            rarities.put(key, item.rarity() == null ? "" : item.rarity());
         }
-        payload.put("itemNames", names);
-        payload.put("itemRarities", rarities);
-        payload.put("itemCount", Math.min(items.size(), CASE_PREVIEW_SLOT_LIMIT));
+        payload.put("items", items);
+        payload.put("itemCount", Math.min(poolItems.size(), CASE_PREVIEW_SLOT_LIMIT));
     }
 
     private Map<String, Object> caseRarityNames() {

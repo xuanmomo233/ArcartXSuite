@@ -79,18 +79,14 @@ ui:
       var.resourceRows = packet['resourceRows']
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
       var.costIconJsons = {}
-      if(var.costRows != none){
-        for(key in var.costRows.keys()){
-          json = packet['costIconJson' + key]
-          var.costIconJsons[key] = json != none && json != '' ? json : var.air
-        }
+      for(key in var.costRows.keys()){
+        json = packet['costIconJson' + key]
+        var.costIconJsons[key] = json != none && json != '' ? json : var.air
       }
       var.costTenIconJsons = {}
-      if(var.costTenRows != none){
-        for(key in var.costTenRows.keys()){
-          json = packet['costTenIconJson' + key]
-          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
-        }
+      for(key in var.costTenRows.keys()){
+        json = packet['costTenIconJson' + key]
+        var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
       }
       var.resourceIconJsons = {}
       if(var.resourceRows != none){
@@ -130,12 +126,14 @@ ui:
             btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
+            btn['UP物品槽'].entryKey = key
             btn['名称'].entryKey = key
           }
         }
         e = val.卡池导航列表['卡池按钮' + key]
         if(e != none){
           e.entryKey = key
+          e['UP物品槽'].seticon()
         }
       }
       // 消耗区与资源栏图标
@@ -188,18 +186,14 @@ ui:
       var.resourceRows = packet['resourceRows']
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
       var.costIconJsons = {}
-      if(var.costRows != none){
-        for(key in var.costRows.keys()){
-          json = packet['costIconJson' + key]
-          var.costIconJsons[key] = json != none && json != '' ? json : var.air
-        }
+      for(key in var.costRows.keys()){
+        json = packet['costIconJson' + key]
+        var.costIconJsons[key] = json != none && json != '' ? json : var.air
       }
       var.costTenIconJsons = {}
-      if(var.costTenRows != none){
-        for(key in var.costTenRows.keys()){
-          json = packet['costTenIconJson' + key]
-          var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
-        }
+      for(key in var.costTenRows.keys()){
+        json = packet['costTenIconJson' + key]
+        var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
       }
       var.resourceIconJsons = {}
       if(var.resourceRows != none){
@@ -238,12 +232,14 @@ ui:
             btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
+            btn['UP物品槽'].entryKey = key
             btn['名称'].entryKey = key
           }
         }
         e = val.卡池导航列表['卡池按钮' + key]
         if(e != none){
           e.entryKey = key
+          e['UP物品槽'].seticon()
         }
       }
       // 消耗区与资源栏图标
@@ -731,7 +727,7 @@ controls:
                   资源条目0:
                     type: Canvas
                     attribute:
-                      entryKey: 4.round()
+                      entryKey: 0.round()
                       width: 196
                       height: 60
                       visible: "var.resourceRows == none ? self.entryKey < 2 : var.resourceRows[self.entryKey] != none"
@@ -857,7 +853,7 @@ controls:
                   卡池按钮0:
                     type: Canvas
                     attribute:
-                      entryKey: 12.round()
+                      entryKey: 0.round()
                       width: 208
                       height: 124
                       visible: "var.poolList == none || var.poolList.size() == 0 ? self.entryKey < 3 : self.entryKey < var.poolList.size()"
@@ -933,10 +929,10 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           point: ~top_center
-                          y: 10
+                          y: 20
                           slotType: ~Icon
-                          width: 176
-                          height: 70
+                          width: 50
+                          height: 50
                           normal: ~0,0,0,0
                           through: true
                           seticon: "self.setItemIcon(var.poolUpItemIcons[self.entryKey])"
@@ -1515,7 +1511,7 @@ controls:
                       进度格0:
                         type: Texture
                         attribute:
-                          entryKey: 10.round()
+                          entryKey: 0.round()
                           width: "var.pity5Limit != none && var.pity5Limit > 0 && var.pity5 != none ? (var.pity5 * 10 >= (self.entryKey + 1) * var.pity5Limit ? 15.3 : (var.pity5 * 10 > self.entryKey * var.pity5Limit ? (var.pity5 * 10 - self.entryKey * var.pity5Limit) * 15.3 / var.pity5Limit : 15.3)) : 15.3"
                           height: 10
                           normal: "var.pity5Limit != none && var.pity5Limit > 0 ? '236,196,110,245' : '110,148,204,90'"
@@ -1608,7 +1604,7 @@ controls:
                       进度格0:
                         type: Texture
                         attribute:
-                          entryKey: 10.round()
+                          entryKey: 0.round()
                           width: "var.pity4Limit != none && var.pity4Limit > 0 && var.pity4 != none ? (var.pity4 * 10 >= (self.entryKey + 1) * var.pity4Limit ? 15.3 : (var.pity4 * 10 > self.entryKey * var.pity4Limit ? (var.pity4 * 10 - self.entryKey * var.pity4Limit) * 15.3 / var.pity4Limit : 15.3)) : 15.3"
                           height: 10
                           normal: "var.pity4Limit != none && var.pity4Limit > 0 ? '176,146,232,245' : '110,148,204,90'"
@@ -1980,7 +1976,7 @@ controls:
                       消耗条目0:
                         type: Canvas
                         attribute:
-                          entryKey: 4.round()
+                          entryKey: 0.round()
                           width: 80
                           height: 34
                           through: true
@@ -2003,8 +1999,8 @@ controls:
                               entryKey: 0.round()
                               point: ~middle_left
                               x: 36
-                              texts: "var.costRows[self.entryKey] != none ? (var.costRows[self.entryKey]['owned'] == none || var.costRows[self.entryKey]['owned'] < 0 ? '&7x' : var.costRows[self.entryKey]['owned'] < var.costRows[self.entryKey]['amount'] ? '&cx' : '&fx') + var.costRows[self.entryKey]['amount'].round() : (self.entryKey == 0 ? '———' : '')"
-                              fontSize: 30
+                              texts: "'&0x' + var.costRows[self.entryKey]['amount'].round()"
+                              fontSize: 36
                               through: true
               祈愿十次:
                 type: Canvas
@@ -2095,7 +2091,7 @@ controls:
                       消耗条目0:
                         type: Canvas
                         attribute:
-                          entryKey: 4.round()
+                          entryKey: 0.round()
                           width: 80
                           height: 34
                           through: true
@@ -2118,8 +2114,8 @@ controls:
                               entryKey: 0.round()
                               point: ~middle_left
                               x: 36
-                              texts: "var.costTenRows[self.entryKey] != none ? (var.costTenRows[self.entryKey]['owned'] == none || var.costTenRows[self.entryKey]['owned'] < 0 ? '&7x' : var.costTenRows[self.entryKey]['owned'] < var.costTenRows[self.entryKey]['amount'] ? '&cx' : '&fx') + var.costTenRows[self.entryKey]['amount'].round() : (self.entryKey == 0 ? '———' : '')"
-                              fontSize: 30
+                              texts: "'&0x' + var.costTenRows[self.entryKey]['amount'].round()"
+                              fontSize: 36
                               through: true
           关闭按钮:
             type: Canvas
@@ -2592,778 +2588,838 @@ controls:
         type: Canvas
         val: 历史面板
         attribute:
-          point: ~middle_center
-          width: 960
-          height: 720
+          point: ~stretch_all
           visible: false
         children:
-          面板背景:
+          遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              gradient:
-                color1: ~24,30,48,255
-                color2: ~16,22,36,255
-                type: 0
-                angleDeg: 90
-              stroke:
-                width: 3
-                color: ~226,196,132,255
-          内高光线:
-            type: Texture
-            attribute:
-              point: ~middle_center
-              width: 946
-              height: 706
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 10
-              through: true
-            effect:
-              stroke:
-                width: 3
-                color: ~255,246,214,150
-          内侧金线:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
-          面板标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 20
-              texts: "'&f祈愿记录 · ' + var.historyPoolName"
-              fontSize: 52
-          记录条数:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 66
-              texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
-              fontSize: 32
-          历史滑轨:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 110
-              width: 10
-              height: 520
-              normal: ~20,24,38,220
-              shape: ~round_rect
-              radius: 4
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,180
-          历史滑块:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 110
-              width: 10
-              height: 60
-              normal: ~255,226,158,255
-              maxDragY: 520 - 60
-              dragY: 0
-              shape: ~round_rect
-              radius: 4
-          历史视口:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 110
-              width: 880
-              height: 520
-              moveY: self.parent['历史滑块'].getDragYRatio()
-              through: false
-            action:
-              wheel: |-
-                if(self.moveY >= 0){
-                  if(self.wheelValue > 0){
-                    self.parent['历史滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
-                if(self.moveY <= 1){
-                  if(self.wheelValue < 0){
-                    self.parent['历史滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
-            children:
-              历史列表:
-                type: VGrid
-                val: 历史列表
-                attribute:
-                  row: 100
-                  spaceBetweenY: 12
-                children:
-                  历史行0:
-                    type: Canvas
-                    attribute:
-                      entryKey: 0.round()
-                      width: 860
-                      height: 66
-                      visible: "var.historyRows[self.entryKey] != none"
-                    children:
-                      行背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~22,28,44,240
-                          shape: ~round_rect
-                          radius: 6
-                      时间:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 16
-                          texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
-                          fontSize: 32
-                      摘要:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 230
-                          texts: "var.historyRows[self.entryKey] != none ? var.historyRows[self.entryKey]['summary'] : ''"
-                          fontSize: 36
-          历史空态:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts:
-                - ~&8暂无祈愿记录
-              fontSize: 36
-              visible: "var.historyCount != none && var.historyCount == 0"
-          历史关闭:
+              normal: ~0,0,0,0
+          面板容器:
             type: Canvas
             attribute:
-              point: ~bottom_center
-              y: -20
-              width: 200
-              height: 56
-            action:
-              click: "val.历史面板.visible = false"
+              point: ~middle_center
+              width: 960
+              height: 720
             children:
-              历史关闭背景:
+              面板背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
+                  normal: ~14,18,30,250
                   shape: ~round_rect
-                  radius: 26
+                  radius: 12
+                effect:
+                  gradient:
+                    color1: ~24,30,48,255
+                    color2: ~16,22,36,255
+                    type: 0
+                    angleDeg: 90
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,255
+              内高光线:
+                type: Texture
+                attribute:
+                  point: ~middle_center
+                  width: 946
+                  height: 706
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
                 effect:
                   stroke:
                     width: 3
-                    color: ~226,196,132,235
-              历史关闭文字:
+                    color: ~255,246,214,150
+              内侧金线:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,220
+              面板标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 20
+                  texts: "'&f祈愿记录 · ' + var.historyPoolName"
+                  fontSize: 52
+              记录条数:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 66
+                  texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
+                  fontSize: 32
+              历史滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 110
+                  width: 10
+                  height: 520
+                  normal: ~20,24,38,220
+                  shape: ~round_rect
+                  radius: 4
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,180
+              历史滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 110
+                  width: 10
+                  height: 60
+                  normal: ~255,226,158,255
+                  maxDragY: 520 - 60
+                  dragY: 0
+                  shape: ~round_rect
+                  radius: 4
+              历史视口:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 110
+                  width: 880
+                  height: 520
+                  moveY: self.parent['历史滑块'].getDragYRatio()
+                  through: false
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0){
+                      if(self.wheelValue > 0){
+                        self.parent['历史滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                    if(self.moveY <= 1){
+                      if(self.wheelValue < 0){
+                        self.parent['历史滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                children:
+                  历史列表:
+                    type: VGrid
+                    val: 历史列表
+                    attribute:
+                      row: 100
+                      spaceBetweenY: 12
+                    children:
+                      历史行0:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          width: 860
+                          height: 66
+                          visible: "var.historyRows[self.entryKey] != none"
+                        children:
+                          行背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~22,28,44,240
+                              shape: ~round_rect
+                              radius: 6
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~226,196,132,180
+                          时间:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 16
+                              texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
+                              fontSize: 32
+                          摘要:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 230
+                              texts: "var.historyRows[self.entryKey] != none ? var.historyRows[self.entryKey]['summary'] : ''"
+                              fontSize: 36
+              历史空态:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
-                  texts: "~&f关闭"
+                  texts:
+                    - ~&8暂无祈愿记录
                   fontSize: 36
-                  through: true
+                  visible: "var.historyCount != none && var.historyCount == 0"
+              历史关闭:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -20
+                  width: 200
+                  height: 56
+                action:
+                  click: "val.历史面板.visible = false"
+                children:
+                  历史关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,48,74,240
+                      hover: ~62,78,120,245
+                      shape: ~round_rect
+                      radius: 26
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~226,196,132,235
+                  历史关闭文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 200
+                      texts: "~&f关闭"
+                      fontSize: 36
+                      through: true
       # 详情面板: details 包的概率、保底与卡池条目
       详情面板:
         type: Canvas
         val: 详情面板
         attribute:
-          point: ~middle_center
-          width: 960
-          height: 720
+          point: ~stretch_all
           visible: false
         children:
-          面板背景:
+          遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              gradient:
-                color1: ~24,30,48,255
-                color2: ~16,22,36,255
-                type: 0
-                angleDeg: 90
-              stroke:
-                width: 3
-                color: ~226,196,132,255
-          内高光线:
-            type: Texture
+              normal: ~0,0,0,0
+          面板容器:
+            type: Canvas
             attribute:
               point: ~middle_center
-              width: 946
-              height: 706
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 10
-              through: true
-            effect:
-              stroke:
-                width: 3
-                color: ~255,246,214,150
-          内侧金线:
+              width: 960
+              height: 720
+            children:
+              面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  gradient:
+                    color1: ~24,30,48,255
+                    color2: ~16,22,36,255
+                    type: 0
+                    angleDeg: 90
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,255
+              内高光线:
+                type: Texture
+                attribute:
+                  point: ~middle_center
+                  width: 946
+                  height: 706
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,246,214,150
+              内侧金线:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,220
+              面板标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 20
+                  texts: "'&f概率详情 · ' + var.detailPoolName"
+                  fontSize: 52
+              概率说明:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 68
+                  texts: "'&75 星基础概率 &6' + ((var.detailBase5Rate != none ? var.detailBase5Rate : 0) * 100).round(1) + '% &7· 4 星基础概率 &5' + ((var.detailBase4Rate != none ? var.detailBase4Rate : 0) * 100).round(1) + '%'"
+                  fontSize: 34
+              保底说明:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 102
+                  texts: "'&75 星保底 ' + (var.detailPity5 != none ? var.detailPity5.round() : 0) + ' 抽 · 4 星保底 ' + (var.detailPity4 != none ? var.detailPity4.round() : 0) + ' 抽 · UP 概率 ' + ((var.detailUpRate != none ? var.detailUpRate : 0) * 100).round(1) + '%'"
+                  fontSize: 34
+              详情滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 150
+                  width: 10
+                  height: 470
+                  normal: ~20,24,38,220
+                  shape: ~round_rect
+                  radius: 4
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,180
+              详情滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 150
+                  width: 10
+                  height: 60
+                  normal: ~255,226,158,255
+                  maxDragY: 470 - 60
+                  dragY: 0
+                  shape: ~round_rect
+                  radius: 4
+              详情视口:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 150
+                  width: 880
+                  height: 470
+                  moveY: self.parent['详情滑块'].getDragYRatio()
+                  through: false
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0){
+                      if(self.wheelValue > 0){
+                        self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                    if(self.moveY <= 1){
+                      if(self.wheelValue < 0){
+                        self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                children:
+                  详情列表:
+                    type: VGrid
+                    val: 详情列表
+                    attribute:
+                      row: 60
+                      spaceBetweenY: 12
+                    children:
+                      详情行0:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          width: 860
+                          height: 58
+                          visible: "var.detailRows[self.entryKey] != none"
+                        children:
+                          行背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~22,28,44,240
+                              shape: ~round_rect
+                              radius: 6
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~226,196,132,180
+                          名称:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 16
+                              texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
+                              fontSize: 34
+                          稀有度:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 500
+                              texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['rarity'] : ''"
+                              fontSize: 34
+                          权重:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 740
+                              texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['weight'].round() : ''"
+                              fontSize: 34
+              详情空态:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts:
+                    - ~&8暂无可展示的卡池条目
+                  fontSize: 36
+                  visible: "var.detailCount != none && var.detailCount == 0"
+              详情关闭:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -20
+                  width: 200
+                  height: 56
+                action:
+                  click: "val.详情面板.visible = false"
+                children:
+                  详情关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,48,74,240
+                      hover: ~62,78,120,245
+                      shape: ~round_rect
+                      radius: 26
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~226,196,132,235
+                  详情关闭文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 200
+                      texts: "~&f关闭"
+                      fontSize: 36
+                      through: true
+      # 兑换面板: exchange 包的积分余额与真实商品列表，点击兑换发送 exchange_buy
+      兑换面板:
+        type: Canvas
+        val: 兑换面板
+        attribute:
+          point: ~stretch_all
+          visible: false
+        children:
+          遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
-          面板标题:
-            type: Text
+              normal: ~0,0,0,0
+          面板容器:
+            type: Canvas
             attribute:
-              point: ~top_left
-              x: 24
-              y: 20
-              texts: "'&f概率详情 · ' + var.detailPoolName"
-              fontSize: 52
-          概率说明:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 68
-              texts: "'&75 星基础概率 &6' + ((var.detailBase5Rate != none ? var.detailBase5Rate : 0) * 100).round(1) + '% &7· 4 星基础概率 &5' + ((var.detailBase4Rate != none ? var.detailBase4Rate : 0) * 100).round(1) + '%'"
-              fontSize: 34
-          保底说明:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 102
-              texts: "'&75 星保底 ' + (var.detailPity5 != none ? var.detailPity5.round() : 0) + ' 抽 · 4 星保底 ' + (var.detailPity4 != none ? var.detailPity4.round() : 0) + ' 抽 · UP 概率 ' + ((var.detailUpRate != none ? var.detailUpRate : 0) * 100).round(1) + '%'"
-              fontSize: 34
-          详情滑轨:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 150
-              width: 10
-              height: 470
-              normal: ~20,24,38,220
-              shape: ~round_rect
-              radius: 4
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,180
-          详情滑块:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 150
-              width: 10
-              height: 60
-              normal: ~255,226,158,255
-              maxDragY: 470 - 60
-              dragY: 0
-              shape: ~round_rect
-              radius: 4
-          详情视口:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 150
-              width: 880
-              height: 470
-              moveY: self.parent['详情滑块'].getDragYRatio()
-              through: false
-            action:
-              wheel: |-
-                if(self.moveY >= 0){
-                  if(self.wheelValue > 0){
-                    self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
-                if(self.moveY <= 1){
-                  if(self.wheelValue < 0){
-                    self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
+              point: ~middle_center
+              width: 1120
+              height: 760
             children:
-              详情列表:
-                type: VGrid
-                val: 详情列表
+              面板背景:
+                type: Texture
                 attribute:
-                  row: 60
-                  spaceBetweenY: 12
+                  point: ~stretch_all
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  gradient:
+                    color1: ~24,30,48,255
+                    color2: ~16,22,36,255
+                    type: 0
+                    angleDeg: 90
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,255
+              内高光线:
+                type: Texture
+                attribute:
+                  point: ~middle_center
+                  width: 946
+                  height: 706
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,246,214,150
+              内侧金线:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~14,18,30,250
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~226,196,132,220
+              面板标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 20
+                  texts:
+                    - ~&f积分兑换
+                  fontSize: 52
+              # 积分余额栏: 玩家各类积分余额
+              积分余额栏:
+                type: HStack
+                val: 积分余额栏
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 76
+                  height: 60
+                  spaceBetween: 28
+                action:
+                  create: |-
+                    for(i in range(1, 3)){
+                      key = i.round()
+                      e = self['积分条目0'].copy('积分条目' + key)
+                      e.entryKey = key
+                      e['图标'].entryKey = key
+                      e['名称'].entryKey = key
+                      e['余额'].entryKey = key
+                    }
                 children:
-                  详情行0:
+                  积分条目0:
                     type: Canvas
                     attribute:
                       entryKey: 0.round()
-                      width: 860
-                      height: 58
-                      visible: "var.detailRows[self.entryKey] != none"
+                      width: 210
+                      height: 60
+                      visible: "var.pointBalanceRows[self.entryKey] != none"
                     children:
-                      行背景:
+                      条目背景:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           normal: ~22,28,44,240
                           shape: ~round_rect
                           radius: 6
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~226,196,132,180
+                      图标:
+                        type: Slot
+                        attribute:
+                          entryKey: 0.round()
+                          point: ~middle_left
+                          x: 8
+                          slotType: ~Icon
+                          width: 44
+                          height: 44
+                          normal: ~0,0,0,0
+                          seticon: "self.setItemIcon(var.pointIconJsons[self.entryKey])"
                       名称:
                         type: Text
                         attribute:
                           entryKey: 0.round()
                           point: ~middle_left
-                          x: 16
-                          texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
-                          fontSize: 34
-                      稀有度:
+                          x: 60
+                          y: -12
+                          texts: "var.pointBalanceRows[self.entryKey] != none ? '&7' + var.pointBalanceRows[self.entryKey]['displayName'] : ''"
+                          fontSize: 32
+                      余额:
                         type: Text
                         attribute:
                           entryKey: 0.round()
                           point: ~middle_left
-                          x: 500
-                          texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['rarity'] : ''"
-                          fontSize: 34
-                      权重:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 740
-                          texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['weight'].round() : ''"
-                          fontSize: 34
-          详情空态:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts:
-                - ~&8暂无可展示的卡池条目
-              fontSize: 36
-              visible: "var.detailCount != none && var.detailCount == 0"
-          详情关闭:
-            type: Canvas
-            attribute:
-              point: ~bottom_center
-              y: -20
-              width: 200
-              height: 56
-            action:
-              click: "val.详情面板.visible = false"
-            children:
-              详情关闭背景:
+                          x: 60
+                          y: 14
+                          texts: "'&6' + var.pointBalanceRows[self.entryKey]['amount'].round()"
+                          fontSize: 36
+              兑换滑轨:
                 type: Texture
                 attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
+                  point: ~top_right
+                  x: -16
+                  y: 156
+                  width: 10
+                  height: 500
+                  normal: ~20,24,38,220
                   shape: ~round_rect
-                  radius: 26
+                  radius: 4
                 effect:
                   stroke:
                     width: 3
-                    color: ~226,196,132,235
-              详情关闭文字:
+                    color: ~226,196,132,180
+              兑换滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 156
+                  width: 10
+                  height: 60
+                  normal: ~255,226,158,255
+                  maxDragY: 500 - 60
+                  dragY: 0
+                  shape: ~round_rect
+                  radius: 4
+              兑换视口:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 156
+                  width: 1040
+                  height: 500
+                  moveY: self.parent['兑换滑块'].getDragYRatio()
+                  through: false
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0){
+                      if(self.wheelValue > 0){
+                        self.parent['兑换滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                    if(self.moveY <= 1){
+                      if(self.wheelValue < 0){
+                        self.parent['兑换滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                      }
+                    }
+                children:
+                  兑换列表:
+                    type: VGrid
+                    val: 兑换列表
+                    attribute:
+                      row: 20
+                      spaceBetweenY: 12
+                    children:
+                      兑换行0:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          width: 1020
+                          height: 64
+                          visible: "var.exchangeRows[self.entryKey] != none"
+                        children:
+                          行背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~22,28,44,240
+                              shape: ~round_rect
+                              radius: 6
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~226,196,132,180
+                          商品图标:
+                            type: Slot
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 12
+                              slotType: ~Icon
+                              width: 44
+                              height: 44
+                              normal: ~0,0,0,0
+                              seticon: "self.setItemIcon(var.exchangeIconJsons[self.entryKey])"
+                          商品名称:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 68
+                              y: -12
+                              texts: "var.exchangeRows[self.entryKey] != none ? '&f' + var.exchangeRows[self.entryKey]['name'] : ''"
+                              fontSize: 28
+                              limit: 16
+                              through: true
+                          消耗文本:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 68
+                              y: 12
+                              texts: "var.exchangeRows[self.entryKey] != none ? '&7消耗 &6' + var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][0]['amount'].round() + (var.exchangeRows[self.entryKey]['costRows'][1] != none ? ' &7+ &6' + var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][1]['amount'].round() : '') : ''"
+                              fontSize: 26
+                              through: true
+                          限购文本:
+                            type: Text
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_right
+                              x: -140
+                              texts: "var.exchangeRows[self.entryKey] != none ? (var.exchangeRows[self.entryKey]['limit'] == 0 ? '&7不限购' : '&7剩余 ' + var.exchangeRows[self.entryKey]['remaining'].round() + '/' + var.exchangeRows[self.entryKey]['limit'].round()) : ''"
+                              fontSize: 26
+                              through: true
+                          兑换按钮:
+                            type: Texture
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_right
+                              x: -12
+                              width: 110
+                              height: 44
+                              normal: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '226,196,132,255' : '28,34,54,230'}"
+                              hover: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '255,246,214,255' : '28,34,54,230'}"
+                              shape: ~round_rect
+                              radius: 22
+                              texts: "var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '&f兑换' : '&7已达上限'"
+                              center: true
+                              fontSize: 28
+                              enable: "!var.actionBusy && var.actionToken != ''"
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~110,148,204,150
+                            action:
+                              click: |-
+                                if(var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] != none && var.exchangeRows[self.entryKey]['canExchange'] == true){
+                                  var.actionBusy = true
+                                  Packet.send(var.packetId, 'exchange_buy', var.exchangeRows[self.entryKey]['id'], var.actionToken)
+                                }
+              兑换空态:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
-                  texts: "~&f关闭"
+                  texts:
+                    - ~&8暂无可兑换内容
                   fontSize: 36
-                  through: true
-      # 兑换面板: exchange 包的积分余额与真实商品列表，点击兑换发送 exchange_buy
-      兑换面板:
-        type: Canvas
-        val: 兑换面板
-        attribute:
-          point: ~middle_center
-          width: 1120
-          height: 760
-          visible: false
-        children:
-          面板背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              gradient:
-                color1: ~24,30,48,255
-                color2: ~16,22,36,255
-                type: 0
-                angleDeg: 90
-              stroke:
-                width: 3
-                color: ~226,196,132,255
-          内高光线:
-            type: Texture
-            attribute:
-              point: ~middle_center
-              width: 946
-              height: 706
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 10
-              through: true
-            effect:
-              stroke:
-                width: 3
-                color: ~255,246,214,150
-          内侧金线:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~14,18,30,250
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
-          面板标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 20
-              texts:
-                - ~&f积分兑换
-              fontSize: 52
-          # 积分余额栏: 玩家各类积分余额
-          积分余额栏:
-            type: HStack
-            val: 积分余额栏
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 76
-              height: 60
-              spaceBetween: 28
-            action:
-              create: |-
-                for(i in range(1, 3)){
-                  key = i.round()
-                  e = self['积分条目0'].copy('积分条目' + key)
-                  e.entryKey = key
-                  e['图标'].entryKey = key
-                  e['名称'].entryKey = key
-                  e['余额'].entryKey = key
-                }
-            children:
-              积分条目0:
+                  visible: "var.exchangeCount != none && var.exchangeCount == 0"
+              兑换关闭:
                 type: Canvas
                 attribute:
-                  entryKey: 0.round()
-                  width: 210
-                  height: 60
-                  visible: "var.pointBalanceRows[self.entryKey] != none"
+                  point: ~bottom_center
+                  y: -20
+                  width: 200
+                  height: 56
+                action:
+                  click: "val.兑换面板.visible = false"
                 children:
-                  条目背景:
+                  兑换关闭背景:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~22,28,44,240
+                      through: true
+                      normal: ~40,48,74,240
+                      hover: ~62,78,120,245
                       shape: ~round_rect
-                      radius: 6
-                  图标:
-                    type: Slot
-                    attribute:
-                      entryKey: 0.round()
-                      point: ~middle_left
-                      x: 8
-                      slotType: ~Icon
-                      width: 44
-                      height: 44
-                      normal: ~0,0,0,0
-                      seticon: "self.setItemIcon(var.pointIconJsons[self.entryKey])"
-                  名称:
+                      radius: 26
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~226,196,132,235
+                  兑换关闭文字:
                     type: Text
                     attribute:
-                      entryKey: 0.round()
-                      point: ~middle_left
-                      x: 60
-                      y: -12
-                      texts: "var.pointBalanceRows[self.entryKey] != none ? '&7' + var.pointBalanceRows[self.entryKey]['displayName'] : ''"
-                      fontSize: 32
-                  余额:
-                    type: Text
-                    attribute:
-                      entryKey: 0.round()
-                      point: ~middle_left
-                      x: 60
-                      y: 14
-                      texts: "'&6' + var.pointBalanceRows[self.entryKey]['amount'].round()"
+                      point: ~middle_center
+                      width: 200
+                      texts: "~&f关闭"
                       fontSize: 36
-          兑换滑轨:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 156
-              width: 10
-              height: 500
-              normal: ~20,24,38,220
-              shape: ~round_rect
-              radius: 4
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,180
-          兑换滑块:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 156
-              width: 10
-              height: 60
-              normal: ~255,226,158,255
-              maxDragY: 500 - 60
-              dragY: 0
-              shape: ~round_rect
-              radius: 4
-          兑换视口:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 156
-              width: 1040
-              height: 500
-              moveY: self.parent['兑换滑块'].getDragYRatio()
-              through: false
-            action:
-              wheel: |-
-                if(self.moveY >= 0){
-                  if(self.wheelValue > 0){
-                    self.parent['兑换滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
-                if(self.moveY <= 1){
-                  if(self.wheelValue < 0){
-                    self.parent['兑换滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                  }
-                }
-            children:
-              兑换列表:
-                type: VGrid
-                val: 兑换列表
-                attribute:
-                  row: 20
-                  spaceBetweenY: 12
-                children:
-                  兑换行0:
-                    type: Canvas
-                    attribute:
-                      entryKey: 0.round()
-                      width: 1020
-                      height: 96
-                      visible: "var.exchangeRows[self.entryKey] != none"
-                    children:
-                      行背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~22,28,44,240
-                          shape: ~round_rect
-                          radius: 8
-                      商品图标:
-                        type: Slot
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 16
-                          slotType: ~Icon
-                          width: 64
-                          height: 74
-                          normal: ~0,0,0,0
-                          seticon: "self.setItemIcon(var.exchangeIconJsons[self.entryKey])"
-                      商品名称:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 96
-                          y: -18
-                          texts: "var.exchangeRows[self.entryKey] != none ? '&f' + var.exchangeRows[self.entryKey]['name'] : ''"
-                          fontSize: 36
-                      消耗文本:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_left
-                          x: 96
-                          y: 18
-                          texts: "var.exchangeRows[self.entryKey] != none ? '&7消耗 &6' + var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][0]['amount'].round() + (var.exchangeRows[self.entryKey]['costRows'][1] != none ? ' &7+ &6' + var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][1]['amount'].round() : '') : ''"
-                          fontSize: 32
-                      限购文本:
-                        type: Text
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_right
-                          x: -200
-                          texts: "var.exchangeRows[self.entryKey] != none ? (var.exchangeRows[self.entryKey]['limit'] == 0 ? '&7不限购' : '&7剩余 ' + var.exchangeRows[self.entryKey]['remaining'].round() + '/' + var.exchangeRows[self.entryKey]['limit'].round()) : ''"
-                          fontSize: 32
-                      兑换按钮:
-                        type: Texture
-                        attribute:
-                          entryKey: 0.round()
-                          point: ~middle_right
-                          x: -16
-                          width: 160
-                          height: 66
-                          normal: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '226,196,132,255' : '28,34,54,230'}"
-                          hover: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '255,246,214,255' : '28,34,54,230'}"
-                          shape: ~round_rect
-                          radius: 28
-                          texts: "var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '&f兑换' : '&7已达上限'"
-                          center: true
-                          fontSize: 34
-                          enable: "!var.actionBusy && var.actionToken != ''"
-                        effect:
-                          stroke:
-                            width: 3
-                            color: ~110,148,204,150
-                        action:
-                          click: |-
-                            if(var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] != none && var.exchangeRows[self.entryKey]['canExchange'] == true){
-                              var.actionBusy = true
-                              Packet.send(var.packetId, 'exchange_buy', var.exchangeRows[self.entryKey]['id'], var.actionToken)
-                            }
-          兑换空态:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts:
-                - ~&8暂无可兑换内容
-              fontSize: 36
-              visible: "var.exchangeCount != none && var.exchangeCount == 0"
-          兑换关闭:
-            type: Canvas
-            attribute:
-              point: ~bottom_center
-              y: -20
-              width: 200
-              height: 56
-            action:
-              click: "val.兑换面板.visible = false"
-            children:
-              兑换关闭背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
-                  shape: ~round_rect
-                  radius: 26
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~226,196,132,235
-              兑换关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 200
-                  texts: "~&f关闭"
-                  fontSize: 36
-                  through: true
+                      through: true
       # 资源不足提示: 抽奖/开箱时资源不够的提示面板
       资源不足提示:
         type: Canvas
         val: 资源不足提示
         attribute:
-          point: ~middle_center
-          width: 600
-          height: 400
+          point: ~stretch_all
           visible: false
         children:
-          提示背景:
+          遮罩:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~26,30,44,244
-              shape: ~round_rect
-              radius: 12
-            effect:
-              gradient:
-                color1: ~38,46,72,255
-                color2: ~30,40,64,255
-                type: 0
-                angleDeg: 90
-              stroke:
-                width: 3
-                color: ~110,148,204,150
-          提示标题:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 40
-              texts:
-                - ~&c&l资源不足
-              fontSize: 56
-          提示内容:
-            type: Text
-            attribute:
-              point: ~middle_center
-              y: -20
-              texts:
-                - "~&7您没有足够的抽奖资源"
-                - "~&7请获取对应道具后再次尝试"
-              fontSize: 36
-          提示关闭:
+              normal: ~0,0,0,0
+          面板容器:
             type: Canvas
             attribute:
-              point: ~bottom_center
-              y: -24
-              width: 200
-              height: 56
-            action:
-              click: "val.资源不足提示.visible = false"
+              point: ~middle_center
+              width: 600
+              height: 400
             children:
-              提示关闭背景:
+              提示背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
+                  normal: ~26,30,44,244
                   shape: ~round_rect
-                  radius: 26
+                  radius: 12
                 effect:
+                  gradient:
+                    color1: ~38,46,72,255
+                    color2: ~30,40,64,255
+                    type: 0
+                    angleDeg: 90
                   stroke:
                     width: 3
-                    color: ~226,196,132,235
-              提示关闭文字:
+                    color: ~110,148,204,150
+              提示标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 40
+                  texts:
+                    - ~&c&l资源不足
+                  fontSize: 56
+              提示内容:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
-                  texts: "~&f知道了"
+                  y: -20
+                  texts:
+                    - "~&7您没有足够的抽奖资源"
+                    - "~&7请获取对应道具后再次尝试"
                   fontSize: 36
-                  through: true
+              提示关闭:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -24
+                  width: 200
+                  height: 56
+                action:
+                  click: "val.资源不足提示.visible = false"
+                children:
+                  提示关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,48,74,240
+                      hover: ~62,78,120,245
+                      shape: ~round_rect
+                      radius: 26
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~226,196,132,235
+                  提示关闭文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 200
+                      texts: "~&f知道了"
+                      fontSize: 36
+                      through: true

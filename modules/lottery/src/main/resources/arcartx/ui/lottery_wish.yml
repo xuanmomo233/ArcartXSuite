@@ -1574,7 +1574,6 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          through: true
           normal: ~Frosted:24;22,26,38,200
       历史弹窗:
         type: Canvas
@@ -1646,7 +1645,7 @@ controls:
               radius: 6
             effect:
               stroke:
-                width: 2
+                width: 3
                 color: ~120,160,235,240
           历史滑块:
             type: Texture
@@ -1729,7 +1728,6 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          through: true
           normal: ~Frosted:24;22,26,38,200
       详情弹窗:
         type: Canvas
@@ -1809,7 +1807,7 @@ controls:
               radius: 6
             effect:
               stroke:
-                width: 2
+                width: 3
                 color: ~120,160,235,240
           详情滑块:
             type: Texture
@@ -1897,7 +1895,6 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          through: true
           normal: ~Frosted:24;22,26,38,200
       兑换弹窗:
         type: Canvas
@@ -2024,7 +2021,7 @@ controls:
               radius: 6
             effect:
               stroke:
-                width: 2
+                width: 3
                 color: ~120,160,235,240
           兑换滑块:
             type: Texture
@@ -2161,7 +2158,6 @@ controls:
         type: Texture
         attribute:
           point: ~stretch_all
-          through: true
           normal: ~Frosted:24;22,26,38,200
       提示框:
         type: Canvas
