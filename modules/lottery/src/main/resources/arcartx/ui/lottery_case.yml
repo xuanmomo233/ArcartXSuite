@@ -2091,7 +2091,7 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 0
+                              x: 24
                               width: 6
                               height: 48
                               normal: "var.rarityColors != none && var.detailRows[self.entryKey] != none && var.rarityColors[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityColors[var.detailRows[self.entryKey]['rarity']] : '128,128,128,255'"
@@ -2103,7 +2103,7 @@ controls:
                               through: true
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 24
+                              x: 48
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
                               fontSize: 34
                           稀有度:
@@ -2112,7 +2112,7 @@ controls:
                               through: true
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 480
+                              x: 448
                               texts: "var.rarityNames != none && var.detailRows[self.entryKey] != none && var.rarityNames[var.detailRows[self.entryKey]['rarity']] != none ? var.rarityNames[var.detailRows[self.entryKey]['rarity']] : ''"
                               fontSize: 30
                           概率:
@@ -2121,7 +2121,7 @@ controls:
                               through: true
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 720
+                              x: 688
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['probability'] : ''"
                               fontSize: 30
               详情空态:

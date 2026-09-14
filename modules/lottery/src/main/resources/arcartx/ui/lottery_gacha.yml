@@ -356,6 +356,14 @@ ui:
       var.historyPoolName = packet['historyPoolName']
       var.historyCount = packet['historyCount']
       var.historyRows = packet['historyRows']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.historyIconJsons = {}
+      if(var.historyRows != none){
+        for(key in var.historyRows.keys()){
+          json = packet['historyIconJson' + key]
+          var.historyIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       // 根据实际历史条目数动态创建行
       historyCount = var.historyCount != none ? var.historyCount : 0
       for(i in range(0, historyCount)){
@@ -364,6 +372,7 @@ ui:
           existing = val.历史列表['历史行' + key]
           if(existing == none){
             e = val.历史列表['历史行0'].copy('历史行' + key)
+            e['物品图标'].entryKey = key
             e['时间'].entryKey = key
             e['摘要'].entryKey = key
           }
@@ -371,6 +380,7 @@ ui:
         row = val.历史列表['历史行' + key]
         if(row != none){
           row.entryKey = key
+          row['物品图标'].seticon()
         }
       }
       val.历史面板.visible = true
@@ -388,6 +398,14 @@ ui:
       var.detailBase5Rate = packet['detailBase5Rate']
       var.detailBase4Rate = packet['detailBase4Rate']
       var.detailUpRate = packet['detailUpRate']
+      // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
+      var.detailIconJsons = {}
+      if(var.detailRows != none){
+        for(key in var.detailRows.keys()){
+          json = packet['detailIconJson' + key]
+          var.detailIconJsons[key] = json != none && json != '' ? json : var.air
+        }
+      }
       // 根据实际详情条目数动态创建行
       detailCount = var.detailCount != none ? var.detailCount : 0
       for(i in range(0, detailCount)){
@@ -396,14 +414,16 @@ ui:
           existing = val.详情列表['详情行' + key]
           if(existing == none){
             e = val.详情列表['详情行0'].copy('详情行' + key)
+            e['物品图标'].entryKey = key
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
-            e['权重'].entryKey = key
+            e['概率'].entryKey = key
           }
         }
         row = val.详情列表['详情行' + key]
         if(row != none){
           row.entryKey = key
+          row['物品图标'].seticon()
         }
       }
       val.详情面板.visible = true
@@ -2162,12 +2182,6 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,236
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
           等待文本:
             type: Text
             attribute:
@@ -2197,12 +2211,6 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,228
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
           保底提示:
             type: Text
             attribute:
@@ -2379,12 +2387,6 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~10,14,24,228
-              shape: ~round_rect
-              radius: 12
-            effect:
-              stroke:
-                width: 3
-                color: ~226,196,132,220
           十连标题:
             type: Text
             attribute:
@@ -2660,14 +2662,25 @@ controls:
                   y: 66
                   texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
                   fontSize: 32
+              顶部分界线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 108
+                  width: 912
+                  height: 2
+                  normal: ~226,196,132,180
+                  shape: ~round_rect
+                  radius: 1
               历史滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 110
+                  y: 124
                   width: 10
-                  height: 520
+                  height: 516
                   normal: ~20,24,38,220
                   shape: ~round_rect
                   radius: 4
@@ -2680,11 +2693,11 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 110
+                  y: 124
                   width: 10
                   height: 60
                   normal: ~255,226,158,255
-                  maxDragY: 520 - 60
+                  maxDragY: 516 - 60
                   dragY: 0
                   shape: ~round_rect
                   radius: 4
@@ -2693,9 +2706,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 24
-                  y: 110
+                  y: 124
                   width: 880
-                  height: 520
+                  height: 516
                   moveY: self.parent['历史滑块'].getDragYRatio()
                   through: false
                 action:
@@ -2737,12 +2750,23 @@ controls:
                               stroke:
                                 width: 3
                                 color: ~226,196,132,180
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 12
+                              slotType: ~Icon
+                              width: 44
+                              height: 44
+                              normal: ~0,0,0,0
+                              seticon: "self.setItemIcon(var.historyIconJsons[self.entryKey])"
                           时间:
                             type: Text
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 16
+                              x: 68
                               texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
                               fontSize: 32
                           摘要:
@@ -2750,7 +2774,7 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 230
+                              x: 280
                               texts: "var.historyRows[self.entryKey] != none ? var.historyRows[self.entryKey]['summary'] : ''"
                               fontSize: 36
               历史空态:
@@ -2877,14 +2901,49 @@ controls:
                   y: 102
                   texts: "'&75 星保底 ' + (var.detailPity5 != none ? var.detailPity5.round() : 0) + ' 抽 · 4 星保底 ' + (var.detailPity4 != none ? var.detailPity4.round() : 0) + ' 抽 · UP 概率 ' + ((var.detailUpRate != none ? var.detailUpRate : 0) * 100).round(1) + '%'"
                   fontSize: 34
+              物品列表头:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 92
+                  y: 140
+                  texts: "~&e物品名称"
+                  fontSize: 28
+              稀有度列表头:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 564
+                  y: 140
+                  texts: "~&e稀有度"
+                  fontSize: 28
+              概率列表头:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 764
+                  y: 140
+                  texts: "~&e概率"
+                  fontSize: 28
+              顶部分界线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 172
+                  width: 912
+                  height: 2
+                  normal: ~226,196,132,180
+                  shape: ~round_rect
+                  radius: 1
               详情滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 150
+                  y: 184
                   width: 10
-                  height: 470
+                  height: 456
                   normal: ~20,24,38,220
                   shape: ~round_rect
                   radius: 4
@@ -2897,11 +2956,11 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 150
+                  y: 184
                   width: 10
                   height: 60
                   normal: ~255,226,158,255
-                  maxDragY: 470 - 60
+                  maxDragY: 456 - 60
                   dragY: 0
                   shape: ~round_rect
                   radius: 4
@@ -2910,9 +2969,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 24
-                  y: 150
+                  y: 184
                   width: 880
-                  height: 470
+                  height: 456
                   moveY: self.parent['详情滑块'].getDragYRatio()
                   through: false
                 action:
@@ -2954,12 +3013,23 @@ controls:
                               stroke:
                                 width: 3
                                 color: ~226,196,132,180
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              entryKey: 0.round()
+                              point: ~middle_left
+                              x: 12
+                              slotType: ~Icon
+                              width: 44
+                              height: 44
+                              normal: ~0,0,0,0
+                              seticon: "self.setItemIcon(var.detailIconJsons[self.entryKey])"
                           名称:
                             type: Text
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 16
+                              x: 68
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
                               fontSize: 34
                           稀有度:
@@ -2967,16 +3037,16 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
-                              x: 500
+                              x: 540
                               texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['rarity'] : ''"
                               fontSize: 34
-                          权重:
+                          概率:
                             type: Text
                             attribute:
                               entryKey: 0.round()
                               point: ~middle_left
                               x: 740
-                              texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['weight'].round() : ''"
+                              texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['probability'] : ''"
                               fontSize: 34
               详情空态:
                 type: Text
@@ -3034,8 +3104,8 @@ controls:
             type: Canvas
             attribute:
               point: ~middle_center
-              width: 1120
-              height: 760
+              width: 960
+              height: 720
             children:
               面板背景:
                 type: Texture
@@ -3087,6 +3157,17 @@ controls:
                   texts:
                     - ~&f积分兑换
                   fontSize: 52
+              顶部分界线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 140
+                  width: 912
+                  height: 2
+                  normal: ~226,196,132,180
+                  shape: ~round_rect
+                  radius: 1
               # 积分余额栏: 玩家各类积分余额
               积分余额栏:
                 type: HStack
@@ -3161,9 +3242,9 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 156
+                  y: 152
                   width: 10
-                  height: 500
+                  height: 492
                   normal: ~20,24,38,220
                   shape: ~round_rect
                   radius: 4
@@ -3176,11 +3257,11 @@ controls:
                 attribute:
                   point: ~top_right
                   x: -16
-                  y: 156
+                  y: 152
                   width: 10
                   height: 60
                   normal: ~255,226,158,255
-                  maxDragY: 500 - 60
+                  maxDragY: 492 - 60
                   dragY: 0
                   shape: ~round_rect
                   radius: 4
@@ -3189,9 +3270,9 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 24
-                  y: 156
-                  width: 1040
-                  height: 500
+                  y: 152
+                  width: 880
+                  height: 492
                   moveY: self.parent['兑换滑块'].getDragYRatio()
                   through: false
                 action:
@@ -3218,7 +3299,7 @@ controls:
                         type: Canvas
                         attribute:
                           entryKey: 0.round()
-                          width: 1020
+                          width: 860
                           height: 64
                           visible: "var.exchangeRows[self.entryKey] != none"
                         children:
@@ -3286,7 +3367,7 @@ controls:
                               hover: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '255,246,214,255' : '28,34,54,230'}"
                               shape: ~round_rect
                               radius: 22
-                              texts: "var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '&f兑换' : '&7已达上限'"
+                              texts: "var.exchangeRows[self.entryKey]['canExchange'] == true ? '&0兑换' : '&7已达上限'"
                               center: true
                               fontSize: 28
                               enable: "!var.actionBusy && var.actionToken != ''"
@@ -3363,18 +3444,18 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~26,30,44,244
+                  normal: ~14,18,30,250
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~38,46,72,255
-                    color2: ~30,40,64,255
+                    color1: ~24,30,48,255
+                    color2: ~16,22,36,255
                     type: 0
                     angleDeg: 90
                   stroke:
                     width: 3
-                    color: ~110,148,204,150
+                    color: ~226,196,132,255
               提示标题:
                 type: Text
                 attribute:

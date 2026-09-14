@@ -6,9 +6,9 @@ config-version: 3  # 配置文件版本号
 ui:
   # 是否强制覆盖用户已修改的 UI 文件。
   overwrite-ui-files: false
-  # 祈愿（GACHA）界面 UI ID。
-  gacha-ui-id: "AXS:lottery_wish"
-  # 开箱（CASE）界面 UI ID。
+  # 祈愿（GACHA）界面 UI ID。可选AXS:lottery_gacha 或 AXS:lottery_wish （全屏版）
+  gacha-ui-id: "AXS:lottery_gacha"
+  # 开箱（CASE）界面 UI ID。仅AXS:lottery_case
   case-ui-id: "AXS:lottery_case"
 
 # 奖池文件所在目录，路径相对模块数据目录。

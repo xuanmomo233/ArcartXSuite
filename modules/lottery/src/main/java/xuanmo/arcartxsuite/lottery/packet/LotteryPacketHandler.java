@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.lottery.packet;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.AbstractMap;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -542,7 +543,11 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                     row.put("star", star);
                     row.put("summary", starColor(star) + name
                         + (entry.guaranteed() && star >= 5 ? " &6·保底" : ""));
-                    rows.put(Integer.toString(index++), row);
+                    rows.put(Integer.toString(index), row);
+                    // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+                    payload.put("historyIconJson" + index,
+                        item != null ? poolItemJson(player, item) : "");
+                    index++;
                 }
             }
         } else {
@@ -559,6 +564,10 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 row.put("summary", service.message("packet.history-case",
                     itemName(pool, entry.itemId()), entry.rarity()));
                 rows.put(Integer.toString(i), row);
+                // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+                PoolItem caseItem = findCaseItem(pool, entry.itemId());
+                payload.put("historyIconJson" + i,
+                    caseItem != null ? poolItemJson(player, caseItem) : "");
             }
         }
         payload.put("historyCount", rows.size());
@@ -575,6 +584,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("detailPoolName", pool.displayName());
         Map<String, Object> rows = new LinkedHashMap<>();
         List<PoolItem> items = new ArrayList<>();
+        List<AbstractMap.SimpleEntry<PoolItem, String>> itemsWithRarity = new ArrayList<>();
         Map<String, Integer> rarityItemWeightSum = new LinkedHashMap<>();
         int totalRarityWeight = 0;
         if (pool.type() == PoolType.CASE && pool.caseConfig() != null) {
@@ -589,25 +599,36 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                     rarityItemWeightSum.merge(item.rarity().toUpperCase(), item.weight(), Integer::sum);
                 }
             }
+            // CASE 物品使用自身 rarity
+            for (PoolItem item : items) {
+                itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item,
+                    item.rarity() == null ? "" : item.rarity()));
+            }
         }
         if (pool.type() == PoolType.GACHA && pool.gacha() != null) {
             GachaPoolConfig gacha = pool.gacha();
-            items.addAll(gacha.up5starItems());
-            items.addAll(gacha.standard5starItems());
-            items.addAll(gacha.up4starItems());
-            items.addAll(gacha.standard4starItems());
-            items.addAll(gacha.star3Items());
+            // 为 GACHA 物品标注稀有度（物品本身 rarity 为 null，由所在列表决定）
+            for (PoolItem item : gacha.up5starItems()) itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item, "5"));
+            for (PoolItem item : gacha.standard5starItems()) itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item, "5"));
+            for (PoolItem item : gacha.up4starItems()) itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item, "4"));
+            for (PoolItem item : gacha.standard4starItems()) itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item, "4"));
+            for (PoolItem item : gacha.star3Items()) itemsWithRarity.add(new AbstractMap.SimpleEntry<>(item, "3"));
+            // 计算各稀有度物品权重总和（用于 GACHA 概率计算）
+            for (AbstractMap.SimpleEntry<PoolItem, String> entry : itemsWithRarity) {
+                rarityItemWeightSum.merge(entry.getValue(), entry.getKey().weight(), Integer::sum);
+            }
             payload.put("detailPity5", gacha.pity5star());
             payload.put("detailPity4", gacha.pity4star());
             payload.put("detailBase5Rate", gacha.base5starRate());
             payload.put("detailBase4Rate", gacha.base4starRate());
             payload.put("detailUpRate", gacha.upRate());
         }
-        for (int i = 0; i < items.size(); i++) {
-            PoolItem item = items.get(i);
+        for (int i = 0; i < itemsWithRarity.size(); i++) {
+            PoolItem item = itemsWithRarity.get(i).getKey();
+            String itemRarity = itemsWithRarity.get(i).getValue();
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("name", item.name());
-            row.put("rarity", item.rarity() == null ? "" : item.rarity());
+            row.put("rarity", itemRarity);
             row.put("weight", item.weight());
             // 计算概率百分比：P(物品) = P(稀有度) × P(物品|稀有度)
             String probabilityText = "";
@@ -622,8 +643,27 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                     probabilityText = String.format("%.2f%%", prob * 100);
                 }
             }
+            if (pool.type() == PoolType.GACHA && pool.gacha() != null
+                && itemRarity != null && !itemRarity.isEmpty()) {
+                GachaPoolConfig gacha = pool.gacha();
+                double rarityRate;
+                if ("5".equals(itemRarity)) {
+                    rarityRate = gacha.base5starRate();
+                } else if ("4".equals(itemRarity)) {
+                    rarityRate = gacha.base4starRate();
+                } else {
+                    rarityRate = 1.0 - gacha.base5starRate() - gacha.base4starRate();
+                }
+                int raritySum = rarityItemWeightSum.getOrDefault(itemRarity, 1);
+                if (raritySum > 0) {
+                    double prob = rarityRate * (double) item.weight() / raritySum;
+                    probabilityText = String.format("%.2f%%", prob * 100);
+                }
+            }
             row.put("probability", probabilityText);
             rows.put(Integer.toString(i), row);
+            // itemJson 分离模式（§7）：图标 JSON 放在 packet 顶层字段
+            payload.put("detailIconJson" + i, poolItemJson(player, item));
         }
         payload.put("detailCount", rows.size());
         payload.put("detailRows", rows);
@@ -773,6 +813,16 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             }
         }
         return itemId;
+    }
+
+    /** 在 CASE 奖池中按 itemId 查找 PoolItem。 */
+    private PoolItem findCaseItem(PoolDefinition pool, String itemId) {
+        if (pool.caseConfig() != null) {
+            for (PoolItem item : pool.caseConfig().items()) {
+                if (item.key().equals(itemId)) return item;
+            }
+        }
+        return null;
     }
 
     /** 解析日志中 itemsJson（形如 [key1,key2,...]）为奖品 key 列表。 */
