@@ -272,9 +272,15 @@ moderation:
   cloud:
     # 远程词库开关；开启后会定期拉取 urls 内容并并入过滤规则。
     enabled: true
-    # 远程词库地址列表（支持多个 URL，每行一个词，# 开头为注释）。
+    # 远程词库地址列表（支持多个 URL）。
+    # 支持三种格式：
+    #   1. 纯文本：每行一个词，# 开头为注释
+    #   2. JSON 对象：自动识别 words / data / list 数组字段，如 {"words": ["fuck", "sb"]}
+    #   3. JSON 数组：如 ["fuck", "sb"]
     urls:
       - "https://raw.githubusercontent.com/Yurinann/Filter-Thesaurus-Cloud/main/database.json"
+      # 服务器在国内连不上 raw.githubusercontent.com 时，可改用镜像加速前缀，例如：
+      # - "https://ghproxy.net/https://raw.githubusercontent.com/Yurinann/Filter-Thesaurus-Cloud/main/database.json"
       # 有时导致误判，自行开启
       # - "https://raw.githubusercontent.com/konsheng/Sensitive-lexicon/main/ThirdPartyCompatibleFormats/TrChat/SensitiveLexicon.json"
     # 云端词库中要忽略的词（不区分大小写）。
@@ -316,6 +322,18 @@ keybinds:
   pickup-pick:
     name: AXS_PICKUP_PICK
     default-key: F
+    category: ArcartXSuite
+  # Map 模块打开全屏地图键。
+  # Map 模块订阅此键；按下时打开 map_menu UI。
+  map-menu:
+    name: AXS_MAP_MENU
+    default-key: M
+    category: ArcartXSuite
+  # Map 模块切换小地图 HUD 键。
+  # Map 模块订阅此键；按下时切换 map_hud 显示/隐藏。
+  map-hud:
+    name: AXS_MAP_HUD
+    default-key: H
     category: ArcartXSuite
 
 # ========== Tacz 模组伤害兼容 ==========

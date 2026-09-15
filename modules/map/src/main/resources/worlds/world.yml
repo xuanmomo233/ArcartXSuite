@@ -1,0 +1,27 @@
+# 世界配置示例 — 文件名即世界 ID（此文件对应 world）
+# 地图完全由客户端 mod 实时渲染，无需纹理/图片参数。
+# display-name 留空时运行时从 Multiverse-Core colourless alias 自动补。
+enabled: true
+display-name: ""
+
+# 该世界的锚点列表。每个锚点可配置解锁条件、传送消耗和点亮区域。
+# 点亮区域两种写法（可同时配，任一生效即可）：
+#   light-region: 多边形顶点 [[x,z],...]（至少 3 点）
+#   light-radius: 以锚点为中心的圆形半径（方块数）
+# 不配 light-region 和 light-radius = 该锚点不管点亮。
+anchors:
+  spawn:
+    enabled: true
+    display-name: "出生点"
+    x: 0
+    y: 64
+    z: 0
+    description: "默认出生点锚点。"
+    permission: ""
+    sort-order: 0
+    unlock-currencies: []
+    teleport-currencies: []
+    unlock-items: []
+    # light-region:
+    #   points: [[-50, -50], [50, -50], [50, 50], [-50, 50]]
+    # light-radius: 100

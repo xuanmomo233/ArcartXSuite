@@ -120,13 +120,22 @@ public record MapModuleConfiguration(
             marker
         );
 
-        Map<String, WorldDefinition> worlds = loadWorlds(configuration.getConfigurationSection("worlds"));
-        List<DefaultUnlockRule> defaultUnlocks = loadDefaultUnlockRules(configuration.getMapList("default-unlocks"));
-        WaypointConfiguration waypoints = loadWaypoints(configuration.getConfigurationSection("waypoints"));
+        // 世界和锚点从 worlds/ 目录加载（每个世界一个 yml 文件，内含 anchors 节）
+        Map<String, WorldDefinition> worlds = new LinkedHashMap<>();
         Map<String, AnchorDefinition> anchors = new LinkedHashMap<>();
         if (anchorsDirectory != null && anchorsDirectory.isDirectory()) {
-            loadAnchorsFromDirectory(anchorsDirectory, anchors, logger);
+            loadWorldsFromDirectory(anchorsDirectory, worlds, anchors, logger);
         }
+        // 兼容：worlds 节仍可直接写在 config.yml（旧格式降级）
+        if (worlds.isEmpty()) {
+            ConfigurationSection worldsSection = configuration.getConfigurationSection("worlds");
+            if (worldsSection != null) {
+                loadWorldsInline(worldsSection, worlds, anchors, logger);
+            }
+        }
+
+        List<DefaultUnlockRule> defaultUnlocks = loadDefaultUnlockRules(configuration.getMapList("default-unlocks"));
+        WaypointConfiguration waypoints = loadWaypoints(configuration.getConfigurationSection("waypoints"));
 
         return new MapModuleConfiguration(
             debug,
@@ -170,67 +179,81 @@ public record MapModuleConfiguration(
         );
     }
 
-    private static Map<String, WorldDefinition> loadWorlds(ConfigurationSection section) {
-        LinkedHashMap<String, WorldDefinition> values = new LinkedHashMap<>();
-        if (section == null) {
-            values.put("world", new WorldDefinition("world", "主世界", "Map/world.png", 2048, 2048, 0, 0, 1.6D, 0.18D, 180, "", List.of()));
-            return values;
-        }
-        for (String rawId : section.getKeys(false)) {
-            ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
-                continue;
+    /**
+     * 从 worlds/ 目录加载世界和锚点。每个 {@code <worldId>.yml} 文件含世界配置 + anchors 节。
+     * 文件名（去掉 .yml）即世界 ID。
+     */
+    private static void loadWorldsFromDirectory(
+        File directory,
+        Map<String, WorldDefinition> worlds,
+        Map<String, AnchorDefinition> anchors,
+        Logger logger
+    ) {
+        File[] files = directory.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (files == null) return;
+        Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        for (File file : files) {
+            String worldId = normalizeId(file.getName().substring(0, file.getName().length() - 4));
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            if (!yaml.getBoolean("enabled", true)) continue;
+            worlds.put(worldId, new WorldDefinition(
+                worldId,
+                string(yaml.getString("display-name"), "")
+            ));
+            // 解析 anchors 节
+            ConfigurationSection anchorsSection = yaml.getConfigurationSection("anchors");
+            if (anchorsSection != null) {
+                loadAnchorsInSection(anchorsSection, worldId, anchors, logger);
             }
-            String id = normalizeId(rawId);
-            values.put(
-                id,
-                new WorldDefinition(
-                    id,
-                    string(child.getString("display-name", rawId), rawId),
-                    string(child.getString("texture"), ""),
-                    Math.max(1, child.getInt("image-width", 2048)),
-                    Math.max(1, child.getInt("image-height", 2048)),
-                    child.getInt("pixel-offset-x", 0),
-                    child.getInt("pixel-offset-z", 0),
-                    positiveDouble(child.get("default-zoom"), 1.6D),
-                    positiveDouble(child.get("hud-zoom"), 0.18D),
-                    Math.max(64, child.getInt("hud-size", 180)),
-                    string(child.getString("dimension"), ""),
-                    loadPolygonRegions(child.getMapList("regions"))
-                )
-            );
         }
-        return values;
     }
 
-    /**
-     * 解析多边形区域列表。配置格式：
-     * <pre>{@code
-     * regions:
-     *   - id: "spawn_area"
-     *     points: [[x, z], [x, z], ...]
-     * }</pre>
-     */
-    private static List<PolygonRegion> loadPolygonRegions(List<Map<?, ?>> rawRegions) {
-        if (rawRegions == null || rawRegions.isEmpty()) {
-            return List.of();
+    /** 兼容旧格式：从 config.yml 的 worlds 节内联加载（无 anchors，锚点仍从 anchors/ 目录）。 */
+    private static void loadWorldsInline(
+        ConfigurationSection section,
+        Map<String, WorldDefinition> worlds,
+        Map<String, AnchorDefinition> anchors,
+        Logger logger
+    ) {
+        for (String rawId : section.getKeys(false)) {
+            ConfigurationSection child = section.getConfigurationSection(rawId);
+            if (child == null || !child.getBoolean("enabled", true)) continue;
+            String id = normalizeId(rawId);
+            worlds.put(id, new WorldDefinition(
+                id,
+                string(child.getString("display-name"), "")
+            ));
         }
-        List<PolygonRegion> regions = new ArrayList<>();
-        for (Map<?, ?> raw : rawRegions) {
-            List<int[]> points = new ArrayList<>();
-            Object rawPoints = raw.get("points");
-            if (rawPoints instanceof List<?> pointList) {
-                for (Object p : pointList) {
-                    if (p instanceof List<?> pair && pair.size() >= 2) {
-                        points.add(new int[]{toInt(pair.get(0)), toInt(pair.get(1))});
-                    }
-                }
-            }
-            if (points.size() >= 3) {
-                regions.add(new PolygonRegion(string(raw.get("id"), "region_" + regions.size()), List.copyOf(points)));
-            }
+    }
+
+    /** 从 ConfigurationSection 加载锚点（世界文件内的 anchors 节）。 */
+    private static void loadAnchorsInSection(
+        ConfigurationSection section,
+        String worldId,
+        Map<String, AnchorDefinition> target,
+        Logger logger
+    ) {
+        for (String rawId : section.getKeys(false)) {
+            ConfigurationSection child = section.getConfigurationSection(rawId);
+            if (child == null || !child.getBoolean("enabled", true)) continue;
+            String id = normalizeId(rawId);
+            target.put(id, new AnchorDefinition(
+                id,
+                string(child.getString("display-name", rawId), rawId),
+                worldId,
+                child.getDouble("x"),
+                child.getDouble("y"),
+                child.getDouble("z"),
+                string(child.getString("description", ""), ""),
+                string(child.getString("permission", ""), ""),
+                child.getInt("sort-order", target.size()),
+                loadCurrencyCosts(child.getMapList("unlock-currencies")),
+                loadCurrencyCosts(child.getMapList("teleport-currencies")),
+                loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
+                loadLightRegion(child.getConfigurationSection("light-region")),
+                positiveDouble(child.get("light-radius"), 0D)
+            ));
         }
-        return List.copyOf(regions);
     }
 
     /**
@@ -305,90 +328,6 @@ public record MapModuleConfiguration(
             section == null ? 5 : Math.max(1, section.getInt("default-max-count", 5)),
             List.copyOf(limits)
         );
-    }
-
-    private static Map<String, AnchorDefinition> loadAnchors(ConfigurationSection section, Logger logger) {
-        LinkedHashMap<String, AnchorDefinition> values = new LinkedHashMap<>();
-        if (section == null) {
-            values.put(
-                "spawn",
-                new AnchorDefinition(
-                    "spawn",
-                    "新手村",
-                    "world",
-                    0D,
-                    80D,
-                    0D,
-                    "默认示例锚点。",
-                    "",
-                    0,
-                    List.of(),
-                    List.of(),
-                    List.of(),
-                    List.of()
-                )
-            );
-            return values;
-        }
-        for (String rawId : section.getKeys(false)) {
-            ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
-                continue;
-            }
-            String id = normalizeId(rawId);
-            values.put(
-                id,
-                new AnchorDefinition(
-                    id,
-                    string(child.getString("display-name", rawId), rawId),
-                    normalizeId(child.getString("world", "")),
-                    child.getDouble("x"),
-                    child.getDouble("y"),
-                    child.getDouble("z"),
-                    string(child.getString("description", ""), ""),
-                    string(child.getString("permission", ""), ""),
-                    child.getInt("sort-order", values.size()),
-                    loadCurrencyCosts(child.getMapList("unlock-currencies")),
-                    loadCurrencyCosts(child.getMapList("teleport-currencies")),
-                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
-                    loadLightRegion(child.getConfigurationSection("light-region"))
-                )
-            );
-        }
-        return values;
-    }
-
-    private static void loadAnchorsFromDirectory(
-        File directory,
-        Map<String, AnchorDefinition> target,
-        Logger logger
-    ) {
-        File[] files = directory.listFiles((dir, name) -> name.endsWith(".yml"));
-        if (files == null) return;
-        Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
-        for (File file : files) {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-            for (String rawId : yaml.getKeys(false)) {
-                ConfigurationSection child = yaml.getConfigurationSection(rawId);
-                if (child == null || !child.getBoolean("enabled", true)) continue;
-                String id = normalizeId(rawId);
-                target.put(id, new AnchorDefinition(
-                    id,
-                    string(child.getString("display-name", rawId), rawId),
-                    normalizeId(child.getString("world", "")),
-                    child.getDouble("x"),
-                    child.getDouble("y"),
-                    child.getDouble("z"),
-                    string(child.getString("description", ""), ""),
-                    string(child.getString("permission", ""), ""),
-                    child.getInt("sort-order", target.size()),
-                    loadCurrencyCosts(child.getMapList("unlock-currencies")),
-                    loadCurrencyCosts(child.getMapList("teleport-currencies")),
-                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
-                    loadLightRegion(child.getConfigurationSection("light-region"))
-                ));
-            }
-        }
     }
 
     private static List<CurrencyCost> loadCurrencyCosts(List<Map<?, ?>> rawCosts) {
@@ -718,34 +657,15 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 世界定义，描述单个世界的地图纹理与显示参数。
+     * 世界定义。地图完全由客户端 mod 渲染，无需纹理参数。
+     * 每个世界对应 {@code worlds/<worldId>.yml} 单文件，文件内含世界配置 + anchors 节。
      *
-     * @param id            世界 ID
-     * @param displayName   显示名称
-     * @param texture       纹理文件路径
-     * @param imageWidth    纹理图片宽度（像素）
-     * @param imageHeight   纹理图片高度（像素）
-     * @param pixelOffsetX  像素 X 偏移
-     * @param pixelOffsetZ  像素 Z 偏移
-     * @param defaultZoom   菜单默认缩放
-     * @param hudZoom       HUD 缩放
-     * @param hudSize       HUD 尺寸（像素）
-     * @param dimension     MC 维度 key（如 {@code minecraft:overworld}）；空 = 运行时按 Bukkit world.getKey() 自动解析
-     * @param regions       世界级点亮区域（always-lit，不依赖锚点解锁）；空列表 = 该世界不启用点亮机制
+     * @param id          世界 ID（Bukkit world name）
+     * @param displayName 显示名称；留空时运行时从 Multiverse-Core colourless alias 补
      */
     public record WorldDefinition(
         String id,
-        String displayName,
-        String texture,
-        int imageWidth,
-        int imageHeight,
-        int pixelOffsetX,
-        int pixelOffsetZ,
-        double defaultZoom,
-        double hudZoom,
-        int hudSize,
-        String dimension,
-        List<PolygonRegion> regions
+        String displayName
     ) {
     }
 
@@ -791,7 +711,8 @@ public record MapModuleConfiguration(
      * @param unlockCurrencies   解锁所需货币列表
      * @param teleportCurrencies 传送所需货币列表
      * @param unlockItems        解锁所需物品列表
-     * @param lightRegions       解锁后点亮的多边形区域列表；空 = 该锚点不管点亮
+     * @param lightRegions       解锁后点亮的多边形区域列表；空 = 该锚点不用多边形点亮
+     * @param lightRadius        解锁后点亮的圆形半径（以锚点为中心）；≤0 = 不用圆形点亮
      */
     public record AnchorDefinition(
         String id,
@@ -806,7 +727,8 @@ public record MapModuleConfiguration(
         List<CurrencyCost> unlockCurrencies,
         List<CurrencyCost> teleportCurrencies,
         List<ItemCost> unlockItems,
-        List<PolygonRegion> lightRegions
+        List<PolygonRegion> lightRegions,
+        double lightRadius
     ) {
     }
 

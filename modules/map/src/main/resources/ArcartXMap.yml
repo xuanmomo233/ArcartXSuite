@@ -102,100 +102,12 @@ navigation:
     path-max-iterations: 2000
 
 # ─── 世界配置 ──────────────────────────────────────────
-# 每个根键为世界 ID（对应 Bukkit world name），定义该世界的地图纹理与显示参数。
-worlds:
-  bskyblock_world:
-    enabled: true
-    display-name: "空岛"
-    dimension: ""
-    texture: ""
-    image-width: 8192
-    image-height: 8192
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.0
-    hud-zoom: 0.18
-    hud-size: 180
-    # 不启用点亮机制（全亮）；后续通过 BentoBox 集成自动配区域
-    regions: []
-  bskyblock_world_nether:
-    enabled: true
-    display-name: "下界"
-    dimension: ""
-    texture: ""
-    image-width: 1024
-    image-height: 1024
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.4
-    hud-zoom: 0.16
-    hud-size: 180
-    regions: []
-  bskyblock_world_the_end:
-    enabled: true
-    display-name: "末地"
-    dimension: ""
-    texture: ""
-    image-width: 1024
-    image-height: 1024
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.4
-    hud-zoom: 0.16
-    hud-size: 180
-    regions: []
-  big_world:
-    enabled: true
-    display-name: "秋收村寨"
-    dimension: ""
-    texture: ""
-    image-width: 4096
-    image-height: 4096
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.2
-    hud-zoom: 0.18
-    hud-size: 180
-    regions: []
-  big_world_II:
-    enabled: true
-    display-name: "藏秘山林"
-    dimension: ""
-    texture: ""
-    image-width: 4096
-    image-height: 4096
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.2
-    hud-zoom: 0.18
-    hud-size: 180
-    regions: []
-  DANTIAO:
-    enabled: true
-    display-name: "明辉殿"
-    dimension: ""
-    texture: ""
-    image-width: 2048
-    image-height: 2048
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.2
-    hud-zoom: 0.18
-    hud-size: 180
-    regions: []
-  boss_world:
-    enabled: true
-    display-name: "困兽之笼"
-    dimension: ""
-    texture: ""
-    image-width: 2048
-    image-height: 2048
-    pixel-offset-x: 0
-    pixel-offset-z: 0
-    default-zoom: 1.2
-    hud-zoom: 0.18
-    hud-size: 180
-    regions: []
+# 每个世界单独一个文件，放在 worlds/ 目录下，文件名即世界 ID（如 worlds/bskyblock_world.yml）。
+# 文件内含 enabled / display-name / anchors 节。地图完全由客户端 mod 实时渲染，无需纹理参数。
+# display-name 留空时运行时从 Multiverse-Core colourless alias 自动补。
+# dimension 完全自动按 Bukkit world.getKey() 解析，无需配置。
+# 示例文件见 worlds/world.yml。
+worlds-directory: "worlds"
 
 # ─── 默认解锁 ──────────────────────────────────────────
 # 拥有指定权限的玩家在进服时自动解锁对应锚点列表。
@@ -203,11 +115,6 @@ default-unlocks:
   - permission: "ArcartXSuite.map.use"
     anchors:
       - "spawn"
-
-# 锚点定义目录，路径相对模块数据目录。
-# 目录下每个 *.yml 文件可包含多个锚点，根键即为锚点 ID。
-# 同一个文件中可放多个锚点，不需要每个锚点单独一个文件。
-anchors-directory: "anchors"
 
 # ─── 路径点配置 ────────────────────────────────────────
 waypoints:

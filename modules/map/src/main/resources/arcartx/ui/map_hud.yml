@@ -25,15 +25,11 @@ ui:
     #   - packetId: 通信标识，用于 Packet.send 回包
     #   - visible: 小地图是否可见
     #   - worldId: 当前世界 ID
-    #   - texture: 地图纹理路径
-    #   - imageWidth: 地图图片宽度
-    #   - imageHeight: 地图图片高度
-    #   - hudZoom: HUD 缩放比例
-    #   - hudSize: HUD 尺寸（像素）
-    #   - clippedPlayerX: 裁剪后玩家 X 坐标
-    #   - clippedPlayerZ: 裁剪后玩家 Z 坐标
+    #   - dimension: MC 维度 key，供 mod 匹配本地维度
     #   - playerYaw: 玩家朝向角度
     #   - trackingText: 导航追踪提示文本
+    #   - litEnabled: 是否启用点亮机制
+    #   - litRegions: 已点亮多边形区域并集
     init: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
@@ -41,13 +37,6 @@ ui:
       var.dimension = packet['dimension']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
-      var.texture = packet['texture']
-      var.imageWidth = packet['imageWidth']
-      var.imageHeight = packet['imageHeight']
-      var.hudZoom = packet['hudZoom']
-      var.hudSize = packet['hudSize']
-      var.clippedPlayerX = packet['clippedPlayerX']
-      var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
       if(var.mapRenderer == none) {
@@ -66,13 +55,6 @@ ui:
       var.dimension = packet['dimension']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
-      var.texture = packet['texture']
-      var.imageWidth = packet['imageWidth']
-      var.imageHeight = packet['imageHeight']
-      var.hudZoom = packet['hudZoom']
-      var.hudSize = packet['hudSize']
-      var.clippedPlayerX = packet['clippedPlayerX']
-      var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
       if(var.mapRenderer == none) {
@@ -87,13 +69,6 @@ ui:
       var.packetId = 'AXS_MAP'
       var.visible = false
       var.worldId = none
-      var.texture = none
-      var.imageWidth = 0
-      var.imageHeight = 0
-      var.hudZoom = 0.18
-      var.hudSize = 180
-      var.clippedPlayerX = 0
-      var.clippedPlayerZ = 0
       var.playerYaw = 0
       var.trackingText = '当前未导航'
       var.mapMod = none

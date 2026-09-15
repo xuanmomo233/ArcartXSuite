@@ -1051,16 +1051,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 new MapSnapshotBuilder.WorldView(
                     world.id(),
                     resolveDisplayName(world),
-                    world.texture(),
-                    world.imageWidth(),
-                    world.imageHeight(),
-                    world.pixelOffsetX(),
-                    world.pixelOffsetZ(),
-                    world.defaultZoom(),
-                    world.hudZoom(),
-                    world.hudSize(),
-                    resolveDimension(world),
-                    toRegionPoints(world.regions())
+                    resolveDimension(world)
                 )
             );
         }
@@ -1084,7 +1075,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     !unlocked,
                     unlocked,
                     anchor.sortOrder(),
-                    toRegionPoints(anchor.lightRegions())
+                    toRegionPoints(anchor.lightRegions()),
+                    anchor.lightRadius()
                 )
             );
         }
@@ -1125,9 +1117,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     private static String resolveDimension(WorldDefinition world) {
-        if (world.dimension() != null && !world.dimension().isBlank()) {
-            return world.dimension();
-        }
         World bukkitWorld = Bukkit.getWorld(world.id());
         return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
     }
@@ -1185,7 +1174,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             LinkedHashMap<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", row.id());
             entry.put("displayName", row.displayName());
-            entry.put("texture", row.texture());
             entry.put("dimension", row.dimension());
             entry.put("selected", row.selected());
             worldRows.put(Integer.toString(i), entry);
@@ -1280,13 +1268,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("visible", snapshot.visible());
         payload.put("worldId", snapshot.worldId());
         payload.put("dimension", snapshot.dimension());
-        payload.put("texture", snapshot.texture());
-        payload.put("imageWidth", snapshot.imageWidth());
-        payload.put("imageHeight", snapshot.imageHeight());
-        payload.put("hudZoom", snapshot.hudZoom());
-        payload.put("hudSize", snapshot.hudSize());
-        payload.put("clippedPlayerX", snapshot.clippedPlayerX());
-        payload.put("clippedPlayerZ", snapshot.clippedPlayerZ());
         payload.put("playerYaw", snapshot.playerYaw());
         payload.put("trackingText", snapshot.trackingText());
         payload.put("litEnabled", snapshot.litEnabled());

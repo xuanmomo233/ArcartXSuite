@@ -100,19 +100,18 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             throw new IllegalStateException("ArcartXMap.yml 配置文件缺失");
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
-        String anchorsDirRelative = yaml.getString("anchors-directory", "anchors");
-        File anchorsDirectory = new File(dataFolder, anchorsDirRelative);
-        if (!anchorsDirectory.exists()) {
-            anchorsDirectory.mkdirs();
-        }
-        File[] existing = anchorsDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing == null || existing.length == 0) {
-            File defaultAnchors = new File(anchorsDirectory, "default.yml");
-            if (!defaultAnchors.exists()) {
-                exportResource("anchors/default.yml", defaultAnchors, false);
+        // 世界配置目录：每个 <worldId>.yml 含世界配置 + anchors 节
+        String worldsDirRelative = yaml.getString("worlds-directory", "worlds");
+        File worldsDirectory = new File(dataFolder, worldsDirRelative);
+        if (!worldsDirectory.exists()) {
+            worldsDirectory.mkdirs();
+            // 导出示例世界文件
+            File exampleWorld = new File(worldsDirectory, "world.yml");
+            if (!exampleWorld.exists()) {
+                exportResource("worlds/world.yml", exampleWorld, false);
             }
         }
-        configuration = MapModuleConfiguration.load(yaml, logger, anchorsDirectory);
+        configuration = MapModuleConfiguration.load(yaml, logger, worldsDirectory);
     }
 
     @Override
@@ -155,6 +154,19 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             messages()
         );
         service.start();
+
+        // 订阅宿主全局按键：AXS_MAP_MENU 打开大地图，AXS_MAP_HUD 切换小地图。
+        // 优先级 30，低于拾取(10)/对话(50)确认键，避免冲突。
+        registerKeybindHandler("AXS_MAP_MENU", 30, (player, keyName) -> {
+            if (service == null) return false;
+            service.openMenu(player, "");
+            return true;
+        });
+        registerKeybindHandler("AXS_MAP_HUD", 30, (player, keyName) -> {
+            if (service == null) return false;
+            service.setHud(player, "toggle");
+            return true;
+        });
 
         // 注册 MapNavigable capability，供 QuestGps 等模块调用
         registerCapability(MapNavigable.class, new MapNavigable() {

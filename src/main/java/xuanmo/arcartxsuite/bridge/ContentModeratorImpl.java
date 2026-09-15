@@ -14,6 +14,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -52,6 +56,7 @@ public final class ContentModeratorImpl implements ContentModerator {
     // 云端词库运行时
     private final CopyOnWriteArrayList<String> cloudWords = new CopyOnWriteArrayList<>();
     private volatile BukkitTask cloudRefreshTask;
+    private final AtomicBoolean cloudFetchFailed = new AtomicBoolean(false);
 
     public ContentModeratorImpl(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -93,6 +98,7 @@ public final class ContentModeratorImpl implements ContentModerator {
         cloudUrls = cloudSec == null ? List.of() : cloudSec.getStringList("urls");
         cloudIgnored = lowerSet(cloudSec == null ? List.of() : cloudSec.getStringList("ignored"));
         cloudRefreshMinutes = cloudSec == null ? 60 : Math.max(1, cloudSec.getInt("refresh-minutes", 60));
+        cloudFetchFailed.set(false);
 
         cancelCloudRefresh();
         if (cloudEnabled && !cloudUrls.isEmpty()) {
@@ -103,7 +109,8 @@ public final class ContentModeratorImpl implements ContentModerator {
 
     private void scheduleCloudRefresh() {
         long periodTicks = Math.max(1200L, cloudRefreshMinutes * 60L * 20L);
-        cloudRefreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshCloudWords, 20L, periodTicks);
+        // 首次拉取已由 reload() 的 runAsync 执行，定时器从第一个完整周期开始
+        cloudRefreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshCloudWords, periodTicks, periodTicks);
     }
 
     private void cancelCloudRefresh() {
@@ -115,25 +122,107 @@ public final class ContentModeratorImpl implements ContentModerator {
 
     private void refreshCloudWords() {
         LinkedHashSet<String> loaded = new LinkedHashSet<>();
+        int successCount = 0;
+        int failCount = 0;
         for (String url : cloudUrls) {
             if (url == null || url.isBlank()) continue;
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(URI.create(url.trim()).toURL().openStream(), StandardCharsets.UTF_8)
-            )) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String normalized = line.trim().toLowerCase(Locale.ROOT);
-                    if (!normalized.isBlank() && !normalized.startsWith("#") && !cloudIgnored.contains(normalized)) {
-                        loaded.add(normalized);
+            try {
+                String content = readUrlContent(url.trim());
+                if (content.isBlank()) {
+                    failCount++;
+                    logCloudFailure(url, new Exception("响应内容为空"));
+                    continue;
+                }
+                String trimmed = content.trim();
+                if (trimmed.startsWith("{")) {
+                    // JSON 对象：优先提取 words / data / list 数组字段
+                    JsonObject json = JsonParser.parseString(trimmed).getAsJsonObject();
+                    JsonArray array = null;
+                    for (String key : new String[]{"words", "data", "list"}) {
+                        if (json.has(key) && json.get(key).isJsonArray()) {
+                            array = json.getAsJsonArray(key);
+                            break;
+                        }
                     }
+                    if (array != null) {
+                        collectJsonWords(array, loaded);
+                        successCount++;
+                    } else {
+                        failCount++;
+                        logCloudFailure(url, new Exception("JSON 缺少 words/data/list 数组字段"));
+                    }
+                } else if (trimmed.startsWith("[")) {
+                    // JSON 数组：每个元素一个词
+                    collectJsonWords(JsonParser.parseString(trimmed).getAsJsonArray(), loaded);
+                    successCount++;
+                } else {
+                    // 纯文本：每行一个词，# 开头为注释
+                    collectTextLines(content, loaded);
+                    successCount++;
                 }
             } catch (Exception e) {
-                logger.warning("拉取云端敏感词库失败: " + url + " | " + e.getMessage());
+                failCount++;
+                logCloudFailure(url, e);
             }
         }
+
+        // 全部失败且已有旧词库 → 保留旧词库，避免网络抖动时词库被清空
+        if (successCount == 0 && failCount > 0 && !cloudWords.isEmpty()) {
+            return;
+        }
+
         cloudWords.clear();
         cloudWords.addAll(loaded);
         logger.fine("云端敏感词库已刷新: " + cloudWords.size() + " 条");
+
+        // 从失败状态恢复时提示一次
+        if (successCount > 0 && cloudFetchFailed.compareAndSet(true, false)) {
+            logger.info("云端敏感词库拉取已恢复正常，当前 " + cloudWords.size() + " 条。");
+        }
+    }
+
+    /**
+     * 云端词库拉取失败日志：首次失败 WARN，后续连续失败降级为 FINE 避免刷屏。
+     */
+    private void logCloudFailure(String url, Exception e) {
+        if (cloudFetchFailed.compareAndSet(false, true)) {
+            logger.warning("拉取云端敏感词库失败: " + url + " | " + e.getMessage()
+                + "（后续连续失败将静默，恢复时会提示）");
+        } else {
+            logger.fine("拉取云端敏感词库失败: " + url + " | " + e.getMessage());
+        }
+    }
+
+    private String readUrlContent(String url) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(URI.create(url).toURL().openStream(), StandardCharsets.UTF_8)
+        )) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    private void collectJsonWords(JsonArray array, Set<String> loaded) {
+        for (JsonElement element : array) {
+            if (element == null || element.isJsonNull()) continue;
+            String word = element.getAsString().trim().toLowerCase(Locale.ROOT);
+            if (!word.isBlank() && !word.startsWith("#") && !cloudIgnored.contains(word)) {
+                loaded.add(word);
+            }
+        }
+    }
+
+    private void collectTextLines(String content, Set<String> loaded) {
+        for (String line : content.split("\\R")) {
+            String normalized = line.trim().toLowerCase(Locale.ROOT);
+            if (!normalized.isBlank() && !normalized.startsWith("#") && !cloudIgnored.contains(normalized)) {
+                loaded.add(normalized);
+            }
+        }
     }
 
     @Override
