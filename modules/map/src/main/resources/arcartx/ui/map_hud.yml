@@ -5,10 +5,10 @@
 # 关联文件: ArcartXMap.yml、ui/map_menu.yml
 # 重载命令: /axs map reload
 #
-# 小地图渲染由 Arcart-Suite-Map 客户端 mod 负责：
-#   - UI 的 tick 触发器每帧通过 Aria use() 调用 mod 的 MapRenderer.setRegion()，
-#     把小地图渲染区的屏幕坐标传给 mod
-#   - mod 在 ArcartXLayerRenderEvent 事件中往指定区域渲染地图画面、玩家箭头
+# 小地图渲染由 Arcart-Suite-Map 客户端 mod 完全接管：
+#   - UI 的 tick 每帧通过 axsmap.getMapRenderer().setHudAnchor() 传小地图右上角锚点
+#   - mod 根据锚点和内部 hudSize 状态计算实际渲染区域，绘制圆形/方形小地图
+#   - 坐标和世界名文字位置由 UI 根据 mapRenderer.getHudSize() 动态计算
 
 ui:
   isHud: true
@@ -18,20 +18,6 @@ ui:
   screenScale: true
   show: true
   packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - packetId: 通信标识，用于 Packet.send 回包
-    #   - visible: 小地图是否可见
-    #   - worldId: 当前世界 ID
-    #   - texture: 地图纹理路径
-    #   - imageWidth: 地图图片宽度
-    #   - imageHeight: 地图图片高度
-    #   - hudZoom: HUD 缩放比例
-    #   - hudSize: HUD 尺寸（像素）
-    #   - clippedPlayerX: 裁剪后玩家 X 坐标
-    #   - clippedPlayerZ: 裁剪后玩家 Z 坐标
-    #   - playerYaw: 玩家朝向角度
-    #   - trackingText: 导航追踪提示文本
     init: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
@@ -45,8 +31,6 @@ ui:
       var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
-    # packetHandler: update
-    # 包字段: 同 init（实时刷新小地图数据）
     update: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
@@ -74,37 +58,31 @@ ui:
       var.clippedPlayerZ = 0
       var.playerYaw = 0
       var.trackingText = '当前未导航'
-      // 加载客户端 mod 的 MapRenderer 实例
       var.mapMod = none
       var.mapRenderer = none
-      try {
-        var.mapMod = use('xuanmo.arcartsuitemap.ArcartSuiteMapMod')
-        var.mapRenderer = var.mapMod.getMapRenderer()
-      } catch(e) {
-        // mod 未安装，小地图将保持空白
-      }
-    # tick：每帧计算小地图渲染区的屏幕坐标，传给客户端 mod
+      var.hudSizeDesign = 200
     tick: |-
+      if(var.mapRenderer == none) {
+        try {
+          var.mapRenderer = axsmap.getMapRenderer()
+        } catch(e) {
+        }
+      }
       if(var.mapRenderer != none && var.visible) {
-        // Adaptive ~top_right：右上角对齐
-        // 小地图面板在设计坐标系中：右上角 (1920-28, 24)，宽 250 高 250
-        // 左上角在设计坐标系中 = (1642, 24)
-        // 地图渲染区在面板里: x=18, y=48, w=214, h=160
-        // 地图渲染区左上角在设计坐标系中 = (1660, 72)
         sx = Screen.getWidth() / 1920
         sy = Screen.getHeight() / 1080
         s = sx < sy ? sx : sy
-        // Adaptive ~top_right：UI 原点 X = Screen.getWidth() - 1920*s
-        mapX = Screen.getWidth() - 1920 * s + 1660 * s
-        mapY = 72 * s
-        mapW = 214 * s
-        mapH = 160 * s
-        var.mapRenderer.setRegion(mapX, mapY, mapW, mapH, s)
-        var.mapRenderer.setWorldId(var.worldId)
-        // 设置玩家位置与朝向
-        var.mapRenderer.setPlayerPose(var.clippedPlayerX, var.clippedPlayerZ, var.playerYaw)
-      } else if(var.mapRenderer != none && !var.visible) {
-        // 不可见时停止渲染
+        // 小地图右上角锚点：设计坐标系 (1920-28, 24)
+        anchorX = Screen.getWidth() - 28 * s
+        anchorY = 24 * s
+        var.mapRenderer.setHudAnchor(anchorX, anchorY, s)
+        // 读取 mod 实际 hudSize，换算回设计坐标系用于文字定位
+        try {
+          var.hudSizeDesign = var.mapRenderer.getHudSize() / s
+        } catch(e2) {
+          var.hudSizeDesign = 200
+        }
+      } elif(var.mapRenderer != none && !var.visible) {
         var.mapRenderer.deactivate()
       }
     close: |-
@@ -120,90 +98,28 @@ controls:
       width: 1920
       height: 1080
     children:
-      小地图面板:
+      小地图文字区:
         type: Canvas
         attribute:
           point: ~top_right
           x: -28
-          y: 24
-          width: 250
-          height: 250
+          y: "24 + var.hudSizeDesign + 8"
+          width: "var.hudSizeDesign"
+          height: 80
           visible: var.visible
-        action:
-          clickLeft: |-
-            Packet.send(var.packetId, 'open_menu')
         children:
-          背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              through: true
-              normal: ~28,30,38,200
-              shape: ~round_rect
-              radius: 26
-          边框:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              through: true
-              normal: ~255,255,255,30
-              shape: ~round_rect
-              radius: 26
-          标题:
+          世界名称:
             type: Text
             attribute:
-              point: ~top_left
-              x: 18
-              y: 16
-              texts: "'&f小地图 &8/ &7' + var.worldId"
-              fontSize: 18
-              shadow: true
+              point: ~top_center
+              texts: "'&f' + var.worldId"
+              fontSize: 32
               through: true
-          # 小地图渲染区（由 mod 渲染地图画面）
-          地图渲染区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 18
-              y: 48
-              width: 214
-              height: 160
-            children:
-              地图区域背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~20,22,28,255
-                  shape: ~round_rect
-                  radius: 18
-              地图加载提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 214
-                  texts: "'&7加载中...'"
-                  fontSize: 16
-                  shadow: true
-                  through: true
-                  visible: "var.mapRenderer == none"
           坐标:
             type: Text
             attribute:
-              point: ~top_left
-              x: 20
-              y: 218
-              texts: "'&7X: &f' + var.clippedPlayerX + '  &7Z: &f' + var.clippedPlayerZ"
-              fontSize: 14
-              shadow: true
-              through: true
-          导航信息:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 236
-              texts: "'&b' + var.trackingText"
-              fontSize: 13
-              shadow: true
+              point: ~top_center
+              y: 36
+              texts: "'&fX: ' + var.clippedPlayerX + '  Z: ' + var.clippedPlayerZ"
+              fontSize: 32
               through: true
