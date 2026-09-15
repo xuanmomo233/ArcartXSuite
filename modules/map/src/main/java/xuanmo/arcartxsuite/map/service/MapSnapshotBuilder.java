@@ -38,7 +38,7 @@ public final class MapSnapshotBuilder {
 
         List<WorldRow> worldRows = new ArrayList<>();
         for (WorldView world : input.worlds()) {
-            worldRows.add(new WorldRow(world.id(), world.displayName(), world.texture(), world.id().equalsIgnoreCase(selectedWorldId)));
+            worldRows.add(new WorldRow(world.id(), world.displayName(), world.texture(), world.dimension(), world.id().equalsIgnoreCase(selectedWorldId)));
         }
 
         List<AnchorView> visibleAnchors = input.anchors().stream()
@@ -104,9 +104,27 @@ public final class MapSnapshotBuilder {
             );
         }
 
+        // 点亮区域并集：always-lit 世界区域 ∪ 已解锁锚点的 lightRegions。
+        // litEnabled=false 表示该世界未配置任何点亮区域 → 客户端全亮不遮罩。
+        boolean litEnabled = (selectedWorld != null && !selectedWorld.regions().isEmpty())
+            || visibleAnchors.stream().anyMatch(a -> !a.lightRegions().isEmpty());
+        List<List<List<Integer>>> litRegions = new ArrayList<>();
+        if (litEnabled && selectedWorld != null) {
+            for (List<int[]> r : selectedWorld.regions()) {
+                litRegions.add(toIntLists(r));
+            }
+            for (AnchorView a : visibleAnchors) {
+                if (a.unlocked()) {
+                    for (List<int[]> r : a.lightRegions()) {
+                        litRegions.add(toIntLists(r));
+                    }
+                }
+            }
+        }
+
         boolean canCreateWaypoint = input.waypointsEnabled() && visibleWaypoints.size() < input.waypointLimit();
         DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, canCreateWaypoint, selectedWorldId);
-        HudSnapshot hud = buildHudSnapshot(input, selectedWorld, selectedWorldId);
+        HudSnapshot hud = buildHudSnapshot(input, selectedWorld, selectedWorldId, litEnabled, litRegions);
 
         return new BuildResult(
             new MenuSnapshot(
@@ -122,10 +140,20 @@ public final class MapSnapshotBuilder {
                 canCreateWaypoint,
                 input.navigationState().active(),
                 trackingText(input.navigationState()),
-                detail
+                detail,
+                litEnabled,
+                litRegions
             ),
             hud
         );
+    }
+
+    private static List<List<Integer>> toIntLists(List<int[]> points) {
+        List<List<Integer>> out = new ArrayList<>(points.size());
+        for (int[] p : points) {
+            out.add(List.of(p[0], p[1]));
+        }
+        return out;
     }
 
     private DetailSnapshot buildDetail(
@@ -226,9 +254,10 @@ public final class MapSnapshotBuilder {
         );
     }
 
-    private HudSnapshot buildHudSnapshot(BuildInput input, WorldView selectedWorld, String selectedWorldId) {
+    private HudSnapshot buildHudSnapshot(BuildInput input, WorldView selectedWorld, String selectedWorldId,
+                                         boolean litEnabled, List<List<List<Integer>>> litRegions) {
         if (!input.viewState().hudVisible() || selectedWorld == null || input.playerPosition() == null) {
-            return new HudSnapshot(input.packetId(), false, selectedWorldId, "", 0, 0, 0D, 0, 0, 0, 0F, "");
+            return new HudSnapshot(input.packetId(), false, selectedWorldId, "", "", 0, 0, 0D, 0, 0, 0, 0F, "", false, List.of());
         }
         double pixelX = clip(input.playerPosition().x() + selectedWorld.pixelOffsetX(), 0D, selectedWorld.imageWidth());
         double pixelZ = clip(input.playerPosition().z() + selectedWorld.pixelOffsetZ(), 0D, selectedWorld.imageHeight());
@@ -236,6 +265,7 @@ public final class MapSnapshotBuilder {
             input.packetId(),
             true,
             selectedWorldId,
+            selectedWorld.dimension(),
             selectedWorld.texture(),
             selectedWorld.imageWidth(),
             selectedWorld.imageHeight(),
@@ -244,7 +274,9 @@ public final class MapSnapshotBuilder {
             pixelX,
             pixelZ,
             input.playerPosition().yaw(),
-            trackingText(input.navigationState())
+            trackingText(input.navigationState()),
+            litEnabled,
+            litRegions
         );
     }
 
@@ -345,6 +377,8 @@ public final class MapSnapshotBuilder {
      * @param defaultZoom   菜单默认缩放
      * @param hudZoom       HUD 缩放
      * @param hudSize       HUD 尺寸
+     * @param dimension     MC 维度 key（minecraft:overworld 等），供客户端 mod 匹配本地维度
+     * @param regions       always-lit 点亮区域（多边形顶点列表，每项为 List<[x,z]>）
      */
     public record WorldView(
         String id,
@@ -356,7 +390,9 @@ public final class MapSnapshotBuilder {
         int pixelOffsetZ,
         double defaultZoom,
         double hudZoom,
-        int hudSize
+        int hudSize,
+        String dimension,
+        List<List<int[]>> regions
     ) {
     }
 
@@ -376,6 +412,7 @@ public final class MapSnapshotBuilder {
      * @param canUnlock        是否可解锁
      * @param canTeleport      是否可传送
      * @param sortOrder        排序权重
+     * @param lightRegions     解锁后点亮的多边形区域列表
      */
     public record AnchorView(
         String id,
@@ -390,7 +427,8 @@ public final class MapSnapshotBuilder {
         String teleportCostText,
         boolean canUnlock,
         boolean canTeleport,
-        int sortOrder
+        int sortOrder,
+        List<List<int[]>> lightRegions
     ) {
     }
 
@@ -426,6 +464,8 @@ public final class MapSnapshotBuilder {
      * @param clearTrackVisible 是否显示清除追踪按钮
      * @param trackingText      当前追踪状态文本
      * @param detail            选中目标的详情快照
+     * @param litEnabled        该世界是否启用点亮机制（配置了任何区域）
+     * @param litRegions        当前已点亮的多边形区域并集（always-lit ∪ 已解锁锚点区域）
      */
     public record MenuSnapshot(
         String packetId,
@@ -440,7 +480,9 @@ public final class MapSnapshotBuilder {
         boolean canCreateWaypoint,
         boolean clearTrackVisible,
         String trackingText,
-        DetailSnapshot detail
+        DetailSnapshot detail,
+        boolean litEnabled,
+        List<List<List<Integer>>> litRegions
     ) {
     }
 
@@ -450,6 +492,7 @@ public final class MapSnapshotBuilder {
      * @param packetId       数据包标识
      * @param visible        HUD 是否可见
      * @param worldId        当前世界 ID
+     * @param dimension      MC 维度 key，供 mod 匹配本地维度
      * @param texture        纹理文件路径
      * @param imageWidth     纹理图片宽度
      * @param imageHeight    纹理图片高度
@@ -459,11 +502,14 @@ public final class MapSnapshotBuilder {
      * @param clippedPlayerZ 裁剪后的玩家像素 Z 坐标
      * @param playerYaw      玩家朝向角
      * @param trackingText   当前追踪状态文本
+     * @param litEnabled     是否启用点亮机制
+     * @param litRegions     已点亮多边形区域并集
      */
     public record HudSnapshot(
         String packetId,
         boolean visible,
         String worldId,
+        String dimension,
         String texture,
         int imageWidth,
         int imageHeight,
@@ -472,7 +518,9 @@ public final class MapSnapshotBuilder {
         double clippedPlayerX,
         double clippedPlayerZ,
         float playerYaw,
-        String trackingText
+        String trackingText,
+        boolean litEnabled,
+        List<List<List<Integer>>> litRegions
     ) {
     }
 
@@ -482,12 +530,14 @@ public final class MapSnapshotBuilder {
      * @param id          世界 ID
      * @param displayName 显示名称
      * @param texture     纹理文件路径
+     * @param dimension   MC 维度 key，供 mod 匹配本地维度
      * @param selected    是否当前选中
      */
     public record WorldRow(
         String id,
         String displayName,
         String texture,
+        String dimension,
         boolean selected
     ) {
     }

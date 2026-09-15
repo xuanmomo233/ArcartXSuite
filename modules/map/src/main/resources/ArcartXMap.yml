@@ -109,6 +109,10 @@ worlds:
     enabled: true
     # 显示名称
     display-name: "主世界"
+    # MC 维度 key（客户端 mod 用它匹配本地维度，决定实时地形归属哪个世界）。
+    # 留空 = 运行时自动按 Bukkit world.getKey() 解析（world → minecraft:overworld）。
+    # 仅当世界 ID 与 Bukkit world 名不一致、或需要强制映射时才需要手动填写。
+    dimension: ""
     # 地图纹理文件路径（相对资源包目录）
     texture: "Map/world.png"
     # 地图图片宽度（像素）
@@ -125,11 +129,21 @@ worlds:
     hud-zoom: 0.18
     # 小地图 HUD 尺寸（像素）
     hud-size: 180
+    # ── 世界级点亮区域（always-lit，不依赖锚点解锁）──
+    # 列表为空且没有任何锚点配 light-region → 该世界不启用点亮机制（全亮）。
+    # 配了区域 → 只有"已点亮区域"显示地形，未点亮区域显示纯黑迷雾。
+    # 顶点为多边形顶点列表（至少 3 点），可用 PolygonSelection 选区工具画出来。
+    # regions:
+    #   - id: "spawn_area"
+    #     points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
+    regions: []
   world_nether:
     # 是否在地图菜单中显示此世界
     enabled: true
     # 显示名称
     display-name: "下界"
+    # MC 维度 key（同上，留空自动解析）
+    dimension: ""
     # 地图纹理文件路径（相对资源包目录）
     texture: "Map/world_nether.png"
     # 地图图片宽度（像素）

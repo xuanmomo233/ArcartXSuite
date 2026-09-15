@@ -173,7 +173,7 @@ public record MapModuleConfiguration(
     private static Map<String, WorldDefinition> loadWorlds(ConfigurationSection section) {
         LinkedHashMap<String, WorldDefinition> values = new LinkedHashMap<>();
         if (section == null) {
-            values.put("world", new WorldDefinition("world", "主世界", "Map/world.png", 2048, 2048, 0, 0, 1.6D, 0.18D, 180));
+            values.put("world", new WorldDefinition("world", "主世界", "Map/world.png", 2048, 2048, 0, 0, 1.6D, 0.18D, 180, "", List.of()));
             return values;
         }
         for (String rawId : section.getKeys(false)) {
@@ -194,11 +194,82 @@ public record MapModuleConfiguration(
                     child.getInt("pixel-offset-z", 0),
                     positiveDouble(child.get("default-zoom"), 1.6D),
                     positiveDouble(child.get("hud-zoom"), 0.18D),
-                    Math.max(64, child.getInt("hud-size", 180))
+                    Math.max(64, child.getInt("hud-size", 180)),
+                    string(child.getString("dimension"), ""),
+                    loadPolygonRegions(child.getMapList("regions"))
                 )
             );
         }
         return values;
+    }
+
+    /**
+     * 解析多边形区域列表。配置格式：
+     * <pre>{@code
+     * regions:
+     *   - id: "spawn_area"
+     *     points: [[x, z], [x, z], ...]
+     * }</pre>
+     */
+    private static List<PolygonRegion> loadPolygonRegions(List<Map<?, ?>> rawRegions) {
+        if (rawRegions == null || rawRegions.isEmpty()) {
+            return List.of();
+        }
+        List<PolygonRegion> regions = new ArrayList<>();
+        for (Map<?, ?> raw : rawRegions) {
+            List<int[]> points = new ArrayList<>();
+            Object rawPoints = raw.get("points");
+            if (rawPoints instanceof List<?> pointList) {
+                for (Object p : pointList) {
+                    if (p instanceof List<?> pair && pair.size() >= 2) {
+                        points.add(new int[]{toInt(pair.get(0)), toInt(pair.get(1))});
+                    }
+                }
+            }
+            if (points.size() >= 3) {
+                regions.add(new PolygonRegion(string(raw.get("id"), "region_" + regions.size()), List.copyOf(points)));
+            }
+        }
+        return List.copyOf(regions);
+    }
+
+    /**
+     * 解析单个多边形区域（锚点 light-region 用）。配置格式：
+     * <pre>{@code
+     * light-region:
+     *   points: [[x, z], [x, z], ...]
+     * }</pre>
+     */
+    private static List<PolygonRegion> loadLightRegion(ConfigurationSection section) {
+        if (section == null) {
+            return List.of();
+        }
+        List<int[]> points = new ArrayList<>();
+        Object raw = section.get("points");
+        if (raw instanceof List<?> pointList) {
+            for (Object p : pointList) {
+                if (p instanceof List<?> pair && pair.size() >= 2) {
+                    points.add(new int[]{toInt(pair.get(0)), toInt(pair.get(1))});
+                } else if (p instanceof Map<?, ?> pairMap) {
+                    points.add(new int[]{toInt(pairMap.get("x")), toInt(pairMap.get("z"))});
+                }
+            }
+        }
+        if (points.size() >= 3) {
+            return List.of(new PolygonRegion("light", List.copyOf(points)));
+        }
+        return List.of();
+    }
+
+    private static int toInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return (int) Double.parseDouble(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private static List<DefaultUnlockRule> loadDefaultUnlockRules(List<Map<?, ?>> rawRules) {
@@ -253,6 +324,7 @@ public record MapModuleConfiguration(
                     0,
                     List.of(),
                     List.of(),
+                    List.of(),
                     List.of()
                 )
             );
@@ -278,7 +350,8 @@ public record MapModuleConfiguration(
                     child.getInt("sort-order", values.size()),
                     loadCurrencyCosts(child.getMapList("unlock-currencies")),
                     loadCurrencyCosts(child.getMapList("teleport-currencies")),
-                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items")
+                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
+                    loadLightRegion(child.getConfigurationSection("light-region"))
                 )
             );
         }
@@ -311,7 +384,8 @@ public record MapModuleConfiguration(
                     child.getInt("sort-order", target.size()),
                     loadCurrencyCosts(child.getMapList("unlock-currencies")),
                     loadCurrencyCosts(child.getMapList("teleport-currencies")),
-                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items")
+                    loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
+                    loadLightRegion(child.getConfigurationSection("light-region"))
                 ));
             }
         }
@@ -656,6 +730,8 @@ public record MapModuleConfiguration(
      * @param defaultZoom   菜单默认缩放
      * @param hudZoom       HUD 缩放
      * @param hudSize       HUD 尺寸（像素）
+     * @param dimension     MC 维度 key（如 {@code minecraft:overworld}）；空 = 运行时按 Bukkit world.getKey() 自动解析
+     * @param regions       世界级点亮区域（always-lit，不依赖锚点解锁）；空列表 = 该世界不启用点亮机制
      */
     public record WorldDefinition(
         String id,
@@ -667,7 +743,24 @@ public record MapModuleConfiguration(
         int pixelOffsetZ,
         double defaultZoom,
         double hudZoom,
-        int hudSize
+        int hudSize,
+        String dimension,
+        List<PolygonRegion> regions
+    ) {
+    }
+
+    /**
+     * 多边形点亮区域（世界 XZ 平面上的多边形）。
+     * <p>
+     * 顶点列表按顺序构成闭合多边形（至少 3 点），由 PolygonSelection 选区工具
+     * 或配置文件手工填写。
+     *
+     * @param id     区域标识（调试/命令管理用）
+     * @param points 顶点列表，每个元素为 [x, z]
+     */
+    public record PolygonRegion(
+        String id,
+        List<int[]> points
     ) {
     }
 
@@ -698,6 +791,7 @@ public record MapModuleConfiguration(
      * @param unlockCurrencies   解锁所需货币列表
      * @param teleportCurrencies 传送所需货币列表
      * @param unlockItems        解锁所需物品列表
+     * @param lightRegions       解锁后点亮的多边形区域列表；空 = 该锚点不管点亮
      */
     public record AnchorDefinition(
         String id,
@@ -711,7 +805,8 @@ public record MapModuleConfiguration(
         int sortOrder,
         List<CurrencyCost> unlockCurrencies,
         List<CurrencyCost> teleportCurrencies,
-        List<ItemCost> unlockItems
+        List<ItemCost> unlockItems,
+        List<PolygonRegion> lightRegions
     ) {
     }
 

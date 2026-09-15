@@ -12,6 +12,9 @@
 #   unlock-currencies  - 解锁此锚点需消耗的货币列表（currency=货币ID, amount=数量）
 #   teleport-currencies - 传送到此锚点需消耗的货币列表
 #   unlock-items       - 解锁此锚点需消耗的物品列表（amount=数量, matcher=物品匹配器）
+#   light-region       - 可选：解锁后点亮的多边形区域（原神式点亮机制）
+#                        points: 多边形顶点列表 [[x,z],...]（至少 3 点）
+#                        不配 = 该锚点不管点亮；配了 → 未解锁时该区域在大小地图上都遮蔽
 
 # 锚点: spawn（主城出生点，默认解锁）
 spawn:
@@ -29,6 +32,9 @@ spawn:
     - currency: "money"
       amount: 10
   unlock-items: []
+  # 示例：解锁后点亮以锚点为中心的方形区域（可选，不配则不启用点亮）
+  # light-region:
+  #   points: [[-64, -64], [64, -64], [64, 64], [-64, 64]]
 
 # 锚点: mine（矿洞入口，需货币+物品解锁）
 mine:

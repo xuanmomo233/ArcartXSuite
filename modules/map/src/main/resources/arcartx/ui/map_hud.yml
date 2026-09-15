@@ -6,9 +6,11 @@
 # 重载命令: /axs map reload
 #
 # 小地图渲染由 Arcart-Suite-Map 客户端 mod 完全接管：
-#   - UI 的 tick 每帧通过 axsmap.getMapRenderer().setHudAnchor() 传小地图右上角锚点
+#   - UI 的 tick 触发器每帧通过 axsmap.getMapRenderer().setHudAnchor() 传小地图右上角锚点
 #   - mod 根据锚点和内部 hudSize 状态计算实际渲染区域，绘制圆形/方形小地图
-#   - 坐标和世界名文字位置由 UI 根据 mapRenderer.getHudSize() 动态计算
+#   - 圆形遮罩在 mod 的 CPU 端生成视图纹理时应用，含 1px 抗锯齿与圆形描边
+#   - 世界名与 xyz 坐标由 mod 直接绘制（本地玩家数据，每帧实时，不发包）
+#   - 按 [ 切换圆形/方形，按 +/- 调整大小，按 ,/. 调整缩放
 
 ui:
   isHud: true
@@ -18,10 +20,27 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - visible: 小地图是否可见
+    #   - worldId: 当前世界 ID
+    #   - texture: 地图纹理路径
+    #   - imageWidth: 地图图片宽度
+    #   - imageHeight: 地图图片高度
+    #   - hudZoom: HUD 缩放比例
+    #   - hudSize: HUD 尺寸（像素）
+    #   - clippedPlayerX: 裁剪后玩家 X 坐标
+    #   - clippedPlayerZ: 裁剪后玩家 Z 坐标
+    #   - playerYaw: 玩家朝向角度
+    #   - trackingText: 导航追踪提示文本
     init: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
       var.worldId = packet['worldId']
+      var.dimension = packet['dimension']
+      var.litEnabled = packet['litEnabled']
+      var.litRegions = packet['litRegions']
       var.texture = packet['texture']
       var.imageWidth = packet['imageWidth']
       var.imageHeight = packet['imageHeight']
@@ -31,10 +50,22 @@ ui:
       var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      if(var.mapRenderer == none) {
+        try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
+      }
+      if(var.mapRenderer != none) {
+        var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
+        var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
+      }
+    # packetHandler: update
+    # 包字段: 同 init（实时刷新小地图数据）
     update: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
       var.worldId = packet['worldId']
+      var.dimension = packet['dimension']
+      var.litEnabled = packet['litEnabled']
+      var.litRegions = packet['litRegions']
       var.texture = packet['texture']
       var.imageWidth = packet['imageWidth']
       var.imageHeight = packet['imageHeight']
@@ -44,6 +75,13 @@ ui:
       var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      if(var.mapRenderer == none) {
+        try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
+      }
+      if(var.mapRenderer != none) {
+        var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
+        var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
+      }
   action:
     load: |-
       var.packetId = 'AXS_MAP'
@@ -61,6 +99,13 @@ ui:
       var.mapMod = none
       var.mapRenderer = none
       var.hudSizeDesign = 200
+      var.hudShape = 'CIRCLE'
+    # tick：每帧计算小地图右上角锚点坐标，传给客户端 mod
+    # mod 内部根据 hudSize 状态计算实际渲染区域（向左下延伸 hudSize×hudSize）
+    # setHudAnchor(anchorX, anchorY, s):
+    #   anchorX = 屏幕宽度 - 28*s（右上角 X，自适应缩放）
+    #   anchorY = 24*s（右上角 Y）
+    #   s = 自适应缩放因子（sx/sy 取小值）
     tick: |-
       if(var.mapRenderer == none) {
         try {
@@ -76,12 +121,9 @@ ui:
         anchorX = Screen.getWidth() - 28 * s
         anchorY = 24 * s
         var.mapRenderer.setHudAnchor(anchorX, anchorY, s)
-        // 读取 mod 实际 hudSize，换算回设计坐标系用于文字定位
-        try {
-          var.hudSizeDesign = var.mapRenderer.getHudSize() / s
-        } catch(e2) {
-          var.hudSizeDesign = 200
-        }
+        // 同步 mod 内的小地图尺寸/形状给装饰控件使用（设计坐标 = 屏幕像素 / s）
+        var.hudSizeDesign = var.mapRenderer.getHudSize() / s
+        var.hudShape = '' + var.mapRenderer.getHudShape()
       } elif(var.mapRenderer != none && !var.visible) {
         var.mapRenderer.deactivate()
       }
@@ -98,28 +140,23 @@ controls:
       width: 1920
       height: 1080
     children:
-      小地图文字区:
-        type: Canvas
+      # 小地图装饰边框：由 UI 负责渲染装饰，mod 只画地形。
+      # 注意 ArcartX HUD 控件渲染在地形纹理上层，normal 必须全透明
+      # （实心底色会盖住地形），装饰通过 effect.stroke 画外圈描边。
+      小地图边框:
+        type: Texture
         attribute:
           point: ~top_right
-          x: -28
-          y: "24 + var.hudSizeDesign + 8"
-          width: "var.hudSizeDesign"
-          height: 80
-          visible: var.visible
-        children:
-          世界名称:
-            type: Text
-            attribute:
-              point: ~top_center
-              texts: "'&f' + var.worldId"
-              fontSize: 32
-              through: true
-          坐标:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 36
-              texts: "'&fX: ' + var.clippedPlayerX + '  Z: ' + var.clippedPlayerZ"
-              fontSize: 32
-              through: true
+          x: "0 - (28 + var.hudSizeDesign + 4)"
+          y: 20
+          width: "var.hudSizeDesign + 8"
+          height: "var.hudSizeDesign + 8"
+          normal: ~255,255,255,0
+          shape: "var.hudShape == 'CIRCLE' ? 'circle' : 'round_rect'"
+          radius: "var.hudShape == 'CIRCLE' ? (var.hudSizeDesign + 8) / 2 : 16"
+          visible: "var.visible && var.mapRenderer != none"
+          through: true
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,140

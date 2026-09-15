@@ -38,6 +38,7 @@ import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.AnchorDefinition;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.CurrencyCost;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.DefaultUnlockRule;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.ItemCost;
+import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.PolygonRegion;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.WorldDefinition;
 import xuanmo.arcartxsuite.map.model.MapNavigationState;
 import xuanmo.arcartxsuite.map.model.MapNavigationState.TargetType;
@@ -1057,7 +1058,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     world.pixelOffsetZ(),
                     world.defaultZoom(),
                     world.hudZoom(),
-                    world.hudSize()
+                    world.hudSize(),
+                    resolveDimension(world),
+                    toRegionPoints(world.regions())
                 )
             );
         }
@@ -1080,7 +1083,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     formatTeleportCostText(anchor),
                     !unlocked,
                     unlocked,
-                    anchor.sortOrder()
+                    anchor.sortOrder(),
+                    toRegionPoints(anchor.lightRegions())
                 )
             );
         }
@@ -1104,6 +1108,30 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         );
     }
 
+    /**
+     * 解析世界维度 key：config 显式配置优先，否则按 Bukkit world.getKey() 自动获取。
+     * 供客户端 mod 将 worldId 匹配到本地 MC 维度（overworld/the_nether 等）。
+     */
+    /** PolygonRegion 列表 → 顶点列表列表（SnapshotBuilder 内部传递格式）。 */
+    private static List<List<int[]>> toRegionPoints(List<PolygonRegion> regions) {
+        if (regions == null || regions.isEmpty()) {
+            return List.of();
+        }
+        List<List<int[]>> out = new ArrayList<>(regions.size());
+        for (PolygonRegion r : regions) {
+            out.add(r.points());
+        }
+        return List.copyOf(out);
+    }
+
+    private static String resolveDimension(WorldDefinition world) {
+        if (world.dimension() != null && !world.dimension().isBlank()) {
+            return world.dimension();
+        }
+        World bukkitWorld = Bukkit.getWorld(world.id());
+        return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
+    }
+
     private Map<String, Object> buildMenuPayload(MapSnapshotBuilder.MenuSnapshot snapshot) {
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", snapshot.packetId());
@@ -1117,6 +1145,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("id", row.id());
             entry.put("displayName", row.displayName());
             entry.put("texture", row.texture());
+            entry.put("dimension", row.dimension());
             entry.put("selected", row.selected());
             worldRows.put(Integer.toString(i), entry);
         }
@@ -1195,6 +1224,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailCanCreateWaypoint", snapshot.detail().canCreateWaypoint());
         payload.put("detailClearTrackVisible", snapshot.detail().clearTrackVisible());
         payload.put("detailTrackingText", snapshot.detail().trackingText());
+        payload.put("litEnabled", snapshot.litEnabled());
+        payload.put("litRegions", snapshot.litRegions());
         payload.put("maxWorldCount", worldRows.size());
         payload.put("maxAnchorCount", anchorRows.size());
         payload.put("maxWaypointCount", waypointRows.size());
@@ -1207,6 +1238,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("packetId", snapshot.packetId());
         payload.put("visible", snapshot.visible());
         payload.put("worldId", snapshot.worldId());
+        payload.put("dimension", snapshot.dimension());
         payload.put("texture", snapshot.texture());
         payload.put("imageWidth", snapshot.imageWidth());
         payload.put("imageHeight", snapshot.imageHeight());
@@ -1216,6 +1248,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("clippedPlayerZ", snapshot.clippedPlayerZ());
         payload.put("playerYaw", snapshot.playerYaw());
         payload.put("trackingText", snapshot.trackingText());
+        payload.put("litEnabled", snapshot.litEnabled());
+        payload.put("litRegions", snapshot.litRegions());
         return payload;
     }
 

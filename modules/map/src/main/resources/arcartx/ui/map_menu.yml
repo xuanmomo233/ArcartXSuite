@@ -5,61 +5,26 @@
 # 关联文件: ArcartXMap.yml、ui/map_hud.yml
 # 重载命令: /axs map reload
 #
-# 地图渲染由 Arcart-Suite-Map 客户端 mod 负责：
-#   - UI 的 tick 触发器每帧通过 Aria use() 调用 mod 的 MapRenderer.setRegion()，
-#     把地图渲染区的屏幕坐标传给 mod
-#   - packet init/update 时通过 use() 调用 mod 的 clearMarkers()/addMarker()，
-#     把锚点/路径点/外部目标的世界坐标传给 mod
-#   - mod 在 ArcartXLayerRenderEvent 事件中往指定区域渲染地图画面、玩家箭头、标点图标
+# 大地图渲染由 Arcart-Suite-Map 客户端 mod 完全接管：
+#   - UI 的 tick 每帧调用 mapRenderer.setRegion() 传地图渲染区屏幕坐标
+#   - mod 在 Screen.render RETURN 往该区域渲染地形、玩家箭头、标记点
+#   - mod 内部处理滚轮缩放、拖拽平移、锚点点击
 
 ui:
   isHud: false
-  background: true
+  background: false
   closeDied: true
   escClose: true
   through: false
   screenScale: true
   show: true
   packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - packetId: 通信标识，用于 Packet.send 回包
-    #   - selectedWorldId: 当前选中的世界 ID
-    #   - selectedWorldName: 当前选中的世界名称
-    #   - worldRows: 世界列表行数据
-    #   - anchorRows: 锚点列表行数据（含 x/y/z 世界坐标）
-    #   - waypointRows: 路径点列表行数据（含 x/y/z 世界坐标）
-    #   - externalTargetRows: 外部目标列表行数据（含 x/y/z 世界坐标）
-    #   - waypointLimit: 路径点上限
-    #   - waypointCount: 当前路径点数量
-    #   - canCreateWaypoint: 是否允许创建路径点
-    #   - clearTrackVisible: 是否显示清除导航按钮
-    #   - trackingText: 导航追踪提示文本
-    #   - detailSelectedType: 详情面板选中类型
-    #   - detailSelectedId: 详情面板选中 ID
-    #   - detailTitle: 详情标题
-    #   - detailDescription: 详情描述
-    #   - detailUnlocked: 是否已解锁
-    #   - detailUnlockCostText: 解锁费用文本
-    #   - detailTeleportCostText: 传送费用文本
-    #   - detailExternalTarget: 是否为外部目标
-    #   - detailCanUnlock: 是否可解锁
-    #   - detailCanTeleport: 是否可传送
-    #   - detailCanTrackAnchor: 是否可追踪锚点
-    #   - detailCanTrackWaypoint: 是否可追踪路径点
-    #   - detailCanTrackExternal: 是否可追踪外部目标
-    #   - detailCanDeleteWaypoint: 是否可删除路径点
-    #   - detailCanCreateWaypoint: 是否可创建路径点
-    #   - detailClearTrackVisible: 详情面板是否显示清除导航
-    #   - detailTrackingText: 详情面板导航追踪文本
-    #   - maxWorldCount: 世界行模板最大复制数
-    #   - maxAnchorCount: 锚点行模板最大复制数
-    #   - maxWaypointCount: 路径点行模板最大复制数
-    #   - maxExternalCount: 外部目标行模板最大复制数
     init: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
       var.selectedWorldName = packet['selectedWorldName']
+      var.litEnabled = packet['litEnabled']
+      var.litRegions = packet['litRegions']
       var.worldRows = packet['worldRows']
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
@@ -125,14 +90,14 @@ ui:
       }
       var.actionBusy = false
       var.actionBusySeconds = 0
-      // 同步标点数据到客户端 mod
       call_syncMarkers()
-    # packetHandler: update
-    # 包字段: 同 init（实时刷新地图菜单数据）
+      call_syncWorldDims()
     update: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
       var.selectedWorldName = packet['selectedWorldName']
+      var.litEnabled = packet['litEnabled']
+      var.litRegions = packet['litRegions']
       var.worldRows = packet['worldRows']
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
@@ -197,10 +162,9 @@ ui:
         e.entryKey = key
       }
       var.actionBusy = false
-      // 同步标点数据到客户端 mod
       call_syncMarkers()
+      call_syncWorldDims()
   action:
-    # 视口换算：把窗口实际宽高折算回设计坐标系（按避坑指南 §16）
     load: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -208,20 +172,15 @@ ui:
       var.viewW = Screen.getWidth() / var.scale
       var.viewH = Screen.getHeight() / var.scale
       var.offX = (var.viewW - 1920) / 2
-      // 加载客户端 mod 的 MapRenderer 实例
       var.mapMod = none
       var.mapRenderer = none
       try {
-        var.mapMod = use('xuanmo.arcartsuitemap.ArcartSuiteMapMod')
-        var.mapRenderer = var.mapMod.getMapRenderer()
+        var.mapRenderer = axsmap.getMapRenderer()
       } catch(e) {
-        // mod 未安装，地图渲染区将保持空白
       }
-      // 同步标点的函数定义
       var.syncMarkers = -> {
         if(var.mapRenderer == none) { return }
         var.mapRenderer.clearMarkers()
-        // 锚点
         if(var.anchorRows != none) {
           for(key in var.anchorRows.keys()) {
             row = var.anchorRows[key]
@@ -230,7 +189,6 @@ ui:
             }
           }
         }
-        // 路径点
         if(var.waypointRows != none) {
           for(key in var.waypointRows.keys()) {
             row = var.waypointRows[key]
@@ -239,7 +197,6 @@ ui:
             }
           }
         }
-        // 外部目标
         if(var.externalTargetRows != none) {
           for(key in var.externalTargetRows.keys()) {
             row = var.externalTargetRows[key]
@@ -249,9 +206,28 @@ ui:
           }
         }
       }
-      // 调用同步标点的快捷函数
       var.call_syncMarkers = -> {
         if(var.syncMarkers != none) { var.syncMarkers() }
+      }
+      // 世界ID→MC维度映射下发给 mod（服务端 packet 的 worldRows[].dimension），
+      // mod 用它把"选中世界"匹配到对应维度的地形缓存桶
+      var.syncWorldDims = -> {
+        if(var.mapRenderer == none) { return }
+        if(var.worldRows != none) {
+          for(key in var.worldRows.keys()) {
+            row = var.worldRows[key]
+            if(row != none) {
+              dim = row['dimension']
+              var.mapRenderer.setWorldDimension('' + row['id'], dim == none ? '' : '' + dim)
+            }
+          }
+        }
+        // 点亮区域：litEnabled=false → 传 none（全亮不遮罩）；true → 传已解锁区域并集
+        var.mapRenderer.setLitRegions('' + var.selectedWorldId,
+          var.litEnabled == true ? var.litRegions : none)
+      }
+      var.call_syncWorldDims = -> {
+        if(var.syncWorldDims != none) { var.syncWorldDims() }
       }
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -260,35 +236,17 @@ ui:
       var.viewW = Screen.getWidth() / var.scale
       var.viewH = Screen.getHeight() / var.scale
       var.offX = (var.viewW - 1920) / 2
-    # tick：每帧计算地图渲染区的屏幕坐标，传给客户端 mod
     tick: |-
       if(var.mapRenderer != none) {
-        // Adaptive ~top_center：水平居中，顶部对齐
-        // 主面板 ~middle_center 在 Adaptive 里，宽 1520 高 900
-        // 主面板左上角在设计坐标系中 = (200, 90)
-        // 地图区域在主面板里: x=24, y=280, w=900, h=596
-        // 地图区域左上角在设计坐标系中 = (224, 370)
-        mapX = (var.offX + 224) * var.scale
-        mapY = 370 * var.scale
-        mapW = 900 * var.scale
-        mapH = 596 * var.scale
+        // 主面板 top_left x:-offX y:0 铺满窗口，地图渲染区在主面板里 x:24 y:120
+        // 地图渲染区在 Adaptive 设计坐标系 = (-offX + 24, 120)
+        // 屏幕坐标 = (offX + (-offX + 24)) * scale = 24 * scale
+        mapX = 24 * var.scale
+        mapY = 120 * var.scale
+        mapW = (var.viewW - 540) * var.scale
+        mapH = (var.viewH - 144) * var.scale
         var.mapRenderer.setRegion(mapX, mapY, mapW, mapH, var.scale)
-        // 设置当前世界 ID（mod 据此判断是否需要重新渲染纹理）
         var.mapRenderer.setWorldId(var.selectedWorldId)
-        // 设置玩家位置与朝向（mod 据此定位玩家箭头和地图中心）
-        // 使用 Aria use() 获取 Minecraft 客户端玩家数据
-        try {
-          mc = use('net.minecraft.client.MinecraftClient')
-          player = mc.field_1729  // MinecraftClient.instance (INSTANCE field)
-          if(player != none) {
-            p = player.field_1724  // MinecraftClient.player
-            if(p != none) {
-              var.mapRenderer.setPlayerPose(p.getX(), p.getZ(), p.getYaw())
-            }
-          }
-        } catch(e2) {
-          // 获取玩家数据失败，mod 将使用上次的位置
-        }
       }
     open: |-
       var.packetId = 'AXS_MAP'
@@ -328,7 +286,6 @@ ui:
       var.actionBusy = false
       var.actionBusySeconds = 0
     close: |-
-      // 通知 mod 停止渲染
       if(var.mapRenderer != none) {
         var.mapRenderer.deactivate()
       }
@@ -344,6 +301,13 @@ ui:
       }
 
 controls:
+  # 全屏高模糊不透明毛玻璃背景
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: "~Frosted:24;30,32,38,200"
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -354,681 +318,926 @@ controls:
       主面板:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1520
-          height: 900
+          point: ~top_left
+          x: "-var.offX"
+          y: 0
+          width: "var.viewW"
+          height: "var.viewH"
         children:
-          地图主背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~28,30,38,235
-              shape: ~round_rect
-              radius: 28
-          边框:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~255,255,255,18
-              shape: ~round_rect
-              radius: 28
-          地图菜单标题:
-            type: Text
+          # ─── 顶栏 ───
+          顶栏:
+            type: Canvas
             attribute:
               point: ~top_left
-              x: 36
-              y: 24
-              texts: "'&f地图总览 &8/ &7' + var.selectedWorldName"
-              fontSize: 30
-              shadow: true
-          追踪文字:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 36
-              y: 62
-              texts: "'&b' + var.trackingText"
-              fontSize: 18
-              shadow: true
-          # ─── 世界列表 ───
-          世界列表面板:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 110
-              width: 360
-              height: 150
-              normal: ~255,255,255,25
-              shape: ~round_rect
-              radius: 18
-          世界列表标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 42
-              y: 128
-              texts: "'&f世界列表'"
-              fontSize: 22
-              shadow: true
-          世界滑块:
-            type: Texture
-            val: 世界滑块
-            attribute:
-              point: ~top_left
-              x: 42
-              y: 248
-              width: 30
-              height: 6
-              normal: ~120,120,120,200
-              maxDragX: 294
-          世界滚动栏:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 42
-              y: 162
-              width: 324
-              height: 82
-              moveX: "self.parent['世界滑块'].getDragXRatio()"
-            action:
-              wheel: |-
-                if(self.moveX >= 0 && self.wheelValue > 0){
-                  self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveX <= 1 && self.wheelValue < 0){
-                  self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
-                }
+              x: 0
+              y: 0
+              width: "var.viewW"
+              height: 96
             children:
-              world_list:
-                val: world_entry
-                type: HStack
+              顶栏底:
+                type: Texture
                 attribute:
-                  height: 68
-                  spaceBetween: 12
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,40
+              标题色块:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 36
+                  width: 6
+                  height: 44
+                  normal: ~232,180,90,255
+                  shape: ~round_rect
+                  radius: 3
+              地图菜单标题:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 60
+                  texts: "'&f地图总览 &8/ &7' + var.selectedWorldName"
+                  fontSize: 36
+              追踪文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  x: -260
+                  texts: "'&b' + var.trackingText"
+                  fontSize: 32
+              # ─── 小地图设置组（直接调客户端 mod，不发包） ───
+              小地图设置标签:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: "var.viewW - 838"
+                  texts: ~&7小地图
+                  fontSize: 32
+              形状按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.viewW - 718"
+                  y: 24
+                  width: 110
+                  height: 48
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.toggleHudShape()
+                    }
                 children:
-                  地图项目:
-                    type: Canvas
+                  形状按钮底:
+                    type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.worldRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 148
-                      height: 68
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'open_world', self.entry['id'])
-                    children:
-                      地图项目背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
-                          shape: ~round_rect
-                          radius: 16
-                      地图项目文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 148
-                          texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
-                          fontSize: 20
-                          shadow: true
-                          through: true
-          # ─── 地图渲染区（由 Arcart-Suite-Map mod 渲染） ───
+                      point: ~stretch_all
+                      through: true
+                      normal: ~52,56,64,255
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  形状按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '&f圆形' : '&f方形'"
+                      fontSize: 32
+                      through: true
+              大小减按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.viewW - 596"
+                  y: 24
+                  width: 48
+                  height: 48
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.adjustHudSize(-25)
+                    }
+                children:
+                  大小减底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~52,56,64,255
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  大小减字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f-
+                      fontSize: 32
+                      through: true
+              大小值文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: "var.viewW - 538"
+                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + '&8px' : '&8-'"
+                  fontSize: 32
+              大小加按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.viewW - 462"
+                  y: 24
+                  width: 48
+                  height: 48
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.adjustHudSize(25)
+                    }
+                children:
+                  大小加底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~52,56,64,255
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  大小加字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f+
+                      fontSize: 32
+                      through: true
+              缩放减按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.viewW - 382"
+                  y: 24
+                  width: 48
+                  height: 48
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.adjustHudZoom(0.8)
+                    }
+                children:
+                  缩放减底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~52,56,64,255
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  缩放减字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f-
+                      fontSize: 32
+                      through: true
+              缩放值文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: "var.viewW - 324"
+                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&8%' : '&8-'"
+                  fontSize: 32
+              缩放加按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.viewW - 252"
+                  y: 24
+                  width: 48
+                  height: 48
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.adjustHudZoom(1.25)
+                    }
+                children:
+                  缩放加底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~52,56,64,255
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  缩放加字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f+
+                      fontSize: 32
+                      through: true
+              关闭按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  x: -96
+                  y: 24
+                  width: 60
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Screen.close()
+                children:
+                  关闭按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~220,80,80,255
+                      hover: ~240,100,100,255
+                      shape: ~round_rect
+                      radius: 12
+                  关闭按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f✕
+                      fontSize: 36
+                      through: true
+          # ─── 地图渲染区（mod 渲染地形，在 UI 上层；边框靠外扩环露出） ───
           地图渲染区:
             type: Canvas
             attribute:
               point: ~top_left
               x: 24
-              y: 280
-              width: 900
-              height: 596
-            # 这个 Canvas 不带背景色，mod 会直接往这个区域渲染地图画面
-            # Canvas 的 through 不设为 true，以便接收鼠标交互（滚轮缩放/拖拽平移）
+              y: 120
+              width: "var.viewW - 540"
+              height: "var.viewH - 144"
             children:
-              地图区域边框:
+              # 边框：比地形区外扩 4px。mod 地形画在 UI 上层会盖住内部，
+              # 只有外扩的 4px 环露出 → 视觉上是地图外框。
+              地图边框:
                 type: Texture
                 attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~255,255,255,30
+                  point: ~top_left
+                  x: -4
+                  y: -4
+                  width: "var.viewW - 540 + 8"
+                  height: "var.viewH - 144 + 8"
+                  normal: ~255,255,255,0
                   shape: ~round_rect
-                  radius: 22
-              地图区域背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
+                  radius: 8
                   through: true
-                  normal: ~20,22,28,255
-                  shape: ~round_rect
-                  radius: 22
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,140
               地图加载提示:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 900
                   texts: "'&7地图加载中...'"
-                  fontSize: 24
-                  shadow: true
+                  fontSize: 36
                   through: true
                   visible: "var.mapRenderer == none"
-          # ─── 锚点列表 ───
-          锚点面板:
-            type: Texture
+          # ─── 右侧面板 ───
+          右侧面板:
+            type: Canvas
             attribute:
               point: ~top_left
-              x: 948
-              y: 110
-              width: 548
-              height: 250
-              normal: ~255,255,255,25
-              shape: ~round_rect
-              radius: 18
-          锚点标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 126
-              texts: "'&f锚点列表'"
-              fontSize: 22
-              shadow: true
-          锚点滑块:
-            type: Texture
-            val: 锚点滑块
-            attribute:
-              point: ~top_left
-              x: 1466
-              y: 156
-              width: 6
-              height: 40
-              normal: ~120,120,120,200
-              maxDragY: 146
-          锚点滚动栏:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 156
-              width: 500
-              height: 186
-              moveY: "self.parent['锚点滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+              x: "var.viewW - 492"
+              y: 120
+              width: 468
+              height: "var.viewH - 144"
             children:
-              anchor_stack:
-                val: anchor_row
-                type: VStack
+              右侧面板底:
+                type: Texture
                 attribute:
-                  width: 500
-                  spaceBetween: 10
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              # 世界列表（横向条）
+              世界列表标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 24
+                  texts: ~&f世界列表
+                  fontSize: 32
+              世界滑块:
+                type: Texture
+                val: 世界滑块
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 122
+                  width: 40
+                  height: 6
+                  normal: ~120,120,120,200
+                  shape: ~round_rect
+                  radius: 3
+                  maxDragX: 380
+              世界滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 64
+                  width: 420
+                  height: 54
+                  moveX: "self.parent['世界滑块'].getDragXRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveX >= 0 && self.wheelValue > 0){
+                      self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveX <= 1 && self.wheelValue < 0){
+                      self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                    }
                 children:
-                  地图项目:
-                    type: Canvas
+                  world_list:
+                    val: world_entry
+                    type: HStack
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.anchorRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 500
-                      height: 70
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'select_anchor', self.entry['id'])
+                      height: 60
+                      spaceBetween: 8
                     children:
-                      地图项目背景:
-                        type: Texture
+                      地图项目:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
-                          shape: ~round_rect
-                          radius: 14
-                      地图项目状态:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 18
-                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a● 已解锁' : '&c● 未解锁') : none"
-                          fontSize: 18
-                          shadow: true
-                          through: true
-                      地图项目文字:
-                        type: Text
-                        attribute:
-                          point: ~top_left
-                          x: 20
-                          y: 42
-                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['displayName'] : none"
-                          fontSize: 16
-                          shadow: true
-                          through: true
-          # ─── 路径点列表 ───
-          路径点面板:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 948
-              y: 374
-              width: 548
-              height: 142
-              normal: ~255,255,255,25
-              shape: ~round_rect
-              radius: 18
-          路径点标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 390
-              texts: "'&f路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
-              fontSize: 22
-              shadow: true
-          路径点滑块:
-            type: Texture
-            val: 路径点滑块
-            attribute:
-              point: ~top_left
-              x: 1466
-              y: 420
-              width: 6
-              height: 20
-              normal: ~120,120,120,200
-              maxDragY: 60
-          路径点滚动栏:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 420
-              width: 500
-              height: 80
-              moveY: "self.parent['路径点滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              waypoint_stack:
-                val: waypoint_row
-                type: VStack
+                          entryKey: 0.round()
+                          entry: var.worldRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 148
+                          height: 60
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'open_world', self.entry['id'])
+                        children:
+                          地图项目背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                              shape: ~round_rect
+                              radius: 14
+                          地图项目文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
+                              fontSize: 32
+                              through: true
+              # 锚点列表
+              锚点标题:
+                type: Text
                 attribute:
-                  width: 500
-                  spaceBetween: 8
+                  point: ~top_center
+                  y: 148
+                  texts: ~&f锚点列表
+                  fontSize: 32
+              锚点滑块:
+                type: Texture
+                val: 锚点滑块
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 188
+                  width: 10
+                  height: 40
+                  normal: ~120,120,120,200
+                  maxDragY: 140
+              锚点滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 188
+                  width: 420
+                  height: 160
+                  moveY: "self.parent['锚点滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
-                  地图项目:
-                    type: Canvas
+                  anchor_stack:
+                    val: anchor_row
+                    type: VStack
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.waypointRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 500
-                      height: 48
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
+                      width: 420
+                      spaceBetween: 8
                     children:
-                      地图项目背景:
-                        type: Texture
+                      地图项目:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
-                          shape: ~round_rect
-                          radius: 14
-                      地图项目文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 20
-                          width: 460
-                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &8(' + self.parent.entry['x'].round() + ', ' + self.parent.entry['z'].round() + ')' : none"
-                          fontSize: 18
-                          shadow: true
-                          through: true
-          # ─── 外部目标列表 ───
-          外部面板:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 948
-              y: 530
-              width: 548
-              height: 130
-              normal: ~255,255,255,25
-              shape: ~round_rect
-              radius: 18
-          外部标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 546
-              texts: "'&f任务目标'"
-              fontSize: 22
-              shadow: true
-          外部滑块:
-            type: Texture
-            val: 外部滑块
-            attribute:
-              point: ~top_left
-              x: 1466
-              y: 576
-              width: 6
-              height: 18
-              normal: ~120,120,120,200
-              maxDragY: 50
-          外部滚动栏:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 576
-              width: 500
-              height: 68
-              moveY: "self.parent['外部滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              external_stack:
-                val: external_row
-                type: VStack
+                          entryKey: 0.round()
+                          entry: var.anchorRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 420
+                          height: 68
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'select_anchor', self.entry['id'])
+                        children:
+                          地图项目背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                              shape: ~round_rect
+                              radius: 14
+                          地图项目状态:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 16
+                              y: 8
+                              texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a● 已解锁' : '&c● 未解锁') : none"
+                              fontSize: 32
+                              through: true
+                          地图项目文字:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 16
+                              y: 38
+                              texts: "self.parent.entry != none ? '&7' + self.parent.entry['displayName'] : none"
+                              fontSize: 32
+                              through: true
+              # 路径点列表
+              路径点标题:
+                type: Text
                 attribute:
-                  width: 500
-                  spaceBetween: 8
+                  point: ~top_center
+                  y: 368
+                  texts: "'&f路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
+                  fontSize: 32
+              路径点滑块:
+                type: Texture
+                val: 路径点滑块
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 408
+                  width: 10
+                  height: 24
+                  normal: ~120,120,120,200
+                  maxDragY: 60
+              路径点滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 408
+                  width: 420
+                  height: 96
+                  moveY: "self.parent['路径点滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
-                  地图项目:
-                    type: Canvas
+                  waypoint_stack:
+                    val: waypoint_row
+                    type: VStack
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.externalTargetRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 500
-                      height: 48
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'select_external', self.entry['id'])
+                      width: 420
+                      spaceBetween: 8
                     children:
-                      地图项目背景:
-                        type: Texture
+                      地图项目:
+                        type: Canvas
                         attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
-                          shape: ~round_rect
-                          radius: 14
-                      地图项目文字:
-                        type: Text
+                          entryKey: 0.round()
+                          entry: var.waypointRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 420
+                          height: 56
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
+                        children:
+                          地图项目背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                              shape: ~round_rect
+                              radius: 14
+                          地图项目文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] + ' &8(' + self.parent.entry['x'].round() + ', ' + self.parent.entry['z'].round() + ')' : none"
+                              fontSize: 32
+                              through: true
+              # 外部目标列表
+              外部标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 524
+                  texts: ~&f任务目标
+                  fontSize: 32
+              外部滑块:
+                type: Texture
+                val: 外部滑块
+                attribute:
+                  point: ~top_right
+                  x: -16
+                  y: 564
+                  width: 10
+                  height: 18
+                  normal: ~120,120,120,200
+                  maxDragY: 40
+              外部滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 564
+                  width: 420
+                  height: 72
+                  moveY: "self.parent['外部滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  external_stack:
+                    val: external_row
+                    type: VStack
+                    attribute:
+                      width: 420
+                      spaceBetween: 8
+                    children:
+                      地图项目:
+                        type: Canvas
                         attribute:
-                          point: ~middle_left
-                          x: 20
-                          width: 460
-                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
-                          fontSize: 18
-                          shadow: true
-                          through: true
-          # ─── 详情面板 ───
-          详情面板:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 948
-              y: 674
-              width: 548
-              height: 202
-              normal: ~255,255,255,25
-              shape: ~round_rect
-              radius: 18
-          详情标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 692
-              texts: "var.detailTitle"
-              fontSize: 24
-              shadow: true
-          详情描述:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 724
-              texts: "var.detailDescription"
-              fontSize: 16
-              shadow: true
-          解锁费用文字:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 750
-              texts: "'&7解锁: &f' + var.detailUnlockCostText"
-              fontSize: 15
-              shadow: true
-              visible: "var.detailSelectedType == 'anchor'"
-          传送费用文字:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 768
-              texts: "'&7传送: &f' + var.detailTeleportCostText"
-              fontSize: 15
-              shadow: true
-              visible: "var.detailSelectedType == 'anchor'"
-          # ─── 按钮组 ───
-          解锁按钮:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 972
-              y: 800
-              width: 104
-              height: 36
-              enable: "!var.actionBusy && var.actionToken != ''"
-            action:
-              clickLeft: |-
-                if (var.detailCanUnlock) {
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
-                }
-            children:
-              解锁按钮背景:
+                          entryKey: 0.round()
+                          entry: var.externalTargetRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 420
+                          height: 56
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'select_external', self.entry['id'])
+                        children:
+                          地图项目背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                              shape: ~round_rect
+                              radius: 14
+                          地图项目文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                              fontSize: 32
+                              through: true
+              # 详情面板（底部对齐到按钮上方，高度自适应）
+              详情面板底:
                 type: Texture
                 attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.detailCanUnlock ? '82,196,26,255' : '60,60,66,255'"
-                  hover: "var.detailCanUnlock ? '102,216,46,255' : '60,60,66,255'"
+                  point: ~top_left
+                  x: 24
+                  y: 656
+                  width: 420
+                  height: "var.viewH - 932"
+                  normal: ~255,255,255,25
                   shape: ~round_rect
-                  radius: 12
-              解锁按钮文字:
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              详情标题:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  width: 104
-                  texts: ~&f解锁
-                  fontSize: 18
-                  shadow: true
-                  through: true
-          传送按钮:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 1088
-              y: 800
-              width: 104
-              height: 36
-              enable: "!var.actionBusy && var.actionToken != ''"
-            action:
-              clickLeft: |-
-                if (var.detailCanTeleport) {
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
-                }
-            children:
-              传送按钮背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.detailCanTeleport ? '74,144,226,255' : '60,60,66,255'"
-                  hover: "var.detailCanTeleport ? '94,164,246,255' : '60,60,66,255'"
-                  shape: ~round_rect
-                  radius: 12
-              传送按钮文字:
+                  point: ~top_center
+                  y: 676
+                  texts: "var.detailTitle"
+                  fontSize: 32
+              详情描述:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  width: 104
-                  texts: ~&f传送
-                  fontSize: 18
-                  shadow: true
-                  through: true
-          追踪按钮:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 1204
-              y: 800
-              width: 104
-              height: 36
-            action:
-              clickLeft: |-
-                if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
-                  Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
-                }
-                if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
-                  Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
-                }
-                if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
-                  Packet.send(var.packetId, 'track_external', var.detailSelectedId)
-                }
-            children:
-              追踪按钮背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '236,180,24,255' : '60,60,66,255'"
-                  hover: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '246,200,44,255' : '60,60,66,255'"
-                  shape: ~round_rect
-                  radius: 12
-              追踪按钮文字:
+                  point: ~top_center
+                  y: 716
+                  texts: "var.detailDescription"
+                  fontSize: 32
+              解锁费用文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  width: 104
-                  texts: ~&f导航
-                  fontSize: 18
-                  shadow: true
-                  through: true
-          删除按钮:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 1320
-              y: 800
-              width: 72
-              height: 36
-              enable: "!var.actionBusy && var.actionToken != ''"
-            action:
-              clickLeft: |-
-                if (var.detailCanDeleteWaypoint) {
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, var.actionToken)
-                }
-            children:
-              删除按钮背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
-                  hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
-                  shape: ~round_rect
-                  radius: 12
-              删除按钮文字:
+                  point: ~top_center
+                  x: -105
+                  y: 756
+                  texts: "'&7解锁: &f' + var.detailUnlockCostText"
+                  fontSize: 32
+                  visible: "var.detailSelectedType == 'anchor'"
+              传送费用文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
+                  point: ~top_center
+                  x: 105
+                  y: 756
+                  texts: "'&7传送: &f' + var.detailTeleportCostText"
+                  fontSize: 32
+                  visible: "var.detailSelectedType == 'anchor'"
+              # 按钮组（两行布局，收入面板内宽 420）
+              解锁按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: "var.viewH - 144 - 96"
+                  width: 90
+                  height: 36
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if (var.detailCanUnlock) {
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
+                    }
+                children:
+                  解锁按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailCanUnlock ? '82,196,26,255' : '60,60,66,255'"
+                      hover: "var.detailCanUnlock ? '102,216,46,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  解锁按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f解锁
+                      fontSize: 32
+                      through: true
+              传送按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 126
+                  y: "var.viewH - 144 - 96"
+                  width: 90
+                  height: 36
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if (var.detailCanTeleport) {
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
+                    }
+                children:
+                  传送按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailCanTeleport ? '74,144,226,255' : '60,60,66,255'"
+                      hover: "var.detailCanTeleport ? '94,164,246,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  传送按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f传送
+                      fontSize: 32
+                      through: true
+              追踪按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 228
+                  y: "var.viewH - 144 - 96"
+                  width: 90
+                  height: 36
+                action:
+                  clickLeft: |-
+                    if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
+                      Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
+                    }
+                    if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
+                      Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                    }
+                    if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
+                      Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                    }
+                children:
+                  追踪按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '236,180,24,255' : '60,60,66,255'"
+                      hover: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '246,200,44,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  追踪按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f导航
+                      fontSize: 32
+                      through: true
+              删除按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 330
+                  y: "var.viewH - 144 - 96"
                   width: 72
-                  texts: ~&f删除
-                  fontSize: 18
-                  shadow: true
-                  through: true
-          创建按钮:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 1404
-              y: 800
-              width: 72
-              height: 36
-              enable: "!var.actionBusy && var.actionToken != ''"
-            action:
-              clickLeft: |-
-                if (var.canCreateWaypoint) {
-                  var.actionBusy = true
-                  Packet.send(var.packetId, 'create_waypoint', var.actionToken)
-                }
-            children:
-              创建按钮背景:
-                type: Texture
+                  height: 36
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if (var.detailCanDeleteWaypoint) {
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, var.actionToken)
+                    }
+                children:
+                  删除按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
+                      hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  删除按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f删除
+                      fontSize: 32
+                      through: true
+              创建按钮:
+                type: Canvas
                 attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
-                  hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
-                  shape: ~round_rect
-                  radius: 12
-              创建按钮文字:
-                type: Text
+                  point: ~top_left
+                  x: 24
+                  y: "var.viewH - 144 - 48"
+                  width: 90
+                  height: 36
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if (var.canCreateWaypoint) {
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'create_waypoint', var.actionToken)
+                    }
+                children:
+                  创建按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
+                      hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  创建按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f新建
+                      fontSize: 32
+                      through: true
+              复位按钮:
+                type: Canvas
                 attribute:
-                  point: ~middle_center
-                  width: 72
-                  texts: ~&f新建
-                  fontSize: 18
-                  shadow: true
-                  through: true
+                  point: ~top_left
+                  x: 126
+                  y: "var.viewH - 144 - 48"
+                  width: 90
+                  height: 36
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.resetView()
+                    }
+                children:
+                  复位按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~90,110,140,255
+                      hover: ~110,130,160,255
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  复位按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f复位
+                      fontSize: 32
+                      through: true
+          # 清除按钮（顶栏右侧）
           清除按钮:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 1404
+              point: ~top_right
+              x: -180
               y: 24
               width: 72
-              height: 36
+              height: 48
             action:
               clickLeft: |-
                 if (var.clearTrackVisible) {
                   Packet.send(var.packetId, 'clear_track')
                 }
             children:
-              清除按钮背景:
+              清除按钮底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -1041,8 +1250,6 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 72
                   texts: ~&f清除
-                  fontSize: 18
-                  shadow: true
+                  fontSize: 32
                   through: true
