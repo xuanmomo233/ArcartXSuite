@@ -21,6 +21,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -567,6 +568,33 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         playerDataCache.remove(uuid);
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
+    }
+
+    /**
+     * 玩家跨世界时把地图选中世界切到新世界，并刷新 HUD 显示。
+     * <p>
+     * {@code selectedWorldId} 是粘性状态：玩家之前选过的世界会一直保留，
+     * 导致传送到别的世界后 HUD 仍显示旧世界名（例如人在 boss_world 却显示
+     * bskyblock_world）。此处在世界切换时自动跟随；新世界未配置地图时保持现状。
+     */
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        String newWorldId = normalizeId(player.getWorld().getName());
+        if (!configuration.worlds().containsKey(newWorldId)) {
+            return;
+        }
+        MapPlayerViewState viewState = state(player);
+        if (newWorldId.equals(viewState.selectedWorldId())) {
+            return;
+        }
+        viewState.selectWorld(newWorldId);
+        if (viewState.hudVisible()) {
+            syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
+        }
     }
 
     private MapOperationResult openMenuInternal(Player player, String worldId, boolean pushInitPacket) {
@@ -1413,15 +1441,17 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!requested.isBlank()) {
             return configuration.worlds().containsKey(requested) ? requested : "";
         }
-        MapPlayerViewState viewState = state(player);
-        if (!viewState.selectedWorldId().isBlank() && configuration.worlds().containsKey(viewState.selectedWorldId())) {
-            return viewState.selectedWorldId();
-        }
+        // 玩家当前世界优先：打开大地图默认显示当前世界，而不是上次关闭前
+        // 残留的 selectedWorldId（粘性状态只在玩家当前世界未配置地图时回退）
         if (player != null && player.getWorld() != null) {
             String currentWorldId = normalizeId(player.getWorld().getName());
             if (configuration.worlds().containsKey(currentWorldId)) {
                 return currentWorldId;
             }
+        }
+        MapPlayerViewState viewState = state(player);
+        if (!viewState.selectedWorldId().isBlank() && configuration.worlds().containsKey(viewState.selectedWorldId())) {
+            return viewState.selectedWorldId();
         }
         return configuration.worlds().isEmpty() ? "" : configuration.worlds().keySet().iterator().next();
     }
