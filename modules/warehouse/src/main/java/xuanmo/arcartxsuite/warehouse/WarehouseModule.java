@@ -90,10 +90,13 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     .dynamicSection("shared")
                     .dynamicSection("sort-profiles")
                 .build())
-            .currentVersion(3)
+            .currentVersion(4)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+                    // pickup 服务器级开关必须是布尔值
+                    ValidationRule.of("pickup.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("pickup.mythic-loot-enabled", ValueType.BOOLEAN),
                     // pool-size 范围 1-100（仅在 shared: false 时生效）
                     ValidationRule.of("storage.pool-size", ValueType.INT)
                         .withRange(1, 100),

@@ -411,6 +411,13 @@ public final class WarehouseService implements Listener {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
             return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "没有可存入物品。");
         }
+        // 服务器级开关兜底：总开关或战利品开关关闭时，外部模块（如 Pickup 扫描模式）的自动入库同样拒绝
+        if (!configuration.pickup().enabled()) {
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "服务器已关闭自动入库功能。");
+        }
+        if (itemSourceRegistry.isMythicItem(stack) && !configuration.pickup().mythicLootEnabled()) {
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "服务器已关闭战利品入库功能。");
+        }
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
             if (result.success()) {
@@ -935,6 +942,10 @@ public final class WarehouseService implements Listener {
         if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
             return;
         }
+        // 服务器总开关：关闭后自动入库功能全服失效，玩家个人开关不生效
+        if (!configuration.pickup().enabled()) {
+            return;
+        }
         // 若 Pickup 扫描模式已接管该玩家的拾取流程，则跳过自动入库，
         // 让扫描面板正常展示掉落物，由玩家按键交互后再走 depositToPersonalWarehouse。
         PickupInterceptor interceptor = pickupInterceptorSupplier.get();
@@ -944,11 +955,16 @@ public final class WarehouseService implements Listener {
         // 使用 state(player) 而非 viewStates.get()：确保玩家未打开仓库 UI 时也能从数据库加载持久化的自动入库设置，
         // 否则服务器重启后会回退到 config.yml 的 auto-store-on-pickup 默认值，导致玩家关闭的自动入库被重新开启。
         ViewState state = state(player);
-        boolean pickup = state.autoPickup();
-        if (!pickup) {
+        ItemStack stack = event.getItem().getItemStack().clone();
+        // MythicMobs 自定义掉落物走战利品通道（服务器 mythic-loot 开关 + 玩家战利品开关），
+        // 其余物品走普通通道（玩家自动入库开关）。isMythicItem 在 MythicMobs 缺席时安全返回 false。
+        if (itemSourceRegistry.isMythicItem(stack)) {
+            if (!configuration.pickup().mythicLootEnabled() || !state.autoPickupMythic()) {
+                return;
+            }
+        } else if (!state.autoPickup()) {
             return;
         }
-        ItemStack stack = event.getItem().getItemStack().clone();
         // 保留原始物品原型用于 HUD 展示：setAmount(0) 会使 ItemStack.getType() 变成 AIR，
         // 导致后续 notifyPickup 收到 AIR 物品而 early-return，HUD 提示不显示。
         ItemStack displayPrototype = stack.clone();
@@ -1503,6 +1519,8 @@ public final class WarehouseService implements Listener {
         packet.put("autoPickup", state.autoPickup());
         packet.put("autoPickupMythic", state.autoPickupMythic());
         packet.put("autoPickupNotify", state.autoPickupNotify());
+        packet.put("serverAutoPickup", configuration.pickup().enabled());
+        packet.put("serverMythicLoot", configuration.pickup().mythicLootEnabled());
         packet.put("showcaseEnabled", currentShowcaseEnabled(player, state));
         packet.put("maxManageCount", ((java.util.Map<?,?>) packet.getOrDefault("manageWarehouses", java.util.Map.of())).size());
         packet.put("maxMemberCount", sharedMembers.size());
@@ -1741,6 +1759,16 @@ public final class WarehouseService implements Listener {
 
     private void toggleAutoPickup(Player player, String kind) throws Exception {
         ViewState state = state(player);
+        // 服务器开关关闭时对应开关已在管理界面隐藏，此处兜底拒绝伪造包；仍需刷新 UI 复位客户端防抖标志
+        var pickupConfig = configuration.pickup();
+        boolean serverAllowed = switch (kind) {
+            case "mythic" -> pickupConfig.enabled() && pickupConfig.mythicLootEnabled();
+            default -> pickupConfig.enabled();
+        };
+        if (!serverAllowed) {
+            refreshBoth(player);
+            return;
+        }
         switch (kind) {
             case "pickup" -> {
                 state.setAutoPickup(!state.autoPickup());

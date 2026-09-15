@@ -64,6 +64,8 @@ ui:
     #   - autoPickup: 是否启用自动拾取
     #   - autoPickupMythic: 是否自动拾取 MythicMobs 掉落
     #   - autoPickupNotify: 是否通知自动拾取
+    #   - serverAutoPickup: 服务器是否开启自动拾取入库（false 时隐藏整个拾取开关组）
+    #   - serverMythicLoot: 服务器是否开启 MythicMobs 掉落物入库（false 时隐藏怪物战利品开关）
     #   - showcaseEnabled: 是否启用展示柜
     #   - maxManageCount: 可管理仓库最大数量（用于动态创建控件）
     #   - maxMemberCount: 成员最大数量
@@ -105,6 +107,8 @@ ui:
       var.autoPickup = packet['autoPickup']
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
+      var.serverAutoPickup = packet['serverAutoPickup']
+      var.serverMythicLoot = packet['serverMythicLoot']
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
@@ -228,6 +232,8 @@ ui:
       var.autoPickup = true
       var.autoPickupMythic = true
       var.autoPickupNotify = true
+      var.serverAutoPickup = true
+      var.serverMythicLoot = true
       var.maxManageCount = 0
       var.maxMemberCount = 0
       var.刷新轮次 = 0.round()
@@ -727,6 +733,15 @@ controls:
                   y: 64
                   texts: "~&f自动拾取"
                   fontSize: 36
+              拾取关闭提示:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 108
+                  visible: "!var.serverAutoPickup"
+                  texts: "~&7服务器未开启自动拾取入库功能"
+                  fontSize: 36
               拾取组:
                 type: HStack
                 attribute:
@@ -736,11 +751,12 @@ controls:
                   width: "var.halfW - 60"
                   height: 48
                   spaceBetween: 8
+                  visible: "var.serverAutoPickup"
                 children:
                   自动入库:
                     type: Canvas
                     attribute:
-                      width: "(var.halfW - 76) / 3"
+                      width: "var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2"
                       height: 48
                       enable: "!var.pickupBusy && var.actionToken != ''"
                     action:
@@ -772,6 +788,7 @@ controls:
                     attribute:
                       width: "(var.halfW - 76) / 3"
                       height: 48
+                      visible: "var.serverMythicLoot"
                       enable: "!var.mythicBusy && var.actionToken != ''"
                     action:
                       clickLeft: |-
@@ -800,7 +817,7 @@ controls:
                   入库通知:
                     type: Canvas
                     attribute:
-                      width: "(var.halfW - 76) / 3"
+                      width: "var.serverMythicLoot ? (var.halfW - 76) / 3 : (var.halfW - 68) / 2"
                       height: 48
                       enable: "!var.notifyBusy && var.actionToken != ''"
                     action:

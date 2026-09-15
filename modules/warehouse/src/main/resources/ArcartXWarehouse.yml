@@ -1,4 +1,4 @@
-config-version: 2
+config-version: 4
 # AXS Warehouse AXUI
 # 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
 # 重载: /axs warehouse reload
@@ -60,9 +60,11 @@ security:
   admin-reveal-secret: ""  # 管理员查看密码所需的密钥
 
 pickup:
-  auto-store-on-pickup: true  # 拾取时是否自动存入仓库
-  auto-store-mythic-loot: false  # 是否自动存入 MythicMobs 掉落物
-  notify-on-auto-store: true  # 自动存入时是否通知玩家
+  enabled: true  # 服务器总开关：关闭后全服自动入库功能失效，玩家个人开关不生效，管理界面隐藏相关开关
+  auto-store-on-pickup: true  # 拾取时是否自动存入仓库（玩家个人设置的默认值）
+  auto-store-mythic-loot: false  # 是否自动存入 MythicMobs 自定义掉落物（玩家个人设置的默认值）
+  mythic-loot-enabled: true  # 服务器开关：是否允许 MythicMobs 自定义掉落物自动入库（关闭后管理界面隐藏对应开关）
+  notify-on-auto-store: true  # 自动存入时是否通知玩家（玩家个人设置的默认值）
 
 search:
   page-size: 18  # 搜索结果每页显示数量

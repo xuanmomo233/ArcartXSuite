@@ -83,8 +83,10 @@ public record WarehouseModuleConfiguration(
 
         ConfigurationSection pickupSection = configuration.getConfigurationSection("pickup");
         PickupConfiguration pickup = new PickupConfiguration(
+            pickupSection == null || pickupSection.getBoolean("enabled", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-on-pickup", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-mythic-loot", true),
+            pickupSection == null || pickupSection.getBoolean("mythic-loot-enabled", true),
             pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true)
         );
 
@@ -581,8 +583,16 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
-    /** 自动拾取配置：存入开关、Mythic 掉落开关、通知开关。 */
-    public record PickupConfiguration(boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean notifyOnAutoStore) {
+    /**
+     * 自动拾取配置。
+     *
+     * @param enabled            服务器总开关：false 时全服自动入库功能失效，玩家个人开关不生效
+     * @param autoStoreOnPickup  拾取时自动存入仓库（玩家个人设置默认值）
+     * @param autoStoreMythicLoot 自动存入 MythicMobs 自定义掉落物（玩家个人设置默认值）
+     * @param mythicLootEnabled  服务器开关：是否允许 MythicMobs 自定义掉落物自动入库
+     * @param notifyOnAutoStore  自动存入时通知玩家（玩家个人设置默认值）
+     */
+    public record PickupConfiguration(boolean enabled, boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean mythicLootEnabled, boolean notifyOnAutoStore) {
     }
 
     /** 搜索与排序默认配置。 */

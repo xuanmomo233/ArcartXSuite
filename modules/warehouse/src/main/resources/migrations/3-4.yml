@@ -1,0 +1,11 @@
+from-version: 3
+to-version: 4
+description: "pickup 节新增服务器级开关：enabled（自动入库总闸）、mythic-loot-enabled（MythicMobs 自定义掉落物入库）"
+
+operations:
+  - type: set-if-missing
+    path: "pickup.enabled"
+    value: true
+  - type: set-if-missing
+    path: "pickup.mythic-loot-enabled"
+    value: true
