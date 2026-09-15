@@ -5,7 +5,8 @@ main: xuanmo.arcartxsuite.map.MapModule
 api-version: 1.0
 
 depends: []
-softdepends: []
+softdepends:
+  - Multiverse-Core
 external-depends:
 
 external-softdepends:

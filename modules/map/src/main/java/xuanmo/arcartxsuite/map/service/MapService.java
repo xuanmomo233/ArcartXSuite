@@ -1050,7 +1050,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             worlds.add(
                 new MapSnapshotBuilder.WorldView(
                     world.id(),
-                    world.displayName(),
+                    resolveDisplayName(world),
                     world.texture(),
                     world.imageWidth(),
                     world.imageHeight(),
@@ -1130,6 +1130,47 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         World bukkitWorld = Bukkit.getWorld(world.id());
         return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
+    }
+
+    /** MV alias 缓存：worldId → colourlessAlias。启动时一次性补空，避免每次 buildSnapshot 调 MV API。 */
+    private final java.util.Map<String, String> mvDisplayNames = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 解析世界显示名：配置填了就用配置，留空则从 Multiverse-Core 的 colourless alias 补。
+     * MV 不存在或世界未在 MV 注册时，降级用 world id。
+     */
+    private String resolveDisplayName(WorldDefinition world) {
+        String configured = world.displayName();
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String cached = mvDisplayNames.get(world.id());
+        if (cached != null) {
+            return cached;
+        }
+        String resolved = resolveDisplayNameFromMV(world.id());
+        mvDisplayNames.put(world.id(), resolved);
+        return resolved;
+    }
+
+    /** 从 Multiverse-Core API 读取世界的去色码 alias。MV 未加载时降级用 world id。 */
+    private String resolveDisplayNameFromMV(String worldId) {
+        if (!org.mvplugins.multiverse.core.MultiverseCoreApi.isLoaded()) {
+            return worldId;
+        }
+        try {
+            org.mvplugins.multiverse.core.MultiverseCoreApi api = org.mvplugins.multiverse.core.MultiverseCoreApi.get();
+            org.mvplugins.multiverse.core.world.WorldManager wm = api.getWorldManager();
+            for (org.mvplugins.multiverse.core.world.LoadedMultiverseWorld mvWorld : wm.getLoadedWorlds()) {
+                if (worldId.equals(mvWorld.getName())) {
+                    String alias = mvWorld.getColourlessAlias();
+                    return (alias != null && !alias.isBlank()) ? alias : worldId;
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("从 Multiverse-Core 读取世界 " + worldId + " 的 alias 失败: " + e.getMessage());
+        }
+        return worldId;
     }
 
     private Map<String, Object> buildMenuPayload(MapSnapshotBuilder.MenuSnapshot snapshot) {
