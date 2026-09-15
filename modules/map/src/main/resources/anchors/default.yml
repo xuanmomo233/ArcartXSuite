@@ -19,12 +19,12 @@
 # 锚点: spawn（主城出生点，默认解锁）
 spawn:
   enabled: true
-  display-name: "新手村"
-  world: "world"
+  display-name: "出生岛"
+  world: "bskyblock_world"
   x: 0
-  y: 80
-  z: 0
-  description: "所有玩家默认可见的主城锚点。"
+  y: 88
+  z: -20
+  description: "空岛出生点（对齐 Multiverse-Core spawn-location）。"
   permission: ""
   sort-order: 0
   unlock-currencies: []
@@ -39,12 +39,12 @@ spawn:
 # 锚点: mine（矿洞入口，需货币+物品解锁）
 mine:
   enabled: true
-  display-name: "矿洞入口"
-  world: "world"
-  x: 128
-  y: 64
-  z: -42
-  description: "示例锁定锚点，演示货币 + 物品解锁。"
+  display-name: "我的岛"
+  world: "bskyblock_world"
+  x: 1600
+  y: 80
+  z: 1600
+  description: "示例玩家岛屿锚点（BentoBox island center 1600,1600）。"
   permission: ""
   sort-order: 10
   unlock-currencies:
@@ -60,16 +60,19 @@ mine:
       matcher:
         material-ids:
           - "ender_pearl"
+  # 点亮区域暂不启用（regions 为空 = 全亮）；后续 BentoBox 集成后自动配
+  # light-region:
+  #   points: [[1400, 1400], [1800, 1400], [1800, 1800], [1400, 1800]]
 
 # 锚点: nether_hub（下界中枢，无需解锁）
 nether_hub:
   enabled: true
   display-name: "下界中枢"
-  world: "world_nether"
-  x: 12
+  world: "bskyblock_world_nether"
+  x: -8
   y: 64
-  z: 12
-  description: "下界示例锚点。"
+  z: 120
+  description: "下界出生点（对齐 Multiverse-Core spawn-location）。"
   permission: ""
   sort-order: 0
   unlock-currencies: []

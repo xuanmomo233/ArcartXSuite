@@ -104,62 +104,98 @@ navigation:
 # ─── 世界配置 ──────────────────────────────────────────
 # 每个根键为世界 ID（对应 Bukkit world name），定义该世界的地图纹理与显示参数。
 worlds:
-  world:
-    # 是否在地图菜单中显示此世界
+  bskyblock_world:
     enabled: true
-    # 显示名称
-    display-name: "主世界"
-    # MC 维度 key（客户端 mod 用它匹配本地维度，决定实时地形归属哪个世界）。
-    # 留空 = 运行时自动按 Bukkit world.getKey() 解析（world → minecraft:overworld）。
-    # 仅当世界 ID 与 Bukkit world 名不一致、或需要强制映射时才需要手动填写。
+    display-name: "空岛"
     dimension: ""
-    # 地图纹理文件路径（相对资源包目录）
-    texture: "Map/world.png"
-    # 地图图片宽度（像素）
-    image-width: 2048
-    # 地图图片高度（像素）
-    image-height: 2048
-    # 像素 X 轴偏移（用于校准地图与坐标对应关系）
+    texture: ""
+    image-width: 8192
+    image-height: 8192
     pixel-offset-x: 0
-    # 像素 Z 轴偏移
     pixel-offset-z: 0
-    # 全屏地图默认缩放
-    default-zoom: 1.6
-    # 小地图 HUD 缩放
+    default-zoom: 1.0
     hud-zoom: 0.18
-    # 小地图 HUD 尺寸（像素）
     hud-size: 180
-    # ── 世界级点亮区域（always-lit，不依赖锚点解锁）──
-    # 列表为空且没有任何锚点配 light-region → 该世界不启用点亮机制（全亮）。
-    # 配了区域 → 只有"已点亮区域"显示地形，未点亮区域显示纯黑迷雾。
-    # 顶点为多边形顶点列表（至少 3 点），可用 PolygonSelection 选区工具画出来。
-    # regions:
-    #   - id: "spawn_area"
-    #     points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
+    # 不启用点亮机制（全亮）；后续通过 BentoBox 集成自动配区域
     regions: []
-  world_nether:
-    # 是否在地图菜单中显示此世界
+  bskyblock_world_nether:
     enabled: true
-    # 显示名称
     display-name: "下界"
-    # MC 维度 key（同上，留空自动解析）
     dimension: ""
-    # 地图纹理文件路径（相对资源包目录）
-    texture: "Map/world_nether.png"
-    # 地图图片宽度（像素）
+    texture: ""
     image-width: 1024
-    # 地图图片高度（像素）
     image-height: 1024
-    # 像素 X 轴偏移
     pixel-offset-x: 0
-    # 像素 Z 轴偏移
     pixel-offset-z: 0
-    # 全屏地图默认缩放
     default-zoom: 1.4
-    # 小地图 HUD 缩放
     hud-zoom: 0.16
-    # 小地图 HUD 尺寸（像素）
     hud-size: 180
+    regions: []
+  bskyblock_world_the_end:
+    enabled: true
+    display-name: "末地"
+    dimension: ""
+    texture: ""
+    image-width: 1024
+    image-height: 1024
+    pixel-offset-x: 0
+    pixel-offset-z: 0
+    default-zoom: 1.4
+    hud-zoom: 0.16
+    hud-size: 180
+    regions: []
+  big_world:
+    enabled: true
+    display-name: "秋收村寨"
+    dimension: ""
+    texture: ""
+    image-width: 4096
+    image-height: 4096
+    pixel-offset-x: 0
+    pixel-offset-z: 0
+    default-zoom: 1.2
+    hud-zoom: 0.18
+    hud-size: 180
+    regions: []
+  big_world_II:
+    enabled: true
+    display-name: "藏秘山林"
+    dimension: ""
+    texture: ""
+    image-width: 4096
+    image-height: 4096
+    pixel-offset-x: 0
+    pixel-offset-z: 0
+    default-zoom: 1.2
+    hud-zoom: 0.18
+    hud-size: 180
+    regions: []
+  DANTIAO:
+    enabled: true
+    display-name: "明辉殿"
+    dimension: ""
+    texture: ""
+    image-width: 2048
+    image-height: 2048
+    pixel-offset-x: 0
+    pixel-offset-z: 0
+    default-zoom: 1.2
+    hud-zoom: 0.18
+    hud-size: 180
+    regions: []
+  boss_world:
+    enabled: true
+    display-name: "困兽之笼"
+    dimension: ""
+    texture: ""
+    image-width: 2048
+    image-height: 2048
+    pixel-offset-x: 0
+    pixel-offset-z: 0
+    default-zoom: 1.2
+    hud-zoom: 0.18
+    hud-size: 180
+    regions: []
 
 # ─── 默认解锁 ──────────────────────────────────────────
 # 拥有指定权限的玩家在进服时自动解锁对应锚点列表。
