@@ -948,6 +948,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         state(player).setHudVisible(visible);
         if (!visible) {
             openedHudPlayers.remove(player.getUniqueId());
+            // 先发一个 visible=false 的包让 UI 的 update 触发 deactivate，再关闭 UI
+            MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
+            bridge.sendPacket(player, hudUiId, "update", buildHudPayload(snapshot.hud()));
             bridge.closeUi(player, hudUiId);
             return announce ? MapOperationResult.success(message("player.hud-disabled")) : MapOperationResult.success("");
         }
@@ -1359,9 +1362,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private void sync(Player player, boolean initPacket) {
         syncMenu(player, initPacket);
-        if (state(player).hudVisible()) {
-            syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
-        }
+        syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
     }
 
     private void syncMenu(Player player, boolean initPacket) {

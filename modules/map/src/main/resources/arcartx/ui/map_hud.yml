@@ -111,7 +111,10 @@ ui:
       }
     close: |-
       if(var.mapRenderer != none) {
-        var.mapRenderer.deactivate()
+        try {
+          var.mapRenderer.deactivate()
+        } catch(e) {
+        }
       }
 
 controls:
@@ -123,22 +126,38 @@ controls:
       height: 1080
     children:
       # 小地图装饰边框：由 UI 负责渲染装饰，mod 只画地形。
-      # 注意 ArcartX HUD 控件渲染在地形纹理上层，normal 必须全透明
-      # （实心底色会盖住地形），装饰通过 effect.stroke 画外圈描边。
-      小地图边框:
+      # top_right 锚点把控件右上角对齐父级右上角：x=-28 时控件右边在 父宽-28，
+      # 正好是小地图右边（mod anchorX=屏宽-28s）。边框比小地图各大 4px/边：
+      #   右边 = 小地图右边 + 4 → x = -24；顶边 = 小地图顶边 - 4 → y = 16
+      #   宽高 = hudSizeDesign + 8（左右上下各 4px 间隙，随小地图调大小自动跟随）
+      小地图圆形边框:
         type: Texture
         attribute:
           point: ~top_right
-          x: "0 - (28 + var.hudSizeDesign + 4)"
-          y: 20
-          width: "var.hudSizeDesign + 8"
-          height: "var.hudSizeDesign + 8"
-          normal: ~255,255,255,0
-          shape: "var.hudShape == 'CIRCLE' ? 'circle' : 'round_rect'"
-          radius: "var.hudShape == 'CIRCLE' ? (var.hudSizeDesign + 8) / 2 : 16"
-          visible: "var.visible && var.mapRenderer != none"
+          x: -24
+          y: 16
+          width: var.hudSizeDesign + 8
+          height: var.hudSizeDesign + 8
+          normal: ~map/alpha.png
+          shape: circle
+          visible: var.visible && var.hudShape == 'CIRCLE'
           through: true
         effect:
           stroke:
             width: 3
-            color: ~255,255,255,140
+            color: ~255,255,255,255
+      小地图方形边框:
+        type: Texture
+        attribute:
+          point: ~top_right
+          x: -24
+          y: 16
+          width: var.hudSizeDesign + 8
+          height: var.hudSizeDesign + 8
+          normal: ~map/alpha.png
+          visible: var.visible && var.hudShape != 'CIRCLE'
+          through: true
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,255
