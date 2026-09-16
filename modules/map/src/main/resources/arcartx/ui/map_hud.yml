@@ -43,6 +43,7 @@ ui:
         try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
       }
       if(var.mapRenderer != none) {
+        var.mapRenderer.setWorldId('' + var.worldId)
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
       }
@@ -61,6 +62,7 @@ ui:
         try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
       }
       if(var.mapRenderer != none) {
+        var.mapRenderer.setWorldId('' + var.worldId)
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
       }
@@ -100,9 +102,9 @@ ui:
         var.hudSizeDesign = var.mapRenderer.getHudSize() / s
         var.hudShape = '' + var.mapRenderer.getHudShape()
       } elif(var.mapRenderer != none && !var.visible) {
-        # 只在 HUD 模式下停渲染——大地图打开期间 mode=MENU，
-        # 此时 deactivate 会把 mode 清成 NONE，与 menu tick 的 setRegion
-        # 互相覆盖导致大地图逐帧闪烁
+        // 只在 HUD 模式下停渲染——大地图打开期间 mode=MENU，
+        // 此时 deactivate 会把 mode 清成 NONE，与 menu tick 的 setRegion
+        // 互相覆盖导致大地图逐帧闪烁
         if('' + var.mapRenderer.getMode() == 'HUD') {
           var.mapRenderer.deactivate()
         }

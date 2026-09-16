@@ -540,6 +540,108 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
+    public void crossWorldNavigate(Player player, String targetDesc) {
+        if (player == null || !player.isOnline() || targetDesc == null) {
+            return;
+        }
+        int sep = targetDesc.indexOf(':');
+        if (sep <= 0 || sep >= targetDesc.length() - 1) {
+            sync(player, false);
+            return;
+        }
+        String type = targetDesc.substring(0, sep).toLowerCase(Locale.ROOT);
+        String id = targetDesc.substring(sep + 1);
+        MapOperationResult teleportResult;
+        switch (type) {
+            case "anchor" -> teleportResult = teleportAnchorInternal(player, id);
+            case "waypoint", "external" -> teleportResult = teleportToNearestUnlockedAnchor(player, type, id);
+            default -> {
+                sync(player, false);
+                return;
+            }
+        }
+        if (!teleportResult.success()) {
+            sendPlayerResult(player, teleportResult);
+            return;
+        }
+        MapOperationResult trackResult = switch (type) {
+            case "anchor" -> trackAnchorInternal(player, id);
+            case "waypoint" -> trackWaypointInternal(player, id);
+            case "external" -> trackExternalTargetInternal(player, id);
+            default -> MapOperationResult.success("");
+        };
+        sendPlayerResult(player, trackResult.success()
+            ? MapOperationResult.success(message("player.cross-world-navigated"))
+            : trackResult);
+    }
+
+    /**
+     * 在目标所在世界找最近已解锁锚点并传送（扣该锚点传送费）。
+     * 用于 waypoint/external 跨世界导航的就近传送。
+     */
+    private MapOperationResult teleportToNearestUnlockedAnchor(Player player, String type, String id) {
+        if (player == null || !player.isOnline()) {
+            return MapOperationResult.failure(message("player.offline"));
+        }
+        double targetX;
+        double targetZ;
+        String worldId;
+        if (type.equals("waypoint")) {
+            MapWaypoint waypoint = findWaypoint(player, id);
+            if (waypoint == null) {
+                return MapOperationResult.failure(message("player.waypoint-not-found", id));
+            }
+            targetX = waypoint.x();
+            targetZ = waypoint.z();
+            worldId = normalizeId(waypoint.world());
+        } else {
+            MapExternalTarget target = findExternalTarget(player, id);
+            if (target == null) {
+                return MapOperationResult.failure(message("player.target-not-found", id));
+            }
+            targetX = target.x();
+            targetZ = target.z();
+            worldId = normalizeId(target.worldId());
+        }
+        AnchorDefinition nearest = null;
+        double nearestDist = Double.MAX_VALUE;
+        for (AnchorDefinition anchor : configuration.anchors().values()) {
+            if (!normalizeId(anchor.worldId()).equals(worldId)) continue;
+            if (!isAnchorUnlocked(player, anchor)) continue;
+            double dx = anchor.x() - targetX;
+            double dz = anchor.z() - targetZ;
+            double dist = dx * dx + dz * dz;
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = anchor;
+            }
+        }
+        if (nearest == null) {
+            return MapOperationResult.failure(message("player.no-unlocked-anchor-in-world"));
+        }
+        return teleportAnchorInternal(player, nearest.id());
+    }
+
+    @Override
+    public void teleportToWorld(Player player, String worldId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        String resolvedWorldId = normalizeId(worldId);
+        if (!configuration.worlds().containsKey(resolvedWorldId)) {
+            player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
+            return;
+        }
+        World world = Bukkit.getWorld(resolvedWorldId);
+        if (world == null) {
+            player.sendMessage(PREFIX + message("player.anchor-world-unloaded", resolvedWorldId));
+            return;
+        }
+        player.teleport(world.getSpawnLocation());
+        sync(player, false);
+    }
+
+    @Override
     public void clearTrack(Player player) {
         sendPlayerResult(player, clearTrackInternal(player, true));
     }
@@ -1146,6 +1248,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private static String resolveDimension(WorldDefinition world) {
         World bukkitWorld = Bukkit.getWorld(world.id());
+        if (bukkitWorld == null) {
+            // 世界文件名可能含大写（如 DANTIAO），normalizeId 转小写后
+            // Bukkit.getWorld 精确匹配不到，遍历做 case-insensitive 匹配
+            for (World w : Bukkit.getWorlds()) {
+                if (w.getName().equalsIgnoreCase(world.id())) {
+                    bukkitWorld = w;
+                    break;
+                }
+            }
+        }
         return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
     }
 
@@ -1195,6 +1307,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("packetId", snapshot.packetId());
         payload.put("selectedWorldId", snapshot.selectedWorldId());
         payload.put("selectedWorldName", snapshot.selectedWorldName());
+        payload.put("playerWorldId", snapshot.playerWorldId());
 
         LinkedHashMap<String, Object> worldRows = new LinkedHashMap<>();
         for (int i = 0; i < snapshot.worldRows().size(); i++) {
@@ -1383,15 +1496,20 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     private CachedPlayerMapData loadPlayerData(UUID playerUuid) {
-        return playerDataCache.computeIfAbsent(playerUuid, uuid -> {
-            try {
-                Set<String> anchors = repository.loadUnlockedAnchors(uuid);
-                List<MapWaypoint> waypoints = repository.loadWaypoints(uuid);
-                return new CachedPlayerMapData(Set.copyOf(anchors), List.copyOf(waypoints));
-            } catch (Exception exception) {
-                return new CachedPlayerMapData(Set.of(), List.of());
-            }
-        });
+        CachedPlayerMapData cached = playerDataCache.get(playerUuid);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            Set<String> anchors = repository.loadUnlockedAnchors(playerUuid);
+            List<MapWaypoint> waypoints = repository.loadWaypoints(playerUuid);
+            CachedPlayerMapData fresh = new CachedPlayerMapData(Set.copyOf(anchors), List.copyOf(waypoints));
+            playerDataCache.putIfAbsent(playerUuid, fresh);
+            return fresh;
+        } catch (Exception exception) {
+            // DB 异常时不缓存空结果，避免暂时故障后一直读到脏数据
+            return new CachedPlayerMapData(Set.of(), List.of());
+        }
     }
 
     private void invalidatePlayerDataCache(UUID playerUuid) {

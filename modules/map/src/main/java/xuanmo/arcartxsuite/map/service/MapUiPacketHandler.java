@@ -111,6 +111,20 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
+            case "teleport_to_world" -> {
+                if (hasValue(data, 1)) {
+                    target.teleportToWorld(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "cross_world_navigate" -> {
+                if (hasValue(data, 1)) {
+                    target.crossWorldNavigate(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
             case "clear_track" -> target.clearTrack(player);
             case "create_waypoint" -> committed = target.createWaypoint(player);
             case "delete_waypoint" -> {
@@ -164,6 +178,10 @@ public final class MapUiPacketHandler {
         void trackWaypoint(Player player, String waypointId);
 
         void trackExternalTarget(Player player, String targetId);
+
+        void teleportToWorld(Player player, String worldId);
+
+        void crossWorldNavigate(Player player, String targetDesc);
 
         void clearTrack(Player player);
 

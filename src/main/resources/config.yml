@@ -279,8 +279,10 @@ moderation:
     #   3. JSON 数组：如 ["fuck", "sb"]
     urls:
       - "https://raw.githubusercontent.com/Yurinann/Filter-Thesaurus-Cloud/main/database.json"
-      # 服务器在国内连不上 raw.githubusercontent.com 时，可改用镜像加速前缀，例如：
+      # 服务器在国内连不上 raw.githubusercontent.com（DNS 污染）时，可改用镜像加速，例如：
       # - "https://ghproxy.net/https://raw.githubusercontent.com/Yurinann/Filter-Thesaurus-Cloud/main/database.json"
+      # 或 jsDelivr CDN（国内一般可直连，有缓存，上游更新可能延迟数小时生效）：
+      # - "https://cdn.jsdelivr.net/gh/Yurinann/Filter-Thesaurus-Cloud@main/database.json"
       # 有时导致误判，自行开启
       # - "https://raw.githubusercontent.com/konsheng/Sensitive-lexicon/main/ThirdPartyCompatibleFormats/TrChat/SensitiveLexicon.json"
     # 云端词库中要忽略的词（不区分大小写）。

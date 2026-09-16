@@ -141,7 +141,8 @@ public final class MapSnapshotBuilder {
                 trackingText(input.navigationState()),
                 detail,
                 litEnabled,
-                litRegions
+                litRegions,
+                input.playerWorldId()
             ),
             hud
         );
@@ -470,7 +471,8 @@ public final class MapSnapshotBuilder {
         String trackingText,
         DetailSnapshot detail,
         boolean litEnabled,
-        List<List<List<Integer>>> litRegions
+        List<List<List<Integer>>> litRegions,
+        String playerWorldId
     ) {
     }
 

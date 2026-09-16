@@ -23,6 +23,7 @@ ui:
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
       var.selectedWorldName = packet['selectedWorldName']
+      var.playerWorldId = packet['playerWorldId']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
       var.worldRows = packet['worldRows']
@@ -56,83 +57,21 @@ ui:
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
       var.actionToken = packet['action_token']
-      while(val.world_entry.childrenCount() > 1){
-        val.world_entry.get(1).remove()
-      }
-      for(i in range(1, var.maxWorldCount - 1)){
-        key = i.round()
-        e = val.world_entry['地图项目'].copy('地图项目' + key)
-        e.entryKey = key
+      var.crossWorldPromptVisible = false
+      var.worldTpl = val.world_entry['地图项目']
+      if(var.worldTpl != none) {
+        while(val.world_entry.childrenCount() > 1){
+          val.world_entry.get(1).remove()
+        }
+        for(i in range(1, var.maxWorldCount - 1)){
+          var.key = i.round()
+          var.entry = var.worldTpl.copy('地图项目' + var.key)
+          var.entry.entryKey = var.key
+        }
       }
       var.actionBusy = false
       var.actionBusySeconds = 0
-      call_syncMarkers()
-      call_syncWorldDims()
-    update: |-
-      var.packetId = packet['packetId']
-      var.selectedWorldId = packet['selectedWorldId']
-      var.selectedWorldName = packet['selectedWorldName']
-      var.litEnabled = packet['litEnabled']
-      var.litRegions = packet['litRegions']
-      var.worldRows = packet['worldRows']
-      var.anchorRows = packet['anchorRows']
-      var.waypointRows = packet['waypointRows']
-      var.externalTargetRows = packet['externalTargetRows']
-      var.waypointLimit = packet['waypointLimit']
-      var.waypointCount = packet['waypointCount']
-      var.canCreateWaypoint = packet['canCreateWaypoint']
-      var.clearTrackVisible = packet['clearTrackVisible']
-      var.trackingText = packet['trackingText']
-      var.detailSelectedType = packet['detailSelectedType']
-      var.detailSelectedId = packet['detailSelectedId']
-      var.detailTitle = packet['detailTitle']
-      var.detailDescription = packet['detailDescription']
-      var.detailUnlocked = packet['detailUnlocked']
-      var.detailUnlockCostText = packet['detailUnlockCostText']
-      var.detailTeleportCostText = packet['detailTeleportCostText']
-      var.detailExternalTarget = packet['detailExternalTarget']
-      var.detailCanUnlock = packet['detailCanUnlock']
-      var.detailCanTeleport = packet['detailCanTeleport']
-      var.detailCanTrackAnchor = packet['detailCanTrackAnchor']
-      var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
-      var.detailCanTrackExternal = packet['detailCanTrackExternal']
-      var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
-      var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
-      var.detailClearTrackVisible = packet['detailClearTrackVisible']
-      var.detailTrackingText = packet['detailTrackingText']
-      var.maxWorldCount = packet['maxWorldCount']
-      var.maxAnchorCount = packet['maxAnchorCount']
-      var.maxWaypointCount = packet['maxWaypointCount']
-      var.maxExternalCount = packet['maxExternalCount']
-      var.actionToken = packet['action_token']
-      while(val.world_entry.childrenCount() > 1){
-        val.world_entry.get(1).remove()
-      }
-      for(i in range(1, var.maxWorldCount - 1)){
-        key = i.round()
-        e = val.world_entry['地图项目'].copy('地图项目' + key)
-        e.entryKey = key
-      }
-      var.actionBusy = false
-      call_syncMarkers()
-      call_syncWorldDims()
-  action:
-    load: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      var.scale = sx < sy ? sx : sy
-      var.viewW = Screen.getWidth() / var.scale
-      var.viewH = Screen.getHeight() / var.scale
-      var.offX = (var.viewW - 1920) / 2
-      var.mapMod = none
-      var.mapRenderer = none
-      var.showHudSettings = false
-      try {
-        var.mapRenderer = axsmap.getMapRenderer()
-      } catch(e) {
-      }
-      var.syncMarkers = -> {
-        if(var.mapRenderer == none) { return }
+      if(var.mapRenderer != none) {
         var.mapRenderer.clearMarkers()
         if(var.anchorRows != none) {
           for(key in var.anchorRows.keys()) {
@@ -159,8 +98,98 @@ ui:
           }
         }
       }
-      var.call_syncMarkers = -> {
-        if(var.syncMarkers != none) { var.syncMarkers() }
+      call_syncWorldDims()
+    update: |-
+      var.packetId = packet['packetId']
+      var.selectedWorldId = packet['selectedWorldId']
+      var.selectedWorldName = packet['selectedWorldName']
+      var.playerWorldId = packet['playerWorldId']
+      var.litEnabled = packet['litEnabled']
+      var.litRegions = packet['litRegions']
+      var.worldRows = packet['worldRows']
+      var.anchorRows = packet['anchorRows']
+      var.waypointRows = packet['waypointRows']
+      var.externalTargetRows = packet['externalTargetRows']
+      var.waypointLimit = packet['waypointLimit']
+      var.waypointCount = packet['waypointCount']
+      var.canCreateWaypoint = packet['canCreateWaypoint']
+      var.clearTrackVisible = packet['clearTrackVisible']
+      var.trackingText = packet['trackingText']
+      var.detailSelectedType = packet['detailSelectedType']
+      var.detailSelectedId = packet['detailSelectedId']
+      var.detailTitle = packet['detailTitle']
+      var.detailDescription = packet['detailDescription']
+      var.detailUnlocked = packet['detailUnlocked']
+      var.detailUnlockCostText = packet['detailUnlockCostText']
+      var.detailTeleportCostText = packet['detailTeleportCostText']
+      var.detailExternalTarget = packet['detailExternalTarget']
+      var.detailCanUnlock = packet['detailCanUnlock']
+      var.detailCanTeleport = packet['detailCanTeleport']
+      var.detailCanTrackAnchor = packet['detailCanTrackAnchor']
+      var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
+      var.detailCanTrackExternal = packet['detailCanTrackExternal']
+      var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
+      var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
+      var.detailClearTrackVisible = packet['detailClearTrackVisible']
+      var.detailTrackingText = packet['detailTrackingText']
+      var.maxWorldCount = packet['maxWorldCount']
+      var.maxAnchorCount = packet['maxAnchorCount']
+      var.maxWaypointCount = packet['maxWaypointCount']
+      var.maxExternalCount = packet['maxExternalCount']
+      var.actionToken = packet['action_token']
+      var.worldTpl = val.world_entry['地图项目']
+      if(var.worldTpl != none) {
+        while(val.world_entry.childrenCount() > 1){
+          val.world_entry.get(1).remove()
+        }
+        for(i in range(1, var.maxWorldCount - 1)){
+          var.key = i.round()
+          var.entry = var.worldTpl.copy('地图项目' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      var.actionBusy = false
+      if(var.mapRenderer != none) {
+        var.mapRenderer.clearMarkers()
+        if(var.anchorRows != none) {
+          for(key in var.anchorRows.keys()) {
+            row = var.anchorRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'anchor', row['displayName'], row['x'], row['z'], row['selected'], row['tracked'], row['unlocked'])
+            }
+          }
+        }
+        if(var.waypointRows != none) {
+          for(key in var.waypointRows.keys()) {
+            row = var.waypointRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'waypoint', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
+            }
+          }
+        }
+        if(var.externalTargetRows != none) {
+          for(key in var.externalTargetRows.keys()) {
+            row = var.externalTargetRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'external', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
+            }
+          }
+        }
+      }
+      call_syncWorldDims()
+  action:
+    load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      var.scale = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / var.scale
+      var.viewH = Screen.getHeight() / var.scale
+      var.offX = (var.viewW - 1920) / 2
+      var.mapRenderer = none
+      var.showHudSettings = false
+      try {
+        var.mapRenderer = axsmap.getMapRenderer()
+      } catch(e) {
       }
       // 世界ID→MC维度映射下发给 mod（服务端 packet 的 worldRows[].dimension），
       // mod 用它把"选中世界"匹配到对应维度的地形缓存桶
@@ -195,15 +224,14 @@ ui:
         sw = Screen.getWidth()
         sh = Screen.getHeight()
         var.mapRenderer.setRegion(0, 0, sw, sh, var.scale)
-        // 可交互区排除 UI 覆盖区：顶栏 96px、右侧面板 (viewW-516 起)、底部 140px
-        // （世界槽位/取消导航按钮区）；世界浮层展开时再排除左侧 320px
-        if(var.worldListOpen) {
-          var.mapRenderer.setInteractRegion(320 * var.scale, 96 * var.scale,
-            (var.viewW - 516 - 320) * var.scale, (var.viewH - 96 - 140) * var.scale)
-        } else {
-          var.mapRenderer.setInteractRegion(0, 96 * var.scale,
-            (var.viewW - 516) * var.scale, (var.viewH - 96 - 140) * var.scale)
-        }
+        // 可交互区排除 UI 覆盖区：
+        //   顶栏 96px、底部 140px（世界槽位/复位按钮区）
+        //   世界浮层展开 → 排除左侧 268px
+        //   详情面板弹出 → 排除右侧 448px
+        leftExcl = var.worldListOpen ? 268 : 0
+        rightExcl = var.detailSelectedType != 'none' ? 448 : 0
+        var.mapRenderer.setInteractRegion(leftExcl * var.scale, 96 * var.scale,
+          (var.viewW - leftExcl - rightExcl) * var.scale, (var.viewH - 96 - 140) * var.scale)
         var.mapRenderer.setWorldId(var.selectedWorldId)
         // 地图标记点击命中（"type:id"）→ 发包选中目标，服务端回详情面板数据
         hit = var.mapRenderer.getHitMarker()
@@ -258,6 +286,8 @@ ui:
       var.maxWaypointCount = 0
       var.maxExternalCount = 0
       var.actionToken = ''
+      var.playerWorldId = ''
+      var.crossWorldPromptVisible = false
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.showHudSettings = false
@@ -347,10 +377,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_right
-                  x: -336
-                  y: 24
-                  width: 120
-                  height: 48
+                  x: -340
+                  y: 26
+                  width: 108
+                  height: 44
                   enable: "var.mapRenderer != none"
                 action:
                   clickLeft: |-
@@ -374,16 +404,16 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.showHudSettings ? '&f小地图 &8▴' : '&f小地图 &8▾'"
-                      fontSize: 32
+                      fontSize: 30
                       through: true
               关闭按钮:
                 type: Canvas
                 attribute:
                   point: ~top_right
-                  x: -96
-                  y: 24
-                  width: 60
-                  height: 48
+                  x: -68
+                  y: 26
+                  width: 44
+                  height: 44
                 action:
                   clickLeft: |-
                     Screen.close()
@@ -402,7 +432,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 36
+                      fontSize: 32
                       through: true
           # ─── 地图已全屏渲染（mod 在 UI 下层绘制），此处只留加载提示 ───
           地图加载提示:
@@ -413,15 +443,15 @@ controls:
               fontSize: 36
               through: true
               visible: "var.mapRenderer == none"
-          # ─── 详情面板（点地图标记弹出，原神式；未选中时隐藏）───
+          # ─── 详情面板（点地图标记弹出，原神式浮空卡片；未选中时隐藏）───
           详情面板:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.viewW - 492"
-              y: 120
-              width: 468
-              height: "var.viewH - 144"
+              x: "var.viewW - 448"
+              y: "(var.viewH - 400) / 2"
+              width: 420
+              height: 400
               visible: "var.detailSelectedType != 'none'"
             children:
               详情面板底:
@@ -431,52 +461,61 @@ controls:
                   through: true
                   normal: "~Frosted:30;255,255,255,100"
                   shape: ~round_rect
-                  radius: 14
+                  radius: 20
                 effect:
                   stroke:
                     width: 2
                     color: ~255,255,255,50
+              # 类型图标 + 标题
+              详情类型图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 28
+                  texts: "var.detailSelectedType == 'anchor' ? '&6◈' : (var.detailSelectedType == 'waypoint' ? '&a◆' : '&c◆')"
+                  fontSize: 44
+                  through: true
               详情标题:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 36
+                  y: 76
                   texts: "var.detailTitle"
-                  fontSize: 40
+                  fontSize: 38
               详情描述:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 88
+                  y: 124
                   texts: "var.detailDescription"
-                  fontSize: 28
+                  fontSize: 26
               解锁费用文字:
                 type: Text
                 attribute:
                   point: ~top_center
                   x: -105
-                  y: 170
+                  y: 200
                   texts: "'&7解锁: &f' + var.detailUnlockCostText"
-                  fontSize: 28
+                  fontSize: 26
                   visible: "var.detailSelectedType == 'anchor'"
               传送费用文字:
                 type: Text
                 attribute:
                   point: ~top_center
                   x: 105
-                  y: 170
+                  y: 200
                   texts: "'&7传送: &f' + var.detailTeleportCostText"
-                  fontSize: 28
+                  fontSize: 26
                   visible: "var.detailSelectedType == 'anchor'"
-              # 底部两行按钮
+              # 底部按钮区：一行大按钮（主要操作），一行小按钮（次要操作）
               解锁按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 24
-                  y: "var.viewH - 144 - 96"
-                  width: 90
-                  height: 36
+                  y: 300
+                  width: 110
+                  height: 44
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -493,7 +532,7 @@ controls:
                       normal: "var.detailCanUnlock ? '82,196,26,255' : '60,60,66,255'"
                       hover: "var.detailCanUnlock ? '102,216,46,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 2
@@ -509,10 +548,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 126
-                  y: "var.viewH - 144 - 96"
-                  width: 90
-                  height: 36
+                  x: 146
+                  y: 300
+                  width: 110
+                  height: 44
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -529,7 +568,7 @@ controls:
                       normal: "var.detailCanTeleport ? '74,144,226,255' : '60,60,66,255'"
                       hover: "var.detailCanTeleport ? '94,164,246,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 2
@@ -545,20 +584,25 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 228
-                  y: "var.viewH - 144 - 96"
-                  width: 90
-                  height: 36
+                  x: 268
+                  y: 300
+                  width: 110
+                  height: 44
                 action:
                   clickLeft: |-
-                    if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
-                      Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
-                    }
-                    if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
-                      Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
-                    }
-                    if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
-                      Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                    if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                    } else {
+                      if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
+                        Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
+                      }
+                      if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
+                        Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                      }
+                      if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
+                        Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                      }
                     }
                 children:
                   追踪按钮底:
@@ -569,7 +613,7 @@ controls:
                       normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '236,180,24,255' : '60,60,66,255'"
                       hover: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '246,200,44,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 2
@@ -585,10 +629,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 330
-                  y: "var.viewH - 144 - 96"
-                  width: 72
-                  height: 36
+                  x: 24
+                  y: 356
+                  width: 110
+                  height: 32
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -605,7 +649,7 @@ controls:
                       normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
                       hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                     effect:
                       stroke:
                         width: 2
@@ -615,16 +659,16 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f删除
-                      fontSize: 32
+                      fontSize: 28
                       through: true
               创建按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 24
-                  y: "var.viewH - 144 - 48"
-                  width: 90
-                  height: 36
+                  x: 146
+                  y: 356
+                  width: 110
+                  height: 32
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -641,7 +685,7 @@ controls:
                       normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
                       hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                     effect:
                       stroke:
                         width: 2
@@ -651,17 +695,17 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f新建
-                      fontSize: 32
+                      fontSize: 28
                       through: true
           # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
           世界槽位:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 24
-              y: "var.viewH - 104"
-              width: 300
-              height: 80
+              x: 28
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
             action:
               clickLeft: |-
                 var.worldListOpen = !var.worldListOpen
@@ -672,48 +716,38 @@ controls:
                   point: ~stretch_all
                   through: true
                   normal: "~Frosted:30;255,255,255,100"
-                  hover: "~Frosted:30;255,255,255,130"
+                  hover: "~Frosted:30;255,255,255,140"
                   shape: ~round_rect
-                  radius: 14
+                  radius: 18
                 effect:
                   stroke:
                     width: 2
-                    color: ~255,255,255,50
+                    color: "self.isHovered() ? '255,255,255,160' : '255,255,255,50'"
               世界槽位图标:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 20
-                  texts: ~&b◈
-                  fontSize: 48
+                  point: ~middle_center
+                  texts: "var.worldListOpen ? '&b◉' : '&b◎'"
+                  fontSize: 40
                   through: true
-              世界槽位名:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 76
-                  y: 14
-                  texts: "'&f' + var.selectedWorldName"
-                  fontSize: 32
-                  through: true
-              世界槽位提示:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 76
-                  y: 50
-                  texts: ~&7点击切换世界
-                  fontSize: 24
-                  through: true
+          世界槽位名:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 28
+              y: "var.viewH - 96 - 26"
+              texts: "'&f' + var.selectedWorldName"
+              fontSize: 24
+              through: true
           # 世界列表浮层：槽位上方弹出，图标+世界名竖排
           世界列表浮层:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 24
-              y: "var.viewH - 104 - 388"
-              width: 300
-              height: 380
+              x: 28
+              y: "var.viewH - 96 - 26 - 12 - 320"
+              width: 240
+              height: 320
               visible: "var.worldListOpen"
             children:
               世界浮层底:
@@ -723,30 +757,39 @@ controls:
                   through: true
                   normal: "~Frosted:30;255,255,255,110"
                   shape: ~round_rect
-                  radius: 14
+                  radius: 16
                 effect:
                   stroke:
                     width: 2
                     color: ~255,255,255,50
+              世界浮层标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 18
+                  y: 12
+                  texts: ~&8世界列表
+                  fontSize: 24
+                  through: true
               世界浮层滑块:
                 type: Texture
                 val: 世界浮层滑块
                 attribute:
                   point: ~top_right
-                  x: -14
-                  y: 14
-                  width: 8
+                  x: -10
+                  y: 40
+                  width: 6
                   height: 60
                   normal: ~120,120,120,200
-                  maxDragY: 300
+                  maxDragY: 260
               世界浮层滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
                   x: 10
-                  y: 10
-                  width: 280
-                  height: 360
+                  y: 40
+                  width: 220
+                  height: 268
                   moveY: "self.parent['世界浮层滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -761,8 +804,8 @@ controls:
                     val: world_entry
                     type: VStack
                     attribute:
-                      width: 280
-                      spaceBetween: 8
+                      width: 220
+                      spaceBetween: 6
                     children:
                       地图项目:
                         type: Canvas
@@ -770,8 +813,8 @@ controls:
                           entryKey: 0.round()
                           entry: var.worldRows[self.entryKey]
                           visible: self.entry != none
-                          width: 280
-                          height: 56
+                          width: 220
+                          height: 52
                         action:
                           clickLeft: |-
                             if (self.entry != none) {
@@ -793,25 +836,25 @@ controls:
                             attribute:
                               point: ~middle_left
                               x: 14
-                              texts: ~&6◆
-                              fontSize: 36
+                              texts: "self.parent.entry != none && self.parent.entry['selected'] ? '&e◉' : '&6◎'"
+                              fontSize: 30
                               through: true
                           地图项目文字:
                             type: Text
                             attribute:
                               point: ~middle_left
-                              x: 52
+                              x: 46
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['displayName'] : none"
-                              fontSize: 30
+                              fontSize: 26
                               through: true
           复位按钮:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 340
-              y: "var.viewH - 104"
-              width: 96
-              height: 80
+              x: 116
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
               enable: "var.mapRenderer != none"
             action:
               clickLeft: |-
@@ -827,7 +870,7 @@ controls:
                   normal: ~90,110,140,255
                   hover: ~110,130,160,255
                   shape: ~round_rect
-                  radius: 14
+                  radius: 18
                 effect:
                   stroke:
                     width: 2
@@ -836,18 +879,18 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f复位
-                  fontSize: 32
+                  texts: ~&f⟳
+                  fontSize: 36
                   through: true
           # 取消导航按钮（顶栏右侧，清除当前追踪）
           取消导航按钮:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -204
-              y: 24
-              width: 96
-              height: 48
+              x: -220
+              y: 26
+              width: 108
+              height: 44
             action:
               clickLeft: |-
                 if (var.clearTrackVisible) {
@@ -868,7 +911,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f取消导航
-                  fontSize: 32
+                  fontSize: 30
                   through: true
           # ─── 小地图设置浮层（顶栏"小地图"按钮展开） ───
           小地图设置面板:
@@ -1190,3 +1233,108 @@ controls:
                   y: 240
                   texts: ~&8快捷键 [ 形状 · -/+ 尺寸 · ,/. 缩放
                   fontSize: 32
+          # ─── 跨世界导航确认弹窗（模态遮罩，挡住下层一切点击）───
+          跨世界确认层:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.crossWorldPromptVisible"
+            children:
+              确认遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~0,0,0,160
+              确认对话框:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: 480
+                  height: 220
+                children:
+                  对话框底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~30,32,40,240
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,50
+                  对话框标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 24
+                      texts: ~&f跨世界导航
+                      fontSize: 32
+                      through: true
+                  对话框内容:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 72
+                      texts: "'&7目标位于 &f' + var.selectedWorldName + '&7，是否传送到该世界？'"
+                      fontSize: 26
+                      through: true
+                  确认按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 40
+                      y: -24
+                      width: 180
+                      height: 52
+                    action:
+                      clickLeft: |-
+                        var.crossWorldPromptVisible = false
+                        Packet.send(var.packetId, 'cross_world_navigate', var.detailSelectedType + ':' + var.detailSelectedId)
+                    children:
+                      确认底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~74,144,226,255
+                          hover: ~94,164,246,255
+                          shape: ~round_rect
+                          radius: 12
+                      确认文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f传送并导航
+                          fontSize: 28
+                          through: true
+                  取消按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -40
+                      y: -24
+                      width: 180
+                      height: 52
+                    action:
+                      clickLeft: |-
+                        var.crossWorldPromptVisible = false
+                    children:
+                      取消底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                      取消文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f取消
+                          fontSize: 28
+                          through: true

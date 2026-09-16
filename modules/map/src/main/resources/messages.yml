@@ -77,6 +77,8 @@ player:
   target-not-found: "未找到任务导航点: {0}"
   target-navigation-failed: "创建任务导航点失败。"
   target-navigation-started: "已开始导航任务点: {0}"
+  cross-world-navigated: "已传送到目标世界并开始导航。"
+  no-unlocked-anchor-in-world: "目标世界没有已解锁的锚点，无法就近传送。"
   no-active-navigation: "当前没有活动导航。"
   clear-navigation-failed: "清除导航失败。"
   navigation-cleared: "已清除当前导航。"
