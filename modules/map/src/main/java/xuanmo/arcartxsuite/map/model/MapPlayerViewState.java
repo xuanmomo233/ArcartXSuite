@@ -12,6 +12,7 @@ public final class MapPlayerViewState {
     private String selectedAnchorId = "";
     private String selectedWaypointId = "";
     private String selectedExternalTargetId = "";
+    private String selectedPinId = "";
     private boolean hudVisible;
 
     /**
@@ -51,6 +52,15 @@ public final class MapPlayerViewState {
     }
 
     /**
+     * 获取当前选中的标记点 ID。
+     *
+     * @return 标记点 ID，未选中时返回空字符串
+     */
+    public String selectedPinId() {
+        return selectedPinId;
+    }
+
+    /**
      * 获取 HUD 是否可见。
      *
      * @return {@code true} 表示 HUD 当前处于显示状态
@@ -69,6 +79,7 @@ public final class MapPlayerViewState {
         selectedAnchorId = "";
         selectedWaypointId = "";
         selectedExternalTargetId = "";
+        selectedPinId = "";
     }
 
     /**
@@ -80,6 +91,7 @@ public final class MapPlayerViewState {
         selectedAnchorId = safe(anchorId);
         selectedWaypointId = "";
         selectedExternalTargetId = "";
+        selectedPinId = "";
     }
 
     /**
@@ -91,6 +103,7 @@ public final class MapPlayerViewState {
         selectedWaypointId = safe(waypointId);
         selectedAnchorId = "";
         selectedExternalTargetId = "";
+        selectedPinId = "";
     }
 
     /**
@@ -102,15 +115,29 @@ public final class MapPlayerViewState {
         selectedExternalTargetId = safe(targetId);
         selectedAnchorId = "";
         selectedWaypointId = "";
+        selectedPinId = "";
     }
 
     /**
-     * 清除锚点、路径点和外部目标的选中状态（不影响世界选择）。
+     * 选中指定标记点，同时清除其他类型的选中状态。
+     *
+     * @param pinId 标记点 ID
+     */
+    public void selectPin(String pinId) {
+        selectedPinId = safe(pinId);
+        selectedAnchorId = "";
+        selectedWaypointId = "";
+        selectedExternalTargetId = "";
+    }
+
+    /**
+     * 清除锚点、路径点、标记点和外部目标的选中状态（不影响世界选择）。
      */
     public void clearSelection() {
         selectedAnchorId = "";
         selectedWaypointId = "";
         selectedExternalTargetId = "";
+        selectedPinId = "";
     }
 
     /**

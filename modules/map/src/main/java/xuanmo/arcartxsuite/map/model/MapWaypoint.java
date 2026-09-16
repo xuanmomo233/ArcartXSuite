@@ -8,6 +8,7 @@ package xuanmo.arcartxsuite.map.model;
  *
  * @param waypointId 路径点唯一标识
  * @param name       路径点名称
+ * @param description 路径点描述
  * @param world      所在世界 ID
  * @param x          X 坐标
  * @param y          Y 坐标
@@ -18,6 +19,7 @@ package xuanmo.arcartxsuite.map.model;
 public record MapWaypoint(
     String waypointId,
     String name,
+    String description,
     String world,
     double x,
     double y,

@@ -30,6 +30,7 @@ ui:
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
       var.externalTargetRows = packet['externalTargetRows']
+      var.pinRows = packet['pinRows']
       var.waypointLimit = packet['waypointLimit']
       var.waypointCount = packet['waypointCount']
       var.canCreateWaypoint = packet['canCreateWaypoint']
@@ -49,6 +50,7 @@ ui:
       var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
       var.detailCanTrackExternal = packet['detailCanTrackExternal']
       var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
+      var.detailCanDeletePin = packet['detailCanDeletePin']
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
@@ -56,6 +58,7 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      var.maxPinCount = packet['maxPinCount']
       var.actionToken = packet['action_token']
       var.crossWorldPromptVisible = false
       var.worldTpl = val.world_entry['地图项目']
@@ -97,6 +100,14 @@ ui:
             }
           }
         }
+        if(var.pinRows != none) {
+          for(key in var.pinRows.keys()) {
+            row = var.pinRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], false, true)
+            }
+          }
+        }
       }
       call_syncWorldDims()
     update: |-
@@ -110,6 +121,7 @@ ui:
       var.anchorRows = packet['anchorRows']
       var.waypointRows = packet['waypointRows']
       var.externalTargetRows = packet['externalTargetRows']
+      var.pinRows = packet['pinRows']
       var.waypointLimit = packet['waypointLimit']
       var.waypointCount = packet['waypointCount']
       var.canCreateWaypoint = packet['canCreateWaypoint']
@@ -129,6 +141,7 @@ ui:
       var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
       var.detailCanTrackExternal = packet['detailCanTrackExternal']
       var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
+      var.detailCanDeletePin = packet['detailCanDeletePin']
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
@@ -136,6 +149,7 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      var.maxPinCount = packet['maxPinCount']
       var.actionToken = packet['action_token']
       var.worldTpl = val.world_entry['地图项目']
       if(var.worldTpl != none) {
@@ -174,6 +188,26 @@ ui:
               var.mapRenderer.addMarker(row['id'], 'external', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
             }
           }
+        }
+        if(var.pinRows != none) {
+          for(key in var.pinRows.keys()) {
+            row = var.pinRows[key]
+            if(row != none) {
+              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], false, true)
+            }
+          }
+        }
+      }
+      if(var.detailSelectedType != var.lastDetailType || var.detailSelectedId != var.lastDetailId) {
+        var.lastDetailType = var.detailSelectedType
+        var.lastDetailId = var.detailSelectedId
+        if(var.detailSelectedType == 'waypoint') {
+          val.路径点名称输入框.setContent(var.detailTitle)
+          val.路径点描述输入框.setContent(var.detailDescription)
+        }
+        if(var.detailSelectedType == 'pin') {
+          val.标记点名称输入框.setContent(var.detailTitle)
+          val.标记点描述输入框.setContent(var.detailDescription)
         }
       }
       call_syncWorldDims()
@@ -237,16 +271,32 @@ ui:
         hit = var.mapRenderer.getHitMarker()
         if(hit != none && hit != '') {
           var.mapRenderer.clearHitMarker()
-          parts = hit.split(':')
-          if(parts.length >= 2) {
-            if(parts[0] == 'anchor') {
-              Packet.send(var.packetId, 'select_anchor', parts[1])
-            }
-            if(parts[0] == 'waypoint') {
-              Packet.send(var.packetId, 'select_waypoint', parts[1])
-            }
-            if(parts[0] == 'external') {
-              Packet.send(var.packetId, 'select_external', parts[1])
+          if(hit == 'none:') {
+            Packet.send(var.packetId, 'deselect')
+          } else {
+            if(hit.startsWith('none:')) {
+              parts = hit.split(':')
+              if(parts.length >= 3) {
+                var.pinCreateX = parts[1]
+                var.pinCreateZ = parts[2]
+              }
+              Packet.send(var.packetId, 'deselect')
+            } else {
+              parts = hit.split(':')
+              if(parts.length >= 2) {
+                if(parts[0] == 'anchor') {
+                  Packet.send(var.packetId, 'select_anchor', parts[1])
+                }
+                if(parts[0] == 'waypoint') {
+                  Packet.send(var.packetId, 'select_waypoint', parts[1])
+                }
+                if(parts[0] == 'external') {
+                  Packet.send(var.packetId, 'select_external', parts[1])
+                }
+                if(parts[0] == 'pin') {
+                  Packet.send(var.packetId, 'select_pin', parts[1])
+                }
+              }
             }
           }
         }
@@ -290,6 +340,10 @@ ui:
       var.crossWorldPromptVisible = false
       var.actionBusy = false
       var.actionBusySeconds = 0
+      var.lastDetailType = ''
+      var.lastDetailId = ''
+      var.pinCreateX = ''
+      var.pinCreateZ = ''
       var.showHudSettings = false
       var.worldListOpen = false
       // 打开菜单默认回到玩家当前位置：清掉上次残留的拖拽/缩放
@@ -443,8 +497,8 @@ controls:
               fontSize: 36
               through: true
               visible: "var.mapRenderer == none"
-          # ─── 详情面板（点地图标记弹出，原神式浮空卡片；未选中时隐藏）───
-          详情面板:
+          # ─── 锚点详情面板（只有解锁/传送/导航）───
+          锚点详情面板:
             type: Canvas
             attribute:
               point: ~top_left
@@ -452,9 +506,9 @@ controls:
               y: "(var.viewH - 400) / 2"
               width: 420
               height: 400
-              visible: "var.detailSelectedType != 'none'"
+              visible: "var.detailSelectedType == 'anchor'"
             children:
-              详情面板底:
+              锚点面板底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -466,30 +520,29 @@ controls:
                   stroke:
                     width: 2
                     color: ~255,255,255,50
-              # 类型图标 + 标题
-              详情类型图标:
+              锚点类型图标:
                 type: Text
                 attribute:
                   point: ~top_center
                   y: 28
-                  texts: "var.detailSelectedType == 'anchor' ? '&6◈' : (var.detailSelectedType == 'waypoint' ? '&a◆' : '&c◆')"
+                  texts: ~&6◈
                   fontSize: 44
                   through: true
-              详情标题:
+              锚点详情标题:
                 type: Text
                 attribute:
                   point: ~top_center
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
-              详情描述:
+              锚点详情描述:
                 type: Text
                 attribute:
                   point: ~top_center
                   y: 124
                   texts: "var.detailDescription"
                   fontSize: 26
-              解锁费用文字:
+              锚点解锁费用:
                 type: Text
                 attribute:
                   point: ~top_center
@@ -497,8 +550,7 @@ controls:
                   y: 200
                   texts: "'&7解锁: &f' + var.detailUnlockCostText"
                   fontSize: 26
-                  visible: "var.detailSelectedType == 'anchor'"
-              传送费用文字:
+              锚点传送费用:
                 type: Text
                 attribute:
                   point: ~top_center
@@ -506,9 +558,7 @@ controls:
                   y: 200
                   texts: "'&7传送: &f' + var.detailTeleportCostText"
                   fontSize: 26
-                  visible: "var.detailSelectedType == 'anchor'"
-              # 底部按钮区：一行大按钮（主要操作），一行小按钮（次要操作）
-              解锁按钮:
+              锚点解锁按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
@@ -524,7 +574,7 @@ controls:
                       Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
                     }
                 children:
-                  解锁按钮底:
+                  锚点解锁按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -537,14 +587,14 @@ controls:
                       stroke:
                         width: 2
                         color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
-                  解锁按钮文字:
+                  锚点解锁按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f解锁
                       fontSize: 32
                       through: true
-              传送按钮:
+              锚点传送按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
@@ -560,7 +610,7 @@ controls:
                       Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
                     }
                 children:
-                  传送按钮底:
+                  锚点传送按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -573,14 +623,14 @@ controls:
                       stroke:
                         width: 2
                         color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
-                  传送按钮文字:
+                  锚点传送按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f传送
                       fontSize: 32
                       through: true
-              追踪按钮:
+              锚点导航按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
@@ -594,45 +644,227 @@ controls:
                     if (var.isCrossWorld) {
                       var.crossWorldPromptVisible = true
                     } else {
-                      if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
+                      if (var.detailCanTrackAnchor) {
                         Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
-                      }
-                      if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
-                        Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
-                      }
-                      if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
-                        Packet.send(var.packetId, 'track_external', var.detailSelectedId)
                       }
                     }
                 children:
-                  追踪按钮底:
+                  锚点导航按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '236,180,24,255' : '60,60,66,255'"
-                      hover: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '246,200,44,255' : '60,60,66,255'"
+                      normal: "var.detailCanTrackAnchor ? '236,180,24,255' : '60,60,66,255'"
+                      hover: "var.detailCanTrackAnchor ? '246,200,44,255' : '60,60,66,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
                         width: 2
                         color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
-                  追踪按钮文字:
+                  锚点导航按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f导航
                       fontSize: 32
                       through: true
-              删除按钮:
+          # ─── 路径点详情面板（命名/修改描述/导航/删除/分享）───
+          路径点详情面板:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 448"
+              y: "(var.viewH - 400) / 2"
+              width: 420
+              height: 400
+              visible: "var.detailSelectedType == 'waypoint'"
+            children:
+              路径点面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              路径点类型图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 28
+                  texts: ~&a◆
+                  fontSize: 44
+                  through: true
+              路径点详情标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 76
+                  texts: "var.detailTitle"
+                  fontSize: 38
+              路径点名称标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 30
+                  y: 130
+                  texts: ~&7名称
+                  fontSize: 24
+                  through: true
+              路径点名称输入框:
+                type: TextBox
+                attribute:
+                  point: ~top_left
+                  x: 100
+                  y: 126
+                  width: 280
+                  height: 32
+                  length: 64
+                  emptyText: "~输入名称"
+                  background: "~Frosted:20;255,255,255,30"
+                  canLoseFocus: true
+              路径点描述标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 30
+                  y: 175
+                  texts: ~&7描述
+                  fontSize: 24
+                  through: true
+              路径点描述输入框:
+                type: TextBox
+                attribute:
+                  point: ~top_left
+                  x: 100
+                  y: 171
+                  width: 280
+                  height: 64
+                  length: 256
+                  allowNewLine: true
+                  emptyText: "~输入描述（可选）"
+                  background: "~Frosted:20;255,255,255,30"
+                  canLoseFocus: true
+              路径点保存按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 24
-                  y: 356
-                  width: 110
-                  height: 32
+                  y: 260
+                  width: 90
+                  height: 44
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    var.wpName = val.路径点名称输入框.getContent()
+                    var.wpDesc = val.路径点描述输入框.getContent()
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'update_waypoint', var.detailSelectedId, var.wpName, var.wpDesc, var.actionToken)
+                children:
+                  路径点保存按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~130,200,130,255
+                      hover: ~150,220,150,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  路径点保存按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f保存
+                      fontSize: 30
+                      through: true
+              路径点导航按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 120
+                  y: 260
+                  width: 90
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                    if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                    } else {
+                      if (var.detailCanTrackWaypoint) {
+                        Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                      }
+                    }
+                children:
+                  路径点导航按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailCanTrackWaypoint ? '236,180,24,255' : '60,60,66,255'"
+                      hover: "var.detailCanTrackWaypoint ? '246,200,44,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  路径点导航按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f导航
+                      fontSize: 30
+                      through: true
+              路径点分享按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 216
+                  y: 260
+                  width: 90
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'share_waypoint', var.detailSelectedId)
+                children:
+                  路径点分享按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~90,160,220,255
+                      hover: ~110,180,240,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  路径点分享按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f分享
+                      fontSize: 30
+                      through: true
+              路径点删除按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 312
+                  y: 260
+                  width: 90
+                  height: 44
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
@@ -641,7 +873,7 @@ controls:
                       Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, var.actionToken)
                     }
                 children:
-                  删除按钮底:
+                  路径点删除按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -649,54 +881,365 @@ controls:
                       normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
                       hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 10
+                      radius: 14
                     effect:
                       stroke:
                         width: 2
                         color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
-                  删除按钮文字:
+                  路径点删除按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f删除
-                      fontSize: 28
+                      fontSize: 30
                       through: true
-              创建按钮:
+          # ─── 外部目标详情面板（只有导航）───
+          外部目标详情面板:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 448"
+              y: "(var.viewH - 400) / 2"
+              width: 420
+              height: 400
+              visible: "var.detailSelectedType == 'external'"
+            children:
+              外部目标面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              外部目标类型图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 28
+                  texts: ~&c◆
+                  fontSize: 44
+                  through: true
+              外部目标详情标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 76
+                  texts: "var.detailTitle"
+                  fontSize: 38
+              外部目标详情描述:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 124
+                  texts: "var.detailDescription"
+                  fontSize: 26
+              外部目标导航按钮:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 146
-                  y: 356
-                  width: 110
-                  height: 32
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  x: 150
+                  y: 300
+                  width: 120
+                  height: 44
                 action:
                   clickLeft: |-
-                    if (var.canCreateWaypoint) {
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'create_waypoint', var.actionToken)
+                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                    if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                    } else {
+                      if (var.detailCanTrackExternal) {
+                        Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                      }
                     }
                 children:
-                  创建按钮底:
+                  外部目标导航按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
-                      hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
+                      normal: "var.detailCanTrackExternal ? '236,180,24,255' : '60,60,66,255'"
+                      hover: "var.detailCanTrackExternal ? '246,200,44,255' : '60,60,66,255'"
                       shape: ~round_rect
-                      radius: 10
+                      radius: 14
                     effect:
                       stroke:
                         width: 2
                         color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
-                  创建按钮文字:
+                  外部目标导航按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f新建
-                      fontSize: 28
+                      texts: ~&f导航
+                      fontSize: 32
                       through: true
+          # ─── 标记点详情面板（命名/修改描述/删除/分享）───
+          标记点详情面板:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 448"
+              y: "(var.viewH - 400) / 2"
+              width: 420
+              height: 400
+              visible: "var.detailSelectedType == 'pin'"
+            children:
+              标记点面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              标记点类型图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 28
+                  texts: ~&b●
+                  fontSize: 44
+                  through: true
+              标记点详情标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 76
+                  texts: "var.detailTitle"
+                  fontSize: 38
+              标记点名称标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 30
+                  y: 130
+                  texts: ~&7名称
+                  fontSize: 24
+                  through: true
+              标记点名称输入框:
+                type: TextBox
+                attribute:
+                  point: ~top_left
+                  x: 100
+                  y: 126
+                  width: 280
+                  height: 32
+                  length: 64
+                  emptyText: "~输入名称"
+                  background: "~Frosted:20;255,255,255,30"
+                  canLoseFocus: true
+              标记点描述标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 30
+                  y: 175
+                  texts: ~&7描述
+                  fontSize: 24
+                  through: true
+              标记点描述输入框:
+                type: TextBox
+                attribute:
+                  point: ~top_left
+                  x: 100
+                  y: 171
+                  width: 280
+                  height: 64
+                  length: 256
+                  allowNewLine: true
+                  emptyText: "~输入描述（可选）"
+                  background: "~Frosted:20;255,255,255,30"
+                  canLoseFocus: true
+              标记点保存按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 260
+                  width: 110
+                  height: 44
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    var.pinName = val.标记点名称输入框.getContent()
+                    var.pinDesc = val.标记点描述输入框.getContent()
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'update_pin', var.detailSelectedId, var.pinName, var.pinDesc, var.actionToken)
+                children:
+                  标记点保存按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~130,200,130,255
+                      hover: ~150,220,150,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  标记点保存按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f保存
+                      fontSize: 32
+                      through: true
+              标记点分享按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 146
+                  y: 260
+                  width: 110
+                  height: 44
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'share_pin', var.detailSelectedId)
+                children:
+                  标记点分享按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~90,160,220,255
+                      hover: ~110,180,240,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  标记点分享按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f分享
+                      fontSize: 32
+                      through: true
+              标记点删除按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 268
+                  y: 260
+                  width: 110
+                  height: 44
+                  enable: "!var.actionBusy && var.actionToken != ''"
+                action:
+                  clickLeft: |-
+                    if (var.detailCanDeletePin) {
+                      var.actionBusy = true
+                      Packet.send(var.packetId, 'delete_pin', var.detailSelectedId, var.actionToken)
+                    }
+                children:
+                  标记点删除按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailCanDeletePin ? '220,80,80,255' : '60,60,66,255'"
+                      hover: "var.detailCanDeletePin ? '240,100,100,255' : '60,60,66,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+                  标记点删除按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f删除
+                      fontSize: 32
+                      through: true
+          # ─── 右下角常驻：新建路径点按钮 ───
+          新建路径点按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 300"
+              y: "var.viewH - 60"
+              width: 130
+              height: 44
+              enable: "!var.actionBusy && var.actionToken != '' && var.canCreateWaypoint"
+              visible: "var.detailSelectedType != 'anchor' && var.detailSelectedType != 'external'"
+            action:
+              clickLeft: |-
+                if (var.canCreateWaypoint) {
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'create_waypoint', var.actionToken)
+                }
+            children:
+              新建路径点按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
+                  hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+              新建路径点按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f新建路径点
+                  fontSize: 28
+                  through: true
+          # ─── 右下角常驻：新建标记点按钮（点击空白处后出现）───
+          新建标记点按钮:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "var.viewW - 160"
+              y: "var.viewH - 60"
+              width: 130
+              height: 44
+              enable: "!var.actionBusy && var.actionToken != ''"
+              visible: "var.pinCreateX != '' && var.pinCreateZ != ''"
+            action:
+              clickLeft: |-
+                if (var.pinCreateX != '' && var.pinCreateZ != '') {
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.actionToken)
+                  var.pinCreateX = ''
+                  var.pinCreateZ = ''
+                }
+            children:
+              新建标记点按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~100,180,220,255
+                  hover: ~120,200,240,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: "self.isHovered() ? '255,255,255,160' : '255,255,255,60'"
+              新建标记点按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f新建标记点
+                  fontSize: 28
+                  through: true
           # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
           世界槽位:
             type: Canvas

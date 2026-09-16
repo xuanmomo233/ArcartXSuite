@@ -15,6 +15,7 @@ import java.util.logging.Logger;
 import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.map.model.MapPin;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 
 /**
@@ -37,12 +38,12 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("AXS_map_unlocks", "AXS_map_waypoints");
+        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins");
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of("AXS_map_unlocks", "AXS_map_waypoints");
+        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins");
     }
 
     @Override
@@ -167,12 +168,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                     statement.setString(1, playerUuid.toString());
                     statement.setString(2, waypoint.waypointId());
                     statement.setString(3, waypoint.name());
-                    statement.setString(4, waypoint.world());
-                    statement.setDouble(5, waypoint.x());
-                    statement.setDouble(6, waypoint.y());
-                    statement.setDouble(7, waypoint.z());
-                    statement.setLong(8, waypoint.createdAt());
-                    statement.setLong(9, waypoint.updatedAt());
+                    statement.setString(4, waypoint.description());
+                    statement.setString(5, waypoint.world());
+                    statement.setDouble(6, waypoint.x());
+                    statement.setDouble(7, waypoint.y());
+                    statement.setDouble(8, waypoint.z());
+                    statement.setLong(9, waypoint.createdAt());
+                    statement.setLong(10, waypoint.updatedAt());
                     statement.executeUpdate();
                 }
                 connection.commit();
@@ -198,7 +200,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         List<MapWaypoint> result = new ArrayList<>();
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                 "SELECT waypoint_id, name, world, x, y, z, created_at, updated_at "
+                 "SELECT waypoint_id, name, description, world, x, y, z, created_at, updated_at "
                      + "FROM AXS_map_waypoints WHERE uuid = ? ORDER BY updated_at DESC, waypoint_id ASC"
              )) {
             statement.setString(1, playerUuid.toString());
@@ -208,6 +210,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         new MapWaypoint(
                             resultSet.getString("waypoint_id"),
                             resultSet.getString("name"),
+                            resultSet.getString("description"),
                             resultSet.getString("world"),
                             resultSet.getDouble("x"),
                             resultSet.getDouble("y"),
@@ -236,12 +239,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             statement.setString(1, playerUuid.toString());
             statement.setString(2, waypoint.waypointId());
             statement.setString(3, waypoint.name());
-            statement.setString(4, waypoint.world());
-            statement.setDouble(5, waypoint.x());
-            statement.setDouble(6, waypoint.y());
-            statement.setDouble(7, waypoint.z());
-            statement.setLong(8, waypoint.createdAt());
-            statement.setLong(9, waypoint.updatedAt());
+            statement.setString(4, waypoint.description());
+            statement.setString(5, waypoint.world());
+            statement.setDouble(6, waypoint.x());
+            statement.setDouble(7, waypoint.y());
+            statement.setDouble(8, waypoint.z());
+            statement.setLong(9, waypoint.createdAt());
+            statement.setLong(10, waypoint.updatedAt());
             statement.executeUpdate();
         }
     }
@@ -308,6 +312,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid TEXT NOT NULL,
                         waypoint_id TEXT NOT NULL,
                         name TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
                         world TEXT NOT NULL,
                         x REAL NOT NULL,
                         y REAL NOT NULL,
@@ -315,6 +320,20 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         created_at INTEGER NOT NULL,
                         updated_at INTEGER NOT NULL,
                         PRIMARY KEY (uuid, waypoint_id)
+                    );
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS AXS_map_pins (
+                        uuid TEXT NOT NULL,
+                        pin_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        world TEXT NOT NULL,
+                        x REAL NOT NULL,
+                        z REAL NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (uuid, pin_id)
                     );
                     """);
             } else {
@@ -331,6 +350,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid VARCHAR(36) NOT NULL,
                         waypoint_id VARCHAR(128) NOT NULL,
                         name VARCHAR(128) NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
                         world VARCHAR(64) NOT NULL,
                         x DOUBLE NOT NULL,
                         y DOUBLE NOT NULL,
@@ -340,6 +360,30 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         PRIMARY KEY (uuid, waypoint_id)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS AXS_map_pins (
+                        uuid VARCHAR(36) NOT NULL,
+                        pin_id VARCHAR(128) NOT NULL,
+                        name VARCHAR(128) NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        world VARCHAR(64) NOT NULL,
+                        x DOUBLE NOT NULL,
+                        z DOUBLE NOT NULL,
+                        created_at BIGINT NOT NULL,
+                        updated_at BIGINT NOT NULL,
+                        PRIMARY KEY (uuid, pin_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+            }
+            // Migration: 给已存在的 waypoints 表加 description 列（如果不存在）
+            try {
+                if (isMysql()) {
+                    statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''");
+                } else {
+                    statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+                }
+            } catch (SQLException ignored) {
+                // 列已存在
             }
         }
     }
@@ -364,10 +408,11 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     private String waypointUpsertSql() {
         if (!isMysql()) {
             return """
-                INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, world, x, y, z, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, description, world, x, y, z, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uuid, waypoint_id) DO UPDATE SET
                     name = excluded.name,
+                    description = excluded.description,
                     world = excluded.world,
                     x = excluded.x,
                     y = excluded.y,
@@ -376,14 +421,142 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                 """;
         }
         return """
-            INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, world, x, y, z, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, description, world, x, y, z, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name = VALUES(name),
+                description = VALUES(description),
                 world = VALUES(world),
                 x = VALUES(x),
                 y = VALUES(y),
                 z = VALUES(z),
                 updated_at = VALUES(updated_at)
             """;
+    }
+
+    private String pinUpsertSql() {
+        if (!isMysql()) {
+            return """
+                INSERT INTO AXS_map_pins (uuid, pin_id, name, description, world, x, z, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(uuid, pin_id) DO UPDATE SET
+                    name = excluded.name,
+                    description = excluded.description,
+                    world = excluded.world,
+                    x = excluded.x,
+                    z = excluded.z,
+                    updated_at = excluded.updated_at
+                """;
+        }
+        return """
+            INSERT INTO AXS_map_pins (uuid, pin_id, name, description, world, x, z, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                name = VALUES(name),
+                description = VALUES(description),
+                world = VALUES(world),
+                x = VALUES(x),
+                z = VALUES(z),
+                updated_at = VALUES(updated_at)
+            """;
+    }
+
+    @Override
+    public boolean createPinIfUnderWorldLimit(UUID playerUuid, MapPin pin, String worldId, int maxCountInWorld) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                int count;
+                try (PreparedStatement countStatement = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM AXS_map_pins WHERE uuid = ? AND world = ?"
+                )) {
+                    countStatement.setString(1, playerUuid.toString());
+                    countStatement.setString(2, worldId);
+                    try (ResultSet resultSet = countStatement.executeQuery()) {
+                        count = resultSet.next() ? resultSet.getInt(1) : 0;
+                    }
+                }
+                if (count >= maxCountInWorld) {
+                    connection.rollback();
+                    return false;
+                }
+                try (PreparedStatement statement = connection.prepareStatement(pinUpsertSql())) {
+                    statement.setString(1, playerUuid.toString());
+                    statement.setString(2, pin.pinId());
+                    statement.setString(3, pin.name());
+                    statement.setString(4, pin.description());
+                    statement.setString(5, pin.world());
+                    statement.setDouble(6, pin.x());
+                    statement.setDouble(7, pin.z());
+                    statement.setLong(8, pin.createdAt());
+                    statement.setLong(9, pin.updatedAt());
+                    statement.executeUpdate();
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
+    public List<MapPin> loadPins(UUID playerUuid) throws SQLException {
+        List<MapPin> result = new ArrayList<>();
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                "SELECT pin_id, name, description, world, x, z, created_at, updated_at "
+                    + "FROM AXS_map_pins WHERE uuid = ? ORDER BY updated_at DESC, pin_id ASC"
+            )) {
+            statement.setString(1, playerUuid.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    result.add(
+                        new MapPin(
+                            resultSet.getString("pin_id"),
+                            resultSet.getString("name"),
+                            resultSet.getString("description"),
+                            resultSet.getString("world"),
+                            resultSet.getDouble("x"),
+                            resultSet.getDouble("z"),
+                            resultSet.getLong("created_at"),
+                            resultSet.getLong("updated_at")
+                        )
+                    );
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    @Override
+    public void upsertPin(UUID playerUuid, MapPin pin) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(pinUpsertSql())) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, pin.pinId());
+            statement.setString(3, pin.name());
+            statement.setString(4, pin.description());
+            statement.setString(5, pin.world());
+            statement.setDouble(6, pin.x());
+            statement.setDouble(7, pin.z());
+            statement.setLong(8, pin.createdAt());
+            statement.setLong(9, pin.updatedAt());
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public boolean deletePin(UUID playerUuid, String pinId) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM AXS_map_pins WHERE uuid = ? AND pin_id = ?"
+            )) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, pinId);
+            return statement.executeUpdate() > 0;
+        }
     }}

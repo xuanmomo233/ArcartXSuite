@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import xuanmo.arcartxsuite.map.model.MapExternalTarget;
 import xuanmo.arcartxsuite.map.model.MapNavigationState;
+import xuanmo.arcartxsuite.map.model.MapPin;
 import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 
@@ -74,6 +75,7 @@ public final class MapSnapshotBuilder {
                 new WaypointRow(
                     waypoint.waypointId(),
                     waypoint.name(),
+                    waypoint.description(),
                     waypoint.x(),
                     waypoint.y(),
                     waypoint.z(),
@@ -104,6 +106,24 @@ public final class MapSnapshotBuilder {
             );
         }
 
+        List<MapPin> visiblePins = input.pins().stream()
+            .filter(pin -> pin.world().equalsIgnoreCase(selectedWorldId))
+            .sorted(Comparator.comparingLong(MapPin::updatedAt).reversed().thenComparing(MapPin::pinId, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+        List<PinRow> pinRows = new ArrayList<>();
+        for (MapPin pin : visiblePins) {
+            pinRows.add(
+                new PinRow(
+                    pin.pinId(),
+                    pin.name(),
+                    pin.description(),
+                    pin.x(),
+                    pin.z(),
+                    pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId())
+                )
+            );
+        }
+
         // 点亮区域并集：已解锁锚点的 lightRegions（多边形）+ lightRadius（圆形转多边形）。
         // litEnabled=false 表示该世界没有任何点亮配置 → 客户端全亮不遮罩。
         boolean litEnabled = visibleAnchors.stream().anyMatch(a ->
@@ -122,7 +142,7 @@ public final class MapSnapshotBuilder {
         }
 
         boolean canCreateWaypoint = input.waypointsEnabled() && visibleWaypoints.size() < input.waypointLimit();
-        DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, canCreateWaypoint, selectedWorldId);
+        DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, visiblePins, canCreateWaypoint, selectedWorldId);
         HudSnapshot hud = buildHudSnapshot(input, selectedWorld, selectedWorldId, litEnabled, litRegions);
 
         return new BuildResult(
@@ -134,6 +154,7 @@ public final class MapSnapshotBuilder {
                 List.copyOf(anchorRows),
                 List.copyOf(waypointRows),
                 List.copyOf(externalRows),
+                List.copyOf(pinRows),
                 input.waypointLimit(),
                 visibleWaypoints.size(),
                 canCreateWaypoint,
@@ -174,6 +195,7 @@ public final class MapSnapshotBuilder {
         List<AnchorView> visibleAnchors,
         List<MapWaypoint> visibleWaypoints,
         List<MapExternalTarget> visibleExternalTargets,
+        List<MapPin> visiblePins,
         boolean canCreateWaypoint,
         String selectedWorldId
     ) {
@@ -194,6 +216,7 @@ public final class MapSnapshotBuilder {
                     false,
                     false,
                     false,
+                    false,
                     canCreateWaypoint,
                     input.navigationState().active(),
                     trackingText(input.navigationState())
@@ -206,7 +229,7 @@ public final class MapSnapshotBuilder {
                     "waypoint",
                     waypoint.waypointId(),
                     waypoint.name(),
-                    "世界: " + selectedWorldId + "  坐标: " + trim(waypoint.x()) + ", " + trim(waypoint.y()) + ", " + trim(waypoint.z()),
+                    waypoint.description().isBlank() ? "世界: " + selectedWorldId + "  坐标: " + trim(waypoint.x()) + ", " + trim(waypoint.y()) + ", " + trim(waypoint.z()) : waypoint.description(),
                     true,
                     "",
                     "",
@@ -217,6 +240,7 @@ public final class MapSnapshotBuilder {
                     input.navigationEnabled(),
                     false,
                     true,
+                    false,
                     canCreateWaypoint,
                     input.navigationState().active(),
                     trackingText(input.navigationState())
@@ -240,6 +264,31 @@ public final class MapSnapshotBuilder {
                     false,
                     input.navigationEnabled(),
                     false,
+                    false,
+                    canCreateWaypoint,
+                    input.navigationState().active(),
+                    trackingText(input.navigationState())
+                );
+            }
+        }
+        for (MapPin pin : visiblePins) {
+            if (pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId())) {
+                return new DetailSnapshot(
+                    "pin",
+                    pin.pinId(),
+                    pin.name(),
+                    pin.description().isBlank() ? "世界: " + selectedWorldId + "  坐标: " + trim(pin.x()) + ", " + trim(pin.z()) : pin.description(),
+                    true,
+                    "",
+                    "",
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
                     canCreateWaypoint,
                     input.navigationState().active(),
                     trackingText(input.navigationState())
@@ -254,6 +303,7 @@ public final class MapSnapshotBuilder {
             true,
             "",
             "",
+            false,
             false,
             false,
             false,
@@ -346,6 +396,7 @@ public final class MapSnapshotBuilder {
         List<AnchorView> anchors,
         List<MapWaypoint> waypoints,
         List<MapExternalTarget> externalTargets,
+        List<MapPin> pins,
         MapPlayerViewState viewState,
         MapNavigationState navigationState,
         PlayerPosition playerPosition,
@@ -464,6 +515,7 @@ public final class MapSnapshotBuilder {
         List<AnchorRow> anchorRows,
         List<WaypointRow> waypointRows,
         List<ExternalTargetRow> externalTargetRows,
+        List<PinRow> pinRows,
         int waypointLimit,
         int waypointCount,
         boolean canCreateWaypoint,
@@ -561,6 +613,7 @@ public final class MapSnapshotBuilder {
     public record WaypointRow(
         String id,
         String name,
+        String description,
         double x,
         double y,
         double z,
@@ -592,6 +645,26 @@ public final class MapSnapshotBuilder {
         double z,
         boolean selected,
         boolean tracked
+    ) {
+    }
+
+    /**
+     * 标记点列表行数据，对应菜单中的一个地图标记点条目。
+     *
+     * @param id          标记点 ID
+     * @param name        显示名称
+     * @param description 描述文本
+     * @param x           X 坐标
+     * @param z           Z 坐标
+     * @param selected    是否当前选中
+     */
+    public record PinRow(
+        String id,
+        String name,
+        String description,
+        double x,
+        double z,
+        boolean selected
     ) {
     }
 
@@ -631,6 +704,7 @@ public final class MapSnapshotBuilder {
         boolean canTrackWaypoint,
         boolean canTrackExternal,
         boolean canDeleteWaypoint,
+        boolean canDeletePin,
         boolean canCreateWaypoint,
         boolean clearTrackVisible,
         String trackingText

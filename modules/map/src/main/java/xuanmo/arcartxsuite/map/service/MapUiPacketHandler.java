@@ -41,7 +41,8 @@ public final class MapUiPacketHandler {
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         boolean tokenized = switch (action) {
-            case "unlock_anchor", "teleport_anchor", "create_waypoint", "delete_waypoint" -> true;
+            case "unlock_anchor", "teleport_anchor", "create_waypoint", "delete_waypoint",
+                 "update_waypoint", "create_pin", "delete_pin", "update_pin" -> true;
             default -> false;
         };
         if (tokenized && !target.beginActionToken(player, action, data)) return true;
@@ -72,6 +73,13 @@ public final class MapUiPacketHandler {
             case "select_external" -> {
                 if (hasValue(data, 1)) {
                     target.selectExternalTarget(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "select_pin" -> {
+                if (hasValue(data, 1)) {
+                    target.selectPin(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -126,10 +134,57 @@ public final class MapUiPacketHandler {
                 }
             }
             case "clear_track" -> target.clearTrack(player);
+            case "deselect" -> target.deselect(player);
             case "create_waypoint" -> committed = target.createWaypoint(player);
             case "delete_waypoint" -> {
                 if (hasValue(data, 1)) {
                     committed = target.deleteWaypoint(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "update_waypoint" -> {
+                if (hasValue(data, 1)) {
+                    target.updateWaypoint(player, data.get(1),
+                        hasValue(data, 2) ? data.get(2) : "",
+                        hasValue(data, 3) ? data.get(3) : "");
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "create_pin" -> {
+                if (hasValue(data, 1) && hasValue(data, 2)) {
+                    committed = target.createPin(player, parseDouble(data.get(1)), parseDouble(data.get(2)));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "delete_pin" -> {
+                if (hasValue(data, 1)) {
+                    committed = target.deletePin(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "update_pin" -> {
+                if (hasValue(data, 1)) {
+                    target.updatePin(player, data.get(1),
+                        hasValue(data, 2) ? data.get(2) : "",
+                        hasValue(data, 3) ? data.get(3) : "");
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "share_waypoint" -> {
+                if (hasValue(data, 1)) {
+                    target.shareWaypoint(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "share_pin" -> {
+                if (hasValue(data, 1)) {
+                    target.sharePin(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -147,6 +202,14 @@ public final class MapUiPacketHandler {
 
     private static String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static double parseDouble(String value) {
+        try {
+            return Double.parseDouble(safe(value));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**
@@ -169,6 +232,8 @@ public final class MapUiPacketHandler {
 
         void selectExternalTarget(Player player, String targetId);
 
+        void selectPin(Player player, String pinId);
+
         boolean unlockAnchor(Player player, String anchorId);
 
         boolean teleportAnchor(Player player, String anchorId);
@@ -183,11 +248,25 @@ public final class MapUiPacketHandler {
 
         void crossWorldNavigate(Player player, String targetDesc);
 
+        void deselect(Player player);
+
         void clearTrack(Player player);
 
         boolean createWaypoint(Player player);
 
         boolean deleteWaypoint(Player player, String waypointId);
+
+        void updateWaypoint(Player player, String waypointId, String name, String description);
+
+        boolean createPin(Player player, double x, double z);
+
+        boolean deletePin(Player player, String pinId);
+
+        void updatePin(Player player, String pinId, String name, String description);
+
+        void shareWaypoint(Player player, String waypointId);
+
+        void sharePin(Player player, String pinId);
 
         boolean beginActionToken(Player player, String action, List<String> data);
 

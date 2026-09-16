@@ -46,6 +46,7 @@ import xuanmo.arcartxsuite.map.model.MapNavigationState.TargetType;
 import xuanmo.arcartxsuite.map.model.MapExternalTarget;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
 import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
+import xuanmo.arcartxsuite.map.model.MapPin;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 import xuanmo.arcartxsuite.map.storage.MapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -423,7 +424,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     @Override
     public boolean beginActionToken(Player player, String action, List<String> data) {
         UUID uuid = player.getUniqueId();
-        int tokenIndex = "create_waypoint".equals(action) ? 1 : 2;
+        int tokenIndex = switch (action) {
+            case "create_waypoint" -> 1;
+            case "create_pin" -> 3;
+            case "update_waypoint", "update_pin" -> 4;
+            default -> 2;
+        };
         String supplied = data != null && data.size() > tokenIndex ? data.get(tokenIndex) : "";
         return bridge != null && bridge.isUiOpen(player, menuUiId)
             && actionTokens.get(uuid) != null
@@ -435,7 +441,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     public void finishActionToken(Player player, boolean committed) {
         UUID uuid = player.getUniqueId();
         actionTokensInFlight.remove(uuid);
-        if (committed) actionTokens.put(uuid, UUID.randomUUID().toString());
+        if (committed) {
+            actionTokens.put(uuid, UUID.randomUUID().toString());
+            // 重新 sync 让 UI 拿到新 token，否则 UI 端 actionToken 与服务端不一致
+            // 导致后续 tokenized 按钮校验失败（如新建路径点后删除按钮无效）
+            syncMenu(player, false);
+        }
     }
 
     @Override
@@ -504,6 +515,21 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         state(player).selectWorld(normalizeId(target.worldId()));
         state(player).selectExternalTarget(normalizeId(target.targetId()));
+        sync(player, false);
+    }
+
+    @Override
+    public void selectPin(Player player, String pinId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapPin pin = findPin(player, pinId);
+        if (pin == null) {
+            sync(player, false);
+            return;
+        }
+        state(player).selectWorld(normalizeId(pin.world()));
+        state(player).selectPin(normalizeId(pin.pinId()));
         sync(player, false);
     }
 
@@ -647,6 +673,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
+    public void deselect(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        state(player).clearSelection();
+        sync(player, false);
+    }
+
+    @Override
     public boolean createWaypoint(Player player) {
         MapOperationResult result = createWaypointInternal(player);
         sendPlayerResult(player, result);
@@ -658,6 +693,189 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MapOperationResult result = deleteWaypointInternal(player, waypointId);
         sendPlayerResult(player, result);
         return result.success();
+    }
+
+    @Override
+    public void updateWaypoint(Player player, String waypointId, String name, String description) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapWaypoint waypoint = findWaypoint(player, waypointId);
+        if (waypoint == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-not-found", waypointId)));
+            return;
+        }
+        String newName = name == null || name.isBlank() ? waypoint.name() : name;
+        String newDesc = description == null ? "" : description;
+        long now = System.currentTimeMillis();
+        MapWaypoint updated = new MapWaypoint(
+            waypoint.waypointId(), newName, newDesc, waypoint.world(),
+            waypoint.x(), waypoint.y(), waypoint.z(), waypoint.createdAt(), now
+        );
+        try {
+            repository.upsertWaypoint(player.getUniqueId(), updated);
+            invalidatePlayerDataCache(player.getUniqueId());
+            sync(player, false);
+            sendPlayerResult(player, MapOperationResult.success(message("player.waypoint-updated", newName)));
+        } catch (Exception e) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
+        }
+    }
+
+    @Override
+    public boolean createPin(Player player, double x, double z) {
+        if (player == null || !player.isOnline()) {
+            return false;
+        }
+        if (!configuration.waypoints().enabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
+            return false;
+        }
+        String worldId = normalizeId(player.getWorld().getName());
+        if (!configuration.worlds().containsKey(worldId)) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
+            return false;
+        }
+        int limit = resolveWaypointLimit(player);
+        List<MapPin> pins = loadPins(player);
+        long countInWorld = pins.stream().filter(pin -> normalizeId(pin.world()).equals(worldId)).count();
+        if (countInWorld >= limit) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        String pinId = configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
+        String name = configuration.waypoints().autoNamePrefix() + "-标记-" + (countInWorld + 1);
+        MapPin pin = new MapPin(
+            normalizeId(pinId), name, "", worldId, x, z, now, now
+        );
+        try {
+            if (!repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, worldId, limit)) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+                return false;
+            }
+            invalidatePlayerDataCache(player.getUniqueId());
+            state(player).selectWorld(worldId);
+            state(player).selectPin(normalizeId(pinId));
+            sync(player, false);
+            sendPlayerResult(player, MapOperationResult.success(message("player.pin-created", name)));
+            return true;
+        } catch (Exception e) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
+            return false;
+        }
+    }
+
+    @Override
+    public boolean deletePin(Player player, String pinId) {
+        MapOperationResult result = deletePinInternal(player, pinId);
+        sendPlayerResult(player, result);
+        return result.success();
+    }
+
+    private MapOperationResult deletePinInternal(Player player, String pinId) {
+        if (player == null || !player.isOnline()) {
+            return MapOperationResult.failure(message("player.offline"));
+        }
+        MapPin pin = findPin(player, pinId);
+        if (pin == null) {
+            return MapOperationResult.failure(message("player.pin-not-found", pinId));
+        }
+        try {
+            if (!repository.deletePin(player.getUniqueId(), pin.pinId())) {
+                return MapOperationResult.failure(message("player.waypoint-delete-failed"));
+            }
+            invalidatePlayerDataCache(player.getUniqueId());
+            if (state(player).selectedPinId().equalsIgnoreCase(pin.pinId())) {
+                state(player).clearSelection();
+            }
+            sync(player, false);
+            return MapOperationResult.success(message("player.pin-deleted", pin.name()));
+        } catch (Exception e) {
+            return MapOperationResult.failure(message("player.waypoint-delete-failed"));
+        }
+    }
+
+    @Override
+    public void updatePin(Player player, String pinId, String name, String description) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapPin pin = findPin(player, pinId);
+        if (pin == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.pin-not-found", pinId)));
+            return;
+        }
+        String newName = name == null || name.isBlank() ? pin.name() : name;
+        String newDesc = description == null ? "" : description;
+        long now = System.currentTimeMillis();
+        MapPin updated = new MapPin(
+            pin.pinId(), newName, newDesc, pin.world(), pin.x(), pin.z(), pin.createdAt(), now
+        );
+        try {
+            repository.upsertPin(player.getUniqueId(), updated);
+            invalidatePlayerDataCache(player.getUniqueId());
+            sync(player, false);
+            sendPlayerResult(player, MapOperationResult.success(message("player.pin-updated", newName)));
+        } catch (Exception e) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
+        }
+    }
+
+    @Override
+    public void shareWaypoint(Player player, String waypointId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapWaypoint waypoint = findWaypoint(player, waypointId);
+        if (waypoint == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-not-found", waypointId)));
+            return;
+        }
+        String json = "{\"type\":\"map_waypoint\",\"id\":\"" + waypoint.waypointId()
+            + "\",\"name\":\"" + escapeJson(waypoint.name())
+            + "\",\"world\":\"" + waypoint.world()
+            + "\",\"x\":" + waypoint.x()
+            + ",\"y\":" + waypoint.y()
+            + ",\"z\":" + waypoint.z() + "}";
+        if (bridge != null) {
+            bridge.sendChatCard(player, "map_share", Map.of(
+                "title", waypoint.name(),
+                "body", json,
+                "sender", player.getName()
+            ));
+        }
+        sendPlayerResult(player, MapOperationResult.success(message("player.waypoint-shared", waypoint.name())));
+    }
+
+    @Override
+    public void sharePin(Player player, String pinId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapPin pin = findPin(player, pinId);
+        if (pin == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.pin-not-found", pinId)));
+            return;
+        }
+        String json = "{\"type\":\"map_pin\",\"id\":\"" + pin.pinId()
+            + "\",\"name\":\"" + escapeJson(pin.name())
+            + "\",\"world\":\"" + pin.world()
+            + "\",\"x\":" + pin.x()
+            + ",\"z\":" + pin.z() + "}";
+        if (bridge != null) {
+            bridge.sendChatCard(player, "map_share", Map.of(
+                "title", pin.name(),
+                "body", json,
+                "sender", player.getName()
+            ));
+        }
+        sendPlayerResult(player, MapOperationResult.success(message("player.pin-shared", pin.name())));
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
 
     @EventHandler
@@ -981,6 +1199,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MapWaypoint waypoint = new MapWaypoint(
             normalizeId(waypointId),
             name,
+            "",
             worldId,
             location.getX(),
             location.getY(),
@@ -1219,6 +1438,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 anchors,
                 loadWaypoints(player),
                 loadExternalTargets(player),
+                loadPins(player),
                 state,
                 navigationStates.getOrDefault(player.getUniqueId(), MapNavigationState.none()),
                 location == null ? null : new MapSnapshotBuilder.PlayerPosition(location.getX(), location.getY(), location.getZ(), location.getYaw()),
@@ -1372,6 +1592,20 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         payload.put("externalTargetRows", externalRows);
 
+        LinkedHashMap<String, Object> pinRows = new LinkedHashMap<>();
+        for (int i = 0; i < snapshot.pinRows().size(); i++) {
+            MapSnapshotBuilder.PinRow row = snapshot.pinRows().get(i);
+            LinkedHashMap<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", row.id());
+            entry.put("name", row.name());
+            entry.put("description", row.description());
+            entry.put("x", row.x());
+            entry.put("z", row.z());
+            entry.put("selected", row.selected());
+            pinRows.put(Integer.toString(i), entry);
+        }
+        payload.put("pinRows", pinRows);
+
         payload.put("waypointLimit", snapshot.waypointLimit());
         payload.put("waypointCount", snapshot.waypointCount());
         payload.put("canCreateWaypoint", snapshot.canCreateWaypoint());
@@ -1391,6 +1625,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailCanTrackWaypoint", snapshot.detail().canTrackWaypoint());
         payload.put("detailCanTrackExternal", snapshot.detail().canTrackExternal());
         payload.put("detailCanDeleteWaypoint", snapshot.detail().canDeleteWaypoint());
+        payload.put("detailCanDeletePin", snapshot.detail().canDeletePin());
         payload.put("detailCanCreateWaypoint", snapshot.detail().canCreateWaypoint());
         payload.put("detailClearTrackVisible", snapshot.detail().clearTrackVisible());
         payload.put("detailTrackingText", snapshot.detail().trackingText());
@@ -1400,6 +1635,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("maxAnchorCount", anchorRows.size());
         payload.put("maxWaypointCount", waypointRows.size());
         payload.put("maxExternalCount", externalRows.size());
+        payload.put("maxPinCount", pinRows.size());
         return payload;
     }
 
@@ -1552,6 +1788,27 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return false;
         }
         return loadUnlockedAnchors(player).contains(anchor.id());
+    }
+
+    private MapPin findPin(Player player, String pinId) {
+        String normalized = normalizeId(pinId);
+        for (MapPin pin : loadPins(player)) {
+            if (normalizeId(pin.pinId()).equals(normalized)) {
+                return pin;
+            }
+        }
+        return null;
+    }
+
+    private List<MapPin> loadPins(Player player) {
+        if (player == null) {
+            return List.of();
+        }
+        try {
+            return repository.loadPins(player.getUniqueId());
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private String resolveOpenWorld(Player player, String requestedWorldId) {

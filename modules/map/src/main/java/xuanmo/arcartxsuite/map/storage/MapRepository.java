@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import xuanmo.arcartxsuite.map.model.MapPin;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 
 public interface MapRepository {
@@ -31,6 +32,17 @@ public interface MapRepository {
     void upsertWaypoint(UUID playerUuid, MapWaypoint waypoint) throws SQLException;
 
     boolean deleteWaypoint(UUID playerUuid, String waypointId) throws SQLException;
+
+    /**
+     * 在世界标记点未达上限时创建标记点，返回 false 表示已达上限。
+     */
+    boolean createPinIfUnderWorldLimit(UUID playerUuid, MapPin pin, String worldId, int maxCountInWorld) throws SQLException;
+
+    List<MapPin> loadPins(UUID playerUuid) throws SQLException;
+
+    void upsertPin(UUID playerUuid, MapPin pin) throws SQLException;
+
+    boolean deletePin(UUID playerUuid, String pinId) throws SQLException;
 
     void clearPlayer(UUID playerUuid) throws SQLException;
 
