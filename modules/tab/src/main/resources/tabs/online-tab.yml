@@ -133,4 +133,4 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 #   name: "%axstitle_tab_adventure_prefix%%player_name%"
 #   uuid: "{player_uuid}"
 #   health: "%player_health%"
-pack: "%axstitle_display% %player_name%"  # 字符串形态 pack，按每个在线玩家渲染后组成根列表发给 UI
+pack: "%axstitle_display_tab_prefix% %player_name%"  # 字符串形态 pack，按每个在线玩家渲染后组成根列表发给 UI

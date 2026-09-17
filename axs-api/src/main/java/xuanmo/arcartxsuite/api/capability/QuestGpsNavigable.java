@@ -5,10 +5,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 任务导航能力接口。
+ * 任务导航能力接口（公开 capability）。
  * <p>
- * 由 QuestGPS 模块实现，供 EventPacket 等模块跨模块调用。
+ * 由 QuestGPS 模块实现，供 EventPacket 等模块跨模块调用；
+ * 外部 Bukkit 插件经 {@code AxsCapabilities.get(QuestGpsNavigable.class)} 获取。
  */
+@PublicCapability
 public interface QuestGpsNavigable {
 
     /** 向玩家推送任务供选择 */

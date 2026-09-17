@@ -9,7 +9,10 @@ import org.jetbrains.annotations.Nullable;
  * Essentials 模块状态查询能力接口。
  * <p>
  * 由 Essentials 模块实现，供 Tab、Chat 等模块查询玩家 AFK/Vanish/Mute/Nick 状态。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(EssentialsQueryable.class)} 获取。
  */
+@PublicCapability
 public interface EssentialsQueryable {
 
     /**

@@ -18,25 +18,21 @@ ui:
   screenScale: true
   action:
     load: |-
+      var.previewGrid = []
       var.recipeBookOpen = false
       var.recipes = {}
       var.recipeJsons = {}
       var.recipeCanCraft = {}
-      var.recipeCount = 0
       var.刷新轮次 = 0
-      var.selectedRecipe = none
-      var.previewGrid = []
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.previewVisible = [true, true, true, true, true, true, true, true, true]
       var.previewMissing = [false, false, false, false, false, false, false, false, false]
       var.resultVisible = true
-      var.allRecipes = {}
       var.currentCategory = 'all'
       var.needFilterRefresh = false
       var.showAll = true
       var.searchText = ''
       var.shiftHeld = false
-      var.catIcons = {}
     keyPress: |-
       if(self.currentKeyPress == 'LEFT_SHIFT'){
         var.shiftHeld = true
@@ -125,13 +121,13 @@ ui:
       }
       if(packet['catIcons'] != none){
         var.catIcons = packet['catIcons']
-        val.配方书按钮.setItemIcon(var.catIcons['book'])
-        val.显示切换.setItemIcon(var.catIcons['toggle'])
-        val.分类栏['分类_全部'].setItemIcon(var.catIcons['all'])
-        val.分类栏['分类_工具'].setItemIcon(var.catIcons['tools'])
-        val.分类栏['分类_建筑'].setItemIcon(var.catIcons['building'])
-        val.分类栏['分类_食品'].setItemIcon(var.catIcons['food'])
-        val.分类栏['分类_红石'].setItemIcon(var.catIcons['redstone'])
+        if(val.配方书按钮 != none){ val.配方书按钮.setItemIcon(var.catIcons['book']) }
+        if(val.显示切换 != none){ val.显示切换.setItemIcon(var.catIcons['toggle']) }
+        if(val.分类栏['分类_全部'] != none){ val.分类栏['分类_全部'].setItemIcon(var.catIcons['all']) }
+        if(val.分类栏['分类_工具'] != none){ val.分类栏['分类_工具'].setItemIcon(var.catIcons['tools']) }
+        if(val.分类栏['分类_建筑'] != none){ val.分类栏['分类_建筑'].setItemIcon(var.catIcons['building']) }
+        if(val.分类栏['分类_食品'] != none){ val.分类栏['分类_食品'].setItemIcon(var.catIcons['food']) }
+        if(val.分类栏['分类_红石'] != none){ val.分类栏['分类_红石'].setItemIcon(var.catIcons['redstone']) }
       }
   defaultOpen: true
 controls:

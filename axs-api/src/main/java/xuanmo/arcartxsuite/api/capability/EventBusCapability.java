@@ -11,25 +11,30 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  * 模块间解耦事件总线能力接口（pub/sub 模式）。
  * <p>
  * 任何模块都可以发布事件（publish），其他模块订阅感兴趣的事件主题。
- * 事件主题以字符串标识（如 {@code "market.purchase"}、{@code "mail.received"}）。
+ * 事件主题以字符串标识，AXS 内置主题统一使用 {@code axs.<模块id>.<事件名>} 前缀
+ * （如 {@code "axs.market.listing_created"}、{@code "axs.mail.received"}）。
  * <p>
  * 与 {@link SignalDispatchable} 的区别：
  * <ul>
  *   <li>SignalDispatchable 面向 EventPacket 规则引擎（1 对 1）</li>
  *   <li>EventBusCapability 面向所有模块（1 对多 pub/sub）</li>
  * </ul>
+ * <p>
+ * 本接口为公开 capability：外部插件可经 {@code AxsCapabilities.get(EventBusCapability.class)}
+ * 订阅任意事件主题；插件自身禁用时务必 {@link #unsubscribe} 已注册的订阅。
  *
  * <h3>使用示例</h3>
  * <pre>{@code
  * // 发布方（Market 模块）
- * eventBus.publish("market.purchase", player, Map.of("price", "1000", "item", "钻石剑"));
+ * eventBus.publish("axs.market.purchase", player, Map.of("price", "1000", "item", "钻石剑"));
  *
- * // 订阅方（QQBot 模块）
- * eventBus.subscribe("market.purchase", (event) -> {
+ * // 订阅方（QQBot 模块 / 外部插件）
+ * eventBus.subscribe("axs.market.purchase", (event) -> {
  *     qqBot.sendToAllGroups("[交易] " + event.player().getName() + " 购买了物品");
  * });
  * }</pre>
  */
+@PublicCapability
 public interface EventBusCapability {
 
     /**
@@ -86,7 +91,7 @@ public interface EventBusCapability {
     /**
      * 订阅一个事件主题。
      *
-     * @param topic    事件主题（支持通配符 {@code "market.*"}）
+     * @param topic    事件主题（支持通配符 {@code "axs.market.*"}）
      * @param handler  处理器
      * @return 订阅 ID（用于取消订阅）
      */

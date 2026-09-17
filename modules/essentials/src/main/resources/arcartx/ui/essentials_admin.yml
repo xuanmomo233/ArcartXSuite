@@ -50,15 +50,15 @@ ui:
       var.worldWeather = packet['worldWeather']
   action:
     load: |-
+      var.bans = []
+      var.mutes = []
+      var.players = []
+      var.warps = []
       var.packetId = 'AXS_ESS_ADMIN'
       var.page = 'players'
-      var.players = []
       var.playerCount = '0'
-      var.warps = []
-      var.bans = []
       var.banCount = '0'
       var.chatAvailable = 'false'
-      var.mutes = []
       var.muteCount = '0'
       var.worldName = ''
       var.worldTime = '0'

@@ -251,6 +251,22 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             }
         });
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.LoginViewQueryable.class,
+            new xuanmo.arcartxsuite.api.capability.LoginViewQueryable() {
+                @Override public boolean isAuthenticated(@NotNull Player player) {
+                    return service != null && service.isAuthenticated(player);
+                }
+                @Override public boolean isRegistered(@NotNull Player player) {
+                    return service != null && service.isRegistered(player);
+                }
+                @Override public void openFor(@NotNull Player player) {
+                    if (service != null) service.openFor(player);
+                }
+                @Override public void openFor(@NotNull Player player, boolean force) {
+                    if (service != null) service.openFor(player, force);
+                }
+            });
+
         logger.fine("LoginView 模块已载入，UI: " + uiBinding.runtimeUiId());
     }
 

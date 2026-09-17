@@ -5,7 +5,10 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * 通用菜单打开能力，由 Menu 模块实现。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(MenuOpenable.class)} 获取。
  */
+@PublicCapability
 public interface MenuOpenable {
 
     /**

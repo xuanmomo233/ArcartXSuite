@@ -71,7 +71,7 @@ ui:
       var.flags = packet['flags']
       var.owners = packet['owners']
       var.members = packet['members']
-      # 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
+      // 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
       var.curFlagList = []
       if(var.currentFlags != null){
         for(key in var.currentFlags.keys()){

@@ -149,7 +149,7 @@ ui:
       }
       for(i in range(1, 31)){
         key = i.round()()
-        e = val.日历网格['日历模板'].copy('日历项_' + key)
+        if(val.日历网格['日历模板'] != none){ e = val.日历网格['日历模板'].copy('日历项_' + key) }
         e.entryKey = key
       }
       while(val.阶段堆叠.childrenCount() > 1){
@@ -157,7 +157,7 @@ ui:
       }
       for(i in range(1, var.maxRewardCount - 1)){
         key = i.round()()
-        e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
+        if(val.阶段堆叠['阶段奖励项'] != none){ e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key) }
         e.entryKey = key
       }
       // 触发阶段奖励图标 seticon
@@ -176,7 +176,7 @@ ui:
       }
       for(i in range(1, var.maxPeriodicCount - 1)){
         key = i.round()()
-        e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
+        if(val.周期堆叠['周期奖励项'] != none){ e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key) }
         e.entryKey = key
       }
       // 触发周期奖励图标 seticon
@@ -195,7 +195,7 @@ ui:
       }
       for(i in range(1, var.maxSigninRewardCount - 1)){
         key = i.round()()
-        e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
+        if(val.签到堆叠['签到奖励项'] != none){ e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key) }
         e.entryKey = key
       }
       // 触发签到奖励图标 seticon
@@ -214,7 +214,7 @@ ui:
       }
       for(i in range(1, var.maxSelectedRewardCount - 1)){
         key = i.round()()
-        e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
+        if(val.选中奖励堆叠['选中奖励项'] != none){ e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key) }
         e.entryKey = key
       }
       var.actionBusy = false
@@ -319,7 +319,7 @@ ui:
         }
         for(i in range(1, var.maxRewardCount - 1)){
           key = i.round()()
-          e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
+        if(val.阶段堆叠['阶段奖励项'] != none){ e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key) }
           e.entryKey = key
         }
       }
@@ -341,7 +341,7 @@ ui:
         }
         for(i in range(1, var.maxPeriodicCount - 1)){
           key = i.round()()
-          e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
+        if(val.周期堆叠['周期奖励项'] != none){ e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key) }
           e.entryKey = key
         }
       }
@@ -363,7 +363,7 @@ ui:
         }
         for(i in range(1, var.maxSigninRewardCount - 1)){
           key = i.round()()
-          e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
+        if(val.签到堆叠['签到奖励项'] != none){ e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key) }
           e.entryKey = key
         }
       }
@@ -385,7 +385,7 @@ ui:
         }
         for(i in range(1, var.maxSelectedRewardCount - 1)){
           key = i.round()()
-          e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
+        if(val.选中奖励堆叠['选中奖励项'] != none){ e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key) }
           e.entryKey = key
         }
       }
@@ -402,6 +402,10 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
+      var.periodicRewardRows = {}
+      var.rewardRows = {}
+      var.selectedRewardRows = {}
+      var.signInRewardRows = {}
       var.currentPage = 'signin'
       var.currentRewardTab = 'stage'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -438,30 +442,18 @@ ui:
       var.totalTimeText = '0分钟'
       var.offlineSavingsText = '0分钟'
       var.progress = 0
-      var.progressPercent = 0
       var.progressPercentText = '0'
       var.progressTitle = '等待同步'
       var.completed = false
-      var.rewardStage = 0
-      var.rewardCount = 0
       var.rewardStageText = '0/0'
-      var.signedToday = false
       var.signInStatusText = '今日未签到'
       var.signInStreak = 0
       var.signInTotal = 0
       var.makeupCardCount = 0
-      var.calendarMonthText = none
-      var.calendarMonthOffset = 0
-      var.selectedDateText = none
-      var.selectedCanMakeup = false
       var.selectedAction = 'none'
       var.selectedActionText = '等待同步'
       var.selectedActionEnabled = false
-      var.rewardRows = {}
-      var.periodicRewardRows = {}
-      var.signInRewardRows = {}
       var.calendarRows = {}
-      var.selectedRewardRows = {}
       var.serverSignInGoalEnabled = false
       var.serverSignInGoalCurrent = 0
       var.serverSignInGoalNext = 0

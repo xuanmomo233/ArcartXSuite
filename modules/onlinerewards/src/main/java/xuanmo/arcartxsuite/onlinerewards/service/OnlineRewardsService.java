@@ -1960,7 +1960,7 @@ public class OnlineRewardsService implements Listener {
             for (Player online : Bukkit.getOnlinePlayers()) {
                 executeServerGoalCommands(online, target);
             }
-            publishEventBus("onlinerewards.server_goal_reached", triggerPlayer, Map.of(
+            publishEventBus("axs.onlinerewards.server_goal_reached", triggerPlayer, Map.of(
                 "goal_id", target.id(),
                 "goal_name", target.name(),
                 "required", String.valueOf(target.required()),

@@ -108,7 +108,7 @@ ui:
         }
         var.奖励卡片列表 = {}
         var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        模板 = val.奖励网格.get(0)
+        if(val.奖励网格 != none){ 模板 = val.奖励网格.get(0) }
         var.奖励卡片列表[1.round()] = 模板
         if(模板 != none){
           模板.entryKey = 1.round()
@@ -161,7 +161,7 @@ ui:
         for(key in var.itemJsons.keys()){
           var.animItemJsons[key] = var.itemJsons[key]
         }
-        动画模板 = val.动画卡片带.get(1)
+        if(val.动画卡片带 != none){ 动画模板 = val.动画卡片带.get(1) }
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
           随机key = (math.floor(math.random() * 目标数) + 1).round()
@@ -195,7 +195,7 @@ ui:
       // 消耗区: 刷新图标
       for(i in range(0, 3)){
         key = i.round()
-        e = val.消耗区.get(key)
+        if(val.消耗区 != none){ e = val.消耗区.get(key) }
         if(e != none){
           e['图标'].seticon()
         }
@@ -270,7 +270,7 @@ ui:
         }
         var.奖励卡片列表 = {}
         var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        模板 = val.奖励网格.get(0)
+        if(val.奖励网格 != none){ 模板 = val.奖励网格.get(0) }
         var.奖励卡片列表[1.round()] = 模板
         if(模板 != none){
           模板.entryKey = 1.round()
@@ -323,7 +323,7 @@ ui:
         for(key in var.itemJsons.keys()){
           var.animItemJsons[key] = var.itemJsons[key]
         }
-        动画模板 = val.动画卡片带.get(1)
+        if(val.动画卡片带 != none){ 动画模板 = val.动画卡片带.get(1) }
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
           随机key = (math.floor(math.random() * 目标数) + 1).round()
@@ -356,7 +356,7 @@ ui:
       }
       for(i in range(0, 3)){
         key = i.round()
-        e = val.消耗区.get(key)
+        if(val.消耗区 != none){ e = val.消耗区.get(key) }
         if(e != none){
           e['图标'].seticon()
         }
@@ -460,7 +460,7 @@ ui:
         }
         var.十连卡片列表 = {}
         var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
-        十连模板 = val.十连网格.get(0)
+        if(val.十连网格 != none){ 十连模板 = val.十连网格.get(0) }
         var.十连卡片列表[1.round()] = 十连模板
         if(十连模板 != none){
           十连模板.entryKey = 1.round()
@@ -539,7 +539,7 @@ ui:
         if(i > 0){
           existing = val.历史列表['历史行' + key]
           if(existing == none){
-            e = val.历史列表['历史行'].copy('历史行' + key)
+            if(val.历史列表['历史行'] != none){ e = val.历史列表['历史行'].copy('历史行' + key) }
             e['时间'].entryKey = key
             e['物品名'].entryKey = key
             e['稀有度名'].entryKey = key
@@ -547,7 +547,7 @@ ui:
             e['稀有度条'].entryKey = key
           }
         }
-        row = val.历史列表.get(key)
+        if(val.历史列表 != none){ row = val.历史列表.get(key) }
         if(row != none){
           row.entryKey = key
         }
@@ -568,7 +568,7 @@ ui:
         if(i > 0){
           existing = val.详情列表['详情行' + key]
           if(existing == none){
-            e = val.详情列表['详情行'].copy('详情行' + key)
+            if(val.详情列表['详情行'] != none){ e = val.详情列表['详情行'].copy('详情行' + key) }
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
             e['概率'].entryKey = key
@@ -576,7 +576,7 @@ ui:
             e['稀有度条'].entryKey = key
           }
         }
-        row = val.详情列表.get(key)
+        if(val.详情列表 != none){ row = val.详情列表.get(key) }
         if(row != none){
           row.entryKey = key
         }
@@ -612,25 +612,11 @@ ui:
       var.spinTarget = 0.85  // 滚动条停止位置比例
       var.rolling = false        // 是否正在开箱（防连点）
       var.resultPending = false  // 本次开箱是否已收到结果包
-      var.箱子抖动 = none
-      var.箱子缩放 = none
-      var.加速 = none
-      var.减速 = none
       var.滚动起点 = 0
       var.滚动位置 = 0
-      var.滚动曲线 = none
-      var.中线闪 = none
-      var.命中抖 = none
-      var.白闪 = none
       var.命中已触发 = false
-      var.出货Y = none
-      var.出货缩放 = none
-      var.出货淡入 = none
-      var.待机呼吸 = none
-      var.待机浮动 = none
       var.出货开始 = 0
       var.十连开始 = 0
-      var.揭晓类型 = none
       var.奖励卡片轮次 = 0
       var.动画带轮次 = 0
       var.动画带基数 = 0
@@ -642,19 +628,10 @@ ui:
     open: |-
       var.rolling = false
       var.resultPending = false
-      var.箱子抖动 = none
-      var.箱子缩放 = none
-      var.加速 = none
-      var.减速 = none
       var.滚动位置 = 0
-      var.滚动曲线 = none
-      var.中线闪 = none
-      var.命中抖 = none
-      var.白闪 = none
       var.命中已触发 = false
       var.出货开始 = 0
       var.十连开始 = 0
-      var.揭晓类型 = none
       val.主面板.visible = true
       val.开箱动画层.visible = false
       val.单抽结果层.visible = false

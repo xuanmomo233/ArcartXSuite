@@ -548,7 +548,7 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public void registerKeybindHandler(String keyName, int priority, xuanmo.arcartxsuite.api.KeybindHandler handler) {
         if (keybindService != null && keyName != null && handler != null) {
-            keybindService.registerHandler(keyName, priority, handler);
+            keybindService.registerHandler(moduleId, keyName, priority, handler);
             registeredKeybindHandlers.add(handler);
         }
     }

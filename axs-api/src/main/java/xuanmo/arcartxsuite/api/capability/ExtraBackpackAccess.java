@@ -8,7 +8,11 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Capability for operating a player's extra backpack without opening its UI.
+ * <p>
+ * Public capability: external plugins may obtain it via
+ * {@code AxsCapabilities.get(ExtraBackpackAccess.class)}.
  */
+@PublicCapability
 public interface ExtraBackpackAccess {
 
     /**

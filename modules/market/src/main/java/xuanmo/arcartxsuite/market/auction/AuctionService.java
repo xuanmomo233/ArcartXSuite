@@ -40,6 +40,11 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
  */
 public class AuctionService {
 
+    /** EventBus 发布回调（由 MarketService 注入）。 */
+    public interface AuctionEventPublisher {
+        void publish(String topic, @Nullable Player player, java.util.Map<String, String> payload);
+    }
+
     private static final int AUCTION_BACKPACK_SLOTS = 36;
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
 
@@ -63,7 +68,12 @@ public class AuctionService {
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
     private final ItemMatcherAPI itemMatcher;
+    private volatile AuctionEventPublisher eventPublisher;
     private BukkitTask schedulerTask;
+
+    public void setEventPublisher(AuctionEventPublisher publisher) {
+        this.eventPublisher = publisher;
+    }
 
     public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
                           MarketRepository repository, RedisMarketCache redisCache,
@@ -513,6 +523,8 @@ public class AuctionService {
                 listing.getCurrentBid(), listing.getCurrency(), tax,
                 "BID_WIN", System.currentTimeMillis()
             ));
+
+            publishAuctionPurchased(listing, tax);
         } else {
             // 无人竞价，退还物品给卖家（安全发放）
             deliverItemSafe(listing.getSeller(), listing, "auction_expired_return");
@@ -535,6 +547,36 @@ public class AuctionService {
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
         }
+    }
+
+    /**
+     * 发布 {@code axs.market.auction_purchased} 事件（竞价成交结算时触发）。
+     * 买家此时通常已离线，事件 player 可能为 null，买家信息以 payload 字段为准。
+     */
+    private void publishAuctionPurchased(AuctionListing listing, double tax) {
+        AuctionEventPublisher publisher = eventPublisher;
+        if (publisher == null || listing.getHighestBidder() == null) {
+            return;
+        }
+        String buyerName;
+        var offlineBuyer = Bukkit.getOfflinePlayer(listing.getHighestBidder());
+        buyerName = offlineBuyer.getName() != null ? offlineBuyer.getName() : "未知";
+        String currency = listing.getCurrency() != null ? listing.getCurrency() : "money";
+        java.util.Map<String, String> payload = new java.util.LinkedHashMap<>();
+        payload.put("listing_id", String.valueOf(listing.getId()));
+        payload.put("item", listing.getItemDisplayName() != null ? listing.getItemDisplayName() : "");
+        payload.put("price", String.valueOf(listing.getCurrentBid()));
+        payload.put("formatted_price",
+            java.util.Objects.requireNonNullElse(
+                currencyManager.format(currency, BigDecimal.valueOf(listing.getCurrentBid())),
+                String.valueOf(listing.getCurrentBid())));
+        payload.put("currency", currency);
+        payload.put("tax", String.valueOf(tax));
+        payload.put("seller_uuid", listing.getSeller().toString());
+        payload.put("buyer_uuid", listing.getHighestBidder().toString());
+        payload.put("buyer", buyerName);
+        publisher.publish("axs.market.auction_purchased",
+            Bukkit.getPlayer(listing.getHighestBidder()), payload);
     }
 
     /** 在主线程执行任务（已在主线程则直接执行）。 */

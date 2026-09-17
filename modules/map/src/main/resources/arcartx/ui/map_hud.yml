@@ -9,7 +9,7 @@
 #   - UI 的 tick 触发器每帧通过 axsmap.getMapRenderer().setHudAnchor() 传小地图右上角锚点
 #   - mod 根据锚点和内部 hudSize 状态计算实际渲染区域，绘制圆形/方形小地图
 #   - 圆形遮罩在 mod 的 CPU 端生成视图纹理时应用，含 1px 抗锯齿与圆形描边
-#   - 世界名与 xyz 坐标由 mod 直接绘制（本地玩家数据，每帧实时，不发包）
+#   - 世界名与 xyz 坐标由本 UI 的 Text 控件渲染（世界名走 Placeholder.parse PAPI，坐标用 Player.getPosX/Y/Z 本地实时取）
 #   - 按 [ 切换圆形/方形，按 +/- 调整大小，按 ,/. 调整缩放
 
 ui:
@@ -39,12 +39,18 @@ ui:
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      // axsmap 是客户端 mod(Arcart-Suite-Map) 注册的 Aria 全局函数命名空间，
+      // getMapRenderer() 返回 JavaObjectMirror 包装的 MapRenderer 实例（Java 互操作）。
+      // 懒加载：首次拿到后缓存在 var.mapRenderer，后续包直接复用
       if(var.mapRenderer == none) {
         try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
       }
       if(var.mapRenderer != none) {
+        // 告诉 mod 渲染哪个世界的地形
         var.mapRenderer.setWorldId('' + var.worldId)
+        // 注册 worldId → MC 维度 key 映射（如 bskyblock_world → minecraft:overworld）
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
+        // 下发已点亮区域多边形（战争迷雾：未探索区遮罩）；litEnabled=false 时传 none 全亮
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
       }
     # packetHandler: update
@@ -58,6 +64,7 @@ ui:
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      // 同 init：懒加载 MapRenderer + 同步世界/维度/点亮数据给 mod
       if(var.mapRenderer == none) {
         try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
       }
@@ -68,14 +75,10 @@ ui:
       }
   action:
     load: |-
-      var.packetId = 'AXS_MAP'
       var.visible = false
-      var.worldId = none
-      var.playerYaw = 0
-      var.trackingText = '当前未导航'
-      var.mapMod = none
-      var.mapRenderer = none
       var.hudSizeDesign = 200
+      var.packetId = 'AXS_MAP'
+      var.trackingText = '当前未导航'
       var.hudShape = 'CIRCLE'
     # tick：每帧计算小地图右上角锚点坐标，传给客户端 mod
     # mod 内部根据 hudSize 状态计算实际渲染区域（向左下延伸 hudSize×hudSize）
@@ -84,6 +87,7 @@ ui:
     #   anchorY = 24*s（右上角 Y）
     #   s = 自适应缩放因子（sx/sy 取小值）
     tick: |-
+      // tick 也懒加载一次：init/update 包可能比 UI 更早到达（mapRenderer 还没被赋值）
       if(var.mapRenderer == none) {
         try {
           var.mapRenderer = axsmap.getMapRenderer()
@@ -104,15 +108,21 @@ ui:
       } elif(var.mapRenderer != none && !var.visible) {
         // 只在 HUD 模式下停渲染——大地图打开期间 mode=MENU，
         // 此时 deactivate 会把 mode 清成 NONE，与 menu tick 的 setRegion
-        // 互相覆盖导致大地图逐帧闪烁
+        // 互相覆盖导致大地图逐帧闪烁。
+        // 注意：这里必须用 deactivate()（延迟防抖）而非 forceDeactivate()——
+        // 若有多个同名 HUD 副本，本副本的 visible=false 不代表其他副本也该停，
+        // 立即停用会被还在调 setHudAnchor 的副本抢回导致闪烁。
         if('' + var.mapRenderer.getMode() == 'HUD') {
           var.mapRenderer.deactivate()
         }
       }
+    # close：UI 关闭时调 closeHud() 立即停渲染（close 是一次性事件不需要防抖；
+    # 只作用于 HUD 模式，大地图开着时关 HUD UI 不会误杀大地图）。
+    # 若 close 没执行，mod 端 150ms 看门狗兜底（setHudAnchor 停调超时自动停用）。
     close: |-
       if(var.mapRenderer != none) {
         try {
-          var.mapRenderer.deactivate()
+          var.mapRenderer.closeHud()
         } catch(e) {
         }
       }
@@ -121,43 +131,73 @@ controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~top_right
+      point: ~stretch_all
       width: 1920
       height: 1080
     children:
       # 小地图装饰边框：由 UI 负责渲染装饰，mod 只画地形。
-      # top_right 锚点把控件右上角对齐父级右上角：x=-28 时控件右边在 父宽-28，
-      # 正好是小地图右边（mod anchorX=屏宽-28s）。边框比小地图各大 4px/边：
-      #   右边 = 小地图右边 + 4 → x = -24；顶边 = 小地图顶边 - 4 → y = 16
-      #   宽高 = hudSizeDesign + 8（左右上下各 4px 间隙，随小地图调大小自动跟随）
-      小地图圆形边框:
-        type: Texture
+      地图边框范围布局:
+        type: Canvas
         attribute:
           point: ~top_right
-          x: -24
-          y: 16
-          width: var.hudSizeDesign + 8
-          height: var.hudSizeDesign + 8
-          normal: ~map/alpha.png
-          shape: circle
-          visible: var.visible && var.hudShape == 'CIRCLE'
+          # 注意: 边框越厚的地图，x、y、width、height也需要做相应调整
+          strokewidth: 4
+          x: -28 + self.strokewidth
+          y: 22 - self.strokewidth
+          width: var.hudSizeDesign + 2 * self.strokewidth
+          height: var.hudSizeDesign + 2 * self.strokewidth
           through: true
-        effect:
-          stroke:
-            width: 3
-            color: ~255,255,255,255
-      小地图方形边框:
-        type: Texture
-        attribute:
-          point: ~top_right
-          x: -24
-          y: 16
-          width: var.hudSizeDesign + 8
-          height: var.hudSizeDesign + 8
-          normal: ~map/alpha.png
-          visible: var.visible && var.hudShape != 'CIRCLE'
-          through: true
-        effect:
-          stroke:
-            width: 3
-            color: ~255,255,255,255
+        children:
+          小地图圆形边框:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              # 注意:此处normal需要使用100px的纯透明贴图，搭配effect.stroke的描边效果才能显示地图边框
+              # normal支持任何贴图来装饰地图，使用贴图时请删除下方的effect.stroke的描边效果
+              normal: ~map/alpha.png
+              shape: ~circle
+              # mapRenderer != none 守卫：没装 Arcart-Suite-Map mod 的玩家（服务端照常发包）
+              # 不会画出悬空边框
+              visible: var.visible && var.hudShape == 'CIRCLE' && var.mapRenderer != none
+              through: true
+            effect:
+              stroke:
+                width: self.parent.strokewidth
+                # 可以通过调整颜色来调整地图边框描边
+                color: ~255,255,255,255
+          小地图方形边框:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              # 此处为 方形小地图 显示的边框
+              normal: ~map/alpha.png
+              visible: var.visible && var.hudShape != 'CIRCLE' && var.mapRenderer != none
+              through: true
+            effect:
+              stroke:
+                width: self.parent.strokewidth
+                # 可以通过调整颜色来调整地图边框描边
+                color: ~255,255,255,255
+          小地图世界名:
+            type: Text
+            attribute:
+              x: self.parent.width / 2
+              y: self.parent.height + 10
+              # 此处为 Multiverse-Core 提供的世界名称PAPI
+              texts: Placeholder.parse("%multiverse-core_alias%")
+              fontSize: 36
+              visible: var.visible && var.mapRenderer != none
+              through: true
+              center: true
+          小地图坐标:
+            type: Text
+            attribute:
+              x: self.parent.width / 2
+              y: self.parent.height + 30
+              # 此处为 ArcartX 提供的客户端aria函数工具
+              texts: "'&eX&f: ' + Player.getPosX().round(2) + ' &eY&f: ' + Player.getPosY().round(2) + ' &eZ&f: ' + Player.getPosZ().round(2)"
+              fontSize: 36
+              visible: var.visible && var.mapRenderer != none
+              through: true
+              center: true
+

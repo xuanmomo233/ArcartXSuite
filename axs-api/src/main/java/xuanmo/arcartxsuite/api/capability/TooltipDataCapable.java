@@ -18,8 +18,11 @@ import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
  * 采集 tooltip 文本行和结构化数据，通过 ArcartX 自定义网络包发送给服务端，
  * 由 Tooltip 模块缓存并提供给其他模块使用。
  *
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(TooltipDataCapable.class)} 获取。
+ *
  * @since 1.1.0
  */
+@PublicCapability
 public interface TooltipDataCapable {
 
     /**

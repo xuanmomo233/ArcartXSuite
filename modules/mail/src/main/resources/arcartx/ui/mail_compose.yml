@@ -39,33 +39,23 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.sessionId = none
       var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.baseFee = '0'
       var.allowVault = true
-      var.quoteSuccess = true
-      var.quoteMessage = none
       var.itemFee = '0'
       var.totalFee = '0'
       var.maxAttachments = 0
       var.attachmentCount = 0
       var.subjectMax = 48
       var.bodyMax = 400
-      var.composeRecipient = none
-      var.composeSubject = none
-      var.composeBody = none
       var.composeVault = '0'
       var.passwordPanelVisible = false
       var.passwordText = ''
-      var.currencies = none
-      var.feeCurrency = ''
-      var.totalFeeCurrency = ''
       var.totalFeeCurrencyName = ''
       var.isAdmin = false
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.attachmentJsons = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -128,7 +118,7 @@ ui:
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        slot = val.附件网格.get(i.round())
+        if(val.附件网格 != none){ slot = val.附件网格.get(i.round()) }
         if(slot != none){
           slot.seticon()
         }
@@ -155,7 +145,7 @@ ui:
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        slot = val.附件网格.get(i.round())
+        if(val.附件网格 != none){ slot = val.附件网格.get(i.round()) }
         if(slot != none){
           slot.seticon()
         }

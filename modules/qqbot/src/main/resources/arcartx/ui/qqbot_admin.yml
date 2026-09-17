@@ -66,19 +66,16 @@ ui:
       var.cmdHistory.add({'cmd': packet['cmd'], 'result': packet['result'], 'time': packet['time']})
   action:
     load: |-
+      var.bindings = []
+      var.groups = []
       var.packetId = 'AXS_qqbot_admin'
       var.botConnected = false
       var.totalBindings = 0
       var.onlinePlayers = 0
       var.maxPlayers = 0
-      var.groups = []
-      var.bindings = []
       var.bindPage = 0
       var.bindTotal = 0
       var.cmdHistory = []
-      var.cmdResult = none
-      var.cmdInput = none
-      var.searchInput = none
       var.tab = 'dashboard'
 
 controls:

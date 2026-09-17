@@ -31,17 +31,13 @@ ui:
     load: |-
       var.view = 'list'
       var.subView = 'item'
-      var.resultMsg = none
       var.editItemCount = 0
       var.maxPresetCount = 0
       var.isAdmin = false
       var.adminAttachmentSlots = 18
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.attachmentJsons = none
       var.presetDetailLoaded = false
       var.showDispatchConfirm = false
-      var.dispatchPresetId = none
-      var.dispatchTargetName = none
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -85,7 +81,7 @@ ui:
       }
       for(i in range(1, var.maxPresetCount - 1)){
         key = i.round()
-        e = val.preset_data['预设行'].copy('预设行' + key)
+        if(val.preset_data['预设行'] != none){ e = val.preset_data['预设行'].copy('预设行' + key) }
         e.entryKey = key
       }
     # packetHandler: preset-detail
@@ -121,13 +117,13 @@ ui:
         tmpExpiresDays = var.editExpiresDays.round()
         tmpCommands = var.editCommands
         tmpConditions = var.editConditions
-        val.编辑编号框.setContent(tmpId)
-        val.编辑显示名框.setContent(tmpDisplayName)
-        val.编辑主题框.setContent(tmpSubject)
-        val.编辑正文框.setContent(tmpBody)
-        val.编辑过期框.setContent(tmpExpiresDays)
-        val.编辑命令框.setContent(tmpCommands)
-        val.编辑领取条件框.setContent(tmpConditions)
+        if(val.编辑编号框 != none){ val.编辑编号框.setContent(tmpId) }
+        if(val.编辑显示名框 != none){ val.编辑显示名框.setContent(tmpDisplayName) }
+        if(val.编辑主题框 != none){ val.编辑主题框.setContent(tmpSubject) }
+        if(val.编辑正文框 != none){ val.编辑正文框.setContent(tmpBody) }
+        if(val.编辑过期框 != none){ val.编辑过期框.setContent(tmpExpiresDays) }
+        if(val.编辑命令框 != none){ val.编辑命令框.setContent(tmpCommands) }
+        if(val.编辑领取条件框 != none){ val.编辑领取条件框.setContent(tmpConditions) }
         // 重建货币附件行：模板作为第 0 行，再复制 size-1 个
         while(val.货币附件滚动区.childrenCount() > 1){
           val.货币附件滚动区.get(1).remove()
@@ -136,15 +132,15 @@ ui:
           row = val.货币附件滚动区['货币行模板']
           row.entryKey = 0
           entry = var.editCurrencyList['0']
-          row['货币输入'].setContent(entry['currency'])
-          row['金额输入'].setContent(entry['amount'].round())
-          row['描述输入'].setContent(entry['description'])
+          if(row['货币输入'] != none){ row['货币输入'].setContent(entry['currency']) }
+          if(row['金额输入'] != none){ row['金额输入'].setContent(entry['amount'].round()) }
+          if(row['描述输入'] != none){ row['描述输入'].setContent(entry['description']) }
           // icon 字段
-          row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-          row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-          row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-          row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-          row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+          if(row['图标材质输入'] != none){ row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '') }
+          if(row['图标CMD输入'] != none){ row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '') }
+          if(row['图标纹理输入'] != none){ row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '') }
+          if(row['图标URL输入'] != none){ row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '') }
+          if(row['图标名称输入'] != none){ row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '') }
           // iconLore 是 List，拼接为多行文本
           loreText = ''
           if(entry['iconLore'] != none){
@@ -155,22 +151,22 @@ ui:
               loreText = loreText + entry['iconLore'][j.round()]
             }
           }
-          row['图标描述输入'].setContent(loreText)
+          if(row['图标描述输入'] != none){ row['图标描述输入'].setContent(loreText) }
         }
         for(i in range(1, var.editCurrencyList.size() - 1)){
-          row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
+          if(val.货币附件滚动区['货币行模板'] != none){ row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round()) }
           row.entryKey = i.round()
           row.isTemplate = false
           entry = var.editCurrencyList[i.round()]
-          row['货币输入'].setContent(entry['currency'])
-          row['金额输入'].setContent(entry['amount'].round())
-          row['描述输入'].setContent(entry['description'])
+          if(row['货币输入'] != none){ row['货币输入'].setContent(entry['currency']) }
+          if(row['金额输入'] != none){ row['金额输入'].setContent(entry['amount'].round()) }
+          if(row['描述输入'] != none){ row['描述输入'].setContent(entry['description']) }
           // icon 字段
-          row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-          row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-          row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-          row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-          row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+          if(row['图标材质输入'] != none){ row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '') }
+          if(row['图标CMD输入'] != none){ row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '') }
+          if(row['图标纹理输入'] != none){ row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '') }
+          if(row['图标URL输入'] != none){ row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '') }
+          if(row['图标名称输入'] != none){ row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '') }
           loreText = ''
           if(entry['iconLore'] != none){
             for(j in range(0, entry['iconLore'].size() - 1)){
@@ -180,7 +176,7 @@ ui:
               loreText = loreText + entry['iconLore'][j.round()]
             }
           }
-          row['图标描述输入'].setContent(loreText)
+          if(row['图标描述输入'] != none){ row['图标描述输入'].setContent(loreText) }
         }
         // 重建 CDK 行：模板作为第 0 行，再复制 size-1 个
         while(val.CDK滚动区.childrenCount() > 1){
@@ -191,36 +187,36 @@ ui:
           row.entryKey = 0
           entry = var.editCdkList['0']
           row.cdkEnabled = entry['enabled']
-          row['CDK码输入'].setContent(entry['code'])
-          row['最大领取输入'].setContent(entry['maxClaims'].round())
+          if(row['CDK码输入'] != none){ row['CDK码输入'].setContent(entry['code']) }
+          if(row['最大领取输入'] != none){ row['最大领取输入'].setContent(entry['maxClaims'].round()) }
           // 过期模式：absolute=绝对时间 / relative=相对时长 / none=不过期
           mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
           row.expireMode = mode
           if(mode == 'absolute'){
-            row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+            if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '') }
           } else {
-            row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+            if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '') }
           }
         }
         for(i in range(1, var.editCdkList.size() - 1)){
-          row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
+          if(val.CDK滚动区['CDK行模板'] != none){ row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round()) }
           row.entryKey = i.round()
           row.isTemplate = false
           entry = var.editCdkList[i.round()]
           row.cdkEnabled = entry['enabled']
-          row['CDK码输入'].setContent(entry['code'])
-          row['最大领取输入'].setContent(entry['maxClaims'].round())
+          if(row['CDK码输入'] != none){ row['CDK码输入'].setContent(entry['code']) }
+          if(row['最大领取输入'] != none){ row['最大领取输入'].setContent(entry['maxClaims'].round()) }
           mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
           row.expireMode = mode
           if(mode == 'absolute'){
-            row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+            if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '') }
           } else {
-            row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+            if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '') }
           }
         }
         // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
         for(i in range(0, var.adminAttachmentSlots - 1)){
-          slot = val.管理附件网格.get(i.round())
+          if(val.管理附件网格 != none){ slot = val.管理附件网格.get(i.round()) }
           if(slot != none){
             slot.seticon()
           }
@@ -239,7 +235,7 @@ ui:
       }
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, var.adminAttachmentSlots - 1)){
-        slot = val.管理附件网格.get(i.round())
+          if(val.管理附件网格 != none){ slot = val.管理附件网格.get(i.round()) }
         if(slot != none){
           slot.seticon()
         }
@@ -671,14 +667,14 @@ controls:
                     row = val.货币附件滚动区['货币行模板']
                     row.entryKey = 0
                     entry = var.editCurrencyList['0']
-                    row['货币输入'].setContent(entry['currency'])
-                    row['金额输入'].setContent(entry['amount'].round())
-                    row['描述输入'].setContent(entry['description'])
-                    row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-                    row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-                    row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-                    row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-                    row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+                    if(row['货币输入'] != none){ row['货币输入'].setContent(entry['currency']) }
+                    if(row['金额输入'] != none){ row['金额输入'].setContent(entry['amount'].round()) }
+                    if(row['描述输入'] != none){ row['描述输入'].setContent(entry['description']) }
+                    if(row['图标材质输入'] != none){ row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '') }
+                    if(row['图标CMD输入'] != none){ row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '') }
+                    if(row['图标纹理输入'] != none){ row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '') }
+                    if(row['图标URL输入'] != none){ row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '') }
+                    if(row['图标名称输入'] != none){ row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '') }
                     loreText = ''
                     if(entry['iconLore'] != none){
                       for(j in range(0, entry['iconLore'].size() - 1)){
@@ -688,21 +684,21 @@ controls:
                         loreText = loreText + entry['iconLore'][j.round()]
                       }
                     }
-                    row['图标描述输入'].setContent(loreText)
+                    if(row['图标描述输入'] != none){ row['图标描述输入'].setContent(loreText) }
                   }
                   for(i in range(1, var.editCurrencyList.size() - 1)){
-                    row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
+                    if(val.货币附件滚动区['货币行模板'] != none){ row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round()) }
                     row.entryKey = i.round()
                     row.isTemplate = false
                     entry = var.editCurrencyList[i.round()]
-                    row['货币输入'].setContent(entry['currency'])
-                    row['金额输入'].setContent(entry['amount'].round())
-                    row['描述输入'].setContent(entry['description'])
-                    row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-                    row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-                    row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-                    row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-                    row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+                    if(row['货币输入'] != none){ row['货币输入'].setContent(entry['currency']) }
+                    if(row['金额输入'] != none){ row['金额输入'].setContent(entry['amount'].round()) }
+                    if(row['描述输入'] != none){ row['描述输入'].setContent(entry['description']) }
+                    if(row['图标材质输入'] != none){ row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '') }
+                    if(row['图标CMD输入'] != none){ row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '') }
+                    if(row['图标纹理输入'] != none){ row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '') }
+                    if(row['图标URL输入'] != none){ row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '') }
+                    if(row['图标名称输入'] != none){ row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '') }
                     loreText = ''
                     if(entry['iconLore'] != none){
                       for(j in range(0, entry['iconLore'].size() - 1)){
@@ -712,7 +708,7 @@ controls:
                         loreText = loreText + entry['iconLore'][j.round()]
                       }
                     }
-                    row['图标描述输入'].setContent(loreText)
+                    if(row['图标描述输入'] != none){ row['图标描述输入'].setContent(loreText) }
                   }
                 })
             children:
@@ -752,7 +748,7 @@ controls:
                 // 副面板可见后刷新附件槽位图标
                 scheduler.delay(50, -> {
                   for(i in range(0, var.adminAttachmentSlots - 1)){
-                    slot = val.管理附件网格.get(i.round())
+                    if(val.管理附件网格 != none){ slot = val.管理附件网格.get(i.round()) }
                     if(slot != none){
                       slot.seticon()
                     }
@@ -802,30 +798,30 @@ controls:
                     row.entryKey = 0
                     entry = var.editCdkList['0']
                     row.cdkEnabled = entry['enabled']
-                    row['CDK码输入'].setContent(entry['code'])
-                    row['最大领取输入'].setContent(entry['maxClaims'].round())
+                    if(row['CDK码输入'] != none){ row['CDK码输入'].setContent(entry['code']) }
+                    if(row['最大领取输入'] != none){ row['最大领取输入'].setContent(entry['maxClaims'].round()) }
                     mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
                     row.expireMode = mode
                     if(mode == 'absolute'){
-                      row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                      if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '') }
                     } else {
-                      row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                      if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '') }
                     }
                   }
                   for(i in range(1, var.editCdkList.size() - 1)){
-                    row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
+                    if(val.CDK滚动区['CDK行模板'] != none){ row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round()) }
                     row.entryKey = i.round()
                     row.isTemplate = false
                     entry = var.editCdkList[i.round()]
                     row.cdkEnabled = entry['enabled']
-                    row['CDK码输入'].setContent(entry['code'])
-                    row['最大领取输入'].setContent(entry['maxClaims'].round())
+                    if(row['CDK码输入'] != none){ row['CDK码输入'].setContent(entry['code']) }
+                    if(row['最大领取输入'] != none){ row['最大领取输入'].setContent(entry['maxClaims'].round()) }
                     mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
                     row.expireMode = mode
                     if(mode == 'absolute'){
-                      row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                      if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '') }
                     } else {
-                      row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                      if(row['过期输入'] != none){ row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '') }
                     }
                   }
                 })

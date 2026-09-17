@@ -4,31 +4,28 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.AxsCapabilities;
 import xuanmo.arcartxsuite.api.bridge.ApiStability;
+import xuanmo.arcartxsuite.api.capability.PublicCapability;
 
 /**
- * 邮件公开服务接口，面向外部 Bukkit 插件。
+ * 邮件公开服务接口，面向外部 Bukkit 插件（公开 capability）。
  * <p>
  * 所有方法均返回 {@link CompletableFuture}，异步执行，不阻塞调用线程。
  * 调用方不应在 Bukkit 主线程对返回值调用 {@code join()} 或 {@code get()}，
  * 应使用 {@code thenAccept}、{@code whenComplete} 等回调处理结果。
  * <p>
- * 获取方式：
+ * 获取方式（唯一入口）：
  * <pre>{@code
- * if (!AxsMailApi.isReady()) return;
- * AxsMailService service = AxsMailApi.service();
+ * AxsMailService service = AxsCapabilities.get(AxsMailService.class);
+ * if (service == null) return; // mail 模块未启用
  * }</pre>
- * 或通过 Bukkit ServicesManager：
- * <pre>{@code
- * RegisteredServiceProvider<AxsMailService> reg =
- *     Bukkit.getServicesManager().getRegistration(AxsMailService.class);
- * if (reg == null) return;
- * AxsMailService service = reg.getProvider();
- * }</pre>
+ * AXS 模块内部通过 {@code getCapability(AxsMailService.class)} 获取同一实例。
  *
  * @since 1.5.0
  */
 @ApiStability.Stable
+@PublicCapability
 public interface AxsMailService {
 
     /**

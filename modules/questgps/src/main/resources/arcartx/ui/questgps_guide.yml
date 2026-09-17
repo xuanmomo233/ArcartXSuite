@@ -93,19 +93,13 @@ ui:
       }
   action:
     load: |-
+      var.tasks = {}
       var.packetId = 'AXS_QUESTGPS'
       var.active = false
       var.questName = '当前未追踪任务'
       var.completedCount = 0
       var.totalCount = 0
       var.progressText = '0/0'
-      var.tasks = {}
-      var.taskCount = 0
-      var.navWorld = none
-      var.navX = 0
-      var.navY = 0
-      var.navZ = 0
-      var.hasNav = false
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 # 布局: Adaptive stretch_all + 左上角偏下面板（420宽）

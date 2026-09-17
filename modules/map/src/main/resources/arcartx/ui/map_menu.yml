@@ -20,6 +20,7 @@ ui:
   show: true
   packetHandler:
     init: |-
+      var.crossWorldPromptVisible = false
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
       var.selectedWorldName = packet['selectedWorldName']
@@ -34,6 +35,7 @@ ui:
       var.waypointLimit = packet['waypointLimit']
       var.waypointCount = packet['waypointCount']
       var.canCreateWaypoint = packet['canCreateWaypoint']
+      var.shareEnabled = packet['shareEnabled']
       var.clearTrackVisible = packet['clearTrackVisible']
       var.trackingText = packet['trackingText']
       var.detailSelectedType = packet['detailSelectedType']
@@ -54,13 +56,13 @@ ui:
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
+      var.detailNavigated = packet['detailNavigated']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
       var.maxPinCount = packet['maxPinCount']
       var.actionToken = packet['action_token']
-      var.crossWorldPromptVisible = false
       var.worldTpl = val.world_entry['地图项目']
       if(var.worldTpl != none) {
         while(val.world_entry.childrenCount() > 1){
@@ -125,6 +127,7 @@ ui:
       var.waypointLimit = packet['waypointLimit']
       var.waypointCount = packet['waypointCount']
       var.canCreateWaypoint = packet['canCreateWaypoint']
+      var.shareEnabled = packet['shareEnabled']
       var.clearTrackVisible = packet['clearTrackVisible']
       var.trackingText = packet['trackingText']
       var.detailSelectedType = packet['detailSelectedType']
@@ -145,6 +148,7 @@ ui:
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
+      var.detailNavigated = packet['detailNavigated']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
@@ -202,25 +206,26 @@ ui:
         var.lastDetailType = var.detailSelectedType
         var.lastDetailId = var.detailSelectedId
         if(var.detailSelectedType == 'waypoint') {
-          val.路径点名称输入框.setContent(var.detailTitle)
-          val.路径点描述输入框.setContent(var.detailDescription)
+          if(val.路径点名称输入框 != none){ val.路径点名称输入框.setContent(var.detailTitle) }
+          if(val.路径点描述输入框 != none){ val.路径点描述输入框.setContent(var.detailDescription) }
         }
         if(var.detailSelectedType == 'pin') {
-          val.标记点名称输入框.setContent(var.detailTitle)
-          val.标记点描述输入框.setContent(var.detailDescription)
+          if(val.标记点名称输入框 != none){ val.标记点名称输入框.setContent(var.detailTitle) }
+          if(val.标记点描述输入框 != none){ val.标记点描述输入框.setContent(var.detailDescription) }
         }
       }
       call_syncWorldDims()
   action:
     load: |-
+      var.showHudSettings = false
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       var.scale = sx < sy ? sx : sy
       var.viewW = Screen.getWidth() / var.scale
       var.viewH = Screen.getHeight() / var.scale
       var.offX = (var.viewW - 1920) / 2
-      var.mapRenderer = none
-      var.showHudSettings = false
+      // axsmap 是客户端 mod(Arcart-Suite-Map) 注册的 Aria 全局函数命名空间，
+      // getMapRenderer() 返回 JavaObjectMirror 包装的 MapRenderer 实例（Java 互操作，见知识文档 11.4）
       try {
         var.mapRenderer = axsmap.getMapRenderer()
       } catch(e) {
@@ -272,16 +277,22 @@ ui:
         if(hit != none && hit != '') {
           var.mapRenderer.clearHitMarker()
           if(hit == 'none:') {
+            // 点在可交互区外：取消选中，也清掉落点光标
+            var.mapRenderer.clearCursor()
             Packet.send(var.packetId, 'deselect')
           } else {
             if(hit.startsWith('none:')) {
+              // 点在空白处：记录落点坐标并在大地图上画十字准星预览
               parts = hit.split(':')
               if(parts.length >= 3) {
                 var.pinCreateX = parts[1]
                 var.pinCreateZ = parts[2]
+                var.mapRenderer.setCursor(Cast.toDouble(parts[1]), Cast.toDouble(parts[2]))
               }
               Packet.send(var.packetId, 'deselect')
             } else {
+              // 点中标记：清掉落点光标与待创建坐标（改由详情面板+选中框标识）
+              var.mapRenderer.clearCursor()
               parts = hit.split(':')
               if(parts.length >= 2) {
                 if(parts[0] == 'anchor') {
@@ -300,41 +311,27 @@ ui:
             }
           }
         }
+        // 落点光标与 pinCreateX/Z 同生共死：创建按钮按下（pinCreateX 清空）/
+        // 点中标记（上面已清）后光标自动消失；不用 detailSelectedType 判断是因为
+        // deselect 包异步返回，同 tick 检查会把刚画上的光标立刻清掉
+        if(var.pinCreateX == '') {
+          var.mapRenderer.clearCursor()
+        }
       }
     open: |-
-      var.packetId = 'AXS_MAP'
-      var.selectedWorldId = none
-      var.selectedWorldName = '未选择'
       var.worldRows = {}
       var.anchorRows = {}
       var.waypointRows = {}
       var.externalTargetRows = {}
-      var.waypointLimit = 0
-      var.waypointCount = 0
       var.canCreateWaypoint = false
       var.clearTrackVisible = false
-      var.trackingText = '当前未导航'
-      var.detailSelectedType = 'none'
-      var.detailSelectedId = none
-      var.detailTitle = '未选中目标'
-      var.detailDescription = '请选择一个锚点或路径点。'
-      var.detailUnlocked = true
-      var.detailUnlockCostText = none
-      var.detailTeleportCostText = none
-      var.detailExternalTarget = false
       var.detailCanUnlock = false
       var.detailCanTeleport = false
       var.detailCanTrackAnchor = false
       var.detailCanTrackWaypoint = false
       var.detailCanTrackExternal = false
       var.detailCanDeleteWaypoint = false
-      var.detailCanCreateWaypoint = false
-      var.detailClearTrackVisible = false
-      var.detailTrackingText = '当前未导航'
       var.maxWorldCount = 0
-      var.maxAnchorCount = 0
-      var.maxWaypointCount = 0
-      var.maxExternalCount = 0
       var.actionToken = ''
       var.playerWorldId = ''
       var.crossWorldPromptVisible = false
@@ -346,13 +343,22 @@ ui:
       var.pinCreateZ = ''
       var.showHudSettings = false
       var.worldListOpen = false
+      var.packetId = 'AXS_MAP'
+      var.selectedWorldName = '未选择'
+      var.trackingText = '当前未导航'
+      var.detailSelectedType = 'none'
+      var.detailTitle = '未选中目标'
+      var.detailDescription = '请选择一个锚点或路径点。'
+      var.detailTrackingText = '当前未导航'
       // 打开菜单默认回到玩家当前位置：清掉上次残留的拖拽/缩放
       if(var.mapRenderer != none) {
         var.mapRenderer.resetView()
       }
     close: |-
+      // closeMenu 立即停大地图渲染（仅 MENU 模式生效，HUD 不受影响）；
+      // 若 close 没执行，mod 端 region 新鲜度 300ms 过期兜底
       if(var.mapRenderer != none) {
-        var.mapRenderer.deactivate()
+        var.mapRenderer.closeMenu()
       }
     seconds: |-
       if(var.actionBusy){
@@ -640,12 +646,16 @@ controls:
                   height: 44
                 action:
                   clickLeft: |-
-                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
-                    if (var.isCrossWorld) {
-                      var.crossWorldPromptVisible = true
+                    if (var.detailNavigated) {
+                      Packet.send(var.packetId, 'clear_track')
                     } else {
-                      if (var.detailCanTrackAnchor) {
-                        Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
+                      var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                      if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                      } else {
+                        if (var.detailCanTrackAnchor) {
+                          Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
+                        }
                       }
                     }
                 children:
@@ -654,8 +664,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanTrackAnchor ? '236,180,24,255' : '60,60,66,255'"
-                      hover: "var.detailCanTrackAnchor ? '246,200,44,255' : '60,60,66,255'"
+                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackAnchor ? '236,180,24,255' : '60,60,66,255')"
+                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackAnchor ? '246,200,44,255' : '60,60,66,255')"
                       shape: ~round_rect
                       radius: 14
                     effect:
@@ -666,7 +676,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f导航
+                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
                       fontSize: 32
                       through: true
           # ─── 路径点详情面板（命名/修改描述/导航/删除/分享）───
@@ -718,6 +728,7 @@ controls:
                   through: true
               路径点名称输入框:
                 type: TextBox
+                val: 路径点名称输入框
                 attribute:
                   point: ~top_left
                   x: 100
@@ -739,6 +750,7 @@ controls:
                   through: true
               路径点描述输入框:
                 type: TextBox
+                val: 路径点描述输入框
                 attribute:
                   point: ~top_left
                   x: 100
@@ -761,9 +773,9 @@ controls:
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     var.wpName = val.路径点名称输入框.getContent()
                     var.wpDesc = val.路径点描述输入框.getContent()
-                    var.actionBusy = true
                     Packet.send(var.packetId, 'update_waypoint', var.detailSelectedId, var.wpName, var.wpDesc, var.actionToken)
                 children:
                   路径点保存按钮底:
@@ -796,12 +808,16 @@ controls:
                   height: 44
                 action:
                   clickLeft: |-
-                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
-                    if (var.isCrossWorld) {
-                      var.crossWorldPromptVisible = true
+                    if (var.detailNavigated) {
+                      Packet.send(var.packetId, 'clear_track')
                     } else {
-                      if (var.detailCanTrackWaypoint) {
-                        Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                      var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                      if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                      } else {
+                        if (var.detailCanTrackWaypoint) {
+                          Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                        }
                       }
                     }
                 children:
@@ -810,8 +826,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanTrackWaypoint ? '236,180,24,255' : '60,60,66,255'"
-                      hover: "var.detailCanTrackWaypoint ? '246,200,44,255' : '60,60,66,255'"
+                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackWaypoint ? '236,180,24,255' : '60,60,66,255')"
+                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackWaypoint ? '246,200,44,255' : '60,60,66,255')"
                       shape: ~round_rect
                       radius: 14
                     effect:
@@ -822,7 +838,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f导航
+                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
                       fontSize: 30
                       through: true
               路径点分享按钮:
@@ -833,6 +849,7 @@ controls:
                   y: 260
                   width: 90
                   height: 44
+                  visible: "var.shareEnabled"
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'share_waypoint', var.detailSelectedId)
@@ -948,12 +965,16 @@ controls:
                   height: 44
                 action:
                   clickLeft: |-
-                    var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
-                    if (var.isCrossWorld) {
-                      var.crossWorldPromptVisible = true
+                    if (var.detailNavigated) {
+                      Packet.send(var.packetId, 'external_nav_cancel', var.detailSelectedId)
                     } else {
-                      if (var.detailCanTrackExternal) {
-                        Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                      var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                      if (var.isCrossWorld) {
+                      var.crossWorldPromptVisible = true
+                      } else {
+                        if (var.detailCanTrackExternal) {
+                          Packet.send(var.packetId, 'external_navigate', var.detailSelectedId)
+                        }
                       }
                     }
                 children:
@@ -962,8 +983,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanTrackExternal ? '236,180,24,255' : '60,60,66,255'"
-                      hover: "var.detailCanTrackExternal ? '246,200,44,255' : '60,60,66,255'"
+                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackExternal ? '236,180,24,255' : '60,60,66,255')"
+                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackExternal ? '246,200,44,255' : '60,60,66,255')"
                       shape: ~round_rect
                       radius: 14
                     effect:
@@ -974,7 +995,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f导航
+                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
                       fontSize: 32
                       through: true
           # ─── 标记点详情面板（命名/修改描述/删除/分享）───
@@ -1026,6 +1047,7 @@ controls:
                   through: true
               标记点名称输入框:
                 type: TextBox
+                val: 标记点名称输入框
                 attribute:
                   point: ~top_left
                   x: 100
@@ -1047,6 +1069,7 @@ controls:
                   through: true
               标记点描述输入框:
                 type: TextBox
+                val: 标记点描述输入框
                 attribute:
                   point: ~top_left
                   x: 100
@@ -1069,9 +1092,9 @@ controls:
                   enable: "!var.actionBusy && var.actionToken != ''"
                 action:
                   clickLeft: |-
+                    var.actionBusy = true
                     var.pinName = val.标记点名称输入框.getContent()
                     var.pinDesc = val.标记点描述输入框.getContent()
-                    var.actionBusy = true
                     Packet.send(var.packetId, 'update_pin', var.detailSelectedId, var.pinName, var.pinDesc, var.actionToken)
                 children:
                   标记点保存按钮底:
@@ -1102,6 +1125,7 @@ controls:
                   y: 260
                   width: 110
                   height: 44
+                  visible: "var.shareEnabled"
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'share_pin', var.detailSelectedId)
@@ -1216,8 +1240,8 @@ controls:
                 if (var.pinCreateX != '' && var.pinCreateZ != '') {
                   var.actionBusy = true
                   Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.actionToken)
-                  var.pinCreateX = ''
                   var.pinCreateZ = ''
+                  var.pinCreateX = ''
                 }
             children:
               新建标记点按钮底:
@@ -1361,8 +1385,8 @@ controls:
                         action:
                           clickLeft: |-
                             if (self.entry != none) {
-                              Packet.send(var.packetId, 'open_world', self.entry['id'])
                               var.worldListOpen = false
+                              Packet.send(var.packetId, 'open_world', self.entry['id'])
                             }
                         children:
                           地图项目背景:

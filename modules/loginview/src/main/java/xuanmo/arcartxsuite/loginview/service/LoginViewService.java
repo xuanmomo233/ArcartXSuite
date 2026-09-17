@@ -523,7 +523,7 @@ public final class LoginViewService implements Listener {
         }
     }
 
-    private boolean isRegistered(Player player) {
+    public boolean isRegistered(Player player) {
         try {
             return configuration.authMode() == AuthMode.AUTHME
                 ? authMeBridge.available() && authMeBridge.isRegistered(player.getName())
@@ -533,7 +533,7 @@ public final class LoginViewService implements Listener {
         }
     }
 
-    private boolean isAuthenticated(Player player) {
+    public boolean isAuthenticated(Player player) {
         if (configuration.authMode() == AuthMode.AUTHME) {
             return authMeBridge.available() && authMeBridge.isAuthenticated(player);
         }

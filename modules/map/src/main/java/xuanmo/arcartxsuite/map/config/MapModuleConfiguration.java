@@ -19,32 +19,30 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 /**
  * 地图模块配置记录，从 {@code ArcartXMap.yml} 解析的完整配置快照。
  * <p>
- * 关联模块：map。包含客户端通信、按键绑定、入服行为、存储、导航、
- * 世界定义、默认解锁规则、锚点定义及路径点配置等全部子节。
+ * 关联模块：map。包含客户端通信、入服行为、存储、导航、
+ * 世界定义、锚点定义（含锚点级自动解锁策略）及路径点配置等全部子节。
  * 通过 {@link #load(FileConfiguration, Logger, File)} 工厂方法从 YAML 加载。
  *
  * @param debug         是否开启调试日志
  * @param client        客户端通信与 UI 配置
- * @param keybinds      按键绑定配置
  * @param join          入服行为配置
  * @param storage       存储后端配置
  * @param navigation    导航功能配置
  * @param worlds        世界定义映射（键为世界 ID）
- * @param defaultUnlocks 默认解锁规则列表
  * @param anchors       锚点定义映射（键为锚点 ID）
  * @param waypoints     路径点功能配置
+ * @param share         点位分享配置
  */
 public record MapModuleConfiguration(
     boolean debug,
     ClientConfiguration client,
-    KeybindConfiguration keybinds,
     JoinConfiguration join,
     StorageConfiguration storage,
     NavigationConfiguration navigation,
     Map<String, WorldDefinition> worlds,
-    List<DefaultUnlockRule> defaultUnlocks,
     Map<String, AnchorDefinition> anchors,
-    WaypointConfiguration waypoints
+    WaypointConfiguration waypoints,
+    ShareConfiguration share
 ) {
 
     private static final String DEFAULT_PACKET_ID = "AXS_MAP";
@@ -80,13 +78,6 @@ public record MapModuleConfiguration(
             string(uiSection == null ? null : uiSection.getString("hud-ui-id"), DEFAULT_HUD_UI_ID),
             uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
             uiSection != null && uiSection.getBoolean("overwrite-ui-files", false)
-        );
-
-        ConfigurationSection keybindSection = configuration.getConfigurationSection("keybinds");
-        KeybindConfiguration keybinds = new KeybindConfiguration(
-            string(keybindSection == null ? null : keybindSection.getString("category"), "AXS Map"),
-            readKeybind(keybindSection == null ? null : keybindSection.getConfigurationSection("open-menu"), "打开地图", "M"),
-            readKeybind(keybindSection == null ? null : keybindSection.getConfigurationSection("toggle-hud"), "切换小地图", "H")
         );
 
         ConfigurationSection joinSection = configuration.getConfigurationSection("join");
@@ -134,20 +125,28 @@ public record MapModuleConfiguration(
             }
         }
 
-        List<DefaultUnlockRule> defaultUnlocks = loadDefaultUnlockRules(configuration.getMapList("default-unlocks"));
+        if (configuration.isSet("default-unlocks")) {
+            logger.warning("ArcartXMap.yml 中的 default-unlocks 节已移除，请在 worlds/<world>.yml 锚点的 unlock 节配置 default / on-permission。");
+        }
         WaypointConfiguration waypoints = loadWaypoints(configuration.getConfigurationSection("waypoints"));
+
+        ConfigurationSection shareSection = configuration.getConfigurationSection("share");
+        ShareConfiguration share = new ShareConfiguration(
+            shareSection == null || shareSection.getBoolean("enabled", true),
+            string(shareSection == null ? null : shareSection.getString("card-id"), "axs_map_share"),
+            shareSection == null ? 30 : Math.max(1, shareSection.getInt("expire-minutes", 30))
+        );
 
         return new MapModuleConfiguration(
             debug,
             client,
-            keybinds,
             join,
             storage,
             navigation,
             immutableCopy(worlds),
-            List.copyOf(defaultUnlocks),
             immutableCopy(anchors),
-            waypoints
+            waypoints,
+            share
         );
     }
 
@@ -169,14 +168,6 @@ public record MapModuleConfiguration(
      */
     public AnchorDefinition anchor(String anchorId) {
         return anchors.get(normalizeId(anchorId));
-    }
-
-    private static KeybindDefinition readKeybind(ConfigurationSection section, String defaultName, String defaultKey) {
-        return new KeybindDefinition(
-            section == null || section.getBoolean("enabled", true),
-            string(section == null ? null : section.getString("display-name"), defaultName),
-            string(section == null ? null : section.getString("default-key"), defaultKey)
-        );
     }
 
     /**
@@ -237,6 +228,11 @@ public record MapModuleConfiguration(
             ConfigurationSection child = section.getConfigurationSection(rawId);
             if (child == null || !child.getBoolean("enabled", true)) continue;
             String id = normalizeId(rawId);
+            String permission = string(child.getString("permission", ""), "");
+            AnchorUnlock unlock = loadAnchorUnlock(child.getConfigurationSection("unlock"));
+            if (unlock.onPermission() && permission.isBlank()) {
+                logger.warning("世界 " + worldId + " 的锚点 " + id + " 配置了 unlock.on-permission 但未设置 permission，自动解锁不会生效。");
+            }
             target.put(id, new AnchorDefinition(
                 id,
                 string(child.getString("display-name", rawId), rawId),
@@ -245,15 +241,34 @@ public record MapModuleConfiguration(
                 child.getDouble("y"),
                 child.getDouble("z"),
                 string(child.getString("description", ""), ""),
-                string(child.getString("permission", ""), ""),
+                permission,
                 child.getInt("sort-order", target.size()),
                 loadCurrencyCosts(child.getMapList("unlock-currencies")),
                 loadCurrencyCosts(child.getMapList("teleport-currencies")),
                 loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
+                unlock,
                 loadLightRegion(child.getConfigurationSection("light-region")),
                 positiveDouble(child.get("light-radius"), 0D)
             ));
         }
+    }
+
+    /**
+     * 解析锚点的 {@code unlock} 自动解锁节。配置格式：
+     * <pre>{@code
+     * unlock:
+     *   default: true        # 所有玩家进服时自动免费解锁
+     *   on-permission: true  # 拥有锚点 permission 权限的玩家进服时自动解锁
+     * }</pre>
+     */
+    private static AnchorUnlock loadAnchorUnlock(ConfigurationSection section) {
+        if (section == null) {
+            return AnchorUnlock.NONE;
+        }
+        return new AnchorUnlock(
+            section.getBoolean("default", false),
+            section.getBoolean("on-permission", false)
+        );
     }
 
     /**
@@ -293,21 +308,6 @@ public record MapModuleConfiguration(
         } catch (NumberFormatException e) {
             return 0;
         }
-    }
-
-    private static List<DefaultUnlockRule> loadDefaultUnlockRules(List<Map<?, ?>> rawRules) {
-        List<DefaultUnlockRule> rules = new ArrayList<>();
-        if (rawRules == null) {
-            return rules;
-        }
-        for (Map<?, ?> rawRule : rawRules) {
-            String permission = string(rawRule.get("permission"), "");
-            List<String> anchors = normalizeStringList(rawList(rawRule.get("anchors")));
-            if (!permission.isBlank() && !anchors.isEmpty()) {
-                rules.add(new DefaultUnlockRule(permission, anchors));
-            }
-        }
-        return rules;
     }
 
     private static WaypointConfiguration loadWaypoints(ConfigurationSection section) {
@@ -374,27 +374,6 @@ public record MapModuleConfiguration(
             configuration.set(String.valueOf(entry.getKey()), entry.getValue());
         }
         return configuration;
-    }
-
-    private static List<String> rawList(Object value) {
-        if (value instanceof List<?> list) {
-            return list.stream().map(String::valueOf).toList();
-        }
-        if (value == null) {
-            return List.of();
-        }
-        return List.of(String.valueOf(value));
-    }
-
-    private static List<String> normalizeStringList(List<String> values) {
-        List<String> normalized = new ArrayList<>();
-        for (String value : values) {
-            String normalizedValue = normalizeId(value);
-            if (!normalizedValue.isBlank()) {
-                normalized.add(normalizedValue);
-            }
-        }
-        return List.copyOf(normalized);
     }
 
     private static String string(Object value, String fallback) {
@@ -475,34 +454,6 @@ public record MapModuleConfiguration(
         String hudUiId,
         boolean registerUiOnEnable,
         boolean overwriteUiFiles
-    ) {
-    }
-
-    /**
-     * 按键绑定配置。
-     *
-     * @param category   按键分类名称
-     * @param openMenu   打开地图菜单的按键定义
-     * @param toggleHud  切换小地图 HUD 的按键定义
-     */
-    public record KeybindConfiguration(
-        String category,
-        KeybindDefinition openMenu,
-        KeybindDefinition toggleHud
-    ) {
-    }
-
-    /**
-     * 单个按键定义。
-     *
-     * @param enabled     是否启用
-     * @param displayName 显示名称
-     * @param defaultKey  默认按键
-     */
-    public record KeybindDefinition(
-        boolean enabled,
-        String displayName,
-        String defaultKey
     ) {
     }
 
@@ -685,15 +636,20 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 默认解锁规则，按权限自动为玩家解锁指定锚点。
+     * 锚点自动解锁策略（锚点 {@code unlock} 节）。
+     * <p>
+     * 自动解锁在玩家客户端初始化时免费写入解锁记录，不消耗 unlock-currencies / unlock-items；
+     * 解锁记录与 {@code permission} 使用检查相互独立——{@code defaultUnlock} 解锁的玩家
+     * 若锚点配了 permission，仍需持有该权限才能传送。
      *
-     * @param permission 所需权限节点
-     * @param anchorIds  自动解锁的锚点 ID 列表
+     * @param defaultUnlock 所有玩家进服时自动解锁
+     * @param onPermission  拥有锚点 {@code permission} 权限的玩家进服时自动解锁
      */
-    public record DefaultUnlockRule(
-        String permission,
-        List<String> anchorIds
+    public record AnchorUnlock(
+        boolean defaultUnlock,
+        boolean onPermission
     ) {
+        public static final AnchorUnlock NONE = new AnchorUnlock(false, false);
     }
 
     /**
@@ -711,6 +667,7 @@ public record MapModuleConfiguration(
      * @param unlockCurrencies   解锁所需货币列表
      * @param teleportCurrencies 传送所需货币列表
      * @param unlockItems        解锁所需物品列表
+     * @param unlock             自动解锁策略（锚点 {@code unlock} 节）
      * @param lightRegions       解锁后点亮的多边形区域列表；空 = 该锚点不用多边形点亮
      * @param lightRadius        解锁后点亮的圆形半径（以锚点为中心）；≤0 = 不用圆形点亮
      */
@@ -727,6 +684,7 @@ public record MapModuleConfiguration(
         List<CurrencyCost> unlockCurrencies,
         List<CurrencyCost> teleportCurrencies,
         List<ItemCost> unlockItems,
+        AnchorUnlock unlock,
         List<PolygonRegion> lightRegions,
         double lightRadius
     ) {
@@ -785,6 +743,21 @@ public record MapModuleConfiguration(
     public record WaypointLimit(
         String permission,
         int maxCount
+    ) {
+    }
+
+    /**
+     * 路径点/标记点分享配置。
+     *
+     * @param enabled       分享功能总开关：false 时分享按钮隐藏、share/claim 一律拒绝
+     * @param cardId        聊天卡片模板 ID（对应 ArcartX/chat_card/&lt;id&gt;.yml）；
+     *                      空字符串 = 不用卡片，降级为纯文本广播（点击文本执行 /map claim）
+     * @param expireMinutes 分享链接有效期（分钟），内存缓存，过期后无法领取
+     */
+    public record ShareConfiguration(
+        boolean enabled,
+        String cardId,
+        int expireMinutes
     ) {
     }
 }

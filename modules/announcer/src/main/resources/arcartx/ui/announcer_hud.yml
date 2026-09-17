@@ -40,10 +40,7 @@ ui:
   action:
     load: |-
       var.displayVisible = false
-      var.currentEntryId = none
-      var.currentText = none
       var.currentClickable = false
-      var.lastRevision = none
       var.textX = Display.width()
       var.textWidth = 0
       var.scrollSpeed = 1.5

@@ -7,7 +7,10 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * 由 Title 模块注册，QuestGps 等模块通过 capability 查询称号信息，
  * 避免直接依赖 Title 模块的内部配置类。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(TitleConfigQueryable.class)} 获取。
  */
+@PublicCapability
 public interface TitleConfigQueryable {
 
     /**

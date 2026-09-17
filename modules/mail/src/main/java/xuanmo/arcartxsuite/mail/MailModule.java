@@ -38,7 +38,6 @@ import xuanmo.arcartxsuite.mail.placeholder.MailPlaceholderExpansion;
 import xuanmo.arcartxsuite.mail.service.MailService;
 import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.api.mail.AxsMailApi;
 import xuanmo.arcartxsuite.api.mail.AxsMailService;
 import xuanmo.arcartxsuite.mail.service.AxsMailServiceAdapter;
 
@@ -282,16 +281,11 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                 }
             });
 
-        // 注册公开 API（ServicesManager + 静态入口），供外部插件调用
+        // 注册公开 API capability：外部插件经 AxsCapabilities.get(AxsMailService.class) 获取，
+        // 模块内部也可 getCapability(AxsMailService.class) 使用同一实例（统一入口，无双通道）
         mailApiAdapter = new AxsMailServiceAdapter(plugin, service, logger);
-        org.bukkit.plugin.RegisteredServiceProvider<AxsMailService> existingRegistration =
-            plugin.getServer().getServicesManager().getRegistration(AxsMailService.class);
-        if (existingRegistration != null) {
-            plugin.getServer().getServicesManager().unregister(AxsMailService.class, existingRegistration.getProvider());
-        }
-        plugin.getServer().getServicesManager().register(AxsMailService.class, mailApiAdapter, plugin, org.bukkit.plugin.ServicePriority.Normal);
-        AxsMailApi.setService(mailApiAdapter);
-        logger.info("Mail 公开 API 已注册（AxsMailApi / ServicesManager）");
+        registerCapability(AxsMailService.class, mailApiAdapter);
+        logger.info("Mail 公开 API 已注册（AxsMailService capability）");
 
         logger.fine(
             "Mail 模块已载入，预设=" + service.presetCount()
@@ -303,12 +297,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void stopService() {
-        // 注销公开 API
-        if (mailApiAdapter != null) {
-            plugin.getServer().getServicesManager().unregister(AxsMailService.class, mailApiAdapter);
-            AxsMailApi.setService(null);
-            mailApiAdapter = null;
-        }
+        // 注销公开 API（capability 由注册表随模块卸载自动清理，这里仅释放引用）
+        mailApiAdapter = null;
         if (service != null) {
             service.shutdown();
             service = null;

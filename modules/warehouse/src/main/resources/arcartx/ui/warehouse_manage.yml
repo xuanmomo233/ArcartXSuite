@@ -120,7 +120,7 @@ ui:
         }
         if(var.maxManageCount > 1){
           for(序号 in range(1, var.maxManageCount - 1)){
-            项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.共享列表['项'] != none){ 项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round()) }
             项.entryKey = 序号.round()
           }
         }
@@ -133,7 +133,7 @@ ui:
         }
         if(var.maxMemberCount > 1){
           for(序号 in range(1, var.maxMemberCount - 1)){
-            项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.成员列表['项'] != none){ 项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round()) }
             项.entryKey = 序号.round()
           }
         }
@@ -182,41 +182,25 @@ ui:
         var.notifyBusySeconds = 0
       }
     load: |-
+      var.manageWarehouseSelected = {}
+      var.manageWarehouses = {}
+      var.sharedMemberNames = {}
+      var.sharedMemberRoles = {}
+      var.sharedMembers = {}
       var.packetId = 'AXS_WAREHOUSE'
       var.ownerType = 'personal'
-      var.ownerId = none
-      var.warehouseId = none
       var.warehouseName = 'AXS 仓库'
-      var.personalWarehouses = {}
-      var.personalWarehouseTexts = {}
-      var.manageWarehouses = {}
-      var.manageWarehouseTexts = {}
-      var.manageWarehouseTypes = {}
-      var.manageWarehouseTargets = {}
-      var.manageWarehouseSelected = {}
-      var.sharedWarehouses = {}
-      var.sharedWarehouseManageTexts = {}
       var.sharedCreateCostText = '创建共享仓库免费'
       var.sharedRoleOwnerName = '所有者'
       var.sharedRoleMemberName = '成员'
       var.sharedRoleViewerName = '观众'
-      var.sharedMembers = {}
-      var.sharedMemberTexts = {}
-      var.sharedMemberNames = {}
-      var.sharedMemberRoles = {}
       var.unlocked = false
       var.hasPassword = false
       var.readOnly = false
-      var.lockOwner = none
       var.capacityText = '0/0'
       var.level = 1
       var.canUpgrade = false
-      var.nextUpgradeText = none
-      var.sharedName = none
-      var.renameName = none
-      var.memberName = none
       var.memberRole = 'member'
-      var.passwordText = none
       var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
@@ -227,7 +211,6 @@ ui:
       var.notifyBusy = false
       var.notifyBusySeconds = 0
       var.deleteConfirm = false
-      var.deletePassword = none
       var.showcaseEnabled = true
       var.autoPickup = true
       var.autoPickupMythic = true

@@ -61,14 +61,14 @@ ui:
         if(var.maxRecordCount > 1){
           for(i in range(1, var.maxRecordCount - 1)){
             key = i.round()
-            e = val.记录列表['记录卡片'].copy('记录卡片' + key)
+            if(val.记录列表['记录卡片'] != none){ e = val.记录列表['记录卡片'].copy('记录卡片' + key) }
             e.entryKey = key
           }
         }
       }
       for(i in range(0, var.maxRecordCount - 1)){
         key = i.round()
-        e = val.记录列表.get(key)
+        if(val.记录列表 != none){ e = val.记录列表.get(key) }
         if(e != none && e['物品图标'] != none){
           e['物品图标'].seticon()
         }

@@ -1,0 +1,49 @@
+# ArcartXSuite Map — 路径点/标记点分享卡片模板
+# 玩家在大地图详情面板点击"分享"后，全服玩家聊天栏显示此卡片。
+# 点击卡片 → Packet.send('AXS_MAP', 'claim_share', code) 静默领取点位副本。
+# 数据字段（服务端 payload）: type(waypoint|pin) / title / sender / world / coords / code / expire
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
+root_control:
+  type: card
+  attribute:
+    width: "Math.max(val.title_label.width, val.info_label.width) + 200 < 550 ? 550 : Math.max(val.title_label.width, val.info_label.width) + 200"
+    height: "Math.max(140, val.info_label.y + val.info_label.height + 20)"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.width"
+        height: "self.parent.height"
+        normal: ~30,45,30,200
+      action:
+        click: |-
+          Packet.send('AXS_MAP', 'claim_share', self.parent.data['code'])
+    icon:
+      type: Text
+      attribute:
+        fontSize: 300
+        x: 5
+        y: "self.parent.height/2 - 75"
+        texts: "self.parent.data['type'] == 'pin' ? '§b●' : '§a◆'"
+        through: true
+    title_label:
+      type: Text
+      val: title_label
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 15
+        texts: "'§e§l' + (self.parent.data['type'] == 'pin' ? '标记点' : '路径点') + '分享 §7来自 §f' + self.parent.data['sender']"
+        through: true
+    info_label:
+      type: Text
+      val: info_label
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 60
+        through: true
+        texts:
+          - "'§7名称: §f' + self.parent.data['title']"
+          - "'§7位置: §f' + self.parent.data['world'] + ' §7(§f' + self.parent.data['coords'] + '§7)'"
+          - "'§8点击卡片领取 · ' + self.parent.data['expire'] + ' 分钟内有效'"

@@ -55,7 +55,7 @@ ui:
         }
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
+            if(val.卡片模板 != none){ val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round()) }
           }
         }
       }
@@ -63,7 +63,7 @@ ui:
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          卡片 = val.血条容器.get(n)
+          if(val.血条容器 != none){ 卡片 = val.血条容器.get(n) }
           进度 = packet.get('slot' + n + '_progress')
           卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
           卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
@@ -97,14 +97,14 @@ ui:
         }
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
+            if(val.卡片模板 != none){ val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round()) }
           }
         }
       }
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          卡片 = val.血条容器.get(n)
+          if(val.血条容器 != none){ 卡片 = val.血条容器.get(n) }
           进度 = packet.get('slot' + n + '_progress')
           卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
           卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
@@ -137,7 +137,6 @@ ui:
       var.isVisible = false
       var.bossCount = 0
       var.totalBossCount = 0
-      var.maxVisibleBars = 0
       var.刷新轮次 = 0
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 controls:

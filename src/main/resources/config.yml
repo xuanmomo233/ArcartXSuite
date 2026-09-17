@@ -296,28 +296,37 @@ moderation:
 # name: ArcartX 注册名（玩家可在按键设置中看到）
 # default-key: 默认键位（GLFW 键名，如 F、G、H、KP_8 等）
 # category: 按键分类名（显示在按键设置界面）
+# module: 归属模块 id（可选，单值或列表）。标注后仅当至少一个归属模块
+#   真实启用（onEnable 成功）时才注册到客户端；归属模块禁用或加载失败
+#   则该键不会出现在玩家按键设置中。未标注 module 的条目在启动时无条件
+#   注册——用于无订阅者的纯声明键（如 combateffect 包定义
+#   trigger: keybind 匹配的自定义键）。
 keybinds:
   # 全局交互键，多模块按优先级订阅（数字越小越优先）：
   #   - Pickup 扫描模式（优先级 10）：按下打开拾取交互菜单
   #   - Conversation 对话（优先级 50）：按下确认/推进对话
   # 拾取优先于对话，故扫描模式开启时此键归拾取。
   # Pickup 模块会在 pickup-pick 留空时默认订阅此键。
+  # 共享键：pickup 与 conversation 任一启用即注册，都禁用才不注册。
   interact:
     name: AXS_INTERACT
     default-key: G
     category: ArcartXSuite
+    module: [pickup, conversation]
   # 导航上一项键，Conversation 模块（优先级 10）订阅，
   # 用于对话选项列表中向上移动选中项。
   navigate-prev:
     name: AXS_NAVIGATE_PREV
     default-key: UP
     category: ArcartXSuite
+    module: conversation
   # 导航下一项键，Conversation 模块（优先级 10）订阅，
   # 用于对话选项列表中向下移动选中项。
   navigate-next:
     name: AXS_NAVIGATE_NEXT
     default-key: DOWN
     category: ArcartXSuite
+    module: conversation
   # Pickup 扫描模式专用拾取键（按键打开 loot_interact 交互菜单）。
   # 仅当配置 pickup-pick 时才订阅此键；
   # 若 pickup-pick 留空则 pickup 默认订阅上面的 AXS_INTERACT，此键不启用。
@@ -325,18 +334,21 @@ keybinds:
     name: AXS_PICKUP_PICK
     default-key: F
     category: ArcartXSuite
+    module: pickup
   # Map 模块打开全屏地图键。
   # Map 模块订阅此键；按下时打开 map_menu UI。
   map-menu:
     name: AXS_MAP_MENU
     default-key: M
     category: ArcartXSuite
+    module: map
   # Map 模块切换小地图 HUD 键。
   # Map 模块订阅此键；按下时切换 map_hud 显示/隐藏。
   map-hud:
     name: AXS_MAP_HUD
     default-key: H
     category: ArcartXSuite
+    module: map
 
 # ========== Tacz 模组伤害兼容 ==========
 # Timeless and Classics Guns（永恒枪械工坊）模组伤害事件兼容。

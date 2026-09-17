@@ -51,6 +51,8 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
 
     private QuestGpsModuleConfiguration configuration;
     private QuestGpsService service;
+    /** 地图导航互斥事件订阅 ID（axs.map.nav_started），stopService 时退订。 */
+    private String mapNavSubscriptionId;
 
     /** @return 模块描述符，包含 id、名称与版本 */
     @Override
@@ -206,6 +208,33 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start();
 
+        // 向地图注册"questgps"来源的导航回调：面板"导航/取消"按钮转发给本模块执行
+        MapNavigable mapNavigable = getCapability(MapNavigable.class);
+        if (mapNavigable != null) {
+            mapNavigable.registerNavigationSource(plugin, service.mapSource(),
+                new xuanmo.arcartxsuite.api.capability.MapNavigationHandler() {
+                    @Override
+                    public boolean onNavigateRequest(@NotNull org.bukkit.entity.Player p, @NotNull String targetId) {
+                        return service.handleMapNavigateRequest(p, targetId);
+                    }
+
+                    @Override
+                    public void onCancelRequest(@NotNull org.bukkit.entity.Player p, @NotNull String targetId) {
+                        service.handleMapCancelRequest(p, targetId);
+                    }
+                });
+        }
+
+        // 互斥：地图自身导航开始时停止本模块的任务导航（任务标记仍保留在地图上）
+        EventBusCapability eventBus = getCapability(EventBusCapability.class);
+        if (eventBus != null) {
+            mapNavSubscriptionId = eventBus.subscribe("axs.map.nav_started", event -> {
+                if (event.player() != null && service != null) {
+                    service.onMapNavigationStarted(event.player());
+                }
+            });
+        }
+
         // 注册 QuestGpsNavigable capability
         registerCapability(QuestGpsNavigable.class, new QuestGpsNavigable() {
             @Override
@@ -256,6 +285,18 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     /** 停止模块服务，释放 {@link QuestGpsService} 与配置资源。 */
     @Override
     protected void stopService() {
+        // 注销地图导航回调与互斥事件订阅
+        MapNavigable mapNavigable = getCapability(MapNavigable.class);
+        if (mapNavigable != null) {
+            mapNavigable.unregisterNavigationSource("questgps");
+        }
+        if (mapNavSubscriptionId != null) {
+            EventBusCapability eventBus = getCapability(EventBusCapability.class);
+            if (eventBus != null) {
+                eventBus.unsubscribe(mapNavSubscriptionId);
+            }
+            mapNavSubscriptionId = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;

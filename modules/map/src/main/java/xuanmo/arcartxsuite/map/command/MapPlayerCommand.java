@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "hud", "cleartrack");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "hud", "cleartrack", "claim");
 
     private final Supplier<MapService> serviceProvider;
     private final Supplier<MapModuleConfiguration> configurationProvider;
@@ -97,6 +97,16 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
             return true;
         }
 
+        if ("claim".equalsIgnoreCase(args[0])) {
+            // 领取分享点位：聊天卡片点击的兜底命令（卡片失效后可手动输入分享码）
+            if (args.length >= 2) {
+                svc.claimShare(player, args[1]);
+            } else {
+                player.sendMessage(fullMsg("player.claim-usage", label));
+            }
+            return true;
+        }
+
         player.sendMessage(fullMsg("player.usage", label));
         return true;
     }
@@ -137,6 +147,7 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         player.sendMessage(fullMsg("player.help.open"));
         player.sendMessage(fullMsg("player.help.hud"));
         player.sendMessage(fullMsg("player.help.cleartrack"));
+        player.sendMessage(fullMsg("player.help.claim"));
     }
 
     private void sendResult(Player player, MapOperationResult result) {

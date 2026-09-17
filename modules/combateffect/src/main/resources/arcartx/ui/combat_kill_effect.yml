@@ -124,4 +124,4 @@ controls:
               fontSize: 49
               y: 134
               point: ~top_center
-              visible: "var.击杀数 > 0"
+              visible: "var.击杀数 != none && var.击杀数 > 0"

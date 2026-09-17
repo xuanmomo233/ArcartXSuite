@@ -45,7 +45,7 @@ ui:
       var.selMembers = packet['selMembers']
       var.worlds = packet['worlds']
       var.worldCount = packet['worldCount']
-      # 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
+      // 将 Map 转为 List，供 VStack 行按 entryKey 整数索引访问
       var.regionList = []
       if(var.regions != null){
         for(key in var.regions.keys()){

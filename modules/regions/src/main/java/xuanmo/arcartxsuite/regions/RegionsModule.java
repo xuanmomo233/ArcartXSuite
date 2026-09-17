@@ -257,6 +257,34 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.RegionQueryable.class,
+            new xuanmo.arcartxsuite.api.capability.RegionQueryable() {
+                private RegionInfo toInfo(xuanmo.arcartxsuite.regions.model.Region region) {
+                    return new RegionInfo(region.id(), region.world(),
+                        region.minX(), region.minY(), region.minZ(),
+                        region.maxX(), region.maxY(), region.maxZ(),
+                        region.priority(), region.parentId(), region.owners(), region.members());
+                }
+                @Override public @NotNull List<RegionInfo> regionsAt(@NotNull String world,
+                        int x, int y, int z) {
+                    if (regionManager == null) return List.of();
+                    return regionManager.getRegionsAt(world, x, y, z).stream()
+                        .map(this::toInfo).toList();
+                }
+                @Override public @NotNull List<RegionInfo> regionsInWorld(@NotNull String world) {
+                    if (regionManager == null) return List.of();
+                    return regionManager.getRegionsInWorld(world).stream()
+                        .map(this::toInfo).toList();
+                }
+                @Override public @NotNull List<RegionInfo> allRegions() {
+                    if (regionManager == null) return List.of();
+                    return regionManager.getAllRegions().stream().map(this::toInfo).toList();
+                }
+                @Override public int countRegionsByOwner(@NotNull java.util.UUID owner) {
+                    return regionManager != null ? regionManager.countRegionsByOwner(owner) : 0;
+                }
+            });
+
         logger.info("Regions 模块已启动 (已加载 " + regionManager.getAllRegions().size() + " 个区域)。");
     }
 

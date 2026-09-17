@@ -242,6 +242,9 @@ public final class SuiteCoreImpl implements SuiteCore {
             schedulerService
         );
         moduleRegistry.attachCore(this);
+        // 外部插件公开 API 门面：AxsCapabilities.get() 直连 capability 注册表，
+        // 仅 @PublicCapability 标记的类型对外可见（过滤逻辑在 axs-api 门面侧）
+        xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(moduleRegistry::getCapability);
         try {
             long timeoutSeconds = getConfig().getLong(
                 "security.secondary-password.unlock-timeout-seconds", 1800L);
@@ -304,6 +307,9 @@ public final class SuiteCoreImpl implements SuiteCore {
         if (!summary.failedModules().isEmpty()) {
             consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
         }
+
+        // 汇总因归属模块未启用而本次未注册的客户端按键（云端下发启用时仍可自动注册）
+        keybindService.reportDeferred();
 
         // 9. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
         // 放在 ModuleRegistry 之后，确保 AccountTypeService 已就绪，实现按玩家类型精准 bypass
@@ -527,6 +533,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             moduleRegistry.unloadAll();
             moduleRegistry = null;
         }
+        xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(null);
         if (schedulerService != null) {
             schedulerService.shutdown();
             schedulerService = null;

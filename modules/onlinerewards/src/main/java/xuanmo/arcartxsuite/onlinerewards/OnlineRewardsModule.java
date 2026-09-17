@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
-import xuanmo.arcartxsuite.onlinerewards.capability.OnlineRewardsQueryable;
+import xuanmo.arcartxsuite.api.capability.OnlineRewardsQueryable;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsAdminCommand;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsPlayerCommand;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
@@ -128,7 +128,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected List<String> publishedTopics() {
-        return List.of("onlinerewards.server_goal_reached");
+        return List.of("axs.onlinerewards.server_goal_reached");
     }
 
     @Override

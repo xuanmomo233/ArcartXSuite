@@ -1,15 +1,18 @@
-package xuanmo.arcartxsuite.onlinerewards.capability;
+package xuanmo.arcartxsuite.api.capability;
 
 import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * OnlineRewards 对外暴露的查询/操作能力。
+ * OnlineRewards 对外暴露的查询/操作能力（公开 capability）。
  * <p>
  * 由 OnlineRewards 模块实现，供其他模块跨模块查询签到状态、在线时长，
  * 或触发签到/补签/发放奖励。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(OnlineRewardsQueryable.class)} 获取。
  */
+@PublicCapability
 public interface OnlineRewardsQueryable {
 
     /**

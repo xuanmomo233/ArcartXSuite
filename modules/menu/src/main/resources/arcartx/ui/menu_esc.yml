@@ -54,24 +54,24 @@ ui:
       }
       for(i in range(1, var.buttonCount - 1)){
         key = i.round()
-        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        if(val.button_rows['菜单按钮'] != none){ mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key) }
         mb.entryKey = key
       }
       for(i in range(1, var.maxFooterCount - 1)){
         key = i.round()
-        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        if(val.footer_rows['页脚按钮'] != none){ fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key) }
         fb.entryKey = key
       }
       for(i in range(0, var.buttonCount - 1)){
         key = i.round()
-        mb = val.button_rows.get(i.round())
+        if(val.button_rows != none){ mb = val.button_rows.get(i.round()) }
         if(mb != none && mb['图标'] != none){
           mb['图标'].seticon()
         }
       }
       for(i in range(0, var.maxFooterCount - 1)){
         key = i.round()
-        fb = val.footer_rows.get(i.round())
+        if(val.footer_rows != none){ fb = val.footer_rows.get(i.round()) }
         if(fb != none && fb['图标'] != none){
           fb['图标'].seticon()
         }
@@ -99,24 +99,24 @@ ui:
       }
       for(i in range(1, var.buttonCount - 1)){
         key = i.round()
-        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        if(val.button_rows['菜单按钮'] != none){ mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key) }
         mb.entryKey = key
       }
       for(i in range(1, var.maxFooterCount - 1)){
         key = i.round()
-        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        if(val.footer_rows['页脚按钮'] != none){ fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key) }
         fb.entryKey = key
       }
       for(i in range(0, var.buttonCount - 1)){
         key = i.round()
-        mb = val.button_rows.get(i.round())
+        if(val.button_rows != none){ mb = val.button_rows.get(i.round()) }
         if(mb != none && mb['图标'] != none){
           mb['图标'].seticon()
         }
       }
       for(i in range(0, var.maxFooterCount - 1)){
         key = i.round()
-        fb = val.footer_rows.get(i.round())
+        if(val.footer_rows != none){ fb = val.footer_rows.get(i.round()) }
         if(fb != none && fb['图标'] != none){
           fb['图标'].seticon()
         }
@@ -147,18 +147,14 @@ ui:
         }
       }
     load: |-
+      var.buttonRows = {}
+      var.footerRows = {}
       var.packetId = 'AXS_MENU'
       var.animation = 1
       var.yaw = 0
       var.title = '菜单'
       var.pageTitle = '菜单'
-      var.pageIndex = 0
-      var.pageCount = 1
-      var.buttonRows = {}
       var.buttonCount = 0
-      var.footerRows = {}
-      var.footerCount = 0
-      var.maxButtonCount = 0
       var.maxFooterCount = 0
 controls:
   自适应全局布局:

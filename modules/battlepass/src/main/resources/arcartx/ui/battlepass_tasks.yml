@@ -53,7 +53,7 @@ ui:
       // range(a,b) 左闭右闭，生成 a~b 含两端；模板在索引0，故复制 1~count-1 共 count-1 项
       for(i in range(1, var.maxDailyCount - 1)){
         key = i.round()
-        e = val.每日任务列表['任务项'].copy('任务项' + key)
+        if(val.每日任务列表['任务项'] != none){ e = val.每日任务列表['任务项'].copy('任务项' + key) }
         e.entryKey = key
       }
       while(val.每周任务列表.childrenCount() > 1){
@@ -61,7 +61,7 @@ ui:
       }
       for(i in range(1, var.maxWeeklyCount - 1)){
         key = i.round()
-        e = val.每周任务列表['任务项'].copy('任务项' + key)
+        if(val.每周任务列表['任务项'] != none){ e = val.每周任务列表['任务项'].copy('任务项' + key) }
         e.entryKey = key
       }
       while(val.赛季任务列表.childrenCount() > 1){
@@ -69,7 +69,7 @@ ui:
       }
       for(i in range(1, var.maxSeasonCount - 1)){
         key = i.round()
-        e = val.赛季任务列表['任务项'].copy('任务项' + key)
+        if(val.赛季任务列表['任务项'] != none){ e = val.赛季任务列表['任务项'].copy('任务项' + key) }
         e.entryKey = key
       }
     # packetHandler: update
@@ -103,7 +103,7 @@ ui:
         }
         for(i in range(1, var.maxDailyCount - 1)){
           key = i.round()
-          e = val.每日任务列表['任务项'].copy('任务项' + key)
+        if(val.每日任务列表['任务项'] != none){ e = val.每日任务列表['任务项'].copy('任务项' + key) }
           e.entryKey = key
         }
       }
@@ -114,7 +114,7 @@ ui:
         }
         for(i in range(1, var.maxWeeklyCount - 1)){
           key = i.round()
-          e = val.每周任务列表['任务项'].copy('任务项' + key)
+        if(val.每周任务列表['任务项'] != none){ e = val.每周任务列表['任务项'].copy('任务项' + key) }
           e.entryKey = key
         }
       }
@@ -125,7 +125,7 @@ ui:
         }
         for(i in range(1, var.maxSeasonCount - 1)){
           key = i.round()
-          e = val.赛季任务列表['任务项'].copy('任务项' + key)
+        if(val.赛季任务列表['任务项'] != none){ e = val.赛季任务列表['任务项'].copy('任务项' + key) }
           e.entryKey = key
         }
       }
@@ -143,10 +143,10 @@ ui:
       var.seasonCompletedCount = packet['seasonCompletedCount']
   action:
     load: |-
-      var.packetId = 'AXS_BATTLEPASS'
       var.dailyTasks = {}
-      var.weeklyTasks = {}
       var.seasonTasks = {}
+      var.weeklyTasks = {}
+      var.packetId = 'AXS_BATTLEPASS'
       var.dailyTaskCount = 0
       var.weeklyTaskCount = 0
       var.seasonTaskCount = 0

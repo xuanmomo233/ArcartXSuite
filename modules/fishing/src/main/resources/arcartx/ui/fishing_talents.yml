@@ -150,7 +150,6 @@ ui:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
       var.packetId = 'AXS_FISHING_TALENTS'
-      var.seasonId = ''
       var.playerLevel = 1
       var.talentPoints = 0
       var.unspentTalentPoints = 0

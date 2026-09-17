@@ -10,7 +10,11 @@ import org.jetbrains.annotations.NotNull;
  * <p>
  * 其他模块通过 {@code context.getCapability(QQBotNotifiable.class)} 获取后
  * 注册 {@link QQGroupEventListener} 监听器。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(QQBotNotifiable.class)} 获取；
+ * 插件禁用时务必 {@link #unregisterListener} 已注册的监听器。
  */
+@PublicCapability
 public interface QQBotNotifiable {
 
     /**

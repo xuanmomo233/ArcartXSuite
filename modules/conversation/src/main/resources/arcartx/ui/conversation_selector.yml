@@ -55,7 +55,7 @@ ui:
         }
         for(i in range(1, var.maxNpcCount - 1)){
           key = i.round()
-          ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
+          if(val.selector_list['选择器模板'] != none){ ni = val.selector_list['选择器模板'].copy('选择器模板' + key) }
           ni.entryKey = key
         }
       }
@@ -74,15 +74,6 @@ ui:
       var.npcRows = {}
   action:
     load: |-
-      var.token = none
-      var.packetId = none
-      var.title = none
-      var.hintText = none
-      var.selectedNpcId = none
-      var.selectedNpcIndex = -1
-      var.npcCount = 0
-      var.npcScrollRatio = 0
-      var.npcRows = {}
       var.maxNpcCount = 0
       var.maxNpcWidth = 150
       var.interactKey = Keyboard.getKeyBindingKeyName("AXS_INTERACT")
@@ -94,8 +85,6 @@ ui:
       if(var.navNextKey == '下方向键'){
         var.navNextKey = "↓"
       }
-    close: |-
-      var.npcRows = {}
     tick: |-
       mw = 0
       for(i in range(0, val.selector_list.childrenCount())){

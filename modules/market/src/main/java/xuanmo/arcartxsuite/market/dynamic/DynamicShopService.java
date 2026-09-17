@@ -179,7 +179,7 @@ public class DynamicShopService {
             payload.put("strategy_key", config.strategyKey());
             payload.put("strategy_type", config.type());
             payload.put("shop_id", config.shopId());
-            eventPublisher.publish("market.shop_dynamic_triggered", payload);
+            eventPublisher.publish("axs.market.shop_dynamic_triggered", payload);
         }
     }
 

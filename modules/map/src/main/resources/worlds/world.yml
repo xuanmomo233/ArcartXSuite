@@ -4,7 +4,12 @@
 enabled: true
 display-name: ""
 
-# 该世界的锚点列表。每个锚点可配置解锁条件、传送消耗和点亮区域。
+# 该世界的锚点列表。每个锚点可配置解锁条件、自动解锁策略、传送消耗和点亮区域。
+# 解锁条件：permission（前置权限）、unlock-currencies（货币）、unlock-items（物品）。
+# 自动解锁 unlock 节（不配 = 不自动解锁，玩家需手动解锁）：
+#   unlock.default: true        所有玩家进服时自动免费解锁（不消耗解锁货币/物品）
+#   unlock.on-permission: true  拥有 permission 权限的玩家进服时自动免费解锁
+# 注意：解锁记录 ≠ 使用权限。default 解锁的玩家若锚点配了 permission，仍需有权限才能传送。
 # 点亮区域两种写法（可同时配，任一生效即可）：
 #   light-region: 多边形顶点 [[x,z],...]（至少 3 点）
 #   light-radius: 以锚点为中心的圆形半径（方块数）
@@ -19,6 +24,9 @@ anchors:
     description: "默认出生点锚点。"
     permission: ""
     sort-order: 0
+    unlock:
+      default: true
+      on-permission: false
     unlock-currencies: []
     teleport-currencies: []
     unlock-items: []

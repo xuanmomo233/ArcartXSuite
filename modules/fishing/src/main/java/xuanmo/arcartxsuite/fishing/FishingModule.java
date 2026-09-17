@@ -420,6 +420,38 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.FishingAccess.class,
+            new xuanmo.arcartxsuite.api.capability.FishingAccess() {
+                @Override public boolean isInMinigame(@NotNull java.util.UUID playerUuid) {
+                    return service != null && service.isPlayerInMinigame(playerUuid);
+                }
+                @Override public boolean startMinigame(@NotNull org.bukkit.entity.Player player) {
+                    return service != null && service.startMinigame(player);
+                }
+                @Override public int collectionCount(@NotNull java.util.UUID playerUuid) {
+                    return service != null ? service.getCollectionCount(playerUuid) : 0;
+                }
+                @Override public int totalFishTypes() {
+                    return service != null ? service.getTotalFishTypes() : 0;
+                }
+                @Override public void giveXp(@NotNull java.util.UUID playerUuid, int amount) {
+                    if (service != null) service.giveXp(playerUuid, amount);
+                }
+                @Override public int fatigue(@NotNull java.util.UUID playerUuid) {
+                    return service != null ? service.getFatigue(playerUuid) : 0;
+                }
+                @Override public void setFatigue(@NotNull java.util.UUID playerUuid, int value) {
+                    if (service != null) service.setFatigue(playerUuid, value);
+                }
+                @Override public boolean claimReward(@NotNull org.bukkit.entity.Player player,
+                        @NotNull String rewardId) {
+                    return service != null && service.claimReward(player, rewardId);
+                }
+                @Override public @NotNull String sellAllFish(@NotNull org.bukkit.entity.Player player) {
+                    return service != null ? service.sellAllFish(player) : "";
+                }
+            });
+
         adminCommand = new FishingAdminCommand(() -> service, this::msg,
             () -> getCapability(xuanmo.arcartxsuite.api.selection.PolygonSelectionCapability.class),
             dataFolder,

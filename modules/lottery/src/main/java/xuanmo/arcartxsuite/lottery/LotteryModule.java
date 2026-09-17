@@ -215,6 +215,36 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.LotteryAccess.class,
+            new xuanmo.arcartxsuite.api.capability.LotteryAccess() {
+                @Override public long getPoint(@NotNull java.util.UUID playerUuid,
+                        @NotNull String pointId) {
+                    return service != null ? service.getPoint(playerUuid, pointId) : 0;
+                }
+                @Override public @NotNull Map<String, Long> getPoints(
+                        @NotNull java.util.UUID playerUuid) {
+                    return service != null ? service.getPoints(playerUuid) : Map.of();
+                }
+                @Override public boolean givePoints(@NotNull java.util.UUID playerUuid,
+                        @NotNull String pointId, long amount) {
+                    return service != null && service.givePoints(playerUuid, pointId, amount);
+                }
+                @Override public boolean exchange(@NotNull org.bukkit.entity.Player player,
+                        @NotNull String itemId) {
+                    return service != null && service.exchange(player, itemId);
+                }
+                @Override public @NotNull List<CaseDrawResult> openCase(
+                        @NotNull org.bukkit.entity.Player player, @NotNull String poolId, int count) {
+                    if (service == null) return List.of();
+                    return service.openCaseBatch(player, poolId, count).stream()
+                        .map(r -> new CaseDrawResult(r.rarity(), r.poolIndex(),
+                            r.item() != null ? r.item().key() : null,
+                            r.item() != null ? r.item().name() : null,
+                            r.item() != null ? r.item().amount() : 0))
+                        .toList();
+                }
+            });
+
         adminCommand = new LotteryAdminCommand(() -> service, messages(), () -> {
             try {
                 onReload();

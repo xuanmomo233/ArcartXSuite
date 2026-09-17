@@ -71,19 +71,12 @@ ui:
       var.resultType = packet['type']
   action:
     load: |-
+      var.messages = []
       var.packetId = 'AXS_qqbot'
       var.bound = false
-      var.qqId = none
-      var.playerName = none
-      var.bindTime = none
-      var.code = none
       var.codeExpire = 0
-      var.result = none
-      var.resultType = none
       var.tab = 'status'
-      var.messages = []
       var.msgCount = 0
-      var.replyText = none
 
 controls:
   自适应全局布局:

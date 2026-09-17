@@ -69,7 +69,7 @@ ui:
 
       for(i in range(1, var.replyCount)){
         key = i.round()
-        ri = val.reply_list['回复模板'].copy('reply_' + i.round())
+        if(val.reply_list['回复模板'] != none){ ri = val.reply_list['回复模板'].copy('reply_' + i.round()) }
         ri.entryKey = key
       }
 
@@ -77,34 +77,15 @@ ui:
     # 包字段:
     #   - packetId: 通信标识（可能为 none）
     close: |-
-      var.token = none
       var.packetId = packet['packetId'] == none ? none : packet['packetId']
-      var.speakerName = none
-      var.messageLines = []
-      var.hintText = none
-      var.canReply = false
-      var.selectedReplyId = none
-      var.selectedReplyIndex = -1
-      var.replyCount = 0
-      var.replyScrollRatio = 0
-      var.replyRows = {}
       Screen.close()
   action:
     load: |-
-      var.token = none
-      var.packetId = none
-      var.speakerName = none
+      var.replyRows = {}
       var.messageLines = []
-      var.hintText = none
       var.canReply = false
-      var.selectedReplyId = none
-      var.selectedReplyIndex = -1
       var.replyCount = 0
-      var.replyScrollRatio = 0
-      var.replyRows = {}
       var.maxReplyWidth = 300
-    close: |-
-      var.replyRows = {}
     keyPress: |-
       var.k = self.currentKeyPress
       if(var.k >= "1" && var.k <= "9"){

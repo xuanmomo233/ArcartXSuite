@@ -37,6 +37,60 @@ public final class QuestGpsNavigationService {
     private boolean runtimeReady;
     private QuestGpsMarkerService markerService;
     private int chemdahRefreshTaskId = -1;
+    /** 导航坐标变更监听（地图模块同步外部目标坐标用），可空。 */
+    private volatile java.util.function.BiConsumer<Player, NavigationPoint> positionListener;
+
+    /**
+     * 设置导航坐标更新监听：激活/刷新路径点时回调，用于地图外部目标坐标跟随。
+     *
+     * @param listener 监听器，{@code null} 清除
+     */
+    public void setPositionListener(java.util.function.BiConsumer<Player, NavigationPoint> listener) {
+        this.positionListener = listener;
+    }
+
+    private void notifyPositionListener(Player player, NavigationPoint point) {
+        java.util.function.BiConsumer<Player, NavigationPoint> listener = positionListener;
+        if (listener == null || player == null || point == null) {
+            return;
+        }
+        try {
+            listener.accept(player, point);
+        } catch (Throwable e) {
+            logger.warning("QuestGPS: 位置更新监听回调失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 预览任务导航坐标点（不要求已追踪）。
+     * <p>
+     * 供 QuestGpsService 在任务接受后即向地图推送外部目标使用。
+     *
+     * @param player             玩家（可为 null，仅影响 chemdah 动态坐标解析）
+     * @param questId            任务 ID
+     * @param prioritizedTaskIds 优先检查的子任务 ID 列表
+     * @param fallbackTitle      标题兜底
+     * @return 可解析的导航坐标点，不可用时返回空
+     */
+    public Optional<NavigationPoint> previewQuestPoint(
+        Player player,
+        String questId,
+        List<String> prioritizedTaskIds,
+        String fallbackTitle
+    ) {
+        return resolveQuestPoint(player, questId, prioritizedTaskIds, fallbackTitle);
+    }
+
+    /**
+     * 构建任务目标 ID（与追踪 waypointId 同规则），供地图外部目标标识与回调反解。
+     *
+     * @param questId 任务 ID
+     * @param taskId  子任务 ID（可为空）
+     * @return 目标 ID
+     */
+    public String buildTargetId(String questId, String taskId) {
+        return buildWaypointId(questId, taskId);
+    }
 
     /**
      * 构造导航服务，内部将 {@link WaypointBridgeAPI} 包装为 {@link BridgeWaypointRuntime}。
@@ -483,6 +537,7 @@ public final class QuestGpsNavigationService {
         if (markerService != null) {
             markerService.showMarker(player, point);
         }
+        notifyPositionListener(player, point);
     }
 
     private static boolean samePosition(NavigationPoint current, NavigationPoint next) {
@@ -586,6 +641,7 @@ public final class QuestGpsNavigationService {
         } else {
             logger.warning("QuestGPS: activateWaypoint → markerService 为 null，跳过标记");
         }
+        notifyPositionListener(player, point);
         return true;
     }
 

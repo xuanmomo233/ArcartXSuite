@@ -787,6 +787,10 @@ public final class ModuleRegistry {
         boolean success = instance.onEnable(context);
         if (success) {
             loaded.setEnabled(true);
+            // 注册声明归属该模块的客户端按键（keybinds.<entry>.module 包含此 id 的条目）
+            if (keybindService != null) {
+                keybindService.onModuleEnabled(descriptor.id());
+            }
             if (instance instanceof ModuleCommandHandler handler) {
                 commandHandlers.put(handler.commandId(), handler);
                 for (String alias : handler.commandAliases()) {

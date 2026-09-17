@@ -169,6 +169,7 @@ public class MarketService {
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
                 repository, redisCache, crossServerPublisher, currencyManager, itemSerializer, logger, vanillaItemNameBridge, itemRewardDispatcher, itemMatcher);
+            auctionService.setEventPublisher(this::publishEvent);
             auctionService.start(config.schedulerIntervalTicks());
         }
 
@@ -275,7 +276,7 @@ public class MarketService {
                 "price", String.valueOf(startingBid),
                 "currency", currency != null ? currency : "money"
             ));
-            publishEvent("market.listing_created", player, Map.of(
+            publishEvent("axs.market.listing_created", player, Map.of(
                 "price", String.valueOf(startingBid),
                 "currency", currency != null ? currency : "money"
             ));

@@ -5,10 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
@@ -25,7 +27,6 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.map.command.MapAdminCommand;
 import xuanmo.arcartxsuite.map.command.MapPlayerCommand;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
-import xuanmo.arcartxsuite.map.model.MapExternalTarget;
 import xuanmo.arcartxsuite.map.service.MapService;
 import xuanmo.arcartxsuite.map.storage.JdbcMapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -51,7 +52,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.4.4")
+            .version("1.4.5")
             .mainClass(getClass().getName())
             .build();
     }
@@ -66,7 +67,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                     .dynamicSection("anchors")
                     .dynamicSection("waypoints")
                 .build())
-            .currentVersion(3)
+            .currentVersion(4)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -92,6 +93,16 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         return PacketHandlerSpec.of(
             (player, packetId, data) ->
                     service != null && service.handleClientPacket(player, packetId, data), 0, null, null);
+    }
+
+    @Override
+    protected @NotNull List<String> publishedTopics() {
+        return List.of(
+            "axs.map.nav_started",
+            "axs.map.nav_cleared",
+            "axs.map.external_navigate",
+            "axs.map.external_nav_cancel"
+        );
     }
 
     @Override
@@ -151,9 +162,13 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             itemSourceRegistry, itemMatcher, currencyManager,
             createWaypointBridge(),
             createAdyeshachNpcBridge(),
-            messages()
+            messages(),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)
         );
         service.start();
+
+        // 导出分享卡片模板到 ArcartX/chat_card/（已存在则保留用户改动）
+        ensureMapShareCardDefaults();
 
         // 订阅宿主全局按键：AXS_MAP_MENU 打开大地图，AXS_MAP_HUD 切换小地图。
         // 优先级 30，低于拾取(10)/对话(50)确认键，避免冲突。
@@ -168,18 +183,32 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             return true;
         });
 
-        // 注册 MapNavigable capability，供 QuestGps 等模块调用
+        // 注册 MapNavigable capability（公开）：供 QuestGps 等模块与外部插件调用
         registerCapability(MapNavigable.class, new MapNavigable() {
             @Override
             public void upsertExternalTarget(
-                @NotNull Player player, @NotNull String targetId, @NotNull String source,
-                @NotNull String worldId, double x, double y, double z,
-                @NotNull String displayName, @Nullable String iconId, boolean select
+                @NotNull Player player,
+                @NotNull xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec spec,
+                boolean select
             ) {
-                service.upsertExternalTarget(player,
-                    new MapExternalTarget(targetId, source, worldId, displayName,
-                        "QuestGPS 任务导航", x, y, z, 0),
-                    select);
+                service.upsertExternalTarget(player, spec, select);
+            }
+
+            @Override
+            public void upsertExternalTargets(
+                @NotNull Player player,
+                @NotNull List<xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec> specs
+            ) {
+                service.upsertExternalTargets(player, specs);
+            }
+
+            @Override
+            public void reconcileExternalTargets(
+                @NotNull Player player,
+                @NotNull String source,
+                @NotNull List<xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec> specs
+            ) {
+                service.reconcileExternalTargets(player, source, specs);
             }
 
             @Override
@@ -188,8 +217,32 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             }
 
             @Override
-            public void openMenuFor(@NotNull Player player, @NotNull String waypointId) {
-                service.openMenuFor(player, waypointId);
+            public void setExternalNavigated(@NotNull Player player, @NotNull String targetId, boolean navigated) {
+                service.setExternalNavigated(player, targetId, navigated);
+            }
+
+            @Override
+            public void registerNavigationSource(
+                @NotNull Plugin owner,
+                @NotNull String source,
+                @NotNull xuanmo.arcartxsuite.api.capability.MapNavigationHandler handler
+            ) {
+                service.registerNavigationSource(owner, source, handler);
+            }
+
+            @Override
+            public void unregisterNavigationSource(@NotNull String source) {
+                service.unregisterNavigationSource(source);
+            }
+
+            @Override
+            public void clearTrack(@NotNull Player player) {
+                service.clearTrackBySource(player);
+            }
+
+            @Override
+            public void openMenuFor(@NotNull Player player, @NotNull String targetId) {
+                service.openMenuFor(player, targetId);
             }
         });
 
@@ -261,6 +314,30 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
      */
     public MapService getService() {
         return service;
+    }
+
+    /**
+     * 导出默认分享卡片模板到 {@code plugins/ArcartX/chat_card/axs_map_share.yml}。
+     * 卡片点击动作走 {@code Packet.send('AXS_MAP', 'claim_share', code)} 静默领取，
+     * 已存在的文件不覆盖（用户自定义保留）。
+     */
+    private void ensureMapShareCardDefaults() {
+        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
+        if (arcartX == null) {
+            return;
+        }
+        File chatCardDir = new File(arcartX.getDataFolder(), "chat_card");
+        if (!chatCardDir.exists()) {
+            chatCardDir.mkdirs();
+        }
+        File target = new File(chatCardDir, "axs_map_share.yml");
+        if (target.exists()) {
+            return;
+        }
+        exportResource("map/card/axs_map_share.yml", target, false);
+        if (target.exists()) {
+            logger.info("已导出地图分享卡片模板到 ArcartX/chat_card/axs_map_share.yml");
+        }
     }
 
     @Override public String commandId() { return "map"; }

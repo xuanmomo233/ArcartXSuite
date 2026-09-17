@@ -8,7 +8,10 @@ import org.jetbrains.annotations.NotNull;
  * 聊天卡片发送能力接口。
  * <p>
  * 由宿主桥接或 Chat 模块实现，供 EventPacket 等模块跨模块调用。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(ChatCardSendable.class)} 获取。
  */
+@PublicCapability
 public interface ChatCardSendable {
 
     /**

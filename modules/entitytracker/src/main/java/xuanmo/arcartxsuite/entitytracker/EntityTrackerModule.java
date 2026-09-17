@@ -281,6 +281,28 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 });
         }
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.BossTrackerQueryable.class,
+            new xuanmo.arcartxsuite.api.capability.BossTrackerQueryable() {
+                @Override public boolean isTrackedBoss(@NotNull java.util.UUID entityUuid) {
+                    return bossService != null && bossService.isTrackedConfiguredBoss(entityUuid);
+                }
+                @Override public int activeSessionCount() {
+                    return bossService != null ? bossService.getActiveSessionCount() : 0;
+                }
+                @Override public int activeViewerCount() {
+                    return bossService != null ? bossService.getActiveViewerCount() : 0;
+                }
+                @Override public @NotNull List<BossSessionInfo> activeSessions(
+                        @Nullable String mobIdFilter) {
+                    if (bossService == null) return List.of();
+                    return bossService.activeSessions(mobIdFilter).stream()
+                        .map(v -> new BossSessionInfo(v.entityUuid(), v.mythicMobId(),
+                            v.displayName(), v.health(), v.maxHealth(),
+                            v.participantCount(), v.trackedPlayerCount(), v.totalDamage()))
+                        .toList();
+                }
+            });
+
         logger.fine(
             "EntityTracker 模块已载入，bosses=" + configuration.getTrackedBossCount()
                 + " | boss-ui=" + bossRuntimeUiIds

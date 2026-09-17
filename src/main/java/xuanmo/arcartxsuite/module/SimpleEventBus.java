@@ -36,11 +36,11 @@ public final class SimpleEventBus implements EventBusCapability {
                 dispatch(sub, event);
             }
         }
-        // 通配符匹配（"market.*" 匹配 "market.purchase"）
+        // 通配符匹配（"axs.market.*" 匹配 "axs.market.purchase"）
         for (var entry : subscriptions.entrySet()) {
             String pattern = entry.getKey();
             if (pattern.endsWith(".*") && !pattern.equals(topic)) {
-                String prefix = pattern.substring(0, pattern.length() - 1); // "market."
+                String prefix = pattern.substring(0, pattern.length() - 1); // "axs.market."
                 if (topic.startsWith(prefix)) {
                     for (Subscription sub : entry.getValue()) {
                         dispatch(sub, event);

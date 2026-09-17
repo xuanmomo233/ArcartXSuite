@@ -112,9 +112,18 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
-            case "track_external" -> {
+            case "track_external", "external_navigate" -> {
+                // 外部目标"导航"：转发给来源模块/插件执行，地图不自建信标
                 if (hasValue(data, 1)) {
                     target.trackExternalTarget(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
+            case "external_nav_cancel" -> {
+                // 外部目标"取消"：转发给来源停止自身导航，目标标记保留
+                if (hasValue(data, 1)) {
+                    target.externalCancel(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -189,6 +198,15 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
+            // 聊天卡片点击领取分享点位：不经 actionToken（点击者未必开着地图菜单，
+            // token 是空的）；分享码本身即凭据，服务端校验存在性+有效期+数量上限
+            case "claim_share" -> {
+                if (hasValue(data, 1)) {
+                    target.claimShare(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
             case "open_menu" -> target.openMenu(player, hasValue(data, 1) ? data.get(1) : "");
             default -> target.refresh(player);
         }
@@ -244,6 +262,8 @@ public final class MapUiPacketHandler {
 
         void trackExternalTarget(Player player, String targetId);
 
+        void externalCancel(Player player, String targetId);
+
         void teleportToWorld(Player player, String worldId);
 
         void crossWorldNavigate(Player player, String targetDesc);
@@ -267,6 +287,8 @@ public final class MapUiPacketHandler {
         void shareWaypoint(Player player, String waypointId);
 
         void sharePin(Player player, String pinId);
+
+        void claimShare(Player player, String shareCode);
 
         boolean beginActionToken(Player player, String action, List<String> data);
 

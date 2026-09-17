@@ -6,7 +6,10 @@ import org.jetbrains.annotations.NotNull;
  * QQ 群消息广播能力接口。
  * <p>
  * 由 QQBot 模块实现，供其他模块跨模块推送消息到 QQ 群。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(QQBotBroadcastable.class)} 获取。
  */
+@PublicCapability
 public interface QQBotBroadcastable {
 
     /**

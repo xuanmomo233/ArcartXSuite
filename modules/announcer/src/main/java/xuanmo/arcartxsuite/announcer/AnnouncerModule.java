@@ -205,6 +205,19 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 (player, groupId) -> subtitleService != null && subtitleService.playGroup(player, groupId));
         }
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.AnnouncerBroadcastable.class,
+            new xuanmo.arcartxsuite.api.capability.AnnouncerBroadcastable() {
+                @Override public void broadcastNow(@NotNull String text) {
+                    if (service != null) service.broadcastNow(text);
+                }
+                @Override public void broadcastNow(@NotNull String text, boolean forward) {
+                    if (service != null) service.broadcastNow(text, forward);
+                }
+                @Override public void enqueue(@NotNull String text, boolean forward) {
+                    if (service != null) service.enqueueManualBroadcast(text, forward);
+                }
+            });
+
         logger.fine(
             "Announcer 模块已载入，启用公告数: "
                 + service.activeEntryCount()

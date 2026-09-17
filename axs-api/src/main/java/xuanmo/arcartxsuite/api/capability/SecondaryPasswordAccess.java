@@ -5,7 +5,12 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Capability for checking and verifying a player's secondary password.
+ * <p>
+ * Public capability: external plugins may obtain it via
+ * {@code AxsCapabilities.get(SecondaryPasswordAccess.class)} to gate
+ * sensitive operations behind the unified secondary password.
  */
+@PublicCapability
 public interface SecondaryPasswordAccess {
 
     /**

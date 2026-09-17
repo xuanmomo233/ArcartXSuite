@@ -3,7 +3,7 @@ package xuanmo.arcartxsuite.qqbot.config;
 /**
  * 大额交易 QQ 群播报配置。
  * <p>
- * 订阅 market 模块的 EventBus 事件（topic: market.auction_purchased），
+ * 订阅 market 模块的 EventBus 事件（topic: axs.market.auction_purchased），
  * 当成交价 &gt;= {@link #threshold()} 时推送到 QQ 群。
  *
  * @param enabled   是否启用大额交易播报

@@ -9,6 +9,7 @@ import ink.ptms.chemdah.core.quest.Template;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -22,6 +23,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -80,6 +82,8 @@ public final class QuestGpsService implements Listener {
     private Supplier<EventBusCapability> eventBusProvider;
     private final ConcurrentMap<UUID, QuestGpsViewState> viewStates = new ConcurrentHashMap<>();
     private final List<Listener> chemdahEventListeners = new ArrayList<>();
+    /** 地图外部目标 targetId → questId 反查表（targetId 为任务级确定性 id，全局共享）。 */
+    private final ConcurrentMap<String, String> questTargetIndex = new ConcurrentHashMap<>();
 
     public QuestGpsService(
         JavaPlugin plugin,
@@ -157,6 +161,28 @@ public final class QuestGpsService implements Listener {
     public void start() {
         chemdahBootstrap.initialize();
         overlayValidator.validate();
+        // 导航坐标变更 → 地图外部目标坐标跟随（追踪中的任务点随 chemdah 位置刷新）
+        navigationService.setPositionListener((player, point) -> {
+            MapNavigable map = mapNavigableProvider.get();
+            QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
+            if (map == null || !tracking.active() || tracking.questId().isBlank()) {
+                return;
+            }
+            QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(tracking.questId());
+            if (definition == null) {
+                return;
+            }
+            String targetId = navigationService.buildTargetId(tracking.questId(), "");
+            String description = definition.description().isEmpty()
+                ? point.mapLabel()
+                : String.join("\n", definition.description());
+            map.upsertExternalTarget(player, new xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec(
+                targetId, MAP_SOURCE, point.world(),
+                tracking.label(), description,
+                point.x(), point.y(), point.z(),
+                null, true, 0
+            ), false);
+        });
         navigationService.start();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerChemdahEventListeners();
@@ -171,8 +197,17 @@ public final class QuestGpsService implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             clearTrackInternal(player, true, false);
         }
+        // 模块卸载：清空本来源在地图上挂的所有外部目标
+        MapNavigable map = mapNavigableProvider.get();
+        if (map != null) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                map.clearExternalTargets(player, MAP_SOURCE, false);
+            }
+        }
+        navigationService.setPositionListener(null);
         navigationService.shutdown();
         viewStates.clear();
+        questTargetIndex.clear();
     }
 
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
@@ -437,6 +472,16 @@ public final class QuestGpsService implements Listener {
         clearTrackInternal(event.getPlayer(), true, false);
     }
 
+    /**
+     * 玩家进服后延迟同步任务外部目标到地图（等 Chemdah profile 就绪，
+     * 已接受但未完成的任务重新挂回地图标记）。
+     */
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        AxsScheduler.runTaskLater(plugin, () -> syncQuestMapTargets(player), 40L);
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
         String message = safe(event.getMessage()).trim().toLowerCase(java.util.Locale.ROOT);
@@ -549,6 +594,11 @@ public final class QuestGpsService implements Listener {
                 publishQuestCompleted(player, questId, definition);
             }
             refreshByProfile(profile);
+            // 任务接受/完成/放弃 → 重建地图外部目标（推送新目标 / 移除结束任务目标）
+            if (player != null && (lifecycle == Lifecycle.ACCEPTED || lifecycle == Lifecycle.ABANDONED
+                || lifecycle == Lifecycle.COMPLETED)) {
+                syncQuestMapTargets(player);
+            }
         } catch (Exception | LinkageError exception) {
             this.logger.warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
         }
@@ -578,7 +628,13 @@ public final class QuestGpsService implements Listener {
     }
 
     private void afterTrackChanged(Player player, String questId) {
-        syncMapTarget(player);
+        // 互斥：QuestGPS 开始导航时清除地图自身的导航（锚点/路径点）
+        MapNavigable map = mapNavigableProvider.get();
+        if (map != null) {
+            map.clearTrack(player);
+        }
+        // 重建地图外部目标：被追踪任务的标记置为 navigated，坐标跟随最新追踪点
+        syncQuestMapTargets(player);
         syncGuide(player, true);
         QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(questId);
         if (definition != null) {
@@ -586,37 +642,115 @@ public final class QuestGpsService implements Listener {
         }
     }
 
-    private void syncMapTarget(Player player) {
-        MapNavigable mapService = mapNavigableProvider.get();
-        if (mapService == null) {
+    /**
+     * 同步玩家所有进行中任务到地图外部目标（紫色标记）。
+     * <p>
+     * 任务接受后即推送（无论是否导航），完成/放弃时移除；追踪中任务的标记
+     * 带 navigated=true（面板显示"取消"按钮）。协调方式：先清空本来源全部
+     * 目标再批量重建，天然处理任务增删与坐标漂移。
+     */
+    private void syncQuestMapTargets(Player player) {
+        MapNavigable map = mapNavigableProvider.get();
+        if (map == null || player == null || !player.isOnline()) {
             return;
         }
-        java.util.Optional<QuestGpsNavigationService.NavigationPoint> point = navigationService.trackingPoint(player);
-        QuestGpsNavigationService.TrackingState state = navigationService.trackingState(player);
-        if (point.isEmpty() || !state.active()) {
-            mapService.clearExternalTargets(player, MAP_SOURCE, true);
+        PlayerProfile profile = loadProfile(player, false);
+        List<xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec> specs = new ArrayList<>();
+        if (profile != null) {
+            QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
+            Optional<QuestGpsNavigationService.NavigationPoint> livePoint = navigationService.trackingPoint(player);            List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors =
+                presentationService.collectDescriptors(profile, this::isCategoryLocked);
+            for (Quest quest : profile.getQuests(false)) {
+                if (quest == null || quest.isCompleted()) {
+                    continue;
+                }
+                QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(quest.getId());
+                if (definition == null || definition.navigation() == null || !definition.navigation().enabled()) {
+                    continue;
+                }
+                QuestGpsSnapshotBuilder.QuestDescriptor descriptor =
+                    presentationService.findDescriptor(descriptors, quest.getId());
+                if (descriptor == null) {
+                    continue;
+                }
+                boolean tracked = tracking.active() && tracking.questId().equalsIgnoreCase(quest.getId());
+                Optional<QuestGpsNavigationService.NavigationPoint> point = tracked && livePoint.isPresent()
+                    ? livePoint
+                    : navigationService.previewQuestPoint(
+                        player, quest.getId(),
+                        presentationService.prioritizedTaskIds(descriptor.tasks()),
+                        descriptor.displayName());
+                if (point.isEmpty()) {
+                    continue;
+                }
+                QuestGpsNavigationService.NavigationPoint p = point.get();
+                String targetId = navigationService.buildTargetId(quest.getId(), "");
+                String description = definition.description().isEmpty()
+                    ? p.mapLabel()
+                    : String.join("\n", definition.description());
+                specs.add(new xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec(
+                    targetId, MAP_SOURCE, p.world(),
+                    descriptor.displayName(), description,
+                    p.x(), p.y(), p.z(),
+                    null, tracked, 0
+                ));
+                questTargetIndex.put(targetId, quest.getId());
+            }
+        }
+        // 原子替换本来源全部目标：选中态按最终集合回收，仍存在的目标不闪断
+        map.reconcileExternalTargets(player, MAP_SOURCE, specs);
+    }
+
+    /**
+     * 地图面板"导航"回调：targetId → questId → trackQuest。
+     *
+     * @return true 表示已接管
+     */
+    public boolean handleMapNavigateRequest(Player player, String targetId) {
+        String questId = questTargetIndex.get(targetId);
+        if (questId == null || player == null || !player.isOnline()) {
+            return false;
+        }
+        trackQuest(player, questId);
+        return true;
+    }
+
+    /**
+     * 地图面板"取消"回调：当前追踪的正是该任务时停止导航（标记保留）。
+     */
+    public void handleMapCancelRequest(Player player, String targetId) {
+        String questId = questTargetIndex.get(targetId);
+        QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
+        if (questId != null && tracking.active() && tracking.questId().equalsIgnoreCase(questId)) {
+            clearTrack(player);
+        }
+    }
+
+    /**
+     * 地图自身导航开始（锚点/路径点）时由 EventBus 触发：停止本模块导航（互斥），
+     * 任务外部目标标记保留在地图上。
+     */
+    public void onMapNavigationStarted(Player player) {
+        if (player == null) {
             return;
         }
-        QuestGpsNavigationService.NavigationPoint p = point.get();
-        mapService.upsertExternalTarget(
-            player,
-            state.waypointId(),
-            MAP_SOURCE,
-            p.world(),
-            p.x(),
-            p.y(),
-            p.z(),
-            state.taskId().isBlank() ? "QuestGPS 任务导航" : "QuestGPS 任务目标导航",
-            null,
-            true
-        );
+        if (navigationService.trackingState(player).active()) {
+            clearTrackInternal(player, true, false);
+        }
+    }
+
+    /** 注册到地图的导航回调 source 名。 */
+    public String mapSource() {
+        return MAP_SOURCE;
     }
 
     private void clearTrackInternal(Player player, boolean silent, boolean notify) {
+        // 先记录当前追踪目标，清除后回推地图 navigated=false（目标标记保留在地图上）
+        QuestGpsNavigationService.TrackingState before = navigationService.trackingState(player);
         navigationService.clearTracking(player, silent);
         MapNavigable mapSvc = mapNavigableProvider.get();
-        if (mapSvc != null) {
-            mapSvc.clearExternalTargets(player, MAP_SOURCE, true);
+        if (mapSvc != null && before.active()) {
+            mapSvc.setExternalNavigated(player, navigationService.buildTargetId(before.questId(), ""), false);
         }
         closeGuide(player);
         if (notify) {

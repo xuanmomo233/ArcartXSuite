@@ -9,7 +9,10 @@ import org.jetbrains.annotations.Nullable;
  * AfkReward 挂机状态查询与控制能力接口。
  * <p>
  * 由 AfkReward 模块实现，供 Essentials 等模块跨模块查询玩家挂机状态或触发原地挂机。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(AfkRewardDispatchable.class)} 获取。
  */
+@PublicCapability
 public interface AfkRewardDispatchable {
 
     /**

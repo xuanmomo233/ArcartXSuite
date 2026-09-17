@@ -68,6 +68,17 @@ public final class RgbModule extends AbstractAXSModule {
         service = new ArcartRgbService(configuration, logger, (player, text) ->
             placeholderResolver.applyPlaceholders(player, text));
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.RgbRenderable.class,
+            new xuanmo.arcartxsuite.api.capability.RgbRenderable() {
+                @Override public @NotNull String render(@NotNull String entryId,
+                        @Nullable org.bukkit.OfflinePlayer player) {
+                    return service != null ? service.render(entryId, player) : "";
+                }
+                @Override public @NotNull List<String> entryIds() {
+                    return service != null ? service.entryIds() : List.of();
+                }
+            });
+
         logger.fine(
             "ArcartRGB 模块已载入，条目数: "
                 + service.activeEntryCount() + "/" + service.entryCount()

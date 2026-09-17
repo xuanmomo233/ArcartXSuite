@@ -23,8 +23,14 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
@@ -33,11 +39,14 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec;
+import xuanmo.arcartxsuite.api.capability.MapNavigationHandler;
 import xuanmo.arcartxsuite.api.util.NavigationMarkerService;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.AnchorDefinition;
+import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.AnchorUnlock;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.CurrencyCost;
-import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.DefaultUnlockRule;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.ItemCost;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.PolygonRegion;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.WorldDefinition;
@@ -85,17 +94,43 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final WaypointBridgeAPI waypointBridge;
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final MessageProvider messages;
+    private final java.util.function.Supplier<EventBusCapability> eventBusProvider;
     private NavigationMarkerService markerService;
     private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, MapNavigationState> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
+    /** 外部目标导航回调：source（normalize 后）→ handler，由来源模块/插件注册。 */
+    private final ConcurrentMap<String, MapNavigationHandler> navigationSources = new ConcurrentHashMap<>();
+    /** owner 插件 → 已注册的 source 列表，用于插件禁用时自动注销回调。 */
+    private final ConcurrentMap<Plugin, Set<String>> navigationSourceOwners = new ConcurrentHashMap<>();
     private final Set<UUID> openedHudPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> defaultUnlocksEnsured = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<UUID, CachedPlayerMapData> playerDataCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
+    /** 分享码 → 点位快照（内存缓存，过期/重启/重载后失效）。 */
+    private final ConcurrentMap<String, SharedPoint> shareCache = new ConcurrentHashMap<>();
+
     private record CachedPlayerMapData(Set<String> unlockedAnchors, List<MapWaypoint> waypoints) {
+    }
+
+    /**
+     * 一条被分享的点位快照。
+     * <p>
+     * 路径点/标记点是玩家私有数据，分享不直接引用原记录 ID——
+     * 存完整快照，原主改名/删除不影响已领取和待领取的副本。
+     *
+     * @param type        {@code "waypoint"} 或 {@code "pin"}
+     * @param name        点位名称
+     * @param description 点位描述
+     * @param world       所在世界 ID（已 normalize）
+     * @param expiresAt   过期时间戳（毫秒）
+     */
+    private record SharedPoint(
+        String type, String name, String description, String world,
+        double x, double y, double z, String senderName, long expiresAt
+    ) {
     }
 
     public MapService(
@@ -113,7 +148,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
-            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null);
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null);
     }
 
     public MapService(
@@ -130,7 +165,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         CurrencyBridgeAPI currencyBridgeManager,
         WaypointBridgeAPI waypointBridge,
         AdyeshachNpcBridgeAPI npcBridge,
-        MessageProvider messages
+        MessageProvider messages,
+        java.util.function.Supplier<EventBusCapability> eventBusProvider
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -147,6 +183,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.waypointBridge = waypointBridge;
         this.npcBridge = npcBridge;
         this.messages = messages;
+        this.eventBusProvider = eventBusProvider != null ? eventBusProvider : () -> null;
     }
 
     private String message(String key, Object... args) {
@@ -198,6 +235,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         openedHudPlayers.clear();
         defaultUnlocksEnsured.clear();
         playerDataCache.clear();
+        shareCache.clear();
     }
 
     /**
@@ -292,14 +330,54 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     /**
-     * 为玩家打开地图菜单。
+     * 为玩家打开地图菜单并选中指定目标。
+     * <p>
+     * {@code targetId} 依次匹配外部目标 → 玩家路径点 → 标记点：命中则切到目标
+     * 所在世界并选中它；否则若恰为已配置的世界 id 则打开该世界地图；
+     * 均未命中或为空时按默认世界规则打开。
      *
-     * @param player  目标玩家
-     * @param worldId 指定世界 ID，为空时自动选择
+     * @param player   目标玩家
+     * @param targetId 目标 ID（可为空字符串）
      * @return 操作结果
      */
-    public MapOperationResult openMenuFor(Player player, String worldId) {
-        return openMenuInternal(player, worldId, true);
+    public MapOperationResult openMenuFor(Player player, String targetId) {
+        String id = normalizeId(targetId);
+        String worldId = "";
+        String selectType = "";
+        if (!id.isBlank()) {
+            MapExternalTarget ext = findExternalTarget(player, id);
+            if (ext != null) {
+                worldId = ext.worldId();
+                selectType = "external";
+            } else {
+                MapWaypoint waypoint = findWaypoint(player, id);
+                if (waypoint != null) {
+                    worldId = waypoint.world();
+                    selectType = "waypoint";
+                } else {
+                    MapPin pin = findPin(player, id);
+                    if (pin != null) {
+                        worldId = pin.world();
+                        selectType = "pin";
+                    }
+                }
+            }
+            // 未匹配到任何目标时，允许把参数直接当作世界 id（命令 /map open <world> 兼容）
+            if (selectType.isBlank() && configuration.worlds().containsKey(id)) {
+                worldId = id;
+            }
+        }
+        MapOperationResult result = openMenuInternal(player, worldId, true);
+        if (result.success() && !selectType.isBlank()) {
+            switch (selectType) {
+                case "external" -> state(player).selectExternalTarget(id);
+                case "waypoint" -> state(player).selectWaypoint(id);
+                case "pin" -> state(player).selectPin(id);
+                default -> { }
+            }
+            sync(player, false);
+        }
+        return result;
     }
 
     /**
@@ -338,13 +416,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      * 新增或更新外部导航目标，并可选地自动选中。
      *
      * @param player 目标玩家
-     * @param target 外部目标数据
+     * @param spec   外部目标规格（公开契约）
      * @param select 是否自动选中该目标
      */
-    public void upsertExternalTarget(Player player, MapExternalTarget target, boolean select) {
-        if (player == null || target == null) {
+    public void upsertExternalTarget(Player player, MapExternalTargetSpec spec, boolean select) {
+        if (player == null || spec == null) {
             return;
         }
+        MapExternalTarget target = MapExternalTarget.fromSpec(spec);
         externalTargets
             .computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>())
             .put(normalizeId(target.targetId()), target);
@@ -353,6 +432,126 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             state(player).selectExternalTarget(normalizeId(target.targetId()));
         }
         sync(player, false);
+    }
+
+    /**
+     * 批量新增或更新外部导航目标（一次视图同步）。
+     *
+     * @param player 目标玩家
+     * @param specs  外部目标规格列表
+     */
+    public void upsertExternalTargets(Player player, List<MapExternalTargetSpec> specs) {
+        if (player == null || specs == null || specs.isEmpty()) {
+            return;
+        }
+        ConcurrentMap<String, MapExternalTarget> state =
+            externalTargets.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
+        for (MapExternalTargetSpec spec : specs) {
+            if (spec == null) {
+                continue;
+            }
+            MapExternalTarget target = MapExternalTarget.fromSpec(spec);
+            state.put(normalizeId(target.targetId()), target);
+        }
+        sync(player, false);
+    }
+
+    /**
+     * 标记外部目标是否正被来源导航（驱动面板"导航"/"取消"按钮切换）。
+     *
+     * @param player    目标玩家
+     * @param targetId  目标 id
+     * @param navigated true = 来源正在导航
+     */
+    public void setExternalNavigated(Player player, String targetId, boolean navigated) {
+        if (player == null || targetId == null || targetId.isBlank()) {
+            return;
+        }
+        ConcurrentMap<String, MapExternalTarget> state = externalTargets.get(player.getUniqueId());
+        if (state == null) {
+            return;
+        }
+        String key = normalizeId(targetId);
+        MapExternalTarget target = state.get(key);
+        if (target == null || target.navigated() == navigated) {
+            return;
+        }
+        state.put(key, target.withNavigated(navigated));
+        sync(player, false);
+    }
+
+    /**
+     * 用给定集合原子替换某来源的全部外部目标（reconcile）。
+     * <p>
+     * 与"先 clearExternalTargets 再 upsert"的区别：一次视图同步、
+     * 选中态按最终集合回收——仍然存在的 targetId 保持选中不闪断。
+     *
+     * @param player 目标玩家
+     * @param source 来源标识
+     * @param specs  最终目标集合（可为空列表 = 清空该来源）
+     */
+    public void reconcileExternalTargets(Player player, String source, List<MapExternalTargetSpec> specs) {
+        if (player == null || source == null) {
+            return;
+        }
+        String normalizedSource = normalizeId(source);
+        ConcurrentMap<String, MapExternalTarget> state =
+            externalTargets.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
+        Set<String> keep = ConcurrentHashMap.newKeySet();
+        for (MapExternalTargetSpec spec : specs == null ? List.<MapExternalTargetSpec>of() : specs) {
+            if (spec == null) {
+                continue;
+            }
+            MapExternalTarget target = MapExternalTarget.fromSpec(spec);
+            String key = normalizeId(target.targetId());
+            keep.add(key);
+            state.put(key, target);
+        }
+        state.entrySet().removeIf(e -> normalizeId(e.getValue().source()).equals(normalizedSource) && !keep.contains(e.getKey()));
+        if (state.isEmpty()) {
+            externalTargets.remove(player.getUniqueId());
+        }
+        // 选中态回收：选中的外部目标不在最终集合时清除
+        String selected = state(player).selectedExternalTargetId();
+        ConcurrentMap<String, MapExternalTarget> remaining = externalTargets.get(player.getUniqueId());
+        if (!selected.isBlank() && (remaining == null || !remaining.containsKey(normalizeId(selected)))) {
+            state(player).clearSelection();
+        }
+        sync(player, false);
+    }
+
+    /**
+     * 注册外部目标导航回调（按 source 归属，插件禁用时自动注销）。
+     *
+     * @param owner   归属插件
+     * @param source  来源标识
+     * @param handler 导航回调
+     */
+    public void registerNavigationSource(Plugin owner, String source, MapNavigationHandler handler) {
+        if (source == null || source.isBlank() || handler == null) {
+            return;
+        }
+        String key = normalizeId(source);
+        navigationSources.put(key, handler);
+        if (owner != null) {
+            navigationSourceOwners.computeIfAbsent(owner, ignored -> ConcurrentHashMap.newKeySet()).add(key);
+        }
+    }
+
+    /**
+     * 注销指定来源的导航回调。
+     *
+     * @param source 来源标识
+     */
+    public void unregisterNavigationSource(String source) {
+        if (source == null || source.isBlank()) {
+            return;
+        }
+        String key = normalizeId(source);
+        navigationSources.remove(key);
+        for (Set<String> owned : navigationSourceOwners.values()) {
+            owned.remove(key);
+        }
     }
 
     /**
@@ -404,16 +603,132 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             clearTrackSilently(player);
         }
         ConcurrentMap<String, MapExternalTarget> state = externalTargets.get(player.getUniqueId());
-        if (state == null || state.isEmpty()) {
-            return;
+        if (state != null) {
+            state.entrySet().removeIf(entry -> normalizedSource.isBlank() || normalizeId(entry.getValue().source()).equals(normalizedSource));
+            if (state.isEmpty()) {
+                externalTargets.remove(player.getUniqueId());
+            }
         }
-        state.entrySet().removeIf(entry -> normalizedSource.isBlank() || normalizeId(entry.getValue().source()).equals(normalizedSource));
-        if (state.isEmpty()) {
-            externalTargets.remove(player.getUniqueId());
+        // 选中态兜底：若当前选中的外部目标已被移除，清除选中避免详情面板残留幻影状态
+        String selected = state(player).selectedExternalTargetId();
+        ConcurrentMap<String, MapExternalTarget> remaining = externalTargets.get(player.getUniqueId());
+        if (!selected.isBlank() && (remaining == null || !remaining.containsKey(normalizeId(selected)))) {
+            state(player).clearSelection();
         }
         if (syncView) {
             sync(player, false);
         }
+    }
+
+    /**
+     * 玩家在地图面板点击外部目标"导航"：转发给来源 handler（导航由来源全权执行）。
+     * 同时发布 {@code axs.map.external_navigate} 事件供监测/兜底。
+     *
+     * @param player   发起玩家
+     * @param targetId 外部目标 id
+     */
+    public void requestExternalNavigate(Player player, String targetId) {
+        MapExternalTarget target = player == null ? null : findExternalTarget(player, targetId);
+        if (player == null || !player.isOnline() || target == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.target-not-found", targetId)));
+            return;
+        }
+        publishBusEvent("axs.map.external_navigate", player, Map.of(
+            "target_id", target.targetId(),
+            "source", normalizeId(target.source()),
+            "world_id", normalizeId(target.worldId())
+        ));
+        MapNavigationHandler handler = navigationSources.get(normalizeId(target.source()));
+        boolean handled = false;
+        if (handler != null) {
+            try {
+                handled = handler.onNavigateRequest(player, target.targetId());
+            } catch (Throwable e) {
+                logger.warning("外部目标导航回调失败 source=" + target.source() + ": " + e.getMessage());
+            }
+        }
+        if (!handled) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.external-nav-unavailable")));
+        }
+    }
+
+    /**
+     * 玩家在地图面板点击外部目标"取消"：转发给来源 handler 停止导航（目标标记保留）。
+     * 同时发布 {@code axs.map.external_nav_cancel} 事件供监测。
+     *
+     * @param player   发起玩家
+     * @param targetId 外部目标 id
+     */
+    public void requestExternalCancel(Player player, String targetId) {
+        MapExternalTarget target = player == null ? null : findExternalTarget(player, targetId);
+        if (player == null || !player.isOnline() || target == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.target-not-found", targetId)));
+            return;
+        }
+        publishBusEvent("axs.map.external_nav_cancel", player, Map.of(
+            "target_id", target.targetId(),
+            "source", normalizeId(target.source()),
+            "world_id", normalizeId(target.worldId())
+        ));
+        MapNavigationHandler handler = navigationSources.get(normalizeId(target.source()));
+        if (handler != null) {
+            try {
+                handler.onCancelRequest(player, target.targetId());
+            } catch (Throwable e) {
+                logger.warning("外部目标取消回调失败 source=" + target.source() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 来源模块开始自身导航时调用：静默清除地图自身的导航（互斥），不打扰玩家。
+     * 与玩家手动清除的区别：不发送"已清除导航"消息，但会发布 nav_cleared 事件。
+     *
+     * @param player 目标玩家
+     */
+    public void clearTrackBySource(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        MapNavigationState active = navigationStates.get(player.getUniqueId());
+        boolean wasActive = active != null && active.active();
+        clearTrackSilently(player);
+        if (wasActive) {
+            publishBusEvent("axs.map.nav_cleared", player, Map.of(
+                "type", active.targetType().name().toLowerCase(Locale.ROOT),
+                "id", active.targetId(),
+                "world_id", active.worldId(),
+                "reason", "source_took_over"
+            ));
+        }
+        sync(player, false);
+    }
+
+    /** 发布 EventBus 事件（总线不可用时静默跳过）。 */
+    private void publishBusEvent(String topic, Player player, Map<String, String> payload) {
+        EventBusCapability bus;
+        try {
+            bus = eventBusProvider.get();
+        } catch (Throwable e) {
+            return;
+        }
+        if (bus == null) {
+            return;
+        }
+        try {
+            bus.publish(topic, player, payload);
+        } catch (Throwable e) {
+            logger.warning("Map EventBus 发布失败 topic=" + topic + ": " + e.getMessage());
+        }
+    }
+
+    /** 发布 nav_started 事件（type: anchor/waypoint/external）。 */
+    private void publishNavStarted(Player player, TargetType type, String targetId, String worldId) {
+        publishBusEvent("axs.map.nav_started", player, Map.of(
+            "type", type.name().toLowerCase(Locale.ROOT),
+            "id", targetId,
+            "world_id", normalizeId(worldId)
+        ));
     }
 
     @Override
@@ -561,8 +876,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     @Override
     public void trackExternalTarget(Player player, String targetId) {
-        MapOperationResult result = trackExternalTargetInternal(player, targetId);
-        sendPlayerResult(player, result);
+        // 外部目标导航不由地图执行：转发给来源模块/插件的回调，来源自行接管。
+        requestExternalNavigate(player, targetId);
+    }
+
+    /**
+     * 外部目标"取消"入口（UI external_nav_cancel 动作）。
+     */
+    public void externalCancel(Player player, String targetId) {
+        requestExternalCancel(player, targetId);
     }
 
     @Override
@@ -593,7 +915,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MapOperationResult trackResult = switch (type) {
             case "anchor" -> trackAnchorInternal(player, id);
             case "waypoint" -> trackWaypointInternal(player, id);
-            case "external" -> trackExternalTargetInternal(player, id);
+            case "external" -> {
+                // 跨世界外部目标：已传送到目标世界就近锚点，导航交给来源接管
+                requestExternalNavigate(player, id);
+                yield MapOperationResult.success("");
+            }
             default -> MapOperationResult.success("");
         };
         sendPlayerResult(player, trackResult.success()
@@ -827,24 +1153,24 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null || !player.isOnline()) {
             return;
         }
+        if (!shareEnabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
+            return;
+        }
         MapWaypoint waypoint = findWaypoint(player, waypointId);
         if (waypoint == null) {
             sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-not-found", waypointId)));
             return;
         }
-        String json = "{\"type\":\"map_waypoint\",\"id\":\"" + waypoint.waypointId()
-            + "\",\"name\":\"" + escapeJson(waypoint.name())
-            + "\",\"world\":\"" + waypoint.world()
-            + "\",\"x\":" + waypoint.x()
-            + ",\"y\":" + waypoint.y()
-            + ",\"z\":" + waypoint.z() + "}";
-        if (bridge != null) {
-            bridge.sendChatCard(player, "map_share", Map.of(
-                "title", waypoint.name(),
-                "body", json,
-                "sender", player.getName()
-            ));
-        }
+        sweepExpiredShares();
+        String code = newShareCode();
+        shareCache.put(code, new SharedPoint(
+            "waypoint", waypoint.name(), waypoint.description(), normalizeId(waypoint.world()),
+            waypoint.x(), waypoint.y(), waypoint.z(), player.getName(),
+            System.currentTimeMillis() + configuration.share().expireMinutes() * 60_000L
+        ));
+        broadcastShare(player, code, "waypoint", waypoint.name(), waypoint.world(),
+            waypoint.x(), waypoint.y(), waypoint.z());
         sendPlayerResult(player, MapOperationResult.success(message("player.waypoint-shared", waypoint.name())));
     }
 
@@ -853,29 +1179,204 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null || !player.isOnline()) {
             return;
         }
+        if (!shareEnabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
+            return;
+        }
         MapPin pin = findPin(player, pinId);
         if (pin == null) {
             sendPlayerResult(player, MapOperationResult.failure(message("player.pin-not-found", pinId)));
             return;
         }
-        String json = "{\"type\":\"map_pin\",\"id\":\"" + pin.pinId()
-            + "\",\"name\":\"" + escapeJson(pin.name())
-            + "\",\"world\":\"" + pin.world()
-            + "\",\"x\":" + pin.x()
-            + ",\"z\":" + pin.z() + "}";
-        if (bridge != null) {
-            bridge.sendChatCard(player, "map_share", Map.of(
-                "title", pin.name(),
-                "body", json,
-                "sender", player.getName()
-            ));
-        }
+        sweepExpiredShares();
+        String code = newShareCode();
+        shareCache.put(code, new SharedPoint(
+            "pin", pin.name(), pin.description(), normalizeId(pin.world()),
+            pin.x(), 0, pin.z(), player.getName(),
+            System.currentTimeMillis() + configuration.share().expireMinutes() * 60_000L
+        ));
+        broadcastShare(player, code, "pin", pin.name(), pin.world(), pin.x(), 0, pin.z());
         sendPlayerResult(player, MapOperationResult.success(message("player.pin-shared", pin.name())));
     }
 
-    private static String escapeJson(String value) {
-        if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+    /**
+     * 领取分享点位（聊天卡片点击 → Packet.send('AXS_MAP', 'claim_share', code)，或 /map claim &lt;code&gt;）。
+     * <p>
+     * 把快照复制为点击者自己的路径点/标记点，受其世界内数量上限约束；
+     * 不需要点击者与分享点位处于同一世界。
+     */
+    @Override
+    public void claimShare(Player player, String code) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        if (!shareEnabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
+            return;
+        }
+        String normalized = normalizeId(code);
+        SharedPoint point = shareCache.get(normalized);
+        if (point == null) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.share-not-found", code)));
+            return;
+        }
+        if (point.expiresAt() < System.currentTimeMillis()) {
+            shareCache.remove(normalized);
+            sendPlayerResult(player, MapOperationResult.failure(message("player.share-expired")));
+            return;
+        }
+        if ("pin".equals(point.type())) {
+            claimPinShare(player, point);
+        } else {
+            claimWaypointShare(player, point);
+        }
+    }
+
+    private void claimWaypointShare(Player player, SharedPoint point) {
+        if (!configuration.waypoints().enabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
+            return;
+        }
+        if (!configuration.worlds().containsKey(point.world())) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
+            return;
+        }
+        int limit = resolveWaypointLimit(player);
+        long countInWorld = loadWaypoints(player).stream()
+            .filter(waypoint -> normalizeId(waypoint.world()).equals(point.world())).count();
+        if (countInWorld >= limit) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String waypointId = configuration.waypoints().idPrefix() + UUID.randomUUID().toString().replace("-", "");
+        MapWaypoint waypoint = new MapWaypoint(
+            normalizeId(waypointId), point.name(), point.description(),
+            point.world(), point.x(), point.y(), point.z(), now, now
+        );
+        try {
+            if (!repository.createWaypointIfUnderWorldLimit(player.getUniqueId(), waypoint, point.world(), limit)) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+                return;
+            }
+            invalidatePlayerDataCache(player.getUniqueId());
+            state(player).selectWorld(point.world());
+            state(player).selectWaypoint(waypoint.waypointId());
+            sync(player, false);
+            sendPlayerResult(player, MapOperationResult.success(
+                message("player.waypoint-claimed", point.name(), point.senderName())));
+        } catch (Exception e) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
+        }
+    }
+
+    private void claimPinShare(Player player, SharedPoint point) {
+        if (!configuration.waypoints().enabled()) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
+            return;
+        }
+        if (!configuration.worlds().containsKey(point.world())) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
+            return;
+        }
+        int limit = resolveWaypointLimit(player);
+        long countInWorld = loadPins(player).stream()
+            .filter(pin -> normalizeId(pin.world()).equals(point.world())).count();
+        if (countInWorld >= limit) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String pinId = configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
+        MapPin pin = new MapPin(
+            normalizeId(pinId), point.name(), point.description(),
+            point.world(), point.x(), point.z(), now, now
+        );
+        try {
+            if (!repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, point.world(), limit)) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
+                return;
+            }
+            invalidatePlayerDataCache(player.getUniqueId());
+            state(player).selectWorld(point.world());
+            state(player).selectPin(pin.pinId());
+            sync(player, false);
+            sendPlayerResult(player, MapOperationResult.success(
+                message("player.pin-claimed", point.name(), point.senderName())));
+        } catch (Exception e) {
+            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
+        }
+    }
+
+    /**
+     * 向全服在线玩家广播分享消息。
+     * <p>
+     * {@code share.card-id} 配置非空 → 聊天卡片（ArcartX/chat_card/&lt;card-id&gt;.yml）；
+     * 留空 → 纯文本降级广播，附带可点击的"[点击领取]"（RUN_COMMAND 执行 /map claim &lt;code&gt;）。
+     */
+    private void broadcastShare(Player sender, String code, String type, String name,
+                                String worldId, double x, double y, double z) {
+        WorldDefinition definition = configuration.worlds().get(normalizeId(worldId));
+        String worldName = definition == null ? worldId : resolveDisplayName(definition);
+        String coords = "waypoint".equals(type)
+            ? (long) x + ", " + (long) y + ", " + (long) z
+            : (long) x + ", " + (long) z;
+        String cardId = configuration.share() == null ? "" : configuration.share().cardId();
+        if (cardId != null && !cardId.isBlank() && bridge != null) {
+            Map<String, String> payload = Map.of(
+                "type", type,
+                "title", name == null ? "" : name,
+                "sender", sender.getName(),
+                "world", worldName,
+                "coords", coords,
+                "code", code,
+                "expire", String.valueOf(configuration.share().expireMinutes())
+            );
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                bridge.sendChatCard(online, cardId, payload);
+            }
+            return;
+        }
+        broadcastShareText(sender, code, type, name, worldName, coords);
+    }
+
+    /** 无聊天卡片时的纯文本广播降级：主文本 + 可点击的"[点击领取]"组件。 */
+    private void broadcastShareText(Player sender, String code, String type, String name,
+                                    String worldName, String coords) {
+        String typeName = "pin".equals(type)
+            ? message("player.share-type-pin")
+            : message("player.share-type-waypoint");
+        TextComponent line = new TextComponent(TextComponent.fromLegacyText(
+            ChatColor.translateAlternateColorCodes('&', message("player.share-broadcast",
+                sender.getName(), typeName, name, worldName, coords))));
+        TextComponent claimButton = new TextComponent(TextComponent.fromLegacyText(
+            ChatColor.translateAlternateColorCodes('&', message("player.share-claim-button"))));
+        claimButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/map claim " + code));
+        claimButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+            new ComponentBuilder(message("player.share-claim-hover", "/map claim " + code)).create()));
+        line.addExtra(claimButton);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            online.spigot().sendMessage(line);
+        }
+    }
+
+    private boolean shareEnabled() {
+        return configuration.share() == null || configuration.share().enabled();
+    }
+
+    /** 生成不与现有分享冲突的 8 位随机码。 */
+    private String newShareCode() {
+        String code;
+        do {
+            code = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        } while (shareCache.containsKey(code));
+        return code;
+    }
+
+    /** 惰性清扫过期分享（在分享/领取入口调用，无需独立定时任务）。 */
+    private void sweepExpiredShares() {
+        long now = System.currentTimeMillis();
+        shareCache.values().removeIf(point -> point.expiresAt() < now);
     }
 
     @EventHandler
@@ -888,6 +1389,19 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         playerDataCache.remove(uuid);
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
+    }
+
+    /**
+     * 外部插件禁用时自动注销其注册的导航回调，避免回调进已卸载的插件类。
+     */
+    @EventHandler
+    public void onPluginDisable(PluginDisableEvent event) {
+        Set<String> owned = navigationSourceOwners.remove(event.getPlugin());
+        if (owned != null) {
+            for (String source : owned) {
+                navigationSources.remove(source);
+            }
+        }
     }
 
     /**
@@ -1071,6 +1585,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (markerService != null) {
             markerService.showMarker(player, anchor.worldId(), anchor.x(), anchor.y(), anchor.z());
         }
+        publishNavStarted(player, TargetType.ANCHOR, anchor.id(), anchor.worldId());
         sync(player, false);
         return MapOperationResult.success(message("player.anchor-navigation-started", anchor.displayName()));
     }
@@ -1111,50 +1626,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (markerService != null) {
             markerService.showMarker(player, normalizeId(waypoint.world()), waypoint.x(), waypoint.y(), waypoint.z());
         }
+        publishNavStarted(player, TargetType.WAYPOINT, waypoint.waypointId(), waypoint.world());
         sync(player, false);
         return MapOperationResult.success(message("player.waypoint-navigation-started", waypoint.name()));
-    }
-
-    private MapOperationResult trackExternalTargetInternal(Player player, String targetId) {
-        if (!configuration.navigation().enabled()) {
-            return MapOperationResult.failure(message("player.navigation-disabled"));
-        }
-        MapExternalTarget target = findExternalTarget(player, targetId);
-        if (player == null || !player.isOnline() || target == null) {
-            return MapOperationResult.failure(message("player.target-not-found", targetId));
-        }
-        if (!waypointBridge.available()) {
-            return MapOperationResult.failure(message("player.waypoint-unavailable"));
-        }
-        clearTrackSilently(player);
-        String runtimeWaypointId = configuration.navigation().waypointIdPrefix() + "external-" + sanitize(target.targetId());
-        String styleId = waypointBridge.resolveStyleId(
-            configuration.waypoints().defaultStyleId(),
-            configuration.navigation().waypointStyleId(),
-            "Map"
-        );
-        if (!waypointBridge.addWaypoint(player, runtimeWaypointId, target.title(), styleId, target.x(), target.y(), target.z())) {
-            return MapOperationResult.failure(message("player.target-navigation-failed"));
-        }
-        navigationStates.put(
-            player.getUniqueId(),
-            new MapNavigationState(
-                true,
-                TargetType.EXTERNAL,
-                normalizeId(target.worldId()),
-                normalizeId(target.targetId()),
-                runtimeWaypointId,
-                target.title(),
-                normalizeId(target.source())
-            )
-        );
-        state(player).selectWorld(normalizeId(target.worldId()));
-        state(player).selectExternalTarget(normalizeId(target.targetId()));
-        if (markerService != null) {
-            markerService.showMarker(player, normalizeId(target.worldId()), target.x(), target.y(), target.z());
-        }
-        sync(player, false);
-        return MapOperationResult.success(message("player.target-navigation-started", target.title()));
     }
 
     private MapOperationResult clearTrackInternal(Player player, boolean sync) {
@@ -1171,7 +1645,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!waypointBridge.removeWaypoint(player, state.waypointId(), false)) {
             return MapOperationResult.failure(message("player.clear-navigation-failed"));
         }
+        if (markerService != null) {
+            markerService.hideMarker(player);
+        }
         navigationStates.remove(player.getUniqueId());
+        publishBusEvent("axs.map.nav_cleared", player, Map.of(
+            "type", state.targetType().name().toLowerCase(Locale.ROOT),
+            "id", state.targetId(),
+            "world_id", state.worldId(),
+            "reason", "cleared"
+        ));
         if (sync) {
             sync(player, false);
         }
@@ -1587,6 +2070,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("x", row.x());
             entry.put("y", row.y());
             entry.put("z", row.z());
+            entry.put("icon", row.iconId());
             entry.put("selected", row.selected());
             entry.put("tracked", row.tracked());
             externalRows.put(Integer.toString(i), entry);
@@ -1610,6 +2094,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("waypointLimit", snapshot.waypointLimit());
         payload.put("waypointCount", snapshot.waypointCount());
         payload.put("canCreateWaypoint", snapshot.canCreateWaypoint());
+        payload.put("shareEnabled", shareEnabled());
         payload.put("clearTrackVisible", snapshot.clearTrackVisible());
         payload.put("trackingText", snapshot.trackingText());
         payload.put("detailSelectedType", snapshot.detail().selectedType());
@@ -1630,6 +2115,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailCanCreateWaypoint", snapshot.detail().canCreateWaypoint());
         payload.put("detailClearTrackVisible", snapshot.detail().clearTrackVisible());
         payload.put("detailTrackingText", snapshot.detail().trackingText());
+        payload.put("detailNavigated", snapshot.detail().navigated());
         payload.put("litEnabled", snapshot.litEnabled());
         payload.put("litRegions", snapshot.litRegions());
         payload.put("maxWorldCount", worldRows.size());
@@ -1694,15 +2180,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             Set<String> existing = new LinkedHashSet<>(loadUnlockedAnchors(player));
             boolean changed = false;
             long now = System.currentTimeMillis();
-            for (DefaultUnlockRule rule : configuration.defaultUnlocks()) {
-                if (!player.hasPermission(rule.permission())) {
-                    continue;
-                }
-                for (String anchorId : rule.anchorIds()) {
-                    if (existing.add(anchorId)) {
-                        repository.unlockAnchor(player.getUniqueId(), anchorId, now);
-                        changed = true;
-                    }
+            for (AnchorDefinition anchor : configuration.anchors().values()) {
+                AnchorUnlock unlock = anchor.unlock();
+                boolean granted = unlock.defaultUnlock()
+                    || (unlock.onPermission()
+                        && !anchor.permission().isBlank()
+                        && player.hasPermission(anchor.permission()));
+                if (granted && existing.add(anchor.id())) {
+                    repository.unlockAnchor(player.getUniqueId(), anchor.id(), now);
+                    changed = true;
                 }
             }
             if (changed) {

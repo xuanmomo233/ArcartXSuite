@@ -97,36 +97,28 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
+      var.activeCurrencies = {}
       var.packetId = 'AXS_MARKET'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.selectedSlot = none
-      var.selectedPrice = none
-      var.selectedMessage = none
       var.selectedDuration = 86400
-      var.selectedCurrency = none
       var.selectedMode = 'auction'
       var.priceMin = 1
       var.priceMax = 1000000000
       var.messageMaxLength = 50
-      var.selectedItemName = none
       var.selectedItemAmount = 0
-      var.selectedItemLore = none
       var.selectedItemJson = var.emptyItemJson
       var.auctionCurrencies = {}
       var.auctionMaxCurrencyCount = 0
-      var.auctionDefaultCurrency = none
       var.auctionPriceMin = 1
       var.auctionPriceMax = 1000000000
       var.auctionMessageMaxLength = 50
       var.auctionEnabled = true
       var.pshopCurrencies = {}
       var.pshopMaxCurrencyCount = 0
-      var.pshopDefaultCurrency = none
       var.pshopPriceMin = 1
       var.pshopPriceMax = 1000000000
       var.pshopMessageMaxLength = 50
       var.pshopEnabled = true
-      var.activeCurrencies = {}
       var.maxCurrencyCount = 0
       var.actionToken = ''
       var.actionBusy = false
@@ -155,7 +147,7 @@ ui:
           if(var.maxCurrencyCount > 1){
             for(i in range(1, var.maxCurrencyCount - 1)){
               key = i.round()
-              e = val.货币列表['货币项'].copy('货币项' + key)
+              if(val.货币列表['货币项'] != none){ e = val.货币列表['货币项'].copy('货币项' + key) }
               e.entryKey = key
             }
           }
@@ -917,7 +909,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedMode == 'auction' ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedMode == 'auction' ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   拍卖模式文字:
                     type: Text
                     attribute:
@@ -950,7 +942,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedMode == 'pshop' ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedMode == 'pshop' ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   玩家商店模式文字:
                     type: Text
                     attribute:
@@ -1133,7 +1125,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                                color: "self.parent.entry != none && self.parent.entry['id'] == var.selectedCurrency ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                           货币项文字:
                             type: Text
                             attribute:
@@ -1174,7 +1166,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 86400 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedDuration == 86400 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   时长1天文字:
                     type: Text
                     attribute:
@@ -1205,7 +1197,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 259200 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedDuration == 259200 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   时长3天文字:
                     type: Text
                     attribute:
@@ -1236,7 +1228,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 604800 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedDuration == 604800 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   时长7天文字:
                     type: Text
                     attribute:
@@ -1268,7 +1260,7 @@ controls:
                     effect:
                       stroke:
                         width: 3
-                        color: "var.selectedDuration == 2592000 ? '255,255,255,255' : self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                        color: "var.selectedDuration == 2592000 ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
                   时长30天文字:
                     type: Text
                     attribute:

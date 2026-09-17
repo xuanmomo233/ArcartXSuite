@@ -154,7 +154,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected List<String> publishedTopics() {
-        return List.of("market.listing_created", "market.auction_purchased", "market.shop_dynamic_triggered");
+        return List.of("axs.market.listing_created", "axs.market.auction_purchased", "axs.market.shop_dynamic_triggered");
     }
 
     @Override
@@ -266,6 +266,52 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                 catch (Exception e) { logger.warning("Market purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
+
+        registerCapability(xuanmo.arcartxsuite.api.capability.AxsMarketService.class,
+            new xuanmo.arcartxsuite.api.capability.AxsMarketService() {
+                @Override public void openUi(@NotNull org.bukkit.entity.Player player,
+                        @NotNull MarketView view) {
+                    if (service == null) return;
+                    switch (view) {
+                        case AUCTION -> service.openAuctionUi(player);
+                        case AUCTION_SELL -> service.openAuctionSellUi(player);
+                        case SHOP_LIST -> service.openShopListUi(player);
+                        case SHOP -> service.openShopUi(player);
+                        case RECYCLE -> service.openRecycleUi(player);
+                        case HISTORY -> service.openHistoryUi(player);
+                        case SELL -> service.openSellUi(player);
+                        case PLAYER_SHOP -> service.openPlayerShopUi(player);
+                        case MY_LISTINGS -> service.openMyListingsUi(player);
+                    }
+                }
+                @Override public void createAuctionListing(@NotNull org.bukkit.entity.Player player,
+                        @NotNull ItemStack item, double startingBid, @Nullable String currency,
+                        long durationSeconds) {
+                    if (service != null) {
+                        service.createListing(player, item, startingBid, currency, durationSeconds);
+                    }
+                }
+                @Override public void cancelListing(@NotNull org.bukkit.entity.Player player,
+                        long listingId) {
+                    if (service != null) service.cancelListing(player, listingId);
+                }
+                @Override public void searchAuction(@NotNull org.bukkit.entity.Player player,
+                        @Nullable String keyword) {
+                    if (service != null) service.searchAuction(player, keyword);
+                }
+                @Override public int auctionCount() {
+                    return service != null ? service.getAuctionCount() : 0;
+                }
+                @Override public int shopCount() {
+                    return service != null ? service.getShopCount() : 0;
+                }
+                @Override public int myListingCount(@NotNull org.bukkit.entity.Player player) {
+                    return service != null ? service.getMyListingsCount(player) : 0;
+                }
+                @Override public boolean playerShopEnabled() {
+                    return service != null && service.isPlayerShopEnabled();
+                }
+            });
 
         adminCommand = new MarketAdminCommand(() -> service, messages());
 

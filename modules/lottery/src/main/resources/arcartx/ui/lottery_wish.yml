@@ -131,7 +131,7 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
+            if(val.卡池导航列表['卡池按钮0'] != none){ btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key) }
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['UP物品槽'].entryKey = key
@@ -241,7 +241,7 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
+            if(val.卡池导航列表['卡池按钮0'] != none){ btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key) }
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['UP物品槽'].entryKey = key
@@ -384,7 +384,7 @@ ui:
         if(i > 0){
           existing = val.历史列表['历史行' + key]
           if(existing == none){
-            e = val.历史列表['历史行0'].copy('历史行' + key)
+            if(val.历史列表['历史行0'] != none){ e = val.历史列表['历史行0'].copy('历史行' + key) }
             e['物品图标'].entryKey = key
             e['时间'].entryKey = key
             e['摘要'].entryKey = key
@@ -426,7 +426,7 @@ ui:
         if(i > 0){
           existing = val.详情列表['详情行' + key]
           if(existing == none){
-            e = val.详情列表['详情行0'].copy('详情行' + key)
+            if(val.详情列表['详情行0'] != none){ e = val.详情列表['详情行0'].copy('详情行' + key) }
             e['物品图标'].entryKey = key
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
@@ -482,7 +482,7 @@ ui:
         if(i > 0){
           existing = val.兑换列表['兑换行' + key]
           if(existing == none){
-            e = val.兑换列表['兑换行0'].copy('兑换行' + key)
+            if(val.兑换列表['兑换行0'] != none){ e = val.兑换列表['兑换行0'].copy('兑换行' + key) }
             e['商品图标'].entryKey = key
             e['商品名称'].entryKey = key
             e['消耗文本'].entryKey = key
@@ -1460,31 +1460,31 @@ controls:
                       星1:
                         type: Text
                         attribute:
-                          texts: "var.upItemStar >= 1 ? '&6★' : '&8★'"
+                          texts: "var.upItemStar != none && var.upItemStar >= 1 ? '&6★' : '&8★'"
                           fontSize: 48
                           through: true
                       星2:
                         type: Text
                         attribute:
-                          texts: "var.upItemStar >= 2 ? '&6★' : '&8★'"
+                          texts: "var.upItemStar != none && var.upItemStar >= 2 ? '&6★' : '&8★'"
                           fontSize: 48
                           through: true
                       星3:
                         type: Text
                         attribute:
-                          texts: "var.upItemStar >= 3 ? '&6★' : '&8★'"
+                          texts: "var.upItemStar != none && var.upItemStar >= 3 ? '&6★' : '&8★'"
                           fontSize: 48
                           through: true
                       星4:
                         type: Text
                         attribute:
-                          texts: "var.upItemStar >= 4 ? '&6★' : '&8★'"
+                          texts: "var.upItemStar != none && var.upItemStar >= 4 ? '&6★' : '&8★'"
                           fontSize: 48
                           through: true
                       星5:
                         type: Text
                         attribute:
-                          texts: "var.upItemStar >= 5 ? '&6★' : '&8★'"
+                          texts: "var.upItemStar != none && var.upItemStar >= 5 ? '&6★' : '&8★'"
                           fontSize: 48
                           through: true
                   UP描述:
@@ -1866,7 +1866,7 @@ controls:
                   point: ~top_left
                   x: 170
                   y: 158
-                  texts: "var.poolCount > 0 ? '&f第 ' + (var.currentPoolIndex + 1).round() + ' / 共 ' + var.poolCount.round() + ' 个' : '&f第 ' + (var.currentPoolIndex + 1).round() + ' 个'"
+                  texts: "var.poolCount != none && var.poolCount > 0 ? '&f第 ' + (var.currentPoolIndex + 1).round() + ' / 共 ' + var.poolCount.round() + ' 个' : '&f第 ' + (var.currentPoolIndex + 1).round() + ' 个'"
                   fontSize: 36
                   limit: 18
                   through: true
@@ -2450,7 +2450,7 @@ controls:
         attribute:
           point: ~top_center
           y: 70
-          texts: "'&6本次共获得 ' + var.resultCount.round() + ' 件物品"
+          texts: "'&6本次共获得 ' + var.resultCount.round() + ' 件物品'"
           fontSize: 52
       十连保底提示:
         type: Text

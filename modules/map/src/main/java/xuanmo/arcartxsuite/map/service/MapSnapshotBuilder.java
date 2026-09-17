@@ -100,8 +100,9 @@ public final class MapSnapshotBuilder {
                     target.x(),
                     target.y(),
                     target.z(),
+                    target.iconId() == null ? "" : target.iconId(),
                     target.targetId().equalsIgnoreCase(input.viewState().selectedExternalTargetId()),
-                    input.navigationState().matchesExternal(target.targetId())
+                    target.navigated()
                 )
             );
         }
@@ -219,7 +220,8 @@ public final class MapSnapshotBuilder {
                     false,
                     canCreateWaypoint,
                     input.navigationState().active(),
-                    trackingText(input.navigationState())
+                    trackingText(input.navigationState()),
+                    input.navigationState().matchesAnchor(anchor.id())
                 );
             }
         }
@@ -243,7 +245,8 @@ public final class MapSnapshotBuilder {
                     false,
                     canCreateWaypoint,
                     input.navigationState().active(),
-                    trackingText(input.navigationState())
+                    trackingText(input.navigationState()),
+                    input.navigationState().matchesWaypoint(waypoint.waypointId())
                 );
             }
         }
@@ -267,7 +270,8 @@ public final class MapSnapshotBuilder {
                     false,
                     canCreateWaypoint,
                     input.navigationState().active(),
-                    trackingText(input.navigationState())
+                    trackingText(input.navigationState()),
+                    target.navigated()
                 );
             }
         }
@@ -291,7 +295,8 @@ public final class MapSnapshotBuilder {
                     true,
                     canCreateWaypoint,
                     input.navigationState().active(),
-                    trackingText(input.navigationState())
+                    trackingText(input.navigationState()),
+                    false
                 );
             }
         }
@@ -313,7 +318,8 @@ public final class MapSnapshotBuilder {
             false,
             canCreateWaypoint,
             input.navigationState().active(),
-            trackingText(input.navigationState())
+            trackingText(input.navigationState()),
+            false
         );
     }
 
@@ -632,8 +638,9 @@ public final class MapSnapshotBuilder {
      * @param x           X 坐标
      * @param y           Y 坐标
      * @param z           Z 坐标
+     * @param iconId      图标 id（可空字符串）
      * @param selected    是否当前选中
-     * @param tracked     是否正在追踪
+     * @param tracked     来源是否正在导航该目标（驱动"导航/取消"按钮态）
      */
     public record ExternalTargetRow(
         String id,
@@ -643,6 +650,7 @@ public final class MapSnapshotBuilder {
         double x,
         double y,
         double z,
+        String iconId,
         boolean selected,
         boolean tracked
     ) {
@@ -688,6 +696,8 @@ public final class MapSnapshotBuilder {
      * @param canCreateWaypoint  是否可创建路径点
      * @param clearTrackVisible  是否显示清除追踪按钮
      * @param trackingText       当前追踪状态文本
+     * @param navigated          当前选中目标是否正被导航（anchor/waypoint 看地图自身导航态；
+     *                           external 看来源回推的 navigated 标记；驱动"导航/取消"按钮切换）
      */
     public record DetailSnapshot(
         String selectedType,
@@ -707,7 +717,8 @@ public final class MapSnapshotBuilder {
         boolean canDeletePin,
         boolean canCreateWaypoint,
         boolean clearTrackVisible,
-        String trackingText
+        String trackingText,
+        boolean navigated
     ) {
     }
 

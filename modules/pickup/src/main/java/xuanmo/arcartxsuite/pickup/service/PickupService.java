@@ -184,6 +184,9 @@ public final class PickupService implements Listener {
         payload.put("itemJson", itemStackBridge.itemToJson(itemStack).orElse(""));
         payload.put("amount", amount);
 
+        // 补发路径同样代表"发生了一次拾取"，无论 HUD 最终是否成功打开都发事件
+        publishPickupEvent(player, itemStack, amount);
+
         if (openedPlayers.contains(playerId)) {
             if (configuration.debug()) {
                 logger.info("[PickupDiag] notifyPickup already-opened -> scheduleSend");
@@ -226,6 +229,7 @@ public final class PickupService implements Listener {
         payload.put("amount", itemStack.getAmount());
 
         UUID playerId = player.getUniqueId();
+        publishPickupEvent(player, itemStack, itemStack.getAmount());
         if (openedPlayers.contains(playerId)) {
             scheduleSend(player, payload, OPENED_PACKET_DELAY_TICKS);
             return;
@@ -236,16 +240,15 @@ public final class PickupService implements Listener {
             removeQueuedPayload(playerId, queuedPayload);
             logPickupPacket(player, payload, false);
         }
-        publishPickupEvent(player, itemStack);
     }
 
-    private void publishPickupEvent(Player player, ItemStack itemStack) {
+    private void publishPickupEvent(Player player, ItemStack itemStack, int amount) {
         if (eventBusProvider == null) return;
         EventBusCapability eventBus = eventBusProvider.get();
         if (eventBus == null) return;
         Map<String, String> eventPayload = new HashMap<>();
         eventPayload.put("material", itemStack.getType().name());
-        eventPayload.put("amount", String.valueOf(itemStack.getAmount()));
+        eventPayload.put("amount", String.valueOf(amount));
         eventBus.publish("axs.pickup.item_pickup", player, eventPayload);
     }
 

@@ -1,0 +1,6 @@
+from-version: 3
+to-version: 4
+description: "全局 default-unlocks 节移除，自动解锁改为 worlds/<world>.yml 锚点的 unlock 节（default / on-permission）"
+operations:
+  - type: remove
+    path: default-unlocks

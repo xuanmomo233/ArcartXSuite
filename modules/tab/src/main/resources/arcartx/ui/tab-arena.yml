@@ -10,10 +10,10 @@ ui:
   escClose: false  # 按 ESC 不关闭（HUD 常驻）
   defaultOpen: true  # 模块加载时默认打开此 HUD
   action:
-    # UI 加载时初始化变量
     load: |-
       var.ArenaTAB刷新轮次 = 0
       var.ArenaTAB详细 = false
+    # UI 加载时初始化变量
     # 按下 TAB 键: 请求服务端刷新并开启详细模式（显示血量）
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
@@ -46,7 +46,7 @@ ui:
       while(i < packet.size()){
         if(val.red_player_row.width == 320){
           if(packet.get(i).team == "red"){
-            ROW = val.red_player_row.copy('red_' + var.ArenaTAB刷新轮次 + '_' + i.round())
+            if(val.red_player_row != none){ ROW = val.red_player_row.copy('red_' + var.ArenaTAB刷新轮次 + '_' + i.round()) }
             ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
             ROW['名称文字'].texts = packet.get(i).name
             //status 字段服务端发的是 "1" / "0"；UI 端转图标
@@ -58,7 +58,7 @@ ui:
             ROW['血量文字'].texts = "&c❤ " + packet.get(i).health
             ROW.visible = true
           }elif(packet.get(i).team == "blue"){
-            ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i.round())
+            if(val.blue_player_row != none){ ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i.round()) }
             ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
             ROW['名称文字'].texts = packet.get(i).name
             if(packet.get(i).status == "1"){
@@ -109,7 +109,7 @@ controls:
             attribute:
               point: ~top_center
               width: 720
-              texts: '&cRED  &fvs  &9BLUE'
+              texts: ~&cRED  &fvs  &9BLUE
               fontSize: 32
               through: true
           # ============ 红队（左侧）============

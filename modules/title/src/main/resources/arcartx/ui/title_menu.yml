@@ -26,39 +26,15 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.titles = {}
+      var.equippedByGroup = {}
       var.groups = {}
       var.qualities = {}
+      var.titles = {}
       var.sets = {}
-      var.equippedByGroup = {}
-      var.filterModes = {}
-      var.selectedId = none
       var.selectedCanEquip = false
       var.selectedIsEquipped = false
-      var.selectedName = none
-      var.selectedKind = none
-      var.selectedKindText = none
-      var.selectedChatPrefix = none
-      var.selectedChatSuffix = none
-      var.selectedTabPrefix = none
-      var.selectedTabSuffix = none
-      var.selectedGroupId = none
-      var.selectedGroupName = none
-      var.selectedQualityName = none
-      var.selectedDescription = none
-      var.selectedSource = none
       var.selectedOwned = false
       var.selectedHidden = false
-      var.selectedRemainingText = none
-      var.selectedDisplayAttributesText = none
-      var.selectedCollectionAttributesText = none
-      var.displayAttributesText = none
-      var.collectionAttributesText = none
-      var.totalAttributesText = none
-      var.setBonusAttributesText = none
-      var.displayTitleName = none
-      var.displayTitleId = none
-      var.selectedIsDisplayTitle = false
       var.ownedCount = 0
       var.hiddenCount = 0
       var.equippedCount = 0
@@ -69,16 +45,11 @@ ui:
       var.maxSetCount = 0
       var.maxEquippedCount = 0
       var.刷新轮次 = 0
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       var.filterMode = 'all'
       var.filterGroup = 'all'
       var.filterQuality = 'all'
-      var.titleListScrollRatio = 0
-      var.groupScrollRatio = 0
-      var.qualityScrollRatio = 0
-      var.detailScrollRatio = 0
-      var.rightScrollRatio = 0
-      var.actionBusy = false
-      var.actionBusySeconds = 0
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
       // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
@@ -168,6 +139,13 @@ ui:
     #   - max_set_count: 套装最大数量（用于动态复制套装项控件）
     #   - max_equipped_count: 已装备分组最大数量（用于动态复制已装备项控件）
     init: |-
+      var.actionBusy = false
+      var.activeSetCount = 0
+      var.titleListScrollRatio = 0
+      var.groupScrollRatio = 0
+      var.qualityScrollRatio = 0
+      var.detailScrollRatio = 0
+      var.rightScrollRatio = 0
       var.titles = packet['titles']
       var.groups = packet['groups']
       var.qualities = packet['qualities']
@@ -204,7 +182,6 @@ ui:
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
-      var.activeSetCount = 0
       if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
@@ -219,7 +196,7 @@ ui:
       var.maxEquippedCount = packet['max_equipped_count']
       称号数 = var.maxTitleCount.round()
       现有称号数 = val.title_list.childrenCount() - 1
-      if(现有称号数 != 称号数 - 1){
+      if(现有称号数 != 称号数 - 1 && val.title_list['称号模板'] != none){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.title_list.childrenCount() > 1){
           val.title_list.get(1).remove()
@@ -233,7 +210,7 @@ ui:
       }
       分组数 = var.maxGroupCount.round()
       现有分组数 = val.group_list.childrenCount() - 1
-      if(现有分组数 != 分组数 - 1){
+      if(现有分组数 != 分组数 - 1 && val.group_list['分组模板'] != none){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.group_list.childrenCount() > 1){
           val.group_list.get(1).remove()
@@ -247,7 +224,7 @@ ui:
       }
       品质数 = var.maxQualityCount.round()
       现有品质数 = val.quality_list.childrenCount() - 1
-      if(现有品质数 != 品质数 - 1){
+      if(现有品质数 != 品质数 - 1 && val.quality_list['品质模板'] != none){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.quality_list.childrenCount() > 1){
           val.quality_list.get(1).remove()
@@ -261,7 +238,7 @@ ui:
       }
       套装数 = var.maxSetCount.round()
       现有套装数 = val.set_list.childrenCount() - 1
-      if(现有套装数 != 套装数 - 1){
+      if(现有套装数 != 套装数 - 1 && val.set_list['套装模板'] != none){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.set_list.childrenCount() > 1){
           val.set_list.get(1).remove()
@@ -275,7 +252,7 @@ ui:
       }
       已装备数 = var.maxEquippedCount.round()
       现有已装备数 = val.equipped_list.childrenCount() - 1
-      if(现有已装备数 != 已装备数 - 1){
+      if(现有已装备数 != 已装备数 - 1 && val.equipped_list['已装备模板'] != none){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.equipped_list.childrenCount() > 1){
           val.equipped_list.get(1).remove()
@@ -287,18 +264,14 @@ ui:
           }
         }
       }
-      var.titleListScrollRatio = 0
-      var.groupScrollRatio = 0
-      var.qualityScrollRatio = 0
-      var.detailScrollRatio = 0
-      var.rightScrollRatio = 0
       // init 包到达，重置防抖标志，恢复按钮可点击
-      var.actionBusy = false
     # packetHandler: update
     # 后端推送更新时执行，字段与 init 完全相同，用于刷新界面变量。
     # 包字段: 同 init（titles/groups/qualities/sets/equipped_by_group/filter_modes/selected_* 等全部字段）
     # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
+      var.actionBusy = false
+      var.activeSetCount = 0
       // 保存旧数量，用于判断是否需要重建列表
       oldMaxTitleCount = var.maxTitleCount
       oldMaxGroupCount = var.maxGroupCount
@@ -341,7 +314,6 @@ ui:
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
-      var.activeSetCount = 0
       if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
@@ -355,7 +327,7 @@ ui:
       var.maxSetCount = packet['max_set_count']
       var.maxEquippedCount = packet['max_equipped_count']
       // ── 称号列表：仅在数量变化时重建 ──
-      if(var.maxTitleCount != oldMaxTitleCount){
+      if(var.maxTitleCount != oldMaxTitleCount && val.title_list['称号模板'] != none){
         称号数 = var.maxTitleCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.title_list.childrenCount() > 1){
@@ -369,7 +341,7 @@ ui:
         }
       }
       // ── 分组列表：仅在数量变化时重建 ──
-      if(var.maxGroupCount != oldMaxGroupCount){
+      if(var.maxGroupCount != oldMaxGroupCount && val.group_list['分组模板'] != none){
         分组数 = var.maxGroupCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.group_list.childrenCount() > 1){
@@ -383,7 +355,7 @@ ui:
         }
       }
       // ── 品质列表：仅在数量变化时重建 ──
-      if(var.maxQualityCount != oldMaxQualityCount){
+      if(var.maxQualityCount != oldMaxQualityCount && val.quality_list['品质模板'] != none){
         品质数 = var.maxQualityCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.quality_list.childrenCount() > 1){
@@ -397,7 +369,7 @@ ui:
         }
       }
       // ── 套装列表：仅在数量变化时重建 ──
-      if(var.maxSetCount != oldMaxSetCount){
+      if(var.maxSetCount != oldMaxSetCount && val.set_list['套装模板'] != none){
         套装数 = var.maxSetCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.set_list.childrenCount() > 1){
@@ -411,7 +383,7 @@ ui:
         }
       }
       // ── 已装备列表：仅在数量变化时重建 ──
-      if(var.maxEquippedCount != oldMaxEquippedCount){
+      if(var.maxEquippedCount != oldMaxEquippedCount && val.equipped_list['已装备模板'] != none){
         已装备数 = var.maxEquippedCount.round()
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.equipped_list.childrenCount() > 1){
@@ -425,7 +397,6 @@ ui:
         }
       }
       // update 包到达，重置防抖标志，恢复按钮可点击
-      var.actionBusy = false
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 controls:

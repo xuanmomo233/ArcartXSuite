@@ -9,7 +9,10 @@ import org.jetbrains.annotations.NotNull;
  * <p>
  * 由 Warehouse 模块实现，供 Pickup 等模块在不打开 UI 的情况下
  * 尝试将玩家手中的物品直接存入个人仓库。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(WarehouseAutoDepositable.class)} 获取。
  */
+@PublicCapability
 public interface WarehouseAutoDepositable {
 
     /**

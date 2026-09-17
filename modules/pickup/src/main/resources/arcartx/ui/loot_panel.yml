@@ -63,7 +63,6 @@ ui:
     load: |-
       var.count = 0
       var.selectedIndex = 0
-      var.menuOpen = false
       var.dirty = false
       var.item0Visible = false
       var.item1Visible = false
@@ -81,14 +80,6 @@ ui:
       var.item5Amount = 0
       var.item6Amount = 0
       var.item7Amount = 0
-      var.item0ItemJson = none
-      var.item1ItemJson = none
-      var.item2ItemJson = none
-      var.item3ItemJson = none
-      var.item4ItemJson = none
-      var.item5ItemJson = none
-      var.item6ItemJson = none
-      var.item7ItemJson = none
     tick: |-
       if(var.dirty){
         if(var.item0ItemJson != none){

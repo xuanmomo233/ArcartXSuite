@@ -9,7 +9,10 @@ import org.jetbrains.annotations.Nullable;
  * 战斗特效主动触发能力接口。
  * <p>
  * 由 CombatEffect 模块实现，供其他模块（如 EventPacket、OnlineRewards）跨模块触发战斗特效。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(CombatEffectTriggerable.class)} 获取。
  */
+@PublicCapability
 public interface CombatEffectTriggerable {
 
     /**

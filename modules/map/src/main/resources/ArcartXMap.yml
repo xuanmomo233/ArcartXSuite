@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 2
+config-version: 4
 # AXS Map
 # 作用: 提供全屏地图 GUI、小地图 HUD、世界配置、锚点、路径点、自定义图标和 AXMap 临时导航目标。
 # 依赖: ArcartX；Vault、PlayerPoints、MythicMobs、NeigeItems 按功能选用。
@@ -20,17 +20,9 @@ ui:
   register-ui-on-enable: true
   overwrite-ui-files: false
 
-keybinds:
-  # KeyBind 分类名和默认键位；default-key 使用客户端按键名。
-  category: "AXS Map"
-  open-menu:
-    enabled: true
-    display-name: "打开地图"
-    default-key: "M"
-  toggle-hud:
-    enabled: true
-    display-name: "切换小地图"
-    default-key: "H"
+# 按键已由宿主 config.yml keybinds 节统一注册（AXS_MAP_MENU 打开地图 / AXS_MAP_HUD 切换小地图，
+# 归属 module: map，本模块禁用时按键不会注册到客户端）。
+# 本模块不再自行注册按键；默认键位请在宿主 config.yml 的 keybinds.map-menu / map-hud 修改。
 
 # ─── 进服行为 ──────────────────────────────────────────
 join:
@@ -79,9 +71,9 @@ navigation:
   # 导航标记模型配置，控制路径标记实体的外观与行为
   marker:
     # 是否启用标记模型
-    enabled: false
+    enabled: true
     # 模型 ID（资源包中的模型标识）
-    model-id: "nav_beacon"
+    model-id: "waypoint"
     # 缩放比例
     scale: 1.0
     # 默认状态
@@ -109,13 +101,6 @@ navigation:
 # 示例文件见 worlds/world.yml。
 worlds-directory: "worlds"
 
-# ─── 默认解锁 ──────────────────────────────────────────
-# 拥有指定权限的玩家在进服时自动解锁对应锚点列表。
-default-unlocks:
-  - permission: "ArcartXSuite.map.use"
-    anchors:
-      - "spawn"
-
 # ─── 路径点配置 ────────────────────────────────────────
 waypoints:
   # 是否允许玩家创建自定义路径点
@@ -127,8 +112,18 @@ waypoints:
   # 自动命名前缀（玩家未命名时使用）
   auto-name-prefix: "标记点"
   # 默认路径点最大数量
-  default-max-count: 5
+  default-max-count: 50
   # 按权限设置不同的路径点上限
   limits:
-    - permission: "ArcartXSuite.map.admin"
-      max-count: 20
+    - permission: "ArcartXSuite.map.vip"
+      max-count: 100
+
+# ─── 分享配置 ──────────────────────────────────────────
+share:
+  # 分享路径点和标记点功能总开关：false 时详情面板的分享按钮隐藏，share/claim 一律拒绝
+  enabled: true
+  # 聊天卡片模板 ID（对应 plugins/ArcartX/chat_card/<id>.yml）
+  # 留空 = 不用聊天卡片，降级为纯文本广播（点击文本自动执行 /map claim <分享码>）
+  card-id: "axs_map_share"
+  # 分享链接有效期（分钟）。分享码存内存，重启/重载后失效；过期后点击领取会提示失败
+  expire-minutes: 30

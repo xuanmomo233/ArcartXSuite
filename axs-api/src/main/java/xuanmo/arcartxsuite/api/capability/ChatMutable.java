@@ -11,7 +11,10 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * 由 Chat 模块实现并注册，供 Essentials 等模块通过 capability 调用以执行禁言/解禁操作。
  * 当 Chat 模块未启用时，调用方应做降级处理。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(ChatMutable.class)} 获取。
  */
+@PublicCapability
 public interface ChatMutable {
 
     /**

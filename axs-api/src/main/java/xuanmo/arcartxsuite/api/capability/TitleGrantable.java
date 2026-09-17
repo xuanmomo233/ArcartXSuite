@@ -7,7 +7,10 @@ import org.jetbrains.annotations.NotNull;
  * 称号授予能力接口。
  * <p>
  * 由 Title 模块实现，供 EventPacket 等模块跨模块调用。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(TitleGrantable.class)} 获取。
  */
+@PublicCapability
 public interface TitleGrantable {
 
     /**

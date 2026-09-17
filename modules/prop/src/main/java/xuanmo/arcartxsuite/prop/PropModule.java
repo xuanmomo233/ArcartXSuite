@@ -85,6 +85,20 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         service.start();
         adminCommand = new PropAdminCommand(() -> service, messages());
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.PropAccessible.class,
+            new xuanmo.arcartxsuite.api.capability.PropAccessible() {
+                @Override public @NotNull List<String> propIds() {
+                    return service != null ? service.propIds() : List.of();
+                }
+                @Override public @NotNull PropApplyResult applyPropToMainHand(
+                        @NotNull org.bukkit.entity.Player player, @NotNull String propId) {
+                    if (service == null) return new PropApplyResult(false, "Prop 模块未启动");
+                    var result = service.applyPropToMainHand(player, propId);
+                    return new PropApplyResult(result.success(),
+                        result.message() != null ? result.message() : "");
+                }
+            });
+
         logger.fine(
             "Prop 模块已载入，props=" + service.propCount()
                 + " | keys=" + service.registeredKeyCount()

@@ -9,10 +9,10 @@ ui:
   escClose: false  # 按 ESC 不关闭（HUD 常驻）
   defaultOpen: true  # 模块加载时默认打开此 HUD
   action:
-    # UI 加载时初始化变量
     load: |-
       var.TAB刷新轮次 = 0
       var.TAB显示 = false
+    # UI 加载时初始化变量
     # 按下 TAB 键: 请求服务端刷新并计算列数
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
@@ -42,7 +42,7 @@ ui:
       //此处的写法有点赘余，但这是为了防止报错写的伪判断,以及绕过ax的控件的复制删除BUG
       while(i < packet.size()){
         if(val.player.width == 250){
-          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round())
+          if(val.player != none){ TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round()) }
           TAB['player_text'].texts = packet.get(i)
           TAB.visible = true
         }
@@ -70,7 +70,7 @@ controls:
           visible: var.TAB显示  # 仅按住 TAB 时显示
           shape: ~round_rect
           radius: 20
-          about_y: "var.单列数量 < 4 || var.单列数量 > 5 ? var.单列数量 : 3"  # 信息栏折行系数
+          about_y: "var.单列数量 == none ? 3 : (var.单列数量 < 4 || var.单列数量 > 5 ? var.单列数量 : 3)"  # 信息栏折行系数
         effect:
           stroke:  # 描边
             width: 3

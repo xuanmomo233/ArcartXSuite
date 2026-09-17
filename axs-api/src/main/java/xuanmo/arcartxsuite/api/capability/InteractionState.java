@@ -11,7 +11,11 @@ import org.jetbrains.annotations.NotNull;
  * <p>
  * 当 {@link #isPlayerInteracting(Player)} 返回 {@code true} 时，
  * 表示该玩家正在与当前模块交互，其他模块不应抢占按键。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(InteractionState.class)} 获取，
+ * 用于在响应共享交互键前判断是否应让步。
  */
+@PublicCapability
 public interface InteractionState {
 
     /**

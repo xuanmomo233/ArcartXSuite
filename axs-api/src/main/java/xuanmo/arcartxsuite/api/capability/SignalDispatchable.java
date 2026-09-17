@@ -9,7 +9,11 @@ import org.jetbrains.annotations.Nullable;
  * 信号派发能力接口。
  * <p>
  * 由 EventPacket 模块实现，供其他模块（如 OnlineRewards）跨模块触发信号。
+ * <p>
+ * 公开 capability：外部插件可经 {@code AxsCapabilities.get(SignalDispatchable.class)} 获取，
+ * 直接向 EventPacket 规则引擎触发信号。请仅触发服务器管理员预期内的信号名。
  */
+@PublicCapability
 public interface SignalDispatchable {
 
     /**

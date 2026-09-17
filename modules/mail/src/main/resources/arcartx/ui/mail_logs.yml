@@ -29,8 +29,6 @@ ui:
   action:
     load: |-
       var.logs = {}
-      var.page = 1
-      var.maxPage = 1
       var.totalCount = 0
       var.maxLogCount = 0
       var.isAdmin = false
@@ -73,7 +71,7 @@ ui:
       }
       for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
-        e = val.logs_list['日志项目'].copy('日志项目' + key)
+        if(val.logs_list['日志项目'] != none){ e = val.logs_list['日志项目'].copy('日志项目' + key) }
         e.entryKey = key
       }
     # packetHandler: update（字段与 init 相同）
@@ -89,7 +87,7 @@ ui:
       }
       for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
-        e = val.logs_list['日志项目'].copy('日志项目' + key)
+        if(val.logs_list['日志项目'] != none){ e = val.logs_list['日志项目'].copy('日志项目' + key) }
         e.entryKey = key
       }
 

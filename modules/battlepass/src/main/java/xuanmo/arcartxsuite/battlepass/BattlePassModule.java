@@ -219,6 +219,46 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             }
         });
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.BattlePassAccess.class,
+            new xuanmo.arcartxsuite.api.capability.BattlePassAccess() {
+                @Override public boolean isSeasonActive() {
+                    return service != null && service.isSeasonActive();
+                }
+                @Override public int addXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    return service != null ? service.addXp(player, xp) : 0;
+                }
+                @Override public void setXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    if (service != null) service.setXp(player, xp);
+                }
+                @Override public void removeXp(@NotNull org.bukkit.entity.Player player, int xp) {
+                    if (service != null) service.removeXp(player, xp);
+                }
+                @Override public void setLevel(@NotNull org.bukkit.entity.Player player, int level) {
+                    if (service != null) service.setLevel(player, level);
+                }
+                @Override public boolean unlockTier(@NotNull org.bukkit.entity.Player player,
+                        @NotNull String tier) {
+                    if (service == null) return false;
+                    try {
+                        return service.unlockTier(player,
+                            xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress.PassTier
+                                .valueOf(tier.toUpperCase(java.util.Locale.ROOT)));
+                    } catch (IllegalArgumentException e) {
+                        return false;
+                    }
+                }
+                @Override public int claimAllRewards(@NotNull org.bukkit.entity.Player player) {
+                    return service != null ? service.claimAllRewards(player) : 0;
+                }
+                @Override public void updateTaskProgress(@NotNull org.bukkit.entity.Player player,
+                        @NotNull String taskId, int increment) {
+                    if (service != null) service.updateTaskProgress(player, taskId, increment);
+                }
+                @Override public void resetProgress(@NotNull java.util.UUID playerUuid) {
+                    if (service != null) service.resetPlayerProgress(playerUuid);
+                }
+            });
+
         adminCommand = new BattlePassAdminCommand(() -> service, this::msg, MODULE_VERSION);
         logger.fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId()
             + " | 跨服=" + (configuration.crossServer().enabled() ? "ON" : "OFF"));
