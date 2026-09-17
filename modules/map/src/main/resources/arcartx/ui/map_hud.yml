@@ -53,6 +53,10 @@ ui:
         }
       }
       if(var.mapRenderer != none) {
+        // 转发服务端稳定标识：mod 以此做地形缓存一级隔离键（换 IP/域名/端口不丢缓存）
+        if(packet['serverId'] != none && packet['serverId'] != '') {
+          var.mapRenderer.setServerId('' + packet['serverId'])
+        }
         // 告诉 mod 渲染哪个世界的地形
         var.mapRenderer.setWorldId('' + var.worldId)
         // 注册 worldId → MC 维度 key 映射（如 bskyblock_world → minecraft:overworld）
@@ -82,6 +86,10 @@ ui:
         }
       }
       if(var.mapRenderer != none) {
+        // 转发服务端稳定标识（同 init）
+        if(packet['serverId'] != none && packet['serverId'] != '') {
+          var.mapRenderer.setServerId('' + packet['serverId'])
+        }
         var.mapRenderer.setWorldId('' + var.worldId)
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)

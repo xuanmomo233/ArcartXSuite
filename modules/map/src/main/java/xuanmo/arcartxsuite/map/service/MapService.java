@@ -1,6 +1,8 @@
 package xuanmo.arcartxsuite.map.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -11,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.nio.file.Files;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.bukkit.Bukkit;
@@ -2332,6 +2335,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (initPacket) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         Map<String, Object> payload = buildMenuPayload(snapshot.menu());
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
+        payload.put("serverId", serverId());
         bridge.sendPacket(player, menuUiId, initPacket ? "init" : "update", payload);
     }
 
@@ -2351,7 +2355,50 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private void sendHudPacket(Player player, String handler, MapSnapshotBuilder.HudSnapshot hud) {
         Map<String, Object> payload = buildHudPayload(hud);
         payload.put("hudSession", hudSessions.getOrDefault(player.getUniqueId(), -1));
+        payload.put("serverId", serverId());
         bridge.sendPacket(player, hudUiId, handler, payload);
+    }
+
+    /**
+     * 当前服务器的稳定标识（{@code plugins/ArcartXSuite/server-id} 文件持久化，
+     * 首次启动自动生成 UUID）。随 HUD/菜单数据包下发，客户端 mod 以此为
+     * 地形缓存的一级隔离键——换 IP/域名/端口不影响缓存命中；迁移 VPS 时
+     * 连同本文件一起复制即可让玩家沿用旧缓存。
+     *
+     * @return 服务器标识字符串
+     */
+    public String serverId() {
+        String id = serverId;
+        if (id == null) {
+            id = loadOrCreateServerId();
+            serverId = id;
+        }
+        return id;
+    }
+
+    private volatile String serverId;
+
+    private String loadOrCreateServerId() {
+        File file = new File(plugin.getDataFolder(), "server-id");
+        if (file.isFile()) {
+            try {
+                String id = Files.readString(file.toPath()).trim();
+                if (id.matches("[A-Za-z0-9_-]{8,64}")) {
+                    return id;
+                }
+                logger.warning("[Map] server-id 文件内容非法，重新生成");
+            } catch (IOException e) {
+                logger.warning("[Map] 读取 server-id 失败: " + e.getMessage());
+            }
+        }
+        String generated = UUID.randomUUID().toString();
+        try {
+            Files.writeString(file.toPath(), generated);
+            logger.info("[Map] 已生成服务器标识 server-id=" + generated);
+        } catch (IOException e) {
+            logger.warning("[Map] 写入 server-id 失败（仅本次会话内有效）: " + e.getMessage());
+        }
+        return generated;
     }
 
     private MapSnapshotBuilder.BuildResult buildSnapshot(Player player) {
