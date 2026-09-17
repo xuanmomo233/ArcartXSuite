@@ -285,10 +285,10 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     /** 停止模块服务，释放 {@link QuestGpsService} 与配置资源。 */
     @Override
     protected void stopService() {
-        // 注销地图导航回调与互斥事件订阅
+        // 注销地图导航回调与互斥事件订阅（source 与注册时一致，用 service.mapSource()）
         MapNavigable mapNavigable = getCapability(MapNavigable.class);
-        if (mapNavigable != null) {
-            mapNavigable.unregisterNavigationSource("questgps");
+        if (mapNavigable != null && service != null) {
+            mapNavigable.unregisterNavigationSource(service.mapSource());
         }
         if (mapNavSubscriptionId != null) {
             EventBusCapability eventBus = getCapability(EventBusCapability.class);

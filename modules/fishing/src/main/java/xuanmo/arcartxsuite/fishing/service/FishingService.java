@@ -217,6 +217,7 @@ public final class FishingService {
         activeMinigames.clear();
         fishingCooldowns.clear();
         recentCatches.clear();
+        taskEngine.shutdown();
         shutdownCrossServer();
         repository.shutdown();
     }

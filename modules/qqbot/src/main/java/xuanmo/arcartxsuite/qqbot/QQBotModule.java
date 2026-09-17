@@ -56,6 +56,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private BukkitTask redPacketRefundTask;
     // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
     private volatile boolean closed = false;
+    // EventBus 订阅 ID：stopService 时退订，防止 /axs reload 后订阅叠加、播报重复
+    private final List<String> eventBusSubscriptionIds = new java.util.ArrayList<>();
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -377,7 +379,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus = getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         if (eventBus != null) {
-            eventBus.subscribe("axs.market.*", event -> {
+            String marketSubId = eventBus.subscribe("axs.market.*", event -> {
                 if (!"axs.market.auction_purchased".equals(event.topic())) return;
                 if (!configuration.marketBroadcast().enabled()) return;
                 double price = 0;
@@ -393,9 +395,15 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                     : event.payload().getOrDefault("buyer", "未知");
                 svc.sendToAllGroups("[交易] " + playerName + " 以 " + formattedPrice + " 购买了拍卖行物品");
             });
-            eventBus.subscribe("axs.mail.*", event -> {
+            if (marketSubId != null) {
+                eventBusSubscriptionIds.add(marketSubId);
+            }
+            String mailSubId = eventBus.subscribe("axs.mail.*", event -> {
                 // 预留：邮件相关事件群通知
             });
+            if (mailSubId != null) {
+                eventBusSubscriptionIds.add(mailSubId);
+            }
         }
 
         // 17. 服务器监控告警
@@ -474,6 +482,17 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         if (repository != null) {
             repository.close();
             repository = null;
+        }
+        // 退订 EventBus，防止 reload 后订阅叠加导致重复播报
+        if (!eventBusSubscriptionIds.isEmpty()) {
+            xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus = getCapability(
+                xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
+            if (eventBus != null) {
+                for (String subId : eventBusSubscriptionIds) {
+                    eventBus.unsubscribe(subId);
+                }
+            }
+            eventBusSubscriptionIds.clear();
         }
         storageManager.closeModuleDataSource("qqbot");
         configuration = null;

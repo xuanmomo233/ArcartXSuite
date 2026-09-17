@@ -26,10 +26,10 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  * <h3>使用示例</h3>
  * <pre>{@code
  * // 发布方（Market 模块）
- * eventBus.publish("axs.market.purchase", player, Map.of("price", "1000", "item", "钻石剑"));
+ * eventBus.publish("axs.market.listing_created", player, Map.of("price", "1000", "item", "钻石剑"));
  *
  * // 订阅方（QQBot 模块 / 外部插件）
- * eventBus.subscribe("axs.market.purchase", (event) -> {
+ * eventBus.subscribe("axs.market.listing_created", (event) -> {
  *     qqBot.sendToAllGroups("[交易] " + event.player().getName() + " 购买了物品");
  * });
  * }</pre>

@@ -38,6 +38,8 @@ public final class TaskEngine {
 
     // 玩家任务实例缓存：uuid → 分类 → 实例列表
     private final Map<UUID, Map<FishingTask.TaskCategory, List<PlayerTaskInstance>>> playerTasks = new HashMap<>();
+    // EventBus 订阅 ID：shutdown 时退订，防止模块 reload 后订阅叠加、进度双倍增长
+    private final List<String> eventBusSubscriptionIds = new ArrayList<>();
 
     public TaskEngine(@NotNull List<FishingTask> dailyPool,
                       @NotNull List<FishingTask> weeklyPool,
@@ -79,7 +81,7 @@ public final class TaskEngine {
         }
         // 订阅所有主题
         for (String topic : topics) {
-            eventBus.subscribe(topic, event -> {
+            String subId = eventBus.subscribe(topic, event -> {
                 try {
                     if (event.player() != null) {
                         updateTasks(event.player(), event.topic(), event.payload());
@@ -88,7 +90,24 @@ public final class TaskEngine {
                     logger.warning("更新任务进度失败 [" + event.topic() + "]: " + e.getMessage());
                 }
             });
+            if (subId != null) {
+                eventBusSubscriptionIds.add(subId);
+            }
         }
+    }
+
+    /**
+     * 关闭任务引擎：退订全部 EventBus 订阅并清空任务缓存。
+     */
+    public void shutdown() {
+        EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
+        if (eventBus != null) {
+            for (String subId : eventBusSubscriptionIds) {
+                eventBus.unsubscribe(subId);
+            }
+        }
+        eventBusSubscriptionIds.clear();
+        playerTasks.clear();
     }
 
     /**

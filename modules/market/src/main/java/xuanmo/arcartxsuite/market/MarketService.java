@@ -239,23 +239,23 @@ public class MarketService {
 
     // ─── 拍卖行操作 ─────────────────────────────────────────
 
-    public void createListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
+    public boolean createListing(Player player, ItemStack item, double startingBid, String currency, long duration) {
         if (auctionService == null) {
             player.sendMessage(messages.get("player.auction-unavailable"));
-            return;
+            return false;
         }
         // 价格范围校验（覆盖命令路径，UI 路径在 handleAuctionListCreatePacket 已校验）
         if (startingBid < 0) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.auction().minPrice()),
                 formatPrice(config.auction().maxPrice())));
-            return;
+            return false;
         }
         if (startingBid > 0 && (startingBid < config.auction().minPrice() || startingBid > config.auction().maxPrice())) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",
                 formatPrice(config.auction().minPrice()),
                 formatPrice(config.auction().maxPrice())));
-            return;
+            return false;
         }
         // 货币校验
         String effectiveCurrency = currency != null && !currency.isBlank() ? currency : config.auction().defaultCurrency();
@@ -265,7 +265,7 @@ public class MarketService {
         if (currencyOption == null || currencyManager.bridge(effectiveCurrency) == null
             || !currencyManager.bridge(effectiveCurrency).available()) {
             player.sendMessage(messages.get("player.sell.invalid-currency"));
-            return;
+            return false;
         }
         if (duration <= 0) duration = config.auction().defaultDurationSeconds();
         var result = auctionService.createListing(player, item, startingBid, currencyOption.id(), duration);
@@ -274,19 +274,20 @@ public class MarketService {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
             dispatchSignal("market_listing_created", player, Map.of(
                 "price", String.valueOf(startingBid),
-                "currency", currency != null ? currency : "money"
+                "currency", currencyOption.id()
             ));
             publishEvent("axs.market.listing_created", player, Map.of(
                 "price", String.valueOf(startingBid),
-                "currency", currency != null ? currency : "money"
+                "currency", currencyOption.id()
             ));
-        } else {
-            player.sendMessage(ChatColor.RED + result.error());
+            return true;
         }
+        player.sendMessage(ChatColor.RED + result.error());
+        return false;
     }
 
-    public void cancelListing(Player player, long listingId) {
-        if (auctionService == null) return;
+    public boolean cancelListing(Player player, long listingId) {
+        if (auctionService == null) return false;
         boolean success = auctionService.cancelListing(player, listingId);
         if (success) {
             rotateToken(player, config.ui().auctionId());
@@ -294,6 +295,7 @@ public class MarketService {
         } else {
             player.sendMessage(messages.get("player.cancel-failed"));
         }
+        return success;
     }
 
     public void searchAuction(Player player, String keyword) {

@@ -53,7 +53,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
         this.mailService = mailService;
         this.logger = logger;
         this.asyncExecutor = Executors.newFixedThreadPool(2, r -> {
-            Thread t = new Thread(r, "AxsMailApi-Async");
+            Thread t = new Thread(r, "AxsMailService-Async");
             t.setDaemon(true);
             return t;
         });
@@ -104,7 +104,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                     future.complete(AxsDeliveryReceipt.noOp());
                 }
             } catch (Exception e) {
-                logger.warning("AxsMailApi send 失败: " + e.getMessage());
+                logger.warning("AxsMailService send 失败: " + e.getMessage());
                 future.complete(AxsDeliveryReceipt.noOp());
             }
         });
@@ -120,7 +120,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 Optional<MailMessage> mail = mailService.repository().loadMail(playerId, mailId);
                 return mail.map(this::toView).orElse(null);
             } catch (Exception e) {
-                logger.warning("AxsMailApi getMail 失败: " + e.getMessage());
+                logger.warning("AxsMailService getMail 失败: " + e.getMessage());
                 return null;
             }
         }, asyncExecutor);
@@ -142,7 +142,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 }
                 return views;
             } catch (Exception e) {
-                logger.warning("AxsMailApi getInbox 失败: " + e.getMessage());
+                logger.warning("AxsMailService getInbox 失败: " + e.getMessage());
                 return List.of();
             }
         }, asyncExecutor);
@@ -154,7 +154,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
             try {
                 return mailService.unreadCount(playerId);
             } catch (Exception e) {
-                logger.warning("AxsMailApi getUnreadCount 失败: " + e.getMessage());
+                logger.warning("AxsMailService getUnreadCount 失败: " + e.getMessage());
                 return 0;
             }
         }, asyncExecutor);
@@ -169,7 +169,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 Optional<MailMessage> mail = mailService.markMailRead(playerId, mailId);
                 return mail.map(this::toView).orElse(null);
             } catch (Exception e) {
-                logger.warning("AxsMailApi markRead 失败: " + e.getMessage());
+                logger.warning("AxsMailService markRead 失败: " + e.getMessage());
                 return null;
             }
         }, asyncExecutor);
@@ -188,7 +188,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                     future.complete(mapClaimFailure(result.message()));
                 }
             } catch (Exception e) {
-                logger.warning("AxsMailApi claim 失败: " + e.getMessage());
+                logger.warning("AxsMailService claim 失败: " + e.getMessage());
                 future.complete(AxsClaimResult.failure("CLAIM_FAILED"));
             }
         });
@@ -205,7 +205,7 @@ public final class AxsMailServiceAdapter implements AxsMailService {
                 }
                 return mapDeleteFailure(result.message());
             } catch (Exception e) {
-                logger.warning("AxsMailApi delete 失败: " + e.getMessage());
+                logger.warning("AxsMailService delete 失败: " + e.getMessage());
                 return AxsDeleteResult.failure("DELETE_FAILED");
             }
         }, asyncExecutor);

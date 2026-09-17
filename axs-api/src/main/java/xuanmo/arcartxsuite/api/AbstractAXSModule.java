@@ -299,7 +299,8 @@ public abstract class AbstractAXSModule implements AXSModule {
                     context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
                 if (eventBus != null) {
                     for (String topic : topics) {
-                        if (topic != null && !topic.startsWith("axs.")) {
+                        if (topic == null || topic.isBlank()) continue;
+                        if (!topic.startsWith("axs.")) {
                             logger.warning("EventBus 主题缺少 axs. 前缀: " + topic
                                 + "（AXS 内置主题约定 axs.<模块id>.<事件名>）");
                         }

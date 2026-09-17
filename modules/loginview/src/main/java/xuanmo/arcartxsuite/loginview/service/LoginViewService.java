@@ -81,7 +81,7 @@ public final class LoginViewService implements Listener {
     private final Supplier<QqBindCapable> qqBindProvider;
     private final MessageProvider messages;
     private Supplier<EventBusCapability> eventBusProvider;
-    private final Set<UUID> authenticatedPlayers = new HashSet<>();
+    private final Set<UUID> authenticatedPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> failedAttempts = new HashMap<>();
     private final Set<String> allowedCommandPrefixes = new HashSet<>();
     private final Set<UUID> loginViewInvulnerablePlayers = new HashSet<>();

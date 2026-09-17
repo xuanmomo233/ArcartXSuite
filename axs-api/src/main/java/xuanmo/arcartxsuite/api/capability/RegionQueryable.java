@@ -13,6 +13,9 @@ import org.jetbrains.annotations.Nullable;
  * 区域变更可订阅 EventBus 主题 {@code axs.regions.region_change}。
  * <p>
  * 外部插件经 {@code AxsCapabilities.get(RegionQueryable.class)} 获取。
+ * <p>
+ * 线程约定：请在 Bukkit 主线程调用。Region 内部成员集合非并发容器，
+ * 快照拷贝遇异步并发修改可能抛出 ConcurrentModificationException。
  */
 @PublicCapability
 public interface RegionQueryable {

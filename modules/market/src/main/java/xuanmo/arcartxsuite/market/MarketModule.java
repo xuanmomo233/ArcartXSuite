@@ -284,20 +284,25 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                         case MY_LISTINGS -> service.openMyListingsUi(player);
                     }
                 }
-                @Override public void createAuctionListing(@NotNull org.bukkit.entity.Player player,
+                @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
+                        createAuctionListing(@NotNull org.bukkit.entity.Player player,
                         @NotNull ItemStack item, double startingBid, @Nullable String currency,
                         long durationSeconds) {
-                    if (service != null) {
-                        service.createListing(player, item, startingBid, currency, durationSeconds);
+                    return java.util.concurrent.CompletableFuture.completedFuture(
+                        service != null && service.createListing(player, item, startingBid, currency, durationSeconds));
+                }
+                @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
+                        cancelListing(@NotNull org.bukkit.entity.Player player, long listingId) {
+                    return java.util.concurrent.CompletableFuture.completedFuture(
+                        service != null && service.cancelListing(player, listingId));
+                }
+                @Override public @NotNull java.util.concurrent.CompletableFuture<Boolean>
+                        searchAuction(@NotNull org.bukkit.entity.Player player, @Nullable String keyword) {
+                    if (service == null) {
+                        return java.util.concurrent.CompletableFuture.completedFuture(false);
                     }
-                }
-                @Override public void cancelListing(@NotNull org.bukkit.entity.Player player,
-                        long listingId) {
-                    if (service != null) service.cancelListing(player, listingId);
-                }
-                @Override public void searchAuction(@NotNull org.bukkit.entity.Player player,
-                        @Nullable String keyword) {
-                    if (service != null) service.searchAuction(player, keyword);
+                    service.searchAuction(player, keyword);
+                    return java.util.concurrent.CompletableFuture.completedFuture(true);
                 }
                 @Override public int auctionCount() {
                     return service != null ? service.getAuctionCount() : 0;

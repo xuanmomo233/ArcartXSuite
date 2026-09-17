@@ -17,22 +17,30 @@ public interface LoginViewQueryable {
     /**
      * 查询玩家当前是否已通过认证（含 session 恢复判定）。
      * <p>
-     * 请在 Bukkit 主线程调用。
+     * 可从任意线程调用。注意：内存缓存未命中时会同步执行一次数据库
+     * session 查询（重启/重连恢复判定），高频路径请缓存结果或异步调用。
      */
     boolean isAuthenticated(@NotNull Player player);
 
     /**
      * 查询玩家是否已有注册账号。
+     * <p>
+     * 可从任意线程调用。自建认证模式下每次调用都会执行一次数据库查询
+     * （AuthMe 模式走其本地缓存），高频路径请缓存结果或异步调用。
      */
     boolean isRegistered(@NotNull Player player);
 
     /**
      * 为玩家打开登录界面（已认证且无 force 时为空操作）。
+     * <p>
+     * 涉及 UI 打开，请在 Bukkit 主线程调用。
      */
     void openFor(@NotNull Player player);
 
     /**
      * 为玩家打开登录界面。
+     * <p>
+     * 涉及 UI 打开，请在 Bukkit 主线程调用。
      *
      * @param force true 时即使已认证也强制打开（用于改密等场景）
      */

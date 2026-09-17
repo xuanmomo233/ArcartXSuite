@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.api.capability;
 
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -47,6 +48,13 @@ public interface AxsMarketService {
 
     /**
      * 替玩家创建一条拍卖挂单（从玩家手中取走物品）。
+     * <p>
+     * 在调用线程同步执行（涉及背包与落库，须在 Bukkit 主线程调用），
+     * 返回的 Future 已完成：{@code true} 上架成功，{@code false} 校验失败
+     * （价格/货币/黑名单/数量上限等，失败原因已通过消息发送给玩家）。
+     * <p>
+     * 防复制约束：{@code item} 必须与玩家主手物品匹配（type 相同且数量不超过
+     * 主手持量），上架从主手扣除——不支持给玩家上架其未持有的物品。
      *
      * @param player          卖家
      * @param item            上架物品
@@ -54,18 +62,24 @@ public interface AxsMarketService {
      * @param currency        货币 id，null 使用默认货币
      * @param durationSeconds 持续秒数
      */
-    void createAuctionListing(@NotNull Player player, @NotNull ItemStack item,
+    @NotNull CompletableFuture<Boolean> createAuctionListing(@NotNull Player player, @NotNull ItemStack item,
                               double startingBid, @Nullable String currency, long durationSeconds);
 
     /**
      * 取消玩家的一条拍卖挂单。
+     * <p>
+     * 在调用线程同步执行（须主线程），返回的 Future 已完成：
+     * {@code true} 取消成功，{@code false} 挂单不存在/不属于该玩家/已成交等。
      */
-    void cancelListing(@NotNull Player player, long listingId);
+    @NotNull CompletableFuture<Boolean> cancelListing(@NotNull Player player, long listingId);
 
     /**
      * 打开拍卖 UI 并按关键字搜索。
+     * <p>
+     * 在调用线程同步执行（须主线程），返回的 Future 已完成：
+     * {@code false} 表示市场服务不可用。
      */
-    void searchAuction(@NotNull Player player, @Nullable String keyword);
+    @NotNull CompletableFuture<Boolean> searchAuction(@NotNull Player player, @Nullable String keyword);
 
     /** 当前活跃拍卖挂单总数。 */
     int auctionCount();
