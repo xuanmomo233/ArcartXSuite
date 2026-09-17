@@ -12,13 +12,14 @@ ui:
     load: |-
       var.TAB刷新轮次 = 0
       var.TAB显示 = false
+      var.TAB在线人数 = 0
     # UI 加载时初始化变量
     # 按下 TAB 键: 请求服务端刷新并计算列数
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
-        var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
-        var.第一列人数 = math.min(server.server_online, 15)
+        var.单列数量 = math.ceil(var.TAB在线人数 / val.TAB遍历.row)
+        var.第一列人数 = math.min(var.TAB在线人数, 15)
         var.TAB显示 = true
       }
     # 松开 TAB 键: 隐藏列表
@@ -48,8 +49,9 @@ ui:
         }
         i++
       }
-      var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
-      var.第一列人数 = math.min(server.server_online, 15)
+      var.TAB在线人数 = packet.size()
+      var.单列数量 = math.ceil(var.TAB在线人数 / val.TAB遍历.row)
+      var.第一列人数 = math.min(var.TAB在线人数, 15)
 # ============ 控件定义 ============
 controls:
   自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
@@ -146,7 +148,7 @@ controls:
                   radius: 10
                   ID: 0.round()
                   normal: ~95,95,95,255
-                  visible: var.TAB显示 && self.ID < server.server_online  # 仅显示在线人数范围内的行
+                  visible: var.TAB显示 && self.ID < var.TAB在线人数  # 仅显示在线人数范围内的行
           TAB遍历2:  # 玩家文本渲染网格，packetHandler 动态复制 player 模板填充文本
             type: VGrid
             val: TAB遍历2

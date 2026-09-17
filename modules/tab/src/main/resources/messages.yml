@@ -40,6 +40,14 @@ player:
 
 # ── 调试与快照运维 ────────────────────────────────────
 admin:
+  fake:
+    usage: "&7用法: /axstab fake <数量|off> &8(0-{0}，仅影响自己的 TAB 显示)"
+    status-on: "&efake 测试模式已开启：模拟在线人数 &f{0}&e。"
+    status-off: "&efake 测试模式未开启。"
+    enabled: "&a已进入 fake 测试模式：模拟在线人数 &f{0}&a。按住 TAB 查看布局效果，输入 /axstab fake off 关闭。"
+    disabled: "&a已关闭 fake 测试模式，恢复真实数据。"
+    not-active: "&efake 测试模式未开启。"
+    invalid: "&c数量无效: {0}（请输入 0-{1} 或 off）"
   debug:
     usage: "&7用法: /axstab debug <player> [definitionId]"
     offline: "&c玩家不在线: {0}"

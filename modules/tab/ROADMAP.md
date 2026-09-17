@@ -219,6 +219,8 @@ settings:
   - `load` 将存档注入为 `snapshot:<name>:local` + `snapshot:<name>:<原 nodeId>` 虚拟跨服节点，在 `cleanupStaleSnapshots` 中豁免清理，必须 `unload` 显式移除。
   - 实现：`TabSnapshotStore` + `TabSyncService.snapshotLocalEntries / snapshotRemoteEntries / installSnapshotPayload / uninstallSnapshotPayload / installedSnapshotNodeIds`。`TabPlayerCommand.handleSnapshot` 提供子命令与 tab-complete。
   - **限制**：load 不重新解析 PAPI（使用落盘时的 `renderedPack`）。
+- **`/axstab fake <数量|off>`**（fake 测试模式）：权限 `axstab.debug` 或 OP，仅玩家自身；开启后 `TabSyncService.dispatchRefresh` 对该 viewer 的所有 definition 推送 count 条伪造条目（pack 模板渲染本人 + ` &8#序号` 后缀；map pack 顶层 key 加 `_fake_<i>` 后缀），用于观察 UI 在不同在线人数下的列数 / 背景高度 / 信息栏布局。状态存于 `fakeEntryCounts`，退服自动清除。上限 500（UI 背景行预生成上限约 120）。
+- **在线人数包驱动**：`tab.yml` / `tab-rich.yml` 不再读 `server.server_online`（PAPI），改用 `var.TAB在线人数 = packet.size()` / `var.RichTAB在线人数 = packet.size()`，keyPress 与背景行 `visible` 均引用该变量。计数与实际渲染行数始终一致，filters / max-entries / 分页截断下不再错位。
 
 ## 10. 合规 / 安全（优先级 ★★）✅ 阶段 4-C 完成
 

@@ -71,6 +71,8 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     private final Map<UUID, GraceEntry> leaveGraceCache = new LinkedHashMap<>();
     /** 最近一次 {@link #sortPlayers} 的本服 ordered UUID 列表，供 PAPI rank/count 读取。 */
     private final Map<String, List<UUID>> lastSortedByDef = new LinkedHashMap<>();
+    /** fake 测试模式：viewer -> 伪造的在线条目数，仅影响该 viewer 的 payload，不影响其他玩家。 */
+    private final Map<UUID, Integer> fakeEntryCounts = new LinkedHashMap<>();
 
     private record GraceEntry(String name, long expireAt, Map<String, Object> renderedPackByDefinition,
                               Map<String, Double> sortNumericByDefinition,
@@ -163,6 +165,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         viewerPages.clear();
         lastBroadcastTimestamps.clear();
         leaveGraceCache.clear();
+        fakeEntryCounts.clear();
     }
 
     /** 公开 API：切换玩家当前 Tab 视图，触发一次强制刷新。 */
@@ -217,6 +220,36 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             return 0;
         }
         return pageMap.getOrDefault(definitionId, 0);
+    }
+
+    /**
+     * fake 测试模式：为 viewer 设置伪造的在线条目数，count &lt; 0 时关闭。
+     * 开启后该 viewer 收到的所有 definition payload 均为 count 条伪造条目
+     * （按 pack 模板渲染 viewer 本人 + 序号后缀），用于测试 UI 在不同在线人数下的布局。
+     * 仅影响该 viewer，不影响其他玩家与 PAPI 统计。
+     */
+    public boolean setFakeEntryCount(Player viewer, int count) {
+        if (viewer == null || !viewer.isOnline()) {
+            return false;
+        }
+        Integer previous = count < 0
+            ? fakeEntryCounts.remove(viewer.getUniqueId())
+            : fakeEntryCounts.put(viewer.getUniqueId(), count);
+        boolean changed = count < 0
+            ? previous != null
+            : !Integer.valueOf(count).equals(previous);
+        if (changed) {
+            List<String> allIds = new ArrayList<>(definitionsById.keySet());
+            if (!allIds.isEmpty()) {
+                requestForcedViewerRefresh(viewer, allIds, "fake-count");
+            }
+        }
+        return true;
+    }
+
+    /** viewer 当前的 fake 条目数；未开启返回 null。 */
+    public Integer fakeEntryCount(Player viewer) {
+        return viewer == null ? null : fakeEntryCounts.get(viewer.getUniqueId());
     }
 
     public boolean handleClientRefreshPacket(Player player, String packetId, List<String> data) {
@@ -331,6 +364,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         forcedViewerDefinitionRefreshes.remove(playerId);
         viewerCurrentView.remove(playerId);
         viewerPages.remove(playerId);
+        fakeEntryCounts.remove(playerId);
 
         // 退服宽限：把玩家最后一次的渲染快照存起来，跨服快照在 grace 期内仍带这一条
         long graceMs = configuration.leaveGraceMs();
@@ -461,7 +495,10 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
                     }
                     payload = TabPayloadAssembler.create(definition.packTemplate(), 0);
                 } else {
-                    payload = buildPayloadForViewer(definition, onlinePlayers, viewer);
+                    Integer fakeCount = fakeEntryCounts.get(viewer.getUniqueId());
+                    payload = fakeCount != null
+                        ? buildFakePayload(definition, viewer, fakeCount)
+                        : buildPayloadForViewer(definition, onlinePlayers, viewer);
                 }
 
                 Object previousPayload = deliveredPayloads.get(viewer.getUniqueId());
@@ -618,6 +655,66 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             TabPayloadAssembler.append(payload, packTemplate, rendered, definition.omitBlankValues());
         }
         return payload;
+    }
+
+    /**
+     * fake 测试模式 payload：按 pack 模板形态生成 count 条伪造条目。
+     * <ul>
+     *   <li>String pack：渲染文本 + {@code &8#序号} 后缀区分行。</li>
+     *   <li>List pack：每个字符串元素加序号后缀。</li>
+     *   <li>Map pack：顶层 key 加 {@code _fake_<序号>} 后缀保证条目互不覆盖；
+     *   内层字典的字符串字段（uuid 除外）加序号后缀。</li>
+     * </ul>
+     */
+    private Object buildFakePayload(TabDefinition definition, Player viewer, int count) {
+        Object packTemplate = definition.packTemplate();
+        Object payload = TabPayloadAssembler.create(packTemplate, count);
+        // 模板只渲染一次（viewer 本人上下文），markFakeEntry 逐条生成带序号的副本
+        Object rendered = renderNode(packTemplate, viewer);
+        for (int i = 0; i < count; i++) {
+            TabPayloadAssembler.append(payload, packTemplate, markFakeEntry(rendered, i), false);
+        }
+        return payload;
+    }
+
+    private Object markFakeEntry(Object rendered, int index) {
+        String marker = " &8#" + (index + 1);
+        if (rendered instanceof String stringValue) {
+            return stringValue + marker;
+        }
+        if (rendered instanceof List<?> listValue) {
+            List<Object> marked = new ArrayList<>(listValue.size());
+            for (Object entry : listValue) {
+                marked.add(entry instanceof String s ? s + marker : entry);
+            }
+            return marked;
+        }
+        if (rendered instanceof Map<?, ?> mapValue) {
+            Map<String, Object> rekeyed = new LinkedHashMap<>(mapValue.size());
+            for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
+                rekeyed.put(String.valueOf(entry.getKey()) + "_fake_" + index, markFakeInnerMap(entry.getValue(), index));
+            }
+            return rekeyed;
+        }
+        return rendered;
+    }
+
+    /** Map pack 内层字典：给非 uuid 的字符串字段加序号后缀（uuid 字段保持原值以免破坏 PlayerSkin）。 */
+    private Object markFakeInnerMap(Object value, int index) {
+        if (!(value instanceof Map<?, ?> innerMap)) {
+            return value;
+        }
+        Map<String, Object> marked = new LinkedHashMap<>(innerMap.size());
+        for (Map.Entry<?, ?> entry : innerMap.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object inner = entry.getValue();
+            if (inner instanceof String s && !"uuid".equalsIgnoreCase(key)) {
+                marked.put(key, s + " &8#" + (index + 1));
+            } else {
+                marked.put(key, inner);
+            }
+        }
+        return marked;
     }
 
     private void appendGroupedEntries(
