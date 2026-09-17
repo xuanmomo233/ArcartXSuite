@@ -55,7 +55,9 @@ ui:
         }
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            if(val.卡片模板 != none){ val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round()) }
+            if(val.卡片模板 != none) {
+              val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
+            }
           }
         }
       }
@@ -63,7 +65,9 @@ ui:
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          if(val.血条容器 != none){ 卡片 = val.血条容器.get(n) }
+          if(val.血条容器 != none) {
+            卡片 = val.血条容器.get(n)
+          }
           进度 = packet.get('slot' + n + '_progress')
           卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
           卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
@@ -97,14 +101,18 @@ ui:
         }
         if(var.bossCount > 0){
           for(序号 in range(1, var.bossCount)){
-            if(val.卡片模板 != none){ val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round()) }
+            if(val.卡片模板 != none) {
+              val.卡片模板.copy('boss卡片_' + var.刷新轮次 + '_' + 序号.round())
+            }
           }
         }
       }
       if(var.bossCount > 0){
         for(序号 in range(1, var.bossCount)){
           n = 序号.round()
-          if(val.血条容器 != none){ 卡片 = val.血条容器.get(n) }
+          if(val.血条容器 != none) {
+            卡片 = val.血条容器.get(n)
+          }
           进度 = packet.get('slot' + n + '_progress')
           卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
           卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
@@ -126,18 +134,16 @@ ui:
     # 包字段: 无（关闭包不携带数据，仅触发清理逻辑）
     # close 在 HUD 被服务端主动关闭时执行：清零计数并移除所有复制出来的卡片。
     close: |-
-      var.isVisible = false
       var.bossCount = 0
       var.totalBossCount = 0
+      var.isVisible = false
       while(val.血条容器.childrenCount() > 1){
         val.血条容器.get(1).remove()
       }
   action:
     load: |-
-      var.isVisible = false
-      var.bossCount = 0
-      var.totalBossCount = 0
       var.刷新轮次 = 0
+      var.isVisible = false
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 controls:
   自适应全局布局:                   # 设计分辨率容器，整树等比缩放
@@ -151,10 +157,6 @@ controls:
       # 避免 HUD 刚打开但服务端数据包还没到时出现脏数据。
       create: |-
         var.isVisible = false
-        var.bossCount = 0
-        var.totalBossCount = 0
-        var.maxVisibleBars = 0
-        var.刷新轮次 = 0
     children:
       首领追踪标题文字:               # 顶部标题，显示 "首领追踪 当前/总数"
         type: text

@@ -42,6 +42,12 @@ ui:
     #   - items / itemCount: 奖池预览物品（key 为 "1" 起的数字字符串，每个 entry 含 name/rarity）
     # 说明: owned 为 -1 表示余额未知（外部货币桥不可用），界面显示 "—" 且不判定为不足。
     init: |-
+      var.costTenIconJsons = {}
+      var.动画卡片列表 = {}
+      var.奖励卡片列表 = {}
+      var.animItemJsons = {}
+      var.animItems = {}
+      var.costIconJsons = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -51,14 +57,12 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
-      var.costIconJsons = {}
       if(var.costRows != none){
         for(key in var.costRows.keys()){
           json = packet['costIconJson' + key]
           var.costIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.costTenIconJsons = {}
       if(var.costTenRows != none){
         for(key in var.costTenRows.keys()){
           json = packet['costTenIconJson' + key]
@@ -106,9 +110,10 @@ ui:
             }
           }
         }
-        var.奖励卡片列表 = {}
         var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        if(val.奖励网格 != none){ 模板 = val.奖励网格.get(0) }
+        if(val.奖励网格 != none) {
+          模板 = val.奖励网格.get(0)
+        }
         var.奖励卡片列表[1.round()] = 模板
         if(模板 != none){
           模板.entryKey = 1.round()
@@ -150,18 +155,17 @@ ui:
             }
           }
         }
-        var.动画卡片列表 = {}
         var.动画带轮次 = (var.动画带轮次 + 1).round()
         // 初始化动画带物品数据为奖池预览数据的副本，让动画卡片创建时就有颜色和图标
-        var.animItems = {}
-        var.animItemJsons = {}
         for(key in var.items.keys()){
           var.animItems[key] = var.items[key]
         }
         for(key in var.itemJsons.keys()){
           var.animItemJsons[key] = var.itemJsons[key]
         }
-        if(val.动画卡片带 != none){ 动画模板 = val.动画卡片带.get(1) }
+        if(val.动画卡片带 != none) {
+          动画模板 = val.动画卡片带.get(1)
+        }
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
           随机key = (math.floor(math.random() * 目标数) + 1).round()
@@ -195,7 +199,9 @@ ui:
       // 消耗区: 刷新图标
       for(i in range(0, 3)){
         key = i.round()
-        if(val.消耗区 != none){ e = val.消耗区.get(key) }
+        if(val.消耗区 != none) {
+          e = val.消耗区.get(key)
+        }
         if(e != none){
           e['图标'].seticon()
         }
@@ -205,6 +211,9 @@ ui:
     # 包字段与 init 完全相同，用于切换奖池、抽奖结束后刷新界面数据。
     # 额外职责: 若处于等待态但本次没有结果包（抽奖失败），解除等待态并回到主面板。
     update: |-
+      var.costTenIconJsons = {}
+      var.动画卡片列表 = {}
+      var.奖励卡片列表 = {}
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
       var.poolDescription = packet['poolDescription']
@@ -213,14 +222,12 @@ ui:
       var.costTenRows = packet['costTenRows'] != none ? packet['costTenRows'] : {}
       var.tenAvailable = packet['tenAvailable'] == true
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
-      var.costIconJsons = {}
       if(var.costRows != none){
         for(key in var.costRows.keys()){
           json = packet['costIconJson' + key]
           var.costIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.costTenIconJsons = {}
       if(var.costTenRows != none){
         for(key in var.costTenRows.keys()){
           json = packet['costTenIconJson' + key]
@@ -268,9 +275,10 @@ ui:
             }
           }
         }
-        var.奖励卡片列表 = {}
         var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
-        if(val.奖励网格 != none){ 模板 = val.奖励网格.get(0) }
+        if(val.奖励网格 != none) {
+          模板 = val.奖励网格.get(0)
+        }
         var.奖励卡片列表[1.round()] = 模板
         if(模板 != none){
           模板.entryKey = 1.round()
@@ -312,18 +320,17 @@ ui:
             }
           }
         }
-        var.动画卡片列表 = {}
         var.动画带轮次 = (var.动画带轮次 + 1).round()
         // 初始化动画带物品数据为奖池预览数据的副本，让动画卡片创建时就有颜色和图标
-        var.animItems = {}
-        var.animItemJsons = {}
         for(key in var.items.keys()){
           var.animItems[key] = var.items[key]
         }
         for(key in var.itemJsons.keys()){
           var.animItemJsons[key] = var.itemJsons[key]
         }
-        if(val.动画卡片带 != none){ 动画模板 = val.动画卡片带.get(1) }
+        if(val.动画卡片带 != none) {
+          动画模板 = val.动画卡片带.get(1)
+        }
         var.动画卡片列表[0.round()] = 动画模板
         if(动画模板 != none){
           随机key = (math.floor(math.random() * 目标数) + 1).round()
@@ -356,7 +363,9 @@ ui:
       }
       for(i in range(0, 3)){
         key = i.round()
-        if(val.消耗区 != none){ e = val.消耗区.get(key) }
+        if(val.消耗区 != none) {
+          e = val.消耗区.get(key)
+        }
         if(e != none){
           e['图标'].seticon()
         }
@@ -376,6 +385,8 @@ ui:
     #   - resultRarity: 中奖物品稀有度
     #   - resultPoolIndex: 中奖物品在奖池中的 1 基索引
     result: |-
+      var.spinTarget = 0.8358
+      var.出货开始 = 0
       var.resultCount = packet['resultCount'] != none ? packet['resultCount'] : 0
       // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
       var.resultItemJsons = {}
@@ -385,7 +396,6 @@ ui:
       var.resultRarity = packet['resultRarity']
       var.resultPending = true
       var.揭晓类型 = 'single'
-      var.出货开始 = 0
       val.单抽结果卡片['物品浮动容器']['物品槽'].seticon()
       // 用 Java 端发送的 50 个伪随机物品存入 var.animItems/var.animItemJsons，不覆盖奖池预览的 var.items/var.itemJsons
       animCount = packet['animCount'] != none ? packet['animCount'] : 50
@@ -416,7 +426,6 @@ ui:
         }
       }
       // 结果已到达: 固定 spinTarget 让中线精确对准 card 38（中奖位置）
-      var.spinTarget = 0.8358
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
@@ -460,7 +469,9 @@ ui:
         }
         var.十连卡片列表 = {}
         var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
-        if(val.十连网格 != none){ 十连模板 = val.十连网格.get(0) }
+        if(val.十连网格 != none) {
+          十连模板 = val.十连网格.get(0)
+        }
         var.十连卡片列表[1.round()] = 十连模板
         if(十连模板 != none){
           十连模板.entryKey = 1.round()
@@ -519,7 +530,6 @@ ui:
           e['物品槽'].seticon()
         }
       }
-      var.spinTarget = 0.8358
       var.滚动起点 = var.滚动位置
       var.减速 = Q4(0, 1, 1, var.spinMs)
       var.滚动曲线 = var.减速
@@ -539,7 +549,9 @@ ui:
         if(i > 0){
           existing = val.历史列表['历史行' + key]
           if(existing == none){
-            if(val.历史列表['历史行'] != none){ e = val.历史列表['历史行'].copy('历史行' + key) }
+            if(val.历史列表['历史行'] != none) {
+              e = val.历史列表['历史行'].copy('历史行' + key)
+            }
             e['时间'].entryKey = key
             e['物品名'].entryKey = key
             e['稀有度名'].entryKey = key
@@ -547,7 +559,9 @@ ui:
             e['稀有度条'].entryKey = key
           }
         }
-        if(val.历史列表 != none){ row = val.历史列表.get(key) }
+        if(val.历史列表 != none) {
+          row = val.历史列表.get(key)
+        }
         if(row != none){
           row.entryKey = key
         }
@@ -568,7 +582,9 @@ ui:
         if(i > 0){
           existing = val.详情列表['详情行' + key]
           if(existing == none){
-            if(val.详情列表['详情行'] != none){ e = val.详情列表['详情行'].copy('详情行' + key) }
+            if(val.详情列表['详情行'] != none) {
+              e = val.详情列表['详情行'].copy('详情行' + key)
+            }
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
             e['概率'].entryKey = key
@@ -576,7 +592,9 @@ ui:
             e['稀有度条'].entryKey = key
           }
         }
-        if(val.详情列表 != none){ row = val.详情列表.get(key) }
+        if(val.详情列表 != none) {
+          row = val.详情列表.get(key)
+        }
         if(row != none){
           row.entryKey = key
         }
@@ -595,6 +613,13 @@ ui:
       }
     # load 事件: 初始化稀有度颜色表与界面状态变量
     load: |-
+      var.动画带轮次 = 0
+      var.十连卡片轮次 = 0
+      var.奖励卡片轮次 = 0
+      var.actionToken = ''
+      var.rarityNames = {}
+      var.滚动位置 = 0
+      var.滚动起点 = 0
       var.rarityColors = {}
       var.rarityColors['COMMON']    = '176,176,176,255'  // 消费级 - 灰色
       var.rarityColors['UNCOMMON']  = '94,152,217,255'   // 工业级 - 蓝灰色
@@ -604,34 +629,17 @@ ui:
       var.rarityColors['MYTHIC']    = '235,75,75,255'    // 隐秘 - 深红色
       var.rarityColors['SPECIAL']   = '255,215,0,255'    // 罕见特殊物品 - 金色
       var.rarityColors[none] = '128,128,128,255'         // 默认 - 中灰色
-      var.rarityNames = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.animItems = {}
-      var.animItemJsons = {}
       var.spinMs = 2600      // 开箱动画时长（毫秒），结果包到达后再等这么久揭晓
       var.spinTarget = 0.85  // 滚动条停止位置比例
       var.rolling = false        // 是否正在开箱（防连点）
       var.resultPending = false  // 本次开箱是否已收到结果包
-      var.滚动起点 = 0
-      var.滚动位置 = 0
       var.命中已触发 = false
-      var.出货开始 = 0
-      var.十连开始 = 0
-      var.奖励卡片轮次 = 0
-      var.动画带轮次 = 0
-      var.动画带基数 = 0
-      var.十连卡片轮次 = 0
-      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
     # open 事件: 每次打开界面复位所有层
     open: |-
-      var.rolling = false
-      var.resultPending = false
-      var.滚动位置 = 0
       var.命中已触发 = false
-      var.出货开始 = 0
-      var.十连开始 = 0
       val.主面板.visible = true
       val.开箱动画层.visible = false
       val.单抽结果层.visible = false
@@ -1406,9 +1414,6 @@ controls:
             action:
               click: |-
                 val.单抽结果层.visible = false
-                var.出货开始 = 0
-                var.箱子抖动 = none
-                var.箱子缩放 = none
                 val.主面板.visible = true
             children:
               继续背景:
@@ -1585,8 +1590,6 @@ controls:
             action:
               click: |-
                 val.十连结果层.visible = false
-                var.箱子抖动 = none
-                var.箱子缩放 = none
                 val.主面板.visible = true
             children:
               十连继续背景:

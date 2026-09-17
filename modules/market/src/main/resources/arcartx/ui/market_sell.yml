@@ -97,30 +97,17 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.activeCurrencies = {}
+      var.actionToken = ''
+      var.maxCurrencyCount = 0
+      var.messageMaxLength = 50
       var.packetId = 'AXS_MARKET'
+      var.priceMax = 1000000000
+      var.priceMin = 1
+      var.selectedItemAmount = 0
+      var.selectedMode = 'auction'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.selectedDuration = 86400
-      var.selectedMode = 'auction'
-      var.priceMin = 1
-      var.priceMax = 1000000000
-      var.messageMaxLength = 50
-      var.selectedItemAmount = 0
       var.selectedItemJson = var.emptyItemJson
-      var.auctionCurrencies = {}
-      var.auctionMaxCurrencyCount = 0
-      var.auctionPriceMin = 1
-      var.auctionPriceMax = 1000000000
-      var.auctionMessageMaxLength = 50
-      var.auctionEnabled = true
-      var.pshopCurrencies = {}
-      var.pshopMaxCurrencyCount = 0
-      var.pshopPriceMin = 1
-      var.pshopPriceMax = 1000000000
-      var.pshopMessageMaxLength = 50
-      var.pshopEnabled = true
-      var.maxCurrencyCount = 0
-      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.syncMode = -> {
@@ -147,8 +134,10 @@ ui:
           if(var.maxCurrencyCount > 1){
             for(i in range(1, var.maxCurrencyCount - 1)){
               key = i.round()
-              if(val.货币列表['货币项'] != none){ e = val.货币列表['货币项'].copy('货币项' + key) }
-              e.entryKey = key
+              if(val.货币列表['货币项'] != none) {
+                e = val.货币列表['货币项'].copy('货币项' + key)
+                e.entryKey = key
+              }
             }
           }
         }
@@ -252,6 +241,9 @@ controls:
               height: 48
             action:
               clickLeft: |-
+                var.selectedItemLore = none
+                var.selectedItemName = none
+                var.selectedSlot = none
                 Screen.close()
             children:
               关闭背景:

@@ -28,10 +28,7 @@ ui:
     - air_level
   action:
     load: |-
-      var.logs = {}
       var.totalCount = 0
-      var.maxLogCount = 0
-      var.isAdmin = false
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -71,8 +68,10 @@ ui:
       }
       for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
-        if(val.logs_list['日志项目'] != none){ e = val.logs_list['日志项目'].copy('日志项目' + key) }
-        e.entryKey = key
+        if(val.logs_list['日志项目'] != none) {
+          e = val.logs_list['日志项目'].copy('日志项目' + key)
+          e.entryKey = key
+        }
       }
     # packetHandler: update（字段与 init 相同）
     update: |-
@@ -87,8 +86,10 @@ ui:
       }
       for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
-        if(val.logs_list['日志项目'] != none){ e = val.logs_list['日志项目'].copy('日志项目' + key) }
-        e.entryKey = key
+        if(val.logs_list['日志项目'] != none) {
+          e = val.logs_list['日志项目'].copy('日志项目' + key)
+          e.entryKey = key
+        }
       }
 
 # ─── 控件树 ────────────────────────────────────────────────────────

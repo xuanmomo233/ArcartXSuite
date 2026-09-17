@@ -53,24 +53,30 @@ ui:
       // range(a,b) 左闭右闭，生成 a~b 含两端；模板在索引0，故复制 1~count-1 共 count-1 项
       for(i in range(1, var.maxDailyCount - 1)){
         key = i.round()
-        if(val.每日任务列表['任务项'] != none){ e = val.每日任务列表['任务项'].copy('任务项' + key) }
-        e.entryKey = key
+        if(val.每日任务列表['任务项'] != none) {
+          e = val.每日任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
       while(val.每周任务列表.childrenCount() > 1){
         val.每周任务列表.get(1).remove()
       }
       for(i in range(1, var.maxWeeklyCount - 1)){
         key = i.round()
-        if(val.每周任务列表['任务项'] != none){ e = val.每周任务列表['任务项'].copy('任务项' + key) }
-        e.entryKey = key
+        if(val.每周任务列表['任务项'] != none) {
+          e = val.每周任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
       while(val.赛季任务列表.childrenCount() > 1){
         val.赛季任务列表.get(1).remove()
       }
       for(i in range(1, var.maxSeasonCount - 1)){
         key = i.round()
-        if(val.赛季任务列表['任务项'] != none){ e = val.赛季任务列表['任务项'].copy('任务项' + key) }
-        e.entryKey = key
+        if(val.赛季任务列表['任务项'] != none) {
+          e = val.赛季任务列表['任务项'].copy('任务项' + key)
+          e.entryKey = key
+        }
       }
     # packetHandler: update
     # 数据更新时接收服务端任务数据包，刷新 UI 变量（字段与 init 相同）
@@ -103,8 +109,10 @@ ui:
         }
         for(i in range(1, var.maxDailyCount - 1)){
           key = i.round()
-        if(val.每日任务列表['任务项'] != none){ e = val.每日任务列表['任务项'].copy('任务项' + key) }
+        if(val.每日任务列表['任务项'] != none) {
+          e = val.每日任务列表['任务项'].copy('任务项' + key)
           e.entryKey = key
+        }
         }
       }
       // ── 每周任务列表：仅在数量变化时重建 ──
@@ -114,8 +122,10 @@ ui:
         }
         for(i in range(1, var.maxWeeklyCount - 1)){
           key = i.round()
-        if(val.每周任务列表['任务项'] != none){ e = val.每周任务列表['任务项'].copy('任务项' + key) }
+        if(val.每周任务列表['任务项'] != none) {
+          e = val.每周任务列表['任务项'].copy('任务项' + key)
           e.entryKey = key
+        }
         }
       }
       // ── 赛季任务列表：仅在数量变化时重建 ──
@@ -125,8 +135,10 @@ ui:
         }
         for(i in range(1, var.maxSeasonCount - 1)){
           key = i.round()
-        if(val.赛季任务列表['任务项'] != none){ e = val.赛季任务列表['任务项'].copy('任务项' + key) }
+        if(val.赛季任务列表['任务项'] != none) {
+          e = val.赛季任务列表['任务项'].copy('任务项' + key)
           e.entryKey = key
+        }
         }
       }
     progress: |-
@@ -143,20 +155,13 @@ ui:
       var.seasonCompletedCount = packet['seasonCompletedCount']
   action:
     load: |-
-      var.dailyTasks = {}
-      var.seasonTasks = {}
-      var.weeklyTasks = {}
-      var.packetId = 'AXS_BATTLEPASS'
-      var.dailyTaskCount = 0
-      var.weeklyTaskCount = 0
-      var.seasonTaskCount = 0
-      var.totalTaskCount = 0
       var.dailyCompletedCount = 0
-      var.weeklyCompletedCount = 0
       var.seasonCompletedCount = 0
-      var.maxDailyCount = 0
-      var.maxWeeklyCount = 0
-      var.maxSeasonCount = 0
+      var.weeklyCompletedCount = 0
+      var.dailyTaskCount = 0
+      var.packetId = 'AXS_BATTLEPASS'
+      var.seasonTaskCount = 0
+      var.weeklyTaskCount = 0
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
       // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）

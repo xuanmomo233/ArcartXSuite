@@ -92,41 +92,18 @@ ui:
     # packetHandler: close
     # 服务端主动关闭 HUD 时执行，将所有变量重置为默认空值
     close: |-
-      var.isVisible = false
-      var.title = none
-      var.subtitle = none
-      var.health = 0
-      var.maxHealth = 0
-      var.healthText = '0'
-      var.maxHealthText = '0'
-      var.healthPercent = 0
-      var.healthPercentText = '0'
-      var.progress = 0
-      var.distance = 0
       var.distanceText = '-'
-      var.displayName = none
-      var.entityUuid = none
-      var.world = none
-      var.x = 0
-      var.y = 0
-      var.z = 0
-      var.entityType = none
-      var.entityTypeName = none
-      var.mythicMobId = none
-      var.isPlayerTarget = false
+      var.healthPercentText = '0'
+      var.healthText = '0'
       var.lastHitAgoMs = 0
+      var.maxHealthText = '0'
+      var.progress = 0
       var.timeoutMs = 0
+      var.isVisible = false
   action:
     # load 在 HUD 首次加载时执行，初始化所有变量为默认空值，避免数据包到达前显示脏数据
     load: |-
       var.isVisible = false
-      var.healthText = '0'
-      var.maxHealthText = '0'
-      var.healthPercentText = '0'
-      var.progress = 0
-      var.distanceText = '-'
-      var.lastHitAgoMs = 0
-      var.timeoutMs = 0
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定
 controls:

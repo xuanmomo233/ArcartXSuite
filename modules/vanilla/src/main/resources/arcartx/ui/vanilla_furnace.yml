@@ -27,25 +27,22 @@ ui:
         var.shiftHeld = false
       }
     load: |-
-      var.previewGrid = []
-      var.recipeBookOpen = false
-      var.recipes = {}
-      var.recipeJsons = {}
-      var.recipeCanCraft = {}
-      var.刷新轮次 = 0
-      var.previewVisible = true
-      var.resultVisible = true
-      var.air = '{"id":"minecraft:air","Count":1b}'
-      var.currentCategory = 'all'
-      var.needFilterRefresh = false
       var.showAll = true
+      var.previewGrid = []
       var.searchText = ''
-      var.shiftHeld = false
       var.burnTime = 0
       var.burnTimeTotal = 1
       var.cookTime = 0
       var.cookTimeTotal = 1
-      var.burning = false
+      var.recipeCanCraft = {}
+      var.recipeJsons = {}
+      var.recipes = {}
+      var.allRecipes = {}
+      var.刷新轮次 = 0
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.currentCategory = 'all'
+      var.needFilterRefresh = false
+      var.shiftHeld = false
     tick: |-
       if(var.needFilterRefresh){
         var.needFilterRefresh = false
@@ -137,12 +134,24 @@ ui:
       }
       if(packet['catIcons'] != none){
         var.catIcons = packet['catIcons']
-        if(val.配方书按钮 != none){ val.配方书按钮.setItemIcon(var.catIcons['book']) }
-        if(val.显示切换 != none){ val.显示切换.setItemIcon(var.catIcons['toggle']) }
-        if(val.分类栏['分类_全部'] != none){ val.分类栏['分类_全部'].setItemIcon(var.catIcons['all']) }
-        if(val.分类栏['分类_食品'] != none){ val.分类栏['分类_食品'].setItemIcon(var.catIcons['food']) }
-        if(val.分类栏['分类_建筑'] != none){ val.分类栏['分类_建筑'].setItemIcon(var.catIcons['building']) }
-        if(val.分类栏['分类_杂项'] != none){ val.分类栏['分类_杂项'].setItemIcon(var.catIcons['misc']) }
+        if(val.配方书按钮 != none) {
+          val.配方书按钮.setItemIcon(var.catIcons['book'])
+        }
+        if(val.显示切换 != none) {
+          val.显示切换.setItemIcon(var.catIcons['toggle'])
+        }
+        if(val.分类栏['分类_全部'] != none) {
+          val.分类栏['分类_全部'].setItemIcon(var.catIcons['all'])
+        }
+        if(val.分类栏['分类_食品'] != none) {
+          val.分类栏['分类_食品'].setItemIcon(var.catIcons['food'])
+        }
+        if(val.分类栏['分类_建筑'] != none) {
+          val.分类栏['分类_建筑'].setItemIcon(var.catIcons['building'])
+        }
+        if(val.分类栏['分类_杂项'] != none) {
+          val.分类栏['分类_杂项'].setItemIcon(var.catIcons['misc'])
+        }
       }
   defaultOpen: true
 controls:

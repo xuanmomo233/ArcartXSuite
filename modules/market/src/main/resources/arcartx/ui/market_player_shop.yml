@@ -44,6 +44,7 @@ ui:
     #   - maxItemCount: 商品最大数量
     #   - action_token: 操作令牌
     pshop_list: |-
+      var.itemJsons = {}
       oldMaxItemCount = var.maxItemCount
       var.packetId = packet['packetId']
       var.page = packet['page']
@@ -53,7 +54,6 @@ ui:
       var.sellerUuid = packet['sellerUuid']
       var.listings = packet['listings']
       var.listingTexts = packet['listingTexts']
-      var.itemJsons = {}
       var.maxItemCount = packet['maxItemCount']
       var.actionToken = packet['action_token']
       for(key in var.listings.keys()){
@@ -71,14 +71,18 @@ ui:
         if(var.maxItemCount > 1){
           for(i in range(1, var.maxItemCount - 1)){
             key = i.round()
-            if(val.商品列表['商品卡片'] != none){ e = val.商品列表['商品卡片'].copy('商品卡片' + key) }
-            e.entryKey = key
+            if(val.商品列表['商品卡片'] != none) {
+              e = val.商品列表['商品卡片'].copy('商品卡片' + key)
+              e.entryKey = key
+            }
           }
         }
       }
       for(i in range(0, var.maxItemCount - 1)){
         key = i.round()
-        if(val.商品列表 != none){ e = val.商品列表.get(key) }
+        if(val.商品列表 != none) {
+          e = val.商品列表.get(key)
+        }
         if(e != none && e['商品图标'] != none){
           e['商品图标'].seticon()
         }
@@ -109,8 +113,10 @@ ui:
         if(var.maxSellerCount > 1){
           for(i in range(1, var.maxSellerCount - 1)){
             key = i.round()
-            if(val.卖家列表['卖家项'] != none){ e = val.卖家列表['卖家项'].copy('卖家项' + key) }
-            e.entryKey = key
+            if(val.卖家列表['卖家项'] != none) {
+              e = val.卖家列表['卖家项'].copy('卖家项' + key)
+              e.entryKey = key
+            }
           }
         }
       }
@@ -126,21 +132,15 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.sellerTexts = {}
-      var.sellers = {}
+      var.actionToken = ''
+      var.keyword = ''
       var.packetId = 'AXS_MARKET'
       var.page = 0
-      var.totalPages = 1
       var.pageText = '1/1'
-      var.keyword = ''
+      var.sellerTexts = {}
       var.sellerUuid = ''
-      var.listings = {}
-      var.itemJsons = {}
-      var.maxItemCount = 0
-      var.sellerPageText = '1/1'
-      var.maxSellerCount = 0
+      var.totalPages = 1
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
       sx = Screen.getWidth() / 1920

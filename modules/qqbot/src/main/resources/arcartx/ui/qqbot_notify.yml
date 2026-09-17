@@ -24,8 +24,8 @@ ui:
     # packetHandler: clear
     # 包字段: 无（清空所有通知）
     clear: |-
-      var.notifications = []
       var.showCount = 0
+      var.notifications = []
   action:
     load: |-
       var.notifications = []

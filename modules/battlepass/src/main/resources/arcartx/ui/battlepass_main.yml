@@ -64,18 +64,14 @@ ui:
       var.progressRatio = packet['progressRatio']
   action:
     load: |-
-      var.packetId = 'AXS_BATTLEPASS'
-      var.seasonName = '等待同步'
       var.currentLevel = 0
-      var.maxLevel = 0
       var.currentXp = 0
-      var.xpPerLevel = 1000
-      var.xpNeeded = 1000
-      var.premiumUnlocked = false
-      var.deluxeUnlocked = false
-      var.tier = 'FREE'
-      var.tierDisplay = '&f免费'
+      var.maxLevel = 0
       var.progressRatio = 0
+      var.seasonName = '等待同步'
+      var.xpNeeded = 1000
+      var.xpPerLevel = 1000
+      var.packetId = 'AXS_BATTLEPASS'
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
       // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）

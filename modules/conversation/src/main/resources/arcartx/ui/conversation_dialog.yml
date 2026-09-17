@@ -69,8 +69,10 @@ ui:
 
       for(i in range(1, var.replyCount)){
         key = i.round()
-        if(val.reply_list['回复模板'] != none){ ri = val.reply_list['回复模板'].copy('reply_' + i.round()) }
-        ri.entryKey = key
+        if(val.reply_list['回复模板'] != none) {
+          ri = val.reply_list['回复模板'].copy('reply_' + i.round())
+          ri.entryKey = key
+        }
       }
 
     # packetHandler: close
@@ -78,14 +80,10 @@ ui:
     #   - packetId: 通信标识（可能为 none）
     close: |-
       var.packetId = packet['packetId'] == none ? none : packet['packetId']
-      Screen.close()
   action:
     load: |-
-      var.replyRows = {}
-      var.messageLines = []
-      var.canReply = false
-      var.replyCount = 0
-      var.maxReplyWidth = 300
+          var.maxReplyWidth = 300
+          var.replyRows = {}
     keyPress: |-
       var.k = self.currentKeyPress
       if(var.k >= "1" && var.k <= "9"){

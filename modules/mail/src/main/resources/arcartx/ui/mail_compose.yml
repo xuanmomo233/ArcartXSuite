@@ -40,21 +40,16 @@ ui:
       }
     load: |-
       var.actionToken = ''
-      var.actionBusy = false
-      var.actionBusySeconds = 0
-      var.baseFee = '0'
-      var.allowVault = true
-      var.itemFee = '0'
-      var.totalFee = '0'
-      var.maxAttachments = 0
       var.attachmentCount = 0
-      var.subjectMax = 48
       var.bodyMax = 400
       var.composeVault = '0'
-      var.passwordPanelVisible = false
+      var.itemFee = '0'
+      var.maxAttachments = 0
       var.passwordText = ''
-      var.totalFeeCurrencyName = ''
-      var.isAdmin = false
+      var.subjectMax = 48
+      var.totalFee = '0'
+      var.actionBusy = false
+      var.actionBusySeconds = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
       // 视口换算
       sx = Screen.getWidth() / 1920
@@ -93,6 +88,9 @@ ui:
     #   - total_fee_currency: 总费用使用的货币 ID
     #   - is_admin: 当前玩家是否为管理员
     init: |-
+      var.composeBody = none
+      var.composeRecipient = none
+      var.composeSubject = none
       var.sessionId = packet['session_id']
       var.actionToken = packet['action_token']
       var.baseFee = packet['base_fee']
@@ -105,12 +103,7 @@ ui:
       var.attachmentCount = packet['attachment_count']
       var.subjectMax = packet['subject_max']
       var.bodyMax = packet['body_max']
-      var.composeRecipient = none
-      var.composeSubject = none
-      var.composeBody = none
-      var.composeVault = '0'
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
-      var.passwordText = ''
       var.totalFeeCurrency = packet['total_fee_currency']
       var.totalFeeCurrencyName = packet['total_fee_currency_name']
       var.isAdmin = packet['is_admin']
@@ -118,7 +111,9 @@ ui:
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        if(val.附件网格 != none){ slot = val.附件网格.get(i.round()) }
+        if(val.附件网格 != none) {
+          slot = val.附件网格.get(i.round())
+        }
         if(slot != none){
           slot.seticon()
         }
@@ -145,7 +140,9 @@ ui:
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
-        if(val.附件网格 != none){ slot = val.附件网格.get(i.round()) }
+        if(val.附件网格 != none) {
+          slot = val.附件网格.get(i.round())
+        }
         if(slot != none){
           slot.seticon()
         }

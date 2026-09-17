@@ -21,6 +21,10 @@ import org.jetbrains.annotations.Nullable;
  * @param iconId      图标 id（可空，预留给客户端自定义图标渲染）
  * @param navigated   来源当前是否正在导航该目标（true 时面板按钮显示"取消"）
  * @param sortOrder   排序权重，越小越靠前
+ * @param useMapNavigation true 时玩家点"导航"由地图内置导航栈执行
+ *                     （路标 + 路径标记 + 到达判定，样式/到达半径走地图
+ *                     `navigation.*` 配置），不再回调来源 handler；
+ *                     false（默认）走来源回调/全局委托
  */
 public record MapExternalTargetSpec(
     @NotNull String targetId,
@@ -33,11 +37,31 @@ public record MapExternalTargetSpec(
     double z,
     @Nullable String iconId,
     boolean navigated,
-    int sortOrder
+    int sortOrder,
+    boolean useMapNavigation
 ) {
 
     /**
-     * 便捷构造：navigated=false、sortOrder=0、无图标。
+     * 兼容构造：useMapNavigation=false。
+     */
+    public MapExternalTargetSpec(
+        @NotNull String targetId,
+        @NotNull String source,
+        @NotNull String worldId,
+        @NotNull String title,
+        @Nullable String description,
+        double x,
+        double y,
+        double z,
+        @Nullable String iconId,
+        boolean navigated,
+        int sortOrder
+    ) {
+        this(targetId, source, worldId, title, description, x, y, z, iconId, navigated, sortOrder, false);
+    }
+
+    /**
+     * 便捷构造：navigated=false、sortOrder=0、无图标、useMapNavigation=false。
      */
     public MapExternalTargetSpec(
         @NotNull String targetId,
@@ -49,6 +73,6 @@ public record MapExternalTargetSpec(
         double y,
         double z
     ) {
-        this(targetId, source, worldId, title, description, x, y, z, null, false, 0);
+        this(targetId, source, worldId, title, description, x, y, z, null, false, 0, false);
     }
 }

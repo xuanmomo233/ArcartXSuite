@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.map.service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import xuanmo.arcartxsuite.map.model.MapExternalTarget;
 import xuanmo.arcartxsuite.map.model.MapNavigationState;
@@ -60,7 +61,7 @@ public final class MapSnapshotBuilder {
                     anchor.unlockCostText(),
                     anchor.teleportCostText(),
                     anchor.id().equalsIgnoreCase(input.viewState().selectedAnchorId()),
-                    input.navigationState().matchesAnchor(anchor.id())
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id()))
                 )
             );
         }
@@ -80,7 +81,7 @@ public final class MapSnapshotBuilder {
                     waypoint.y(),
                     waypoint.z(),
                     waypoint.waypointId().equalsIgnoreCase(input.viewState().selectedWaypointId()),
-                    input.navigationState().matchesWaypoint(waypoint.waypointId())
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId()))
                 )
             );
         }
@@ -159,8 +160,8 @@ public final class MapSnapshotBuilder {
                 input.waypointLimit(),
                 visibleWaypoints.size(),
                 canCreateWaypoint,
-                input.navigationState().active(),
-                trackingText(input.navigationState()),
+                !input.navigationStates().isEmpty(),
+                trackingText(input.navigationStates()),
                 detail,
                 litEnabled,
                 litRegions,
@@ -219,9 +220,9 @@ public final class MapSnapshotBuilder {
                     false,
                     false,
                     canCreateWaypoint,
-                    input.navigationState().active(),
-                    trackingText(input.navigationState()),
-                    input.navigationState().matchesAnchor(anchor.id())
+                    !input.navigationStates().isEmpty(),
+                    trackingText(input.navigationStates()),
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id()))
                 );
             }
         }
@@ -244,9 +245,9 @@ public final class MapSnapshotBuilder {
                     true,
                     false,
                     canCreateWaypoint,
-                    input.navigationState().active(),
-                    trackingText(input.navigationState()),
-                    input.navigationState().matchesWaypoint(waypoint.waypointId())
+                    !input.navigationStates().isEmpty(),
+                    trackingText(input.navigationStates()),
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId()))
                 );
             }
         }
@@ -269,8 +270,8 @@ public final class MapSnapshotBuilder {
                     false,
                     false,
                     canCreateWaypoint,
-                    input.navigationState().active(),
-                    trackingText(input.navigationState()),
+                    !input.navigationStates().isEmpty(),
+                    trackingText(input.navigationStates()),
                     target.navigated()
                 );
             }
@@ -294,8 +295,8 @@ public final class MapSnapshotBuilder {
                     false,
                     true,
                     canCreateWaypoint,
-                    input.navigationState().active(),
-                    trackingText(input.navigationState()),
+                    !input.navigationStates().isEmpty(),
+                    trackingText(input.navigationStates()),
                     false
                 );
             }
@@ -317,8 +318,8 @@ public final class MapSnapshotBuilder {
             false,
             false,
             canCreateWaypoint,
-            input.navigationState().active(),
-            trackingText(input.navigationState()),
+            !input.navigationStates().isEmpty(),
+            trackingText(input.navigationStates()),
             false
         );
     }
@@ -334,7 +335,7 @@ public final class MapSnapshotBuilder {
             selectedWorldId,
             selectedWorld.dimension(),
             input.playerPosition().yaw(),
-            trackingText(input.navigationState()),
+            trackingText(input.navigationStates()),
             litEnabled,
             litRegions
         );
@@ -368,10 +369,14 @@ public final class MapSnapshotBuilder {
         return BigDecimalString.of(value);
     }
 
-    static String trackingText(MapNavigationState navigationState) {
-        if (navigationState == null || !navigationState.active()) {
+    static String trackingText(Map<String, MapNavigationState> navigationStates) {
+        if (navigationStates == null || navigationStates.isEmpty()) {
             return "当前未导航";
         }
+        if (navigationStates.size() > 1) {
+            return "正在导航 " + navigationStates.size() + " 个目标";
+        }
+        MapNavigationState navigationState = navigationStates.values().iterator().next();
         return switch (navigationState.targetType()) {
             case ANCHOR -> "当前导航锚点: " + navigationState.label();
             case WAYPOINT -> "当前导航路径点: " + navigationState.label();
@@ -389,7 +394,7 @@ public final class MapSnapshotBuilder {
      * @param waypoints       玩家路径点列表
      * @param externalTargets 外部目标列表
      * @param viewState       玩家视图状态
-     * @param navigationState 玩家导航状态
+     * @param navigationStates 玩家导航状态表（导航键 type:id → 状态，支持多目标并行）
      * @param playerPosition  玩家位置信息
      * @param playerWorldId   玩家当前所在世界 ID
      * @param waypointLimit   路径点数量上限
@@ -404,7 +409,7 @@ public final class MapSnapshotBuilder {
         List<MapExternalTarget> externalTargets,
         List<MapPin> pins,
         MapPlayerViewState viewState,
-        MapNavigationState navigationState,
+        Map<String, MapNavigationState> navigationStates,
         PlayerPosition playerPosition,
         String playerWorldId,
         int waypointLimit,

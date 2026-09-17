@@ -25,15 +25,6 @@ public record MapNavigationState(
 ) {
 
     /**
-     * 创建一个表示"无导航"的空状态实例。
-     *
-     * @return 非活跃的空导航状态
-     */
-    public static MapNavigationState none() {
-        return new MapNavigationState(false, TargetType.NONE, "", "", "", "", "");
-    }
-
-    /**
      * 判断当前导航目标是否匹配指定锚点。
      *
      * @param anchorId 锚点 ID
@@ -51,16 +42,6 @@ public record MapNavigationState(
      */
     public boolean matchesWaypoint(String waypointId) {
         return active && targetType == TargetType.WAYPOINT && safe(targetId).equalsIgnoreCase(safe(waypointId));
-    }
-
-    /**
-     * 判断当前导航目标是否匹配指定外部目标。
-     *
-     * @param targetId 外部目标 ID
-     * @return 若导航活跃且目标类型为外部目标且 ID 匹配则返回 {@code true}
-     */
-    public boolean matchesExternal(String targetId) {
-        return active && targetType == TargetType.EXTERNAL && safe(this.targetId).equalsIgnoreCase(safe(targetId));
     }
 
     public enum TargetType {

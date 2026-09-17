@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec;
  * @param iconId      图标 id（可空）
  * @param navigated   来源当前是否正在导航该目标
  * @param sortOrder   排序权重，越小越靠前
+ * @param useMapNavigation true 时"导航"点击由地图内置导航栈执行
  */
 public record MapExternalTarget(
     String targetId,
@@ -31,7 +32,8 @@ public record MapExternalTarget(
     double z,
     String iconId,
     boolean navigated,
-    int sortOrder
+    int sortOrder,
+    boolean useMapNavigation
 ) {
 
     /** 从公开 spec 构建内部记录。 */
@@ -40,14 +42,14 @@ public record MapExternalTarget(
             spec.targetId(), spec.source(), spec.worldId(),
             spec.title(), spec.description(),
             spec.x(), spec.y(), spec.z(),
-            spec.iconId(), spec.navigated(), spec.sortOrder()
+            spec.iconId(), spec.navigated(), spec.sortOrder(), spec.useMapNavigation()
         );
     }
 
     /** 返回 navigated 标志变更后的新实例（record 不可变，整体替换）。 */
     public MapExternalTarget withNavigated(boolean value) {
         return navigated == value ? this : new MapExternalTarget(
-            targetId, source, worldId, title, description, x, y, z, iconId, value, sortOrder
+            targetId, source, worldId, title, description, x, y, z, iconId, value, sortOrder, useMapNavigation
         );
     }
 }

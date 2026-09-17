@@ -75,7 +75,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                     ValidationRule.of("storage.pool-size", ValueType.INT)
                         .withRange(1, 100),
                     ValidationRule.required("ui.packet-id", ValueType.STRING),
-                    ValidationRule.of("navigation.enabled", ValueType.BOOLEAN)
+                    ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.waypoint.enabled", ValueType.BOOLEAN)
             ))
             .build();
     }
@@ -222,6 +223,11 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             }
 
             @Override
+            public boolean navigateExternalTarget(@NotNull Player player, @NotNull String targetId) {
+                return service.navigateExternalTarget(player, targetId);
+            }
+
+            @Override
             public void registerNavigationSource(
                 @NotNull Plugin owner,
                 @NotNull String source,
@@ -233,6 +239,24 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             @Override
             public void unregisterNavigationSource(@NotNull String source) {
                 service.unregisterNavigationSource(source);
+            }
+
+            @Override
+            public void setNavigationDelegate(
+                @NotNull Plugin owner,
+                @NotNull xuanmo.arcartxsuite.api.capability.MapNavigationDelegate delegate
+            ) {
+                service.setNavigationDelegate(owner, delegate);
+            }
+
+            @Override
+            public void clearNavigationDelegate(@NotNull Plugin owner) {
+                service.clearNavigationDelegate(owner);
+            }
+
+            @Override
+            public boolean hasNavigationDelegate() {
+                return service.hasNavigationDelegate();
             }
 
             @Override

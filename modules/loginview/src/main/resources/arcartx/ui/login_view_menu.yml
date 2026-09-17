@@ -48,6 +48,11 @@ ui:
     #   - message: 初始结果消息
     #   - requireTerms: 是否要求同意服务条款
     init: |-
+      var.changeConfirmPassword = none
+      var.confirmPassword = none
+      var.newPassword = none
+      var.oldPassword = none
+      var.password = none
       var.packetId = packet['packetId']
       var.type = packet['type']
       var.title = packet['title']
@@ -63,11 +68,6 @@ ui:
       var.qqBound = packet['qqBound']
       var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
-      var.password = none
-      var.confirmPassword = none
-      var.oldPassword = none
-      var.newPassword = none
-      var.changeConfirmPassword = none
       var.agreed = false
       var.showRules = false
       var.requireTerms = packet['requireTerms']
@@ -92,12 +92,9 @@ ui:
       var.result = packet['message']
   action:
     load: |-
-      var.packetId = 'AXS_loginview'
-      var.type = 'login'
-      var.title = '登录服务器'
-      var.mode = 'standalone'
-      var.online = 0
       var.maxPlayers = 0
+      var.online = 0
+      var.packetId = 'AXS_loginview'
       var.agreed = false
       var.showRules = false
 

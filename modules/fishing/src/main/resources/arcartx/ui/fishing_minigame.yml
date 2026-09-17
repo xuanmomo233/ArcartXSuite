@@ -15,6 +15,7 @@ ui:
   show: true
   packetHandler:
     init: |-
+      var.fishInside = false
       var.packetId = packet['packetId']
       var.fishId = packet['fishId']
       var.fishName = packet['fishName']
@@ -27,7 +28,6 @@ ui:
       var.caughtSize = packet['caughtSize']
       var.rarity = packet['rarity']
       var.fishIconJson = packet['fishIconJson']
-      var.fishInside = false
       var.rarityTag = var.rarity == 'legendary' ? '&6' : (var.rarity == 'rare' ? '&9' : (var.rarity == 'uncommon' ? '&a' : '&f'))
       var.rarityLabel = var.rarity == 'legendary' ? '传说' : (var.rarity == 'rare' ? '稀有' : (var.rarity == 'uncommon' ? '罕见' : '普通'))
       var.rarityColor = var.rarity == 'legendary' ? '255,200,50' : (var.rarity == 'rare' ? '80,140,240' : (var.rarity == 'uncommon' ? '100,220,120' : '200,200,200'))
@@ -45,21 +45,17 @@ ui:
       var.fishInside = packet['fishInside']
   action:
     load: |-
-      var.packetId = 'AXS_FISHING'
+      var.caughtSize = 0
+      var.fishIconJson = ''
       var.fishName = ''
       var.fishY = 0.5
-      var.barY = 0.5
-      var.barHeight = 0.24
-      var.progress = 0.5
-      var.state = 'playing'
-      var.timeLeft = 600
-      var.caughtSize = 0
-      var.rarity = 'common'
-      var.fishIconJson = ''
-      var.fishInside = false
-      var.rarityTag = '&f'
       var.rarityLabel = '普通'
-      var.rarityColor = '200,200,200'
+      var.barHeight = 0.24
+      var.barY = 0.5
+      var.packetId = 'AXS_FISHING'
+      var.progress = 0.5
+      var.rarityTag = '&f'
+      var.timeLeft = 600
       var.emptyItemJson = '{"id":"minecraft:cod","Count":1b}'
     open: |-
       Packet.send(var.packetId, 'open_minigame')

@@ -53,6 +53,9 @@ ui:
     #   - resourceRows: 当前卡池涉及的资源余额
     # 说明: owned 为 -1 表示余额未知（外部货币桥不可用），界面显示 "—" 且不判定为不足。
     init: |-
+      var.costIconJsons = {}
+      var.costTenIconJsons = {}
+      var.resourceIconJsons = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -82,21 +85,18 @@ ui:
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows']
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
-      var.costIconJsons = {}
       if(var.costRows != none){
         for(key in var.costRows.keys()){
           json = packet['costIconJson' + key]
           var.costIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.costTenIconJsons = {}
       if(var.costTenRows != none){
         for(key in var.costTenRows.keys()){
           json = packet['costTenIconJson' + key]
           var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.resourceIconJsons = {}
       if(var.resourceRows != none){
         for(key in var.resourceRows.keys()){
           json = packet['resourceIconJson' + key]
@@ -131,7 +131,9 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            if(val.卡池导航列表['卡池按钮0'] != none){ btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key) }
+            if(val.卡池导航列表['卡池按钮0'] != none) {
+              btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
+            }
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['UP物品槽'].entryKey = key
@@ -193,21 +195,18 @@ ui:
       var.tenAvailable = packet['tenAvailable'] == true
       var.resourceRows = packet['resourceRows']
       // itemJson 分离模式（§7）：从 packet 顶层字段构建图标字典
-      var.costIconJsons = {}
       if(var.costRows != none){
         for(key in var.costRows.keys()){
           json = packet['costIconJson' + key]
           var.costIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.costTenIconJsons = {}
       if(var.costTenRows != none){
         for(key in var.costTenRows.keys()){
           json = packet['costTenIconJson' + key]
           var.costTenIconJsons[key] = json != none && json != '' ? json : var.air
         }
       }
-      var.resourceIconJsons = {}
       if(var.resourceRows != none){
         for(key in var.resourceRows.keys()){
           json = packet['resourceIconJson' + key]
@@ -241,7 +240,9 @@ ui:
         if(i > 0){
           existing = val.卡池导航列表['卡池按钮' + key]
           if(existing == none){
-            if(val.卡池导航列表['卡池按钮0'] != none){ btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key) }
+            if(val.卡池导航列表['卡池按钮0'] != none) {
+              btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
+            }
             btn['卡底'].entryKey = key
             btn['立绘框'].entryKey = key
             btn['UP物品槽'].entryKey = key
@@ -289,6 +290,7 @@ ui:
     #   - pity4 / pity5: 抽后的保底计数
     #   - highestStar: 本次最高星级
     result: |-
+      var.resultItemJsons = {}
       var.resultCount = packet['resultCount']
       var.resultItemNames = packet['resultItemNames']
       var.resultItemStars = packet['resultItemStars']
@@ -300,7 +302,6 @@ ui:
       var.highestStar = packet['highestStar']
       var.resultPending = true
       // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
-      var.resultItemJsons = {}
       if(var.resultItemNames != none){
         for(key in var.resultItemNames.keys()){
           json = packet['resultItemJson' + key]
@@ -322,6 +323,7 @@ ui:
       }
     # packetHandler: batch_result（十连结果，字段与 result 相同）
     batch_result: |-
+      var.resultItemJsons = {}
       var.resultCount = packet['resultCount']
       var.resultItemNames = packet['resultItemNames']
       var.resultItemStars = packet['resultItemStars']
@@ -333,7 +335,6 @@ ui:
       var.highestStar = packet['highestStar']
       var.resultPending = true
       // itemJson 分离模式（§7）：从 packet 顶层字段构建 var.resultItemJsons
-      var.resultItemJsons = {}
       if(var.resultItemNames != none){
         for(key in var.resultItemNames.keys()){
           json = packet['resultItemJson' + key]
@@ -384,7 +385,9 @@ ui:
         if(i > 0){
           existing = val.历史列表['历史行' + key]
           if(existing == none){
-            if(val.历史列表['历史行0'] != none){ e = val.历史列表['历史行0'].copy('历史行' + key) }
+            if(val.历史列表['历史行0'] != none) {
+              e = val.历史列表['历史行0'].copy('历史行' + key)
+            }
             e['物品图标'].entryKey = key
             e['时间'].entryKey = key
             e['摘要'].entryKey = key
@@ -426,7 +429,9 @@ ui:
         if(i > 0){
           existing = val.详情列表['详情行' + key]
           if(existing == none){
-            if(val.详情列表['详情行0'] != none){ e = val.详情列表['详情行0'].copy('详情行' + key) }
+            if(val.详情列表['详情行0'] != none) {
+              e = val.详情列表['详情行0'].copy('详情行' + key)
+            }
             e['物品图标'].entryKey = key
             e['名称'].entryKey = key
             e['稀有度'].entryKey = key
@@ -482,7 +487,9 @@ ui:
         if(i > 0){
           existing = val.兑换列表['兑换行' + key]
           if(existing == none){
-            if(val.兑换列表['兑换行0'] != none){ e = val.兑换列表['兑换行0'].copy('兑换行' + key) }
+            if(val.兑换列表['兑换行0'] != none) {
+              e = val.兑换列表['兑换行0'].copy('兑换行' + key)
+            }
             e['商品图标'].entryKey = key
             e['商品名称'].entryKey = key
             e['消耗文本'].entryKey = key
@@ -510,6 +517,8 @@ ui:
       }
     # load 事件: 初始化星级配色、界面状态变量与视口换算
     load: |-
+      var.actionToken = ''
+      var.exchangeRows = {}
       var.starColors = {}
       var.starColors[3] = '196,200,208,255'  // 3 星 - 灰
       var.starColors[4] = '186,140,232,255'  // 4 星 - 紫
@@ -519,10 +528,6 @@ ui:
       var.revealMs = 1600       // 等待层到结果层的过场时长（毫秒）
       var.pulling = false       // 是否正在祈愿（防连点）
       var.resultPending = false // 本次祈愿是否已收到结果包
-      var.pointBalanceRows = {}
-      var.exchangeRows = {}
-      var.exchangeCount = 0
-      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
       // 视口换算：Adaptive 以 1920x1080 等比缩放
@@ -537,8 +542,6 @@ ui:
       var.centerW = var.contentW - var.rightW - 24  // 中主区吃剩余
     # open 事件: 每次打开界面复位所有层
     open: |-
-      var.pulling = false
-      var.resultPending = false
       val.左侧导航.visible = true
       val.内容区.visible = true
       val.等待层.visible = false
@@ -550,6 +553,7 @@ ui:
       val.资源不足提示.visible = false
     # resize 事件: 窗口尺寸变化后重算视口变量
     resize: |-
+      var.rightW = 320
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -557,7 +561,6 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.rightW = 320
       var.centerW = var.contentW - var.rightW - 24
 
 # ─── 控件树（书写顺序即叠层顺序，弹层写在最后）────────────────────
@@ -745,7 +748,6 @@ controls:
                     action:
                       click: |-
                         var.actionBusy = true
-                        var.actionBusySeconds = 0
                         Packet.send(var.packetId, 'switch_pool', self.entryKey, var.actionToken)
                     effect:
                       ripple:
@@ -2053,7 +2055,6 @@ controls:
                             val.内容区.visible = false
                             val.等待层.visible = true
                             var.actionBusy = true
-                            var.actionBusySeconds = 0
                             Packet.send(var.packetId, 'pull', '1', var.actionToken)
                           } else {
                             val.资源不足提示.visible = true
@@ -2169,7 +2170,6 @@ controls:
                             val.内容区.visible = false
                             val.等待层.visible = true
                             var.actionBusy = true
-                            var.actionBusySeconds = 0
                             Packet.send(var.packetId, 'pull', '10', var.actionToken)
                           } else {
                             val.资源不足提示.visible = true
@@ -3368,7 +3368,6 @@ controls:
                           click: |-
                             if(var.exchangeRows != none && var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] != none && var.exchangeRows[self.entryKey]['canExchange'] == true){
                               var.actionBusy = true
-                              var.actionBusySeconds = 0
                               Packet.send(var.packetId, 'exchange_buy', var.exchangeRows[self.entryKey]['id'], var.actionToken)
                             }
           兑换空态:

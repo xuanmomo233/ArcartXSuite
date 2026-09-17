@@ -101,13 +101,25 @@ public record MapModuleConfiguration(
             markerSection == null ? 20 : markerSection.getInt("path-max-markers", 20),
             markerSection == null ? 10 : markerSection.getInt("path-update-ticks", 10),
             markerSection == null ? 64.0 : markerSection.getDouble("path-max-distance", 64.0),
-            markerSection == null ? 2000 : markerSection.getInt("path-max-iterations", 2000)
+            markerSection == null ? 2000 : markerSection.getInt("path-max-iterations", 2000),
+            markerSection == null ? 8.0 : markerSection.getDouble("path-reshow-buffer", 8.0)
+        );
+        ConfigurationSection waypointSection = navigationSection == null ? null : navigationSection.getConfigurationSection("waypoint");
+        NavWaypointConfiguration waypoint = new NavWaypointConfiguration(
+            waypointSection == null || waypointSection.getBoolean("enabled", true),
+            string(waypointSection == null ? null : waypointSection.getString("style-id"), "default"),
+            string(waypointSection == null ? null : waypointSection.getString("title-template"), "")
         );
         NavigationConfiguration navigation = new NavigationConfiguration(
             navigationSection == null || navigationSection.getBoolean("enabled", true),
-            string(navigationSection == null ? null : navigationSection.getString("waypoint-style-id"), "default"),
             string(navigationSection == null ? null : navigationSection.getString("anchor-id-prefix"), "AXS-map-anchor-"),
             string(navigationSection == null ? null : navigationSection.getString("waypoint-id-prefix"), "AXS-map-track-"),
+            navigationSection == null ? 20 : navigationSection.getInt("refresh-ticks", 20),
+            navigationSection == null ? 30 : navigationSection.getInt("world-hint-interval", 30),
+            navigationSection == null ? 0.0 : navigationSection.getDouble("finish-range", 0.0),
+            normalizeStringList(navigationSection == null ? List.of() : navigationSection.getStringList("finish-commands")),
+            navigationSection == null ? 3.0 : navigationSection.getDouble("finish-rearm-buffer", 3.0),
+            waypoint,
             marker
         );
 
@@ -384,6 +396,19 @@ public record MapModuleConfiguration(
         return normalized.isEmpty() ? fallback : normalized;
     }
 
+    private static List<String> normalizeStringList(List<String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>(raw.size());
+        for (String entry : raw) {
+            if (entry != null && !entry.isBlank()) {
+                result.add(entry.trim());
+            }
+        }
+        return List.copyOf(result);
+    }
+
     private static int positiveInt(Object value, int fallback) {
         if (value instanceof Number number) {
             return number.intValue() > 0 ? number.intValue() : fallback;
@@ -559,17 +584,42 @@ public record MapModuleConfiguration(
      * 导航功能配置。
      *
      * @param enabled           是否启用导航
-     * @param waypointStyleId   路径点样式 ID
      * @param anchorIdPrefix    锚点路径点 ID 前缀
      * @param waypointIdPrefix  自定义路径点 ID 前缀
+     * @param refreshTicks      目标刷新间隔 tick（diff 推送与到达判定）
+     * @param worldHintIntervalSeconds 跨世界提示节流间隔（秒），0 = 不提示
+     * @param finishRange       到达触发半径（格），0 = 不启用
+     * @param finishCommands    到达命令（控制台执行，%player% 占位）
+     * @param rearmBuffer       到达判定滞回缓冲（格）
+     * @param waypoint          ArcartX 路标渲染配置（目标点光柱与标题）
      * @param marker            导航标记模型配置
      */
     public record NavigationConfiguration(
         boolean enabled,
-        String waypointStyleId,
         String anchorIdPrefix,
         String waypointIdPrefix,
+        int refreshTicks,
+        int worldHintIntervalSeconds,
+        double finishRange,
+        List<String> finishCommands,
+        double rearmBuffer,
+        NavWaypointConfiguration waypoint,
         MarkerConfiguration marker
+    ) {
+    }
+
+    /**
+     * 导航用 ArcartX 路标（waypoint）渲染配置：目标点光柱与标题，样式在 ArcartX waypoint 目录定义。
+     * 与 {@code waypoints.*}（玩家自定义路径点功能）的 WaypointConfiguration 区分。
+     *
+     * @param enabled       是否向客户端推送路标（false 时导航仅保留追踪态/到达判定/路径标记，不发路标包）
+     * @param styleId       路标样式 ID
+     * @param titleTemplate 路标标题模板（%label%/%distance%/%world%/%x%/%y%/%z%/%type% 占位；空=显示目标名）
+     */
+    public record NavWaypointConfiguration(
+        boolean enabled,
+        String styleId,
+        String titleTemplate
     ) {
     }
 
@@ -587,6 +637,7 @@ public record MapModuleConfiguration(
      * @param pathUpdateTicks  路径更新间隔 tick
      * @param pathMaxDistance  路径最大距离
      * @param pathMaxIterations 路径计算最大迭代次数
+     * @param pathReshowBuffer  距离滞回缓冲（格）：超距隐藏后须回到 maxDistance - 本值 内才重显示
      */
     public record MarkerConfiguration(
         boolean enabled,
@@ -599,11 +650,12 @@ public record MapModuleConfiguration(
         int pathMaxMarkers,
         int pathUpdateTicks,
         double pathMaxDistance,
-        int pathMaxIterations
+        int pathMaxIterations,
+        double pathReshowBuffer
     ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
         public static MarkerConfiguration defaults() {
             return new MarkerConfiguration(false, "nav_beacon", 1.0, "idle", "rotate", 2.0,
-                3.0, 20, 10, 64.0, 2000);
+                3.0, 20, 10, 64.0, 2000, 8.0);
         }
     }
 

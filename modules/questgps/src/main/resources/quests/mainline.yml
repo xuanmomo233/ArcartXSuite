@@ -48,6 +48,15 @@ example_mainline_quest:
       title: "初入岛屿"
       style-id: "default"               # ArcartX waypoint 样式
       map-label: "主线目标"             # 同步到 Map 模块的标签
+      # npc: "长老"                      # 可选：Adyeshach NPC 名/ID，设置后导航点跟随该 NPC 实时位置（world 可留空）
+      # finish-range: 3                  # 可选：到达触发半径（<0 或不写继承全局 navigation.finish-range）
+      # finish-commands:                 # 可选：到达命令（控制台执行，%player% 占位）
+      #   - "say %player% 到达了目标"
+      # teleport:                        # 可选：目标在其他世界时，面板显示「传送并追踪」到此点
+      #   world: "world_nether"
+      #   x: 0
+      #   y: 64
+      #   z: 0
   tasks:                                # key = Chemdah 子目标 ID（常为 "0"、"1"…）
     "0":
       sort-order: 10

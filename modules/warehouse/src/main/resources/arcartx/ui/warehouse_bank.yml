@@ -73,8 +73,10 @@ ui:
         }
         if(var.maxBalanceCount > 1){
           for(序号 in range(1, var.maxBalanceCount - 1)){
-            if(val.余额列表['项'] != none){ 项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.余额列表['项'] != none) {
+              项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -86,8 +88,10 @@ ui:
         }
         if(var.maxProductCount > 1){
           for(序号 in range(1, var.maxProductCount - 1)){
-            if(val.产品列表['项'] != none){ 项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.产品列表['项'] != none) {
+              项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -99,8 +103,10 @@ ui:
         }
         if(var.maxFixedCount > 1){
           for(序号 in range(1, var.maxFixedCount - 1)){
-            if(val.定期列表['项'] != none){ 项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.定期列表['项'] != none) {
+              项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -142,24 +148,17 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.balanceTexts = {}
-      var.balances = {}
-      var.fixedDepositTexts = {}
-      var.productTexts = {}
-      var.packetId = 'AXS_WAREHOUSE'
-      var.warehouseName = 'AXS 仓库'
-      var.products = {}
-      var.fixedDeposits = {}
-      var.unlocked = false
-      var.hasPassword = false
       var.actionToken = ''
+      var.balanceTexts = {}
+      var.expectedPayout = '—'
+      var.fixedDepositTexts = {}
+      var.hasPassword = false
+      var.packetId = 'AXS_WAREHOUSE'
+      var.productTexts = {}
+      var.selectedCurrency = 'money'
+      var.unlocked = false
       var.actionBusy = false
       var.actionBusySeconds = 0
-      var.selectedCurrency = 'money'
-      var.expectedPayout = '—'
-      var.maxBalanceCount = 0
-      var.maxProductCount = 0
-      var.maxFixedCount = 0
       var.刷新轮次 = 0.round()
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
@@ -295,6 +294,8 @@ controls:
               height: 48
             action:
               clickLeft: |-
+                var.selectedDeposit = none
+                var.selectedProduct = none
                 Packet.send(var.packetId, 'refresh')
             children:
               刷新底:

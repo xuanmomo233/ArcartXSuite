@@ -62,16 +62,6 @@ ui:
   action:
     load: |-
       var.count = 0
-      var.selectedIndex = 0
-      var.dirty = false
-      var.item0Visible = false
-      var.item1Visible = false
-      var.item2Visible = false
-      var.item3Visible = false
-      var.item4Visible = false
-      var.item5Visible = false
-      var.item6Visible = false
-      var.item7Visible = false
       var.item0Amount = 0
       var.item1Amount = 0
       var.item2Amount = 0
@@ -80,6 +70,8 @@ ui:
       var.item5Amount = 0
       var.item6Amount = 0
       var.item7Amount = 0
+      var.selectedIndex = 0
+      var.dirty = false
     tick: |-
       if(var.dirty){
         if(var.item0ItemJson != none){

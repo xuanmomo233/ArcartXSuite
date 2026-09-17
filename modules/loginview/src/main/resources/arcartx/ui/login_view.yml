@@ -20,15 +20,11 @@ ui:
   screenScale: true
   action:
     load: |-
-      var.packetId = 'AXS_loginview'
-      var.type = 'login'
-      var.title = '登录服务器'
-      var.mode = 'standalone'
-      var.online = 0
       var.maxPlayers = 0
+      var.online = 0
+      var.packetId = 'AXS_loginview'
       var.agreed = false
       var.showRules = false
-      var.requireTerms = true
   packetHandler:
     # packetHandler: result
     # 包字段:
@@ -64,6 +60,7 @@ ui:
     #   - message: 初始结果消息
     #   - requireTerms: 是否要求同意服务条款
     init: |-
+      var.resultAlpha = 0
       var.packetId = packet['packetId']
       var.type = packet['type']
       var.title = packet['title']
@@ -79,7 +76,6 @@ ui:
       var.qqBound = packet['qqBound']
       var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
-      var.resultAlpha = 0
       var.password = none
       var.confirmPassword = none
       var.oldPassword = none

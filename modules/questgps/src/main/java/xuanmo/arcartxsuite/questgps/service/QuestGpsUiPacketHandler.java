@@ -40,6 +40,13 @@ final class QuestGpsUiPacketHandler {
                 data.size() > 1 ? data.get(1) : "",
                 data.size() > 2 ? data.get(2) : ""
             );
+            case "untrack_quest" -> service.untrackQuest(player, data.size() > 1 ? data.get(1) : "");
+            case "untrack_task" -> service.untrackTask(
+                player,
+                data.size() > 1 ? data.get(1) : "",
+                data.size() > 2 ? data.get(2) : ""
+            );
+            case "cross_world_track" -> service.crossWorldTrack(player, data.size() > 1 ? data.get(1) : "");
             case "clear_track" -> service.clearTrack(player);
             case "open_map" -> {
                 xuanmo.arcartxsuite.api.capability.MapNavigable map = service.mapNavigableProvider().get();

@@ -36,23 +36,20 @@ ui:
       var.entry1IconDirty = true
   action:
     load: |-
-      var.entryTtlMs = 3000
-      var.now = 0
-      var.entry1Visible = false
-      var.entry1CreatedAt = 0
       var.entry1Amount = 0
-      var.entry1IconDirty = false
-      var.entry2Visible = false
-      var.entry2CreatedAt = 0
+      var.entry1CreatedAt = 0
       var.entry2Amount = 0
-      var.entry2IconDirty = false
-      var.entry3Visible = false
-      var.entry3CreatedAt = 0
+      var.entry2CreatedAt = 0
       var.entry3Amount = 0
-      var.entry3IconDirty = false
-      var.entry4Visible = false
-      var.entry4CreatedAt = 0
+      var.entry3CreatedAt = 0
       var.entry4Amount = 0
+      var.entry4CreatedAt = 0
+      var.now = 0
+      var.entryTtlMs = 3000
+      var.entry1Visible = false
+      var.entry1IconDirty = false
+      var.entry2IconDirty = false
+      var.entry3IconDirty = false
       var.entry4IconDirty = false
     tick: |-
       var.now = Time.currentTime()

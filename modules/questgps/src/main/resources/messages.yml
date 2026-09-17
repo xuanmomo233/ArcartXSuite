@@ -59,5 +59,12 @@ player:
   task-navigation-create-failed: "&c任务目标导航创建失败。"
   task-navigation-set: "&a已设置任务目标导航: {0}"     # {0}=目标文案
   navigation-cleared: "&e已清除当前任务导航。"
+  navigation-removed: "&e已取消该任务导航。"               # 单目标取消（其他目标不受影响）
+  navigation-other-world: "&e任务目标位于其他世界: {0}"   # {0}=目标世界名（节流提示）
+  navigation-arrived: "&a已到达任务目标附近: {0}"         # {0}=目标名称
+  navigation-no-teleport: "&c任务目标位于其他世界 ({0})，该任务未配置传送点。"
+  navigation-teleport-world-unloaded: "&c传送目标世界未加载: {0}"
+  navigation-teleport-failed: "&c传送失败，导航未开始。"
+  navigation-teleported: "&a已传送至 {0}，开始导航。"
   chemdah-profile-not-loaded: "&cChemdah 玩家档案尚未加载。"
   chemdah-profile-read-failed: "&c无法读取 Chemdah 玩家档案。"

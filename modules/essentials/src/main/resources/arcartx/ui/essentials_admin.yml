@@ -50,19 +50,13 @@ ui:
       var.worldWeather = packet['worldWeather']
   action:
     load: |-
-      var.bans = []
-      var.mutes = []
-      var.players = []
-      var.warps = []
-      var.packetId = 'AXS_ESS_ADMIN'
-      var.page = 'players'
-      var.playerCount = '0'
       var.banCount = '0'
-      var.chatAvailable = 'false'
       var.muteCount = '0'
+      var.playerCount = '0'
       var.worldName = ''
       var.worldTime = '0'
       var.worldWeather = 'clear'
+      var.packetId = 'AXS_ESS_ADMIN'
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080

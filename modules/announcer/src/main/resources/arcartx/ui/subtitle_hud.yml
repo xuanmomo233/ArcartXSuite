@@ -27,17 +27,10 @@ ui:
     # 包字段: 无（仅通知客户端关闭字幕）
     close: |-
       var.subtitleVisible = false
-      var.subtitleText = none
-      var.subtitleLength = 0
-      var.subtitleTime = 0
-      var.subtitleShowBackground = false
       var.subtitleAnimation = Lerp(0, 0, 1)
   action:
     load: |-
       var.subtitleVisible = false
-      var.subtitleLength = 0
-      var.subtitleTime = 0
-      var.subtitleShowBackground = false
       var.subtitleAnimation = Lerp(0, 0, 1)
 
 controls:

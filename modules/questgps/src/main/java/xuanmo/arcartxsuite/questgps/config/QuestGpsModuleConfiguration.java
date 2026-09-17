@@ -140,13 +140,24 @@ public record QuestGpsModuleConfiguration(
     }
 
     private static NavigationDefaults loadNavigationDefaults(ConfigurationSection section) {
+        ConfigurationSection waypointSection = section == null ? null : section.getConfigurationSection("waypoint");
+        WaypointDefaults waypoint = new WaypointDefaults(
+            waypointSection == null || waypointSection.getBoolean("enabled", true),
+            string(waypointSection == null ? null : waypointSection.getString("style-id"), DEFAULT_WAYPOINT_STYLE_ID),
+            normalizeStringList(rawStringList(waypointSection == null ? null : waypointSection.get("title-template")))
+        );
         return new NavigationDefaults(
             section == null || section.getBoolean("enabled", DEFAULT_NAVIGATION_ENABLED),
-            string(section == null ? null : section.getString("waypoint-style-id"), DEFAULT_WAYPOINT_STYLE_ID),
             string(section == null ? null : section.getString("quest-id-prefix"), DEFAULT_QUEST_ID_PREFIX),
             section == null || section.getBoolean("remove-on-finish", DEFAULT_REMOVE_ON_FINISH),
             string(section == null ? null : section.getString("mode"), "hybrid"),
-            loadMarkerDefaults(section == null ? null : section.getConfigurationSection("marker"))
+            loadMarkerDefaults(section == null ? null : section.getConfigurationSection("marker")),
+            waypoint,
+            section == null ? 10 : section.getInt("refresh-ticks", 10),
+            section == null ? 30 : section.getInt("world-hint-interval", 30),
+            section == null ? 0.0 : section.getDouble("finish-range", 0.0),
+            normalizeStringList(section == null ? List.of() : section.getStringList("finish-commands")),
+            section == null ? 3.0 : section.getDouble("finish-rearm-buffer", 3.0)
         );
     }
 
@@ -261,7 +272,8 @@ public record QuestGpsModuleConfiguration(
             section.getInt("path-max-markers", 20),
             section.getInt("path-update-ticks", 10),
             section.getDouble("path-max-distance", 64.0),
-            section.getInt("path-max-iterations", 2000)
+            section.getInt("path-max-iterations", 2000),
+            section.getDouble("path-reshow-buffer", 8.0)
         );
     }
 
@@ -463,7 +475,8 @@ public record QuestGpsModuleConfiguration(
             return null;
         }
         String world = string(section.getString("world"), "");
-        if (world.isBlank()) {
+        String npc = string(section.getString("npc"), "");
+        if (world.isBlank() && npc.isBlank()) {
             return null;
         }
         return new NavigationPointDefinition(
@@ -473,7 +486,27 @@ public record QuestGpsModuleConfiguration(
             section.getDouble("z"),
             string(section.getString("title"), ""),
             string(section.getString("style-id"), ""),
-            string(section.getString("map-label"), "")
+            string(section.getString("map-label"), ""),
+            npc,
+            section.contains("finish-range") ? section.getDouble("finish-range") : -1,
+            normalizeStringList(section.getStringList("finish-commands")),
+            readTeleportPoint(section.getConfigurationSection("teleport"))
+        );
+    }
+
+    private static TeleportPointDefinition readTeleportPoint(ConfigurationSection section) {
+        if (section == null) {
+            return null;
+        }
+        String world = string(section.getString("world"), "");
+        if (world.isBlank()) {
+            return null;
+        }
+        return new TeleportPointDefinition(
+            world,
+            section.getDouble("x"),
+            section.getDouble("y"),
+            section.getDouble("z")
         );
     }
 
@@ -507,6 +540,24 @@ public record QuestGpsModuleConfiguration(
             return List.of();
         }
         return List.of(String.valueOf(value));
+    }
+
+    /** 字符串或字符串列表统一转列表（title-template 既支持单行字符串也支持多行列表）。 */
+    private static List<String> rawStringList(Object value) {
+        if (value instanceof List<?> list) {
+            List<String> result = new ArrayList<>(list.size());
+            for (Object entry : list) {
+                if (entry != null) {
+                    result.add(String.valueOf(entry));
+                }
+            }
+            return result;
+        }
+        if (value == null) {
+            return List.of();
+        }
+        String text = String.valueOf(value);
+        return text.isBlank() ? List.of() : List.of(text);
     }
 
     private static List<String> normalizeStringList(List<String> values) {
@@ -580,12 +631,35 @@ public record QuestGpsModuleConfiguration(
 
     public record NavigationDefaults(
         boolean enabled,
-        String waypointStyleId,
         String questIdPrefix,
         boolean removeOnFinish,
         String mode,
-        MarkerDefaults marker
+        MarkerDefaults marker,
+        WaypointDefaults waypoint,
+        int refreshTicks,
+        int worldHintIntervalSeconds,
+        double finishRange,
+        List<String> finishCommands,
+        double rearmBuffer
     ) {
+    }
+
+    /**
+     * ArcartX 路标（waypoint）渲染配置：目标点光柱与标题，样式在 ArcartX waypoint 目录定义。
+     *
+     * @param enabled       是否向客户端推送路标（false 时导航仅保留追踪态/到达判定/路径标记，不发路标包）
+     * @param styleId       路标样式 ID
+     * @param titleTemplate 路标标题模板行（拼接为单行；%label%/%quest%/%objective%/%distance%/%world%/%x%/%y%/%z% 占位）
+     */
+    public record WaypointDefaults(
+        boolean enabled,
+        String styleId,
+        List<String> titleTemplate
+    ) {
+        /** 标题模板拼接为单行（路标标题为单行文本）。 */
+        public String titleTemplateText() {
+            return titleTemplate == null || titleTemplate.isEmpty() ? "" : String.join(" ", titleTemplate);
+        }
     }
 
     public record PresentationDefaults(PresentationSource source) {
@@ -615,11 +689,12 @@ public record QuestGpsModuleConfiguration(
         int pathMaxMarkers,
         int pathUpdateTicks,
         double pathMaxDistance,
-        int pathMaxIterations
+        int pathMaxIterations,
+        double pathReshowBuffer
     ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
         public static MarkerDefaults defaults() {
             return new MarkerDefaults(true, "nav_beacon", 1.0, "idle", "rotate", 2.0,
-                3.0, 20, 10, 64.0, 2000);
+                3.0, 20, 10, 64.0, 2000, 8.0);
         }
     }
 
@@ -702,6 +777,12 @@ public record QuestGpsModuleConfiguration(
     ) {
     }
 
+    /**
+     * @param npc            Adyeshach NPC 名/ID（非空时导航点跟随该 NPC 实时位置；world 可留空）
+     * @param finishRange    到达触发半径（格）；&lt; 0 表示继承全局 navigation.finish-range
+     * @param finishCommands 到达命令（控制台执行，%player% 占位）；空列表表示继承全局 navigation.finish-commands
+     * @param teleport       跨世界传送点（目标在其他世界时面板显示「传送并追踪」，可空）
+     */
     public record NavigationPointDefinition(
         String world,
         double x,
@@ -709,7 +790,27 @@ public record QuestGpsModuleConfiguration(
         double z,
         String title,
         String styleId,
-        String mapLabel
+        String mapLabel,
+        String npc,
+        double finishRange,
+        List<String> finishCommands,
+        TeleportPointDefinition teleport
+    ) {
+    }
+
+    /**
+     * 跨世界传送点定义（quest/task 级 navigation.teleport 段）。
+     *
+     * @param world 目标世界
+     * @param x     X 坐标
+     * @param y     Y 坐标
+     * @param z     Z 坐标
+     */
+    public record TeleportPointDefinition(
+        String world,
+        double x,
+        double y,
+        double z
     ) {
     }
 }

@@ -55,22 +55,13 @@ ui:
       var.autotoolEnabled = packet['autotoolEnabled']
   action:
     load: |-
-      var.homes = []
-      var.onlinePlayers = []
-      var.warps = []
-      var.packetId = 'AXS_ESS_MENU'
-      var.page = 'home'
-      var.playerName = ''
-      var.isFlying = 'false'
-      var.isGod = 'false'
-      var.isAfk = 'false'
-      var.flySpeed = '0'
-      var.walkSpeed = '0'
-      var.location = ''
-      var.homeCount = '0'
-      var.warpCount = '0'
-      var.replantEnabled = 'false'
-      var.autotoolEnabled = 'false'
+          var.flySpeed = '0'
+          var.homeCount = '0'
+          var.location = ''
+          var.packetId = 'AXS_ESS_MENU'
+          var.playerName = ''
+          var.walkSpeed = '0'
+          var.warpCount = '0'
     open: |-
       Packet.send(var.packetId, 'refresh', 'home')
 

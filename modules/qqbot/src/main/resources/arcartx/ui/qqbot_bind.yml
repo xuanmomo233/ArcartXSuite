@@ -23,15 +23,14 @@ ui:
     #   - messages: 群消息列表
     #   - msgCount: 群消息数量
     init: |-
+      var.code = none
+      var.codeExpire = 0
+      var.result = none
       var.packetId = packet['packetId']
       var.bound = packet['bound']
       var.qqId = packet['qqId']
       var.playerName = packet['playerName']
       var.bindTime = packet['bindTime']
-      var.code = none
-      var.codeExpire = 0
-      var.result = none
-      var.resultType = none
       var.tab = 'status'
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
@@ -71,12 +70,9 @@ ui:
       var.resultType = packet['type']
   action:
     load: |-
-      var.messages = []
-      var.packetId = 'AXS_qqbot'
-      var.bound = false
-      var.codeExpire = 0
-      var.tab = 'status'
       var.msgCount = 0
+      var.packetId = 'AXS_qqbot'
+      var.tab = 'status'
 
 controls:
   自适应全局布局:
@@ -129,6 +125,7 @@ controls:
               height: 40
             action:
               clickLeft: |-
+                var.replyText = none
                 self.close()
             children:
               关闭背景:

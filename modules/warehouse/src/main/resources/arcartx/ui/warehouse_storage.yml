@@ -75,6 +75,7 @@ ui:
     #   - maxSharedCount: 共享仓库最大数量
     #   - maxCategoryCount: 分类最大数量
     update: |-
+      var.itemJsons = {}
       // 保存旧数量，用于判断是否需要重建列表（首次 update 时旧数量为 0，数量从 0 变为 N 时触发重建）
       oldMaxPersonalCount = var.maxPersonalCount
       oldMaxSharedCount = var.maxSharedCount
@@ -132,8 +133,10 @@ ui:
         }
         if(var.maxPersonalCount > 1){
           for(序号 in range(1, var.maxPersonalCount - 1)){
-            if(val.个人仓库列表['项'] != none){ 项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.个人仓库列表['项'] != none) {
+              项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -145,8 +148,10 @@ ui:
         }
         if(var.maxSharedCount > 1){
           for(序号 in range(1, var.maxSharedCount - 1)){
-            if(val.共享仓库列表['项'] != none){ 项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.共享仓库列表['项'] != none) {
+              项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -158,13 +163,14 @@ ui:
         }
         if(var.maxCategoryCount > 1){
           for(序号 in range(1, var.maxCategoryCount - 1)){
-            if(val.分类列表['项'] != none){ 项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.分类列表['项'] != none) {
+              项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
       var.renderBackpackAmounts()
-      var.itemJsons = {}
       if(var.slots != none){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
@@ -183,14 +189,18 @@ ui:
         }
         if(var.pageSize > 1){
           for(序号 in range(1, var.pageSize - 1)){
-            if(val.仓库网格['物品图标'] != none){ slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            slot.entryKey = 序号.round()
+            if(val.仓库网格['物品图标'] != none) {
+              slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次.round() + '_' + 序号.round())
+              slot.entryKey = 序号.round()
+            }
           }
         }
       }
       // 对已存在的 Slot 控件重新调用 seticon（数据变了但 seticon 不会自动刷新）
       for(i in range(0, var.pageSize - 1)){
-        if(val.仓库网格 != none){ icon = val.仓库网格.get(i.round()) }
+        if(val.仓库网格 != none) {
+          icon = val.仓库网格.get(i.round())
+        }
         if(icon != none){
           icon.seticon()
         }
@@ -209,42 +219,29 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.categories = {}
-      var.categoryTexts = {}
-      var.personalWarehouseTexts = {}
-      var.personalWarehouses = {}
-      var.sharedWarehouseStorageTexts = {}
-      var.sharedWarehouses = {}
-      var.packetId = 'AXS_WAREHOUSE'
-      var.ownerType = 'personal'
-      var.warehouseName = 'AXS 仓库'
       var.actionToken = ''
-      var.actionBusy = false
-      var.actionBusySeconds = 0
-      var.categoryId = 'all'
-      var.sortId = 'time'
-      var.sortText = '时间'
-      var.slots = {}
-      var.itemJsons = {}
-      var.air = '{"id": "minecraft:air","Count":1b}'
-      var.selectedSlot = -1
-      var.unlocked = false
-      var.hasPassword = false
-      var.readOnly = false
-      var.sharedEditMode = false
-      var.page = 1
-      var.pageText = '1/1'
       var.capacityText = '0/0'
-      var.level = 1
-      var.pageSize = 0
-      var.amount = 1.round()
-      var.selectedBackpackSlot = -1
+      var.categoryTexts = {}
+      var.hasPassword = false
       var.lastBackpackClickTime = 0
       var.lastSlotClickTime = 0
+      var.level = 1
+      var.packetId = 'AXS_WAREHOUSE'
+      var.page = 1
+      var.pageText = '1/1'
+      var.personalWarehouseTexts = {}
+      var.selectedBackpackSlot = -1
+      var.selectedSlot = -1
+      var.sharedEditMode = false
+      var.sharedWarehouseStorageTexts = {}
+      var.sortText = '时间'
+      var.unlocked = false
+      var.warehouseName = 'AXS 仓库'
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      var.air = '{"id": "minecraft:air","Count":1b}'
+      var.amount = 1.round()
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
-      var.maxPersonalCount = 0
-      var.maxSharedCount = 0
-      var.maxCategoryCount = 0
       var.刷新轮次 = 0.round()
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != none){
@@ -372,6 +369,7 @@ controls:
               height: 48
             action:
               clickLeft: |-
+                var.search = none
                 Screen.close()
             children:
               关闭背景:

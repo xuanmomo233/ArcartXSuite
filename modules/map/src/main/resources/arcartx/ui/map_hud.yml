@@ -39,11 +39,18 @@ ui:
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      // 会话号：服务端每次开启小地图自增，mod 只认最新会话副本的锚点
+      if(packet['hudSession'] != none) {
+        var.hudSession = packet['hudSession']
+      }
       // axsmap 是客户端 mod(Arcart-Suite-Map) 注册的 Aria 全局函数命名空间，
       // getMapRenderer() 返回 JavaObjectMirror 包装的 MapRenderer 实例（Java 互操作）。
       // 懒加载：首次拿到后缓存在 var.mapRenderer，后续包直接复用
       if(var.mapRenderer == none) {
-        try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
+        try {
+          var.mapRenderer = axsmap.getMapRenderer()
+        } catch(e) {
+        }
       }
       if(var.mapRenderer != none) {
         // 告诉 mod 渲染哪个世界的地形
@@ -64,9 +71,15 @@ ui:
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      if(packet['hudSession'] != none) {
+        var.hudSession = packet['hudSession']
+      }
       // 同 init：懒加载 MapRenderer + 同步世界/维度/点亮数据给 mod
       if(var.mapRenderer == none) {
-        try { var.mapRenderer = axsmap.getMapRenderer() } catch(e) {}
+        try {
+          var.mapRenderer = axsmap.getMapRenderer()
+        } catch(e) {
+        }
       }
       if(var.mapRenderer != none) {
         var.mapRenderer.setWorldId('' + var.worldId)
@@ -80,18 +93,45 @@ ui:
       var.packetId = 'AXS_MAP'
       var.trackingText = '当前未导航'
       var.hudShape = 'CIRCLE'
+      var.hudSession = -1
+      // api4 = 客户端 mod 是否带会话化 API（4参 setHudAnchor / deactivateHud /
+      // closeHud(session)）；none = 未探测，首次拿到 mapRenderer 后探测固定
+      var.api4 = none
+      // 上报就绪：服务端换发新会话号并重推 visible——UI 热重载/重进后自愈
+      try {
+        Packet.send(var.packetId, 'hud_ready')
+      } catch(e) {
+      }
+    open: |-
+      // open 也补一次就绪上报（defaultOpen 常驻 HUD 重载后会重新 open）
+      if(var.packetId != none && var.packetId != '') {
+        try {
+          Packet.send(var.packetId, 'hud_ready')
+        } catch(e) {
+        }
+      }
     # tick：每帧计算小地图右上角锚点坐标，传给客户端 mod
     # mod 内部根据 hudSize 状态计算实际渲染区域（向左下延伸 hudSize×hudSize）
-    # setHudAnchor(anchorX, anchorY, s):
+    # setHudAnchor(anchorX, anchorY, s, session):
     #   anchorX = 屏幕宽度 - 28*s（右上角 X，自适应缩放）
     #   anchorY = 24*s（右上角 Y）
     #   s = 自适应缩放因子（sx/sy 取小值）
+    #   session = 服务端下发的会话号（旧版 mod 无此参，走 api4 探测回退 3 参）
     tick: |-
       // tick 也懒加载一次：init/update 包可能比 UI 更早到达（mapRenderer 还没被赋值）
       if(var.mapRenderer == none) {
         try {
           var.mapRenderer = axsmap.getMapRenderer()
         } catch(e) {
+        }
+      }
+      // 探测 mod 是否支持会话化 API：deactivateHud(-1) 是无害探针
+      if(var.mapRenderer != none && var.api4 == none) {
+        try {
+          var.mapRenderer.deactivateHud(-1)
+          var.api4 = true
+        } catch(e) {
+          var.api4 = false
         }
       }
       if(var.mapRenderer != none && var.visible) {
@@ -101,28 +141,38 @@ ui:
         // 小地图右上角锚点：设计坐标系 (1920-28, 24)
         anchorX = Screen.getWidth() - 28 * s
         anchorY = 24 * s
-        var.mapRenderer.setHudAnchor(anchorX, anchorY, s)
+        if(var.api4) {
+          var.mapRenderer.setHudAnchor(anchorX, anchorY, s, var.hudSession)
+        } else {
+          var.mapRenderer.setHudAnchor(anchorX, anchorY, s)
+        }
         // 同步 mod 内的小地图尺寸/形状给装饰控件使用（设计坐标 = 屏幕像素 / s）
         var.hudSizeDesign = var.mapRenderer.getHudSize() / s
         var.hudShape = '' + var.mapRenderer.getHudShape()
       } elif(var.mapRenderer != none && !var.visible) {
         // 只在 HUD 模式下停渲染——大地图打开期间 mode=MENU，
-        // 此时 deactivate 会把 mode 清成 NONE，与 menu tick 的 setRegion
+        // 此时停用会把 mode 清成 NONE，与 menu tick 的 setRegion
         // 互相覆盖导致大地图逐帧闪烁。
-        // 注意：这里必须用 deactivate()（延迟防抖）而非 forceDeactivate()——
-        // 若有多个同名 HUD 副本，本副本的 visible=false 不代表其他副本也该停，
-        // 立即停用会被还在调 setHudAnchor 的副本抢回导致闪烁。
+        // 会话版 deactivateHud(session)：仅本副本持有当前会话才生效并注销会话，
+        // 旧会话副本（僵尸 UI）调用无效；旧版 mod 回退 deactivate() 防抖。
         if('' + var.mapRenderer.getMode() == 'HUD') {
-          var.mapRenderer.deactivate()
+          if(var.api4) {
+            var.mapRenderer.deactivateHud(var.hudSession)
+          } else {
+            var.mapRenderer.deactivate()
+          }
         }
       }
-    # close：UI 关闭时调 closeHud() 立即停渲染（close 是一次性事件不需要防抖；
-    # 只作用于 HUD 模式，大地图开着时关 HUD UI 不会误杀大地图）。
-    # 若 close 没执行，mod 端 150ms 看门狗兜底（setHudAnchor 停调超时自动停用）。
+    # close：UI 关闭时停渲染。会话版 closeHud(session)：持旧会话副本的 close
+    # 不会误杀新会话的渲染。若 close 没执行，mod 端 150ms 看门狗兜底。
     close: |-
       if(var.mapRenderer != none) {
         try {
-          var.mapRenderer.closeHud()
+          if(var.api4 == true) {
+            var.mapRenderer.closeHud(var.hudSession)
+          } else {
+            var.mapRenderer.closeHud()
+          }
         } catch(e) {
         }
       }

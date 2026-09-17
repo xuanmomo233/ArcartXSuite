@@ -19,6 +19,17 @@ public final class QuestGpsMenuPacketFactory {
     }
 
     /**
+     * 详情面板导航附加信息（跨世界/传送点）。
+     *
+     * @param crossWorld        选中任务的导航目标是否与玩家不同世界
+     * @param teleportAvailable 是否配置了跨世界传送点（navigation.teleport）
+     * @param targetWorld       目标世界名（用于按钮提示）
+     */
+    public record DetailNav(boolean crossWorld, boolean teleportAvailable, String targetWorld) {
+        public static final DetailNav NONE = new DetailNav(false, false, "");
+    }
+
+    /**
      * 构建菜单 UI 数据包。
      *
      * @param configuration    模块配置
@@ -30,6 +41,24 @@ public final class QuestGpsMenuPacketFactory {
         QuestGpsModuleConfiguration configuration,
         QuestGpsSnapshotBuilder.BuildResult snapshot,
         boolean navigationReady
+    ) {
+        return build(configuration, snapshot, navigationReady, DetailNav.NONE);
+    }
+
+    /**
+     * 构建菜单 UI 数据包（含详情面板跨世界追踪信息）。
+     *
+     * @param configuration    模块配置
+     * @param snapshot         快照构建结果
+     * @param navigationReady  导航运行时是否就绪
+     * @param detailNav        详情面板导航附加信息
+     * @return 菜单 UI 数据包
+     */
+    public static Map<String, Object> build(
+        QuestGpsModuleConfiguration configuration,
+        QuestGpsSnapshotBuilder.BuildResult snapshot,
+        boolean navigationReady,
+        DetailNav detailNav
     ) {
         Map<String, Object> categories = buildCategoriesPacket(configuration, snapshot.category());
         Map<String, Object> pages = buildPagesPacket(snapshot);
@@ -68,6 +97,9 @@ public final class QuestGpsMenuPacketFactory {
         packet.put("canTrackTask", detail.canTrackTask());
         packet.put("canClearTrack", detail.canClearTrack());
         packet.put("questTracked", detail.questTracked());
+        packet.put("detailCrossWorld", detailNav.crossWorld());
+        packet.put("detailTeleportAvailable", detailNav.teleportAvailable());
+        packet.put("detailTargetWorld", detailNav.targetWorld());
         packet.put("taskCount", detail.taskRows().size());
         packet.put("rewardCount", detail.rewardRows().size());
         return packet;

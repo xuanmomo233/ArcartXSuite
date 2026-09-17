@@ -30,4 +30,16 @@ public interface NavigationMarkerConfig {
     double pathMaxDistance();
 
     int pathMaxIterations();
+
+    /**
+     * 距离滞回缓冲（格）：路径标记因超出 {@link #pathMaxDistance()} 被隐藏后，
+     * 玩家必须回到 {@code pathMaxDistance - pathReshowBuffer} 以内才重新显示，
+     * 避免在边界抖动导致标记反复出现/消失。
+     *
+     * @return 重显示缓冲距离，默认 8.0
+     * @since 1.6.0
+     */
+    default double pathReshowBuffer() {
+        return 8.0;
+    }
 }

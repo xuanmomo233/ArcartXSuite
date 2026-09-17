@@ -12,8 +12,8 @@ ui:
   action:
     load: |-
       var.RichTAB刷新轮次 = 0
-      var.RichTAB显示 = false
       var.RichTAB在线人数 = 0
+      var.RichTAB显示 = false
     # UI 加载时初始化变量
     # 按下 TAB 键: 请求服务端刷新并计算列数
     keyPress: |-
@@ -44,8 +44,8 @@ ui:
       }
       //与 tab.yml 同样使用伪判断绕过 ax 控件复制 BUG
       while(i < packet.size()){
-        if(val.player_row.width == 320){
-          if(val.player_row != none){ ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i.round()) }
+        if(val.player_row != none) {
+          ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i.round())
           ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
           ROW['名称文字'].texts = packet.get(i).name
           ROW['ping_text'].texts = packet.get(i).ping

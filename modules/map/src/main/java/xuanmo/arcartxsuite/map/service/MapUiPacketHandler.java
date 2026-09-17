@@ -142,7 +142,16 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
+            case "untrack" -> {
+                // 单目标取消：untrack <type> <targetId>
+                if (hasValue(data, 1) && hasValue(data, 2)) {
+                    target.untrackTarget(player, data.get(1), data.get(2));
+                } else {
+                    target.refresh(player);
+                }
+            }
             case "clear_track" -> target.clearTrack(player);
+            case "hud_ready" -> target.hudReady(player);
             case "deselect" -> target.deselect(player);
             case "create_waypoint" -> committed = target.createWaypoint(player);
             case "delete_waypoint" -> {
@@ -264,6 +273,8 @@ public final class MapUiPacketHandler {
 
         void externalCancel(Player player, String targetId);
 
+        void untrackTarget(Player player, String type, String targetId);
+
         void teleportToWorld(Player player, String worldId);
 
         void crossWorldNavigate(Player player, String targetDesc);
@@ -271,6 +282,8 @@ public final class MapUiPacketHandler {
         void deselect(Player player);
 
         void clearTrack(Player player);
+
+        void hudReady(Player player);
 
         boolean createWaypoint(Player player);
 

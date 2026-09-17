@@ -42,17 +42,16 @@ ui:
       var.talentPoints = packet['talentPoints']
       var.unspentTalentPoints = packet['unspentTalentPoints']
       var.unlockedTalents = packet['unlockedTalents']
-      if(var.unlockedTalents == none){ var.unlockedTalents = {} }
       var.trees = packet['trees']
-      if(var.trees == none){ var.trees = {} }
       var.links = packet['links']
-      if(var.links == none){ var.links = {} }
       var.linkCount = packet['linkCount']
-      if(var.linkCount == none){ var.linkCount = 0 }
+      if(var.linkCount == none) {
+        var.linkCount = 0
+      }
       var.activeBonuses = packet['activeBonuses']
-      if(var.activeBonuses == none){ var.activeBonuses = [] }
       var.needRebuild = true
     update: |-
+      var.allNodes = []
       var.packetId = packet['packetId']
       var.seasonId = packet['seasonId']
       var.playerLevel = packet['level']
@@ -66,23 +65,22 @@ ui:
           treeData = var.trees[var.treeIds[ti]]
           if(treeData != none){
             cnt = treeData['nodeCount']
-            if(cnt == none){ cnt = 0 }
+            if(cnt == none) {
+              cnt = 0
+            }
             oldNodeTotal = oldNodeTotal + cnt
           }
         }
       }
       var.unlockedTalents = packet['unlockedTalents']
-      if(var.unlockedTalents == none){ var.unlockedTalents = {} }
       var.trees = packet['trees']
-      if(var.trees == none){ var.trees = {} }
       var.links = packet['links']
-      if(var.links == none){ var.links = {} }
       var.linkCount = packet['linkCount']
-      if(var.linkCount == none){ var.linkCount = 0 }
+      if(var.linkCount == none) {
+        var.linkCount = 0
+      }
       var.activeBonuses = packet['activeBonuses']
-      if(var.activeBonuses == none){ var.activeBonuses = [] }
       // 重建 allNodeById，使节点控件的 entry 绑定能读取最新状态（unlocked/level/canLevelUp）
-      var.allNodes = []
       var.allNodeById = {}
       for(ti in range(0, var.treeIds.size() - 1)){
         treeKey = var.treeIds[ti]
@@ -90,7 +88,9 @@ ui:
         if(treeData != none){
           nodes = treeData['nodes']
           count = treeData['nodeCount']
-          if(count == none){ count = 0 }
+          if(count == none) {
+            count = 0
+          }
           if(count > 0){
             for(i in range(0, count - 1)){
               node = nodes[i.round()]
@@ -117,7 +117,9 @@ ui:
         treeData = var.trees[var.treeIds[ti]]
         if(treeData != none){
           cnt = treeData['nodeCount']
-          if(cnt == none){ cnt = 0 }
+          if(cnt == none) {
+            cnt = 0
+          }
           newNodeTotal = newNodeTotal + cnt
         }
       }
@@ -128,10 +130,14 @@ ui:
         for(node in var.allNodes){
           childId = node['id']
           prereqs = node['prerequisites']
-          if(prereqs == none || prereqs.size() == 0){ continue }
+          if(prereqs == none || prereqs.size() == 0) {
+            continue
+          }
           childUnlocked = node['unlocked'] == true
           treeId = node['treeId']
-          if(treeId == ''){ treeId = 'meta' }
+          if(treeId == '') {
+            treeId = 'meta'
+          }
           dimColor = var.treeColors[treeId][0]
           brightColor = var.treeColors[treeId][1]
           lineColor = childUnlocked ? brightColor : '160,160,170,200'
@@ -149,17 +155,18 @@ ui:
   action:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
+      var.dragStartMX = 0
+      var.dragStartMY = 0
+      var.dragStartSX = 0
+      var.dragStartSY = 0
+      var.iconDelay = 0
+      var.linkCount = 0
       var.packetId = 'AXS_FISHING_TALENTS'
       var.playerLevel = 1
       var.talentPoints = 0
       var.unspentTalentPoints = 0
-      var.unlockedTalents = {}
-      var.trees = {}
-      var.links = {}
-      var.linkCount = 0
-      var.activeBonuses = []
+      var.zoomScale = 1.0
       var.needRebuild = false
-      var.iconDelay = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 中心发散布局参数
       var.nodeSize = 48
@@ -226,13 +233,8 @@ ui:
       var.angleLinkStep = math.PI() / 60
       // 拖拽滚动状态
       var.isDragging = false
-      var.dragStartMX = 0
-      var.dragStartMY = 0
-      var.dragStartSX = 0
-      var.dragStartSY = 0
       var.dragMoved = false
       // 缩放状态
-      var.zoomScale = 1.0
       // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -291,14 +293,22 @@ ui:
           scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 176)
           if(scrollRangeX > 0){
             newSX = var.dragStartSX - dx / scrollRangeX
-            if(newSX < 0){ newSX = 0 }
-            if(newSX > 1){ newSX = 1 }
+            if(newSX < 0) {
+              newSX = 0
+            }
+            if(newSX > 1) {
+              newSX = 1
+            }
             val.横向滑块.setDragXRatio(newSX)
           }
           if(scrollRangeY > 0){
             newSY = var.dragStartSY - dy / scrollRangeY
-            if(newSY < 0){ newSY = 0 }
-            if(newSY > 1){ newSY = 1 }
+            if(newSY < 0) {
+              newSY = 0
+            }
+            if(newSY > 1) {
+              newSY = 1
+            }
             val.竖向滑块.setDragYRatio(newSY)
           }
         }
@@ -322,7 +332,9 @@ ui:
           if(treeData != none){
             nodes = treeData['nodes']
             count = treeData['nodeCount']
-            if(count == none){ count = 0 }
+            if(count == none) {
+              count = 0
+            }
             if(count > 0){
               for(i in range(0, count - 1)){
                 node = nodes[i.round()]
@@ -359,9 +371,15 @@ ui:
           }
           if(tier == 2){
             // 3 个 T2 均匀分布在 360°
-            if(branch == 'power'){ angle = -math.PI() / 2 }
-            if(branch == 'control'){ angle = math.PI() / 6 }
-            if(branch == 'fortune'){ angle = 5 * math.PI() / 6 }
+            if(branch == 'power') {
+              angle = -math.PI() / 2
+            }
+            if(branch == 'control') {
+              angle = math.PI() / 6
+            }
+            if(branch == 'fortune') {
+              angle = 5 * math.PI() / 6
+            }
             R = var.R2
           }
           if(tier == 3){
@@ -374,7 +392,9 @@ ui:
             ti = treeId == 'steady' ? 0 : (treeId == 'swift' ? 1 : (treeId == 'pressure' ? 2 : (treeId == 'focus' ? 3 : (treeId == 'lucky' ? 4 : 5))))
             baseAngle = -math.PI() / 2 + ti * math.PI() / 3
             angleOff = branch == 'a' ? -var.angleT4 : var.angleT4
-            if(tier == 5){ angleOff = branch == 'a' ? -var.angleT5 : var.angleT5 }
+            if(tier == 5) {
+              angleOff = branch == 'a' ? -var.angleT5 : var.angleT5
+            }
             angle = baseAngle + angleOff
             R = tier == 4 ? var.R4 : var.R5
           }
@@ -382,15 +402,31 @@ ui:
             ti = treeId == 'steady' ? 0 : (treeId == 'swift' ? 1 : (treeId == 'pressure' ? 2 : (treeId == 'focus' ? 3 : (treeId == 'lucky' ? 4 : 5))))
             baseAngle = -math.PI() / 2 + ti * math.PI() / 3
             angleOff = 0
-            if(branch == 'a'){ angleOff = -var.angleT6a }
-            if(branch == 'b'){ angleOff = -var.angleT6b }
-            if(branch == 'c'){ angleOff = var.angleT6b }
-            if(branch == 'd'){ angleOff = var.angleT6a }
+            if(branch == 'a') {
+              angleOff = -var.angleT6a
+            }
+            if(branch == 'b') {
+              angleOff = -var.angleT6b
+            }
+            if(branch == 'c') {
+              angleOff = var.angleT6b
+            }
+            if(branch == 'd') {
+              angleOff = var.angleT6a
+            }
             if(tier == 7){
-              if(branch == 'a'){ angleOff = -var.angleT7a }
-              if(branch == 'b'){ angleOff = -var.angleT7b }
-              if(branch == 'c'){ angleOff = var.angleT7b }
-              if(branch == 'd'){ angleOff = var.angleT7a }
+              if(branch == 'a') {
+                angleOff = -var.angleT7a
+              }
+              if(branch == 'b') {
+                angleOff = -var.angleT7b
+              }
+              if(branch == 'c') {
+                angleOff = var.angleT7b
+              }
+              if(branch == 'd') {
+                angleOff = var.angleT7a
+              }
             }
             angle = baseAngle + angleOff
             R = tier == 6 ? var.R6 : var.R7
@@ -413,8 +449,12 @@ ui:
                   a2 = pos2[2]
                   // 处理角度跨越 ±π 边界：差值 > π 时补一圈
                   diff = a2 - a1
-                  if(diff > math.PI()){ a2 = a2 - 2 * math.PI() }
-                  if(diff < -math.PI()){ a2 = a2 + 2 * math.PI() }
+                  if(diff > math.PI()) {
+                    a2 = a2 - 2 * math.PI()
+                  }
+                  if(diff < -math.PI()) {
+                    a2 = a2 + 2 * math.PI()
+                  }
                   angle = (a1 + a2) / 2
                 }
                 R = var.RlinkA
@@ -438,12 +478,18 @@ ui:
         for(node in var.allNodes){
           childId = node['id']
           childPos = var.nodePositions[childId]
-          if(childPos == none){ continue }
+          if(childPos == none) {
+            continue
+          }
           prereqs = node['prerequisites']
-          if(prereqs == none || prereqs.size() == 0){ continue }
+          if(prereqs == none || prereqs.size() == 0) {
+            continue
+          }
           for(prereq in prereqs){
             parentPos = var.nodePositions[prereq]
-            if(parentPos == none){ continue }
+            if(parentPos == none) {
+              continue
+            }
             x1 = parentPos[0]
             y1 = parentPos[1]
             x2 = childPos[0]
@@ -451,14 +497,18 @@ ui:
             ldx = x2 - x1
             ldy = y2 - y1
             len = math.sqrt(ldx * ldx + ldy * ldy)
-            if(len == 0){ continue }
+            if(len == 0) {
+              continue
+            }
             angDeg = math.atan2(ldy, ldx) * 180 / math.PI()
             midX = (x1 + x2) / 2
             midY = (y1 + y2) / 2
             // 颜色：子节点点亮用亮色，否则用较亮的中性色（保证可见）
             childUnlocked = node['unlocked'] == true
             treeId = node['treeId']
-            if(treeId == ''){ treeId = 'meta' }
+            if(treeId == '') {
+              treeId = 'meta'
+            }
             dimColor = var.treeColors[treeId][0]
             brightColor = var.treeColors[treeId][1]
             // 未点亮统一用半透明亮灰，点亮用树亮色
@@ -480,9 +530,13 @@ ui:
         for(node in var.allNodes){
           id = node['id']
           pos = var.nodePositions[id]
-          if(pos == none){ continue }
+          if(pos == none) {
+            continue
+          }
           treeId = node['treeId']
-          if(treeId == ''){ treeId = 'meta' }
+          if(treeId == '') {
+            treeId = 'meta'
+          }
           n = val.天赋节点模板.copy('节点_' + id)
           n.entryId = id
           n.treeId = treeId
@@ -880,7 +934,7 @@ controls:
                     attribute:
                       point: ~top_left
                       width: 248
-                      texts: "var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
+                      texts: "var.activeBonuses != none && var.activeBonuses.size() > 0 ? var.activeBonuses : ['&7暂无已激活加成']"
                       fontSize: 36
           加成滑块:
             type: Texture
@@ -966,8 +1020,12 @@ controls:
                 oldZoom = var.zoomScale
                 delta = self.wheelValue > 0 ? 0.1 : -0.1
                 newZoom = oldZoom + delta
-                if(newZoom < 0.5){ newZoom = 0.5 }
-                if(newZoom > 2.0){ newZoom = 2.0 }
+                if(newZoom < 0.5) {
+                  newZoom = 0.5
+                }
+                if(newZoom > 2.0) {
+                  newZoom = 2.0
+                }
                 if(newZoom != oldZoom){
                   // 保持滚动位置：通过滑块 ratio 换算
                   viewW = var.contentW - 48
@@ -980,15 +1038,23 @@ controls:
                   oldSY = val.竖向滑块.getDragYRatio()
                   if(newRangeX > 0){
                     newSX = oldRangeX > 0 ? oldSX * oldRangeX / newRangeX : 0
-                    if(newSX < 0){ newSX = 0 }
-                    if(newSX > 1){ newSX = 1 }
+                    if(newSX < 0) {
+                      newSX = 0
+                    }
+                    if(newSX > 1) {
+                      newSX = 1
+                    }
                   } else {
                     newSX = 0
                   }
                   if(newRangeY > 0){
                     newSY = oldRangeY > 0 ? oldSY * oldRangeY / newRangeY : 0
-                    if(newSY < 0){ newSY = 0 }
-                    if(newSY > 1){ newSY = 1 }
+                    if(newSY < 0) {
+                      newSY = 0
+                    }
+                    if(newSY > 1) {
+                      newSY = 1
+                    }
                   } else {
                     newSY = 0
                   }

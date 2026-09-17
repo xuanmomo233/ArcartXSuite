@@ -63,8 +63,10 @@ ui:
       }
       for(i in range(1, var.levelCount)){
         key = i.round()
-        if(val.等级列表['等级列'] != none){ e = val.等级列表['等级列'].copy('等级列' + key) }
-        e.levelKey = key
+        if(val.等级列表['等级列'] != none) {
+          e = val.等级列表['等级列'].copy('等级列' + key)
+          e.levelKey = key
+        }
       }
       // 数据就绪后触发每个奖励图标的 seticon()，否则 Slot 的 seticon 属性不会自动生效
       for(i in range(1, var.levelCount)){
@@ -89,8 +91,9 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.rewards = {}
       var.packetId = 'AXS_BATTLEPASS'
+      var.levels = {}
+      var.rewards = {}
       var.iconJsons = {}
       var.levelCount = 0
       var.rewardCount = 0

@@ -22,14 +22,14 @@ public final class QuestGpsSnapshotBuilder {
         QuestGpsCategory requestedCategory,
         QuestGpsPage requestedPage,
         String preferredQuestId,
-        QuestGpsNavigationService.TrackingState trackingState
+        Collection<QuestGpsNavigationService.TrackingState> trackingStates
     ) {
         Objects.requireNonNull(descriptors, "descriptors");
         QuestGpsCategory category = requestedCategory;
         QuestGpsPage page = requestedPage == null ? QuestGpsPage.AVAILABLE : requestedPage;
-        QuestGpsNavigationService.TrackingState safeTracking = trackingState == null
-            ? QuestGpsNavigationService.TrackingState.none()
-            : trackingState;
+        Collection<QuestGpsNavigationService.TrackingState> safeTracking = trackingStates == null
+            ? List.of()
+            : trackingStates;
 
         Map<QuestGpsPage, List<QuestDescriptor>> buckets = new HashMap<>();
         Map<QuestGpsPage, Integer> counts = new HashMap<>();
@@ -76,9 +76,16 @@ public final class QuestGpsSnapshotBuilder {
         return new BuildResult(category, page, Map.copyOf(counts), List.copyOf(rows), detail);
     }
 
-    private DetailSnapshot buildDetail(QuestDescriptor descriptor, QuestGpsNavigationService.TrackingState trackingState) {
+    private DetailSnapshot buildDetail(QuestDescriptor descriptor, Collection<QuestGpsNavigationService.TrackingState> trackingStates) {
         List<TaskRow> taskRows = new ArrayList<>(descriptor.tasks().size());
         for (TaskDescriptor task : descriptor.tasks()) {
+            boolean taskTracked = false;
+            for (QuestGpsNavigationService.TrackingState state : trackingStates) {
+                if (state.matchesTask(descriptor.questId(), task.taskId())) {
+                    taskTracked = true;
+                    break;
+                }
+            }
             taskRows.add(
                 new TaskRow(
                     task.taskId(),
@@ -87,7 +94,7 @@ public final class QuestGpsSnapshotBuilder {
                     task.statusText(),
                     task.completed(),
                     task.trackAvailable(),
-                    trackingState.matchesTask(descriptor.questId(), task.taskId())
+                    taskTracked
                 )
             );
         }
@@ -107,6 +114,14 @@ public final class QuestGpsSnapshotBuilder {
             );
         }
 
+        boolean questTracked = false;
+        for (QuestGpsNavigationService.TrackingState state : trackingStates) {
+            if (state.active() && state.questId().equalsIgnoreCase(descriptor.questId())) {
+                questTracked = true;
+                break;
+            }
+        }
+
         return new DetailSnapshot(
             descriptor.questId(),
             descriptor.displayName(),
@@ -119,9 +134,9 @@ public final class QuestGpsSnapshotBuilder {
             descriptor.canAbandon(),
             descriptor.questTrackAvailable(),
             descriptor.page() == QuestGpsPage.ACTIVE,
-            trackingState.active(),
-            trackingState.matchesQuest(descriptor.questId()),
-            buildTrackingText(trackingState)
+            !trackingStates.isEmpty(),
+            questTracked,
+            buildTrackingText(trackingStates)
         );
     }
 
@@ -151,13 +166,17 @@ public final class QuestGpsSnapshotBuilder {
         return null;
     }
 
-    private static String buildTrackingText(QuestGpsNavigationService.TrackingState trackingState) {
-        if (trackingState == null || !trackingState.active()) {
+    private static String buildTrackingText(Collection<QuestGpsNavigationService.TrackingState> trackingStates) {
+        if (trackingStates == null || trackingStates.isEmpty()) {
             return "当前未设置导航";
         }
-        return trackingState.taskId().isBlank()
-            ? "当前追踪任务: " + trackingState.label()
-            : "当前追踪目标: " + trackingState.label();
+        if (trackingStates.size() > 1) {
+            return "正在追踪 " + trackingStates.size() + " 个目标";
+        }
+        QuestGpsNavigationService.TrackingState single = trackingStates.iterator().next();
+        return single.taskId().isBlank()
+            ? "当前追踪任务: " + single.label()
+            : "当前追踪目标: " + single.label();
     }
 
     public record BuildResult(
@@ -225,7 +244,7 @@ public final class QuestGpsSnapshotBuilder {
         String trackingText
     ) {
 
-        private static DetailSnapshot empty(QuestGpsNavigationService.TrackingState trackingState) {
+        private static DetailSnapshot empty(Collection<QuestGpsNavigationService.TrackingState> trackingStates) {
             return new DetailSnapshot(
                 "",
                 "暂无任务",
@@ -238,9 +257,9 @@ public final class QuestGpsSnapshotBuilder {
                 false,
                 false,
                 false,
-                trackingState != null && trackingState.active(),
+                trackingStates != null && !trackingStates.isEmpty(),
                 false,
-                buildTrackingText(trackingState)
+                buildTrackingText(trackingStates)
             );
         }
     }

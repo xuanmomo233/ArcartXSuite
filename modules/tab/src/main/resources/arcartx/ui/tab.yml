@@ -11,8 +11,8 @@ ui:
   action:
     load: |-
       var.TAB刷新轮次 = 0
-      var.TAB显示 = false
       var.TAB在线人数 = 0
+      var.TAB显示 = false
     # UI 加载时初始化变量
     # 按下 TAB 键: 请求服务端刷新并计算列数
     keyPress: |-
@@ -42,8 +42,8 @@ ui:
       }
       //此处的写法有点赘余，但这是为了防止报错写的伪判断,以及绕过ax的控件的复制删除BUG
       while(i < packet.size()){
-        if(val.player.width == 250){
-          if(val.player != none){ TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round()) }
+        if(val.player != none){
+          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round())       
           TAB['player_text'].texts = packet.get(i)
           TAB.visible = true
         }

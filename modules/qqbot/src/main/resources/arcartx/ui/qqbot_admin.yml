@@ -24,6 +24,7 @@ ui:
     #   - bindings: 绑定列表数据
     #   - bindTotal: 绑定总条数（用于分页）
     init: |-
+      var.bindPage = 0
       var.packetId = packet['packetId']
       var.botConnected = packet['botConnected']
       var.totalBindings = packet['totalBindings']
@@ -31,10 +32,8 @@ ui:
       var.maxPlayers = packet['maxPlayers']
       var.groups = packet['groups']
       var.bindings = packet['bindings']
-      var.bindPage = 0
       var.bindTotal = packet['bindTotal']
       var.cmdHistory = []
-      var.cmdResult = none
       var.tab = 'dashboard'
     # packetHandler: update
     # 包字段:
@@ -66,15 +65,12 @@ ui:
       var.cmdHistory.add({'cmd': packet['cmd'], 'result': packet['result'], 'time': packet['time']})
   action:
     load: |-
-      var.bindings = []
-      var.groups = []
-      var.packetId = 'AXS_qqbot_admin'
-      var.botConnected = false
-      var.totalBindings = 0
-      var.onlinePlayers = 0
-      var.maxPlayers = 0
-      var.bindPage = 0
       var.bindTotal = 0
+      var.groups = []
+      var.maxPlayers = 0
+      var.onlinePlayers = 0
+      var.packetId = 'AXS_qqbot_admin'
+      var.totalBindings = 0
       var.cmdHistory = []
       var.tab = 'dashboard'
 
@@ -129,6 +125,7 @@ controls:
               height: 40
             action:
               clickLeft: |-
+                var.cmdInput = none
                 self.close()
             children:
               关闭背景:

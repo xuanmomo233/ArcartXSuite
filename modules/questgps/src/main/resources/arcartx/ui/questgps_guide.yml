@@ -1,8 +1,8 @@
-# AXS QuestGPS 任务指引 HUD — 紫罗兰重写版
-# 用途: 任务追踪时屏幕左上角常驻 HUD，展示任务名、进度条、目标列表
+# AXS QuestGPS 任务指引 HUD — 紫罗兰多追踪版
+# 用途: 任务追踪时屏幕左上角常驻 HUD，展示所有追踪中任务的名称、进度、当前目标与导航坐标
 # 风格: 紫罗兰毛玻璃，与 questgps_menu 主菜单统一
 # 位置: 左上角偏下（x=16, y=220），避开聊天框/血条/小地图
-# 数据: 服务端 QuestGpsGuidePacketFactory 发送 init/update 包，最多3个目标
+# 数据: 服务端 QuestGpsGuidePacketFactory 发送 init/update 包，最多3张任务卡片
 
 ui:
   isHud: true
@@ -18,42 +18,27 @@ ui:
     # 包字段:
     #   - packetId: 数据包 ID（用于客户端回传服务端）
     #   - active: HUD 是否激活显示
-    #   - questName: 当前追踪任务名称
-    #   - completedCount: 已完成目标数
-    #   - totalCount: 总目标数
-    #   - progressText: 进度文本（如 "2/5"）
-    #   - tasks: 任务目标字典（key=目标ID，value含id/text/description/completed/status字段）
-    #   - taskCount: 目标总数（最多3）
-    #   - navWorld: 导航点所在世界名
-    #   - navX: 导航点 X 坐标
-    #   - navY: 导航点 Y 坐标
-    #   - navZ: 导航点 Z 坐标
-    #   - hasNav: 是否有可用导航点
+    #   - trackedCount: 追踪中的目标总数
+    #   - quests: 追踪任务卡片字典（key="0"~"2"，value含questId/name/label/progressText/taskText/taskDesc/navText/hasNav/navWorld）
+    #   - questCount: 卡片数（最多3）
+    #   - 兼容字段: questName/navWorld/navX/navY/navZ/hasNav（主追踪目标摘要）
     init: |-
       var.packetId = packet['packetId']
       var.active = packet['active']
-      var.questName = packet['questName']
-      var.completedCount = packet['completedCount']
-      var.totalCount = packet['totalCount']
-      var.progressText = packet['progressText']
-      var.tasks = packet['tasks']
-      var.taskCount = packet['taskCount']
-      var.navWorld = packet['navWorld']
-      var.navX = packet['navX']
-      var.navY = packet['navY']
-      var.navZ = packet['navZ']
-      var.hasNav = packet['hasNav']
-      var.taskKeys = var.tasks.keys()
+      var.trackedCount = packet['trackedCount']
+      var.quests = packet['quests']
+      var.questCount = packet['questCount']
+      var.questKeys = var.quests.keys()
       var.taskIndex = 0
-      for(key in var.taskKeys){
-        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+      for(key in var.questKeys){
+        item = val.guide_quest_list['追踪卡' + var.taskIndex.round()]
         if(item != none){
           item.entryKey = key
         }
         var.taskIndex = var.taskIndex + 1
       }
       while(var.taskIndex < 3){
-        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        item = val.guide_quest_list['追踪卡' + var.taskIndex.round()]
         if(item != none){
           item.entryKey = none
         }
@@ -64,28 +49,20 @@ ui:
     update: |-
       var.packetId = packet['packetId']
       var.active = packet['active']
-      var.questName = packet['questName']
-      var.completedCount = packet['completedCount']
-      var.totalCount = packet['totalCount']
-      var.progressText = packet['progressText']
-      var.tasks = packet['tasks']
-      var.taskCount = packet['taskCount']
-      var.navWorld = packet['navWorld']
-      var.navX = packet['navX']
-      var.navY = packet['navY']
-      var.navZ = packet['navZ']
-      var.hasNav = packet['hasNav']
-      var.taskKeys = var.tasks.keys()
+      var.trackedCount = packet['trackedCount']
+      var.quests = packet['quests']
+      var.questCount = packet['questCount']
+      var.questKeys = var.quests.keys()
       var.taskIndex = 0
-      for(key in var.taskKeys){
-        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+      for(key in var.questKeys){
+        item = val.guide_quest_list['追踪卡' + var.taskIndex.round()]
         if(item != none){
           item.entryKey = key
         }
         var.taskIndex = var.taskIndex + 1
       }
       while(var.taskIndex < 3){
-        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        item = val.guide_quest_list['追踪卡' + var.taskIndex.round()]
         if(item != none){
           item.entryKey = none
         }
@@ -93,17 +70,12 @@ ui:
       }
   action:
     load: |-
-      var.tasks = {}
-      var.packetId = 'AXS_QUESTGPS'
-      var.active = false
-      var.questName = '当前未追踪任务'
-      var.completedCount = 0
-      var.totalCount = 0
-      var.progressText = '0/0'
+      var.trackedCount = 0
+      var.quests = {}
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 # 布局: Adaptive stretch_all + 左上角偏下面板（420宽）
-# 结构: 毛玻璃底 + 紫罗兰强调条 + 任务名 + 进度条 + 3个目标项 + 关闭按钮
+# 结构: 毛玻璃底 + 紫罗兰强调条 + 标题 + 3张追踪任务卡片
 # 配色: 紫罗兰 主色170,120,220 底28,22,38,210 抬升50,44,68,245 描边170,120,220,240
 controls:
   自适应全局布局:
@@ -153,7 +125,7 @@ controls:
               normal: ~170,120,220,255
               shape: ~round_rect
               radius: 4
-          # ── 任务头部（任务名左 + 进度文字右）─────────
+          # ── 头部（标题左 + 追踪数量右）─────────────
           任务图标:
             type: Text
             attribute:
@@ -163,77 +135,54 @@ controls:
               texts: "~&f⬡"
               fontSize: 32
               through: true
-          任务名称:
+          标题:
             type: Text
             attribute:
               point: ~top_left
               x: 48
               y: 16
-              texts: "'&f' + var.questName"
+              texts: "~&f任务追踪"
               fontSize: 32
               through: true
-          进度文字:
+          数量文字:
             type: Text
             attribute:
               point: ~top_right
               x: -16
               y: 16
-              texts: "'&f' + var.progressText"
+              texts: "var.trackedCount > 0 ? '&f' + var.trackedCount + ' 个目标' : none"
               fontSize: 32
               through: true
-          # ── 进度条（横跨面板，任务名下方）────────────
-          进度条背景:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 16
-              y: 52
-              width: 388
-              height: 12
-              normal: ~50,40,60,220
-              shape: ~round_rect
-              radius: 6
-          进度条填充:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 16
-              y: 52
-              width: "var.totalCount > 0 ? math.max(12, 388 * var.completedCount / var.totalCount) : 12"
-              height: 12
-              normal: ~170,120,220,235
-              shape: ~round_rect
-              radius: 6
           # ── 头部分隔线 ──────────────────────────────
           头部分隔线:
             type: Texture
             attribute:
               point: ~top_left
               x: 16
-              y: 72
+              y: 56
               width: 388
               height: 2
               normal: ~170,120,220,180
-          # ── 目标列表（3个固定槽位）──────────────────
+          # ── 追踪任务卡片列表（3个固定槽位）───────────
           任务列表:
-            val: guide_task_list
+            val: guide_quest_list
             type: VStack
             attribute:
               point: ~top_left
               x: 16
-              y: 84
+              y: 68
               width: 388
-              spaceBetween: 4
+              spaceBetween: 8
             children:
-              引导项0:
+              追踪卡0:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   width: 388
-                  height: 66
+                  height: 84
                   entryKey: none
-                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
-                  entry: var.tasks[self.entryKey]
+                  visible: self.entryKey != none && var.quests[self.entryKey] != none
+                  entry: var.quests[self.entryKey]
                 children:
                   项背景:
                     type: Texture
@@ -247,51 +196,51 @@ controls:
                       stroke:
                         width: 2
                         color: ~170,120,220,160
-                  状态图标:
+                  任务名:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 8
-                      y: 4
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 48
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
                       through: true
-                  任务文字:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 36
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 32
-                      through: true
-                  任务状态:
+                  进度文字:
                     type: Text
                     attribute:
                       point: ~top_right
-                      x: -8
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
-                      fontSize: 32
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
                       through: true
-                  任务描述:
+                  当前目标:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 36
-                      y: 36
-                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
-                      fontSize: 32
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
                       through: true
-              引导项1:
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true
+              追踪卡1:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   width: 388
-                  height: 66
+                  height: 84
                   entryKey: none
-                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
-                  entry: var.tasks[self.entryKey]
+                  visible: self.entryKey != none && var.quests[self.entryKey] != none
+                  entry: var.quests[self.entryKey]
                 children:
                   项背景:
                     type: Texture
@@ -305,51 +254,51 @@ controls:
                       stroke:
                         width: 2
                         color: ~170,120,220,160
-                  状态图标:
+                  任务名:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 8
-                      y: 4
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 48
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
                       through: true
-                  任务文字:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 36
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 32
-                      through: true
-                  任务状态:
+                  进度文字:
                     type: Text
                     attribute:
                       point: ~top_right
-                      x: -8
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
-                      fontSize: 32
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
                       through: true
-                  任务描述:
+                  当前目标:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 36
-                      y: 36
-                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
-                      fontSize: 32
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
                       through: true
-              引导项2:
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true
+              追踪卡2:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   width: 388
-                  height: 66
+                  height: 84
                   entryKey: none
-                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
-                  entry: var.tasks[self.entryKey]
+                  visible: self.entryKey != none && var.quests[self.entryKey] != none
+                  entry: var.quests[self.entryKey]
                 children:
                   项背景:
                     type: Texture
@@ -363,40 +312,39 @@ controls:
                       stroke:
                         width: 2
                         color: ~170,120,220,160
-                  状态图标:
+                  任务名:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 8
-                      y: 4
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
-                      fontSize: 48
+                      x: 12
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 30
                       through: true
-                  任务文字:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 36
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&f&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
-                      fontSize: 32
-                      through: true
-                  任务状态:
+                  进度文字:
                     type: Text
                     attribute:
                       point: ~top_right
-                      x: -8
-                      y: 8
-                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&f进行中') : none"
-                      fontSize: 32
+                      x: -10
+                      y: 6
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['progressText'] : none"
+                      fontSize: 30
                       through: true
-                  任务描述:
+                  当前目标:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 36
-                      y: 36
-                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['description'] : none"
-                      fontSize: 32
+                      x: 12
+                      y: 38
+                      texts: "self.parent.entry != none ? '&7◈ ' + self.parent.entry['taskText'] : none"
+                      fontSize: 26
                       through: true
-
+                  导航坐标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 62
+                      texts: "self.parent.entry != none && self.parent.entry['hasNav'] ? '&8→ ' + self.parent.entry['navText'] : none"
+                      fontSize: 20
+                      through: true

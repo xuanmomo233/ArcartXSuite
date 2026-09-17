@@ -24,7 +24,7 @@ dependencies {
     compileOnly(files("../libs/MMOItems-6.9.5-SNAPSHOT.jar"))
     compileOnly(files("../libs/symphony-bukkit-1.0.0-SNAPSHOT.jar"))
     compileOnly(files("../libs/Adyeshach-2.1.30.jar"))
-    compileOnly(files("../libs/ArcartX-2.5.36.jar"))
+    compileOnly(files("../libs/ArcartX-2.7.77.jar"))
     compileOnly(files("../libs/AttributePlus-3.3.3.5.jar"))
     compileOnly(files("../libs/CraneAttribute-0.1.0-dev.jar"))
     compileOnly(files("../libs/Rondo-1.1.0-SNAPSHOT.jar"))

@@ -45,6 +45,7 @@ ui:
     #   - recentIconJson{idx}: 每条记录的鱼物品图标 JSON
     #   - recentCount: 最近捕获记录条数
     init: |-
+      var.recentIconJsons = {}
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
       var.playerLevel = packet['playerLevel']
@@ -67,7 +68,6 @@ ui:
       var.recentCatches = packet['recentCatches']
       var.recentCount = packet['recentCount']
       // 构建最近捕获图标映射
-      var.recentIconJsons = {}
       if(var.recentCatches != none){
         for(key in var.recentCatches.keys()){
           json = packet['recentIconJson' + key]
@@ -85,8 +85,10 @@ ui:
       if(var.recentCount != none && var.recentCount > 1){
         for(i in range(1, var.recentCount - 1)){
           key = i.round()
-          if(val.最近列表['捕获条目'] != none){ e = val.最近列表['捕获条目'].copy('捕获条目' + key) }
-          e.entryKey = key
+          if(val.最近列表['捕获条目'] != none) {
+            e = val.最近列表['捕获条目'].copy('捕获条目' + key)
+            e.entryKey = key
+          }
         }
       }
       // 数据就绪后触发每个条目图标的 seticon()
@@ -125,7 +127,6 @@ ui:
       var.recentCatches = packet['recentCatches']
       oldRecentCount = var.recentCount
       var.recentCount = packet['recentCount']
-      var.recentIconJsons = {}
       if(var.recentCatches != none){
         for(key in var.recentCatches.keys()){
           json = packet['recentIconJson' + key]
@@ -144,8 +145,10 @@ ui:
         if(var.recentCount != none && var.recentCount > 1){
           for(i in range(1, var.recentCount - 1)){
             key = i.round()
-          if(val.最近列表['捕获条目'] != none){ e = val.最近列表['捕获条目'].copy('捕获条目' + key) }
-            e.entryKey = key
+            if(val.最近列表['捕获条目'] != none) {
+              e = val.最近列表['捕获条目'].copy('捕获条目' + key)
+              e.entryKey = key
+            }
           }
         }
       }
@@ -163,24 +166,6 @@ ui:
   action:
     load: |-
       var.packetId = 'AXS_FISHING'
-      var.seasonName = '等待同步'
-      var.playerLevel = 1
-      var.maxLevel = 100
-      var.currentXp = 0
-      var.xpForNext = 100
-      var.progressRatio = 0
-      var.totalCaught = 0
-      var.perfectCatches = 0
-      var.treasureCaught = 0
-      var.collectionCount = 0
-      var.totalFishTypes = 0
-      var.collectionPercent = 0
-      var.unspentTalentPoints = 0
-      var.totalTalentPoints = 0
-      var.claimableRewardCount = 0
-      var.recentCatches = {}
-      var.recentCount = 0
-      var.recentIconJsons = {}
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
@@ -737,7 +722,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~top_left
-                      width: "(var.totalFishTypes > 0 ? var.collectionCount / var.totalFishTypes : 0) * (var.cardW - 60)"
+                      width: "(var.totalFishTypes != none && var.totalFishTypes > 0 && var.collectionCount != none ? var.collectionCount / var.totalFishTypes : 0) * (var.cardW - 60)"
                       height: 8
                       normal: ~124,196,142,255
                       shape: ~round_rect
@@ -962,7 +947,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 220
-                      texts: "'&0领取奖励' + (var.claimableRewardCount > 0 ? ' (' + var.claimableRewardCount.round() + ')' : '')"
+                      texts: "'&0领取奖励' + (var.claimableRewardCount != none && var.claimableRewardCount > 0 ? ' (' + var.claimableRewardCount.round() + ')' : '')"
                       fontSize: 30
                       through: true
               # 天赋按钮
@@ -996,7 +981,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 220
-                      texts: "'&f天赋树' + (var.unspentTalentPoints > 0 ? ' (&b' + var.unspentTalentPoints.round() + '&f)' : '')"
+                      texts: "'&f天赋树' + (var.unspentTalentPoints != none && var.unspentTalentPoints > 0 ? ' (&b' + var.unspentTalentPoints.round() + '&f)' : '')"
                       fontSize: 30
                       through: true
               # 任务按钮

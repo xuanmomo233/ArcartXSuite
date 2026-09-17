@@ -30,6 +30,8 @@ ui:
     #   - worlds: 世界规则页的世界列表
     #   - worldCount: 世界数量
     init: |-
+      var.newRegionName = ''
+      var.renameValue = ''
       var.page = packet['page']
       var.packetId = packet['packetId']
       var.regions = packet['regions']
@@ -70,8 +72,6 @@ ui:
           var.worldList.add(var.worlds[key])
         }
       }
-      var.newRegionName = ''
-      var.renameValue = ''
 
 controls:
   自适应全局布局:

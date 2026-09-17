@@ -75,12 +75,36 @@ categories:
 #导航配置，有 ArcartX 的 路标导航（waypoint） 和 Suite 提供的路径导航（marker）
 navigation:
   enabled: true
-  # ArcartX 的 路标导航（waypoint）样式，在 ArcartX waypoint 目录下定义
-  waypoint-style-id: "default"
   quest-id-prefix: "AXS-questgps-"
   remove-on-finish: true
   # 导航坐标来源: chemdah（仅 Chemdah tracker）| overlay（仅 YAML）| hybrid（默认，Chemdah 优先）
   mode: hybrid
+  # 多目标并行追踪：玩家可同时追踪多个任务/子目标（追踪态/到达判定并行）；
+  # 屏幕路标与路径标记链只跟随"最新激活且同世界"的目标（避免多路标误导玩家）。
+  # 目标刷新间隔（tick）：驱动动态坐标解析（Chemdah/NPC）、diff 推送与到达判定
+  refresh-ticks: 10
+  # 目标在其他世界时的提示节流间隔（秒），0 = 不提示
+  world-hint-interval: 30
+  # 到达触发半径（格），0 = 不启用到达判定；
+  # 到达不取消导航，须离开 finish-range + finish-rearm-buffer 才会再次触发
+  finish-range: 0
+  # 到达命令（控制台执行，支持 %player% 占位符）；
+  # 任务/子目标可在 quests/*.yml 的导航点里用 finish-range/finish-commands 覆盖
+  finish-commands: []
+  # 到达判定的滞回缓冲（格）：触发后须离开 finish-range + 本值 才重新武装，防边界抖动重复触发
+  finish-rearm-buffer: 3.0
+
+  # ArcartX 路标 — 目标点光柱 + 标题（ArcartX waypoint 系统渲染）。
+  # 依赖: ArcartX 客户端。
+  waypoint:
+    # 是否推送路标；false 时导航仅保留追踪态/到达判定/路径标记，不发路标包。
+    enabled: true
+    # 路标样式 ID，在 ArcartX waypoint 目录下定义。
+    style-id: "default"
+    # 路标标题模板（单行；支持 %label% 目标名 / %quest% 任务名 / %objective% 子目标名 /
+    #   %distance% 距离 / %world% / %x% / %y% / %z%），留空时直接显示目标名。
+    title-template: ""
+
   # 导航标记 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记。
   # 仅在追踪状态变更时发包，客户端独立渲染，零服务端 tick 开销。
   # 依赖: Adyeshach + ArcartX 客户端。
@@ -105,6 +129,8 @@ navigation:
     path-update-ticks: 10
     # 路径最大渲染距离（方块数，超出此距离不显示路径标记）。
     path-max-distance: 64
+    # 距离滞回缓冲（格）：标记因超距隐藏后，须回到 path-max-distance - 本值 以内才重新显示。
+    path-reshow-buffer: 8
     # A* 寻路最大迭代次数（防止服务端卡顿，越大路径越精确但越耗时）。
     path-max-iterations: 2000
 

@@ -18,7 +18,6 @@ ui:
       var.currentPage = packet['page']
       var.totalPages = packet['totalPages']
       var.totalCount = packet['totalCount']
-      var.resultMsg = none
     statistics: |-
       var.totalCount = packet['totalCount']
       var.successCount = packet['successCount']
@@ -482,7 +481,9 @@ controls:
                   height: 36
                 action:
                   click: |-
-                    if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage - 1) }
+                    if (var.currentPage > 1) {
+                      Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage - 1)
+                    }
                 children:
                   上一页背景:
                     type: Texture
@@ -508,7 +509,9 @@ controls:
                   height: 36
                 action:
                   click: |-
-                    if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage + 1) }
+                    if (var.currentPage < var.totalPages) {
+                      Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage + 1)
+                    }
                 children:
                   下一页背景:
                     type: Texture

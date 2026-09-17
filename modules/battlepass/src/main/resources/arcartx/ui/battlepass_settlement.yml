@@ -30,13 +30,13 @@ ui:
     #   - settlements: 结算奖励映射（key 为序号，含 id/minLevel/reached/free/premium/deluxe）
     #   - iconJsonX_Y: 各档位奖励的图标 itemJson（X=结算序号, Y=0免费/1高级/2典藏）
     init: |-
+      var.iconJsons = {}
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
       var.currentLevel = packet['currentLevel']
       var.settlements = packet['settlements']
       var.settlementCount = packet['settlementCount']
       // 构建 iconJsons 映射（iconJsonX_Y → key "X_Y"）
-      var.iconJsons = {}
       for(i in range(0, var.settlementCount - 1)){
         for(j in range(0, 2)){
           key = i.round() + '_' + j.round()
@@ -53,8 +53,10 @@ ui:
       }
       for(i in range(1, var.settlementCount - 1)){
         key = i.round()
-        if(val.卡片列表['结算卡片'] != none){ e = val.卡片列表['结算卡片'].copy('结算卡片' + key) }
-        e.entryKey = key
+        if(val.卡片列表['结算卡片'] != none) {
+          e = val.卡片列表['结算卡片'].copy('结算卡片' + key)
+          e.entryKey = key
+        }
       }
       // 数据就绪后触发每个图标的 seticon()
       // 模板卡片（索引0）也需要触发，否则第一张卡片图标不显示
@@ -72,11 +74,8 @@ ui:
       }
   action:
     load: |-
-      var.settlements = {}
-      var.packetId = 'AXS_BATTLEPASS'
       var.seasonName = '等待同步'
-      var.settlementCount = 0
-      var.iconJsons = {}
+      var.packetId = 'AXS_BATTLEPASS'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080

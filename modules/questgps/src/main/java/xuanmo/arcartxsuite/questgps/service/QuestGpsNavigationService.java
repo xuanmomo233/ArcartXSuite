@@ -1,18 +1,25 @@
 package xuanmo.arcartxsuite.questgps.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
+import xuanmo.arcartxsuite.api.util.NavigationMarkerService;
+import xuanmo.arcartxsuite.api.util.NavigationTarget;
+import xuanmo.arcartxsuite.api.util.NavigationTargetService;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
@@ -20,42 +27,60 @@ import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
  * QuestGPS 导航服务。
  * <p>
  * 属于 {@code questgps} 模块，负责管理玩家任务/子任务的路径点追踪、
- * 导航标记模型显示以及 Chemdah 动态坐标刷新。支持 overlay（配置坐标）、
- * chemdah（任务系统动态坐标）和 hybrid（混合）三种导航模式。
+ * 导航标记模型显示以及 Chemdah/Adyeshach 动态坐标解析。
+ * 支持 overlay（配置坐标）、chemdah（任务系统动态坐标）、npc（Adyeshach 实体定位）
+ * 三种坐标来源；玩家可同时追踪多个目标（追踪态/到达判定并行），
+ * 但屏幕路标与路径标记链只跟随"最新激活且同世界"的目标（避免多路标误导玩家）。
+ * 坐标推送、到达滞回判定、跨世界抑制由共享 {@link NavigationTargetService} 完成。
  */
 public final class QuestGpsNavigationService {
 
     private final QuestGpsModuleConfiguration configuration;
     private final WaypointRuntime waypointRuntime;
+    private final WaypointBridgeAPI waypointBridge;
     private final Logger logger;
     private final JavaPlugin plugin;
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final ChemdahTrackerBridge trackerBridge;
-    private final ConcurrentMap<java.util.UUID, TrackingState> trackingStates = new ConcurrentHashMap<>();
-    private final ConcurrentMap<java.util.UUID, NavigationPoint> trackingPoints = new ConcurrentHashMap<>();
+    /** 玩家 → (trackKey → 追踪状态)，同一玩家可并行追踪多个目标。 */
+    private final ConcurrentMap<java.util.UUID, LinkedHashMap<String, TrackingState>> trackingStates = new ConcurrentHashMap<>();
+    /** 玩家 → (trackKey → 最近解析的导航点)。 */
+    private final ConcurrentMap<java.util.UUID, Map<String, NavigationPoint>> trackingPoints = new ConcurrentHashMap<>();
 
     private boolean runtimeReady;
-    private QuestGpsMarkerService markerService;
-    private int chemdahRefreshTaskId = -1;
+    private NavigationMarkerService markerService;
+    private NavigationTargetService targetService;
     /** 导航坐标变更监听（地图模块同步外部目标坐标用），可空。 */
-    private volatile java.util.function.BiConsumer<Player, NavigationPoint> positionListener;
+    private volatile PositionListener positionListener;
+
+    /**
+     * 导航坐标变更监听器：激活/刷新路径点时回调，携带追踪状态便于按任务区分。
+     */
+    public interface PositionListener {
+        void onPositionUpdate(Player player, TrackingState state, NavigationPoint point);
+    }
 
     /**
      * 设置导航坐标更新监听：激活/刷新路径点时回调，用于地图外部目标坐标跟随。
      *
      * @param listener 监听器，{@code null} 清除
      */
-    public void setPositionListener(java.util.function.BiConsumer<Player, NavigationPoint> listener) {
+    public void setPositionListener(PositionListener listener) {
         this.positionListener = listener;
     }
 
-    private void notifyPositionListener(Player player, NavigationPoint point) {
-        java.util.function.BiConsumer<Player, NavigationPoint> listener = positionListener;
+    private void notifyPositionListener(Player player, String trackKey, NavigationPoint point) {
+        PositionListener listener = positionListener;
         if (listener == null || player == null || point == null) {
             return;
         }
+        Map<String, TrackingState> states = trackingStates.get(player.getUniqueId());
+        TrackingState state = states == null ? null : states.get(trackKey);
+        if (state == null) {
+            return;
+        }
         try {
-            listener.accept(player, point);
+            listener.onPositionUpdate(player, state, point);
         } catch (Throwable e) {
             logger.warning("QuestGPS: 位置更新监听回调失败: " + e.getMessage());
         }
@@ -93,13 +118,22 @@ public final class QuestGpsNavigationService {
     }
 
     /**
+     * 共享导航编排服务（diff 推送/到达判定/跨世界处理）。start() 且导航就绪后非空。
+     *
+     * @return 目标服务实例，未就绪时返回 null
+     */
+    public NavigationTargetService targetService() {
+        return targetService;
+    }
+
+    /**
      * 构造导航服务，内部将 {@link WaypointBridgeAPI} 包装为 {@link BridgeWaypointRuntime}。
      *
      * @param plugin         宿主插件实例
      * @param logger         日志器
      * @param configuration  模块配置
      * @param waypointBridge 路径点桥接 API
-     * @param npcBridge      Adyeshach NPC 桥接 API，用于导航标记
+     * @param npcBridge      Adyeshach NPC 桥接 API，用于导航标记与 NPC 动态目标
      * @param trackerBridge  Chemdah 追踪桥接，用于动态坐标解析
      */
     public QuestGpsNavigationService(
@@ -114,6 +148,7 @@ public final class QuestGpsNavigationService {
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
+            waypointBridge,
             logger,
             npcBridge,
             trackerBridge
@@ -124,6 +159,7 @@ public final class QuestGpsNavigationService {
         JavaPlugin plugin,
         QuestGpsModuleConfiguration configuration,
         WaypointRuntime waypointRuntime,
+        WaypointBridgeAPI waypointBridge,
         Logger logger,
         AdyeshachNpcBridgeAPI npcBridge,
         ChemdahTrackerBridge trackerBridge
@@ -131,12 +167,13 @@ public final class QuestGpsNavigationService {
         this.plugin = plugin;
         this.configuration = configuration;
         this.waypointRuntime = waypointRuntime;
+        this.waypointBridge = waypointBridge;
         this.logger = logger;
         this.npcBridge = npcBridge;
         this.trackerBridge = trackerBridge;
     }
 
-    /** 启动导航运行时与标记服务，并按配置启动 Chemdah 坐标刷新定时任务。 */
+    /** 启动导航运行时、标记服务与共享目标编排服务。 */
     public void start() {
         runtimeReady = configuration.navigation().enabled() && waypointRuntime.initialize("QuestGPS 导航");
         if (configuration.navigation().marker().enabled()) {
@@ -144,31 +181,56 @@ public final class QuestGpsNavigationService {
             npcBridge.setDebug(configuration.debug());
             boolean adyAvailable = npcBridge.initialize();
             if (configuration.debug()) logger.info("QuestGPS: AdyeshachNpcBridgeAPI.initialize() = " + adyAvailable);
-            markerService = new QuestGpsMarkerService(
-                plugin, npcBridge, configuration.navigation().marker(), logger, configuration.debug()
+            markerService = new NavigationMarkerService(
+                plugin, npcBridge, configuration.navigation().marker(), logger,
+                configuration.debug(), "questgps_path_"
             );
             markerService.start();
         } else {
             logger.info("QuestGPS: 导航标记已在配置中禁用 (navigation.marker.enabled=false)");
         }
-        if (chemdahNavigationEnabled()) {
-            int interval = Math.max(5, configuration.navigation().marker().pathUpdateTicks());
-            chemdahRefreshTaskId = AxsScheduler.runTaskTimer(plugin, this::refreshChemdahTrackingPositions, interval, interval).getTaskId();
+        if (runtimeReady && waypointBridge != null) {
+            targetService = new NavigationTargetService(
+                plugin,
+                waypointBridge,
+                markerService,
+                logger,
+                new NavigationTargetService.Config(
+                    Math.max(1, configuration.navigation().refreshTicks()),
+                    Math.max(0, configuration.navigation().worldHintIntervalSeconds()) * 1000L,
+                    configuration.navigation().rearmBuffer(),
+                    1_500L,
+                    configuration.navigation().waypoint().enabled()
+                )
+            );
+            targetService.setPositionChangedHandler((player, target, resolved) -> {
+                Object attachment = target.attachment();
+                if (!(attachment instanceof TrackContext context)) {
+                    return;
+                }
+                NavigationPoint point = trackingPoint(player, context.trackKey()).orElse(null);
+                if (point != null) {
+                    notifyPositionListener(player, context.trackKey(), point);
+                }
+            });
+            targetService.start();
         }
     }
 
-    /** 关闭导航服务，取消定时任务、清除所有玩家追踪并释放运行时资源。 */
+    /** 关闭导航服务，清除所有玩家追踪并释放运行时资源。 */
     public void shutdown() {
-        if (chemdahRefreshTaskId >= 0) {
-            AxsScheduler.cancelTask(chemdahRefreshTaskId);
-            chemdahRefreshTaskId = -1;
+        if (targetService != null) {
+            targetService.shutdown();
+            targetService = null;
         }
         if (markerService != null) {
             markerService.shutdown();
             markerService = null;
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
-            clearTracking(player, true);
+            if (chemdahNavigationEnabled()) {
+                trackerBridge.stopAll(player);
+            }
         }
         trackingStates.clear();
         trackingPoints.clear();
@@ -187,29 +249,68 @@ public final class QuestGpsNavigationService {
     }
 
     /**
-     * 获取玩家的追踪状态。
+     * 玩家全部追踪状态（trackKey → 状态，激活顺序）。
      *
-     * @param player 玩家，为 {@code null} 时返回空状态
-     * @return 当前追踪状态，无追踪时返回 {@link TrackingState#none()}
+     * @param player 玩家
+     * @return 追踪状态映射的副本
      */
-    public TrackingState trackingState(Player player) {
+    public Map<String, TrackingState> trackingStates(Player player) {
         if (player == null) {
-            return TrackingState.none();
+            return Map.of();
         }
-        return trackingStates.getOrDefault(player.getUniqueId(), TrackingState.none());
+        Map<String, TrackingState> states = trackingStates.get(player.getUniqueId());
+        // LinkedHashMap 保序：values() 顺序 = 激活顺序，"主追踪"取最后
+        return states == null
+            ? Map.of()
+            : Collections.unmodifiableMap(new LinkedHashMap<>(states));
+    }
+
+    /** @return 玩家是否有任意追踪中的目标 */
+    public boolean hasAnyTracking(Player player) {
+        return player != null && !trackingStates(player).isEmpty();
+    }
+
+    /** @return 指定任务是否有任意追踪中的目标（任务级或子任务级） */
+    public boolean isTrackingQuest(Player player, String questId) {
+        if (player == null || questId == null) {
+            return false;
+        }
+        String needle = questId.trim().toLowerCase(Locale.ROOT);
+        for (TrackingState state : trackingStates(player).values()) {
+            if (state.questId().equalsIgnoreCase(needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @return 指定子任务是否追踪中 */
+    public boolean isTrackingTask(Player player, String questId, String taskId) {
+        return player != null && trackingStates(player).containsKey(trackKey(questId, taskId));
+    }
+
+    /** @return 玩家追踪中的任务 ID 集合（含任务级与子任务级所属任务） */
+    public java.util.Set<String> trackedQuestIds(Player player) {
+        java.util.Set<String> result = new java.util.LinkedHashSet<>();
+        for (TrackingState state : trackingStates(player).values()) {
+            result.add(state.questId());
+        }
+        return result;
     }
 
     /**
-     * 获取玩家当前的追踪坐标点。
+     * 获取指定追踪键的最近解析坐标点。
      *
-     * @param player 玩家，为 {@code null} 时返回空
-     * @return 导航坐标点，无追踪时返回空
+     * @param player   玩家
+     * @param trackKey 追踪键（questId 或 questId|taskId）
+     * @return 导航坐标点
      */
-    public Optional<NavigationPoint> trackingPoint(Player player) {
-        if (player == null) {
+    public Optional<NavigationPoint> trackingPoint(Player player, String trackKey) {
+        if (player == null || trackKey == null) {
             return Optional.empty();
         }
-        return Optional.ofNullable(trackingPoints.get(player.getUniqueId()));
+        Map<String, NavigationPoint> points = trackingPoints.get(player.getUniqueId());
+        return points == null ? Optional.empty() : Optional.ofNullable(points.get(trackKey));
     }
 
     /**
@@ -285,7 +386,7 @@ public final class QuestGpsNavigationService {
     }
 
     /**
-     * 为玩家开启任务级导航追踪。
+     * 为玩家开启任务级导航追踪（与其他目标并行）。
      *
      * @param player             玩家
      * @param questId            任务 ID
@@ -294,72 +395,235 @@ public final class QuestGpsNavigationService {
      * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
      */
     public boolean trackQuest(Player player, String questId, String questName, List<String> prioritizedTaskIds) {
-        if (player == null || !player.isOnline()) {
+        if (player == null || !player.isOnline() || !runtimeReady()) {
             return false;
         }
         if (chemdahNavigationEnabled()) {
             trackerBridge.startQuestTracking(player);
         }
         Optional<NavigationPoint> point = resolveQuestPoint(player, questId, prioritizedTaskIds, questName);
-        if (point.isPresent()) {
-            return activateWaypoint(player, TrackingMode.QUEST, questId, "", point.get());
+        if (point.isEmpty() && !chemdahNavigationEnabled()) {
+            return false;
         }
-        if (chemdahNavigationEnabled()) {
-            trackingStates.put(
-                player.getUniqueId(),
-                new TrackingState(
-                    true,
-                    TrackingMode.QUEST,
-                    safe(questId),
-                    "",
-                    buildWaypointId(questId, ""),
-                    effectiveTitle("", questName)
-                )
-            );
-            return true;
-        }
-        return false;
+        return activate(player, TrackingMode.QUEST, questId, "", questName, "", prioritizedTaskIds, point.orElse(null));
     }
 
     /**
-     * 为玩家开启子任务级导航追踪。
+     * 为玩家开启子任务级导航追踪（与其他目标并行）。
      *
-     * @param player   玩家
-     * @param questId  任务 ID
-     * @param taskId   子任务 ID
-     * @param taskName 子任务名称（用于路径点标题）
+     * @param player    玩家
+     * @param questId   任务 ID
+     * @param taskId    子任务 ID
+     * @param questName 任务名称（%quest% 占位符）
+     * @param taskName  子任务名称（用于路径点标题）
      * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
      */
-    public boolean trackTask(Player player, String questId, String taskId, String taskName) {
-        if (player == null || !player.isOnline()) {
+    public boolean trackTask(Player player, String questId, String taskId, String questName, String taskName) {
+        if (player == null || !player.isOnline() || !runtimeReady()) {
             return false;
         }
         if (chemdahNavigationEnabled()) {
             trackerBridge.startQuestTracking(player);
         }
         Optional<NavigationPoint> point = resolveTaskPoint(player, questId, taskId, taskName);
-        if (point.isPresent()) {
-            return activateWaypoint(player, TrackingMode.TASK, questId, taskId, point.get());
+        if (point.isEmpty() && !chemdahNavigationEnabled()) {
+            return false;
         }
-        if (chemdahNavigationEnabled()) {
-            trackingStates.put(
-                player.getUniqueId(),
-                new TrackingState(
-                    true,
-                    TrackingMode.TASK,
-                    safe(questId),
-                    safe(taskId),
-                    buildWaypointId(questId, taskId),
-                    effectiveTitle("", taskName)
-                )
-            );
-            return true;
+        return activate(player, TrackingMode.TASK, questId, taskId, questName, taskName, List.of(), point.orElse(null));
+    }
+
+    private boolean activate(
+        Player player,
+        TrackingMode mode,
+        String questId,
+        String taskId,
+        String questName,
+        String taskName,
+        List<String> prioritizedTaskIds,
+        NavigationPoint point
+    ) {
+        String trackKey = trackKey(questId, taskId);
+        String waypointId = point == null ? buildWaypointId(questId, taskId) : point.waypointId();
+        String label = mode == TrackingMode.TASK ? taskName : questName;
+        String title = effectiveTitle(point == null ? "" : point.title(), label);
+
+        TrackContext context = new TrackContext(
+            trackKey, mode, questId, taskId, title,
+            prioritizedTaskIds == null ? List.of() : List.copyOf(prioritizedTaskIds),
+            point
+        );
+
+        NavigationTarget.Builder builder = NavigationTarget.builder(waypointId)
+            .title(title)
+            .styleId(point == null ? effectiveStyle("") : point.styleId())
+            .resolver(p -> resolveLive(p, context))
+            .attachment(context)
+            .placeholder("label", title)
+            .placeholder("quest", questName == null || questName.isBlank() ? title : questName)
+            .placeholder("objective", taskName == null ? "" : taskName);
+        if (point != null && !point.world().isBlank()) {
+            builder.world(point.world()).position(point.x(), point.y(), point.z());
         }
-        return false;
+        String template = configuration.navigation().waypoint().titleTemplateText();
+        if (!template.isBlank()) {
+            builder.titleTemplate(template);
+        }
+        double finishRange = point != null && point.finishRange() >= 0
+            ? point.finishRange()
+            : configuration.navigation().finishRange();
+        if (finishRange > 0) {
+            builder.finishRange(finishRange);
+        }
+        List<String> finishCommands = point != null && !point.finishCommands().isEmpty()
+            ? point.finishCommands()
+            : configuration.navigation().finishCommands();
+        builder.finishCommands(finishCommands);
+
+        trackingStates.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
+            .put(trackKey, new TrackingState(true, mode, safe(questId),
+                mode == TrackingMode.TASK ? safe(taskId) : "", waypointId, title,
+                questName == null || questName.isBlank() ? title : questName));
+        if (point != null) {
+            trackingPoints.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
+                .put(trackKey, point);
+        }
+        if (targetService != null) {
+            targetService.setTarget(player, builder.build());
+        } else if (point != null && configuration.navigation().waypoint().enabled()) {
+            // 目标编排服务不可用时（如测试替身）：直接下发路标，无 diff/滞回/钩子
+            if (!waypointRuntime.addWaypoint(player, waypointId, title, point.styleId(), point.x(), point.y(), point.z())) {
+                removeState(player.getUniqueId(), trackKey);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void removeState(java.util.UUID uuid, String trackKey) {
+        Map<String, TrackingState> states = trackingStates.get(uuid);
+        if (states != null) {
+            states.remove(trackKey);
+            if (states.isEmpty()) {
+                trackingStates.remove(uuid);
+            }
+        }
+        Map<String, NavigationPoint> points = trackingPoints.get(uuid);
+        if (points != null) {
+            points.remove(trackKey);
+            if (points.isEmpty()) {
+                trackingPoints.remove(uuid);
+            }
+        }
     }
 
     /**
-     * 清除玩家的导航追踪。
+     * 动态目标实时解析：chemdah → overlay/npc 链，供 {@link NavigationTarget} resolver 调用。
+     * 同时把解析出的最新 NavigationPoint 写回 trackingPoints（地图外部目标同步读取）。
+     */
+    private Location resolveLive(Player player, TrackContext context) {
+        Optional<NavigationPoint> resolved = context.mode() == TrackingMode.TASK
+            ? resolveTaskPoint(player, context.questId(), context.taskId(), context.label())
+            : resolveQuestPoint(player, context.questId(), context.prioritizedTaskIds(), context.label());
+        NavigationPoint point = resolved.orElse(context.initialPoint());
+        Map<String, NavigationPoint> points = trackingPoints.get(player.getUniqueId());
+        if (point == null) {
+            if (points != null) {
+                points.remove(context.trackKey());
+            }
+            return null;
+        }
+        Location location = null;
+        if (!point.npcId().isBlank() && npcBridge != null && npcBridge.isAvailable()) {
+            location = npcBridge.locateByName(point.npcId()).orElse(null);
+        }
+        if (location == null && !point.world().isBlank()) {
+            World world = findWorld(point.world());
+            if (world != null) {
+                location = new Location(world, point.x(), point.y(), point.z());
+            }
+        }
+        if (location == null) {
+            if (points != null) {
+                points.remove(context.trackKey());
+            }
+            return null;
+        }
+        NavigationPoint effective = point.withPosition(location);
+        if (points != null) {
+            points.put(context.trackKey(), effective);
+        } else {
+            trackingPoints.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
+                .put(context.trackKey(), effective);
+        }
+        return location;
+    }
+
+    /**
+     * 取消玩家单个追踪目标。
+     *
+     * @param player 玩家
+     * @param questId 任务 ID
+     * @param taskId 子任务 ID（空 = 任务级目标）
+     * @return 存在该追踪并已移除时返回 {@code true}
+     */
+    public boolean untrack(Player player, String questId, String taskId) {
+        if (player == null) {
+            return false;
+        }
+        java.util.UUID uuid = player.getUniqueId();
+        LinkedHashMap<String, TrackingState> states = trackingStates.get(uuid);
+        String key = trackKey(questId, taskId);
+        TrackingState removed = states == null ? null : states.remove(key);
+        if (removed == null) {
+            return false;
+        }
+        Map<String, NavigationPoint> points = trackingPoints.get(uuid);
+        if (points != null) {
+            points.remove(key);
+            if (points.isEmpty()) {
+                trackingPoints.remove(uuid);
+            }
+        }
+        if (targetService != null) {
+            targetService.removeTarget(player, removed.waypointId());
+        } else if (!removed.waypointId().isBlank()) {
+            waypointRuntime.removeWaypoint(player, removed.waypointId(), false);
+        }
+        if (states != null && states.isEmpty()) {
+            trackingStates.remove(uuid);
+            if (chemdahNavigationEnabled()) {
+                trackerBridge.stopAll(player);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 取消指定任务的全部追踪目标（任务级 + 其所有子任务级）。
+     *
+     * @return 是否存在该任务的追踪并被移除
+     */
+    public boolean untrackQuest(Player player, String questId) {
+        if (player == null || questId == null) {
+            return false;
+        }
+        String needle = questId.trim().toLowerCase(Locale.ROOT);
+        List<String> keys = trackingStates(player).entrySet().stream()
+            .filter(entry -> entry.getValue().questId().equalsIgnoreCase(needle))
+            .map(Map.Entry::getKey)
+            .toList();
+        boolean removed = false;
+        for (String key : keys) {
+            TrackingState state = trackingStates(player).get(key);
+            if (state != null) {
+                removed |= untrack(player, state.questId(), state.taskId());
+            }
+        }
+        return removed;
+    }
+
+    /**
+     * 清除玩家的全部导航追踪。
      *
      * @param player 玩家
      * @param silent 为 {@code true} 时删除失败不输出警告日志
@@ -371,31 +635,70 @@ public final class QuestGpsNavigationService {
         if (chemdahNavigationEnabled()) {
             trackerBridge.stopAll(player);
         }
-        TrackingState state = trackingStates.remove(player.getUniqueId());
+        Map<String, TrackingState> states = trackingStates.remove(player.getUniqueId());
         trackingPoints.remove(player.getUniqueId());
-        // 移除导航标记模型
+        if (targetService != null) {
+            targetService.clearTargets(player);
+        } else if (states != null) {
+            for (TrackingState state : states.values()) {
+                if (!state.waypointId().isBlank()) {
+                    waypointRuntime.removeWaypoint(player, state.waypointId(), false);
+                }
+            }
+        }
         if (markerService != null) {
             markerService.hideMarker(player);
-        }
-        if (state == null || !state.active() || !runtimeReady()) {
-            return;
-        }
-        if (!waypointRuntime.removeWaypoint(player, state.waypointId(), false) && !silent) {
-            logger.warning("QuestGPS: 删除导航失败: " + state.waypointId());
         }
     }
 
     /**
-     * 当玩家当前追踪的目标属于指定任务时，清除其追踪。
+     * 指定任务最近激活的追踪状态（同任务存在多个目标时取最后注册的）。
      *
      * @param player  玩家
      * @param questId 任务 ID
+     * @return 最近追踪状态
      */
-    public void clearTrackingForQuest(Player player, String questId) {
-        TrackingState state = trackingState(player);
-        if (state.matchesQuest(questId) || state.questId().equalsIgnoreCase(safe(questId))) {
-            clearTracking(player, true);
+    public Optional<TrackingState> primaryStateForQuest(Player player, String questId) {
+        if (player == null || questId == null) {
+            return Optional.empty();
         }
+        TrackingState latest = null;
+        for (TrackingState state : trackingStates(player).values()) {
+            if (state.questId().equalsIgnoreCase(questId.trim())) {
+                latest = state;
+            }
+        }
+        return Optional.ofNullable(latest);
+    }
+
+    /** 玩家退出时清理追踪与目标状态（不派发包）。 */
+    public void handleQuit(Player player) {
+        if (player == null) {
+            return;
+        }
+        trackingStates.remove(player.getUniqueId());
+        trackingPoints.remove(player.getUniqueId());
+        if (targetService != null) {
+            targetService.handleQuit(player);
+        }
+        if (markerService != null) {
+            markerService.hideMarker(player);
+        }
+    }
+
+    /**
+     * 定位 Adyeshach NPC 所在世界名（预览跨世界追踪用）。
+     *
+     * @param npcId NPC 名/ID
+     * @return 世界名，找不到时返回空串
+     */
+    public String locateNpcWorld(String npcId) {
+        if (npcBridge == null || npcId == null || npcId.isBlank()) {
+            return "";
+        }
+        return npcBridge.locateByName(npcId)
+            .map(location -> location.getWorld() == null ? "" : location.getWorld().getName())
+            .orElse("");
     }
 
     private Optional<NavigationPoint> resolveQuestPoint(
@@ -409,12 +712,13 @@ public final class QuestGpsNavigationService {
         }
         Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, "", fallbackTitle);
         if (chemdahPoint.isPresent()) {
-            return chemdahPoint;
+            return chemdahPoint.map(point -> withQuestTeleport(questId, point));
         }
         if (!overlayNavigationEnabled()) {
             return Optional.empty();
         }
-        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, fallbackTitle);
+        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, fallbackTitle)
+            .map(point -> withQuestTeleport(questId, point));
     }
 
     private Optional<NavigationPoint> resolveTaskPoint(Player player, String questId, String taskId, String fallbackTitle) {
@@ -423,12 +727,13 @@ public final class QuestGpsNavigationService {
         }
         Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, taskId, fallbackTitle);
         if (chemdahPoint.isPresent()) {
-            return chemdahPoint;
+            return chemdahPoint.map(point -> withQuestTeleport(questId, point));
         }
         if (!overlayNavigationEnabled()) {
             return Optional.empty();
         }
-        return resolveOverlayTaskPoint(questId, taskId, fallbackTitle);
+        return resolveOverlayTaskPoint(questId, taskId, fallbackTitle)
+            .map(point -> withQuestTeleport(questId, point));
     }
 
     private boolean hasOverlayQuestPoint(String questId, List<String> prioritizedTaskIds) {
@@ -486,85 +791,25 @@ public final class QuestGpsNavigationService {
                 location.getX(),
                 location.getY(),
                 location.getZ(),
-                effectiveTitle("", fallbackTitle)
+                effectiveTitle("", fallbackTitle),
+                "",
+                -1,
+                List.of(),
+                null
             ));
     }
 
-    private void refreshChemdahTrackingPositions() {
-        if (!chemdahNavigationEnabled() || !runtimeReady()) {
-            return;
+    /** 目标点未声明 teleport 时回退到任务级 navigation.point.teleport。 */
+    private NavigationPoint withQuestTeleport(String questId, NavigationPoint point) {
+        if (point.teleport() != null) {
+            return point;
         }
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            TrackingState state = trackingStates.get(player.getUniqueId());
-            if (state == null || !state.active()) {
-                continue;
-            }
-            Optional<NavigationPoint> point = resolveChemdahPoint(player, state.questId(), state.taskId(), state.label());
-            if (point.isEmpty()) {
-                continue;
-            }
-            NavigationPoint current = trackingPoints.get(player.getUniqueId());
-            NavigationPoint next = point.get();
-            if (current != null && samePosition(current, next)) {
-                continue;
-            }
-            if (current == null) {
-                activateWaypoint(player, state.mode(), state.questId(), state.taskId(), next);
-            } else {
-                refreshWaypointPosition(player, state, next);
-            }
-        }
-    }
-
-    private void refreshWaypointPosition(Player player, TrackingState state, NavigationPoint point) {
-        if (!runtimeReady()) {
-            return;
-        }
-        waypointRuntime.removeWaypoint(player, state.waypointId(), false);
-        boolean success = waypointRuntime.addWaypoint(
-            player,
-            point.waypointId(),
-            point.title(),
-            point.styleId(),
-            point.x(),
-            point.y(),
-            point.z()
-        );
-        if (!success) {
-            return;
-        }
-        trackingPoints.put(player.getUniqueId(), point);
-        if (markerService != null) {
-            markerService.showMarker(player, point);
-        }
-        notifyPositionListener(player, point);
-    }
-
-    private static boolean samePosition(NavigationPoint current, NavigationPoint next) {
-        return current.world().equalsIgnoreCase(next.world())
-            && Math.abs(current.x() - next.x()) < 0.5
-            && Math.abs(current.y() - next.y()) < 0.5
-            && Math.abs(current.z() - next.z()) < 0.5;
-    }
-
-    private String navigationMode() {
-        String mode = configuration.navigation().mode();
-        if (mode == null || mode.isBlank()) {
-            return "hybrid";
-        }
-        return mode.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private boolean chemdahNavigationEnabled() {
-        return trackerBridge != null && trackerBridge.available() && !navigationMode().equals("overlay");
-    }
-
-    private boolean overlayNavigationEnabled() {
-        return navigationMode().equals("overlay") || navigationMode().equals("hybrid");
-    }
-
-    private boolean chemdahOnlyNavigation() {
-        return navigationMode().equals("chemdah") && chemdahNavigationEnabled();
+        QuestGpsModuleConfiguration.QuestDefinition quest = configuration.quest(questId);
+        QuestGpsModuleConfiguration.NavigationPointDefinition questPoint =
+            quest == null ? null : quest.navigation().point();
+        QuestGpsModuleConfiguration.TeleportPointDefinition teleport =
+            questPoint == null ? null : questPoint.teleport();
+        return teleport == null ? point : point.withTeleport(teleport);
     }
 
     private Optional<NavigationPoint> resolveQuestPoint(
@@ -594,59 +839,16 @@ public final class QuestGpsNavigationService {
             point.x(),
             point.y(),
             point.z(),
-            blankTo(point.mapLabel(), title)
+            blankTo(point.mapLabel(), title),
+            point.npc(),
+            point.finishRange(),
+            point.finishCommands(),
+            point.teleport()
         );
-    }
-
-    private boolean activateWaypoint(
-        Player player,
-        TrackingMode mode,
-        String questId,
-        String taskId,
-        NavigationPoint point
-    ) {
-        clearTracking(player, true);
-        if (!runtimeReady()) {
-            return false;
-        }
-        boolean success = waypointRuntime.addWaypoint(
-            player,
-            point.waypointId(),
-            point.title(),
-            point.styleId(),
-            point.x(),
-            point.y(),
-            point.z()
-        );
-        if (!success) {
-            return false;
-        }
-        trackingStates.put(
-            player.getUniqueId(),
-            new TrackingState(
-                true,
-                mode,
-                safe(questId),
-                mode == TrackingMode.TASK ? safe(taskId) : "",
-                point.waypointId(),
-                point.title()
-            )
-        );
-        trackingPoints.put(player.getUniqueId(), point);
-        // 显示导航标记模型
-        if (markerService != null) {
-            if (configuration.debug()) logger.info("QuestGPS: activateWaypoint → 调用 markerService.showMarker player=" + player.getName()
-                + " point.world=" + point.world());
-            markerService.showMarker(player, point);
-        } else {
-            logger.warning("QuestGPS: activateWaypoint → markerService 为 null，跳过标记");
-        }
-        notifyPositionListener(player, point);
-        return true;
     }
 
     private String effectiveStyle(String configuredStyleId) {
-        return waypointRuntime.resolveStyleId(configuredStyleId, configuration.navigation().waypointStyleId(), "QuestGPS");
+        return waypointRuntime.resolveStyleId(configuredStyleId, configuration.navigation().waypoint().styleId(), "QuestGPS");
     }
 
     private String effectiveTitle(String configuredTitle, String fallbackTitle) {
@@ -656,6 +858,48 @@ public final class QuestGpsNavigationService {
     private String buildWaypointId(String questId, String taskId) {
         String base = configuration.navigation().questIdPrefix() + sanitize(questId);
         return taskId == null || taskId.isBlank() ? base : base + "__" + sanitize(taskId);
+    }
+
+    private static String trackKey(String questId, String taskId) {
+        String base = safe(questId).toLowerCase(Locale.ROOT);
+        return safe(taskId).isBlank() ? base : base + "|" + safe(taskId).toLowerCase(Locale.ROOT);
+    }
+
+    private String navigationMode() {
+        String mode = configuration.navigation().mode();
+        if (mode == null || mode.isBlank()) {
+            return "hybrid";
+        }
+        return mode.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean chemdahNavigationEnabled() {
+        return trackerBridge != null && trackerBridge.available() && !navigationMode().equals("overlay");
+    }
+
+    private boolean overlayNavigationEnabled() {
+        return navigationMode().equals("overlay") || navigationMode().equals("hybrid");
+    }
+
+    private boolean chemdahOnlyNavigation() {
+        return navigationMode().equals("chemdah") && chemdahNavigationEnabled();
+    }
+
+    /** 世界查找：精确匹配优先，其次大小写不敏感（配置的世界名可能大小写不一致）。 */
+    private static World findWorld(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        World world = Bukkit.getWorld(name);
+        if (world != null) {
+            return world;
+        }
+        for (World w : Bukkit.getWorlds()) {
+            if (w.getName().equalsIgnoreCase(name.trim())) {
+                return w;
+            }
+        }
+        return null;
     }
 
     private static String sanitize(String value) {
@@ -668,6 +912,20 @@ public final class QuestGpsNavigationService {
 
     private static String blankTo(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    /**
+     * 追踪上下文（NavigationTarget.attachment），供 resolver/回调反查。
+     */
+    private record TrackContext(
+        String trackKey,
+        TrackingMode mode,
+        String questId,
+        String taskId,
+        String label,
+        List<String> prioritizedTaskIds,
+        NavigationPoint initialPoint
+    ) {
     }
 
     /**
@@ -690,6 +948,7 @@ public final class QuestGpsNavigationService {
      * @param taskId     子任务 ID，任务级追踪时为空
      * @param waypointId 路径点标识符
      * @param label      追踪目标显示名称
+     * @param questName  所属任务显示名（多追踪 HUD 卡片标题用）
      */
     public record TrackingState(
         boolean active,
@@ -697,16 +956,9 @@ public final class QuestGpsNavigationService {
         String questId,
         String taskId,
         String waypointId,
-        String label
+        String label,
+        String questName
     ) {
-
-        public static TrackingState none() {
-            return new TrackingState(false, TrackingMode.NONE, "", "", "", "");
-        }
-
-        public boolean matchesQuest(String questId) {
-            return active && mode == TrackingMode.QUEST && this.questId.equalsIgnoreCase(safe(questId));
-        }
 
         public boolean matchesTask(String questId, String taskId) {
             return active
@@ -714,19 +966,28 @@ public final class QuestGpsNavigationService {
                 && this.questId.equalsIgnoreCase(safe(questId))
                 && this.taskId.equalsIgnoreCase(safe(taskId));
         }
+
+        /** 该状态在追踪表中的键（questId 或 questId|taskId，小写规范化）。 */
+        public String trackKey() {
+            return QuestGpsNavigationService.trackKey(questId, taskId);
+        }
     }
 
     /**
      * 导航坐标点。
      *
-     * @param waypointId 路径点标识符
-     * @param title      路径点标题
-     * @param styleId    路径点样式 ID
-     * @param world      世界名称
-     * @param x          X 坐标
-     * @param y          Y 坐标
-     * @param z          Z 坐标
-     * @param mapLabel   地图标记标签
+     * @param waypointId     路径点标识符
+     * @param title          路径点标题
+     * @param styleId        路径点样式 ID
+     * @param world          世界名称
+     * @param x              X 坐标
+     * @param y              Y 坐标
+     * @param z              Z 坐标
+     * @param mapLabel       地图标记标签
+     * @param npcId          Adyeshach NPC 名/ID（非空时跟随 NPC 实时位置）
+     * @param finishRange    到达触发半径（&lt; 0 继承全局配置）
+     * @param finishCommands 到达命令（空列表继承全局配置）
+     * @param teleport       跨世界传送点（可空）
      */
     public record NavigationPoint(
         String waypointId,
@@ -736,12 +997,33 @@ public final class QuestGpsNavigationService {
         double x,
         double y,
         double z,
-        String mapLabel
+        String mapLabel,
+        String npcId,
+        double finishRange,
+        List<String> finishCommands,
+        QuestGpsModuleConfiguration.TeleportPointDefinition teleport
     ) {
+
+        /** 返回以动态定位坐标覆盖本点坐标/世界的副本。 */
+        public NavigationPoint withPosition(Location location) {
+            return new NavigationPoint(
+                waypointId, title, styleId,
+                location.getWorld() == null ? world : location.getWorld().getName(),
+                location.getX(), location.getY(), location.getZ(),
+                mapLabel, npcId, finishRange, finishCommands, teleport
+            );
+        }
+
+        /** 返回 teleport 字段替换后的副本。 */
+        public NavigationPoint withTeleport(QuestGpsModuleConfiguration.TeleportPointDefinition teleport) {
+            return new NavigationPoint(
+                waypointId, title, styleId, world, x, y, z, mapLabel, npcId, finishRange, finishCommands, teleport
+            );
+        }
     }
 
     /**
-     * 路径点运行时接口，抽象路径点桥接的增删与样式解析操作。
+     * 路径点运行时接口，抽象路径点桥接的初始化与样式解析操作。
      */
     interface WaypointRuntime {
         boolean initialize(String ownerLabel);
@@ -789,5 +1071,3 @@ public final class QuestGpsNavigationService {
         }
     }
 }
-
-

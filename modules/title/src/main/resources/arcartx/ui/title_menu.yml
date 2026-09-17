@@ -26,25 +26,12 @@ ui:
         var.actionBusySeconds = 0
       }
     load: |-
-      var.equippedByGroup = {}
-      var.groups = {}
-      var.qualities = {}
-      var.titles = {}
-      var.sets = {}
-      var.selectedCanEquip = false
-      var.selectedIsEquipped = false
-      var.selectedOwned = false
-      var.selectedHidden = false
-      var.ownedCount = 0
-      var.hiddenCount = 0
-      var.equippedCount = 0
       var.activeSetCount = 0
-      var.maxTitleCount = 0
-      var.maxGroupCount = 0
-      var.maxQualityCount = 0
-      var.maxSetCount = 0
-      var.maxEquippedCount = 0
       var.刷新轮次 = 0
+      var.equippedCount = 0
+      var.hiddenCount = 0
+      var.ownedCount = 0
+      var.selectedOwned = false
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.filterMode = 'all'
@@ -140,7 +127,6 @@ ui:
     #   - max_equipped_count: 已装备分组最大数量（用于动态复制已装备项控件）
     init: |-
       var.actionBusy = false
-      var.activeSetCount = 0
       var.titleListScrollRatio = 0
       var.groupScrollRatio = 0
       var.qualityScrollRatio = 0
@@ -182,6 +168,7 @@ ui:
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
+      var.activeSetCount = 0
       if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
@@ -271,7 +258,6 @@ ui:
     # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
       var.actionBusy = false
-      var.activeSetCount = 0
       // 保存旧数量，用于判断是否需要重建列表
       oldMaxTitleCount = var.maxTitleCount
       oldMaxGroupCount = var.maxGroupCount
@@ -314,6 +300,7 @@ ui:
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
+      var.activeSetCount = 0
       if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){

@@ -20,6 +20,7 @@ ui:
   show: true
   packetHandler:
     init: |-
+      var.actionBusySeconds = 0
       var.crossWorldPromptVisible = false
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
@@ -75,7 +76,6 @@ ui:
         }
       }
       var.actionBusy = false
-      var.actionBusySeconds = 0
       if(var.mapRenderer != none) {
         var.mapRenderer.clearMarkers()
         if(var.anchorRows != none) {
@@ -206,12 +206,20 @@ ui:
         var.lastDetailType = var.detailSelectedType
         var.lastDetailId = var.detailSelectedId
         if(var.detailSelectedType == 'waypoint') {
-          if(val.路径点名称输入框 != none){ val.路径点名称输入框.setContent(var.detailTitle) }
-          if(val.路径点描述输入框 != none){ val.路径点描述输入框.setContent(var.detailDescription) }
+          if(val.路径点名称输入框 != none) {
+            val.路径点名称输入框.setContent(var.detailTitle)
+          }
+          if(val.路径点描述输入框 != none) {
+            val.路径点描述输入框.setContent(var.detailDescription)
+          }
         }
         if(var.detailSelectedType == 'pin') {
-          if(val.标记点名称输入框 != none){ val.标记点名称输入框.setContent(var.detailTitle) }
-          if(val.标记点描述输入框 != none){ val.标记点描述输入框.setContent(var.detailDescription) }
+          if(val.标记点名称输入框 != none) {
+            val.标记点名称输入框.setContent(var.detailTitle)
+          }
+          if(val.标记点描述输入框 != none) {
+            val.标记点描述输入框.setContent(var.detailDescription)
+          }
         }
       }
       call_syncWorldDims()
@@ -233,7 +241,9 @@ ui:
       // 世界ID→MC维度映射下发给 mod（服务端 packet 的 worldRows[].dimension），
       // mod 用它把"选中世界"匹配到对应维度的地形缓存桶
       var.syncWorldDims = -> {
-        if(var.mapRenderer == none) { return }
+        if(var.mapRenderer == none) {
+          return
+        }
         if(var.worldRows != none) {
           for(key in var.worldRows.keys()) {
             row = var.worldRows[key]
@@ -248,7 +258,9 @@ ui:
           var.litEnabled == true ? var.litRegions : none)
       }
       var.call_syncWorldDims = -> {
-        if(var.syncWorldDims != none) { var.syncWorldDims() }
+        if(var.syncWorldDims != none) {
+          var.syncWorldDims()
+        }
       }
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -319,37 +331,20 @@ ui:
         }
       }
     open: |-
-      var.worldRows = {}
-      var.anchorRows = {}
-      var.waypointRows = {}
-      var.externalTargetRows = {}
-      var.canCreateWaypoint = false
-      var.clearTrackVisible = false
-      var.detailCanUnlock = false
-      var.detailCanTeleport = false
-      var.detailCanTrackAnchor = false
-      var.detailCanTrackWaypoint = false
-      var.detailCanTrackExternal = false
-      var.detailCanDeleteWaypoint = false
-      var.maxWorldCount = 0
+      var.worldListOpen = false
       var.actionToken = ''
-      var.playerWorldId = ''
-      var.crossWorldPromptVisible = false
-      var.actionBusy = false
-      var.actionBusySeconds = 0
-      var.lastDetailType = ''
-      var.lastDetailId = ''
+      var.detailCanTrackAnchor = false
+      var.detailCanTrackExternal = false
+      var.detailCanTrackWaypoint = false
+      var.detailSelectedType = 'none'
+      var.packetId = 'AXS_MAP'
       var.pinCreateX = ''
       var.pinCreateZ = ''
-      var.showHudSettings = false
-      var.worldListOpen = false
-      var.packetId = 'AXS_MAP'
       var.selectedWorldName = '未选择'
       var.trackingText = '当前未导航'
-      var.detailSelectedType = 'none'
-      var.detailTitle = '未选中目标'
-      var.detailDescription = '请选择一个锚点或路径点。'
-      var.detailTrackingText = '当前未导航'
+      var.worldRows = {}
+      var.crossWorldPromptVisible = false
+      var.actionBusy = false
       // 打开菜单默认回到玩家当前位置：清掉上次残留的拖拽/缩放
       if(var.mapRenderer != none) {
         var.mapRenderer.resetView()
@@ -647,7 +642,7 @@ controls:
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
-                      Packet.send(var.packetId, 'clear_track')
+                      Packet.send(var.packetId, 'untrack', 'anchor', var.detailSelectedId)
                     } else {
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
@@ -809,7 +804,7 @@ controls:
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
-                      Packet.send(var.packetId, 'clear_track')
+                      Packet.send(var.packetId, 'untrack', 'waypoint', var.detailSelectedId)
                     } else {
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
@@ -1240,8 +1235,8 @@ controls:
                 if (var.pinCreateX != '' && var.pinCreateZ != '') {
                   var.actionBusy = true
                   Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.actionToken)
-                  var.pinCreateZ = ''
                   var.pinCreateX = ''
+                  var.pinCreateZ = ''
                 }
             children:
               新建标记点按钮底:
@@ -1385,8 +1380,8 @@ controls:
                         action:
                           clickLeft: |-
                             if (self.entry != none) {
-                              var.worldListOpen = false
                               Packet.send(var.packetId, 'open_world', self.entry['id'])
+                              var.worldListOpen = false
                             }
                         children:
                           地图项目背景:

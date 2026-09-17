@@ -34,6 +34,8 @@ ui:
     # packetHandler: init
     # 接收奖励列表数据包，动态生成奖励条目子元素
     init: |-
+      var.claimableCount = 0
+      var.iconJsons = {}
       var.packetId = packet['packetId']
       var.level = packet['level']
       var.claimedRewards = packet['claimedRewards']
@@ -41,7 +43,6 @@ ui:
       var.rewardCount = packet['rewardCount']
       // 构建 iconJsons 映射（Java 端生成的完整 itemJson，分离模式 flat 字段）
       // 注意：不要在 UI 端拼接 SNBT（材质名大小写/Count 浮点都会出问题）
-      var.iconJsons = {}
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           json = packet['iconJson' + key]
@@ -53,7 +54,6 @@ ui:
         }
       }
       // 统计可领取数量
-      var.claimableCount = 0
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           entry = var.rewards[key]
@@ -68,8 +68,10 @@ ui:
       }
       for(i in range(1, var.rewardCount)){
         key = i.round()
-        if(val.奖励列表['奖励条目'] != none){ e = val.奖励列表['奖励条目'].copy('奖励条目' + key) }
-        e.entryKey = key
+        if(val.奖励列表['奖励条目'] != none) {
+          e = val.奖励列表['奖励条目'].copy('奖励条目' + key)
+          e.entryKey = key
+        }
       }
       // 数据就绪后触发每个奖励图标的 seticon()
       if(val.奖励列表['奖励条目'] != none && val.奖励列表['奖励条目']['图标'] != none){
@@ -90,7 +92,6 @@ ui:
       var.rewards = packet['rewards']
       oldRewardCount = var.rewardCount
       var.rewardCount = packet['rewardCount']
-      var.iconJsons = {}
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           json = packet['iconJson' + key]
@@ -117,8 +118,10 @@ ui:
         }
         for(i in range(1, var.rewardCount)){
           key = i.round()
-        if(val.奖励列表['奖励条目'] != none){ e = val.奖励列表['奖励条目'].copy('奖励条目' + key) }
+        if(val.奖励列表['奖励条目'] != none) {
+          e = val.奖励列表['奖励条目'].copy('奖励条目' + key)
           e.entryKey = key
+        }
         }
       }
       // 重新触发每个奖励图标的 seticon（数据变了但 seticon 不会自动刷新）
@@ -135,12 +138,9 @@ ui:
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
-      var.packetId = 'AXS_FISHING_REWARDS'
       var.level = 1
-      var.rewards = {}
+      var.packetId = 'AXS_FISHING_REWARDS'
       var.rewardCount = 0
-      var.claimableCount = 0
-      var.iconJsons = {}
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 视口换算：把窗口实际宽高折算回设计坐标系
       sx = Screen.getWidth() / 1920

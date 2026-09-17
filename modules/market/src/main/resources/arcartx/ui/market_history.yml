@@ -39,13 +39,13 @@ ui:
     #   - historyItemJson{key}: 各记录物品的 NBT JSON
     #   - maxRecordCount: 记录最大数量
     update: |-
+      var.itemJsons = {}
       oldMaxRecordCount = var.maxRecordCount
       var.packetId = packet['packetId']
       var.page = packet['page']
       var.totalPages = packet['totalPages']
       var.records = packet['records']
       var.maxRecordCount = packet['maxRecordCount']
-      var.itemJsons = {}
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
         if(json != none && json != ''){
@@ -61,14 +61,18 @@ ui:
         if(var.maxRecordCount > 1){
           for(i in range(1, var.maxRecordCount - 1)){
             key = i.round()
-            if(val.记录列表['记录卡片'] != none){ e = val.记录列表['记录卡片'].copy('记录卡片' + key) }
-            e.entryKey = key
+            if(val.记录列表['记录卡片'] != none) {
+              e = val.记录列表['记录卡片'].copy('记录卡片' + key)
+              e.entryKey = key
+            }
           }
         }
       }
       for(i in range(0, var.maxRecordCount - 1)){
         key = i.round()
-        if(val.记录列表 != none){ e = val.记录列表.get(key) }
+        if(val.记录列表 != none) {
+          e = val.记录列表.get(key)
+        }
         if(e != none && e['物品图标'] != none){
           e['物品图标'].seticon()
         }
@@ -78,9 +82,6 @@ ui:
       var.packetId = 'AXS_MARKET'
       var.page = 0
       var.totalPages = 1
-      var.records = {}
-      var.maxRecordCount = 0
-      var.itemJsons = {}
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080

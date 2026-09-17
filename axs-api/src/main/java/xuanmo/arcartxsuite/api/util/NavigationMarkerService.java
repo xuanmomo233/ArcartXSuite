@@ -23,10 +23,17 @@ import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
  * - 定时更新：随玩家移动重新计算路径并传送/增减标记
  * - 实体复用池：尽量传送现有实体，减少创建/销毁开销
  * - 支持多模块共享：每个模块用不同的 markerIdPrefix 区分
+ * - 支持多目标并行：同一玩家可同时存在多条标记链，按 markerKey 区分
+ * - 距离滞回：超出 {@link NavigationMarkerConfig#pathMaxDistance()} 隐藏后，
+ *   须回到 {@code maxDistance - pathReshowBuffer} 以内才重新显示，防止边界抖动
+ * - 原地重定向：同一 markerKey 再次 {@link #showMarker} 只更新目标点，保留实体复用
  *
  * @since 1.5.0
  */
 public final class NavigationMarkerService {
+
+    /** 未指定 markerKey 时的默认分组（旧单目标行为）。 */
+    public static final String DEFAULT_MARKER_KEY = "default";
 
     private final JavaPlugin plugin;
     private final AdyeshachNpcBridgeAPI npcBridge;
@@ -34,7 +41,8 @@ public final class NavigationMarkerService {
     private final Logger logger;
     private final boolean debug;
     private final String markerIdPrefix;
-    private final ConcurrentMap<UUID, PlayerPathState> playerPaths = new ConcurrentHashMap<>();
+    /** 玩家 → (markerKey → 路径状态)，支持同一玩家多条并行路径标记。 */
+    private final ConcurrentMap<UUID, ConcurrentMap<String, PlayerPathState>> playerPaths = new ConcurrentHashMap<>();
 
     private NavigationPathfinder pathfinder;
     private BukkitTask updateTask;
@@ -106,7 +114,7 @@ public final class NavigationMarkerService {
     }
 
     /**
-     * 设置导航目标，启动路径标记跟踪。
+     * 设置导航目标，启动路径标记跟踪（默认分组）。
      *
      * @param player 玩家
      * @param world  目标世界
@@ -115,10 +123,28 @@ public final class NavigationMarkerService {
      * @param z      目标 Z
      */
     public void showMarker(Player player, String world, double x, double y, double z) {
+        showMarker(player, DEFAULT_MARKER_KEY, world, x, y, z);
+    }
+
+    /**
+     * 设置导航目标，启动路径标记跟踪。
+     * <p>
+     * 同一 {@code markerKey} 重复调用为原地重定向：更新目标点并复用已有标记实体，
+     * 下一次定时更新时自动重算路径，不会闪烁重建。
+     *
+     * @param player    玩家
+     * @param markerKey 标记分组键（同一玩家可有多条并行路径标记，按此键区分/取消）
+     * @param world     目标世界
+     * @param x         目标 X
+     * @param y         目标 Y
+     * @param z         目标 Z
+     * @since 1.6.0
+     */
+    public void showMarker(Player player, String markerKey, String world, double x, double y, double z) {
         if (!available || player == null) {
             return;
         }
-        hideMarker(player);
+        String key = sanitizeKey(markerKey);
 
         World w = Bukkit.getWorld(world);
         if (w == null) {
@@ -126,12 +152,26 @@ public final class NavigationMarkerService {
         }
 
         Location goal = new Location(w, x, y, z);
-        PlayerPathState state = new PlayerPathState(goal, new ArrayList<>(), new ArrayList<>());
-        playerPaths.put(player.getUniqueId(), state);
+        ConcurrentMap<String, PlayerPathState> paths =
+            playerPaths.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>());
+        PlayerPathState existing = paths.get(key);
+        if (existing != null && !existing.cancelled) {
+            // 原地重定向：仅更新目标点，实体复用，下个 tick 自动重算
+            existing.goal = goal;
+            existing.suppressedByDistance = false;
+            if (debug) {
+                logger.info("路径标记: 重定向 player=" + player.getName()
+                    + " key=" + key + " goal=(" + x + "," + y + "," + z + ")");
+            }
+            return;
+        }
+
+        PlayerPathState state = new PlayerPathState(goal, new ArrayList<>(), new ArrayList<>(), key);
+        paths.put(key, state);
 
         if (debug) {
             logger.info("路径标记: 开始追踪 player=" + player.getName()
-                + " goal=(" + x + "," + y + "," + z + ")");
+                + " key=" + key + " goal=(" + x + "," + y + "," + z + ")");
         }
 
         AxsScheduler.runTask(plugin, () -> {
@@ -141,20 +181,62 @@ public final class NavigationMarkerService {
     }
 
     /**
-     * 移除玩家的所有路径标记。
+     * 移除玩家指定分组的路径标记。
+     *
+     * @param player    玩家
+     * @param markerKey 标记分组键
+     * @since 1.6.0
      */
-    public void hideMarker(Player player) {
+    public void hideMarker(Player player, String markerKey) {
         if (player == null) return;
-        PlayerPathState state = playerPaths.remove(player.getUniqueId());
+        ConcurrentMap<String, PlayerPathState> paths = playerPaths.get(player.getUniqueId());
+        if (paths == null) return;
+        PlayerPathState state = paths.remove(sanitizeKey(markerKey));
+        if (paths.isEmpty()) {
+            playerPaths.remove(player.getUniqueId());
+        }
         if (state == null) return;
 
         state.cancelled = true;
-
         for (String markerId : state.markerIds) {
             npcBridge.removePrivateMarker(player, markerId);
         }
         state.markerIds.clear();
         state.markerEntities.clear();
+    }
+
+    /**
+     * 移除玩家的所有路径标记（全部分组）。
+     */
+    public void hideMarker(Player player) {
+        if (player == null) return;
+        ConcurrentMap<String, PlayerPathState> paths = playerPaths.remove(player.getUniqueId());
+        if (paths == null) return;
+
+        for (PlayerPathState state : paths.values()) {
+            state.cancelled = true;
+            for (String markerId : state.markerIds) {
+                npcBridge.removePrivateMarker(player, markerId);
+            }
+            state.markerIds.clear();
+            state.markerEntities.clear();
+        }
+    }
+
+    /**
+     * 玩家指定分组当前是否有活跃路径标记。
+     *
+     * @param player    玩家
+     * @param markerKey 标记分组键
+     * @return 存在且未取消时返回 {@code true}
+     * @since 1.6.0
+     */
+    public boolean hasMarker(Player player, String markerKey) {
+        if (player == null) return false;
+        ConcurrentMap<String, PlayerPathState> paths = playerPaths.get(player.getUniqueId());
+        if (paths == null) return false;
+        PlayerPathState state = paths.get(sanitizeKey(markerKey));
+        return state != null && !state.cancelled;
     }
 
     public boolean isAvailable() {
@@ -164,20 +246,24 @@ public final class NavigationMarkerService {
     // ==================== 定时更新 ====================
 
     private void tickUpdate() {
-        for (var entry : playerPaths.entrySet()) {
-            Player player = Bukkit.getPlayer(entry.getKey());
+        for (var playerEntry : playerPaths.entrySet()) {
+            Player player = Bukkit.getPlayer(playerEntry.getKey());
             if (player == null || !player.isOnline()) {
-                PlayerPathState offlineState = playerPaths.remove(entry.getKey());
-                if (offlineState != null) {
-                    offlineState.cancelled = true;
+                ConcurrentMap<String, PlayerPathState> offlinePaths = playerPaths.remove(playerEntry.getKey());
+                if (offlinePaths != null) {
+                    for (PlayerPathState state : offlinePaths.values()) {
+                        state.cancelled = true;
+                    }
                 }
                 continue;
             }
-            PlayerPathState state = entry.getValue();
-            if (state.cancelled) continue;
-            // tickUpdate 本身已在定时任务（主线程）中运行，无需嵌套调度
-            if (player.isOnline() && !state.cancelled) {
-                computeAndApplyPath(player, state);
+            for (var entry : playerEntry.getValue().entrySet()) {
+                PlayerPathState state = entry.getValue();
+                if (state.cancelled) continue;
+                // tickUpdate 本身已在定时任务（主线程）中运行，无需嵌套调度
+                if (player.isOnline() && !state.cancelled) {
+                    computeAndApplyPath(player, state);
+                }
             }
         }
     }
@@ -204,9 +290,19 @@ public final class NavigationMarkerService {
 
         double distance = playerLoc.distance(goal);
         if (distance > config.pathMaxDistance()) {
-            removeExcessMarkers(player, state, 0);
+            if (!state.suppressedByDistance) {
+                state.suppressedByDistance = true;
+                removeExcessMarkers(player, state, 0);
+            }
             return;
         }
+        // 距离滞回：已抑制状态须回到 maxDistance - reshowBuffer 以内才恢复，
+        // 防止玩家在最大距离边界抖动时标记链反复出现/消失。
+        double reshowDistance = Math.max(0.0, config.pathMaxDistance() - config.pathReshowBuffer());
+        if (state.suppressedByDistance && distance > reshowDistance) {
+            return;
+        }
+        state.suppressedByDistance = false;
 
         List<Location> rawPath = pathfinder.findPath(playerLoc, goal);
         if (rawPath.isEmpty()) {
@@ -243,8 +339,10 @@ public final class NavigationMarkerService {
         }
 
         if (needed > existing) {
+            String markerKeySegment = state.markerKeySegment;
             for (int i = existing; i < needed; i++) {
-                String markerId = markerIdPrefix + player.getUniqueId().toString().substring(0, 8) + "_" + i;
+                String markerId = markerIdPrefix + player.getUniqueId().toString().substring(0, 8)
+                    + "_" + markerKeySegment + "_" + i;
                 Object entity = npcBridge.spawnPrivateMarker(player, markerId, points.get(i));
                 if (entity == null) continue;
                 state.markerIds.add(markerId);
@@ -275,18 +373,30 @@ public final class NavigationMarkerService {
         }
     }
 
+    private static String sanitizeKey(String markerKey) {
+        if (markerKey == null || markerKey.isBlank()) {
+            return DEFAULT_MARKER_KEY;
+        }
+        String sanitized = markerKey.replaceAll("[^A-Za-z0-9_\\-]", "_");
+        return sanitized.length() > 32 ? sanitized.substring(0, 32) : sanitized;
+    }
+
     // ==================== 玩家状态 ====================
 
     private static final class PlayerPathState {
-        final Location goal;
+        volatile Location goal;
         final List<String> markerIds;
         final List<Object> markerEntities;
+        final String markerKeySegment;
         volatile boolean cancelled;
+        /** 距离滞回：true 表示已因超出最大距离被抑制，须进入重显示距离内才恢复。 */
+        volatile boolean suppressedByDistance;
 
-        PlayerPathState(Location goal, List<String> markerIds, List<Object> markerEntities) {
+        PlayerPathState(Location goal, List<String> markerIds, List<Object> markerEntities, String markerKey) {
             this.goal = goal;
             this.markerIds = markerIds;
             this.markerEntities = markerEntities;
+            this.markerKeySegment = sanitizeKey(markerKey);
         }
     }
 }

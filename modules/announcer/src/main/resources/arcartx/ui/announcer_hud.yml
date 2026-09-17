@@ -27,6 +27,7 @@ ui:
     #   - revision: 数据修订版本号
     #   - textWidth: 公告文字估算宽度（用于滚动动画）
     display: |-
+      var.currentText = none
       var.displayVisible = packet['isShow']
       var.currentEntryId = packet['id']
       var.currentText = packet['text']
@@ -39,10 +40,8 @@ ui:
       }
   action:
     load: |-
-      var.displayVisible = false
-      var.currentClickable = false
-      var.textX = Display.width()
       var.textWidth = 0
+      var.textX = Display.width()
       var.scrollSpeed = 1.5
     tick: |-
       if(var.displayVisible && var.currentText != none){

@@ -28,21 +28,15 @@ ui:
     - air_level
   action:
     load: |-
-      var.selectedAttachments = {}
-      var.messages = {}
-      var.filterMode = 'all'
-      var.totalCount = 0
-      var.unreadCount = 0
-      var.claimableCount = 0
       var.filteredCount = 0
-      var.selectedBody = ['&f暂无正文']
-      var.selectedAttachmentSummary = '无附件'
       var.attachmentItemJsons = {}
-      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
-      var.maxMailCount = 0
-      var.isAdmin = false
-      var.actionBusy = false
+      var.claimableCount = 0
+      var.unreadCount = 0
       var.actionBusySeconds = 0
+      var.totalCount = 0
+      var.selectedBody = ['&f暂无正文']
+      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
+      var.actionBusy = false
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -92,6 +86,7 @@ ui:
     #   - maxMailCount: 邮件列表最大显示条数（用于动态生成列表项）
     #   - is_admin: 当前玩家是否为管理员（控制管理导航项显隐）
     init: |-
+      var.aIndex = 0
       var.messages = packet['messages']
       var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
@@ -111,18 +106,18 @@ ui:
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
       var.actionBusy = false
-      var.actionBusySeconds = 0
       while(val.mail_list.childrenCount() > 1){
         val.mail_list.get(1).remove()
       }
       for(i in range(1, var.maxMailCount - 1)){
         key = i.round()
-        if(val.mail_list['邮件项目'] != none){ e = val.mail_list['邮件项目'].copy('邮件项目' + key) }
-        e.entryKey = key
+        if(val.mail_list['邮件项目'] != none) {
+          e = val.mail_list['邮件项目'].copy('邮件项目' + key)
+          e.entryKey = key
+        }
       }
       // ── 附件槽位：构建 itemJsons 字典 + 动态复制模板 ──
       var.aKeys = var.selectedAttachments.keys()
-      var.attachmentItemJsons = {}
       for(key in var.aKeys){
         attEntry = var.selectedAttachments[key]
         if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
@@ -134,14 +129,17 @@ ui:
       while(val.附件列表.childrenCount() > 1){
         val.附件列表.get(1).remove()
       }
-      var.aIndex = 0
       for(key in var.aKeys){
-        if(val.附件列表['附件模板'] != none){ item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round()) }
-        item.entryKey = key
+        if(val.附件列表['附件模板'] != none) {
+          item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
+          item.entryKey = key
+        }
         var.aIndex = var.aIndex + 1
       }
       for(i in range(1, var.aIndex)){
-        if(val.附件列表 != none){ item = val.附件列表.get(i.round()) }
+        if(val.附件列表 != none) {
+          item = val.附件列表.get(i.round())
+        }
         if(item != none && item['附件图标'] != none){
           item['附件图标'].seticon()
         }
@@ -187,7 +185,6 @@ ui:
       var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
       var.actionBusy = false
-      var.actionBusySeconds = 0
       // ── 邮件列表：仅在数量变化时重建 ──
       if(var.maxMailCount != oldMaxMailCount){
         while(val.mail_list.childrenCount() > 1){
@@ -205,7 +202,6 @@ ui:
       // ── 附件槽位：构建 itemJsons 字典 + 数量变化时重建 ──
       oldAttCount = var.oldAttCount
       var.aKeys = var.selectedAttachments.keys()
-      var.attachmentItemJsons = {}
       for(key in var.aKeys){
         attEntry = var.selectedAttachments[key]
         if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
@@ -220,15 +216,19 @@ ui:
         }
         var.aIndex = 0
         for(key in var.aKeys){
-        if(val.附件列表['附件模板'] != none){ item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round()) }
-          item.entryKey = key
+          if(val.附件列表['附件模板'] != none) {
+            item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
+            item.entryKey = key
+          }
           var.aIndex = var.aIndex + 1
         }
       }
       var.oldAttCount = var.aKeys.size()
       // 重新触发附件图标 seticon（数据变了但 seticon 不会自动刷新）
       for(i in range(1, val.附件列表.childrenCount())){
-        if(val.附件列表 != none){ item = val.附件列表.get(i.round()) }
+        if(val.附件列表 != none) {
+          item = val.附件列表.get(i.round())
+        }
         if(item != none && item['附件图标'] != none){
           item['附件图标'].seticon()
         }

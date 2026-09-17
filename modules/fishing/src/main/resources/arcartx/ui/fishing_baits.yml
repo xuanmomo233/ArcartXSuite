@@ -45,6 +45,9 @@ ui:
     #   - baitSlotsBase: 鱼竿提供的基础饵料槽数量
     #   - baitSlotsBonus: 天赋提供的额外饵料槽数量
     init: |-
+      var.queueIconJsons = {}
+      var.selectedInvSlot = none
+      var.selectedQueueSlot = none
       var.packetId = packet['packetId']
       var.baitSlots = packet['baitSlots']
       var.baitSlotsBase = packet['baitSlotsBase']
@@ -52,7 +55,6 @@ ui:
       var.queue = packet['queue']
       var.baits = packet['baits']
       // 构建队列槽位图标映射（itemJson 分离模式）
-      var.queueIconJsons = {}
       if(var.queue != none){
         for(key in var.queue.keys()){
           json = packet['queueIconJson' + key]
@@ -70,8 +72,10 @@ ui:
       if(var.baitSlots != none && var.baitSlots > 1){
         for(i in range(1, var.baitSlots - 1)){
           key = i.round()
-          if(val.饵料队列['队列槽'] != none){ e = val.饵料队列['队列槽'].copy('队列槽' + key) }
-          e.entryKey = key
+          if(val.饵料队列['队列槽'] != none) {
+            e = val.饵料队列['队列槽'].copy('队列槽' + key)
+            e.entryKey = key
+          }
         }
       }
       // 数据就绪后触发每个队列槽位图标的 seticon()
@@ -93,13 +97,13 @@ ui:
     # packetHandler: update
     # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
     update: |-
+      var.queueIconJsons = {}
       var.packetId = packet['packetId']
       var.baitSlots = packet['baitSlots']
       var.baitSlotsBase = packet['baitSlotsBase']
       var.baitSlotsBonus = packet['baitSlotsBonus']
       var.queue = packet['queue']
       var.baits = packet['baits']
-      var.queueIconJsons = {}
       if(var.queue != none){
         for(key in var.queue.keys()){
           json = packet['queueIconJson' + key]
@@ -116,8 +120,10 @@ ui:
       if(var.baitSlots != none && var.baitSlots > 1){
         for(i in range(1, var.baitSlots - 1)){
           key = i.round()
-          if(val.饵料队列['队列槽'] != none){ e = val.饵料队列['队列槽'].copy('队列槽' + key) }
-          e.entryKey = key
+          if(val.饵料队列['队列槽'] != none) {
+            e = val.饵料队列['队列槽'].copy('队列槽' + key)
+            e.entryKey = key
+          }
         }
       }
       if(val.饵料队列['队列槽'] != none && val.饵料队列['队列槽']['队列槽图标'] != none){
@@ -136,12 +142,10 @@ ui:
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
-      var.packetId = 'AXS_FISHING_BAITS'
-      var.baitSlots = 0
       var.baitSlotsBase = 0
+      var.baitSlots = 0
       var.baitSlotsBonus = 0
-      var.queue = {}
-      var.queueIconJsons = {}
+      var.packetId = 'AXS_FISHING_BAITS'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 视口换算：把窗口实际宽高折算回设计坐标系
       sx = Screen.getWidth() / 1920

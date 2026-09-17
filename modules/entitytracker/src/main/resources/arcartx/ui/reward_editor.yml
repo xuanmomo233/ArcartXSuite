@@ -28,7 +28,6 @@ ui:
       var.rewardItemsPreview = packet['rewardItemsPreview']
       var.rewardCommandsPreview = packet['rewardCommandsPreview']
       var.enabled = packet['enabled']
-      var.resultMsg = none
     boss-list: |-
       var.bossList = packet['bosses']
     result: |-

@@ -36,6 +36,15 @@ public interface AdyeshachNpcBridgeAPI {
     /** 按显示名/ID 查找 NPC */
     @NotNull Optional<Object> findByName(@NotNull String name);
 
+    /**
+     * 按显示名/ID 定位 NPC 当前所在位置（动态导航目标解析用）。
+     *
+     * @param name NPC 显示名、customName 或实体 id（大小写不敏感精确匹配）
+     * @return 实体当前位置；桥接不可用或找不到时返回空
+     * @since 1.6.0
+     */
+    @NotNull Optional<Location> locateByName(@NotNull String name);
+
     /** 获取指定实体的所有可识别名称 */
     @NotNull List<String> getEntityNames(@Nullable Object adyeshachEntity);
 

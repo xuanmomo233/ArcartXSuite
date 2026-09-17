@@ -85,15 +85,14 @@ ui:
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
-      var.packetId = 'AXS_FISHING'
-      var.playerLevel = 1
-      var.currentXp = 0
-      var.totalCaught = 0
       var.collectionCount = 0
+      var.currentXp = 0
+      var.playerLevel = 1
+      var.totalCaught = 0
       var.totalFishTypes = 0
       var.collectionPercent = 0
-      var.fishList = {}
       var.maxFishCount = 0
+      var.packetId = 'AXS_FISHING'
       var.itemJsons = {}
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.currentTab = 'all'

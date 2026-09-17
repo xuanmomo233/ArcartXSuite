@@ -44,9 +44,17 @@ ui:
     #   - canTrackTask: 是否可追踪目标
     #   - canClearTrack: 是否可清除追踪
     #   - questTracked: 当前任务是否已追踪
+    #   - detailCrossWorld: 选中任务的导航目标是否在其他世界
+    #   - detailTeleportAvailable: 选中任务是否配置了跨世界传送点（navigation.teleport）
+    #   - detailTargetWorld: 选中任务导航目标所在世界名
     #   - taskCount: 目标总数
     #   - rewardCount: 奖励总数
     init: |-
+      var.catIndex = 0
+      var.qIndex = 0
+      var.rIndex = 0
+      var.tIndex = 0
+      var.rewardItemJsons = {}
       var.packetId = packet['packetId']
       var.categories = packet['categories']
       var.pages = packet['pages']
@@ -71,43 +79,46 @@ ui:
       var.canAccept = packet['canAccept']
       var.canAbandon = packet['canAbandon']
       var.canTrackQuest = packet['canTrackQuest']
-      var.canTrackTask = packet['canTrackTask']
-      var.canClearTrack = packet['canClearTrack']
       var.questTracked = packet['questTracked']
+      var.detailCrossWorld = packet['detailCrossWorld']
+      var.detailTeleportAvailable = packet['detailTeleportAvailable']
+      var.detailTargetWorld = packet['detailTargetWorld']
       var.taskCount = packet['taskCount']
       var.rewardCount = packet['rewardCount']
       var.catKeys = var.categories.keys()
       while(val.cat_list.childrenCount() > 1){
         val.cat_list.get(1).remove()
       }
-      var.catIndex = 0
       for(key in var.catKeys){
-        if(val.cat_list['分类模板'] != none){ item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round()) }
-        item.entryKey = key
+        if(val.cat_list['分类模板'] != none) {
+          item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
+          item.entryKey = key
+        }
         var.catIndex = var.catIndex + 1
       }
       var.qKeys = var.quests.keys()
       while(val.quest_list.childrenCount() > 1){
         val.quest_list.get(1).remove()
       }
-      var.qIndex = 0
       for(key in var.qKeys){
-        if(val.quest_list['任务模板'] != none){ item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round()) }
-        item.entryKey = key
+        if(val.quest_list['任务模板'] != none) {
+          item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
+          item.entryKey = key
+        }
         var.qIndex = var.qIndex + 1
       }
       var.tKeys = var.tasks.keys()
       while(val.task_list.childrenCount() > 1){
         val.task_list.get(1).remove()
       }
-      var.tIndex = 0
       for(key in var.tKeys){
-        if(val.task_list['目标模板'] != none){ item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round()) }
-        item.entryKey = key
+        if(val.task_list['目标模板'] != none) {
+          item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
+          item.entryKey = key
+        }
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
-      var.rewardItemJsons = {}
       for(key in var.rKeys){
         rewardEntry = var.rewards[key]
         if(rewardEntry != none && rewardEntry['itemJson'] != none){
@@ -117,14 +128,17 @@ ui:
       while(val.reward_list.childrenCount() > 1){
         val.reward_list.get(1).remove()
       }
-      var.rIndex = 0
       for(key in var.rKeys){
-        if(val.reward_list['奖励模板'] != none){ item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round()) }
-        item.entryKey = key
+        if(val.reward_list['奖励模板'] != none) {
+          item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
+          item.entryKey = key
+        }
         var.rIndex = var.rIndex + 1
       }
       for(i in range(1, var.rIndex)){
-        if(val.reward_list != none){ item = val.reward_list.get(i.round()) }
+        if(val.reward_list != none) {
+          item = val.reward_list.get(i.round())
+        }
         if(item != none && item['奖励图标'] != none){
           item['奖励图标'].seticon()
         }
@@ -162,9 +176,10 @@ ui:
       var.canAccept = packet['canAccept']
       var.canAbandon = packet['canAbandon']
       var.canTrackQuest = packet['canTrackQuest']
-      var.canTrackTask = packet['canTrackTask']
-      var.canClearTrack = packet['canClearTrack']
       var.questTracked = packet['questTracked']
+      var.detailCrossWorld = packet['detailCrossWorld']
+      var.detailTeleportAvailable = packet['detailTeleportAvailable']
+      var.detailTargetWorld = packet['detailTargetWorld']
       var.taskCount = packet['taskCount']
       var.rewardCount = packet['rewardCount']
       var.catKeys = var.categories.keys()
@@ -175,8 +190,10 @@ ui:
         }
         var.catIndex = 0
         for(key in var.catKeys){
-        if(val.cat_list['分类模板'] != none){ item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round()) }
-          item.entryKey = key
+          if(val.cat_list['分类模板'] != none) {
+            item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
+            item.entryKey = key
+          }
           var.catIndex = var.catIndex + 1
         }
       }
@@ -188,8 +205,10 @@ ui:
         }
         var.qIndex = 0
         for(key in var.qKeys){
-        if(val.quest_list['任务模板'] != none){ item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round()) }
-          item.entryKey = key
+          if(val.quest_list['任务模板'] != none) {
+            item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
+            item.entryKey = key
+          }
           var.qIndex = var.qIndex + 1
         }
       }
@@ -201,8 +220,10 @@ ui:
         }
         var.tIndex = 0
         for(key in var.tKeys){
-        if(val.task_list['目标模板'] != none){ item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round()) }
-          item.entryKey = key
+          if(val.task_list['目标模板'] != none) {
+            item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
+            item.entryKey = key
+          }
           var.tIndex = var.tIndex + 1
         }
       }
@@ -221,41 +242,34 @@ ui:
         }
         var.rIndex = 0
         for(key in var.rKeys){
-        if(val.reward_list['奖励模板'] != none){ item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round()) }
-          item.entryKey = key
+          if(val.reward_list['奖励模板'] != none) {
+            item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
+            item.entryKey = key
+          }
           var.rIndex = var.rIndex + 1
         }
       }
       // 重新触发奖励图标 seticon（数据变了但 seticon 不会自动刷新）
       for(i in range(1, val.reward_list.childrenCount())){
-        if(val.reward_list != none){ item = val.reward_list.get(i.round()) }
+        if(val.reward_list != none) {
+          item = val.reward_list.get(i.round())
+        }
         if(item != none && item['奖励图标'] != none){
           item['奖励图标'].seticon()
         }
       }
   action:
     load: |-
-      var.packetId = 'AXS_QUESTGPS'
-      var.categories = {}
-      var.quests = {}
-      var.tasks = {}
-      var.rewards = {}
-      var.rewardItemJsons = {}
-      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
-      var.pageName = '可接取'
-      var.availableCount = 0
       var.activeCount = 0
+      var.availableCount = 0
       var.completedCount = 0
+      var.pageName = '可接取'
       var.questCount = 0
-      var.navigationReady = false
-      var.selectedQuestName = '暂无任务'
-      var.selectedQuestDescriptionText = '当前分类下没有可展示的任务。'
-      var.trackSummary = '当前未设置导航'
-      var.canAccept = false
-      var.canAbandon = false
-      var.questTracked = false
-      var.taskCount = 0
       var.rewardCount = 0
+      var.taskCount = 0
+      var.trackSummary = '当前未设置导航'
+      var.packetId = 'AXS_QUESTGPS'
+      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
       // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
@@ -966,7 +980,13 @@ controls:
                           height: 50
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.entry['id'])
+                            if(self.entry != none){
+                              if(self.entry['tracked']){
+                                Packet.send(var.packetId, 'untrack_task', var.selectedQuestId, self.entry['id'])
+                              } else if(self.entry['trackable']){
+                                Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.entry['id'])
+                              }
+                            }
                         children:
                           目标背景:
                             type: Texture
@@ -1226,7 +1246,11 @@ controls:
                       visible: "var.canTrackQuest && !var.questTracked"
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+                        if(var.detailCrossWorld && var.detailTeleportAvailable){
+                          Packet.send(var.packetId, 'cross_world_track', var.selectedQuestId)
+                        } else {
+                          Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+                        }
                     children:
                       追踪背景:
                         type: Texture
@@ -1245,7 +1269,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0追踪任务"
+                          texts: "(var.detailCrossWorld && var.detailTeleportAvailable) ? '&0传送并追踪' : '&0追踪任务'"
                           fontSize: 36
                           through: true
                   取消按钮:
@@ -1256,7 +1280,7 @@ controls:
                       visible: var.questTracked
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'clear_track')
+                        Packet.send(var.packetId, 'untrack_quest', var.selectedQuestId)
                     children:
                       取消背景:
                         type: Texture

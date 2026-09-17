@@ -53,8 +53,10 @@ ui:
       if(var.dailyCount > 1){
         for(i in range(1, var.dailyCount - 1)){
           key = i.round()
-          if(val.每日任务列表['任务项'] != none){ e = val.每日任务列表['任务项'].copy('任务项' + key) }
-          e.entryKey = key
+          if(val.每日任务列表['任务项'] != none) {
+            e = val.每日任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
         }
       }
       // 重建每周任务列表
@@ -64,8 +66,10 @@ ui:
       if(var.weeklyCount > 1){
         for(i in range(1, var.weeklyCount - 1)){
           key = i.round()
-          if(val.每周任务列表['任务项'] != none){ e = val.每周任务列表['任务项'].copy('任务项' + key) }
-          e.entryKey = key
+          if(val.每周任务列表['任务项'] != none) {
+            e = val.每周任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
         }
       }
       // 重建赛季任务列表
@@ -75,20 +79,19 @@ ui:
       if(var.seasonCount > 1){
         for(i in range(1, var.seasonCount - 1)){
           key = i.round()
-          if(val.赛季任务列表['任务项'] != none){ e = val.赛季任务列表['任务项'].copy('任务项' + key) }
-          e.entryKey = key
+          if(val.赛季任务列表['任务项'] != none) {
+            e = val.赛季任务列表['任务项'].copy('任务项' + key)
+            e.entryKey = key
+          }
         }
       }
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
-      var.packetId = 'AXS_FISHING_TASKS'
-      var.daily = {}
-      var.weekly = {}
-      var.season = {}
       var.dailyCount = 0
-      var.weeklyCount = 0
+      var.packetId = 'AXS_FISHING_TASKS'
       var.seasonCount = 0
+      var.weeklyCount = 0
       var.currentCategory = 'daily'
       // 视口换算：把窗口实际宽高折算回设计坐标系
       sx = Screen.getWidth() / 1920

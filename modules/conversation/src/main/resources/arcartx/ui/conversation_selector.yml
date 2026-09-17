@@ -55,26 +55,21 @@ ui:
         }
         for(i in range(1, var.maxNpcCount - 1)){
           key = i.round()
-          if(val.selector_list['选择器模板'] != none){ ni = val.selector_list['选择器模板'].copy('选择器模板' + key) }
-          ni.entryKey = key
+          if(val.selector_list['选择器模板'] != none) {
+            ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
+            ni.entryKey = key
+          }
         }
       }
     # packetHandler: close
     # 包字段:
     #   - packetId: 通信标识（可能为 none）
     close: |-
+      var.title = none
       var.token = none
       var.packetId = packet['packetId'] == none ? none : packet['packetId']
-      var.title = none
-      var.hintText = none
-      var.selectedNpcId = none
-      var.selectedNpcIndex = -1
-      var.npcCount = 0
-      var.npcScrollRatio = 0
-      var.npcRows = {}
   action:
     load: |-
-      var.maxNpcCount = 0
       var.maxNpcWidth = 150
       var.interactKey = Keyboard.getKeyBindingKeyName("AXS_INTERACT")
       var.navPrevKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_PREV")

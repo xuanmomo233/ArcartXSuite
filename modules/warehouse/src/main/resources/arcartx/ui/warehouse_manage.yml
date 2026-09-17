@@ -120,8 +120,10 @@ ui:
         }
         if(var.maxManageCount > 1){
           for(序号 in range(1, var.maxManageCount - 1)){
-            if(val.共享列表['项'] != none){ 项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.共享列表['项'] != none) {
+              项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -133,8 +135,10 @@ ui:
         }
         if(var.maxMemberCount > 1){
           for(序号 in range(1, var.maxMemberCount - 1)){
-            if(val.成员列表['项'] != none){ 项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round()) }
-            项.entryKey = 序号.round()
+            if(val.成员列表['项'] != none) {
+              项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
+              项.entryKey = 序号.round()
+            }
           }
         }
       }
@@ -182,26 +186,25 @@ ui:
         var.notifyBusySeconds = 0
       }
     load: |-
+      var.actionToken = ''
+      var.autoPickup = true
+      var.autoPickupMythic = true
+      var.autoPickupNotify = true
+      var.capacityText = '0/0'
+      var.hasPassword = false
+      var.level = 1
       var.manageWarehouseSelected = {}
-      var.manageWarehouses = {}
+      var.packetId = 'AXS_WAREHOUSE'
+      var.readOnly = false
+      var.sharedCreateCostText = '创建共享仓库免费'
       var.sharedMemberNames = {}
       var.sharedMemberRoles = {}
-      var.sharedMembers = {}
-      var.packetId = 'AXS_WAREHOUSE'
-      var.ownerType = 'personal'
-      var.warehouseName = 'AXS 仓库'
-      var.sharedCreateCostText = '创建共享仓库免费'
-      var.sharedRoleOwnerName = '所有者'
       var.sharedRoleMemberName = '成员'
       var.sharedRoleViewerName = '观众'
+      var.showcaseEnabled = true
       var.unlocked = false
-      var.hasPassword = false
-      var.readOnly = false
-      var.capacityText = '0/0'
-      var.level = 1
-      var.canUpgrade = false
+      var.warehouseName = 'AXS 仓库'
       var.memberRole = 'member'
-      var.actionToken = ''
       var.actionBusy = false
       var.actionBusySeconds = 0
       var.pickupBusy = false
@@ -211,14 +214,6 @@ ui:
       var.notifyBusy = false
       var.notifyBusySeconds = 0
       var.deleteConfirm = false
-      var.showcaseEnabled = true
-      var.autoPickup = true
-      var.autoPickupMythic = true
-      var.autoPickupNotify = true
-      var.serverAutoPickup = true
-      var.serverMythicLoot = true
-      var.maxManageCount = 0
-      var.maxMemberCount = 0
       var.刷新轮次 = 0.round()
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
       sx = Screen.getWidth() / 1920
@@ -320,6 +315,8 @@ controls:
               height: 48
             action:
               clickLeft: |-
+                var.deletePassword = none
+                var.renameName = none
                 Screen.close()
             children:
               关闭背景:
@@ -622,7 +619,6 @@ controls:
                     action:
                       clickLeft: |-
                         var.deleteConfirm = false
-                        var.renameName = none
                         if(var.manageWarehouseTypes[self.entryKey] == 'shared'){
                           Packet.send(var.packetId, 'shared', var.manageWarehouseTargets[self.entryKey])
                         }else{
@@ -1213,7 +1209,6 @@ controls:
                       Packet.send(var.packetId, 'shared_delete', var.ownerId, var.deletePassword, var.actionToken)
                     }else{
                       var.deleteConfirm = true
-                      var.deletePassword = none
                     }
                 children:
                   删除底:

@@ -149,6 +149,19 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     }
 
     @Override
+    public Optional<Location> locateByName(String name) {
+        Optional<Object> found = findByName(name);
+        if (found.isEmpty() || !(found.get() instanceof EntityInstance entity)) {
+            return Optional.empty();
+        }
+        if (entity.isDeleted() || entity.getInvalid()) {
+            return Optional.empty();
+        }
+        Location location = entity.getLocation();
+        return location == null ? Optional.empty() : Optional.of(location.clone());
+    }
+
+    @Override
     public List<String> getEntityNames(Object adyeshachEntity) {
         if (!(adyeshachEntity instanceof EntityInstance entity)) {
             return List.of();

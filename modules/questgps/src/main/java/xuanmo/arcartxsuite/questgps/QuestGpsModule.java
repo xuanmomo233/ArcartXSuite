@@ -76,10 +76,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             .validations(List.of(
                     ValidationRule.required("ui.packet-id", ValueType.STRING),
                     ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.waypoint.enabled", ValueType.BOOLEAN),
                     ValidationRule.of("navigation.mode", ValueType.STRING),
                     ValidationRule.of("database.enabled", ValueType.BOOLEAN),
                     ValidationRule.of("discovery.mode", ValueType.STRING),
-                    ValidationRule.of("navigation.path-max-iterations", ValueType.INT).withRange(100, 50000),
+                    ValidationRule.of("navigation.marker.path-max-iterations", ValueType.INT).withRange(100, 50000),
                     ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
             ))
             .build();

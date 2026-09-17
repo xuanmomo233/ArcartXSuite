@@ -161,11 +161,15 @@ public final class QuestGpsService implements Listener {
     public void start() {
         chemdahBootstrap.initialize();
         overlayValidator.validate();
-        // 导航坐标变更 → 地图外部目标坐标跟随（追踪中的任务点随 chemdah 位置刷新）
-        navigationService.setPositionListener((player, point) -> {
+        // 导航坐标变更 → 地图外部目标坐标跟随（仅"该任务最近激活的追踪"驱动外部目标坐标）
+        navigationService.setPositionListener((player, tracking, point) -> {
             MapNavigable map = mapNavigableProvider.get();
-            QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
-            if (map == null || !tracking.active() || tracking.questId().isBlank()) {
+            if (map == null || tracking.questId().isBlank()) {
+                return;
+            }
+            if (navigationService.primaryStateForQuest(player, tracking.questId())
+                .map(primary -> primary != tracking)
+                .orElse(false)) {
                 return;
             }
             QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(tracking.questId());
@@ -184,6 +188,14 @@ public final class QuestGpsService implements Listener {
             ), false);
         });
         navigationService.start();
+        // 跨世界目标抑制提示 + 到达回调（节流/滞回由 NavigationTargetService 负责）
+        if (navigationService.targetService() != null) {
+            navigationService.targetService().setWorldHintHandler((player, target, resolved) ->
+                player.sendMessage(PREFIX + message("player.navigation-other-world",
+                    resolved.getWorld() == null ? target.world() : resolved.getWorld().getName())));
+            navigationService.targetService().setArriveHandler((player, target, resolved) ->
+                player.sendMessage(PREFIX + message("player.navigation-arrived", target.title())));
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerChemdahEventListeners();
     }
@@ -237,7 +249,7 @@ public final class QuestGpsService implements Listener {
     public int trackingPlayerCount() {
         int count = 0;
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (navigationService.trackingState(player).active()) {
+            if (navigationService.hasAnyTracking(player)) {
                 count++;
             }
         }
@@ -432,7 +444,7 @@ public final class QuestGpsService implements Listener {
             player.sendMessage(PREFIX + message("player.task-navigation-unavailable"));
             return;
         }
-        boolean success = navigationService.trackTask(player, descriptor.questId(), taskDescriptor.taskId(), taskDescriptor.text());
+        boolean success = navigationService.trackTask(player, descriptor.questId(), taskDescriptor.taskId(), descriptor.displayName(), taskDescriptor.text());
         if (!success) {
             player.sendMessage(PREFIX + message("player.task-navigation-create-failed"));
             return;
@@ -445,6 +457,128 @@ public final class QuestGpsService implements Listener {
     public void clearTrack(Player player) {
         clearTrackInternal(player, false, true);
         refreshViewer(player);
+    }
+
+    /**
+     * 取消指定任务的全部导航追踪（任务级 + 其所有子任务级），其他任务追踪不受影响。
+     *
+     * @param player  玩家
+     * @param questId 任务 ID
+     */
+    public void untrackQuest(Player player, String questId) {
+        PlayerProfile profile = loadProfile(player, true);
+        if (profile == null) {
+            return;
+        }
+        String targetQuestId = resolveQuestId(player, questId);
+        if (!navigationService.untrackQuest(player, targetQuestId)) {
+            refreshViewer(player);
+            return;
+        }
+        afterTrackRemoved(player, targetQuestId);
+        player.sendMessage(PREFIX + message("player.navigation-removed"));
+        refreshViewer(player);
+    }
+
+    /**
+     * 取消单个子任务级导航追踪。
+     *
+     * @param player  玩家
+     * @param questId 任务 ID
+     * @param taskId  子任务 ID
+     */
+    public void untrackTask(Player player, String questId, String taskId) {
+        PlayerProfile profile = loadProfile(player, true);
+        if (profile == null) {
+            return;
+        }
+        String targetQuestId = resolveQuestId(player, questId);
+        if (!navigationService.untrack(player, targetQuestId, taskId)) {
+            refreshViewer(player);
+            return;
+        }
+        afterTrackRemoved(player, targetQuestId);
+        player.sendMessage(PREFIX + message("player.navigation-removed"));
+        refreshViewer(player);
+    }
+
+    /**
+     * 跨世界追踪：目标点在其他世界时，先传送到任务配置的传送点，再开始追踪。
+     *
+     * @param player  玩家
+     * @param questId 任务 ID
+     */
+    public void crossWorldTrack(Player player, String questId) {
+        PlayerProfile profile = loadProfile(player, true);
+        if (profile == null) {
+            return;
+        }
+        String targetQuestId = resolveQuestId(player, questId);
+        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
+        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, targetQuestId);
+        if (descriptor == null || !descriptor.questTrackAvailable()) {
+            player.sendMessage(PREFIX + message("player.navigation-unavailable"));
+            return;
+        }
+        Optional<QuestGpsNavigationService.NavigationPoint> point = navigationService.previewQuestPoint(
+            player, descriptor.questId(), presentationService.prioritizedTaskIds(descriptor.tasks()), descriptor.displayName());
+        if (point.isEmpty()) {
+            player.sendMessage(PREFIX + message("player.navigation-unavailable"));
+            return;
+        }
+        String targetWorld = resolvedWorld(player, point.get());
+        String playerWorld = player.getWorld() == null ? "" : player.getWorld().getName();
+        if (targetWorld.isBlank() || targetWorld.equalsIgnoreCase(playerWorld)) {
+            // 实际同世界/无法定位：直接追踪
+            trackQuest(player, questId);
+            return;
+        }
+        QuestGpsModuleConfiguration.TeleportPointDefinition teleport = point.get().teleport();
+        if (teleport == null) {
+            player.sendMessage(PREFIX + message("player.navigation-no-teleport", targetWorld));
+            return;
+        }
+        org.bukkit.World world = Bukkit.getWorld(teleport.world());
+        if (world == null) {
+            player.sendMessage(PREFIX + message("player.navigation-teleport-world-unloaded", teleport.world()));
+            return;
+        }
+        boolean teleported = player.teleport(new org.bukkit.Location(world, teleport.x(), teleport.y(), teleport.z()));
+        if (!teleported) {
+            player.sendMessage(PREFIX + message("player.navigation-teleport-failed"));
+            return;
+        }
+        player.sendMessage(PREFIX + message("player.navigation-teleported", world.getName()));
+        trackQuest(player, questId);
+    }
+
+    /** 目标点世界名（NPC 目标未配置 world 时用 NPC 实时位置推断）。 */
+    private String resolvedWorld(Player player, QuestGpsNavigationService.NavigationPoint point) {
+        if (!point.world().isBlank()) {
+            return point.world();
+        }
+        if (!point.npcId().isBlank()) {
+            return navigationService.locateNpcWorld(point.npcId());
+        }
+        return "";
+    }
+
+    /** 追踪移除后的统一收尾：地图标记回推、HUD 刷新、TRACK_CHANGED 钩子。 */
+    private void afterTrackRemoved(Player player, String questId) {
+        MapNavigable map = mapNavigableProvider.get();
+        if (map != null && !navigationService.isTrackingQuest(player, questId)) {
+            map.setExternalNavigated(player, navigationService.buildTargetId(questId, ""), false);
+        }
+        syncQuestMapTargets(player);
+        if (navigationService.hasAnyTracking(player)) {
+            syncGuide(player, false);
+        } else {
+            closeGuide(player);
+        }
+        QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(questId);
+        if (definition != null) {
+            fireQuestHooks(player, definition, Lifecycle.TRACK_CHANGED);
+        }
     }
 
     public void offerQuest(Player player, String questId, boolean openMenu) {
@@ -469,7 +603,7 @@ public final class QuestGpsService implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         viewStates.remove(uuid);
-        clearTrackInternal(event.getPlayer(), true, false);
+        navigationService.handleQuit(event.getPlayer());
     }
 
     /**
@@ -657,8 +791,7 @@ public final class QuestGpsService implements Listener {
         PlayerProfile profile = loadProfile(player, false);
         List<xuanmo.arcartxsuite.api.capability.MapExternalTargetSpec> specs = new ArrayList<>();
         if (profile != null) {
-            QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
-            Optional<QuestGpsNavigationService.NavigationPoint> livePoint = navigationService.trackingPoint(player);            List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors =
+            List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors =
                 presentationService.collectDescriptors(profile, this::isCategoryLocked);
             for (Quest quest : profile.getQuests(false)) {
                 if (quest == null || quest.isCompleted()) {
@@ -673,13 +806,18 @@ public final class QuestGpsService implements Listener {
                 if (descriptor == null) {
                     continue;
                 }
-                boolean tracked = tracking.active() && tracking.questId().equalsIgnoreCase(quest.getId());
-                Optional<QuestGpsNavigationService.NavigationPoint> point = tracked && livePoint.isPresent()
-                    ? livePoint
-                    : navigationService.previewQuestPoint(
+                boolean tracked = navigationService.isTrackingQuest(player, quest.getId());
+                // 追踪中任务的标记坐标跟随其"最近激活追踪"的最新解析点
+                Optional<QuestGpsNavigationService.NavigationPoint> point = tracked
+                    ? navigationService.primaryStateForQuest(player, quest.getId())
+                        .flatMap(state -> navigationService.trackingPoint(player, state.trackKey()))
+                    : Optional.<QuestGpsNavigationService.NavigationPoint>empty();
+                if (point.isEmpty()) {
+                    point = navigationService.previewQuestPoint(
                         player, quest.getId(),
                         presentationService.prioritizedTaskIds(descriptor.tasks()),
                         descriptor.displayName());
+                }
                 if (point.isEmpty()) {
                     continue;
                 }
@@ -720,9 +858,8 @@ public final class QuestGpsService implements Listener {
      */
     public void handleMapCancelRequest(Player player, String targetId) {
         String questId = questTargetIndex.get(targetId);
-        QuestGpsNavigationService.TrackingState tracking = navigationService.trackingState(player);
-        if (questId != null && tracking.active() && tracking.questId().equalsIgnoreCase(questId)) {
-            clearTrack(player);
+        if (questId != null && navigationService.isTrackingQuest(player, questId)) {
+            untrackQuest(player, questId);
         }
     }
 
@@ -734,7 +871,7 @@ public final class QuestGpsService implements Listener {
         if (player == null) {
             return;
         }
-        if (navigationService.trackingState(player).active()) {
+        if (navigationService.hasAnyTracking(player)) {
             clearTrackInternal(player, true, false);
         }
     }
@@ -745,12 +882,14 @@ public final class QuestGpsService implements Listener {
     }
 
     private void clearTrackInternal(Player player, boolean silent, boolean notify) {
-        // 先记录当前追踪目标，清除后回推地图 navigated=false（目标标记保留在地图上）
-        QuestGpsNavigationService.TrackingState before = navigationService.trackingState(player);
+        // 先记录全部追踪任务，清除后逐个回推地图 navigated=false（目标标记保留在地图上）
+        java.util.Set<String> trackedQuestIds = navigationService.trackedQuestIds(player);
         navigationService.clearTracking(player, silent);
         MapNavigable mapSvc = mapNavigableProvider.get();
-        if (mapSvc != null && before.active()) {
-            mapSvc.setExternalNavigated(player, navigationService.buildTargetId(before.questId(), ""), false);
+        if (mapSvc != null) {
+            for (String questId : trackedQuestIds) {
+                mapSvc.setExternalNavigated(player, navigationService.buildTargetId(questId, ""), false);
+            }
         }
         closeGuide(player);
         if (notify) {
@@ -759,9 +898,17 @@ public final class QuestGpsService implements Listener {
     }
 
     private void clearTrackForQuest(Player player, String questId) {
-        QuestGpsNavigationService.TrackingState state = navigationService.trackingState(player);
-        if (state.questId().equalsIgnoreCase(safe(questId))) {
-            clearTrackInternal(player, true, false);
+        if (navigationService.isTrackingQuest(player, questId)) {
+            navigationService.untrackQuest(player, questId);
+            MapNavigable mapSvc = mapNavigableProvider.get();
+            if (mapSvc != null) {
+                mapSvc.setExternalNavigated(player, navigationService.buildTargetId(questId, ""), false);
+            }
+            if (!navigationService.hasAnyTracking(player)) {
+                closeGuide(player);
+            } else {
+                syncGuide(player, false);
+            }
         }
     }
 
@@ -788,7 +935,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
         syncMenu(player, profile, state, false);
-        if (navigationService.trackingState(player).active()) {
+        if (navigationService.hasAnyTracking(player)) {
             syncGuide(player, false);
         }
     }
@@ -797,8 +944,8 @@ public final class QuestGpsService implements Listener {
         if (guideUiIds.isEmpty() || player == null || !player.isOnline()) {
             return;
         }
-        QuestGpsNavigationService.TrackingState trackState = navigationService.trackingState(player);
-        if (!trackState.active()) {
+        Map<String, QuestGpsNavigationService.TrackingState> trackStates = navigationService.trackingStates(player);
+        if (trackStates.isEmpty()) {
             closeGuide(player);
             return;
         }
@@ -808,7 +955,7 @@ public final class QuestGpsService implements Listener {
         bridge.sendPacketToAll(player, guideUiIds, initPacket ? "init" : "update", QuestGpsGuidePacketFactory.build(
             configuration,
             player,
-            trackState,
+            trackStates,
             presentationService,
             navigationService
         ));
@@ -830,7 +977,7 @@ public final class QuestGpsService implements Listener {
             viewCategory,
             state.page(),
             state.selectedQuestId(),
-            navigationService.trackingState(player)
+            navigationService.trackingStates(player).values()
         );
         state.setCategory(snapshot.category());
         state.setPage(snapshot.page());
@@ -839,8 +986,34 @@ public final class QuestGpsService implements Listener {
             player,
             menuUiIds,
             initPacket ? "init" : "update",
-            QuestGpsMenuPacketFactory.build(configuration, snapshot, navigationService.runtimeReady())
+            QuestGpsMenuPacketFactory.build(
+                configuration,
+                snapshot,
+                navigationService.runtimeReady(),
+                detailNavExtras(player, profile, snapshot.detail().questId())
+            )
         );
+    }
+
+    /** 详情面板导航附加信息：跨世界标记 + 传送点可用性 + 目标世界名。 */
+    private QuestGpsMenuPacketFactory.DetailNav detailNavExtras(Player player, PlayerProfile profile, String questId) {
+        if (questId == null || questId.isBlank()) {
+            return QuestGpsMenuPacketFactory.DetailNav.NONE;
+        }
+        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
+        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, questId);
+        if (descriptor == null || !descriptor.questTrackAvailable()) {
+            return QuestGpsMenuPacketFactory.DetailNav.NONE;
+        }
+        Optional<QuestGpsNavigationService.NavigationPoint> point = navigationService.previewQuestPoint(
+            player, descriptor.questId(), presentationService.prioritizedTaskIds(descriptor.tasks()), descriptor.displayName());
+        if (point.isEmpty()) {
+            return QuestGpsMenuPacketFactory.DetailNav.NONE;
+        }
+        String targetWorld = resolvedWorld(player, point.get());
+        String playerWorld = player.getWorld() == null ? "" : player.getWorld().getName();
+        boolean crossWorld = !targetWorld.isBlank() && !targetWorld.equalsIgnoreCase(playerWorld);
+        return new QuestGpsMenuPacketFactory.DetailNav(crossWorld, point.get().teleport() != null, targetWorld);
     }
 
     public boolean mainlineGateSatisfied(Player player) {

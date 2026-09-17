@@ -85,12 +85,34 @@ public interface MapNavigable {
 
     /**
      * 标记外部目标是否正被来源导航（驱动面板"导航"/"取消"按钮切换）。
+     * <p>
+     * 注意：{@link MapExternalTargetSpec#useMapNavigation()} 为 true 的目标由地图
+     * 内部维护该标志，来源无需（也不应）再调用本方法。
      *
      * @param player    目标玩家
      * @param targetId  目标 id
      * @param navigated true = 来源正在导航（按钮显示"取消"）
      */
     void setExternalNavigated(@NotNull Player player, @NotNull String targetId, boolean navigated);
+
+    /**
+     * 由地图内置导航栈开始导航指定外部目标（"地图代导航"命令式入口）。
+     * <p>
+     * 与 spec 的 {@code useMapNavigation} 标志等价，适用于来源想在
+     * {@link MapNavigationHandler#onNavigateRequest} 里按需决策的场景；
+     * 也可独立调用。效果等同玩家在面板点击"导航"：
+     * 地图建立客户端路标与路径标记、记录导航态、目标按钮切换为"取消"。
+     * 到达判定/命令钩子/标题模板使用地图 {@code navigation.*} 配置。
+     * <p>
+     * 本方法不经过全局委托（委托只拦截面板点击）；取消时来源不会收到
+     * {@code onCancelRequest}（该导航由地图执行）。
+     *
+     * @param player   目标玩家
+     * @param targetId 已推送的外部目标 id
+     * @return {@code true} 表示导航已开始（已在导航同目标也返回 true）；
+     *         {@code false} 表示目标不存在或地图导航不可用
+     */
+    boolean navigateExternalTarget(@NotNull Player player, @NotNull String targetId);
 
     /**
      * 注册外部目标导航回调（按 source 归属）。
@@ -114,6 +136,35 @@ public interface MapNavigable {
      * @param source 来源标识
      */
     void unregisterNavigationSource(@NotNull String source);
+
+    /**
+     * 注册全局导航委托（全量接管导航点击）。
+     * <p>
+     * 注册后玩家在地图上点击任意"导航"（锚点/路径点/标记点/外部目标）都先回调
+     * delegate；{@code onNavigateRequest} 返回 {@code false} 时交还原处理方。
+     * 全服同一时间只有一个委托：重复注册由后者覆盖；插件禁用时自动注销。
+     *
+     * @param owner    归属插件（插件禁用时自动注销）
+     * @param delegate 委托实现
+     */
+    void setNavigationDelegate(
+        @NotNull org.bukkit.plugin.Plugin owner,
+        @NotNull MapNavigationDelegate delegate
+    );
+
+    /**
+     * 注销导航委托（仅当当前委托属于该插件时生效）。
+     *
+     * @param owner 注册时使用的插件实例
+     */
+    void clearNavigationDelegate(@NotNull org.bukkit.plugin.Plugin owner);
+
+    /**
+     * 当前是否已注册全局导航委托。
+     *
+     * @return {@code true} 表示所有导航点击会先经委托
+     */
+    boolean hasNavigationDelegate();
 
     /**
      * 清除玩家当前的地图导航（锚点/路径点/外部目标追踪）。
