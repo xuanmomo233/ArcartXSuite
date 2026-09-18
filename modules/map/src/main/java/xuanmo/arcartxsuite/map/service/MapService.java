@@ -41,6 +41,7 @@ import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
@@ -113,6 +114,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final MessageProvider messages;
     private final java.util.function.Supplier<EventBusCapability> eventBusProvider;
+    /** Essentials 模块查询能力（读取 /setspawn 出生点，MV 不存在时的二级来源）。 */
+    private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider;
     private NavigationMarkerService markerService;
     /** 共享导航目标编排服务（diff 推送 / 到达滞回判定 / 跨世界抑制），navigation.enabled 时创建。 */
     private NavigationTargetService targetService;
@@ -179,7 +182,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
-            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null);
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null, null);
     }
 
     public MapService(
@@ -197,7 +200,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge,
         AdyeshachNpcBridgeAPI npcBridge,
         MessageProvider messages,
-        java.util.function.Supplier<EventBusCapability> eventBusProvider
+        java.util.function.Supplier<EventBusCapability> eventBusProvider,
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -215,6 +219,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.npcBridge = npcBridge;
         this.messages = messages;
         this.eventBusProvider = eventBusProvider != null ? eventBusProvider : () -> null;
+        this.essentialsProvider = essentialsProvider != null ? essentialsProvider : () -> null;
     }
 
     private String message(String key, Object... args) {
@@ -1333,12 +1338,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
             return false;
         }
-        World world = resolveWorld(resolvedWorldId);
-        if (world == null) {
+        Location spawn = resolveWorldSpawn(resolveWorld(resolvedWorldId));
+        if (spawn == null) {
             player.sendMessage(PREFIX + message("player.anchor-world-unloaded", resolvedWorldId));
             return false;
         }
-        player.teleport(world.getSpawnLocation());
+        player.teleport(spawn);
         sync(player, false);
         return true;
     }
@@ -2062,6 +2067,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (world == null) {
             return MapOperationResult.failure(message("player.anchor-world-unloaded", anchor.worldId()));
         }
+        PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.teleportItems());
+        if (!preparedItems.success()) {
+            return MapOperationResult.failure(preparedItems.message());
+        }
         CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.teleportCurrencies());
         if (!currencyReceipt.success()) {
             return MapOperationResult.failure(currencyReceipt.message());
@@ -2072,6 +2081,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!teleported) {
             rollbackCurrencies(player, currencyReceipt.successfulCharges());
             return MapOperationResult.failure(message("player.teleport-failed"));
+        }
+        MapOperationResult itemResult = applyItemConsumption(player, preparedItems);
+        if (!itemResult.success()) {
+            rollbackCurrencies(player, currencyReceipt.successfulCharges());
+            return itemResult;
         }
         sync(player, false);
         return MapOperationResult.success(message("player.teleported-to-anchor", anchor.displayName()));
@@ -2720,17 +2734,55 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return bukkitWorld;
     }
 
-    /** 世界预加载区域 → 多边形并集（preload-radius 圆心=世界出生点，16 边形近似）。 */
+    /**
+     * 世界出生点解析：Essentials SpawnBackend → Bukkit spawn 兜底。
+     * <p>
+     * ess 模块软依赖 MV 且后端自选（MV 已加载→该世界 MV spawn；无 MV→本地
+     * spawn 表），map 只需问 ess 一次，不再自行分支 MV/ess。
+     *
+     * @param world 已解析的 Bukkit 世界（ess SpawnBackend 的 context）
+     * @return 出生点 Location；world 为 null 时返回 null
+     */
+    private Location resolveWorldSpawn(World world) {
+        if (world == null) {
+            return null;
+        }
+        xuanmo.arcartxsuite.api.capability.EssentialsQueryable ess = essentialsProvider.get();
+        if (ess != null) {
+            try {
+                Location spawn = ess.getSpawn(world);
+                // 世界过滤：本地后端返回的是全局单点 spawn，若其所在世界
+                // 与目标世界不同则不能当该世界出生点用（圆心会落到错误坐标）
+                if (spawn != null && spawn.getWorld() != null
+                    && spawn.getWorld().getName().equalsIgnoreCase(world.getName())) {
+                    return spawn;
+                }
+            } catch (Exception e) {
+                logger.warning("从 Essentials 模块读取世界 " + world.getName() + " 的出生点失败: " + e.getMessage());
+            }
+        }
+        return world.getSpawnLocation();
+    }
+
+    /** 世界预加载区域 → 多边形并集（preload.radius 圆心=配置 center 或出生点链，16 边形近似）。 */
     private List<List<int[]>> preloadRegionPoints(WorldDefinition world) {
         List<List<int[]>> out = new ArrayList<>(toRegionPoints(world.preloadRegions()));
         if (world.preloadRadius() > 0) {
-            World bukkitWorld = resolveWorld(world.id());
-            if (bukkitWorld != null) {
-                Location spawn = bukkitWorld.getSpawnLocation();
-                out.add(circlePoints(spawn.getX(), spawn.getZ(), world.preloadRadius()));
+            Location center = preloadCircleCenter(world);
+            if (center != null) {
+                out.add(circlePoints(center.getX(), center.getZ(), world.preloadRadius()));
             }
         }
         return out;
+    }
+
+    /** 预加载圆心：配置 preload.center 优先，否则 ess→Bukkit 出生点链。 */
+    private Location preloadCircleCenter(WorldDefinition world) {
+        World bukkitWorld = resolveWorld(world.id());
+        if (world.hasPreloadCenter()) {
+            return new Location(bukkitWorld, world.preloadCenterX(), 0, world.preloadCenterZ());
+        }
+        return resolveWorldSpawn(bukkitWorld);
     }
 
     /** 世界预加载覆盖的 MapChunk 坐标集合（64² 网格，逐项 {cx,cz}）。
@@ -2741,10 +2793,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private List<int[]> preloadChunkCoords(WorldDefinition world) {
         Set<Long> coords = new HashSet<>();
         if (world.preloadRadius() > 0) {
-            World bukkitWorld = resolveWorld(world.id());
-            if (bukkitWorld != null) {
-                Location spawn = bukkitWorld.getSpawnLocation();
-                collectCircleChunks(coords, spawn.getX(), spawn.getZ(), world.preloadRadius());
+            Location center = preloadCircleCenter(world);
+            if (center != null) {
+                collectCircleChunks(coords, center.getX(), center.getZ(), world.preloadRadius());
             }
         }
         coords.addAll(preloadRegionChunkCoords(world));
@@ -3070,7 +3121,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             parts.add(formatCurrencyCost(cost));
         }
         for (ItemCost cost : anchor.unlockItems()) {
-            parts.add("物品条件 x" + cost.amount());
+            parts.add(describeItemCost(cost) + " x" + cost.amount());
         }
         return parts.isEmpty() ? "免费解锁" : String.join(" + ", parts);
     }
@@ -3080,7 +3131,22 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         for (CurrencyCost cost : anchor.teleportCurrencies()) {
             parts.add(formatCurrencyCost(cost));
         }
+        for (ItemCost cost : anchor.teleportItems()) {
+            parts.add(describeItemCost(cost) + " x" + cost.amount());
+        }
         return parts.isEmpty() ? "免费传送" : String.join(" + ", parts);
+    }
+
+    /** 物品消耗展示名：取 matcher 首个具体物品 id，取不到退化为"物品"。 */
+    private String describeItemCost(ItemCost cost) {
+        ItemMatcher matcher = cost.matcher();
+        for (List<String> ids : List.of(matcher.materialIds(), matcher.mythicItemIds(),
+            matcher.neigeItemIds(), matcher.overtureItemIds())) {
+            if (!ids.isEmpty()) {
+                return ids.get(0);
+            }
+        }
+        return "物品";
     }
 
     private String formatCurrencyCost(CurrencyCost cost) {

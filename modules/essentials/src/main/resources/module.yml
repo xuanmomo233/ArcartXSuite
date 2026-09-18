@@ -1,6 +1,6 @@
 id: essentials
 name: Essentials
-version: 1.4.4
+version: 1.4.5
 main: xuanmo.arcartxsuite.essentials.EssentialsModule
 api-version: 1.0
 
@@ -8,4 +8,5 @@ depends: []
 softdepends: []
 external-depends:
   - PlaceholderAPI
-external-softdepends: []
+external-softdepends:
+  - Multiverse-Core

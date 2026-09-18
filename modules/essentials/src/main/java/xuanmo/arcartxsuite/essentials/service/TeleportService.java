@@ -12,13 +12,18 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
@@ -43,6 +48,9 @@ public final class TeleportService implements Listener {
     private final Map<UUID, TpaRequest> pendingTpa = new ConcurrentHashMap<>();
     // 传送等待中的玩家
     private final Map<UUID, Integer> warmups = new ConcurrentHashMap<>();
+    // 出生点后端（懒加载，按 MV 是否激活动态选择）
+    private volatile SpawnBackend localSpawnBackend;
+    private volatile SpawnBackend multiverseSpawnBackend;
 
     /**
      * 构造传送服务。
@@ -239,16 +247,31 @@ public final class TeleportService implements Listener {
 
     /**
      * 以玩家当前位置设置服务器出生点。
+     * <p>
+     * 安装 Multiverse-Core 时写入该世界的 MV {@code spawn-location} 配置；
+     * 未安装时写入模块数据库 {@code spawn} 表。
      *
      * @param player 执行者
      */
     public void setSpawn(Player player) {
-        try {
-            repository.setSpawn(player.getLocation());
-            player.sendMessage(prefix() + config.messages().spawnSet());
-        } catch (SQLException e) {
-            logError("setSpawn", e);
-        }
+        boolean success = spawnBackend().setSpawn(player.getLocation());
+        player.sendMessage(prefix() + (success
+            ? config.messages().spawnSet()
+            : config.messages().spawnFailed()));
+    }
+
+    /**
+     * 查询指定世界的出生点（经当前 {@link SpawnBackend}：MV 已加载时返回该世界的
+     * MV spawn，否则返回本地存储的全局 spawn）。
+     * <p>
+     * 未设置时返回 {@code null}——不回退世界默认 spawn，兜底策略由调用方决定。
+     * 供模块内使用及 {@code EssentialsQueryable} 能力对外暴露。
+     *
+     * @param world 上下文世界（MV 后端按世界取 spawn；本地后端忽略）
+     * @return 出生点位置，未设置或查询失败返回 {@code null}
+     */
+    public @Nullable Location getSpawn(@NotNull World world) {
+        return spawnBackend().getSpawn(world);
     }
 
     /**
@@ -257,14 +280,61 @@ public final class TeleportService implements Listener {
      * @param player 目标玩家
      */
     public void teleportSpawn(Player player) {
-        try {
-            Location loc = repository.getSpawn();
-            if (loc == null) {
-                loc = player.getWorld().getSpawnLocation();
+        Location loc = spawnBackend().getSpawn(player.getWorld());
+        if (loc == null) {
+            loc = player.getWorld().getSpawnLocation();
+        }
+        delayedTeleport(player, loc, config.messages().spawnTeleported());
+    }
+
+    /**
+     * 解析当前应使用的出生点后端。
+     * <p>
+     * Multiverse-Core 已加载时使用 {@link MultiverseSpawnBackend}，
+     * 否则使用 {@link LocalSpawnBackend}。每次调用动态判断，
+     * MV 后加载或卸载时可无缝切换。
+     *
+     * @return 当前生效的出生点后端
+     */
+    private SpawnBackend spawnBackend() {
+        if (multiverseActive()) {
+            SpawnBackend backend = multiverseSpawnBackend;
+            if (backend == null) {
+                backend = new MultiverseSpawnBackend(logger);
+                multiverseSpawnBackend = backend;
             }
-            delayedTeleport(player, loc, config.messages().spawnTeleported());
-        } catch (SQLException e) {
-            logError("teleportSpawn", e);
+            return backend;
+        }
+        return localSpawnBackend();
+    }
+
+    /**
+     * 返回本地出生点后端（懒初始化）。
+     *
+     * @return 本地后端实例
+     */
+    private SpawnBackend localSpawnBackend() {
+        SpawnBackend backend = localSpawnBackend;
+        if (backend == null) {
+            backend = new LocalSpawnBackend(repository, logger);
+            localSpawnBackend = backend;
+        }
+        return backend;
+    }
+
+    /**
+     * Multiverse-Core 是否已安装且 API 就绪。
+     * <p>
+     * 必须先查插件启用再触碰 MV 类（否则无 MV 环境下类解析失败）。
+     *
+     * @return MV 可接管出生点时返回 {@code true}
+     */
+    private boolean multiverseActive() {
+        try {
+            return Bukkit.getPluginManager().isPluginEnabled("Multiverse-Core")
+                && MultiverseSpawnBackend.isLoaded();
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -424,6 +494,43 @@ public final class TeleportService implements Listener {
     }
 
     // ─── Events ───
+
+    /**
+     * 玩家死亡重生时，未安装 Multiverse-Core 且开启 {@code spawn.respawn-at-spawn}
+     * 则强制重生于服务器出生点；床/重生锚按 {@code spawn.respect-personal-spawn} 豁免。
+     *
+     * @param event 重生事件
+     */
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent event) {
+        if (multiverseActive() || !config.spawn().respawnAtSpawn()) return;
+        if (config.spawn().respectPersonalSpawn()
+            && (event.isBedSpawn() || event.isAnchorSpawn())) return;
+        Location spawn = localSpawnBackend().getSpawn(event.getPlayer().getWorld());
+        if (spawn != null) {
+            event.setRespawnLocation(spawn);
+        }
+    }
+
+    /**
+     * 新玩家首次进服时，未安装 Multiverse-Core 且开启
+     * {@code spawn.first-join-at-spawn} 则延迟 1 tick 传送到出生点。
+     *
+     * @param event 进服事件
+     */
+    @EventHandler
+    public void onFirstJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (multiverseActive() || !config.spawn().firstJoinAtSpawn()
+            || player.hasPlayedBefore()) return;
+        Location spawn = localSpawnBackend().getSpawn(player.getWorld());
+        if (spawn == null) return;
+        AxsScheduler.runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                player.teleport(spawn);
+            }
+        }, 1L);
+    }
 
     @EventHandler(ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {

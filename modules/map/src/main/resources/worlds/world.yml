@@ -1,48 +1,105 @@
-# 世界配置示例 — 文件名即世界 ID（此文件对应 world）
-# 地图完全由客户端 mod 实时渲染，无需纹理/图片参数。
-# display-name 留空时运行时从 Multiverse-Core colourless alias 自动补。
+# =============================================================================
+# 世界配置示例 —— 文件名即世界 ID（此文件对应 world）
+#
+# 地图完全由客户端 mod 实时渲染，无需配置纹理/图片。
+# =============================================================================
+
+# 是否启用该世界（false = 地图中不显示、不推送、不可切换）
 enabled: true
+
+# 显示名（留空时自动从 Multiverse-Core colourless alias 补全）
 display-name: ""
 
-# 地形预加载（服务端推送，推即亮）：
-#   preload-radius:  以世界出生点为圆心的预加载半径（方块数，0=禁用）
-#   preload-regions: 多边形预加载区列表，每项 {points: [[x,z],...]}（至少 3 点）
-# 客户端首次查看该世界时按需请求，推送地形立即点亮并持久缓存；
-# 改动本文件后自动换版本号（文件 mtime 哈希），客户端会重拉。
-# 仅推送已生成的区块，不会触发世界生成。
-# preload-radius: 200
-# preload-regions:
-#   - points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
 
-# 该世界的锚点列表。每个锚点可配置解锁条件、自动解锁策略、传送消耗和点亮区域。
-# 解锁条件：permission（前置权限）、unlock-currencies（货币）、unlock-items（物品）。
-# 自动解锁 unlock 节（不配 = 不自动解锁，玩家需手动解锁）：
-#   unlock.default: true        所有玩家进服时自动免费解锁（不消耗解锁货币/物品）
-#   unlock.on-permission: true  拥有 permission 权限的玩家进服时自动免费解锁
-#   unlock.radius: 8            手动解锁三维距离门槛：>0 时玩家须在锚点 radius 格内
-#                               （含 Y 距离）才能点"解锁"；详情卡实时显示当前距离
-# 注意：解锁记录 ≠ 使用权限。default 解锁的玩家若锚点配了 permission，仍需有权限才能传送。
-# 点亮区域两种写法（可同时配，任一生效即可），解锁成功后立即推送该区域地形：
-#   light-region: 多边形顶点 [[x,z],...]（至少 3 点）
-#   light-radius: 以锚点为中心的圆形半径（方块数）
-# 不配 light-region 和 light-radius = 该锚点不管点亮。
+# 客户端首次查看该世界时按需请求；推送地形立即点亮地图并持久缓存。
+# 仅推送已生成的区块，不会触发世界生成。
+preload:
+  # 圆形预加载中心（可选）：不配则按出生点链解析（Multiverse spawn → Essentials模块 → Bukkit spawn）
+  # 配置了 center 时 radius 以该点为准。
+  # center:
+  #   x: 0
+  #   z: 0
+  # 以圆心为基准的预加载半径（方块数，0 = 禁用）。
+  radius: 0
+  # 多边形预加载区列表，每项 {points: [[x,z], ...]}（至少 3 点），与 radius 可叠加。
+  # 改动本文件后预加载版本号自动更新（文件 mtime 哈希），客户端会重新拉取。
+  # points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
+  regions: []
+
+# 锚点列表。注意：解锁记录 ≠ 使用权限——default 解锁的玩家若锚点配了
+# permission，仍需持有该权限才能传送。
 anchors:
   spawn:
+    # 是否启用该锚点
     enabled: true
+    # 地图上的显示名
     display-name: "出生点"
+    # 锚点坐标（传送落点）
     x: 0
     y: 64
     z: 0
+    # 描述文本
     description: "默认出生点锚点。"
+    # 使用权限（留空 = 无要求）
     permission: ""
+    # 列表排序权重（小的靠前）
     sort-order: 0
+
+    # 传送消耗（每次传送扣费）
+    teleport:
+      # 传送消耗的货币列表，每项 {currency: 货币ID, amount: 数量}；
+      # 货币 ID 对应宿主 config.yml currencies 节的全局货币定义。
+      # 示例：
+      #   currencies:
+      #     - currency: coins
+      #       amount: 100
+      #     - currency: points
+      #       amount: 5
+      currencies: []
+      # 传送消耗的物品列表，每项 {amount: 数量, match: {匹配规则}}，
+      # 与钓鱼饵料 match 节同款格式。match 各字段为"或"关系，命中任一即匹配：
+      #   material-ids      原版材质名列表（如 [diamond]）
+      #   mythic-item-ids   MythicMobs 物品 ID 列表
+      #   neige-item-ids    NeigeItems 物品 ID 列表
+      #   overture-item-ids Overture 物品 ID 列表
+      #   kinds             物品类别白名单
+      #   name-contains     显示名需包含的子串列表（忽略颜色码）
+      #   lore-contains     Lore 需包含的子串列表
+      #   nbt-keys          NBT/PDC 键白名单
+      #   nbt-values        NBT 键值对精确匹配
+      #   name-regex        显示名正则列表
+      #   lore-regex        Lore 正则列表
+      # 示例：
+      #   items:
+      #     - amount: 3
+      #       match:
+      #         material-ids: [diamond]
+      #     - amount: 1
+      #       match:
+      #         mythic-item-ids: [teleport_scroll]
+      items: []
+
+    # 自动解锁策略（整节不配 = 玩家须手动解锁）
     unlock:
+      # true = 所有玩家进服自动免费解锁
       default: true
+      # true = 持有 permission 权限的玩家进服自动免费解锁
       on-permission: false
-      # radius: 8
-    unlock-currencies: []
-    teleport-currencies: []
-    unlock-items: []
-    # light-region:
-    #   points: [[-50, -50], [50, -50], [50, 50], [-50, 50]]
-    # light-radius: 100
+      # 手动解锁三维距离门槛：>0 时玩家须在锚点 radius 格内（含 Y）
+      radius: 8
+      # 解锁消耗的货币列表，每项 {currency: 货币ID, amount: 数量}（手动解锁时校验；
+      # 自动解锁 default/on-permission 不消耗）。示例见上方 teleport.currencies。
+      currencies: []
+      # 解锁消耗的物品列表，每项 {amount: 数量, match: {匹配规则}}（手动解锁时校验；
+      # 格式与示例见上方 teleport.items）。
+      items: []
+
+    # 锚点解锁自动点亮地图
+    light:
+      # 点亮区域·圆形：以锚点为中心的半径（方块数），0则不点亮，与 region 可叠加；
+      # 两者都不配 = 该锚点不负责点亮
+      radius: 0
+      # 点亮区域·多边形：解锁锚点后立即推送该区域地形（至少 3 点）
+      region:
+        # points: [[-50, -50], [50, -50], [50, 50], [-50, 50]]
+        points: []

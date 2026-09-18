@@ -91,6 +91,19 @@ teleport:
   # 传送安全检查（避免传送到方块内）
   safe-teleport: true
 
+# ─── 出生点 ───
+# 安装 Multiverse-Core 时：出生点的存储、死亡重生、新玩家进服全部由
+# Multiverse 接管（/setspawn 会写入对应世界 worlds.yml 的 spawn-location），
+# 本节配置不生效。
+# 未安装时：由 Essentials 按本节配置自行接管。
+spawn:
+  # 玩家死亡后是否重生于 /setspawn 设置的出生点
+  respawn-at-spawn: true
+  # 玩家有床/重生锚时优先原版个人出生点，false = 强制服务器出生点
+  respect-personal-spawn: true
+  # 新玩家首次进服是否出生在出生点
+  first-join-at-spawn: true
+
 # ─── 世界管理 ───
 world:
   # 允许 /time 和 /weather 的世界列表，空列表 = 所有世界
@@ -168,6 +181,7 @@ messages:
   warp-teleported: '&a已传送到 &f{name}&a。'
   spawn-set: '&a出生点已设置。'
   spawn-teleported: '&a已传送到出生点。'
+  spawn-failed: '&c设置出生点失败（该世界未在 Multiverse 中注册或存储异常）。'
   tpa-sent: '&a传送请求已发送给 &f{player}&a。'
   tpa-received: '&f{player} &a请求传送到你的位置。\n&7输入 &f/tpaccept &7接受，&f/tpdeny &7拒绝。'
   tpa-here-received: '&f{player} &a请求你传送到 TA 的位置。\n&7输入 &f/tpaccept &7接受，&f/tpdeny &7拒绝。'

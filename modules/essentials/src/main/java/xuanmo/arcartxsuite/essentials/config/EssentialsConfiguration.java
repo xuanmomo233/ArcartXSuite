@@ -19,6 +19,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * @param commandAliases 命令简写别名映射（别名 → action）
  * @param player      玩家管理配置（飞行速度、AFK 超时、隐身消息隐藏等）
  * @param teleport    传送配置（TPA 超时、传送延迟、家上限、安全传送等）
+ * @param spawn       出生点配置（无 Multiverse 时的重生/首次进服接管开关）
  * @param world       世界配置（允许生效的世界列表）
  * @param moderation  安全管理配置（封禁/踢出/禁言消息、警告阈值等）
  * @param interaction 交互配置（楼梯/半砖坐下等）
@@ -30,6 +31,7 @@ public record EssentialsConfiguration(
     Map<String, String> commandAliases,
     PlayerConfiguration player,
     TeleportConfiguration teleport,
+    SpawnConfiguration spawn,
     WorldConfiguration world,
     ModerationConfiguration moderation,
     InteractionConfiguration interaction,
@@ -50,6 +52,7 @@ public record EssentialsConfiguration(
             loadCommandAliases(root),
             PlayerConfiguration.load(section(root, "player")),
             TeleportConfiguration.load(section(root, "teleport")),
+            SpawnConfiguration.load(section(root, "spawn")),
             WorldConfiguration.load(section(root, "world")),
             ModerationConfiguration.load(section(root, "moderation")),
             InteractionConfiguration.load(section(root, "interaction")),
@@ -114,6 +117,30 @@ public record EssentialsConfiguration(
                 Math.max(1, s.getInt("max-homes", 3)),
                 Math.max(1, s.getInt("back-stack-size", 5)),
                 s.getBoolean("safe-teleport", true)
+            );
+        }
+    }
+
+    /**
+     * 出生点子配置。
+     * <p>
+     * 仅当服务器未安装 Multiverse-Core 时生效；安装后出生点的存储、
+     * 死亡重生与首次进服全部由 Multiverse 接管。
+     *
+     * @param respawnAtSpawn       玩家死亡后是否重生于服务器出生点
+     * @param respectPersonalSpawn 床/重生锚是否优先于服务器出生点（原版行为）
+     * @param firstJoinAtSpawn     新玩家首次进服是否出生在出生点
+     */
+    public record SpawnConfiguration(
+        boolean respawnAtSpawn,
+        boolean respectPersonalSpawn,
+        boolean firstJoinAtSpawn
+    ) {
+        static SpawnConfiguration load(ConfigurationSection s) {
+            return new SpawnConfiguration(
+                s.getBoolean("respawn-at-spawn", true),
+                s.getBoolean("respect-personal-spawn", true),
+                s.getBoolean("first-join-at-spawn", true)
             );
         }
     }
@@ -279,7 +306,7 @@ public record EssentialsConfiguration(
         String vanishEnabled, String vanishDisabled,
         String homeSet, String homeDeleted, String homeNotFound, String homeLimit, String homeTeleported,
         String warpSet, String warpDeleted, String warpNotFound, String warpTeleported,
-        String spawnSet, String spawnTeleported,
+        String spawnSet, String spawnTeleported, String spawnFailed,
         String tpaSent, String tpaReceived, String tpaHereReceived,
         String tpaAccepted, String tpaDenied, String tpaExpired, String tpaNoPending,
         String teleportCancelled, String teleportWarmup,
@@ -326,6 +353,7 @@ public record EssentialsConfiguration(
                 msg(s, "warp-teleported", "&a已传送到 &f{name}&a。"),
                 msg(s, "spawn-set", "&a出生点已设置。"),
                 msg(s, "spawn-teleported", "&a已传送到出生点。"),
+                msg(s, "spawn-failed", "&c设置出生点失败。"),
                 msg(s, "tpa-sent", "&a传送请求已发送给 &f{player}&a。"),
                 msg(s, "tpa-received", "&f{player} &a请求传送到你的位置。"),
                 msg(s, "tpa-here-received", "&f{player} &a请求你传送到 TA 的位置。"),

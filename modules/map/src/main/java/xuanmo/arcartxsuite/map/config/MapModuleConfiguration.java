@@ -203,22 +203,35 @@ public record MapModuleConfiguration(
             String worldId = normalizeId(file.getName().substring(0, file.getName().length() - 4));
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
             if (!yaml.getBoolean("enabled", true)) continue;
-            double preloadRadius = positiveDouble(
-                yaml.get("preload-radius"), 0D);
+            // preload 节：radius（圆半径）、regions（多边形列表）、center（可选圆心，
+            // 不配则按 MV→ess→Bukkit 出生点链解析）
+            ConfigurationSection preload = yaml.getConfigurationSection("preload");
+            double preloadRadius = preload == null ? 0D
+                : positiveDouble(preload.get("radius"), 0D);
             List<PolygonRegion> preloadRegions = loadPolygonList(
-                yaml.getMapList("preload-regions"), logger, "worlds." + worldId + ".preload-regions");
+                preload == null ? List.of() : preload.getMapList("regions"),
+                logger, "worlds." + worldId + ".preload.regions");
+            ConfigurationSection center = preload == null ? null
+                : preload.getConfigurationSection("center");
+            Double preloadCenterX = center == null || !center.isSet("x") ? null
+                : center.getDouble("x");
+            Double preloadCenterZ = center == null || !center.isSet("z") ? null
+                : center.getDouble("z");
             // 预加载版本 = 配置内容 + 文件 mtime 哈希：改配置/文件自动失效客户端缓存。
             // 掩码到正数：客户端以 version<=0 表示"无预加载"，哈希负数会静默失效。
             int preloadVersion = (preloadRadius > 0 || !preloadRegions.isEmpty())
                 ? Math.max(1, java.util.Objects.hash(worldId, preloadRadius,
-                    preloadRegions, file.lastModified()) & 0x7FFFFFFF)
+                    preloadRegions, preloadCenterX, preloadCenterZ,
+                    file.lastModified()) & 0x7FFFFFFF)
                 : 0;
             worlds.put(worldId, new WorldDefinition(
                 worldId,
                 string(yaml.getString("display-name"), ""),
                 preloadRadius,
                 preloadRegions,
-                preloadVersion
+                preloadVersion,
+                preloadCenterX,
+                preloadCenterZ
             ));
             // 解析 anchors 节
             ConfigurationSection anchorsSection = yaml.getConfigurationSection("anchors");
@@ -242,7 +255,7 @@ public record MapModuleConfiguration(
             worlds.put(id, new WorldDefinition(
                 id,
                 string(child.getString("display-name"), ""),
-                0D, List.of(), 0
+                0D, List.of(), 0, null, null
             ));
         }
     }
@@ -264,10 +277,15 @@ public record MapModuleConfiguration(
                     + "，本次在世界 " + worldId + "），后者覆盖前者——全局锚点 id 必须唯一。");
             }
             String permission = string(child.getString("permission", ""), "");
-            AnchorUnlock unlock = loadAnchorUnlock(child.getConfigurationSection("unlock"));
+            ConfigurationSection unlockSection = child.getConfigurationSection("unlock");
+            AnchorUnlock unlock = loadAnchorUnlock(unlockSection);
             if (unlock.onPermission() && permission.isBlank()) {
                 logger.warning("世界 " + worldId + " 的锚点 " + id + " 配置了 unlock.on-permission 但未设置 permission，自动解锁不会生效。");
             }
+            // light 节：radius（圆形点亮半径）+ region（多边形点亮区域）
+            ConfigurationSection lightSection = child.getConfigurationSection("light");
+            // teleport 节：currencies/items（每次传送消耗）
+            ConfigurationSection teleportSection = child.getConfigurationSection("teleport");
             target.put(id, new AnchorDefinition(
                 id,
                 string(child.getString("display-name", rawId), rawId),
@@ -278,12 +296,15 @@ public record MapModuleConfiguration(
                 string(child.getString("description", ""), ""),
                 permission,
                 child.getInt("sort-order", target.size()),
-                loadCurrencyCosts(child.getMapList("unlock-currencies")),
-                loadCurrencyCosts(child.getMapList("teleport-currencies")),
-                loadItemCosts(child.getMapList("unlock-items"), logger, "anchors." + id + ".unlock-items"),
+                loadCurrencyCosts(unlockSection == null ? List.of() : unlockSection.getMapList("currencies")),
+                loadItemCosts(unlockSection == null ? List.of() : unlockSection.getMapList("items"),
+                    logger, "anchors." + id + ".unlock.items"),
+                loadCurrencyCosts(teleportSection == null ? List.of() : teleportSection.getMapList("currencies")),
+                loadItemCosts(teleportSection == null ? List.of() : teleportSection.getMapList("items"),
+                    logger, "anchors." + id + ".teleport.items"),
                 unlock,
-                loadLightRegion(child.getConfigurationSection("light-region")),
-                positiveDouble(child.get("light-radius"), 0D)
+                loadLightRegion(lightSection == null ? null : lightSection.getConfigurationSection("region")),
+                lightSection == null ? 0D : positiveDouble(lightSection.get("radius"), 0D)
             ));
         }
     }
@@ -295,6 +316,8 @@ public record MapModuleConfiguration(
      *   default: true        # 所有玩家进服时自动免费解锁
      *   on-permission: true  # 拥有锚点 permission 权限的玩家进服时自动解锁
      *   radius: 8            # 手动解锁三维距离门槛（>0 时玩家须在锚点 radius 格内）
+     *   currencies: [...]    # 手动解锁货币消耗
+     *   items: [...]         # 手动解锁物品消耗
      * }</pre>
      */
     private static AnchorUnlock loadAnchorUnlock(ConfigurationSection section) {
@@ -309,11 +332,12 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 解析多边形区域列表（世界 preload-regions 用）。配置格式：
+     * 解析多边形区域列表（世界 preload.regions 用）。配置格式：
      * <pre>{@code
-     * preload-regions:
-     *   - points: [[x, z], [x, z], ...]
-     *   - points: [[x, z], ...]
+     * preload:
+     *   regions:
+     *     - points: [[x, z], [x, z], ...]
+     *     - points: [[x, z], ...]
      * }</pre>
      */
     private static List<PolygonRegion> loadPolygonList(
@@ -347,10 +371,11 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 解析单个多边形区域（锚点 light-region 用）。配置格式：
+     * 解析单个多边形区域（锚点 light.region 用）。配置格式：
      * <pre>{@code
-     * light-region:
-     *   points: [[x, z], [x, z], ...]
+     * light:
+     *   region:
+     *     points: [[x, z], [x, z], ...]
      * }</pre>
      */
     private static List<PolygonRegion> loadLightRegion(ConfigurationSection section) {
@@ -420,6 +445,18 @@ public record MapModuleConfiguration(
         return List.copyOf(values);
     }
 
+    /**
+     * 解析物品消耗列表（fishing 同款 match 模糊匹配器格式）。配置格式：
+     * <pre>{@code
+     * items:
+     *   - amount: 3
+     *     match:
+     *       material-ids: [diamond]
+     *   - amount: 1
+     *     match:
+     *       mythic-item-ids: [teleport_scroll]
+     * }</pre>
+     */
     private static List<ItemCost> loadItemCosts(List<Map<?, ?>> rawCosts, Logger logger, String path) {
         List<ItemCost> values = new ArrayList<>();
         if (rawCosts == null) {
@@ -429,9 +466,9 @@ public record MapModuleConfiguration(
             Map<?, ?> rawCost = rawCosts.get(index);
             int amount = positiveInt(rawCost.get("amount"), 1);
             ItemMatcher matcher = ItemMatcherLoader.load(
-                mapToSection(rawCost.get("matcher")),
+                mapToSection(rawCost.get("match")),
                 logger,
-                path + "[" + index + "].matcher"
+                path + "[" + index + "].match"
             );
             if (!matcher.emptyMatcher()) {
                 values.add(new ItemCost(amount, matcher));
@@ -737,11 +774,18 @@ public record MapModuleConfiguration(
         String displayName,
         double preloadRadius,
         List<PolygonRegion> preloadRegions,
-        int preloadVersion
+        int preloadVersion,
+        Double preloadCenterX,
+        Double preloadCenterZ
     ) {
         /** 该世界是否配置了任何预加载（圆形或区域）。 */
         public boolean hasPreload() {
             return preloadRadius > 0 || !preloadRegions.isEmpty();
+        }
+
+        /** 预加载圆形中心是否显式配置（否则按 MV→ess→Bukkit 出生点链解析）。 */
+        public boolean hasPreloadCenter() {
+            return preloadCenterX != null && preloadCenterZ != null;
         }
     }
 
@@ -763,7 +807,7 @@ public record MapModuleConfiguration(
     /**
      * 锚点自动解锁策略（锚点 {@code unlock} 节）。
      * <p>
-     * 自动解锁在玩家客户端初始化时免费写入解锁记录，不消耗 unlock-currencies / unlock-items；
+     * 自动解锁在玩家客户端初始化时免费写入解锁记录，不消耗 unlock.currencies / unlock.items；
      * 解锁记录与 {@code permission} 使用检查相互独立——{@code defaultUnlock} 解锁的玩家
      * 若锚点配了 permission，仍需持有该权限才能传送。
      *
@@ -793,9 +837,10 @@ public record MapModuleConfiguration(
      * @param description        描述文本
      * @param permission         所需权限节点
      * @param sortOrder          排序权重
-     * @param unlockCurrencies   解锁所需货币列表
-     * @param teleportCurrencies 传送所需货币列表
-     * @param unlockItems        解锁所需物品列表
+     * @param unlockCurrencies   解锁所需货币列表（锚点 {@code unlock.currencies}）
+     * @param unlockItems        解锁所需物品列表（锚点 {@code unlock.items}）
+     * @param teleportCurrencies 传送所需货币列表（锚点 {@code teleport.currencies}）
+     * @param teleportItems      传送所需物品列表（锚点 {@code teleport.items}）
      * @param unlock             自动解锁策略（锚点 {@code unlock} 节）
      * @param lightRegions       解锁后点亮的多边形区域列表；空 = 该锚点不用多边形点亮
      * @param lightRadius        解锁后点亮的圆形半径（以锚点为中心）；≤0 = 不用圆形点亮
@@ -811,8 +856,9 @@ public record MapModuleConfiguration(
         String permission,
         int sortOrder,
         List<CurrencyCost> unlockCurrencies,
-        List<CurrencyCost> teleportCurrencies,
         List<ItemCost> unlockItems,
+        List<CurrencyCost> teleportCurrencies,
+        List<ItemCost> teleportItems,
         AnchorUnlock unlock,
         List<PolygonRegion> lightRegions,
         double lightRadius
@@ -832,7 +878,7 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 物品消耗定义。
+     * 物品消耗定义（fishing 同款 match 模糊匹配器）。
      *
      * @param amount  消耗数量
      * @param matcher 物品匹配器

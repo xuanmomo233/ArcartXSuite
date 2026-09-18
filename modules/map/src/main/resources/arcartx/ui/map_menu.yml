@@ -260,11 +260,13 @@ ui:
               dim = row['dimension']
               var.mapRenderer.setWorldDimension('' + row['id'], dim == none ? '' : '' + dim)
               // 预加载信息（版本号 + 覆盖块坐标串）→ mod 按需 axsmap:request
+              // 显式 if 防护：三元对 missing-key 的 none 判定不可靠，
+              // 直接把 none 传给 Java 会 primitiveConversion NPE
               var.preloadVer = row['preloadVersion']
               var.preloadChunks = row['preloadChunks']
-              var.mapRenderer.setWorldPreload('' + row['id'],
-                preloadVer == none ? 0 : preloadVer,
-                preloadChunks == none ? '' : '' + preloadChunks)
+              if(preloadVer != none && preloadChunks != none) {
+                var.mapRenderer.setWorldPreload('' + row['id'], preloadVer, '' + preloadChunks)
+              }
             }
           }
         }
@@ -1273,8 +1275,8 @@ controls:
               clickLeft: |-
                 if (var.pinCreateX != none && var.pinCreateZ != none) {
                   var.actionBusy = true
-                  # create_pin <x> <z> <worldId> <token>：pin 建在玩家当前浏览的世界
-                  # （允许任意点），与服务端 tokenIndex=4 对齐
+                  // create_pin <x> <z> <worldId> <token>：pin 建在玩家当前浏览的世界
+                  // （允许任意点），与服务端 tokenIndex=4 对齐
                   Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.selectedWorldId, var.actionToken)
                   var.pinCreateX = none
                   var.pinCreateZ = none

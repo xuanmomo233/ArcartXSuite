@@ -2,6 +2,8 @@ package xuanmo.arcartxsuite.essentials;
 
 import java.io.File;
 import java.sql.SQLException;
+import org.bukkit.Location;
+import org.bukkit.World;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,7 +100,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("essentials")
             .name("Essentials")
-            .version("1.4.4")
+            .version("1.4.5")
             .mainClass(getClass().getName())
             .build();
     }
@@ -498,6 +500,11 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         public boolean isGodMode(@NotNull UUID playerUuid) {
             Player p = Bukkit.getPlayer(playerUuid);
             return p != null && p.isInvulnerable();
+        }
+
+        @Override
+        public @Nullable Location getSpawn(@NotNull World world) {
+            return teleportService != null ? teleportService.getSpawn(world) : null;
         }
     }
 }

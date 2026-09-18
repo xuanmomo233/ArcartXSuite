@@ -165,7 +165,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             createWaypointBridge(),
             createAdyeshachNpcBridge(),
             messages(),
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class)
         );
         service.start();
 
