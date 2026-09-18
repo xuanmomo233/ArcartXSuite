@@ -28,6 +28,7 @@ import xuanmo.arcartxsuite.map.command.MapAdminCommand;
 import xuanmo.arcartxsuite.map.command.MapPlayerCommand;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
 import xuanmo.arcartxsuite.map.service.MapService;
+import xuanmo.arcartxsuite.map.service.MapTerrainPushService;
 import xuanmo.arcartxsuite.map.storage.JdbcMapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
@@ -270,6 +271,43 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             }
         });
 
+        // 地形预加载通道：客户端 axsmap:request 请求 → 服务端 axsmap:terrain 回推
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(
+            plugin, MapTerrainPushService.CHANNEL_TERRAIN);
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(
+            plugin, MapTerrainPushService.CHANNEL_REQUEST,
+            (channel, player, message) -> {
+                if (service != null) {
+                    service.handleTerrainRequest(player, message);
+                }
+            });
+
+        // 注册 MapAnchorUnlockable capability（公开）：供任务系统/外部插件/命令
+        // 以代码路径解锁锚点。unlock=免费强解（跳付费跳距离门）；tryUnlock=完整玩家流程
+        registerCapability(xuanmo.arcartxsuite.api.capability.MapAnchorUnlockable.class,
+            new xuanmo.arcartxsuite.api.capability.MapAnchorUnlockable() {
+                @Override
+                public java.util.concurrent.CompletableFuture<Boolean> unlock(
+                    @NotNull Player player, @NotNull String anchorId) {
+                    java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
+                    Runnable task = () -> future.complete(service != null
+                        && service.grantAnchorUnlock(player, anchorId).success());
+                    if (Bukkit.isPrimaryThread()) task.run();
+                    else Bukkit.getScheduler().runTask(plugin, task);
+                    return future;
+                }
+
+                @Override
+                public java.util.concurrent.CompletableFuture<Boolean> tryUnlock(
+                    @NotNull Player player, @NotNull String anchorId) {
+                    java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
+                    Runnable task = () -> future.complete(service != null && service.unlockAnchor(player, anchorId));
+                    if (Bukkit.isPrimaryThread()) task.run();
+                    else Bukkit.getScheduler().runTask(plugin, task);
+                    return future;
+                }
+            });
+
         adminCommand = new MapAdminCommand(() -> service, messages());
 
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
@@ -308,6 +346,10 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     @Override
     protected void stopService() {
+        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(
+            plugin, MapTerrainPushService.CHANNEL_REQUEST);
+        plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(
+            plugin, MapTerrainPushService.CHANNEL_TERRAIN);
         if (service != null) {
             service.shutdown();
             storageManager.closeModuleDataSource("map");

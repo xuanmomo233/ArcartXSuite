@@ -38,15 +38,22 @@ public final class MapUiPacketHandler {
         if (player == null || !player.isOnline() || packetId == null || !this.packetId.equalsIgnoreCase(packetId)) {
             return false;
         }
+        // arcartxsuite.map.use 全入口门控：数据包路径与 /map 命令、全局按键
+        // 同一权限。无权限静默吞掉（不回包不提示，防伪造包探测/刷消息）。
+        if (!player.hasPermission("arcartxsuite.map.use")) {
+            return true;
+        }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
         boolean tokenized = switch (action) {
             case "unlock_anchor", "teleport_anchor", "create_waypoint", "delete_waypoint",
-                 "update_waypoint", "create_pin", "delete_pin", "update_pin" -> true;
+                 "update_waypoint", "create_pin", "delete_pin", "update_pin",
+                 "cross_world_navigate", "teleport_to_world" -> true;
             default -> false;
         };
         if (tokenized && !target.beginActionToken(player, action, data)) return true;
         boolean committed = false;
+        try {
         switch (action) {
             case "refresh" -> target.refresh(player);
             case "open_world" -> {
@@ -130,14 +137,14 @@ public final class MapUiPacketHandler {
             }
             case "teleport_to_world" -> {
                 if (hasValue(data, 1)) {
-                    target.teleportToWorld(player, data.get(1));
+                    committed = target.teleportToWorld(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
             }
             case "cross_world_navigate" -> {
                 if (hasValue(data, 1)) {
-                    target.crossWorldNavigate(player, data.get(1));
+                    committed = target.crossWorldNavigate(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -171,8 +178,13 @@ public final class MapUiPacketHandler {
                 }
             }
             case "create_pin" -> {
-                if (hasValue(data, 1) && hasValue(data, 2)) {
-                    committed = target.createPin(player, parseDouble(data.get(1)), parseDouble(data.get(2)));
+                // create_pin <x> <z> <worldId> <token>：坐标取玩家正在浏览的世界
+                // （pin 允许任意点），NaN/Infinity 等非法坐标直接当 refresh 丢弃
+                double pinX = hasValue(data, 1) ? parseDouble(data.get(1)) : Double.NaN;
+                double pinZ = hasValue(data, 2) ? parseDouble(data.get(2)) : Double.NaN;
+                if (Double.isFinite(pinX) && Double.isFinite(pinZ)) {
+                    committed = target.createPin(player, pinX, pinZ,
+                        hasValue(data, 3) ? data.get(3) : "");
                 } else {
                     target.refresh(player);
                 }
@@ -219,7 +231,13 @@ public final class MapUiPacketHandler {
             case "open_menu" -> target.openMenu(player, hasValue(data, 1) ? data.get(1) : "");
             default -> target.refresh(player);
         }
-        if (tokenized) target.finishActionToken(player, committed);
+        } finally {
+            // in-flight 槽位必须无条件释放：分发过程抛异常（如玩家恰好在
+            // sendPacket 瞬间掉线）否则会把玩家永久锁死在"动作进行中"
+            if (tokenized) {
+                target.finishActionToken(player, committed);
+            }
+        }
         return true;
     }
 
@@ -235,7 +253,9 @@ public final class MapUiPacketHandler {
         try {
             return Double.parseDouble(safe(value));
         } catch (NumberFormatException e) {
-            return 0;
+            // 返回 NaN：调用方用 Double.isFinite 判定，解析失败按非法输入丢弃，
+            // 不能返回 0——否则 "abc" 会在坐标 0,0 建出 pin
+            return Double.NaN;
         }
     }
 
@@ -275,9 +295,9 @@ public final class MapUiPacketHandler {
 
         void untrackTarget(Player player, String type, String targetId);
 
-        void teleportToWorld(Player player, String worldId);
+        boolean teleportToWorld(Player player, String worldId);
 
-        void crossWorldNavigate(Player player, String targetDesc);
+        boolean crossWorldNavigate(Player player, String targetDesc);
 
         void deselect(Player player);
 
@@ -291,7 +311,7 @@ public final class MapUiPacketHandler {
 
         void updateWaypoint(Player player, String waypointId, String name, String description);
 
-        boolean createPin(Player player, double x, double z);
+        boolean createPin(Player player, double x, double z, String worldId);
 
         boolean deletePin(Player player, String pinId);
 

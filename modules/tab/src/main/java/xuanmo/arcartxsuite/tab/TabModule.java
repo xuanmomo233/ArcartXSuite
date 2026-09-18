@@ -4,11 +4,13 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -20,6 +22,7 @@ import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.api.PacketHandlerSpec;
+import xuanmo.arcartxsuite.tab.command.TabAdminCommand;
 import xuanmo.arcartxsuite.tab.command.TabPlayerCommand;
 import xuanmo.arcartxsuite.tab.config.TabDefinition;
 import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
@@ -33,7 +36,7 @@ import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 /**
  * Tab 列表同步独立模块。
  */
-public final class TabModule extends AbstractAXSModule {
+public final class TabModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String TAB_UI_RESOURCE_PATH = "arcartx/ui/tab.yml";
     private static final String TAB_UI_FILE_PATH = "ui/tab.yml";
@@ -45,6 +48,7 @@ public final class TabModule extends AbstractAXSModule {
     private TabModuleConfiguration configuration;
     private TabSyncService service;
     private TabSnapshotStore snapshotStore;
+    private TabAdminCommand adminCommand;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -128,6 +132,9 @@ public final class TabModule extends AbstractAXSModule {
             new File(pluginDataFolder, "data/tab/snapshots").toPath()
         );
 
+        // /axs tab 管理命令（ModuleCommandHandler）
+        adminCommand = new TabAdminCommand(() -> service, () -> snapshotStore, messages());
+
         // 注册 PVP 监听器（始终注册，是否生效由 settings.style.pvp-highlight.enabled 控制）
         plugin.getServer().getPluginManager()
             .registerEvents(new TabPvpListener(service), plugin);
@@ -157,13 +164,25 @@ public final class TabModule extends AbstractAXSModule {
             service.shutdown();
             service = null;
         }
+        adminCommand = null;
         configuration = null;
     }
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
-        TabPlayerCommand cmd = new TabPlayerCommand(() -> service, () -> snapshotStore, messages());
-        return Map.of("axstab", (TabExecutor) cmd);
+        TabPlayerCommand cmd = new TabPlayerCommand(() -> service, messages());
+        return Map.of("tab", (TabExecutor) cmd);
+    }
+
+    // ─── ModuleCommandHandler（/axs tab）────────────────────
+
+    @Override public String commandId() { return "tab"; }
+    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
+    @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        return adminCommand != null && adminCommand.onCommand(sender, label, args);
+    }
+    @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
+        return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 
     @Override

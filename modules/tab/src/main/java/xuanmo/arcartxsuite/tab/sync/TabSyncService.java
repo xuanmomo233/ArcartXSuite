@@ -1486,7 +1486,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
     /**
      * 收集 viewer 在指定 definition 的调试快照：sortKeys 值、groupKey、pinned 状态、view、page、是否可见。
-     * 仅供 {@code /axstab debug <player>} 与日志输出使用。
+     * 仅供 {@code /axs tab debug <player>} 与日志输出使用。
      */
     public Map<String, Object> debugSnapshot(Player viewer, String definitionId) {
         Map<String, Object> result = new LinkedHashMap<>();

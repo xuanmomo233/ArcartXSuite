@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors", "unlock");
 
     private final Supplier<MapService> serviceProvider;
     private final MessageProvider messages;
@@ -64,6 +64,7 @@ public final class MapAdminCommand implements ModuleCommandHandler {
             case "open" -> handleOpen(sender, args);
             case "list" -> handleList(sender);
             case "anchors" -> handleAnchors(sender, args);
+            case "unlock" -> handleUnlock(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -83,10 +84,14 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         if (svc == null) return List.of();
         if (args.length == 3) {
             if ("open".equalsIgnoreCase(args[1])) return null; // player names
+            if ("unlock".equalsIgnoreCase(args[1])) return null; // player names
             if ("anchors".equalsIgnoreCase(args[1])) return filter(svc.configuredWorldIds(), args[2]);
         }
         if (args.length == 4 && "open".equalsIgnoreCase(args[1])) {
             return filter(svc.configuredWorldIds(), args[3]);
+        }
+        if (args.length == 4 && "unlock".equalsIgnoreCase(args[1])) {
+            return filter(svc.configuredAnchorIds(), args[3]);
         }
         return List.of();
     }
@@ -98,6 +103,19 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.open", cmd));
         sender.sendMessage(fullMsg("help.list", cmd));
         sender.sendMessage(fullMsg("help.anchors", cmd));
+        sender.sendMessage(fullMsg("help.unlock", cmd));
+    }
+
+    /** /axs map unlock <player> <anchorId> —— 免费强制解锁（跳付费/距离门）。 */
+    private void handleUnlock(CommandSender sender, String[] args) {
+        MapService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        if (args.length < 4) { sender.sendMessage(fullMsg("unlock.usage")); return; }
+        Player target = Bukkit.getPlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("open.not-online", args[2])); return; }
+        MapOperationResult result = svc.grantAnchorUnlock(target, args[3]);
+        sender.sendMessage((messages != null ? messages.get("prefix") : "")
+            + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 
     private void sendStatus(CommandSender sender) {
@@ -135,14 +153,15 @@ public final class MapAdminCommand implements ModuleCommandHandler {
     private void handleAnchors(CommandSender sender, String[] args) {
         MapService svc = serviceProvider.get();
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
-        List<String> anchors = svc.configuredAnchorIds();
+        // 按锚点所属世界过滤（锚点 id 不一定包含世界名，子串匹配会漏报/误报）
+        String worldFilter = args.length >= 3 ? args[2] : null;
+        List<String> anchors = worldFilter == null
+            ? svc.configuredAnchorIds()
+            : svc.configuredAnchorIds(worldFilter);
         if (anchors.isEmpty()) { sender.sendMessage(fullMsg("anchors.empty")); return; }
-        String worldFilter = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : null;
         sender.sendMessage(fullMsg("anchors.title", worldFilter != null ? " (世界: " + worldFilter + ")" : ""));
         for (String a : anchors) {
-            if (worldFilter == null || a.toLowerCase(Locale.ROOT).contains(worldFilter)) {
-                sender.sendMessage(fullMsg("anchors.item", a));
-            }
+            sender.sendMessage(fullMsg("anchors.item", a));
         }
     }
 

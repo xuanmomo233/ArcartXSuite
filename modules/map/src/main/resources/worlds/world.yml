@@ -4,13 +4,25 @@
 enabled: true
 display-name: ""
 
+# 地形预加载（服务端推送，推即亮）：
+#   preload-radius:  以世界出生点为圆心的预加载半径（方块数，0=禁用）
+#   preload-regions: 多边形预加载区列表，每项 {points: [[x,z],...]}（至少 3 点）
+# 客户端首次查看该世界时按需请求，推送地形立即点亮并持久缓存；
+# 改动本文件后自动换版本号（文件 mtime 哈希），客户端会重拉。
+# 仅推送已生成的区块，不会触发世界生成。
+# preload-radius: 200
+# preload-regions:
+#   - points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
+
 # 该世界的锚点列表。每个锚点可配置解锁条件、自动解锁策略、传送消耗和点亮区域。
 # 解锁条件：permission（前置权限）、unlock-currencies（货币）、unlock-items（物品）。
 # 自动解锁 unlock 节（不配 = 不自动解锁，玩家需手动解锁）：
 #   unlock.default: true        所有玩家进服时自动免费解锁（不消耗解锁货币/物品）
 #   unlock.on-permission: true  拥有 permission 权限的玩家进服时自动免费解锁
+#   unlock.radius: 8            手动解锁三维距离门槛：>0 时玩家须在锚点 radius 格内
+#                               （含 Y 距离）才能点"解锁"；详情卡实时显示当前距离
 # 注意：解锁记录 ≠ 使用权限。default 解锁的玩家若锚点配了 permission，仍需有权限才能传送。
-# 点亮区域两种写法（可同时配，任一生效即可）：
+# 点亮区域两种写法（可同时配，任一生效即可），解锁成功后立即推送该区域地形：
 #   light-region: 多边形顶点 [[x,z],...]（至少 3 点）
 #   light-radius: 以锚点为中心的圆形半径（方块数）
 # 不配 light-region 和 light-radius = 该锚点不管点亮。
@@ -27,6 +39,7 @@ anchors:
     unlock:
       default: true
       on-permission: false
+      # radius: 8
     unlock-currencies: []
     teleport-currencies: []
     unlock-items: []

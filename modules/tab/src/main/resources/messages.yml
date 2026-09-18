@@ -10,20 +10,20 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 # ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&cTab 服务未启动。"
-  only-player: "&c仅玩家可使用此命令（debug 除外）。"
+  only-player: "&c仅玩家可使用此命令。"
   no-permission: "&c缺少权限: {0}"
 
-# ── 玩家操作 ──────────────────────────────────────────
+# ── 玩家操作（/tab） ──────────────────────────────────
 player:
   refresh:
     requested: "&a已请求刷新。"
   view:
     current: "&e当前视图: &f{0}"
-    usage: "&7用法: /axstab view <name>"
+    usage: "&7用法: /tab view <name>"
     success: "&a已切换到视图: &f{0}"
     no-change: "&e已在此视图，无需切换。"
   page:
-    usage: "&7用法: /axstab page <definitionId> <next|prev|N>"
+    usage: "&7用法: /tab page <definitionId> <next|prev|N>"
     invalid-page: "&c页码无效: {0}"
     success: "&a页码已设为: &f{0}"
     failed: "&e翻页未生效（definition 不存在或未开启分页）。"
@@ -34,28 +34,53 @@ player:
     refresh: "&7/{0} refresh"
   help:
     title: "&6Tab列表 命令"
-    view: "&7/axstab view <视图名>&f - 切换视图"
-    page: "&7/axstab page <definitionId> <next|prev|页码>&f - 翻页"
-    refresh: "&7/axstab refresh&f - 强制刷新本玩家"
+    view: "&7{0} view <视图名>&f - 切换视图"
+    page: "&7{0} page <definitionId> <next|prev|页码>&f - 翻页"
+    refresh: "&7{0} refresh&f - 强制刷新本玩家"
 
-# ── 调试与快照运维 ────────────────────────────────────
+# ── 管理与调试（/axs tab） ────────────────────────────
 admin:
+  unknown-action: "&e未知子命令，用法: {0} help"
+  help:
+    title: "&6Tab 管理命令"
+    status: "&7{0} status&f - 查看模块状态"
+    view: "&7{0} view <name> &7|&f {0} view <player> <name>&f - 切换视图"
+    page: "&7{0} page <defId> <arg> &7|&f {0} page <player> <defId> <arg>&f - 翻页"
+    refresh: "&7{0} refresh [player]&f - 刷新（无参 = 全局刷新）"
+    fake: "&7{0} fake <数量|off> [player]&f - fake 测试模式"
+    debug: "&7{0} debug <player> [defId]&f - 打印排序/状态快照"
+    snapshot: "&7{0} snapshot <save|load|unload|list|delete>&f - 快照管理"
+  status:
+    title: "&6Tab 模块状态"
+    server-id: "&7server-id: &f{0}"
+    definitions: "&7definitions: &f{0}"
+    snapshots: "&7已注入虚拟节点: &f{0}"
+  view:
+    usage: "&7用法: /axs tab view <name> 或 /axs tab view <player> <name>"
+    success: "&a已将玩家 &f{0} &a切换到视图: &f{1}"
+    no-change: "&e玩家 &f{0} &e已在该视图，无需切换。"
+  page:
+    usage: "&7用法: /axs tab page <defId> <next|prev|N> 或 /axs tab page <player> <defId> <next|prev|N>"
+    success: "&a已将玩家 &f{0} &a页码设为: &f{1}"
+  refresh:
+    global: "&a已请求全局刷新。"
+    target: "&a已请求刷新玩家: &f{0}"
   fake:
-    usage: "&7用法: /axstab fake <数量|off> &8(0-{0}，仅影响自己的 TAB 显示)"
+    usage: "&7用法: /axs tab fake <数量|off> [player] &8(0-{0}，仅影响目标玩家的 TAB 显示)"
     status-on: "&efake 测试模式已开启：模拟在线人数 &f{0}&e。"
     status-off: "&efake 测试模式未开启。"
-    enabled: "&a已进入 fake 测试模式：模拟在线人数 &f{0}&a。按住 TAB 查看布局效果，输入 /axstab fake off 关闭。"
-    disabled: "&a已关闭 fake 测试模式，恢复真实数据。"
+    enabled: "&a已进入 fake 测试模式：模拟在线人数 &f{0}&a（目标: &f{1}&a）。输入 /axs tab fake off 关闭。"
+    disabled: "&a已关闭玩家 &f{0} &a的 fake 测试模式，恢复真实数据。"
     not-active: "&efake 测试模式未开启。"
     invalid: "&c数量无效: {0}（请输入 0-{1} 或 off）"
   debug:
-    usage: "&7用法: /axstab debug <player> [definitionId]"
+    usage: "&7用法: /axs tab debug <player> [definitionId]"
     offline: "&c玩家不在线: {0}"
     empty: "&e无可用 definition。"
     header: "&6=== {0} @ {1} ==="
   snapshot:
     not-initialized: "&cSnapshot store 未初始化。"
-    usage: "&7用法: /axstab snapshot <save|load|unload|list|delete> [name]"
+    usage: "&7用法: /axs tab snapshot <save|load|unload|list|delete> [name]"
     unknown: "&c未知操作: {0}"
     list:
       saved: "&6已保存快照 ({0}):"
@@ -64,20 +89,20 @@ admin:
       installed: "&6已注入虚拟节点 ({0}):"
       failed: "&c列出快照失败: {0}"
     save:
-      usage: "&7用法: /axstab snapshot save <name>"
+      usage: "&7用法: /axs tab snapshot save <name>"
       invalid-name: "&c名称非法（仅允许字母/数字/_/-，最长 64）: {0}"
       success: "&a快照已保存: &f{0}"
       failed: "&c保存失败: {0}"
     load:
-      usage: "&7用法: /axstab snapshot load <name>"
+      usage: "&7用法: /axs tab snapshot load <name>"
       invalid-name: "&c名称非法: {0}"
       failed: "&c加载失败: {0}"
       success: "&a快照已注入: &f{0} &7| localDefs={1} remoteNodes={2} | savedAt={3}"
     unload:
-      usage: "&7用法: /axstab snapshot unload <name|all>"
+      usage: "&7用法: /axs tab snapshot unload <name|all>"
       success: "&a已卸载虚拟节点: &f{0}"
     delete:
-      usage: "&7用法: /axstab snapshot delete <name>"
+      usage: "&7用法: /axs tab snapshot delete <name>"
       invalid-name: "&c名称非法: {0}"
       success: "&a已删除: &f{0}"
       not-found: "&e未找到: &f{0}"

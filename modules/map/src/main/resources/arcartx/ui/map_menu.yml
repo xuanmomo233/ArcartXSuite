@@ -22,6 +22,7 @@ ui:
     init: |-
       var.actionBusySeconds = 0
       var.crossWorldPromptVisible = false
+      var.crossWorldPromptType = 'navigate'
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
       var.selectedWorldName = packet['selectedWorldName']
@@ -58,6 +59,10 @@ ui:
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
       var.detailNavigated = packet['detailNavigated']
+      var.detailUnlockRadius = packet['detailUnlockRadius']
+      var.detailUnlockInRange = packet['detailUnlockInRange']
+      var.detailUnlockRangeText = packet['detailUnlockRangeText']
+      var.detailCrossWorldCostText = packet['detailCrossWorldCostText']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
@@ -149,6 +154,10 @@ ui:
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
       var.detailNavigated = packet['detailNavigated']
+      var.detailUnlockRadius = packet['detailUnlockRadius']
+      var.detailUnlockInRange = packet['detailUnlockInRange']
+      var.detailUnlockRangeText = packet['detailUnlockRangeText']
+      var.detailCrossWorldCostText = packet['detailCrossWorldCostText']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
@@ -250,6 +259,12 @@ ui:
             if(row != none) {
               dim = row['dimension']
               var.mapRenderer.setWorldDimension('' + row['id'], dim == none ? '' : '' + dim)
+              // 预加载信息（版本号 + 覆盖块坐标串）→ mod 按需 axsmap:request
+              var.preloadVer = row['preloadVersion']
+              var.preloadChunks = row['preloadChunks']
+              var.mapRenderer.setWorldPreload('' + row['id'],
+                preloadVer == none ? 0 : preloadVer,
+                preloadChunks == none ? '' : '' + preloadChunks)
             }
           }
         }
@@ -305,6 +320,8 @@ ui:
             } else {
               // 点中标记：清掉落点光标与待创建坐标（改由详情面板+选中框标识）
               var.mapRenderer.clearCursor()
+              var.pinCreateX = none
+              var.pinCreateZ = none
               parts = hit.split(':')
               if(parts.length >= 2) {
                 if(parts[0] == 'anchor') {
@@ -326,24 +343,22 @@ ui:
         // 落点光标与 pinCreateX/Z 同生共死：创建按钮按下（pinCreateX 清空）/
         // 点中标记（上面已清）后光标自动消失；不用 detailSelectedType 判断是因为
         // deselect 包异步返回，同 tick 检查会把刚画上的光标立刻清掉
-        if(var.pinCreateX == '') {
+        if(var.pinCreateX == none) {
           var.mapRenderer.clearCursor()
         }
       }
     open: |-
       var.worldListOpen = false
-      var.actionToken = ''
       var.detailCanTrackAnchor = false
       var.detailCanTrackExternal = false
       var.detailCanTrackWaypoint = false
       var.detailSelectedType = 'none'
       var.packetId = 'AXS_MAP'
-      var.pinCreateX = ''
-      var.pinCreateZ = ''
       var.selectedWorldName = '未选择'
       var.trackingText = '当前未导航'
       var.worldRows = {}
       var.crossWorldPromptVisible = false
+      var.crossWorldPromptType = 'navigate'
       var.actionBusy = false
       // 打开菜单默认回到玩家当前位置：清掉上次残留的拖拽/缩放
       if(var.mapRenderer != none) {
@@ -364,6 +379,12 @@ ui:
         }
       }else{
         var.actionBusySeconds = 0
+      }
+      // 距离门槛实时刷新：选中未解锁+带 unlock.radius 门槛的锚点时
+      // 每秒重拉快照 → detailUnlockRangeText / detailUnlockInRange 实时更新
+      if(var.detailSelectedType == 'anchor' && var.detailUnlocked != true
+        && var.detailUnlockRadius > 0) {
+        Packet.send(var.packetId, 'refresh')
       }
 
 controls:
@@ -559,6 +580,14 @@ controls:
                   y: 200
                   texts: "'&7传送: &f' + var.detailTeleportCostText"
                   fontSize: 26
+              锚点解锁距离:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 250
+                  texts: "'&7' + var.detailUnlockRangeText"
+                  fontSize: 26
+                  visible: "var.detailUnlockRangeText != none && var.detailUnlockRangeText != ''"
               锚点解锁按钮:
                 type: Canvas
                 attribute:
@@ -567,10 +596,10 @@ controls:
                   y: 300
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none && var.detailUnlockInRange"
                 action:
                   clickLeft: |-
-                    if (var.detailCanUnlock) {
+                    if (var.detailCanUnlock && var.detailUnlockInRange) {
                       var.actionBusy = true
                       Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, var.actionToken)
                     }
@@ -580,8 +609,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanUnlock ? '82,196,26,255' : '60,60,66,255'"
-                      hover: "var.detailCanUnlock ? '102,216,46,255' : '60,60,66,255'"
+                      normal: "var.detailCanUnlock && var.detailUnlockInRange ? '82,196,26,255' : '60,60,66,255'"
+                      hover: "var.detailCanUnlock && var.detailUnlockInRange ? '102,216,46,255' : '60,60,66,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
@@ -603,12 +632,19 @@ controls:
                   y: 300
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
                     if (var.detailCanTeleport) {
-                      var.actionBusy = true
-                      Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
+                      // 跨世界传送同导航一样先弹确认（L16 统一确认）
+                      var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
+                      if (var.isCrossWorld) {
+                      var.crossWorldPromptType = 'teleport'
+                      var.crossWorldPromptVisible = true
+                      } else {
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
+                      }
                     }
                 children:
                   锚点传送按钮底:
@@ -646,6 +682,7 @@ controls:
                     } else {
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
+                      var.crossWorldPromptType = 'navigate'
                       var.crossWorldPromptVisible = true
                       } else {
                         if (var.detailCanTrackAnchor) {
@@ -765,7 +802,7 @@ controls:
                   y: 260
                   width: 90
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -808,6 +845,7 @@ controls:
                     } else {
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
+                      var.crossWorldPromptType = 'navigate'
                       var.crossWorldPromptVisible = true
                       } else {
                         if (var.detailCanTrackWaypoint) {
@@ -877,7 +915,7 @@ controls:
                   y: 260
                   width: 90
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
                     if (var.detailCanDeleteWaypoint) {
@@ -965,6 +1003,7 @@ controls:
                     } else {
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
+                      var.crossWorldPromptType = 'navigate'
                       var.crossWorldPromptVisible = true
                       } else {
                         if (var.detailCanTrackExternal) {
@@ -1084,7 +1123,7 @@ controls:
                   y: 260
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
                     var.actionBusy = true
@@ -1153,7 +1192,7 @@ controls:
                   y: 260
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != ''"
+                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
                     if (var.detailCanDeletePin) {
@@ -1190,7 +1229,7 @@ controls:
               y: "var.viewH - 60"
               width: 130
               height: 44
-              enable: "!var.actionBusy && var.actionToken != '' && var.canCreateWaypoint"
+              enable: "!var.actionBusy && var.actionToken != none && var.canCreateWaypoint"
               visible: "var.detailSelectedType != 'anchor' && var.detailSelectedType != 'external'"
             action:
               clickLeft: |-
@@ -1228,15 +1267,17 @@ controls:
               y: "var.viewH - 60"
               width: 130
               height: 44
-              enable: "!var.actionBusy && var.actionToken != ''"
-              visible: "var.pinCreateX != '' && var.pinCreateZ != ''"
+              enable: "!var.actionBusy && var.actionToken != none"
+              visible: "var.pinCreateX != none && var.pinCreateZ != none"
             action:
               clickLeft: |-
-                if (var.pinCreateX != '' && var.pinCreateZ != '') {
+                if (var.pinCreateX != none && var.pinCreateZ != none) {
                   var.actionBusy = true
-                  Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.actionToken)
-                  var.pinCreateX = ''
-                  var.pinCreateZ = ''
+                  # create_pin <x> <z> <worldId> <token>：pin 建在玩家当前浏览的世界
+                  # （允许任意点），与服务端 tokenIndex=4 对齐
+                  Packet.send(var.packetId, 'create_pin', var.pinCreateX, var.pinCreateZ, var.selectedWorldId, var.actionToken)
+                  var.pinCreateX = none
+                  var.pinCreateZ = none
                 }
             children:
               新建标记点按钮底:
@@ -1409,6 +1450,43 @@ controls:
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['displayName'] : none"
                               fontSize: 26
                               through: true
+                          # 跨世界传送按钮：只对"非玩家当前世界"的条目显示，
+                          # 点击直接传送到该世界出生点（tokenized 写操作）
+                          地图项目传送:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_right
+                              x: -10
+                              width: 40
+                              height: 40
+                              visible: "self.parent.entry != none && self.parent.entry['id'] != var.playerWorldId"
+                            action:
+                              clickLeft: |-
+                                // 跨世界传送统一走确认框（L16）：类型 teleport_world，
+                                // 确认后由对话框按钮发 teleport_to_world
+                                if (self.parent.entry != none && var.actionToken != none) {
+                                  var.crossWorldPromptType = 'teleport_world'
+                                  var.crossWorldTargetWorld = self.parent.entry['id']
+                                  var.crossWorldTargetName = self.parent.entry['displayName']
+                                  var.crossWorldPromptVisible = true
+                                }
+                            children:
+                              地图项目传送底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "var.actionToken != none ? '74,144,226,255' : '60,60,66,255'"
+                                  hover: "var.actionToken != none ? '94,164,246,255' : '60,60,66,255'"
+                                  shape: ~round_rect
+                                  radius: 10
+                              地图项目传送图标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: ~&f⚑
+                                  fontSize: 32
+                                  through: true
           复位按钮:
             type: Canvas
             attribute:
@@ -1832,7 +1910,7 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 24
-                      texts: ~&f跨世界导航
+                      texts: "var.crossWorldPromptType == 'navigate' ? '&f跨世界导航' : '&f跨世界传送'"
                       fontSize: 32
                       through: true
                   对话框内容:
@@ -1840,8 +1918,17 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 72
-                      texts: "'&7目标位于 &f' + var.selectedWorldName + '&7，是否传送到该世界？'"
+                      texts: "var.crossWorldPromptType == 'teleport_world' ? ('&7是否传送到世界 &f' + var.crossWorldTargetName + '&7？') : ('&7目标位于 &f' + var.selectedWorldName + '&7，是否传送到该世界？')"
                       fontSize: 26
+                      through: true
+                  对话框费用:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 112
+                      texts: "'&e传送费用: &f' + var.detailCrossWorldCostText"
+                      fontSize: 26
+                      visible: "var.crossWorldPromptType != 'teleport_world' && var.detailCrossWorldCostText != none && var.detailCrossWorldCostText != ''"
                       through: true
                   确认按钮:
                     type: Canvas
@@ -1851,10 +1938,20 @@ controls:
                       y: -24
                       width: 180
                       height: 52
+                      enable: "var.actionToken != none"
                     action:
                       clickLeft: |-
                         var.crossWorldPromptVisible = false
-                        Packet.send(var.packetId, 'cross_world_navigate', var.detailSelectedType + ':' + var.detailSelectedId)
+                        // navigate=传送+追踪；teleport=锚点传送；teleport_world=世界出生点传送
+                        if (var.crossWorldPromptType == 'teleport_world') {
+                          var.actionBusy = true
+                          Packet.send(var.packetId, 'teleport_to_world', var.crossWorldTargetWorld, var.actionToken)
+                        } elif (var.crossWorldPromptType == 'teleport') {
+                          var.actionBusy = true
+                          Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, var.actionToken)
+                        } else {
+                          Packet.send(var.packetId, 'cross_world_navigate', var.detailSelectedType + ':' + var.detailSelectedId, var.actionToken)
+                        }
                     children:
                       确认底:
                         type: Texture
@@ -1869,7 +1966,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f传送并导航
+                          texts: "var.crossWorldPromptType == 'navigate' ? '&f传送并导航' : '&f传送'"
                           fontSize: 28
                           through: true
                   取消按钮:

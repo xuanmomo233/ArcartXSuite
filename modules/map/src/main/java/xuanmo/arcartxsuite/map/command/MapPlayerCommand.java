@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "hud", "cleartrack", "claim");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "hud", "cleartrack", "claim", "unlock");
 
     private final Supplier<MapService> serviceProvider;
     private final Supplier<MapModuleConfiguration> configurationProvider;
@@ -97,6 +97,16 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
             return true;
         }
 
+        if ("unlock".equalsIgnoreCase(args[0])) {
+            // 手动解锁锚点：走完整流程（permission + unlock.radius 距离门 + 费用）
+            if (args.length >= 2) {
+                svc.unlockAnchor(player, args[1]);
+            } else {
+                player.sendMessage(fullMsg("player.unlock-usage", label));
+            }
+            return true;
+        }
+
         if ("claim".equalsIgnoreCase(args[0])) {
             // 领取分享点位：聊天卡片点击的兜底命令（卡片失效后可手动输入分享码）
             if (args.length >= 2) {
@@ -139,6 +149,11 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
                 .filter(value -> value.startsWith(args[1].toLowerCase()))
                 .toList();
         }
+        if (args.length == 2 && "unlock".equalsIgnoreCase(args[0]) && cfg != null) {
+            return new ArrayList<>(cfg.anchors().keySet()).stream()
+                .filter(value -> value.startsWith(args[1].toLowerCase()))
+                .toList();
+        }
         return List.of();
     }
 
@@ -147,6 +162,7 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         player.sendMessage(fullMsg("player.help.open"));
         player.sendMessage(fullMsg("player.help.hud"));
         player.sendMessage(fullMsg("player.help.cleartrack"));
+        player.sendMessage(fullMsg("player.help.unlock"));
         player.sendMessage(fullMsg("player.help.claim"));
     }
 

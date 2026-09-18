@@ -34,11 +34,13 @@ ui:
       var.packetId = packet['packetId']
       var.visible = packet['visible']
       var.worldId = packet['worldId']
+      var.worldName = packet['worldName']
       var.dimension = packet['dimension']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      var.markerRows = packet['markerRows']
       // 会话号：服务端每次开启小地图自增，mod 只认最新会话副本的锚点
       if(packet['hudSession'] != none) {
         var.hudSession = packet['hudSession']
@@ -57,12 +59,26 @@ ui:
         if(packet['serverId'] != none && packet['serverId'] != '') {
           var.mapRenderer.setServerId('' + packet['serverId'])
         }
-        // 告诉 mod 渲染哪个世界的地形
+        // 告诉 mod 渲染哪个世界的地形（HUD 固定 = 玩家当前世界，服务端已按当前世界构建）
         var.mapRenderer.setWorldId('' + var.worldId)
         // 注册 worldId → MC 维度 key 映射（如 bskyblock_world → minecraft:overworld）
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
         // 下发已点亮区域多边形（战争迷雾：未探索区遮罩）；litEnabled=false 时传 none 全亮
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
+        // 当前世界预加载信息：HUD 也要能请求地形（玩家可能从未打开过菜单）
+        if(packet['preloadVersion'] != none && packet['preloadChunks'] != none) {
+          var.mapRenderer.setWorldPreload('' + var.worldId, packet['preloadVersion'], '' + packet['preloadChunks'])
+        }
+        // HUD 标记（玩家当前世界的锚点/路径点/外部目标/pin，与菜单选中世界无关）
+        var.mapRenderer.clearHudMarkers()
+        if(var.markerRows != none) {
+          for(key in var.markerRows.keys()) {
+            row = var.markerRows[key]
+            if(row != none) {
+              var.mapRenderer.addHudMarker(row['id'], row['type'], row['label'], row['x'], row['z'], row['selected'], row['tracked'], row['unlocked'])
+            }
+          }
+        }
       }
     # packetHandler: update
     # 包字段: 同 init（实时刷新小地图数据）
@@ -70,11 +86,13 @@ ui:
       var.packetId = packet['packetId']
       var.visible = packet['visible']
       var.worldId = packet['worldId']
+      var.worldName = packet['worldName']
       var.dimension = packet['dimension']
       var.litEnabled = packet['litEnabled']
       var.litRegions = packet['litRegions']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+      var.markerRows = packet['markerRows']
       if(packet['hudSession'] != none) {
         var.hudSession = packet['hudSession']
       }
@@ -93,6 +111,18 @@ ui:
         var.mapRenderer.setWorldId('' + var.worldId)
         var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
+        if(packet['preloadVersion'] != none && packet['preloadChunks'] != none) {
+          var.mapRenderer.setWorldPreload('' + var.worldId, packet['preloadVersion'], '' + packet['preloadChunks'])
+        }
+        var.mapRenderer.clearHudMarkers()
+        if(var.markerRows != none) {
+          for(key in var.markerRows.keys()) {
+            row = var.markerRows[key]
+            if(row != none) {
+              var.mapRenderer.addHudMarker(row['id'], row['type'], row['label'], row['x'], row['z'], row['selected'], row['tracked'], row['unlocked'])
+            }
+          }
+        }
       }
   action:
     load: |-
@@ -103,8 +133,7 @@ ui:
       var.hudShape = 'CIRCLE'
       var.hudSession = -1
       // api4 = 客户端 mod 是否带会话化 API（4参 setHudAnchor / deactivateHud /
-      // closeHud(session)）；none = 未探测，首次拿到 mapRenderer 后探测固定
-      var.api4 = none
+      // closeHud(session)）；未定义即 none = 未探测，首次拿到 mapRenderer 后探测固定
       // 上报就绪：服务端换发新会话号并重推 visible——UI 热重载/重进后自愈
       try {
         Packet.send(var.packetId, 'hud_ready')
@@ -241,8 +270,9 @@ controls:
             attribute:
               x: self.parent.width / 2
               y: self.parent.height + 10
-              # 此处为 Multiverse-Core 提供的世界名称PAPI
-              texts: Placeholder.parse("%multiverse-core_alias%")
+              # 世界名由服务端按玩家当前世界下发（配置 display-name 或 MV 去色 alias），
+              # 不再走 %multiverse-core_alias% PAPI——没装 MV 也能显示配置名
+              texts: "var.worldName == none ? '' : '' + var.worldName"
               fontSize: 36
               visible: var.visible && var.mapRenderer != none
               through: true

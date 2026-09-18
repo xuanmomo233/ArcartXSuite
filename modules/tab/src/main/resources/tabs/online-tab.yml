@@ -72,7 +72,7 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 #   bottom:
 #     - { permission: "axs.tab.pin-bottom" }
 
-# 视图（view）：玩家通过 /axstab view <name> 切换。只有 definition.view 与玩家当前 view 相同时，
+# 视图（view）：玩家通过 /tab view <name> 切换。只有 definition.view 与玩家当前 view 相同时，
 # 此 tab 才会推送数据；切换瞬间旧 view 的 tab 会被一次性清空。默认 "default"。
 # view: "default"
 
@@ -87,7 +87,7 @@ omit-blank-values: false  # pack 渲染结果为空字符串时是否跳过该�
 
 # 分页（pagination）：每页 page-size 行，由客户端发包翻页。
 # 客户端：Packet.send("TAB_PAGE", "next") / Packet.send("TAB_PAGE", "prev") / Packet.send("TAB_PAGE", "set", "2")
-# 服务端命令：/axstab page <definitionId> <next|prev|N>
+# 服务端命令：/tab page <definitionId> <next|prev|N>
 # pagination:
 #   enabled: false
 #   page-size: 80

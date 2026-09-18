@@ -65,7 +65,7 @@ settings:
   # 调试工具：
   # - dry-run：渲染流程跑全（filters / sortKeys / pinned / grouping / pagination / PAPI 解析），
   #   但**不真正发包给客户端**，仅在 settings.debug=true 时记录每次跳过日志。用于线上排查或配置预演。
-  # 命令补充：/axstab snapshot save|load|unload|list|delete <name>
+  # 命令补充：/axs tab snapshot save|load|unload|list|delete <name>
   #   存档落盘到 plugins/ArcartXSuite/data/tab/snapshots/<name>.json，load 后注入为
   #   snapshot:<name>:<原 nodeId> 虚拟节点，让本服 viewer 立即看到历史/复现快照。
   debug-tools:

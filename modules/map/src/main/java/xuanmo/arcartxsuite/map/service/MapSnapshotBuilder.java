@@ -40,7 +40,9 @@ public final class MapSnapshotBuilder {
 
         List<WorldRow> worldRows = new ArrayList<>();
         for (WorldView world : input.worlds()) {
-            worldRows.add(new WorldRow(world.id(), world.displayName(), world.dimension(), world.id().equalsIgnoreCase(selectedWorldId)));
+            worldRows.add(new WorldRow(world.id(), world.displayName(), world.dimension(),
+                world.id().equalsIgnoreCase(selectedWorldId),
+                world.preloadVersion(), serializeChunks(world.preloadChunks())));
         }
 
         List<AnchorView> visibleAnchors = input.anchors().stream()
@@ -126,10 +128,14 @@ public final class MapSnapshotBuilder {
             );
         }
 
-        // 点亮区域并集：已解锁锚点的 lightRegions（多边形）+ lightRadius（圆形转多边形）。
-        // litEnabled=false 表示该世界没有任何点亮配置 → 客户端全亮不遮罩。
+        // 点亮区域并集：已解锁锚点的 lightRegions（多边形）+ lightRadius（圆形转多边形）
+        // ∪ 世界预加载区域（"推即亮"：推送地形天然应可见）。
+        // litEnabled 仍只由锚点点亮配置驱动：无锚点灯的世界全亮不遮罩，
+        // 预加载数据本身已可见；仅当世界存在锚点灯时才把预加载区并入遮罩并集。
+        // litEnabled 只看世界是否配置点亮（不看玩家是否已解锁）：
+        // 配置了灯但一个都没解锁 = 全黑迷雾，这才是"点亮"玩法的正确初态
         boolean litEnabled = visibleAnchors.stream().anyMatch(a ->
-            a.unlocked() && (!a.lightRegions().isEmpty() || a.lightRadius() > 0));
+            !a.lightRegions().isEmpty() || a.lightRadius() > 0);
         List<List<List<Integer>>> litRegions = new ArrayList<>();
         if (litEnabled) {
             for (AnchorView a : visibleAnchors) {
@@ -141,11 +147,45 @@ public final class MapSnapshotBuilder {
                     litRegions.add(toIntLists(circleToPolygon(a.x(), a.z(), a.lightRadius())));
                 }
             }
+            // 推即亮：世界预加载区并入点亮并集（防止已推地形被迷雾遮住）
+            if (selectedWorld != null) {
+                for (List<int[]> r : selectedWorld.preloadRegions()) {
+                    litRegions.add(toIntLists(r));
+                }
+            }
         }
 
         boolean canCreateWaypoint = input.waypointsEnabled() && visibleWaypoints.size() < input.waypointLimit();
         DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, visiblePins, canCreateWaypoint, selectedWorldId);
-        HudSnapshot hud = buildHudSnapshot(input, selectedWorld, selectedWorldId, litEnabled, litRegions);
+
+        // HUD 数据完全按"玩家当前世界"构建，与菜单选中世界解耦：
+        // 菜单里浏览其他世界时 HUD 仍应显示玩家所在世界的地形/标记/迷雾
+        WorldView hudWorld = findWorld(input.worlds(), input.playerWorldId());
+        String hudWorldId = hudWorld == null ? "" : hudWorld.id();
+        List<AnchorView> hudAnchors = input.anchors().stream()
+            .filter(anchor -> anchor.worldId().equalsIgnoreCase(hudWorldId))
+            .sorted(Comparator.comparingInt(AnchorView::sortOrder).thenComparing(AnchorView::displayName, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+        boolean hudLitEnabled = hudAnchors.stream().anyMatch(a ->
+            !a.lightRegions().isEmpty() || a.lightRadius() > 0);
+        List<List<List<Integer>>> hudLitRegions = new ArrayList<>();
+        if (hudLitEnabled) {
+            for (AnchorView a : hudAnchors) {
+                if (!a.unlocked()) continue;
+                for (List<int[]> r : a.lightRegions()) {
+                    hudLitRegions.add(toIntLists(r));
+                }
+                if (a.lightRadius() > 0) {
+                    hudLitRegions.add(toIntLists(circleToPolygon(a.x(), a.z(), a.lightRadius())));
+                }
+            }
+            if (hudWorld != null) {
+                for (List<int[]> r : hudWorld.preloadRegions()) {
+                    hudLitRegions.add(toIntLists(r));
+                }
+            }
+        }
+        HudSnapshot hud = buildHudSnapshot(input, hudWorld, hudWorldId, hudAnchors, hudLitEnabled, hudLitRegions);
 
         return new BuildResult(
             new MenuSnapshot(
@@ -179,6 +219,34 @@ public final class MapSnapshotBuilder {
         return out;
     }
 
+    /** MapChunk 坐标列表 → "cx,cz;cx,cz" 字符串（yml→mod 桥接只走字符串最稳）。 */
+    private static String serializeChunks(List<int[]> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(chunks.size() * 12);
+        for (int[] c : chunks) {
+            if (sb.length() > 0) {
+                sb.append(';');
+            }
+            sb.append(c[0]).append(',').append(c[1]);
+        }
+        return sb.toString();
+    }
+
+    /** 玩家到锚点的三维距离；跨世界/无坐标返回 {@code Double.NaN}。 */
+    private static double distanceToAnchor(BuildInput input, AnchorView anchor) {
+        PlayerPosition pos = input.playerPosition();
+        if (pos == null || input.playerWorldId().isBlank()
+            || !input.playerWorldId().equalsIgnoreCase(anchor.worldId())) {
+            return Double.NaN;
+        }
+        double dx = pos.x() - anchor.x();
+        double dy = pos.y() - anchor.y();
+        double dz = pos.z() - anchor.z();
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     /** 以 (cx,cz) 为中心、radius 为半径的圆，近似为 16 边形顶点列表。 */
     private static List<int[]> circleToPolygon(double cx, double cz, double radius) {
         List<int[]> points = new ArrayList<>(16);
@@ -203,6 +271,15 @@ public final class MapSnapshotBuilder {
     ) {
         for (AnchorView anchor : visibleAnchors) {
             if (anchor.id().equalsIgnoreCase(input.viewState().selectedAnchorId())) {
+                double dist = distanceToAnchor(input, anchor);
+                double radius = anchor.unlockRadius();
+                // 半径门槛：radius>0 且未解锁时详情卡显示"距离 112m / 需 ≤8m"
+                // 并门控解锁按钮；已解锁/无门槛/其他目标类型不显示该行
+                boolean inRange = radius <= 0 || (!Double.isNaN(dist) && dist <= radius);
+                String rangeText = (!anchor.unlocked() && radius > 0)
+                    ? (Double.isNaN(dist) ? "距离 --" : "距离 " + Math.round(dist) + "m")
+                        + " / 需 ≤" + Math.round(radius) + "m"
+                    : "";
                 return new DetailSnapshot(
                     "anchor",
                     anchor.id(),
@@ -222,7 +299,10 @@ public final class MapSnapshotBuilder {
                     canCreateWaypoint,
                     !input.navigationStates().isEmpty(),
                     trackingText(input.navigationStates()),
-                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id()))
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id())),
+                    radius, dist, inRange, rangeText,
+                    anchor.worldId().equalsIgnoreCase(input.playerWorldId())
+                        ? "" : anchor.teleportCostText()
                 );
             }
         }
@@ -247,7 +327,10 @@ public final class MapSnapshotBuilder {
                     canCreateWaypoint,
                     !input.navigationStates().isEmpty(),
                     trackingText(input.navigationStates()),
-                    input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId()))
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId())),
+                    0, -1, true, "",
+                    selectedWorldId.equalsIgnoreCase(input.playerWorldId())
+                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, waypoint.x(), waypoint.z())
                 );
             }
         }
@@ -272,7 +355,10 @@ public final class MapSnapshotBuilder {
                     canCreateWaypoint,
                     !input.navigationStates().isEmpty(),
                     trackingText(input.navigationStates()),
-                    target.navigated()
+                    target.navigated(),
+                    0, -1, true, "",
+                    selectedWorldId.equalsIgnoreCase(input.playerWorldId())
+                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, target.x(), target.z())
                 );
             }
         }
@@ -297,7 +383,9 @@ public final class MapSnapshotBuilder {
                     canCreateWaypoint,
                     !input.navigationStates().isEmpty(),
                     trackingText(input.navigationStates()),
-                    false
+                    false,
+                    0, -1, true, "",
+                    ""
                 );
             }
         }
@@ -320,25 +408,115 @@ public final class MapSnapshotBuilder {
             canCreateWaypoint,
             !input.navigationStates().isEmpty(),
             trackingText(input.navigationStates()),
-            false
+            false,
+            0, -1, true, "",
+            ""
         );
     }
 
-    private HudSnapshot buildHudSnapshot(BuildInput input, WorldView selectedWorld, String selectedWorldId,
+    /**
+     * 跨世界导航的锚点传送费用镜像：与 {@code MapService#teleportToNearestUnlockedAnchor}
+     * 相同的"目标世界最近已解锁锚点"选法，返回该锚点的传送费用文本（无可用锚点返回空串）。
+     */
+    private static String nearestAnchorTeleportCost(BuildInput input, String worldId, double x, double z) {
+        AnchorView nearest = null;
+        double best = Double.MAX_VALUE;
+        for (AnchorView anchor : input.anchors()) {
+            if (!anchor.worldId().equalsIgnoreCase(worldId) || !anchor.unlocked()) {
+                continue;
+            }
+            double distance = (anchor.x() - x) * (anchor.x() - x)
+                + (anchor.z() - z) * (anchor.z() - z);
+            if (distance < best) {
+                best = distance;
+                nearest = anchor;
+            }
+        }
+        return nearest == null ? "" : nearest.teleportCostText();
+    }
+
+    private HudSnapshot buildHudSnapshot(BuildInput input, WorldView hudWorld, String hudWorldId,
+                                         List<AnchorView> hudAnchors,
                                          boolean litEnabled, List<List<List<Integer>>> litRegions) {
-        if (!input.viewState().hudVisible() || selectedWorld == null || input.playerPosition() == null) {
-            return new HudSnapshot(input.packetId(), false, selectedWorldId, "", 0F, "", false, List.of());
+        if (!input.viewState().hudVisible() || hudWorld == null || input.playerPosition() == null) {
+            return new HudSnapshot(input.packetId(), false, hudWorldId, "", "", 0F, "",
+                false, List.of(), 0, "", List.of());
         }
         return new HudSnapshot(
             input.packetId(),
             true,
-            selectedWorldId,
-            selectedWorld.dimension(),
+            hudWorldId,
+            hudWorld.displayName(),
+            hudWorld.dimension(),
             input.playerPosition().yaw(),
             trackingText(input.navigationStates()),
             litEnabled,
-            litRegions
+            litRegions,
+            hudWorld.preloadVersion(),
+            serializeChunks(hudWorld.preloadChunks()),
+            hudMarkerRows(input, hudWorldId, hudAnchors)
         );
+    }
+
+    /** HUD 标记行：玩家当前世界的锚点/路径点/外部目标/pin 合并列表（与菜单选中世界无关）。 */
+    private List<HudMarkerRow> hudMarkerRows(BuildInput input, String hudWorldId, List<AnchorView> hudAnchors) {
+        List<HudMarkerRow> rows = new ArrayList<>();
+        for (AnchorView anchor : hudAnchors) {
+            rows.add(new HudMarkerRow(
+                anchor.id(),
+                "anchor",
+                anchor.displayName(),
+                anchor.x(),
+                anchor.z(),
+                anchor.id().equalsIgnoreCase(input.viewState().selectedAnchorId()),
+                input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id())),
+                anchor.unlocked()
+            ));
+        }
+        for (MapWaypoint waypoint : input.waypoints()) {
+            if (!waypoint.world().equalsIgnoreCase(hudWorldId)) {
+                continue;
+            }
+            rows.add(new HudMarkerRow(
+                waypoint.waypointId(),
+                "waypoint",
+                waypoint.name(),
+                waypoint.x(),
+                waypoint.z(),
+                waypoint.waypointId().equalsIgnoreCase(input.viewState().selectedWaypointId()),
+                input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId())),
+                true
+            ));
+        }
+        for (MapExternalTarget target : input.externalTargets()) {
+            if (!target.worldId().equalsIgnoreCase(hudWorldId)) {
+                continue;
+            }
+            rows.add(new HudMarkerRow(
+                target.targetId(),
+                "external",
+                target.title(),
+                target.x(),
+                target.z(),
+                target.targetId().equalsIgnoreCase(input.viewState().selectedExternalTargetId()),
+                target.navigated(),
+                true
+            ));
+        }
+        for (MapPin pin : input.pins()) {
+            if (!pin.world().equalsIgnoreCase(hudWorldId)) continue;
+            rows.add(new HudMarkerRow(
+                pin.pinId(),
+                "pin",
+                pin.name(),
+                pin.x(),
+                pin.z(),
+                pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId()),
+                false,
+                true
+            ));
+        }
+        return List.copyOf(rows);
     }
 
     private static String chooseWorldId(BuildInput input) {
@@ -438,10 +616,24 @@ public final class MapSnapshotBuilder {
      * @param displayName 显示名称
      * @param dimension   MC 维度 key（minecraft:overworld 等），供客户端 mod 匹配本地维度
      */
+    /**
+     * 世界视图数据，供快照构建器使用的世界信息投影。
+     * 地图完全由客户端 mod 渲染，无需纹理/图片参数。
+     *
+     * @param id             世界 ID
+     * @param displayName    显示名称
+     * @param dimension      MC 维度 key（minecraft:overworld 等），供客户端 mod 匹配本地维度
+     * @param preloadVersion 预加载版本号（0 = 无预加载配置）
+     * @param preloadRegions 预加载多边形并集（radius 已转多边形），点亮并集合并用
+     * @param preloadChunks  预加载覆盖的 MapChunk 坐标（64² 网格），逐项 {cx, cz}
+     */
     public record WorldView(
         String id,
         String displayName,
-        String dimension
+        String dimension,
+        int preloadVersion,
+        List<List<int[]>> preloadRegions,
+        List<int[]> preloadChunks
     ) {
     }
 
@@ -463,6 +655,7 @@ public final class MapSnapshotBuilder {
      * @param sortOrder        排序权重
      * @param lightRegions     解锁后点亮的多边形区域列表
      * @param lightRadius      解锁后点亮的圆形半径（≤0 = 不用圆形）
+     * @param unlockRadius     手动解锁三维距离门槛（≤0 = 不限距离）
      */
     public record AnchorView(
         String id,
@@ -479,7 +672,8 @@ public final class MapSnapshotBuilder {
         boolean canTeleport,
         int sortOrder,
         List<List<int[]>> lightRegions,
-        double lightRadius
+        double lightRadius,
+        double unlockRadius
     ) {
     }
 
@@ -542,25 +736,60 @@ public final class MapSnapshotBuilder {
     /**
      * HUD 快照，发送给客户端渲染小地图 HUD 的数据。
      * 地图渲染完全由 mod 控制，服务端只下发世界/维度/点亮数据。
+     * <p>
+     * worldId/worldName/dimension/litRegions/markerRows 全部按"玩家当前世界"
+     * 构建（与菜单选中世界无关）——菜单里浏览其他世界不影响 HUD。
      *
-     * @param packetId     数据包标识
-     * @param visible      HUD 是否可见
-     * @param worldId      当前世界 ID
-     * @param dimension    MC 维度 key，供 mod 匹配本地维度
-     * @param playerYaw    玩家朝向角
-     * @param trackingText 当前追踪状态文本
-     * @param litEnabled   是否启用点亮机制
-     * @param litRegions   已点亮多边形区域并集
+     * @param packetId       数据包标识
+     * @param visible        HUD 是否可见
+     * @param worldId        玩家当前世界 ID（未配置世界为空串）
+     * @param worldName      玩家当前世界显示名
+     * @param dimension      MC 维度 key，供 mod 匹配本地维度
+     * @param playerYaw      玩家朝向角
+     * @param trackingText   当前追踪状态文本
+     * @param litEnabled     当前世界是否启用点亮机制
+     * @param litRegions     当前世界已点亮多边形区域并集
+     * @param preloadVersion 当前世界预加载版本（供 mod 判重）
+     * @param preloadChunks  当前世界预加载块坐标（"cx,cz;..."），供 mod 请求地形
+     * @param markerRows     当前世界标记行（锚点/路径点/外部目标/pin）
      */
     public record HudSnapshot(
         String packetId,
         boolean visible,
         String worldId,
+        String worldName,
         String dimension,
         float playerYaw,
         String trackingText,
         boolean litEnabled,
-        List<List<List<Integer>>> litRegions
+        List<List<List<Integer>>> litRegions,
+        int preloadVersion,
+        String preloadChunks,
+        List<HudMarkerRow> markerRows
+    ) {
+    }
+
+    /**
+     * HUD 标记行数据，对应小地图上的一个标记点（玩家当前世界）。
+     *
+     * @param id       标记 ID
+     * @param type     类型（anchor / waypoint / external / pin）
+     * @param label    显示名
+     * @param x        X 坐标
+     * @param z        Z 坐标
+     * @param selected 是否菜单当前选中
+     * @param tracked  是否正在追踪/导航
+     * @param unlocked 是否已解锁（锚点；其余类型恒 true）
+     */
+    public record HudMarkerRow(
+        String id,
+        String type,
+        String label,
+        double x,
+        double z,
+        boolean selected,
+        boolean tracked,
+        boolean unlocked
     ) {
     }
 
@@ -576,7 +805,9 @@ public final class MapSnapshotBuilder {
         String id,
         String displayName,
         String dimension,
-        boolean selected
+        boolean selected,
+        int preloadVersion,
+        String preloadChunks
     ) {
     }
 
@@ -703,6 +934,12 @@ public final class MapSnapshotBuilder {
      * @param trackingText       当前追踪状态文本
      * @param navigated          当前选中目标是否正被导航（anchor/waypoint 看地图自身导航态；
      *                           external 看来源回推的 navigated 标记；驱动"导航/取消"按钮切换）
+     * @param unlockRadius       手动解锁三维距离门槛（≤0 = 不限距离）
+     * @param distanceToAnchor   玩家到锚点的三维距离（NaN = 跨世界/无坐标，不可用）
+     * @param unlockInRange      当前距离是否满足解锁门槛（radius≤0 恒 true）
+     * @param unlockRangeText    距离提示文本（"距离 112m / 需 ≤8m"；无门槛/已解锁/非锚点为空串）
+     * @param crossWorldCostText 跨世界导航费用提示（目标在玩家当前世界时为空串；
+     *                           锚点=自身传送费，路径点/外部目标=目标世界最近已解锁锚点的传送费）
      */
     public record DetailSnapshot(
         String selectedType,
@@ -723,7 +960,12 @@ public final class MapSnapshotBuilder {
         boolean canCreateWaypoint,
         boolean clearTrackVisible,
         String trackingText,
-        boolean navigated
+        boolean navigated,
+        double unlockRadius,
+        double distanceToAnchor,
+        boolean unlockInRange,
+        String unlockRangeText,
+        String crossWorldCostText
     ) {
     }
 

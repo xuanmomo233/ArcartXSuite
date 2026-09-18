@@ -1,13 +1,11 @@
 id: map
 name: Map
-version: 1.4.4
+version: 1.4.5
 main: xuanmo.arcartxsuite.map.MapModule
 api-version: 1.0
 
 depends: []
-softdepends:
-  - Multiverse-Core
+softdepends: []
 external-depends:
-
 external-softdepends:
-
+  - Multiverse-Core

@@ -26,6 +26,7 @@ commands:
   ess:
     description: Essentials 玩家命令（/axs essentials 缩写）
     usage: /ess <action> [args...]
+    aliases: [axsess]
     permission: axs.essentials.menu
   # ─── Essentials 简写别名（预置，可在 ArcartXEssentials.yml command-aliases 中增删）───
   fly:
@@ -215,14 +216,17 @@ commands:
   rg:
     description: Regions 玩家命令（/axs regions 缩写）
     usage: /rg <action> [args...]
+    aliases: [axsrg]
     permission: axs.regions.select
   afk:
     description: 玩家挂机命令
     usage: /<command> [toggle|status|start <区域>|end|list|top]
+    aliases: [axsafk]
     permission: arcartxsuite.afkreward.use
   afkreward:
     description: 玩家挂机奖励命令
     usage: /<command> [toggle|status|start <区域>|end|list|top]
+    aliases: [axsafkreward]
     permission: arcartxsuite.afkreward.use
   arcartxsuite:
     description: ArcartXSuite 管理命令
@@ -232,81 +236,92 @@ commands:
   title:
     description: 玩家称号命令
     usage: /<command> open|equip <titleId>|unequip <groupId|all>|hide <titleId>|unhide <titleId>
+    aliases: [axstitle]
     permission: arcartxsuite.title.use
   warehouse:
     description: 玩家仓库命令
     usage: /<command> [open]
-    aliases: [wh]
+    aliases: [wh, axswarehouse]
     permission: arcartxsuite.warehouse.use
   mail:
     description: 玩家邮箱命令
     usage: /<command> open|compose|claimall|deleteall|cdk <code>
-    aliases: [axmail, axsmail]
+    aliases: [axsmail]
     permission: arcartxsuite.mail.use
   chat:
     description: 玩家聊天命令
     usage: /<command> channel|toggle|ignore|unignore|socialspy
+    aliases: [axschat]
     permission: arcartxsuite.chat.use
   msg:
     description: 玩家私聊命令
     usage: /<command> <player> <message>
+    aliases: [axsmsg]
     permission: arcartxsuite.chat.msg
   reply:
     description: 玩家回复私聊命令
     usage: /<command> <message>
-    aliases: [r]
+    aliases: [r, axsreply]
     permission: arcartxsuite.chat.msg
   onlinerewards:
     description: 玩家在线奖励与签到命令
     usage: /<command> open|status|signin|top <daily|weekly|monthly|total> [page]
+    aliases: [axsonlinerewards]
     permission: arcartxsuite.onlinerewards.use
   signin:
     description: 签到命令（onlinerewards 别名）
     usage: /<command> open|status|signin|top <daily|weekly|monthly|total> [page]
+    aliases: [axssignin]
     permission: arcartxsuite.onlinerewards.use
   questgps:
     description: 玩家任务导航命令
     usage: /<command> open|cleartrack|hud [on|off|toggle]
+    aliases: [axsquestgps]
     permission: arcartxsuite.questgps.use
-  axstab:
-    description: Tab 列表玩家命令
-    usage: /<command> view [name]|page <id> <next|prev|N>|refresh|debug <player> [id]|snapshot <save|load|unload|list|delete> [name]
+  tab:
+    description: Tab 列表玩家命令（管理命令见 /axs tab）
+    usage: /<command> view [name]|page <id> <next|prev|N>|refresh
+    aliases: [axstab]
     permission: arcartxsuite.tab.use
   map:
     description: 玩家地图命令
     usage: /<command> open [world]|hud [on|off|toggle]|cleartrack
-    aliases: [axmap]
+    aliases: [axsmap]
     permission: arcartxsuite.map.use
   market:
     description: 全球市场命令（拍卖行/系统商店/回收）
     usage: /<command> [shop|auction|sell|recycle|history|my|search|cancel]
-    aliases: [mk, ah]
+    aliases: [mk, ah, axsmarket]
     permission: arcartxsuite.market.use
   pickup:
     description: 玩家拾取功能开关
     usage: /<command> [on|off|status]
+    aliases: [axspickup]
     permission: arcartxsuite.pickup.use
   qqbot:
     description: QQ机器人绑定命令
     usage: /<command> bind <验证码>|unbind|info
+    aliases: [axsqqbot]
     permission: arcartxsuite.qqbot.use
   menu:
     description: 玩家菜单命令
     usage: /<command> open <菜单ID>|list
-    aliases: [axmenu]
+    aliases: [axsmenu]
     permission: arcartxsuite.menu.use
   fishing:
     description: 玩家钓鱼命令
     usage: /<command> [sell|sell all]
+    aliases: [axsfishing]
     permission: arcartxsuite.fishing.use
   lottery:
     description: 玩家抽奖命令
     usage: /<command> <open|info|history> <奖池ID> | claim | help
+    aliases: [axslottery]
     permission: arcartxsuite.lottery.use
   bp:
     description: 玩家战令命令
     usage: /<command> [open|tasks|help]
-    aliases: [battlepass]
+    aliases: [battlepass, axsbp]
     permission: arcartxsuite.battlepass.use
 permissions:
   arcartxsuite.admin:
@@ -345,7 +360,7 @@ permissions:
     default: true
   arcartxsuite.tab.use:
     default: true
-  axstab.debug:
+  axs.tab.debug:
     default: op
   arcartxsuite.map.admin:
     default: op

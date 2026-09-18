@@ -134,6 +134,10 @@ public record MapModuleConfiguration(
             ConfigurationSection worldsSection = configuration.getConfigurationSection("worlds");
             if (worldsSection != null) {
                 loadWorldsInline(worldsSection, worlds, anchors, logger);
+                if (!worlds.isEmpty()) {
+                    logger.warning("检测到 ArcartXMap.yml 内联 worlds 节（已弃用）："
+                        + "该格式仅在没有 worlds/ 目录文件时才生效，请迁移到 worlds/<world>.yml 后删除此节。");
+                }
             }
         }
 
@@ -199,9 +203,22 @@ public record MapModuleConfiguration(
             String worldId = normalizeId(file.getName().substring(0, file.getName().length() - 4));
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
             if (!yaml.getBoolean("enabled", true)) continue;
+            double preloadRadius = positiveDouble(
+                yaml.get("preload-radius"), 0D);
+            List<PolygonRegion> preloadRegions = loadPolygonList(
+                yaml.getMapList("preload-regions"), logger, "worlds." + worldId + ".preload-regions");
+            // 预加载版本 = 配置内容 + 文件 mtime 哈希：改配置/文件自动失效客户端缓存。
+            // 掩码到正数：客户端以 version<=0 表示"无预加载"，哈希负数会静默失效。
+            int preloadVersion = (preloadRadius > 0 || !preloadRegions.isEmpty())
+                ? Math.max(1, java.util.Objects.hash(worldId, preloadRadius,
+                    preloadRegions, file.lastModified()) & 0x7FFFFFFF)
+                : 0;
             worlds.put(worldId, new WorldDefinition(
                 worldId,
-                string(yaml.getString("display-name"), "")
+                string(yaml.getString("display-name"), ""),
+                preloadRadius,
+                preloadRegions,
+                preloadVersion
             ));
             // 解析 anchors 节
             ConfigurationSection anchorsSection = yaml.getConfigurationSection("anchors");
@@ -224,7 +241,8 @@ public record MapModuleConfiguration(
             String id = normalizeId(rawId);
             worlds.put(id, new WorldDefinition(
                 id,
-                string(child.getString("display-name"), "")
+                string(child.getString("display-name"), ""),
+                0D, List.of(), 0
             ));
         }
     }
@@ -240,6 +258,11 @@ public record MapModuleConfiguration(
             ConfigurationSection child = section.getConfigurationSection(rawId);
             if (child == null || !child.getBoolean("enabled", true)) continue;
             String id = normalizeId(rawId);
+            if (target.containsKey(id)) {
+                AnchorDefinition existing = target.get(id);
+                logger.warning("锚点 id " + id + " 重复定义（先前在世界 " + existing.worldId()
+                    + "，本次在世界 " + worldId + "），后者覆盖前者——全局锚点 id 必须唯一。");
+            }
             String permission = string(child.getString("permission", ""), "");
             AnchorUnlock unlock = loadAnchorUnlock(child.getConfigurationSection("unlock"));
             if (unlock.onPermission() && permission.isBlank()) {
@@ -271,6 +294,7 @@ public record MapModuleConfiguration(
      * unlock:
      *   default: true        # 所有玩家进服时自动免费解锁
      *   on-permission: true  # 拥有锚点 permission 权限的玩家进服时自动解锁
+     *   radius: 8            # 手动解锁三维距离门槛（>0 时玩家须在锚点 radius 格内）
      * }</pre>
      */
     private static AnchorUnlock loadAnchorUnlock(ConfigurationSection section) {
@@ -279,8 +303,47 @@ public record MapModuleConfiguration(
         }
         return new AnchorUnlock(
             section.getBoolean("default", false),
-            section.getBoolean("on-permission", false)
+            section.getBoolean("on-permission", false),
+            positiveDouble(section.get("radius"), 0D)
         );
+    }
+
+    /**
+     * 解析多边形区域列表（世界 preload-regions 用）。配置格式：
+     * <pre>{@code
+     * preload-regions:
+     *   - points: [[x, z], [x, z], ...]
+     *   - points: [[x, z], ...]
+     * }</pre>
+     */
+    private static List<PolygonRegion> loadPolygonList(
+        List<Map<?, ?>> list, Logger logger, String path
+    ) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        List<PolygonRegion> out = new ArrayList<>();
+        int i = 0;
+        for (Map<?, ?> entry : list) {
+            Object raw = entry == null ? null : entry.get("points");
+            List<int[]> points = new ArrayList<>();
+            if (raw instanceof List<?> pointList) {
+                for (Object p : pointList) {
+                    if (p instanceof List<?> pair && pair.size() >= 2) {
+                        points.add(new int[]{toInt(pair.get(0)), toInt(pair.get(1))});
+                    } else if (p instanceof Map<?, ?> pairMap) {
+                        points.add(new int[]{toInt(pairMap.get("x")), toInt(pairMap.get("z"))});
+                    }
+                }
+            }
+            if (points.size() >= 3) {
+                out.add(new PolygonRegion("preload-" + i, List.copyOf(points)));
+            } else {
+                logger.warning(path + "[" + i + "] 顶点不足 3 个，跳过该区域");
+            }
+            i++;
+        }
+        return out;
     }
 
     /**
@@ -663,13 +726,23 @@ public record MapModuleConfiguration(
      * 世界定义。地图完全由客户端 mod 渲染，无需纹理参数。
      * 每个世界对应 {@code worlds/<worldId>.yml} 单文件，文件内含世界配置 + anchors 节。
      *
-     * @param id          世界 ID（Bukkit world name）
-     * @param displayName 显示名称；留空时运行时从 Multiverse-Core colourless alias 补
+     * @param id             世界 ID（Bukkit world name）
+     * @param displayName    显示名称；留空时运行时从 Multiverse-Core colourless alias 补
+     * @param preloadRadius  预加载半径（方块，以世界出生点为圆心）；≤0 = 不用圆形预加载
+     * @param preloadRegions 预加载多边形区域列表；空 = 无区域预加载
+     * @param preloadVersion 预加载版本号（配置内容+文件 mtime 哈希；0 = 无预加载）
      */
     public record WorldDefinition(
         String id,
-        String displayName
+        String displayName,
+        double preloadRadius,
+        List<PolygonRegion> preloadRegions,
+        int preloadVersion
     ) {
+        /** 该世界是否配置了任何预加载（圆形或区域）。 */
+        public boolean hasPreload() {
+            return preloadRadius > 0 || !preloadRegions.isEmpty();
+        }
     }
 
     /**
@@ -696,12 +769,16 @@ public record MapModuleConfiguration(
      *
      * @param defaultUnlock 所有玩家进服时自动解锁
      * @param onPermission  拥有锚点 {@code permission} 权限的玩家进服时自动解锁
+     * @param radius        手动解锁三维距离门槛（方块）：>0 时玩家须在锚点 radius 格内
+     *                      才能点"解锁"；≤0 = 不限距离。自动解锁与 {@code MapAnchorUnlockable#unlock}
+     *                      免费强解不受此门限制
      */
     public record AnchorUnlock(
         boolean defaultUnlock,
-        boolean onPermission
+        boolean onPermission,
+        double radius
     ) {
-        public static final AnchorUnlock NONE = new AnchorUnlock(false, false);
+        public static final AnchorUnlock NONE = new AnchorUnlock(false, false, 0D);
     }
 
     /**

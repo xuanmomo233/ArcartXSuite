@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,6 +86,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 
+    /** 玩家侧全部公开入口的使用权限（/map、全局按键、UI 数据包、地形请求）。 */
+    private static final String PERMISSION_USE = "arcartxsuite.map.use";
+
+    /** 路径点/标记点名称上限（与 UI 输入框 length 对齐）。 */
+    private static final int MAX_NAME_LENGTH = 64;
+    /** 路径点/标记点描述上限（与 UI 输入框 length 对齐）。 */
+    private static final int MAX_DESC_LENGTH = 256;
+    /** axsmap:request 同玩家最小请求间隔（防伪造客户端刷推送队列）。 */
+    private static final long TERRAIN_REQUEST_INTERVAL_NANOS = 3_000_000_000L;
+
     private final JavaPlugin plugin;
     private final Logger logger;
     private final PacketGuardAPI packetGuard;
@@ -105,6 +116,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private NavigationMarkerService markerService;
     /** 共享导航目标编排服务（diff 推送 / 到达滞回判定 / 跨世界抑制），navigation.enabled 时创建。 */
     private NavigationTargetService targetService;
+    /** 地形预加载推送服务（axsmap:terrain / axsmap:request 通道）。 */
+    private MapTerrainPushService terrainPush;
     private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
     /** 玩家 → (导航键 type:id → 导航状态)，同一玩家可并行多个导航目标。 */
     private final ConcurrentMap<UUID, LinkedHashMap<String, MapNavigationState>> navigationStates = new ConcurrentHashMap<>();
@@ -124,6 +137,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ConcurrentMap<UUID, CachedPlayerMapData> playerDataCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
+    /** 玩家 → 上次 axsmap:request 受理时间（节流，超出间隔的请求直接丢弃）。 */
+    private final ConcurrentMap<UUID, Long> terrainRequestAt = new ConcurrentHashMap<>();
 
     /** 分享码 → 点位快照（内存缓存，过期/重启/重载后失效）。 */
     private final ConcurrentMap<String, SharedPoint> shareCache = new ConcurrentHashMap<>();
@@ -243,6 +258,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 p.sendMessage(PREFIX + message("player.navigation-arrived", target.title())));
             targetService.start();
         }
+        terrainPush = new MapTerrainPushService(plugin, logger);
+        terrainPush.start();
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -264,6 +281,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (markerService != null) {
             markerService.shutdown();
             markerService = null;
+        }
+        if (terrainPush != null) {
+            terrainPush.shutdown();
+            terrainPush = null;
         }
         repository.shutdown();
         waypointBridge.shutdown();
@@ -330,6 +351,23 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      */
     public List<String> configuredAnchorIds() {
         return new ArrayList<>(configuration.anchors().keySet());
+    }
+
+    /**
+     * 获取指定世界的已配置锚点 ID 列表（按锚点所属世界过滤，非 id 子串匹配）。
+     *
+     * @param worldId 世界 ID（大小写不敏感）
+     * @return 锚点 ID 列表
+     */
+    public List<String> configuredAnchorIds(String worldId) {
+        String filter = normalizeId(worldId);
+        List<String> ids = new ArrayList<>();
+        for (AnchorDefinition anchor : configuration.anchors().values()) {
+            if (normalizeId(anchor.worldId()).equals(filter)) {
+                ids.add(anchor.id());
+            }
+        }
+        return ids;
     }
 
     /**
@@ -429,6 +467,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     public MapOperationResult setHud(Player player, String mode) {
         if (player == null || !player.isOnline()) {
             return MapOperationResult.failure(message("player.offline"));
+        }
+        // HUD 开关同 use 权限门控（命令层已查过一次，这里兜底 keybind 入口）
+        if (!player.hasPermission(PERMISSION_USE)) {
+            return MapOperationResult.failure(message("player.no-permission"));
         }
         boolean targetVisible;
         if ("on".equalsIgnoreCase(mode)) {
@@ -1027,7 +1069,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         UUID uuid = player.getUniqueId();
         int tokenIndex = switch (action) {
             case "create_waypoint" -> 1;
-            case "create_pin" -> 3;
+            case "create_pin" -> 4; // x, z, worldId, token
             case "update_waypoint", "update_pin" -> 4;
             default -> 2;
         };
@@ -1073,6 +1115,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     @Override
     public void openMenu(Player player, String worldId) {
+        // 全局按键/UI open_menu 直达此入口，use 权限在此兜底（静默拒绝）
+        if (player == null || !player.hasPermission(PERMISSION_USE)) {
+            return;
+        }
         openMenuInternal(player, worldId, true);
     }
 
@@ -1190,14 +1236,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
-    public void crossWorldNavigate(Player player, String targetDesc) {
+    public boolean crossWorldNavigate(Player player, String targetDesc) {
         if (player == null || !player.isOnline() || targetDesc == null) {
-            return;
+            return false;
         }
         int sep = targetDesc.indexOf(':');
         if (sep <= 0 || sep >= targetDesc.length() - 1) {
             sync(player, false);
-            return;
+            return false;
         }
         String type = targetDesc.substring(0, sep).toLowerCase(Locale.ROOT);
         String id = targetDesc.substring(sep + 1);
@@ -1207,12 +1253,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             case "waypoint", "external" -> teleportResult = teleportToNearestUnlockedAnchor(player, type, id);
             default -> {
                 sync(player, false);
-                return;
+                return false;
             }
         }
         if (!teleportResult.success()) {
             sendPlayerResult(player, teleportResult);
-            return;
+            return false;
         }
         MapOperationResult trackResult = switch (type) {
             case "anchor" -> trackAnchorInternal(player, id);
@@ -1227,6 +1273,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         sendPlayerResult(player, trackResult.success()
             ? MapOperationResult.success(message("player.cross-world-navigated"))
             : trackResult);
+        return trackResult.success();
     }
 
     /**
@@ -1277,22 +1324,23 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
-    public void teleportToWorld(Player player, String worldId) {
+    public boolean teleportToWorld(Player player, String worldId) {
         if (player == null || !player.isOnline()) {
-            return;
+            return false;
         }
         String resolvedWorldId = normalizeId(worldId);
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
             player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
-            return;
+            return false;
         }
-        World world = Bukkit.getWorld(resolvedWorldId);
+        World world = resolveWorld(resolvedWorldId);
         if (world == null) {
             player.sendMessage(PREFIX + message("player.anchor-world-unloaded", resolvedWorldId));
-            return;
+            return false;
         }
         player.teleport(world.getSpawnLocation());
         sync(player, false);
+        return true;
     }
 
     @Override
@@ -1333,8 +1381,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-not-found", waypointId)));
             return;
         }
-        String newName = name == null || name.isBlank() ? waypoint.name() : name;
-        String newDesc = description == null ? "" : description;
+        String newName = name == null || name.isBlank() ? waypoint.name() : clipText(name, MAX_NAME_LENGTH);
+        String newDesc = description == null ? "" : clipText(description, MAX_DESC_LENGTH);
         long now = System.currentTimeMillis();
         MapWaypoint updated = new MapWaypoint(
             waypoint.waypointId(), newName, newDesc, waypoint.world(),
@@ -1351,22 +1399,29 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
-    public boolean createPin(Player player, double x, double z) {
+    public boolean createPin(Player player, double x, double z, String worldId) {
         if (player == null || !player.isOnline()) {
+            return false;
+        }
+        // NaN/Infinity 等非法坐标直接拒绝（客户端 parseDouble 不挡这两种）
+        if (!Double.isFinite(x) || !Double.isFinite(z)) {
+            sync(player, false);
             return false;
         }
         if (!configuration.waypoints().enabled()) {
             sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
             return false;
         }
-        String worldId = normalizeId(player.getWorld().getName());
-        if (!configuration.worlds().containsKey(worldId)) {
+        // 世界归属 = 客户端正在浏览的世界（所见即所标，pin 允许任意世界任意点）。
+        // 包内世界未配置说明参数被篡改，明确失败而非静默落到玩家世界
+        String resolvedWorldId = normalizeId(worldId);
+        if (!configuration.worlds().containsKey(resolvedWorldId)) {
             sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
             return false;
         }
         int limit = resolveWaypointLimit(player);
         List<MapPin> pins = loadPins(player);
-        long countInWorld = pins.stream().filter(pin -> normalizeId(pin.world()).equals(worldId)).count();
+        long countInWorld = pins.stream().filter(pin -> normalizeId(pin.world()).equals(resolvedWorldId)).count();
         if (countInWorld >= limit) {
             sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
             return false;
@@ -1375,15 +1430,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         String pinId = configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
         String name = configuration.waypoints().autoNamePrefix() + "-标记-" + (countInWorld + 1);
         MapPin pin = new MapPin(
-            normalizeId(pinId), name, "", worldId, x, z, now, now
+            normalizeId(pinId), name, "", resolvedWorldId, x, z, now, now
         );
         try {
-            if (!repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, worldId, limit)) {
+            if (!repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, resolvedWorldId, limit)) {
                 sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
                 return false;
             }
             invalidatePlayerDataCache(player.getUniqueId());
-            state(player).selectWorld(worldId);
+            state(player).selectWorld(resolvedWorldId);
             state(player).selectPin(normalizeId(pinId));
             sync(player, false);
             sendPlayerResult(player, MapOperationResult.success(message("player.pin-created", name)));
@@ -1434,8 +1489,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             sendPlayerResult(player, MapOperationResult.failure(message("player.pin-not-found", pinId)));
             return;
         }
-        String newName = name == null || name.isBlank() ? pin.name() : name;
-        String newDesc = description == null ? "" : description;
+        String newName = name == null || name.isBlank() ? pin.name() : clipText(name, MAX_NAME_LENGTH);
+        String newDesc = description == null ? "" : clipText(description, MAX_DESC_LENGTH);
         long now = System.currentTimeMillis();
         MapPin updated = new MapPin(
             pin.pinId(), newName, newDesc, pin.world(), pin.x(), pin.z(), pin.createdAt(), now
@@ -1698,6 +1753,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         playerDataCache.remove(uuid);
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
+        terrainRequestAt.remove(uuid);
+        // 移除"默认解锁已确保"标记：重登重新尝试，解锁失败的锚点有补救机会
+        defaultUnlocksEnsured.remove(uuid);
     }
 
     /**
@@ -1755,6 +1813,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
             return MapOperationResult.failure(message("player.world-not-configured", worldId));
         }
+        if (bridge == null) {
+            // PacketBridge 初始化失败（ArcartX 未就绪）：菜单打不开，明确失败而非 NPE
+            return MapOperationResult.failure(message("player.map-unavailable"));
+        }
         state(player).selectWorld(resolvedWorldId);
         bridge.openUi(player, menuUiId);
         syncMenu(player, pushInitPacket);
@@ -1803,6 +1865,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!accessResult.success()) {
             return accessResult;
         }
+        // 三维距离门槛：unlock.radius > 0 时玩家须站在锚点 radius 格内
+        // （同世界 + 含 Y 的欧氏距离），才允许手动解锁
+        MapOperationResult rangeResult = validateUnlockRange(player, anchor);
+        if (!rangeResult.success()) {
+            return rangeResult;
+        }
         PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.unlockItems());
         if (!preparedItems.success()) {
             return MapOperationResult.failure(preparedItems.message());
@@ -1828,7 +1896,143 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         invalidatePlayerDataCache(player.getUniqueId());
         sync(player, false);
+        pushAnchorTerrain(player, anchor);
         return MapOperationResult.success(message("player.anchor-unlocked", anchor.displayName()));
+    }
+
+    /**
+     * 免费强制解锁（被动 API / 管理命令）：跳过 permission、距离门槛与全部
+     * 费用消耗，直接写入解锁记录。供 {@code MapAnchorUnlockable#unlock}
+     * 与管理命令使用——任务奖励、活动发放等"系统授予"场景。
+     *
+     * @param player   目标玩家（须在线）
+     * @param anchorId 锚点 id
+     * @return 操作结果
+     */
+    public MapOperationResult grantAnchorUnlock(Player player, String anchorId) {
+        if (player == null || !player.isOnline()) {
+            return MapOperationResult.failure(message("player.offline"));
+        }
+        AnchorDefinition anchor = configuration.anchor(anchorId);
+        if (anchor == null) {
+            return MapOperationResult.failure(message("player.anchor-not-found", anchorId));
+        }
+        if (isAnchorUnlocked(player, anchor)) {
+            return MapOperationResult.failure(message("player.anchor-already-unlocked"));
+        }
+        try {
+            if (!repository.tryUnlockAnchor(player.getUniqueId(), anchor.id(), System.currentTimeMillis())) {
+                return MapOperationResult.failure(message("player.anchor-already-unlocked"));
+            }
+        } catch (Exception exception) {
+            return MapOperationResult.failure(message("player.anchor-unlock-save-failed"));
+        }
+        invalidatePlayerDataCache(player.getUniqueId());
+        sync(player, false);
+        pushAnchorTerrain(player, anchor);
+        MapOperationResult result = MapOperationResult.success(
+            message("player.anchor-unlocked", anchor.displayName()));
+        // 系统授予也要让目标玩家感知（任务奖励/管理授予等）
+        sendPlayerResult(player, result);
+        return result;
+    }
+
+    /**
+     * 解锁成功后推送锚点点亮区域的地形数据（"解锁即亮"）：
+     * 配置了 light-region / light-radius 的锚点，其覆盖 MapChunk 立即推给客户端。
+     */
+    private void pushAnchorTerrain(Player player, AnchorDefinition anchor) {
+        if (terrainPush == null || anchor.lightRegions().isEmpty() && anchor.lightRadius() <= 0) {
+            return;
+        }
+        World world = resolveWorld(anchor.worldId());
+        if (world == null) {
+            return;
+        }
+        Set<Long> coords = new HashSet<>();
+        for (PolygonRegion region : anchor.lightRegions()) {
+            collectPolygonChunks(coords, region.points());
+        }
+        if (anchor.lightRadius() > 0) {
+            collectCircleChunks(coords, anchor.x(), anchor.z(), anchor.lightRadius());
+        }
+        // sourceVersion=0：锚点推送不参与世界预加载版本去重（merge 按列源标记处理）
+        terrainPush.submit(player, world, coords, 0);
+    }
+
+    /**
+     * 客户端 {@code axsmap:request} 插件消息入口（MapModule 注册的
+     * PluginMessageListener 转发）。校验请求块是否 ⊆ 该世界预加载覆盖集合，
+     * 越界请求直接丢弃（防客户端越权拉取任意地形）。
+     *
+     * @param player  请求玩家
+     * @param message 原始请求字节
+     */
+    public void handleTerrainRequest(Player player, byte[] message) {
+        if (terrainPush == null || player == null || !player.isOnline() || message == null) {
+            return;
+        }
+        // use 门控：该入口不经 MapUiPacketHandler（独立插件通道），权限在此自查
+        if (!player.hasPermission(PERMISSION_USE)) {
+            return;
+        }
+        // 节流：每次受理都可能排入数百块任务，高频伪造包可刷爆队列/带宽
+        long now = System.nanoTime();
+        Long last = terrainRequestAt.get(player.getUniqueId());
+        if (last != null && now - last < TERRAIN_REQUEST_INTERVAL_NANOS) {
+            return;
+        }
+        terrainRequestAt.put(player.getUniqueId(), now);
+        MapTerrainPushService.RequestData request = MapTerrainPushService.parseRequest(message);
+        if (request == null) {
+            return;
+        }
+        WorldDefinition world = configuration.worlds().get(normalizeId(request.worldId()));
+        if (world == null || !world.hasPreload()) {
+            return;
+        }
+        World bukkitWorld = resolveWorld(world.id());
+        if (bukkitWorld == null) {
+            return;
+        }
+        // 请求的块必须 ⊆ 预加载覆盖集合（服务端重算覆盖，越界坐标直接丢弃）
+        Set<Long> allowed = new HashSet<>();
+        for (int[] c : preloadChunkCoords(world)) {
+            allowed.add(((long) c[0] << 32) | (c[1] & 0xffffffffL));
+        }
+        List<Long> accepted = new ArrayList<>(request.chunks().size());
+        for (long[] c : request.chunks()) {
+            long packed = ((long) c[0] << 32) | (c[1] & 0xffffffffL);
+            if (allowed.contains(packed)) {
+                accepted.add(packed);
+            }
+        }
+        terrainPush.submit(player, bukkitWorld, accepted, world.preloadVersion());
+    }
+
+    /** 三维距离门槛校验：unlock.radius > 0 时须同世界且在 radius 格内。 */
+    private MapOperationResult validateUnlockRange(Player player, AnchorDefinition anchor) {
+        double radius = anchor.unlock().radius();
+        if (radius <= 0) {
+            return MapOperationResult.success("");
+        }
+        World anchorWorld = resolveWorld(anchor.worldId());
+        if (anchorWorld == null || player.getWorld() == null
+            || !player.getWorld().equals(anchorWorld)) {
+            return MapOperationResult.failure(
+                message("player.anchor-wrong-world", anchor.displayName()));
+        }
+        double dx = player.getLocation().getX() - anchor.x();
+        double dy = player.getLocation().getY() - anchor.y();
+        double dz = player.getLocation().getZ() - anchor.z();
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance > radius) {
+            return MapOperationResult.failure(
+                message("player.anchor-too-far",
+                    String.valueOf(Math.round(distance)),
+                    String.valueOf(Math.round(radius))));
+        }
+        return MapOperationResult.success("");
     }
 
     private void rollbackUnlock(UUID playerUuid, String anchorId) {
@@ -1854,7 +2058,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!accessResult.success()) {
             return accessResult;
         }
-        World world = Bukkit.getWorld(anchor.worldId());
+        World world = resolveWorld(anchor.worldId());
         if (world == null) {
             return MapOperationResult.failure(message("player.anchor-world-unloaded", anchor.worldId()));
         }
@@ -2323,15 +2527,24 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     private void sync(Player player, boolean initPacket) {
-        syncMenu(player, initPacket);
-        syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
+        // 单次快照供 menu+hud 复用（原来各自 buildSnapshot，每 tick 双倍开销）
+        MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
+        syncMenu(player, initPacket, snapshot);
+        syncHud(player, !openedHudPlayers.contains(player.getUniqueId()), snapshot);
     }
 
     private void syncMenu(Player player, boolean initPacket) {
         if (player == null || !player.isOnline()) {
             return;
         }
-        MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
+        syncMenu(player, initPacket, buildSnapshot(player));
+    }
+
+    private void syncMenu(Player player, boolean initPacket,
+                          MapSnapshotBuilder.BuildResult snapshot) {
+        if (player == null || !player.isOnline() || bridge == null) {
+            return;
+        }
         if (initPacket) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         Map<String, Object> payload = buildMenuPayload(snapshot.menu());
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
@@ -2343,7 +2556,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null || !player.isOnline()) {
             return;
         }
-        MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
+        syncHud(player, initPacket, buildSnapshot(player));
+    }
+
+    private void syncHud(Player player, boolean initPacket,
+                         MapSnapshotBuilder.BuildResult snapshot) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
         // HUD 常驻打开（defaultOpen）：不再 openUi/closeUi 切换实例，避免同名
         // HUD 叠副本；隐藏完全由 var.visible 驱动（tick → deactivateHud 即时停）。
         sendHudPacket(player, initPacket ? "init" : "update", snapshot.hud());
@@ -2353,6 +2573,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     private void sendHudPacket(Player player, String handler, MapSnapshotBuilder.HudSnapshot hud) {
+        if (bridge == null) {
+            return;
+        }
         Map<String, Object> payload = buildHudPayload(hud);
         payload.put("hudSession", hudSessions.getOrDefault(player.getUniqueId(), -1));
         payload.put("serverId", serverId());
@@ -2409,7 +2632,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 new MapSnapshotBuilder.WorldView(
                     world.id(),
                     resolveDisplayName(world),
-                    resolveDimension(world)
+                    resolveDimension(world),
+                    world.preloadVersion(),
+                    world.hasPreload() ? preloadRegionPoints(world) : List.of(),
+                    world.hasPreload() ? preloadChunkCoords(world) : List.of()
                 )
             );
         }
@@ -2434,7 +2660,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     unlocked,
                     anchor.sortOrder(),
                     toRegionPoints(anchor.lightRegions()),
-                    anchor.lightRadius()
+                    anchor.lightRadius(),
+                    anchor.unlock().radius()
                 )
             );
         }
@@ -2476,18 +2703,160 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     private static String resolveDimension(WorldDefinition world) {
-        World bukkitWorld = Bukkit.getWorld(world.id());
+        World bukkitWorld = resolveWorld(world.id());
+        return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
+    }
+
+    /** worldId → Bukkit World：精确匹配优先，退回 case-insensitive 遍历（文件名可能含大写）。 */
+    private static World resolveWorld(String worldId) {
+        World bukkitWorld = Bukkit.getWorld(worldId);
         if (bukkitWorld == null) {
-            // 世界文件名可能含大写（如 DANTIAO），normalizeId 转小写后
-            // Bukkit.getWorld 精确匹配不到，遍历做 case-insensitive 匹配
             for (World w : Bukkit.getWorlds()) {
-                if (w.getName().equalsIgnoreCase(world.id())) {
-                    bukkitWorld = w;
-                    break;
+                if (w.getName().equalsIgnoreCase(worldId)) {
+                    return w;
                 }
             }
         }
-        return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
+        return bukkitWorld;
+    }
+
+    /** 世界预加载区域 → 多边形并集（preload-radius 圆心=世界出生点，16 边形近似）。 */
+    private List<List<int[]>> preloadRegionPoints(WorldDefinition world) {
+        List<List<int[]>> out = new ArrayList<>(toRegionPoints(world.preloadRegions()));
+        if (world.preloadRadius() > 0) {
+            World bukkitWorld = resolveWorld(world.id());
+            if (bukkitWorld != null) {
+                Location spawn = bukkitWorld.getSpawnLocation();
+                out.add(circlePoints(spawn.getX(), spawn.getZ(), world.preloadRadius()));
+            }
+        }
+        return out;
+    }
+
+    /** 世界预加载覆盖的 MapChunk 坐标集合（64² 网格，逐项 {cx,cz}）。
+     *  圆形部分实时取当前 spawn（/mv setspawn 即生效），
+     *  多边形部分按 WorldDefinition 缓存（配置重载后新实例自然换键）。 */
+    private final Map<WorldDefinition, Set<Long>> preloadRegionCoordCache = new ConcurrentHashMap<>();
+
+    private List<int[]> preloadChunkCoords(WorldDefinition world) {
+        Set<Long> coords = new HashSet<>();
+        if (world.preloadRadius() > 0) {
+            World bukkitWorld = resolveWorld(world.id());
+            if (bukkitWorld != null) {
+                Location spawn = bukkitWorld.getSpawnLocation();
+                collectCircleChunks(coords, spawn.getX(), spawn.getZ(), world.preloadRadius());
+            }
+        }
+        coords.addAll(preloadRegionChunkCoords(world));
+        List<int[]> out = new ArrayList<>(coords.size());
+        for (long packed : coords) {
+            out.add(new int[]{(int) (packed >> 32), (int) packed});
+        }
+        return out;
+    }
+
+    /** 多边形预加载区域覆盖的块坐标（打包 long），按 WorldDefinition 缓存。 */
+    private Set<Long> preloadRegionChunkCoords(WorldDefinition world) {
+        Set<Long> cached = preloadRegionCoordCache.get(world);
+        if (cached != null) {
+            return cached;
+        }
+        Set<Long> coords = new HashSet<>();
+        for (PolygonRegion region : world.preloadRegions()) {
+            collectPolygonChunks(coords, region.points());
+        }
+        preloadRegionCoordCache.putIfAbsent(world, coords);
+        return coords;
+    }
+
+    /**
+     * 圆形区域覆盖到的 MapChunk 集合。判定用"块中心距 ≤ r + 块对角线半长"
+     * （多收边缘块无害——推送量略大但不漏）。
+     */
+    private static void collectCircleChunks(Set<Long> out, double cx, double cz, double radius) {
+        int min = (int) Math.floor((cx - radius) / 64.0);
+        int max = (int) Math.floor((cx + radius) / 64.0);
+        int zMin = (int) Math.floor((cz - radius) / 64.0);
+        int zMax = (int) Math.floor((cz + radius) / 64.0);
+        double limit = radius + 45.3; // 64/2 * √2 ≈ 45.25
+        double limitSq = limit * limit;
+        for (int ccx = min; ccx <= max; ccx++) {
+            for (int ccz = zMin; ccz <= zMax; ccz++) {
+                double dx = ccx * 64.0 + 32 - cx;
+                double dz = ccz * 64.0 + 32 - cz;
+                if (dx * dx + dz * dz <= limitSq) {
+                    out.add(((long) ccx << 32) | (ccz & 0xffffffffL));
+                }
+            }
+        }
+    }
+
+    /**
+     * 多边形区域覆盖到的 MapChunk 集合：包围盒内逐块判定——
+     * 块中心在多边形内、或任一顶点落在块内、或多边形任一边中点落在块内。
+     */
+    private static void collectPolygonChunks(Set<Long> out, List<int[]> points) {
+        if (points == null || points.size() < 3) {
+            return;
+        }
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (int[] p : points) {
+            minX = Math.min(minX, p[0]);
+            maxX = Math.max(maxX, p[0]);
+            minZ = Math.min(minZ, p[1]);
+            maxZ = Math.max(maxZ, p[1]);
+        }
+        for (int ccx = (int) Math.floor(minX / 64.0); ccx <= (int) Math.floor(maxX / 64.0); ccx++) {
+            for (int ccz = (int) Math.floor(minZ / 64.0); ccz <= (int) Math.floor(maxZ / 64.0); ccz++) {
+                int bx = ccx * 64, bz = ccz * 64;
+                if (pointInPolygon(points, bx + 32.0, bz + 32.0) || chunkTouchesPolygon(points, bx, bz)) {
+                    out.add(((long) ccx << 32) | (ccz & 0xffffffffL));
+                }
+            }
+        }
+    }
+
+    /** 顶点/边中点是否落在 64² 块内（含边界）。 */
+    private static boolean chunkTouchesPolygon(List<int[]> points, int bx, int bz) {
+        int n = points.size();
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            int[] a = points.get(i), b = points.get(j);
+            if (a[0] >= bx && a[0] < bx + 64 && a[1] >= bz && a[1] < bz + 64) {
+                return true;
+            }
+            double mx = (a[0] + b[0]) / 2.0, mz = (a[1] + b[1]) / 2.0;
+            if (mx >= bx && mx < bx + 64 && mz >= bz && mz < bz + 64) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 射线法判点是否在多边形内。 */
+    private static boolean pointInPolygon(List<int[]> pts, double x, double z) {
+        boolean inside = false;
+        for (int i = 0, j = pts.size() - 1; i < pts.size(); j = i++) {
+            double xi = pts.get(i)[0], zi = pts.get(i)[1];
+            double xj = pts.get(j)[0], zj = pts.get(j)[1];
+            if ((zi > z) != (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    /** 圆 → 16 边形顶点列表（与 MapSnapshotBuilder 的 circleToPolygon 同款，service 侧自用）。 */
+    private static List<int[]> circlePoints(double cx, double cz, double radius) {
+        List<int[]> points = new ArrayList<>(16);
+        for (int i = 0; i < 16; i++) {
+            double angle = 2 * Math.PI * i / 16;
+            points.add(new int[]{
+                (int) Math.round(cx + radius * Math.cos(angle)),
+                (int) Math.round(cz + radius * Math.sin(angle))
+            });
+        }
+        return points;
     }
 
     /** MV alias 缓存：worldId → colourlessAlias。启动时一次性补空，避免每次 buildSnapshot 调 MV API。 */
@@ -2507,7 +2876,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return cached;
         }
         String resolved = resolveDisplayNameFromMV(world.id());
-        mvDisplayNames.put(world.id(), resolved);
+        // 只缓存真实解析到的 alias：fallback 值（MV 未加载/世界未注册时
+        // 等于 worldId）一旦入缓存，世界后注册或 reload 后会被永久挡住
+        if (!resolved.equals(world.id())) {
+            mvDisplayNames.put(world.id(), resolved);
+        }
         return resolved;
     }
 
@@ -2546,6 +2919,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("displayName", row.displayName());
             entry.put("dimension", row.dimension());
             entry.put("selected", row.selected());
+            entry.put("preloadVersion", row.preloadVersion());
+            entry.put("preloadChunks", row.preloadChunks());
             worldRows.put(Integer.toString(i), entry);
         }
         payload.put("worldRows", worldRows);
@@ -2631,6 +3006,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailTeleportCostText", snapshot.detail().teleportCostText());
         payload.put("detailExternalTarget", snapshot.detail().externalTarget());
         payload.put("detailCanUnlock", snapshot.detail().canUnlock());
+        payload.put("detailUnlockRadius", snapshot.detail().unlockRadius());
+        payload.put("detailUnlockInRange", snapshot.detail().unlockInRange());
+        payload.put("detailUnlockRangeText", snapshot.detail().unlockRangeText());
         payload.put("detailCanTeleport", snapshot.detail().canTeleport());
         payload.put("detailCanTrackAnchor", snapshot.detail().canTrackAnchor());
         payload.put("detailCanTrackWaypoint", snapshot.detail().canTrackWaypoint());
@@ -2641,6 +3019,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailClearTrackVisible", snapshot.detail().clearTrackVisible());
         payload.put("detailTrackingText", snapshot.detail().trackingText());
         payload.put("detailNavigated", snapshot.detail().navigated());
+        payload.put("detailCrossWorldCostText", snapshot.detail().crossWorldCostText());
         payload.put("litEnabled", snapshot.litEnabled());
         payload.put("litRegions", snapshot.litRegions());
         payload.put("maxWorldCount", worldRows.size());
@@ -2656,11 +3035,31 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("packetId", snapshot.packetId());
         payload.put("visible", snapshot.visible());
         payload.put("worldId", snapshot.worldId());
+        payload.put("worldName", snapshot.worldName());
         payload.put("dimension", snapshot.dimension());
         payload.put("playerYaw", snapshot.playerYaw());
         payload.put("trackingText", snapshot.trackingText());
         payload.put("litEnabled", snapshot.litEnabled());
         payload.put("litRegions", snapshot.litRegions());
+        payload.put("preloadVersion", snapshot.preloadVersion());
+        payload.put("preloadChunks", snapshot.preloadChunks());
+
+        // HUD 标记行（玩家当前世界，与菜单选中世界无关）
+        LinkedHashMap<String, Object> markerRows = new LinkedHashMap<>();
+        for (int i = 0; i < snapshot.markerRows().size(); i++) {
+            MapSnapshotBuilder.HudMarkerRow row = snapshot.markerRows().get(i);
+            LinkedHashMap<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", row.id());
+            entry.put("type", row.type());
+            entry.put("label", row.label());
+            entry.put("x", row.x());
+            entry.put("z", row.z());
+            entry.put("selected", row.selected());
+            entry.put("tracked", row.tracked());
+            entry.put("unlocked", row.unlocked());
+            markerRows.put(Integer.toString(i), entry);
+        }
+        payload.put("markerRows", markerRows);
         return payload;
     }
 
@@ -2703,7 +3102,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         try {
             Set<String> existing = new LinkedHashSet<>(loadUnlockedAnchors(player));
-            boolean changed = false;
+            List<AnchorDefinition> newlyGranted = new ArrayList<>();
             long now = System.currentTimeMillis();
             for (AnchorDefinition anchor : configuration.anchors().values()) {
                 AnchorUnlock unlock = anchor.unlock();
@@ -2713,13 +3112,20 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                         && player.hasPermission(anchor.permission()));
                 if (granted && existing.add(anchor.id())) {
                     repository.unlockAnchor(player.getUniqueId(), anchor.id(), now);
-                    changed = true;
+                    newlyGranted.add(anchor);
                 }
             }
-            if (changed) {
+            if (!newlyGranted.isEmpty()) {
                 invalidatePlayerDataCache(player.getUniqueId());
+                for (AnchorDefinition anchor : newlyGranted) {
+                    pushAnchorTerrain(player, anchor);
+                }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // 存储异常导致解锁失败：移除已确保标记，让下次 sync 重试
+            // （否则该玩家整会话内默认解锁永久丢失，且没有任何日志可查）
+            defaultUnlocksEnsured.remove(player.getUniqueId());
+            logger.warning("[Map] 玩家 " + player.getName() + " 默认锚点解锁失败: " + e.getMessage());
         }
     }
 
@@ -2893,6 +3299,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private static String normalizeId(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** 服务端侧文本截断（客户端输入框有 length 上限，伪造包可绕过）。 */
+    private static String clipText(String value, int max) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     private record CurrencyChargeReceipt(

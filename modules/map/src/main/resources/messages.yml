@@ -22,6 +22,7 @@ help:
   open: "&7{0} open <玩家> [世界名]&f - 为玩家打开地图"
   list: "&7{0} list&f - 列出配置的世界"
   anchors: "&7{0} anchors [世界名]&f - 列出锚点"
+  unlock: "&7{0} unlock <玩家> <锚点ID>&f - 免费强制解锁锚点"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -43,16 +44,20 @@ anchors:
   empty: "&e无配置的锚点。"
   title: "&6锚点列表{0}:"
   item: "  &f{0}"
+unlock:
+  usage: "&e用法: /axs map unlock <玩家> <锚点ID>"
 
 # ── player ────────────────────────────────────────────
 player:
-  usage: "&e用法: /{0} open [world]|hud [on|off|toggle]|cleartrack|claim <分享码>"
+  usage: "&e用法: /{0} open [world]|hud [on|off|toggle]|cleartrack|unlock <锚点ID>|claim <分享码>"
   help:
     title: "&6地图 命令"
     open: "&7/map open [世界名]&f - 打开地图界面"
     hud: "&7/map hud [on|off|toggle]&f - 切换小地图 HUD"
     cleartrack: "&7/map cleartrack&f - 清除当前导航追踪"
+    unlock: "&7/map unlock <锚点ID>&f - 解锁锚点（需在范围内并支付费用）"
     claim: "&7/map claim <分享码>&f - 领取聊天栏分享的地图点位"
+  unlock-usage: "&e用法: /{0} unlock <锚点ID>"
   offline: "玩家当前不在线。"
   world-not-configured: "未配置地图世界: {0}"
   map-unavailable: "当前世界未配置地图，且没有可用的默认地图。"
@@ -62,6 +67,8 @@ player:
   hud-enabled: "已显示小地图 HUD。"
   anchor-not-found: "未找到锚点: {0}"
   anchor-already-unlocked: "该锚点已解锁。"
+  anchor-too-far: "距离锚点还有 {0}m，需要靠近到 {1}m 内才能解锁。"
+  anchor-wrong-world: "锚点 {0} 不在你当前所在的世界。"
   anchor-unlock-save-failed: "写入锚点解锁数据失败。"
   anchor-unlocked: "已解锁锚点: {0}"
   anchor-locked: "该锚点尚未解锁。"

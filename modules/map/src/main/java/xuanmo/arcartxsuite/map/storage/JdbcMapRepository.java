@@ -281,11 +281,15 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement deleteUnlocks = connection.prepareStatement("DELETE FROM AXS_map_unlocks WHERE uuid = ?");
-                 PreparedStatement deleteWaypoints = connection.prepareStatement("DELETE FROM AXS_map_waypoints WHERE uuid = ?")) {
+                 PreparedStatement deleteWaypoints = connection.prepareStatement("DELETE FROM AXS_map_waypoints WHERE uuid = ?");
+                 PreparedStatement deletePins = connection.prepareStatement("DELETE FROM AXS_map_pins WHERE uuid = ?")) {
                 deleteUnlocks.setString(1, playerUuid.toString());
                 deleteUnlocks.executeUpdate();
                 deleteWaypoints.setString(1, playerUuid.toString());
                 deleteWaypoints.executeUpdate();
+                // pin 也是玩家数据，clearPlayer 语义要求一并清掉
+                deletePins.setString(1, playerUuid.toString());
+                deletePins.executeUpdate();
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -375,15 +379,14 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
             }
-            // Migration: 给已存在的 waypoints 表加 description 列（如果不存在）
-            try {
-                if (isMysql()) {
-                    statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''");
-                } else {
+            // Migration: 给已存在的 waypoints 表加 description 列（不存在才加）。
+            // MySQL 不支持 ADD COLUMN IF NOT EXISTS（那是 MariaDB 语法）——
+            // 统一走 JDBC DatabaseMetaData 检查，SQLite/MySQL 都通用
+            try (java.sql.ResultSet cols = connection.getMetaData()
+                    .getColumns(connection.getCatalog(), null, "AXS_map_waypoints", "description")) {
+                if (!cols.next()) {
                     statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN description TEXT NOT NULL DEFAULT ''");
                 }
-            } catch (SQLException ignored) {
-                // 列已存在
             }
         }
     }
