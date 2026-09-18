@@ -89,8 +89,8 @@ public record MapModuleConfiguration(
         StorageConfiguration storage = StorageConfiguration.load(configuration.getConfigurationSection("storage"));
 
         ConfigurationSection navigationSection = configuration.getConfigurationSection("navigation");
-        ConfigurationSection markerSection = navigationSection == null ? null : navigationSection.getConfigurationSection("marker");
-        MarkerConfiguration marker = new MarkerConfiguration(
+        ConfigurationSection markerSection = navigationSection == null ? null : navigationSection.getConfigurationSection("model-marker");
+        ModelMarkerConfiguration modelMarker = new ModelMarkerConfiguration(
             markerSection == null || markerSection.getBoolean("enabled", false),
             string(markerSection == null ? null : markerSection.getString("model-id"), "nav_beacon"),
             markerSection == null ? 1.0 : markerSection.getDouble("scale", 1.0),
@@ -104,6 +104,8 @@ public record MapModuleConfiguration(
             markerSection == null ? 2000 : markerSection.getInt("path-max-iterations", 2000),
             markerSection == null ? 8.0 : markerSection.getDouble("path-reshow-buffer", 8.0)
         );
+        ConfigurationSection textureMarkerSection = navigationSection == null ? null : navigationSection.getConfigurationSection("texture-marker");
+        TextureMarkerConfiguration textureMarker = loadTextureMarkerConfiguration(textureMarkerSection);
         ConfigurationSection waypointSection = navigationSection == null ? null : navigationSection.getConfigurationSection("waypoint");
         NavWaypointConfiguration waypoint = new NavWaypointConfiguration(
             waypointSection == null || waypointSection.getBoolean("enabled", true),
@@ -120,7 +122,8 @@ public record MapModuleConfiguration(
             normalizeStringList(navigationSection == null ? List.of() : navigationSection.getStringList("finish-commands")),
             navigationSection == null ? 3.0 : navigationSection.getDouble("finish-rearm-buffer", 3.0),
             waypoint,
-            marker
+            modelMarker,
+            textureMarker
         );
 
         // 世界和锚点从 worlds/ 目录加载（每个世界一个 yml 文件，内含 anchors 节）
@@ -163,6 +166,36 @@ public record MapModuleConfiguration(
             immutableCopy(anchors),
             waypoints,
             share
+        );
+    }
+
+    private static TextureMarkerConfiguration loadTextureMarkerConfiguration(ConfigurationSection section) {
+        if (section == null) {
+            return TextureMarkerConfiguration.defaults();
+        }
+        ConfigurationSection pulseSection = section.getConfigurationSection("pulse");
+        return new TextureMarkerConfiguration(
+            section.getBoolean("enabled", false),
+            string(section.getString("texture"), "nav_arrow"),
+            section.getDouble("width", 100.0),
+            section.getDouble("height", 100.0),
+            section.getBoolean("facing", false),
+            section.getBoolean("glowing", true),
+            section.getDouble("y-offset", 0.1),
+            (float) section.getDouble("pitch", 90.0),
+            section.getBoolean("orient-to-path", true),
+            section.getInt("life-time", -1),
+            pulseSection == null || pulseSection.getBoolean("enabled", true),
+            pulseSection == null ? 0.8 : pulseSection.getDouble("from", 0.8),
+            pulseSection == null ? 1.2 : pulseSection.getDouble("to", 1.2),
+            pulseSection == null ? 20 : pulseSection.getInt("duration", 20),
+            pulseSection == null ? 2 : pulseSection.getInt("stagger", 2),
+            section.getDouble("path-interval", 3.0),
+            section.getInt("path-max-markers", 20),
+            section.getInt("path-update-ticks", 10),
+            section.getDouble("path-max-distance", 64.0),
+            section.getInt("path-max-iterations", 2000),
+            section.getDouble("path-reshow-buffer", 8.0)
         );
     }
 
@@ -692,7 +725,8 @@ public record MapModuleConfiguration(
      * @param finishCommands    到达命令（控制台执行，%player% 占位）
      * @param rearmBuffer       到达判定滞回缓冲（格）
      * @param waypoint          ArcartX 路标渲染配置（目标点光柱与标题）
-     * @param marker            导航标记模型配置
+     * @param modelMarker       模型导航提示配置（Adyeshach 私有实体 + ArcartX 模型）
+     * @param textureMarker     贴图提示导航配置（WorldTexture 路径贴图，与 modelMarker 互补、独立开关）
      */
     public record NavigationConfiguration(
         boolean enabled,
@@ -704,7 +738,8 @@ public record MapModuleConfiguration(
         List<String> finishCommands,
         double rearmBuffer,
         NavWaypointConfiguration waypoint,
-        MarkerConfiguration marker
+        ModelMarkerConfiguration modelMarker,
+        TextureMarkerConfiguration textureMarker
     ) {
     }
 
@@ -724,7 +759,7 @@ public record MapModuleConfiguration(
     }
 
     /**
-     * 导航标记模型配置，控制路径标记实体的外观与行为。
+     * 模型导航提示配置（Adyeshach 私有实体 + ArcartX 模型渲染路径标记）。
      *
      * @param enabled          是否启用标记模型
      * @param modelId          模型 ID
@@ -739,7 +774,7 @@ public record MapModuleConfiguration(
      * @param pathMaxIterations 路径计算最大迭代次数
      * @param pathReshowBuffer  距离滞回缓冲（格）：超距隐藏后须回到 maxDistance - 本值 内才重显示
      */
-    public record MarkerConfiguration(
+    public record ModelMarkerConfiguration(
         boolean enabled,
         String modelId,
         double scale,
@@ -753,8 +788,63 @@ public record MapModuleConfiguration(
         int pathMaxIterations,
         double pathReshowBuffer
     ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
-        public static MarkerConfiguration defaults() {
-            return new MarkerConfiguration(false, "nav_beacon", 1.0, "idle", "rotate", 2.0,
+        public static ModelMarkerConfiguration defaults() {
+            return new ModelMarkerConfiguration(false, "nav_beacon", 1.0, "idle", "rotate", 2.0,
+                3.0, 20, 10, 64.0, 2000, 8.0);
+        }
+    }
+
+    /**
+     * 导航贴图提示配置（ArcartX WorldTexture 路径贴图，与 modelMarker 模型导航互补、独立开关）。
+     *
+     * @param enabled           是否启用贴图路径提示（需 ArcartX 客户端资源包中存在 texture 对应贴图）
+     * @param texture           贴图资源 ID
+     * @param width             渲染宽度
+     * @param height            渲染高度
+     * @param facing            是否始终面向玩家（billboard）；false = 贴地按 yaw/pitch 定向
+     * @param glowing           是否泛光
+     * @param yOffset           贴图相对路径点的 Y 轴偏移（方块数）
+     * @param pitch             俯仰角（度；贴地渲染 90）
+     * @param orientToPath      yaw 是否朝向下一个路径点（贴地箭头指示方向）
+     * @param lifeTime          贴图存活时长（-1 = 永续直到移除）
+     * @param pulseEnabled      是否启用循环缩放脉冲动画
+     * @param pulseFrom         脉冲起始缩放倍率
+     * @param pulseTo           脉冲目标缩放倍率
+     * @param pulseDuration     脉冲单段时长
+     * @param pulseStagger      脉冲逐级延迟（波浪效果；0 = 同步）
+     * @param pathInterval      路径贴图间距（方块数）
+     * @param pathMaxMarkers    路径贴图最大数量
+     * @param pathUpdateTicks   路径更新间隔（tick）
+     * @param pathMaxDistance   路径最大渲染距离（方块数）
+     * @param pathMaxIterations 寻路最大迭代次数
+     * @param pathReshowBuffer  距离滞回缓冲（格）
+     */
+    public record TextureMarkerConfiguration(
+        boolean enabled,
+        String texture,
+        double width,
+        double height,
+        boolean facing,
+        boolean glowing,
+        double yOffset,
+        float pitch,
+        boolean orientToPath,
+        int lifeTime,
+        boolean pulseEnabled,
+        double pulseFrom,
+        double pulseTo,
+        int pulseDuration,
+        int pulseStagger,
+        double pathInterval,
+        int pathMaxMarkers,
+        int pathUpdateTicks,
+        double pathMaxDistance,
+        int pathMaxIterations,
+        double pathReshowBuffer
+    ) implements xuanmo.arcartxsuite.api.util.NavigationTextureMarkerConfig {
+        public static TextureMarkerConfiguration defaults() {
+            return new TextureMarkerConfiguration(false, "nav_arrow", 100.0, 100.0, false, true,
+                0.1, 90f, true, -1, true, 0.8, 1.2, 20, 2,
                 3.0, 20, 10, 64.0, 2000, 8.0);
         }
     }

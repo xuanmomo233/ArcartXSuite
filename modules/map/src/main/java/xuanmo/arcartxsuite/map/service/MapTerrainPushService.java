@@ -198,13 +198,15 @@ public final class MapTerrainPushService {
             if (stopped) {
                 return;
             }
-            // 区域线程：只抓已生成区块（isChunkGenerated 不触发世界生成）
+            // 区域线程：loadChunk(gen=false) 只加载"已生成"区块——磁盘上有就从
+            // region 文件读进来，没有返回 false 且不触发生成。isChunkGenerated 在
+            // Paper/Spigot 上只反映已加载区块（磁盘上未加载的误报 false），不能用。
             ChunkSnapshot[] snaps = new ChunkSnapshot[16];
             for (int i = 0; i < 16; i++) {
                 int mcx = cx * 4 + (i % 4);
                 int mcz = cz * 4 + (i / 4);
                 try {
-                    if (world.isChunkGenerated(mcx, mcz)) {
+                    if (world.loadChunk(mcx, mcz, false)) {
                         // includeMaxblocky=true：getHighestBlockYAt 需要高度图，
                         // 否则 snapshot 抛 IllegalStateException("without height map")
                         snaps[i] = world.getChunkAt(mcx, mcz).getChunkSnapshot(

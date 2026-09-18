@@ -80,6 +80,47 @@ ui:
           var.entry.entryKey = var.key
         }
       }
+      // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
+      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount > 1) {
+        while(val.browse_anchor.childrenCount() > 1){
+          val.browse_anchor.get(1).remove()
+        }
+        for(i in range(1, var.maxAnchorCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount > 1) {
+        while(val.browse_waypoint.childrenCount() > 1){
+          val.browse_waypoint.get(1).remove()
+        }
+        for(i in range(1, var.maxWaypointCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount > 1) {
+        while(val.browse_pin.childrenCount() > 1){
+          val.browse_pin.get(1).remove()
+        }
+        for(i in range(1, var.maxPinCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_external != none && val.browse_external['浏览第三方项'] != none && var.maxExternalCount > 1) {
+        while(val.browse_external.childrenCount() > 1){
+          val.browse_external.get(1).remove()
+        }
+        for(i in range(1, var.maxExternalCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_external['浏览第三方项'].copy('浏览第三方项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
       var.actionBusy = false
       if(var.mapRenderer != none) {
         var.mapRenderer.clearMarkers()
@@ -175,6 +216,47 @@ ui:
           var.entry.entryKey = var.key
         }
       }
+      // 浏览面板分类列表：与世界列表同款模板复制（模板=栈子0，复制 max-1 份）
+      if(val.browse_anchor != none && val.browse_anchor['浏览锚点项'] != none && var.maxAnchorCount > 1) {
+        while(val.browse_anchor.childrenCount() > 1){
+          val.browse_anchor.get(1).remove()
+        }
+        for(i in range(1, var.maxAnchorCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_anchor['浏览锚点项'].copy('浏览锚点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_waypoint != none && val.browse_waypoint['浏览路径点项'] != none && var.maxWaypointCount > 1) {
+        while(val.browse_waypoint.childrenCount() > 1){
+          val.browse_waypoint.get(1).remove()
+        }
+        for(i in range(1, var.maxWaypointCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_waypoint['浏览路径点项'].copy('浏览路径点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_pin != none && val.browse_pin['浏览标记点项'] != none && var.maxPinCount > 1) {
+        while(val.browse_pin.childrenCount() > 1){
+          val.browse_pin.get(1).remove()
+        }
+        for(i in range(1, var.maxPinCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_pin['浏览标记点项'].copy('浏览标记点项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
+      if(val.browse_external != none && val.browse_external['浏览第三方项'] != none && var.maxExternalCount > 1) {
+        while(val.browse_external.childrenCount() > 1){
+          val.browse_external.get(1).remove()
+        }
+        for(i in range(1, var.maxExternalCount - 1)){
+          var.key = i.round()
+          var.entry = val.browse_external['浏览第三方项'].copy('浏览第三方项' + var.key)
+          var.entry.entryKey = var.key
+        }
+      }
       var.actionBusy = false
       if(var.mapRenderer != none) {
         var.mapRenderer.clearMarkers()
@@ -259,6 +341,12 @@ ui:
             if(row != none) {
               dim = row['dimension']
               var.mapRenderer.setWorldDimension('' + row['id'], dim == none ? '' : '' + dim)
+              // 世界中心（preload.center ?? 出生点链）→ 浏览非当前世界的视野锚点
+              var.centerX = row['centerX']
+              var.centerZ = row['centerZ']
+              if(var.centerX != none && var.centerZ != none) {
+                var.mapRenderer.setWorldCenter('' + row['id'], var.centerX, var.centerZ)
+              }
               // 预加载信息（版本号 + 覆盖块坐标串）→ mod 按需 axsmap:request
               // 显式 if 防护：三元对 missing-key 的 none 判定不可靠，
               // 直接把 none 传给 Java 会 primitiveConversion NPE
@@ -351,6 +439,8 @@ ui:
       }
     open: |-
       var.worldListOpen = false
+      var.browsePanelOpen = false
+      var.browseCategory = 'anchor'
       var.detailCanTrackAnchor = false
       var.detailCanTrackExternal = false
       var.detailCanTrackWaypoint = false
@@ -1302,6 +1392,448 @@ controls:
                   texts: ~&f新建标记点
                   fontSize: 28
                   through: true
+          # ─── 右下角浮层：标记浏览按钮（展开分类浏览面板；详情面板展开时左移避让）───
+          浏览标记按钮:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: "-20 - (var.detailSelectedType != 'none' ? 448 : 0)"
+              y: -204
+              width: 52
+              height: 52
+            action:
+              clickLeft: |-
+                var.browsePanelOpen = !var.browsePanelOpen
+            children:
+              浏览标记按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;255,255,255,100"
+                  hover: "~Frosted:30;255,255,255,140"
+                  shape: ~round_rect
+                  radius: 16
+                effect:
+                  stroke:
+                    width: 2
+                    color: "self.isHovered() ? '255,255,255,160' : '255,255,255,50'"
+              浏览标记按钮图标:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.browsePanelOpen ? '&b☰' : '&f☰'"
+                  fontSize: 32
+                  through: true
+          # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
+          标记浏览面板:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: "-20 - (var.detailSelectedType != 'none' ? 448 : 0)"
+              y: -212
+              width: 320
+              height: 380
+              visible: "var.browsePanelOpen"
+            children:
+              浏览面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~30,32,40,240
+                  shape: ~round_rect
+                  radius: 16
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,50
+              # 面板内顶部分类按钮（锚点/路径点/标记点/第三方目标）
+              分类锚点按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 14
+                  width: 68
+                  height: 34
+                action:
+                  clickLeft: |-
+                    var.browseCategory = 'anchor'
+                children:
+                  分类锚点底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.browseCategory == 'anchor' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 10
+                  分类锚点字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f锚点
+                      fontSize: 24
+                      through: true
+              分类路径点按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 88
+                  y: 14
+                  width: 68
+                  height: 34
+                action:
+                  clickLeft: |-
+                    var.browseCategory = 'waypoint'
+                children:
+                  分类路径点底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.browseCategory == 'waypoint' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 10
+                  分类路径点字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f路径点
+                      fontSize: 24
+                      through: true
+              分类标记点按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 164
+                  y: 14
+                  width: 68
+                  height: 34
+                action:
+                  clickLeft: |-
+                    var.browseCategory = 'pin'
+                children:
+                  分类标记点底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.browseCategory == 'pin' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 10
+                  分类标记点字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f标记点
+                      fontSize: 24
+                      through: true
+              分类第三方按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 240
+                  y: 14
+                  width: 68
+                  height: 34
+                action:
+                  clickLeft: |-
+                    var.browseCategory = 'external'
+                children:
+                  分类第三方底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.browseCategory == 'external' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: ~72,76,84,255
+                      shape: ~round_rect
+                      radius: 10
+                  分类第三方字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f第三方
+                      fontSize: 24
+                      through: true
+              浏览滑块:
+                type: Texture
+                val: 浏览滑块
+                attribute:
+                  point: ~top_right
+                  x: -10
+                  y: 60
+                  width: 6
+                  height: 60
+                  normal: ~120,120,120,200
+                  maxDragY: 240
+              浏览滚动栏:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 10
+                  y: 60
+                  width: 288
+                  height: 308
+                  moveY: "self.parent['浏览滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['浏览滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['浏览滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  浏览列表:
+                    type: VStack
+                    attribute:
+                      width: 288
+                    children:
+                      # ── 锚点列表（browseCategory 过滤；条目由 init/update copy 循环生成） ──
+                      锚点列表:
+                        type: VStack
+                        val: browse_anchor
+                        attribute:
+                          width: 288
+                          spaceBetween: 6
+                          visible: "var.browseCategory == 'anchor'"
+                        children:
+                          浏览锚点项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.anchorRows[self.entryKey]
+                              visible: self.entry != none
+                              width: 288
+                              height: 44
+                            action:
+                              clickLeft: |-
+                                if (self.entry != none) {
+                                  if (var.mapRenderer != none) {
+                                    var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
+                                  }
+                                  Packet.send(var.packetId, 'select_anchor', self.entry['id'])
+                                  var.browsePanelOpen = false
+                                }
+                            children:
+                              浏览锚点项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  shape: ~round_rect
+                                  radius: 10
+                              浏览锚点项图标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 12
+                                  texts: ~&6◎
+                                  fontSize: 26
+                                  through: true
+                              浏览锚点项名称:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 44
+                                  texts: "'&f' + self.parent.entry['displayName']"
+                                  fontSize: 24
+                                  through: true
+                              浏览锚点项坐标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -10
+                                  texts: "'&8' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  fontSize: 20
+                                  through: true
+                      # ── 路径点列表 ──
+                      路径点列表:
+                        type: VStack
+                        val: browse_waypoint
+                        attribute:
+                          width: 288
+                          spaceBetween: 6
+                          visible: "var.browseCategory == 'waypoint'"
+                        children:
+                          浏览路径点项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.waypointRows[self.entryKey]
+                              visible: self.entry != none
+                              width: 288
+                              height: 44
+                            action:
+                              clickLeft: |-
+                                if (self.entry != none) {
+                                  if (var.mapRenderer != none) {
+                                    var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
+                                  }
+                                  Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
+                                  var.browsePanelOpen = false
+                                }
+                            children:
+                              浏览路径点项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  shape: ~round_rect
+                                  radius: 10
+                              浏览路径点项图标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 12
+                                  texts: ~&e⚑
+                                  fontSize: 26
+                                  through: true
+                              浏览路径点项名称:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 44
+                                  texts: "'&f' + self.parent.entry['name']"
+                                  fontSize: 24
+                                  through: true
+                              浏览路径点项坐标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -10
+                                  texts: "'&8' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  fontSize: 20
+                                  through: true
+                      # ── 标记点列表 ──
+                      标记点列表:
+                        type: VStack
+                        val: browse_pin
+                        attribute:
+                          width: 288
+                          spaceBetween: 6
+                          visible: "var.browseCategory == 'pin'"
+                        children:
+                          浏览标记点项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.pinRows[self.entryKey]
+                              visible: self.entry != none
+                              width: 288
+                              height: 44
+                            action:
+                              clickLeft: |-
+                                if (self.entry != none) {
+                                  if (var.mapRenderer != none) {
+                                    var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
+                                  }
+                                  Packet.send(var.packetId, 'select_pin', self.entry['id'])
+                                  var.browsePanelOpen = false
+                                }
+                            children:
+                              浏览标记点项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  shape: ~round_rect
+                                  radius: 10
+                              浏览标记点项图标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 12
+                                  texts: ~&b◈
+                                  fontSize: 26
+                                  through: true
+                              浏览标记点项名称:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 44
+                                  texts: "'&f' + self.parent.entry['name']"
+                                  fontSize: 24
+                                  through: true
+                              浏览标记点项坐标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -10
+                                  texts: "'&8' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  fontSize: 20
+                                  through: true
+                      # ── 第三方目标列表 ──
+                      第三方列表:
+                        type: VStack
+                        val: browse_external
+                        attribute:
+                          width: 288
+                          spaceBetween: 6
+                          visible: "var.browseCategory == 'external'"
+                        children:
+                          浏览第三方项:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.externalTargetRows[self.entryKey]
+                              visible: self.entry != none
+                              width: 288
+                              height: 44
+                            action:
+                              clickLeft: |-
+                                if (self.entry != none) {
+                                  if (var.mapRenderer != none) {
+                                    var.mapRenderer.centerOnWorldPos(Cast.toDouble(self.entry['x']), Cast.toDouble(self.entry['z']))
+                                  }
+                                  Packet.send(var.packetId, 'select_external', self.entry['id'])
+                                  var.browsePanelOpen = false
+                                }
+                            children:
+                              浏览第三方项底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  shape: ~round_rect
+                                  radius: 10
+                              浏览第三方项图标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 12
+                                  texts: ~&d✦
+                                  fontSize: 26
+                                  through: true
+                              浏览第三方项名称:
+                                type: Text
+                                attribute:
+                                  point: ~middle_left
+                                  x: 44
+                                  texts: "'&f' + self.parent.entry['name']"
+                                  fontSize: 24
+                                  through: true
+                              浏览第三方项坐标:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -10
+                                  texts: "'&8' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  fontSize: 20
+                                  through: true
           # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
           世界槽位:
             type: Canvas

@@ -112,11 +112,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ItemMatcherAPI itemMatcherSupport;
     private final WaypointBridgeAPI waypointBridge;
     private final AdyeshachNpcBridgeAPI npcBridge;
+    private final xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge;
     private final MessageProvider messages;
     private final java.util.function.Supplier<EventBusCapability> eventBusProvider;
     /** Essentials 模块查询能力（读取 /setspawn 出生点，MV 不存在时的二级来源）。 */
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider;
     private NavigationMarkerService markerService;
+    /** 贴图路径提示服务（WorldTexture，与模型标记互补、独立开关）。 */
+    private xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService textureMarkerService;
     /** 共享导航目标编排服务（diff 推送 / 到达滞回判定 / 跨世界抑制），navigation.enabled 时创建。 */
     private NavigationTargetService targetService;
     /** 地形预加载推送服务（axsmap:terrain / axsmap:request 通道）。 */
@@ -182,7 +185,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
-            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null, null);
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null, null, null);
     }
 
     public MapService(
@@ -201,7 +204,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         AdyeshachNpcBridgeAPI npcBridge,
         MessageProvider messages,
         java.util.function.Supplier<EventBusCapability> eventBusProvider,
-        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider,
+        xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -220,6 +224,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.messages = messages;
         this.eventBusProvider = eventBusProvider != null ? eventBusProvider : () -> null;
         this.essentialsProvider = essentialsProvider != null ? essentialsProvider : () -> null;
+        this.worldTextureBridge = worldTextureBridge;
     }
 
     private String message(String key, Object... args) {
@@ -233,17 +238,29 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      */
     public void start() throws Exception {
         repository.initialize();
+        loadPreloadVersionBumps();
         if (configuration.navigation().enabled()) {
             waypointBridge.initialize("Map 导航");
         }
-        if (configuration.navigation().marker().enabled() && npcBridge != null) {
+        if (configuration.navigation().modelMarker().enabled() && npcBridge != null) {
             npcBridge.setDebug(configuration.debug());
             npcBridge.initialize();
             markerService = new NavigationMarkerService(
-                plugin, npcBridge, configuration.navigation().marker(), logger,
+                plugin, npcBridge, configuration.navigation().modelMarker(), logger,
                 configuration.debug(), "map_path_"
             );
             markerService.start();
+        }
+        if (configuration.navigation().textureMarker().enabled()) {
+            if (worldTextureBridge == null) {
+                logger.warning("Map: 贴图导航已启用但 WorldTexture 桥接为 null，贴图提示将跳过。");
+            } else {
+                textureMarkerService = new xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService(
+                    plugin, worldTextureBridge, configuration.navigation().textureMarker(), logger,
+                    configuration.debug(), "map_tex_"
+                );
+                textureMarkerService.start();
+            }
         }
         if (configuration.navigation().enabled()) {
             targetService = new NavigationTargetService(
@@ -256,6 +273,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     configuration.navigation().waypoint().enabled()
                 )
             );
+            if (textureMarkerService != null) {
+                targetService.addRouteRenderer(textureMarkerService);
+            }
             targetService.setWorldHintHandler((p, target, resolved) ->
                 p.sendMessage(PREFIX + message("player.navigation-other-world",
                     resolved.getWorld() == null ? target.world() : resolved.getWorld().getName())));
@@ -286,6 +306,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (markerService != null) {
             markerService.shutdown();
             markerService = null;
+        }
+        if (textureMarkerService != null) {
+            textureMarkerService.shutdown();
+            textureMarkerService = null;
         }
         if (terrainPush != null) {
             terrainPush.shutdown();
@@ -1752,6 +1776,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (markerService != null) {
             markerService.hideMarker(event.getPlayer());
         }
+        if (textureMarkerService != null) {
+            textureMarkerService.hideMarker(event.getPlayer());
+        }
         externalTargets.remove(uuid);
         openedHudPlayers.remove(uuid);
         hudSessions.remove(uuid);
@@ -2012,7 +2039,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 accepted.add(packed);
             }
         }
-        terrainPush.submit(player, bukkitWorld, accepted, world.preloadVersion());
+        terrainPush.submit(player, bukkitWorld, accepted, effectivePreloadVersion(world));
     }
 
     /** 三维距离门槛校验：unlock.radius > 0 时须同世界且在 radius 格内。 */
@@ -2313,6 +2340,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         if (markerService != null) {
             markerService.hideMarker(player);
+        }
+        if (textureMarkerService != null) {
+            textureMarkerService.hideMarker(player);
         }
         if (sync) {
             sync(player, false);
@@ -2642,14 +2672,17 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MapPlayerViewState state = state(player);
         List<MapSnapshotBuilder.WorldView> worlds = new ArrayList<>();
         for (WorldDefinition world : configuration.worlds().values()) {
+            Location center = resolveWorldCenter(world);
             worlds.add(
                 new MapSnapshotBuilder.WorldView(
                     world.id(),
                     resolveDisplayName(world),
                     resolveDimension(world),
-                    world.preloadVersion(),
+                    effectivePreloadVersion(world),
                     world.hasPreload() ? preloadRegionPoints(world) : List.of(),
-                    world.hasPreload() ? preloadChunkCoords(world) : List.of()
+                    world.hasPreload() ? preloadChunkCoords(world) : List.of(),
+                    center == null ? 0 : center.getX(),
+                    center == null ? 0 : center.getZ()
                 )
             );
         }
@@ -2768,7 +2801,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private List<List<int[]>> preloadRegionPoints(WorldDefinition world) {
         List<List<int[]>> out = new ArrayList<>(toRegionPoints(world.preloadRegions()));
         if (world.preloadRadius() > 0) {
-            Location center = preloadCircleCenter(world);
+            Location center = resolveWorldCenter(world);
             if (center != null) {
                 out.add(circlePoints(center.getX(), center.getZ(), world.preloadRadius()));
             }
@@ -2776,8 +2809,86 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return out;
     }
 
-    /** 预加载圆心：配置 preload.center 优先，否则 ess→Bukkit 出生点链。 */
-    private Location preloadCircleCenter(WorldDefinition world) {
+    // ─── 预加载版本手动刷新（/axs map refresh <worldId>）────────────
+    //
+    // 语义：bump 计数持久化在 data/map/preload-bumps.properties，有效版本 =
+    // hash(配置版本, bump)。配置改动 → 基线哈希变 → 版本自然变；手动刷新 →
+    // bump+1 → 版本变。重启后 bump 不丢，版本不回落，避免二次全量重拉。
+    private final Map<String, Integer> preloadVersionBumps = new ConcurrentHashMap<>();
+
+    private File preloadBumpFile() {
+        return new File(plugin.getDataFolder(), "data/map/preload-bumps.properties");
+    }
+
+    private void loadPreloadVersionBumps() {
+        File file = preloadBumpFile();
+        if (!file.isFile()) {
+            return;
+        }
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+            props.load(in);
+            for (String key : props.stringPropertyNames()) {
+                try {
+                    preloadVersionBumps.put(normalizeId(key), Integer.parseInt(props.getProperty(key).trim()));
+                } catch (NumberFormatException ignored) {
+                    // 单条非法跳过
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("读取预加载版本刷新记录失败: " + e.getMessage());
+        }
+    }
+
+    private void savePreloadVersionBumps() {
+        File file = preloadBumpFile();
+        file.getParentFile().mkdirs();
+        java.util.Properties props = new java.util.Properties();
+        for (Map.Entry<String, Integer> e : preloadVersionBumps.entrySet()) {
+            props.setProperty(e.getKey(), String.valueOf(e.getValue()));
+        }
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
+            props.store(out, "map preload version bumps (manual refresh counters)");
+        } catch (Exception e) {
+            logger.warning("写入预加载版本刷新记录失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 世界有效预加载版本号：手动 bump 优先于配置哈希基线。
+     * payload 下发与 terrainPush sourceVersion 必须同源，否则客户端永判过期。
+     */
+    private int effectivePreloadVersion(WorldDefinition world) {
+        Integer bump = preloadVersionBumps.get(world.id());
+        if (bump == null) {
+            return world.preloadVersion();
+        }
+        return Math.max(1, java.util.Objects.hash(world.preloadVersion(), bump) & 0x7FFFFFFF);
+    }
+
+    /**
+     * 管理员手动刷新某世界的预加载版本：bump+1 持久化。
+     * 下次快照下发新版本号，客户端发现 sourceVersion 过期自动重拉。
+     */
+    public MapOperationResult refreshPreloadVersion(String worldId) {
+        WorldDefinition world = configuration.worlds().get(normalizeId(worldId));
+        if (world == null) {
+            return MapOperationResult.failure(message("refresh.world-unknown", worldId));
+        }
+        if (!world.hasPreload()) {
+            return MapOperationResult.failure(message("refresh.world-no-preload", world.id()));
+        }
+        int bump = preloadVersionBumps.merge(world.id(), 1, Integer::sum);
+        savePreloadVersionBumps();
+        return MapOperationResult.success(
+            message("refresh.done", world.id(), effectivePreloadVersion(world)));
+    }
+
+    /**
+     * 世界中心点：配置 preload.center 优先，否则 ess→Bukkit 出生点链。
+     * 双用途：预加载圆心 + 客户端浏览非当前世界的默认视野中心。
+     */
+    private Location resolveWorldCenter(WorldDefinition world) {
         World bukkitWorld = resolveWorld(world.id());
         if (world.hasPreloadCenter()) {
             return new Location(bukkitWorld, world.preloadCenterX(), 0, world.preloadCenterZ());
@@ -2793,7 +2904,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private List<int[]> preloadChunkCoords(WorldDefinition world) {
         Set<Long> coords = new HashSet<>();
         if (world.preloadRadius() > 0) {
-            Location center = preloadCircleCenter(world);
+            Location center = resolveWorldCenter(world);
             if (center != null) {
                 collectCircleChunks(coords, center.getX(), center.getZ(), world.preloadRadius());
             }
@@ -2972,6 +3083,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("selected", row.selected());
             entry.put("preloadVersion", row.preloadVersion());
             entry.put("preloadChunks", row.preloadChunks());
+            entry.put("centerX", row.centerX());
+            entry.put("centerZ", row.centerZ());
             worldRows.put(Integer.toString(i), entry);
         }
         payload.put("worldRows", worldRows);
@@ -3338,6 +3451,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         if (markerService != null) {
             markerService.hideMarker(player);
+        }
+        if (textureMarkerService != null) {
+            textureMarkerService.hideMarker(player);
         }
     }
 

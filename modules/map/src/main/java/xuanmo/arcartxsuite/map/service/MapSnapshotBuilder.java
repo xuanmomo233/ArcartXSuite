@@ -42,7 +42,8 @@ public final class MapSnapshotBuilder {
         for (WorldView world : input.worlds()) {
             worldRows.add(new WorldRow(world.id(), world.displayName(), world.dimension(),
                 world.id().equalsIgnoreCase(selectedWorldId),
-                world.preloadVersion(), serializeChunks(world.preloadChunks())));
+                world.preloadVersion(), serializeChunks(world.preloadChunks()),
+                world.centerX(), world.centerZ()));
         }
 
         List<AnchorView> visibleAnchors = input.anchors().stream()
@@ -626,6 +627,8 @@ public final class MapSnapshotBuilder {
      * @param preloadVersion 预加载版本号（0 = 无预加载配置）
      * @param preloadRegions 预加载多边形并集（radius 已转多边形），点亮并集合并用
      * @param preloadChunks  预加载覆盖的 MapChunk 坐标（64² 网格），逐项 {cx, cz}
+     * @param centerX        世界中心 X（preload.center ?? 出生点链；浏览非当前世界时的视野中心）
+     * @param centerZ        世界中心 Z
      */
     public record WorldView(
         String id,
@@ -633,7 +636,9 @@ public final class MapSnapshotBuilder {
         String dimension,
         int preloadVersion,
         List<List<int[]>> preloadRegions,
-        List<int[]> preloadChunks
+        List<int[]> preloadChunks,
+        double centerX,
+        double centerZ
     ) {
     }
 
@@ -800,6 +805,8 @@ public final class MapSnapshotBuilder {
      * @param displayName 显示名称
      * @param dimension   MC 维度 key，供 mod 匹配本地维度
      * @param selected    是否当前选中
+     * @param centerX     世界中心 X（出生点链；客户端浏览非当前世界的默认视野中心）
+     * @param centerZ     世界中心 Z
      */
     public record WorldRow(
         String id,
@@ -807,7 +814,9 @@ public final class MapSnapshotBuilder {
         String dimension,
         boolean selected,
         int preloadVersion,
-        String preloadChunks
+        String preloadChunks,
+        double centerX,
+        double centerZ
     ) {
     }
 

@@ -17,9 +17,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.api.util.NavigationMarkerService;
 import xuanmo.arcartxsuite.api.util.NavigationTarget;
 import xuanmo.arcartxsuite.api.util.NavigationTargetService;
+import xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
@@ -38,6 +40,7 @@ public final class QuestGpsNavigationService {
     private final QuestGpsModuleConfiguration configuration;
     private final WaypointRuntime waypointRuntime;
     private final WaypointBridgeAPI waypointBridge;
+    private final WorldTextureBridgeAPI worldTextureBridge;
     private final Logger logger;
     private final JavaPlugin plugin;
     private final AdyeshachNpcBridgeAPI npcBridge;
@@ -49,6 +52,7 @@ public final class QuestGpsNavigationService {
 
     private boolean runtimeReady;
     private NavigationMarkerService markerService;
+    private NavigationTextureMarkerService textureMarkerService;
     private NavigationTargetService targetService;
     /** 导航坐标变更监听（地图模块同步外部目标坐标用），可空。 */
     private volatile PositionListener positionListener;
@@ -135,6 +139,7 @@ public final class QuestGpsNavigationService {
      * @param waypointBridge 路径点桥接 API
      * @param npcBridge      Adyeshach NPC 桥接 API，用于导航标记与 NPC 动态目标
      * @param trackerBridge  Chemdah 追踪桥接，用于动态坐标解析
+     * @param worldTextureBridge 世界贴图桥接 API，用于贴图路径提示（可空，空时贴图导航不启用）
      */
     public QuestGpsNavigationService(
         JavaPlugin plugin,
@@ -142,13 +147,15 @@ public final class QuestGpsNavigationService {
         QuestGpsModuleConfiguration configuration,
         WaypointBridgeAPI waypointBridge,
         AdyeshachNpcBridgeAPI npcBridge,
-        ChemdahTrackerBridge trackerBridge
+        ChemdahTrackerBridge trackerBridge,
+        WorldTextureBridgeAPI worldTextureBridge
     ) {
         this(
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
             waypointBridge,
+            worldTextureBridge,
             logger,
             npcBridge,
             trackerBridge
@@ -160,6 +167,7 @@ public final class QuestGpsNavigationService {
         QuestGpsModuleConfiguration configuration,
         WaypointRuntime waypointRuntime,
         WaypointBridgeAPI waypointBridge,
+        WorldTextureBridgeAPI worldTextureBridge,
         Logger logger,
         AdyeshachNpcBridgeAPI npcBridge,
         ChemdahTrackerBridge trackerBridge
@@ -168,6 +176,7 @@ public final class QuestGpsNavigationService {
         this.configuration = configuration;
         this.waypointRuntime = waypointRuntime;
         this.waypointBridge = waypointBridge;
+        this.worldTextureBridge = worldTextureBridge;
         this.logger = logger;
         this.npcBridge = npcBridge;
         this.trackerBridge = trackerBridge;
@@ -176,18 +185,29 @@ public final class QuestGpsNavigationService {
     /** 启动导航运行时、标记服务与共享目标编排服务。 */
     public void start() {
         runtimeReady = configuration.navigation().enabled() && waypointRuntime.initialize("QuestGPS 导航");
-        if (configuration.navigation().marker().enabled()) {
+        if (configuration.navigation().modelMarker().enabled()) {
             if (configuration.debug()) logger.info("QuestGPS: 正在初始化导航标记 (Adyeshach + ArcartX)...");
             npcBridge.setDebug(configuration.debug());
             boolean adyAvailable = npcBridge.initialize();
             if (configuration.debug()) logger.info("QuestGPS: AdyeshachNpcBridgeAPI.initialize() = " + adyAvailable);
             markerService = new NavigationMarkerService(
-                plugin, npcBridge, configuration.navigation().marker(), logger,
+                plugin, npcBridge, configuration.navigation().modelMarker(), logger,
                 configuration.debug(), "questgps_path_"
             );
             markerService.start();
         } else {
-            logger.info("QuestGPS: 导航标记已在配置中禁用 (navigation.marker.enabled=false)");
+            logger.info("QuestGPS: 导航标记已在配置中禁用 (navigation.model-marker.enabled=false)");
+        }
+        if (configuration.navigation().textureMarker().enabled()) {
+            if (worldTextureBridge == null) {
+                logger.warning("QuestGPS: 贴图导航已启用但 WorldTexture 桥接为 null，贴图提示将跳过。");
+            } else {
+                textureMarkerService = new NavigationTextureMarkerService(
+                    plugin, worldTextureBridge, configuration.navigation().textureMarker(), logger,
+                    configuration.debug(), "questgps_tex_"
+                );
+                textureMarkerService.start();
+            }
         }
         if (runtimeReady && waypointBridge != null) {
             targetService = new NavigationTargetService(
@@ -203,6 +223,9 @@ public final class QuestGpsNavigationService {
                     configuration.navigation().waypoint().enabled()
                 )
             );
+            if (textureMarkerService != null) {
+                targetService.addRouteRenderer(textureMarkerService);
+            }
             targetService.setPositionChangedHandler((player, target, resolved) -> {
                 Object attachment = target.attachment();
                 if (!(attachment instanceof TrackContext context)) {
@@ -226,6 +249,10 @@ public final class QuestGpsNavigationService {
         if (markerService != null) {
             markerService.shutdown();
             markerService = null;
+        }
+        if (textureMarkerService != null) {
+            textureMarkerService.shutdown();
+            textureMarkerService = null;
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (chemdahNavigationEnabled()) {
@@ -649,6 +676,9 @@ public final class QuestGpsNavigationService {
         if (markerService != null) {
             markerService.hideMarker(player);
         }
+        if (textureMarkerService != null) {
+            textureMarkerService.hideMarker(player);
+        }
     }
 
     /**
@@ -683,6 +713,9 @@ public final class QuestGpsNavigationService {
         }
         if (markerService != null) {
             markerService.hideMarker(player);
+        }
+        if (textureMarkerService != null) {
+            textureMarkerService.hideMarker(player);
         }
     }
 

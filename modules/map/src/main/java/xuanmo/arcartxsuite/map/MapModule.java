@@ -53,7 +53,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.4.5")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -68,7 +68,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                     .dynamicSection("anchors")
                     .dynamicSection("waypoints")
                 .build())
-            .currentVersion(4)
+            .currentVersion(5)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -77,7 +77,12 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                         .withRange(1, 100),
                     ValidationRule.required("ui.packet-id", ValueType.STRING),
                     ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
-                    ValidationRule.of("navigation.waypoint.enabled", ValueType.BOOLEAN)
+                    ValidationRule.of("navigation.waypoint.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.texture-marker.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.texture-marker.width", ValueType.DOUBLE).withRange(0.0, null),
+                    ValidationRule.of("navigation.texture-marker.height", ValueType.DOUBLE).withRange(0.0, null),
+                    ValidationRule.of("navigation.texture-marker.pitch", ValueType.DOUBLE).withRange(-180.0, 180.0),
+                    ValidationRule.of("navigation.texture-marker.path-max-iterations", ValueType.INT).withRange(100, 50000)
             ))
             .build();
     }
@@ -166,7 +171,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             createAdyeshachNpcBridge(),
             messages(),
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class)
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class),
+            worldTextureBridge
         );
         service.start();
 

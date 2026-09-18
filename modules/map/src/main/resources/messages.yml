@@ -23,6 +23,7 @@ help:
   list: "&7{0} list&f - 列出配置的世界"
   anchors: "&7{0} anchors [世界名]&f - 列出锚点"
   unlock: "&7{0} unlock <玩家> <锚点ID>&f - 免费强制解锁锚点"
+  refresh: "&7{0} refresh <世界ID>&f - 刷新该世界预加载版本，客户端重拉地形"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -46,6 +47,11 @@ anchors:
   item: "  &f{0}"
 unlock:
   usage: "&e用法: /axs map unlock <玩家> <锚点ID>"
+refresh:
+  usage: "&e用法: /axs map refresh <世界ID>"
+  world-unknown: "&c世界不存在或未启用: {0}"
+  world-no-preload: "&c世界 {0} 未配置 preload，无需刷新。"
+  done: "&a世界 {0} 预加载版本已刷新（新版本号 {1}），客户端下次同步将重拉地形。"
 
 # ── player ────────────────────────────────────────────
 player:

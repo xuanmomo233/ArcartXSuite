@@ -151,7 +151,8 @@ public record QuestGpsModuleConfiguration(
             string(section == null ? null : section.getString("quest-id-prefix"), DEFAULT_QUEST_ID_PREFIX),
             section == null || section.getBoolean("remove-on-finish", DEFAULT_REMOVE_ON_FINISH),
             string(section == null ? null : section.getString("mode"), "hybrid"),
-            loadMarkerDefaults(section == null ? null : section.getConfigurationSection("marker")),
+            loadModelMarkerDefaults(section == null ? null : section.getConfigurationSection("model-marker")),
+            loadTextureMarkerDefaults(section == null ? null : section.getConfigurationSection("texture-marker")),
             waypoint,
             section == null ? 10 : section.getInt("refresh-ticks", 10),
             section == null ? 30 : section.getInt("world-hint-interval", 30),
@@ -257,17 +258,47 @@ public record QuestGpsModuleConfiguration(
         return new QuestPresentationOverride(PresentationSource.parseGlobal(raw, PresentationSource.CHEMDAH));
     }
 
-    private static MarkerDefaults loadMarkerDefaults(ConfigurationSection section) {
+    private static ModelMarkerDefaults loadModelMarkerDefaults(ConfigurationSection section) {
         if (section == null) {
-            return MarkerDefaults.defaults();
+            return ModelMarkerDefaults.defaults();
         }
-        return new MarkerDefaults(
+        return new ModelMarkerDefaults(
             section.getBoolean("enabled", true),
             string(section.getString("model-id"), "nav_beacon"),
             section.getDouble("scale", 1.0),
             string(section.getString("default-state"), "idle"),
             string(section.getString("animation"), "rotate"),
             section.getDouble("y-offset", 2.0),
+            section.getDouble("path-interval", 3.0),
+            section.getInt("path-max-markers", 20),
+            section.getInt("path-update-ticks", 10),
+            section.getDouble("path-max-distance", 64.0),
+            section.getInt("path-max-iterations", 2000),
+            section.getDouble("path-reshow-buffer", 8.0)
+        );
+    }
+
+    private static TextureMarkerDefaults loadTextureMarkerDefaults(ConfigurationSection section) {
+        if (section == null) {
+            return TextureMarkerDefaults.defaults();
+        }
+        ConfigurationSection pulseSection = section.getConfigurationSection("pulse");
+        return new TextureMarkerDefaults(
+            section.getBoolean("enabled", false),
+            string(section.getString("texture"), "nav_arrow"),
+            section.getDouble("width", 100.0),
+            section.getDouble("height", 100.0),
+            section.getBoolean("facing", false),
+            section.getBoolean("glowing", true),
+            section.getDouble("y-offset", 0.1),
+            (float) section.getDouble("pitch", 90.0),
+            section.getBoolean("orient-to-path", true),
+            section.getInt("life-time", -1),
+            pulseSection == null || pulseSection.getBoolean("enabled", true),
+            pulseSection == null ? 0.8 : pulseSection.getDouble("from", 0.8),
+            pulseSection == null ? 1.2 : pulseSection.getDouble("to", 1.2),
+            pulseSection == null ? 20 : pulseSection.getInt("duration", 20),
+            pulseSection == null ? 2 : pulseSection.getInt("stagger", 2),
             section.getDouble("path-interval", 3.0),
             section.getInt("path-max-markers", 20),
             section.getInt("path-update-ticks", 10),
@@ -634,7 +665,8 @@ public record QuestGpsModuleConfiguration(
         String questIdPrefix,
         boolean removeOnFinish,
         String mode,
-        MarkerDefaults marker,
+        ModelMarkerDefaults modelMarker,
+        TextureMarkerDefaults textureMarker,
         WaypointDefaults waypoint,
         int refreshTicks,
         int worldHintIntervalSeconds,
@@ -678,7 +710,7 @@ public record QuestGpsModuleConfiguration(
         }
     }
 
-    public record MarkerDefaults(
+    public record ModelMarkerDefaults(
         boolean enabled,
         String modelId,
         double scale,
@@ -692,8 +724,63 @@ public record QuestGpsModuleConfiguration(
         int pathMaxIterations,
         double pathReshowBuffer
     ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
-        public static MarkerDefaults defaults() {
-            return new MarkerDefaults(true, "nav_beacon", 1.0, "idle", "rotate", 2.0,
+        public static ModelMarkerDefaults defaults() {
+            return new ModelMarkerDefaults(true, "nav_beacon", 1.0, "idle", "rotate", 2.0,
+                3.0, 20, 10, 64.0, 2000, 8.0);
+        }
+    }
+
+    /**
+     * 导航贴图提示配置（ArcartX WorldTexture 路径贴图，与 modelMarker 模型导航互补、独立开关）。
+     *
+     * @param enabled           是否启用贴图路径提示（需 ArcartX 客户端资源包中存在 texture 对应贴图）
+     * @param texture           贴图资源 ID
+     * @param width             渲染宽度
+     * @param height            渲染高度
+     * @param facing            是否始终面向玩家（billboard）；false = 贴地按 yaw/pitch 定向
+     * @param glowing           是否泛光
+     * @param yOffset           贴图相对路径点的 Y 轴偏移（方块数）
+     * @param pitch             俯仰角（度；贴地渲染 90）
+     * @param orientToPath      yaw 是否朝向下一个路径点（贴地箭头指示方向）
+     * @param lifeTime          贴图存活时长（-1 = 永续直到移除）
+     * @param pulseEnabled      是否启用循环缩放脉冲动画
+     * @param pulseFrom         脉冲起始缩放倍率
+     * @param pulseTo           脉冲目标缩放倍率
+     * @param pulseDuration     脉冲单段时长
+     * @param pulseStagger      脉冲逐级延迟（波浪效果；0 = 同步）
+     * @param pathInterval      路径贴图间距（方块数）
+     * @param pathMaxMarkers    路径贴图最大数量
+     * @param pathUpdateTicks   路径更新间隔（tick）
+     * @param pathMaxDistance   路径最大渲染距离（方块数）
+     * @param pathMaxIterations 寻路最大迭代次数
+     * @param pathReshowBuffer  距离滞回缓冲（格）
+     */
+    public record TextureMarkerDefaults(
+        boolean enabled,
+        String texture,
+        double width,
+        double height,
+        boolean facing,
+        boolean glowing,
+        double yOffset,
+        float pitch,
+        boolean orientToPath,
+        int lifeTime,
+        boolean pulseEnabled,
+        double pulseFrom,
+        double pulseTo,
+        int pulseDuration,
+        int pulseStagger,
+        double pathInterval,
+        int pathMaxMarkers,
+        int pathUpdateTicks,
+        double pathMaxDistance,
+        int pathMaxIterations,
+        double pathReshowBuffer
+    ) implements xuanmo.arcartxsuite.api.util.NavigationTextureMarkerConfig {
+        public static TextureMarkerDefaults defaults() {
+            return new TextureMarkerDefaults(false, "nav_arrow", 100.0, 100.0, false, true,
+                0.1, 90f, true, -1, true, 0.8, 1.2, 20, 2,
                 3.0, 20, 10, 64.0, 2000, 8.0);
         }
     }

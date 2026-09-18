@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors", "unlock");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors", "unlock", "refresh");
 
     private final Supplier<MapService> serviceProvider;
     private final MessageProvider messages;
@@ -65,6 +65,7 @@ public final class MapAdminCommand implements ModuleCommandHandler {
             case "list" -> handleList(sender);
             case "anchors" -> handleAnchors(sender, args);
             case "unlock" -> handleUnlock(sender, args);
+            case "refresh" -> handleRefresh(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -86,6 +87,7 @@ public final class MapAdminCommand implements ModuleCommandHandler {
             if ("open".equalsIgnoreCase(args[1])) return null; // player names
             if ("unlock".equalsIgnoreCase(args[1])) return null; // player names
             if ("anchors".equalsIgnoreCase(args[1])) return filter(svc.configuredWorldIds(), args[2]);
+            if ("refresh".equalsIgnoreCase(args[1])) return filter(svc.configuredWorldIds(), args[2]);
         }
         if (args.length == 4 && "open".equalsIgnoreCase(args[1])) {
             return filter(svc.configuredWorldIds(), args[3]);
@@ -104,6 +106,17 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.list", cmd));
         sender.sendMessage(fullMsg("help.anchors", cmd));
         sender.sendMessage(fullMsg("help.unlock", cmd));
+        sender.sendMessage(fullMsg("help.refresh", cmd));
+    }
+
+    /** /axs map refresh <worldId> —— 手动刷该世界预加载版本号，客户端下次同步自动重拉地形。 */
+    private void handleRefresh(CommandSender sender, String[] args) {
+        MapService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        if (args.length < 3) { sender.sendMessage(fullMsg("refresh.usage")); return; }
+        MapOperationResult result = svc.refreshPreloadVersion(args[2]);
+        sender.sendMessage((messages != null ? messages.get("prefix") : "")
+            + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 
     /** /axs map unlock <player> <anchorId> —— 免费强制解锁（跳付费/距离门）。 */

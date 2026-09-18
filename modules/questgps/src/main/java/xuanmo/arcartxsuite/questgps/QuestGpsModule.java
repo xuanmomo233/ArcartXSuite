@@ -59,7 +59,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("questgps")
             .name("QuestGPS")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -72,7 +72,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             .syncPolicy(SyncPolicy.builder()
                     .dynamicSection("categories")
                 .build())
-            .currentVersion(2)
+            .currentVersion(3)
             .validations(List.of(
                     ValidationRule.required("ui.packet-id", ValueType.STRING),
                     ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
@@ -80,7 +80,12 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
                     ValidationRule.of("navigation.mode", ValueType.STRING),
                     ValidationRule.of("database.enabled", ValueType.BOOLEAN),
                     ValidationRule.of("discovery.mode", ValueType.STRING),
-                    ValidationRule.of("navigation.marker.path-max-iterations", ValueType.INT).withRange(100, 50000),
+                    ValidationRule.of("navigation.model-marker.path-max-iterations", ValueType.INT).withRange(100, 50000),
+                    ValidationRule.of("navigation.texture-marker.enabled", ValueType.BOOLEAN),
+                    ValidationRule.of("navigation.texture-marker.width", ValueType.DOUBLE).withRange(0.0, null),
+                    ValidationRule.of("navigation.texture-marker.height", ValueType.DOUBLE).withRange(0.0, null),
+                    ValidationRule.of("navigation.texture-marker.pitch", ValueType.DOUBLE).withRange(-180.0, 180.0),
+                    ValidationRule.of("navigation.texture-marker.path-max-iterations", ValueType.INT).withRange(100, 50000),
                     ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
             ))
             .build();
@@ -203,6 +208,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             itemSourceRegistry,
             createWaypointBridge(),
             createAdyeshachNpcBridge(),
+            worldTextureBridge,
             messages(),
             vanillaItemNameBridge
         );

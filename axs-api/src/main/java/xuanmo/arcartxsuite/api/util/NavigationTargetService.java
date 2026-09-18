@@ -22,7 +22,8 @@ import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
  * 导航目标编排服务 — 多目标并行导航的共享状态管理层。
  * <p>
  * 由模块持有（每模块一个实例），复用 {@link WaypointBridgeAPI} 与
- * {@link NavigationMarkerService} 完成客户端同步。职责：
+ * {@link NavigationRouteRenderer} 渲染器（{@link NavigationMarkerService} 模型标记、
+ * {@link NavigationTextureMarkerService} 贴图提示，可经 {@link #addRouteRenderer} 并存）完成客户端同步。职责：
  * <ul>
  *   <li>多目标追踪：同一玩家的目标集合以 navId 为键并行登记，各自做位置解析与到达判定</li>
  *   <li>单路标单路线：为避免多路标/多路线误导玩家，仅"最新激活且同世界"的目标
@@ -68,9 +69,10 @@ public final class NavigationTargetService {
 
     private final JavaPlugin plugin;
     private final WaypointBridgeAPI waypointBridge;
-    private final NavigationMarkerService markerService;
     private final Logger logger;
     private final Config config;
+    /** 路径渲染器列表（模型标记/贴图提示等可并存），tick 线程只读遍历。 */
+    private final java.util.List<NavigationRouteRenderer> routeRenderers = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /** 玩家 → 期望目标集合（navId → 状态，LinkedHashMap 保序：后注册在后）。 */
     private final ConcurrentMap<UUID, LinkedHashMap<String, TargetState>> desiredTargets = new ConcurrentHashMap<>();
@@ -95,9 +97,25 @@ public final class NavigationTargetService {
     ) {
         this.plugin = plugin;
         this.waypointBridge = waypointBridge;
-        this.markerService = markerService;
+        if (markerService != null) {
+            routeRenderers.add(markerService);
+        }
         this.logger = logger;
         this.config = config == null ? Config.defaults() : config;
+    }
+
+    /**
+     * 追加一个路径渲染器（如 {@link NavigationTextureMarkerService} 贴图提示）。
+     * 与构造传入的模型标记渲染器并存，显示/隐藏调用会广播到全部渲染器。
+     * 一般在 {@link #start()} 前后注册均可，线程安全。
+     *
+     * @param renderer 渲染器实例，{@code null} 忽略
+     * @since 1.7.0
+     */
+    public void addRouteRenderer(NavigationRouteRenderer renderer) {
+        if (renderer != null) {
+            routeRenderers.add(renderer);
+        }
     }
 
     public void start() {
@@ -129,9 +147,7 @@ public final class NavigationTargetService {
         pushedTargets.remove(uuid);
         worldHintTimestamps.remove(uuid);
         resolverCache.remove(uuid);
-        if (markerService != null) {
-            markerService.hideMarker(player);
-        }
+        hideAllRoutes(player);
     }
 
     /**
@@ -198,9 +214,7 @@ public final class NavigationTargetService {
         for (String navId : navIds) {
             dropWaypoint(player, navId);
         }
-        if (markerService != null) {
-            markerService.hideMarker(player);
-        }
+        hideAllRoutes(player);
         return targets == null ? 0 : targets.size();
     }
 
@@ -295,9 +309,7 @@ public final class NavigationTargetService {
             if (!targets.containsKey(navId)) {
                 pushed.remove(navId);
                 dropWaypoint(player, navId);
-                if (markerService != null) {
-                    markerService.hideMarker(player, navId);
-                }
+                hideRoute(player, navId);
             }
         }
 
@@ -365,10 +377,7 @@ public final class NavigationTargetService {
                 pushed.put(navId, next);
             }
 
-            if (markerService != null) {
-                markerService.showMarker(player, navId, resolved.getWorld().getName(),
-                    resolved.getX(), resolved.getY(), resolved.getZ());
-            }
+            showRoute(player, navId, resolved);
 
             updateArrival(player, target, state, resolved, distance);
         }
@@ -461,9 +470,7 @@ public final class NavigationTargetService {
         if (pushed.remove(navId) != null) {
             dropWaypoint(player, navId);
         }
-        if (markerService != null) {
-            markerService.hideMarker(player, navId);
-        }
+        hideRoute(player, navId);
     }
 
     private void removePushed(Player player, String navId) {
@@ -475,8 +482,29 @@ public final class NavigationTargetService {
             }
         }
         dropWaypoint(player, navId);
-        if (markerService != null) {
-            markerService.hideMarker(player, navId);
+        hideRoute(player, navId);
+    }
+
+    /** 向全部路径渲染器下发目标（模型标记/贴图提示并存）。 */
+    private void showRoute(Player player, String navId, Location resolved) {
+        String worldName = resolved.getWorld() == null ? "" : resolved.getWorld().getName();
+        for (NavigationRouteRenderer renderer : routeRenderers) {
+            renderer.showMarker(player, navId, worldName,
+                resolved.getX(), resolved.getY(), resolved.getZ());
+        }
+    }
+
+    /** 移除全部路径渲染器的指定分组。 */
+    private void hideRoute(Player player, String navId) {
+        for (NavigationRouteRenderer renderer : routeRenderers) {
+            renderer.hideMarker(player, navId);
+        }
+    }
+
+    /** 移除全部路径渲染器的所有分组。 */
+    private void hideAllRoutes(Player player) {
+        for (NavigationRouteRenderer renderer : routeRenderers) {
+            renderer.hideMarker(player);
         }
     }
 
@@ -587,9 +615,7 @@ public final class NavigationTargetService {
                     dropWaypoint(playerOrNull, navId);
                 }
             }
-            if (markerService != null) {
-                markerService.hideMarker(playerOrNull);
-            }
+            hideAllRoutes(playerOrNull);
         }
     }
 

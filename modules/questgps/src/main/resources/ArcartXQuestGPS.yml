@@ -72,7 +72,7 @@ categories:
   #   sort-order: 300
 
 
-#导航配置，有 ArcartX 的 路标导航（waypoint） 和 Suite 提供的路径导航（marker）
+#导航配置：ArcartX 路标（waypoint）+ Suite 提供的两种路径导航——模型导航（model-marker）与贴图导航（texture-marker），三者互补可独立开关
 navigation:
   enabled: true
   quest-id-prefix: "AXS-questgps-"
@@ -105,10 +105,10 @@ navigation:
     #   %distance% 距离 / %world% / %x% / %y% / %z%），留空时直接显示目标名。
     title-template: ""
 
-  # 导航标记 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记。
+  # 模型导航提示 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记。
   # 仅在追踪状态变更时发包，客户端独立渲染，零服务端 tick 开销。
   # 依赖: Adyeshach + ArcartX 客户端。
-  marker:
+  model-marker:
     enabled: true
     # ArcartX 模型 ID（在 ArcartX model 配置中定义）。
     model-id: "waypoint"
@@ -132,6 +132,53 @@ navigation:
     # 距离滞回缓冲（格）：标记因超距隐藏后，须回到 path-max-distance - 本值 以内才重新显示。
     path-reshow-buffer: 8
     # A* 寻路最大迭代次数（防止服务端卡顿，越大路径越精确但越耗时）。
+    path-max-iterations: 2000
+
+  # 贴图导航提示 — 沿寻路结果向玩家单人下发 ArcartX 世界贴图（WorldTexture）路径提示。
+  # 与 model-marker 模型导航互补，可同开也可独立开关；无需 Adyeshach 实体，仅发包，天然玩家私有。
+  # 依赖: ArcartX 客户端（资源包中须存在 texture 对应贴图）。
+  texture-marker:
+    # 是否启用贴图路径提示
+    enabled: false
+    # 贴图资源 ID（ArcartX 自定义文字贴图格式：§k!%<id><type>，或资源包中注册的贴图名）
+    texture: "nav_arrow"
+    # 贴图渲染宽度 / 高度
+    width: 100
+    height: 100
+    # 是否始终面向玩家（billboard）；false = 按 pitch/yaw 定向（贴地箭头）
+    facing: false
+    # 是否泛光（夜间可见性更好）
+    glowing: true
+    # 贴图相对路径点的 Y 轴偏移（方块数）
+    y-offset: 0.1
+    # 俯仰角（度）；贴地渲染用 90，facing=true 时一般忽略
+    pitch: 90
+    # yaw 是否朝向下一个路径点（贴地箭头指示前进方向）
+    orient-to-path: true
+    # 贴图存活时长（-1 = 永续，直到导航取消/路径重算时显式移除）
+    life-time: -1
+    # 循环缩放脉冲动画；按路径点序号错开 delay 形成沿路径传播的波浪效果
+    pulse:
+      enabled: true
+      # 脉冲起始 / 目标缩放倍率
+      from: 0.8
+      to: 1.2
+      # 脉冲单段时长（客户端动画单位）
+      duration: 20
+      # 逐级延迟（每个路径点相对前一点的动画延迟；0 = 同步缩放）
+      stagger: 2
+    # ---- 路径寻路参数（与 model-marker 同语义，互不影响） ----
+    # 路径贴图间距（方块数）
+    path-interval: 3.0
+    # 路径贴图最大数量（超出后截断远端贴图）
+    path-max-markers: 20
+    # 路径更新间隔（tick）
+    path-update-ticks: 10
+    # 路径最大渲染距离（方块数）
+    path-max-distance: 64
+    # 距离滞回缓冲（格）：贴图因超距隐藏后，须回到 path-max-distance - 本值 以内才重新显示
+    path-reshow-buffer: 8
+    # A* 寻路最大迭代次数
     path-max-iterations: 2000
 
 # 提供 MySQL数据库 给 Chemdah免费版 （此为补充付费版独有功能，与任务菜单 UI 无关）

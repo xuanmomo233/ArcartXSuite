@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
  *
  * @since 1.5.0
  */
-public final class NavigationMarkerService {
+public final class NavigationMarkerService implements NavigationRouteRenderer {
 
     /** 未指定 markerKey 时的默认分组（旧单目标行为）。 */
     public static final String DEFAULT_MARKER_KEY = "default";
@@ -140,6 +140,7 @@ public final class NavigationMarkerService {
      * @param z         目标 Z
      * @since 1.6.0
      */
+    @Override
     public void showMarker(Player player, String markerKey, String world, double x, double y, double z) {
         if (!available || player == null) {
             return;
@@ -187,6 +188,7 @@ public final class NavigationMarkerService {
      * @param markerKey 标记分组键
      * @since 1.6.0
      */
+    @Override
     public void hideMarker(Player player, String markerKey) {
         if (player == null) return;
         ConcurrentMap<String, PlayerPathState> paths = playerPaths.get(player.getUniqueId());
@@ -208,6 +210,7 @@ public final class NavigationMarkerService {
     /**
      * 移除玩家的所有路径标记（全部分组）。
      */
+    @Override
     public void hideMarker(Player player) {
         if (player == null) return;
         ConcurrentMap<String, PlayerPathState> paths = playerPaths.remove(player.getUniqueId());
@@ -231,6 +234,7 @@ public final class NavigationMarkerService {
      * @return 存在且未取消时返回 {@code true}
      * @since 1.6.0
      */
+    @Override
     public boolean hasMarker(Player player, String markerKey) {
         if (player == null) return false;
         ConcurrentMap<String, PlayerPathState> paths = playerPaths.get(player.getUniqueId());
@@ -239,6 +243,7 @@ public final class NavigationMarkerService {
         return state != null && !state.cancelled;
     }
 
+    @Override
     public boolean isAvailable() {
         return available;
     }

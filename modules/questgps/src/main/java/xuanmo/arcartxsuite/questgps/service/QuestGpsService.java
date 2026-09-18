@@ -102,6 +102,7 @@ public final class QuestGpsService implements Listener {
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge,
         xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge,
+        xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge,
         MessageProvider messages,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
@@ -135,7 +136,7 @@ public final class QuestGpsService implements Listener {
             rewardReader,
             trackerBridge
         );
-        this.navigationService = new QuestGpsNavigationService(plugin, this.logger, configuration, waypointBridge, npcBridge, trackerBridge);
+        this.navigationService = new QuestGpsNavigationService(plugin, this.logger, configuration, waypointBridge, npcBridge, trackerBridge, worldTextureBridge);
         this.categoryResolver = new ChemdahCategoryResolver(
             this.logger,
             configuration.categoryDefaults(),
