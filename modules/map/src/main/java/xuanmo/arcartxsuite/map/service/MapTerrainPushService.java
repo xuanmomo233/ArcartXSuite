@@ -205,8 +205,10 @@ public final class MapTerrainPushService {
                 int mcz = cz * 4 + (i / 4);
                 try {
                     if (world.isChunkGenerated(mcx, mcz)) {
+                        // includeMaxblocky=true：getHighestBlockYAt 需要高度图，
+                        // 否则 snapshot 抛 IllegalStateException("without height map")
                         snaps[i] = world.getChunkAt(mcx, mcz).getChunkSnapshot(
-                            false, false, false);
+                            true, false, false);
                     }
                 } catch (Exception ignored) {
                     // 单块失败跳过——该 1/16 区域留空

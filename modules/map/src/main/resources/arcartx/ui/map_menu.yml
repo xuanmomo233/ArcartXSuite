@@ -264,8 +264,8 @@ ui:
               // 直接把 none 传给 Java 会 primitiveConversion NPE
               var.preloadVer = row['preloadVersion']
               var.preloadChunks = row['preloadChunks']
-              if(preloadVer != none && preloadChunks != none) {
-                var.mapRenderer.setWorldPreload('' + row['id'], preloadVer, '' + preloadChunks)
+              if(var.preloadVer != none && var.preloadChunks != none && var.preloadChunks != '') {
+                var.mapRenderer.setWorldPreload('' + row['id'], var.preloadVer, '' + var.preloadChunks)
               }
             }
           }
