@@ -276,7 +276,8 @@ public final class MapTerrainPushService {
             }
             out.flush();
             return bos.toByteArray();
-        } catch (IOException e) {
+        } catch (Exception e) {
+            // 单包构建失败（快照异常/IO 等）→ 丢包降级，不上抛炸调度器
             return null;
         }
     }
