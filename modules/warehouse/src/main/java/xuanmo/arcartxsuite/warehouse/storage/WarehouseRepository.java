@@ -58,6 +58,13 @@ public interface WarehouseRepository {
 
     void markFixedDepositClaimed(String depositId, long claimedAt) throws SQLException;
 
+    /**
+     * 删除已领取的定期存款记录。
+     *
+     * @return {@code true} 表示删除成功；记录不存在或未领取时返回 {@code false}
+     */
+    boolean deleteFixedDeposit(String depositId, UUID playerUuid) throws SQLException;
+
     void createSharedWarehouse(SharedWarehouseRecord warehouse) throws SQLException;
 
     void updateSharedWarehouseLevel(String sharedId, int level, long capacity, long updatedAt) throws SQLException;

@@ -16,6 +16,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.config.UiIdParser;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.chemdah.PresentationSource;
 import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsDatabaseSettings;
@@ -690,7 +691,9 @@ public record QuestGpsModuleConfiguration(
     ) {
         /** 标题模板拼接为单行（路标标题为单行文本）。 */
         public String titleTemplateText() {
-            return titleTemplate == null || titleTemplate.isEmpty() ? "" : String.join(" ", titleTemplate);
+            return titleTemplate == null || titleTemplate.isEmpty()
+                ? ""
+                : MessageProvider.translateColors(String.join(" ", titleTemplate));
         }
     }
 

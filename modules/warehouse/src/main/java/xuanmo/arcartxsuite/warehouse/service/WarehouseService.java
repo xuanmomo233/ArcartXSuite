@@ -686,6 +686,7 @@ public final class WarehouseService implements Listener {
                 case "select_currency" -> selectCurrency(player, value(data, 1, ""));
                 case "fixed_create" -> createFixedDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
+                case "fixed_delete" -> deleteFixedDeposit(player, value(data, 1, ""));
                 case "shared_create" -> createSharedWarehouse(player, value(data, 1, "共享仓库"));
                 case "shared_rename" -> renameSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, value(data, 1, ""));
@@ -1176,7 +1177,8 @@ public final class WarehouseService implements Listener {
         if ("bank_deposit".equals(action)
             || "bank_withdraw".equals(action)
             || "fixed_create".equals(action)
-            || "fixed_claim".equals(action)) {
+            || "fixed_claim".equals(action)
+            || "fixed_delete".equals(action)) {
             return packetBridge != null
                 && packetBridge.isUiOpen(player, bankRuntimeUiId);
         }
@@ -1218,6 +1220,7 @@ public final class WarehouseService implements Listener {
             || "bank_withdraw".equals(action)
             || "fixed_create".equals(action)
             || "fixed_claim".equals(action)
+            || "fixed_delete".equals(action)
             || "warehouse_upgrade".equals(action)
             || "shared_create".equals(action)
             || "shared_delete".equals(action)
@@ -1318,7 +1321,8 @@ public final class WarehouseService implements Listener {
         if ("bank_deposit".equals(action)
             || "bank_withdraw".equals(action)
             || "fixed_create".equals(action)
-            || "fixed_claim".equals(action)) {
+            || "fixed_claim".equals(action)
+            || "fixed_delete".equals(action)) {
             return List.of(bankRuntimeUiId);
         }
         if ("warehouse_upgrade".equals(action)) {
@@ -2296,6 +2300,29 @@ public final class WarehouseService implements Listener {
             return;
         }
         sendMessage(player, true, message("player.fixed-deposit-claimed", formatCurrency(deposit.currencyId(), payout.get())));
+        markActionCommitted(player);
+        refreshBoth(player);
+    }
+
+    /**
+     * 删除已领取的定期存款记录。
+     * 服务端二次校验 claimed 状态，仓库层 DELETE 语句也强制 claimed = true，双保险防止误删未领取资产。
+     */
+    private void deleteFixedDeposit(Player player, String depositId) throws Exception {
+        Optional<FixedDepositRecord> optional = repository.loadFixedDeposits(player.getUniqueId()).stream()
+            .filter(deposit -> deposit.id().equals(depositId))
+            .findFirst();
+        if (optional.isEmpty() || !optional.get().claimed()) {
+            sendMessage(player, false, message("player.fixed-deposit-not-deletable"));
+            refreshBoth(player);
+            return;
+        }
+        if (!repository.deleteFixedDeposit(depositId, player.getUniqueId())) {
+            sendMessage(player, false, message("player.fixed-deposit-not-deletable"));
+            refreshBoth(player);
+            return;
+        }
+        sendMessage(player, true, message("player.fixed-deposit-deleted"));
         markActionCommitted(player);
         refreshBoth(player);
     }
@@ -3492,7 +3519,8 @@ public final class WarehouseService implements Listener {
             row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             boolean matured = deposit.maturesAt() <= now;
             row.put("matured", matured);
-            row.put("statusText", matured ? "&a可领取" : "&e未到期");
+            row.put("claimed", deposit.claimed());
+            row.put("statusText", deposit.claimed() ? "&7已领取" : (matured ? "&a可领取" : "&e未到期"));
             // 预期本息 = 本金 + 本金 × 利率
             BigDecimal payout = deposit.principal()
                 .add(deposit.principal().multiply(deposit.interestRate()))

@@ -60,9 +60,13 @@ ui:
           var.mapRenderer.setServerId('' + packet['serverId'])
         }
         // 告诉 mod 渲染哪个世界的地形（HUD 固定 = 玩家当前世界，服务端已按当前世界构建）
-        var.mapRenderer.setWorldId('' + var.worldId)
+        // 注意：只报显示世界（活跃锁存+预加载），不写大地图选中世界——
+        // 大地图浏览非当前世界时，HUD 每包都发玩家世界会把菜单选中值顶掉（振荡）
+        var.mapRenderer.setHudWorldId(var.worldId)
         // 注册 worldId → MC 维度 key 映射（如 bskyblock_world → minecraft:overworld）
-        var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
+        if(var.dimension != none && '' + var.dimension != '' && '' + var.dimension != 'null') {
+          var.mapRenderer.setWorldDimension('' + var.worldId, '' + var.dimension)
+        }
         // 下发已点亮区域多边形（战争迷雾：未探索区遮罩）；litEnabled=false 时传 none 全亮
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
         // 当前世界预加载信息：HUD 也要能请求地形（玩家可能从未打开过菜单）
@@ -108,8 +112,11 @@ ui:
         if(packet['serverId'] != none && packet['serverId'] != '') {
           var.mapRenderer.setServerId('' + packet['serverId'])
         }
-        var.mapRenderer.setWorldId('' + var.worldId)
-        var.mapRenderer.setWorldDimension('' + var.worldId, var.dimension == none ? '' : '' + var.dimension)
+        // 只报显示世界（活跃锁存+预加载），不写大地图选中世界（防振荡）
+        var.mapRenderer.setHudWorldId(var.worldId)
+        if(var.dimension != none && '' + var.dimension != '' && '' + var.dimension != 'null') {
+          var.mapRenderer.setWorldDimension('' + var.worldId, '' + var.dimension)
+        }
         var.mapRenderer.setLitRegions('' + var.worldId, var.litEnabled == true ? var.litRegions : none)
         if(packet['preloadVersion'] != none && packet['preloadChunks'] != none) {
           var.mapRenderer.setWorldPreload('' + var.worldId, packet['preloadVersion'], '' + packet['preloadChunks'])

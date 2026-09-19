@@ -606,6 +606,27 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     /**
+     * 删除已领取的定期存款记录，WHERE 条件强制 claimed = true，防止误删未领取资产。
+     *
+     * @param depositId  存款 ID
+     * @param playerUuid 玩家 UUID
+     * @return {@code true} 表示删除成功；记录不存在、不属于该玩家或未领取时返回 {@code false}
+     * @throws SQLException 删除失败时抛出
+     */
+    @Override
+    public boolean deleteFixedDeposit(String depositId, UUID playerUuid) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "DELETE FROM warehouse_fixed_deposits WHERE id = ? AND player_uuid = ? AND claimed = ?"
+             )) {
+            statement.setString(1, depositId);
+            statement.setString(2, playerUuid.toString());
+            statement.setBoolean(3, true);
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    /**
      * 创建共享仓库并同时将创建者写入成员表（角色 owner），在事务中执行。
      *
      * @param warehouse 共享仓库记录

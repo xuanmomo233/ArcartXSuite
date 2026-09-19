@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
@@ -113,8 +114,8 @@ public final class QuestGpsRewardPreviewResolver {
             default -> new ResolvedRewardPreview(
                 rewardId,
                 "text",
-                blankTo(definition.displayName(), blankTo(definition.text(), "任务奖励")),
-                blankTo(definition.text(), "奖励信息未配置"),
+                blankTo(colored(definition.displayName()), blankTo(colored(definition.text()), "任务奖励")),
+                blankTo(colored(definition.text()), "奖励信息未配置"),
                 "",
                 "",
                 "",
@@ -145,8 +146,8 @@ public final class QuestGpsRewardPreviewResolver {
         if (materialId == null || materialId.isBlank()) return null;
         IconDefinition icon = new IconDefinition(
             materialId, Math.max(1, definition.amount()),
-            blankTo(definition.displayName(), ""),
-            definition.lore() != null ? definition.lore() : List.of(),
+            blankTo(colored(definition.displayName()), ""),
+            definition.lore() != null ? definition.lore().stream().map(QuestGpsRewardPreviewResolver::colored).toList() : List.of(),
             0, "", "", "", "", "",
             "", "", java.util.Map.of(), "", false, "", ""
         );
@@ -165,14 +166,14 @@ public final class QuestGpsRewardPreviewResolver {
             resolved = generateMaterial(definition.fallbackMaterial(), definition);
         }
         if (resolved != null && !resolved.getType().isAir()) {
-            return fromItemStack(rewardId, type, resolved, definition.displayName(), definition.text());
+            return fromItemStack(rewardId, type, resolved, colored(definition.displayName()), colored(definition.text()));
         }
         logger.fine("QuestGPS: 奖励预览未能解析: " + type + " -> " + configuredId);
         return new ResolvedRewardPreview(
             rewardId,
             type,
-            blankTo(definition.displayName(), blankTo(definition.text(), configuredId)),
-            blankTo(definition.text(), "奖励物品未找到"),
+            blankTo(colored(definition.displayName()), blankTo(colored(definition.text()), configuredId)),
+            blankTo(colored(definition.text()), "奖励物品未找到"),
             "",
             definition.fallbackMaterial(),
             configuredId,
@@ -191,13 +192,13 @@ public final class QuestGpsRewardPreviewResolver {
         String titleDesc = titleInfo == null ? "" : titleInfo.description();
         String duration = "permanent".equalsIgnoreCase(definition.duration()) ? "永久" : "限时 " + definition.duration();
         String description = blankTo(
-            definition.text(),
+            colored(definition.text()),
             (qualityName.isBlank() ? "" : qualityName + " · ") + duration + (titleDesc.isBlank() ? "" : " · " + titleDesc)
         );
         return new ResolvedRewardPreview(
             rewardId,
             "title",
-            blankTo(definition.displayName(), "称号: " + titleName),
+            blankTo(colored(definition.displayName()), "称号: " + titleName),
             description,
             "",
             "",
@@ -255,6 +256,10 @@ public final class QuestGpsRewardPreviewResolver {
 
     private static String blankTo(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String colored(String value) {
+        return value == null || value.isEmpty() ? "" : MessageProvider.translateColors(value);
     }
 
     public record ResolvedRewardPreview(

@@ -618,7 +618,7 @@ public final class ChatService implements Listener {
         ChatEnvelope envelope = new ChatEnvelope(
             UUID.randomUUID().toString(),
             nodeId(),
-            configuration.serverId(),
+            nodeId(),
             channel.id(),
             sender.getUniqueId().toString(),
             sender.getName(),
@@ -718,7 +718,7 @@ public final class ChatService implements Listener {
         ChatEnvelope envelope = new ChatEnvelope(
             UUID.randomUUID().toString(),
             nodeId(),
-            configuration.serverId(),
+            nodeId(),
             channel.id(),
             sender.getUniqueId().toString(),
             sender.getName(),
@@ -1497,7 +1497,7 @@ public final class ChatService implements Listener {
         }
         Player online = Bukkit.getPlayer(playerUuid);
         if (online != null) {
-            ChatPlayerProfile profile = new ChatPlayerProfile(playerUuid, online.getName(), Instant.now(), configuration.serverId());
+            ChatPlayerProfile profile = new ChatPlayerProfile(playerUuid, online.getName(), Instant.now(), nodeId());
             profiles.put(playerUuid, profile);
             return profile;
         }
@@ -1525,7 +1525,7 @@ public final class ChatService implements Listener {
                 online.getUniqueId(),
                 online.getName(),
                 Instant.now(),
-                configuration.serverId()
+                nodeId()
             );
             profiles.put(profile.playerUuid(), profile);
             return profile;
@@ -1572,7 +1572,7 @@ public final class ChatService implements Listener {
             player.getUniqueId(),
             player.getName(),
             Instant.now(),
-            configuration.serverId()
+            nodeId()
         );
         profiles.put(profile.playerUuid(), profile);
         if (persist) {
@@ -1672,10 +1672,7 @@ public final class ChatService implements Listener {
     }
 
     private String nodeId() {
-        if (crossServerChannel != null && crossServerChannel.isActive()) {
-            return crossServer.nodeId();
-        }
-        return configuration.serverId();
+        return crossServer.nodeId();
     }
 
     private static UUID parseUuid(String rawValue) {

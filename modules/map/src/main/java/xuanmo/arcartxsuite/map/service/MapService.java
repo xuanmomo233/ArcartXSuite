@@ -1457,7 +1457,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         long now = System.currentTimeMillis();
         String pinId = configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
-        String name = configuration.waypoints().autoNamePrefix() + "-标记-" + (countInWorld + 1);
+        String name = configuration.waypoints().autoNamePrefix() + "-" + (countInWorld + 1);
         MapPin pin = new MapPin(
             normalizeId(pinId), name, "", resolvedWorldId, x, z, now, now
         );
@@ -2406,7 +2406,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         long now = System.currentTimeMillis();
         String waypointId = configuration.waypoints().idPrefix() + UUID.randomUUID().toString().replace("-", "");
-        String name = configuration.waypoints().autoNamePrefix() + "-" + (countInWorld + 1);
+        String name = configuration.waypoints().waypointNamePrefix() + "-" + (countInWorld + 1);
         Location location = player.getLocation();
         MapWaypoint waypoint = new MapWaypoint(
             normalizeId(waypointId),
@@ -2749,9 +2749,17 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return List.copyOf(out);
     }
 
+    /** 世界ID→MC维度键的最近成功解析缓存：BSkyBlock 等动态世界卸载瞬间 Bukkit.getWorld 返回 null，用缓存兜底防下发空维度。 */
+    private static final ConcurrentMap<String, String> RESOLVED_DIMENSION_CACHE = new ConcurrentHashMap<>();
+
     private static String resolveDimension(WorldDefinition world) {
         World bukkitWorld = resolveWorld(world.id());
-        return bukkitWorld == null ? "" : bukkitWorld.getKey().toString();
+        if (bukkitWorld != null) {
+            String key = bukkitWorld.getKey().toString();
+            RESOLVED_DIMENSION_CACHE.put(world.id(), key);
+            return key;
+        }
+        return RESOLVED_DIMENSION_CACHE.getOrDefault(world.id(), "");
     }
 
     /** worldId → Bukkit World：精确匹配优先，退回 case-insensitive 遍历（文件名可能含大写）。 */

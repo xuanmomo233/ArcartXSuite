@@ -70,6 +70,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             .messagesFileName("messages.yml")
             .syncPolicy(SyncPolicy.builder()
                     .dynamicSection("function.custom-components")
+                    .obsoletePath("settings.server-id")
                 .build())
             .currentVersion(2)
             .validations(List.of(

@@ -23,7 +23,6 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  * 供 {@link ChatService} 在运行时读取。
  *
  * @param debug                 是否开启调试日志
- * @param serverId              当前服务器节点 ID
  * @param defaultChannelId      默认频道 ID
  * @param maxLength             单条消息最大长度
  * @param cooldownMillis        发消息冷却时间（毫秒）
@@ -39,7 +38,6 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  */
 public record ChatModuleConfiguration(
     boolean debug,
-    String serverId,
     String defaultChannelId,
     int maxLength,
     long cooldownMillis,
@@ -64,7 +62,6 @@ public record ChatModuleConfiguration(
      */
     public static ChatModuleConfiguration load(FileConfiguration configuration, File channelsDirectory, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
-        String serverId = string(configuration.getString("settings.server-id", "default"));
         String defaultChannelId = normalizeId(configuration.getString("settings.default-channel", "normal"));
         int maxLength = Math.max(1, configuration.getInt("settings.max-length", 256));
         long cooldownMillis = Math.max(0L, configuration.getLong("settings.cooldown-millis", 750L));
@@ -121,7 +118,6 @@ public record ChatModuleConfiguration(
 
         return new ChatModuleConfiguration(
             debug,
-            serverId.isBlank() ? "default" : serverId,
             defaultChannelId,
             maxLength,
             cooldownMillis,

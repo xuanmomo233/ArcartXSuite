@@ -5,10 +5,12 @@ import ink.ptms.chemdah.core.quest.Task;
 import ink.ptms.chemdah.core.quest.Template;
 import ink.ptms.chemdah.core.quest.addon.AddonStats;
 import ink.ptms.chemdah.core.quest.objective.Progress;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 /**
@@ -31,11 +33,13 @@ public final class ChemdahMetadataReader {
         if (chemdahName.isBlank()) {
             chemdahName = ChemdahConfigAccessor.readString(template, "name", "");
         }
-        return ChemdahConfigAccessor.pickString(
-            overlay.presentation().source(defaults.source()),
-            chemdahName,
-            overlay.displayNameOverride(),
-            template.getId()
+        return MessageProvider.translateColors(
+            ChemdahConfigAccessor.pickString(
+                overlay.presentation().source(defaults.source()),
+                chemdahName,
+                overlay.displayNameOverride(),
+                template.getId()
+            )
         );
     }
 
@@ -49,11 +53,13 @@ public final class ChemdahMetadataReader {
             chemdahLines = ChemdahConfigAccessor.readMultiline(template, "description");
         }
         List<String> fallback = List.of("该任务未配置描述。");
-        return ChemdahConfigAccessor.pickLines(
-            overlay.presentation().source(defaults.source()),
-            chemdahLines,
-            overlay.description(),
-            fallback
+        return translateLines(
+            ChemdahConfigAccessor.pickLines(
+                overlay.presentation().source(defaults.source()),
+                chemdahLines,
+                overlay.description(),
+                fallback
+            )
         );
     }
 
@@ -75,9 +81,9 @@ public final class ChemdahMetadataReader {
         );
         String progressSuffix = progressSuffix(profile, template, task);
         if (progressSuffix.isEmpty()) {
-            return base;
+            return MessageProvider.translateColors(base);
         }
-        return base + progressSuffix;
+        return MessageProvider.translateColors(base + progressSuffix);
     }
 
     public List<String> taskDescription(
@@ -88,12 +94,25 @@ public final class ChemdahMetadataReader {
         QuestGpsModuleConfiguration.TaskDefinition taskOverlay = overlay.task(task.getId());
         List<String> overlayLines = taskOverlay == null ? List.of() : taskOverlay.description();
         List<String> chemdahLines = ChemdahConfigAccessor.readMultiline(task, "description");
-        return ChemdahConfigAccessor.pickLines(
-            overlay.presentation().source(defaults.source()),
-            chemdahLines,
-            overlayLines,
-            List.of()
+        return translateLines(
+            ChemdahConfigAccessor.pickLines(
+                overlay.presentation().source(defaults.source()),
+                chemdahLines,
+                overlayLines,
+                List.of()
+            )
         );
+    }
+
+    private static List<String> translateLines(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+        List<String> translated = new ArrayList<>(lines.size());
+        for (String line : lines) {
+            translated.add(MessageProvider.translateColors(line == null ? "" : line));
+        }
+        return List.copyOf(translated);
     }
 
     public String taskStatusText(PlayerProfile profile, Task task, boolean completed, boolean availablePage) {

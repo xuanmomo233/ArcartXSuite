@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.util.NavigationMarkerService;
 import xuanmo.arcartxsuite.api.util.NavigationTarget;
 import xuanmo.arcartxsuite.api.util.NavigationTargetService;
 import xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
@@ -872,7 +873,7 @@ public final class QuestGpsNavigationService {
             point.x(),
             point.y(),
             point.z(),
-            blankTo(point.mapLabel(), title),
+            blankTo(colored(point.mapLabel()), title),
             point.npc(),
             point.finishRange(),
             point.finishCommands(),
@@ -885,7 +886,12 @@ public final class QuestGpsNavigationService {
     }
 
     private String effectiveTitle(String configuredTitle, String fallbackTitle) {
-        return safe(configuredTitle).isBlank() ? blankTo(fallbackTitle, "任务导航") : configuredTitle.trim();
+        String resolved = safe(configuredTitle).isBlank() ? blankTo(fallbackTitle, "任务导航") : configuredTitle.trim();
+        return MessageProvider.translateColors(resolved);
+    }
+
+    private static String colored(String value) {
+        return value == null || value.isEmpty() ? "" : MessageProvider.translateColors(value);
     }
 
     private String buildWaypointId(String questId, String taskId) {

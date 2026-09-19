@@ -1453,7 +1453,7 @@ controls:
                       y: 324
                       texts: "var.selectedDepositEntry != none ? var.selectedDepositEntry['payout'] : ''"
                       fontSize: 36
-                  # 领取按钮（底部，仅到期可领取）
+                  # 领取按钮（底部，仅到期且未领取可点击，已领取记录隐藏该按钮）
                   领取:
                     type: Canvas
                     attribute:
@@ -1462,7 +1462,8 @@ controls:
                       y: -24
                       width: "var.col3W - 48"
                       height: 48
-                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedDeposit != none && var.selectedDepositEntry != none && var.selectedDepositEntry['matured']"
+                      visible: "var.selectedDepositEntry == none || !var.selectedDepositEntry['claimed']"
+                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedDeposit != none && var.selectedDepositEntry != none && var.selectedDepositEntry['matured'] && !var.selectedDepositEntry['claimed']"
                     action:
                       clickLeft: |-
                         var.actionBusy = true
@@ -1485,5 +1486,42 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "var.selectedDepositEntry != none && var.selectedDepositEntry['matured'] ? '&a领取本息' : '&7未到期'"
+                          fontSize: 36
+                          through: true
+                  # 删除记录按钮（底部，仅已领取记录显示）
+                  删除记录:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 24
+                      y: -24
+                      width: "var.col3W - 48"
+                      height: 48
+                      visible: "var.selectedDepositEntry != none && var.selectedDepositEntry['claimed']"
+                      enable: "!var.actionBusy && var.actionToken != '' && var.selectedDeposit != none && var.selectedDepositEntry != none && var.selectedDepositEntry['claimed']"
+                    action:
+                      clickLeft: |-
+                        var.actionBusy = true
+                        Packet.send(var.packetId, 'fixed_delete', var.selectedDeposit, var.actionToken)
+                        var.selectedDeposit = none
+                        var.selectedDepositEntry = none
+                    children:
+                      删除底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~44,50,58,245
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                      删除字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "~&c删除记录"
                           fontSize: 36
                           through: true

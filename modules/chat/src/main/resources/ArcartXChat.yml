@@ -18,9 +18,6 @@ settings:
   # 是否输出 Chat 模块调试日志。
   debug: false
 
-  # 当前服务端节点标识；跨服转发或 Redis 去重时会用到。
-  server-id: "default"
-
   # 默认频道 ID；若配置不存在，模块会自动回退到首个有效频道。
   default-channel: "normal"
 

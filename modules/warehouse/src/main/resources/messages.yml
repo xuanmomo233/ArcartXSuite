@@ -140,6 +140,8 @@ player:
   secondary-required-claim: "领取定期前请先解锁二级密码。"
   fixed-deposit-not-claimable: "该定期暂不可领取。"
   fixed-deposit-claimed: "已领取定期本息 {0}。"
+  fixed-deposit-not-deletable: "该定期记录不可删除。"
+  fixed-deposit-deleted: "已删除定期存款记录。"
   shared-disabled: "共享仓库未启用。"
   shared-limit: "你已达到可创建共享仓库数量上限。"
   shared-level-missing: "共享仓库未配置初始等级。"

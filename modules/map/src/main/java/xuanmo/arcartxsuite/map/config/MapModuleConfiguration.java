@@ -458,6 +458,7 @@ public record MapModuleConfiguration(
             string(section == null ? null : section.getString("default-style-id"), "default"),
             string(section == null ? null : section.getString("id-prefix"), "AXS-map-wp-"),
             string(section == null ? null : section.getString("auto-name-prefix"), "标记点"),
+            string(section == null ? null : section.getString("waypoint-name-prefix"), "路径点"),
             section == null ? 5 : Math.max(1, section.getInt("default-max-count", 5)),
             List.copyOf(limits)
         );
@@ -985,7 +986,8 @@ public record MapModuleConfiguration(
      * @param enabled         是否启用自定义路径点
      * @param defaultStyleId  默认样式 ID
      * @param idPrefix        路径点 ID 前缀
-     * @param autoNamePrefix  自动命名前缀
+     * @param autoNamePrefix  自动命名前缀（标记点）
+     * @param waypointNamePrefix 自动命名前缀（路径点）
      * @param defaultMaxCount 默认每世界最大数量
      * @param limits          按权限区分的数量限制列表
      */
@@ -994,6 +996,7 @@ public record MapModuleConfiguration(
         String defaultStyleId,
         String idPrefix,
         String autoNamePrefix,
+        String waypointNamePrefix,
         int defaultMaxCount,
         List<WaypointLimit> limits
     ) {

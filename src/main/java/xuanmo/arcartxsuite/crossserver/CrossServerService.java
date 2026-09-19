@@ -58,7 +58,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         shutdownBackends();
         configuration = CrossServerGlobalConfiguration.from(plugin.getConfig());
         dedupe = new CrossServerDedupe(configuration.dedupeTtlMs());
-        if (configuration.shouldSign() && configuration.signatureSecret().isBlank()) {
+        if (configuration.signatureEnabled() && configuration.signatureSecret().isBlank()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] signature.enabled=true 但 secret 为空，跨服消息发送已被禁用（拒绝裸奔）。请配置 cross-server.signature.secret 或将 signature.enabled 设为 false。");
         }
         if (configuration.redisEnabled()) {
@@ -307,7 +307,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
             return;
         }
         // 签名启用但密钥为空时拒绝发送（fail-closed，防止无签名裸奔被中间人伪造）
-        if (configuration.shouldSign() && configuration.signatureSecret().isBlank()) {
+        if (configuration.signatureEnabled() && configuration.signatureSecret().isBlank()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning(
                 "[CrossServer] 模块 " + unsignedEnvelope.module() + " 发送被拒绝：signature.enabled=true 但 secret 为空"
             );

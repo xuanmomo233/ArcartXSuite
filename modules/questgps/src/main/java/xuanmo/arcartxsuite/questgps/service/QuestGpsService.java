@@ -354,7 +354,7 @@ public final class QuestGpsService implements Listener {
                     chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation())
                 ));
             } else {
-                String reason = result == null ? "未知原因" : safe(result.getReason());
+                String reason = result == null ? "未知原因" : MessageProvider.translateColors(safe(result.getReason()));
                 player.sendMessage(PREFIX + message(
                     "player.accept-result-failed",
                     blankTo(reason, result == null ? "未知错误" : result.getType().name())
