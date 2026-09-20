@@ -26,6 +26,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
@@ -68,7 +69,9 @@ import xuanmo.arcartxsuite.map.model.MapPin;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 import xuanmo.arcartxsuite.map.storage.MapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.map.crossserver.MapCrossServerService;
 import java.util.logging.Logger;
 
 /**
@@ -117,6 +120,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final java.util.function.Supplier<EventBusCapability> eventBusProvider;
     /** Essentials 模块查询能力（读取 /setspawn 出生点，MV 不存在时的二级来源）。 */
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider;
+    /** 宿主跨服 API（{@code cross-server.enabled=false} 或未注入时为 null，跨服功能整体禁用）。 */
+    private final CrossServerAPI crossServerApi;
+    /** 跨服地图服务（目录广播/地形中继/传送握手）；cross-server.enabled=false 时为 null。 */
+    private MapCrossServerService crossServer;
     private NavigationMarkerService markerService;
     /** 贴图路径提示服务（WorldTexture，与模型标记互补、独立开关）。 */
     private xuanmo.arcartxsuite.api.util.NavigationTextureMarkerService textureMarkerService;
@@ -185,7 +192,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
-            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null, null, null);
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null, null, null, null, null);
     }
 
     public MapService(
@@ -205,7 +212,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MessageProvider messages,
         java.util.function.Supplier<EventBusCapability> eventBusProvider,
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> essentialsProvider,
-        xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge
+        xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge,
+        CrossServerAPI crossServerApi
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -225,6 +233,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.eventBusProvider = eventBusProvider != null ? eventBusProvider : () -> null;
         this.essentialsProvider = essentialsProvider != null ? essentialsProvider : () -> null;
         this.worldTextureBridge = worldTextureBridge;
+        this.crossServerApi = crossServerApi;
     }
 
     private String message(String key, Object... args) {
@@ -285,6 +294,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         terrainPush = new MapTerrainPushService(plugin, logger);
         terrainPush.start();
+        // 跨服地图：目录广播 + 远程世界缓存 + 地形中继 + 传送握手。
+        // 宿主 cross-server 未启用时 channel.isActive()=false，服务自降级为纯广播空转。
+        if (configuration.crossServer().enabled() && crossServerApi != null) {
+            crossServer = new MapCrossServerService(
+                plugin, logger, configuration.crossServer(), crossServerApi,
+                terrainPush, new CrossServerHandler());
+            crossServer.start();
+            logger.info("[Map] 跨服地图已启用，节点 " + crossServer.nodeId()
+                + "，远程节点 " + crossServer.remoteNodeCount() + " 个");
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -310,6 +329,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (textureMarkerService != null) {
             textureMarkerService.shutdown();
             textureMarkerService = null;
+        }
+        if (crossServer != null) {
+            crossServer.shutdown();
+            crossServer = null;
         }
         if (terrainPush != null) {
             terrainPush.shutdown();
@@ -1223,7 +1246,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         String resolvedWorldId = normalizeId(worldId);
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
-            player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
+            // 复合 id（nodeId/worldId）：远程世界同样允许打开浏览
+            MapCrossServerService.RemoteWorldView remote =
+                crossServer == null ? null : crossServer.remoteWorld(resolvedWorldId);
+            if (remote == null) {
+                player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
+                return;
+            }
+            state(player).selectWorld(remote.compositeId());
+            sync(player, false);
             return;
         }
         state(player).selectWorld(resolvedWorldId);
@@ -1236,7 +1267,18 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         AnchorDefinition anchor = configuration.anchor(anchorId);
-        if (anchor == null || !configuration.worlds().containsKey(anchor.worldId())) {
+        if (anchor == null) {
+            // 复合锚点 id（nodeId/anchorId）：选中远程锚点并切换到其远程世界
+            MapCrossServerService.RemoteAnchorView remote =
+                crossServer == null ? null : crossServer.remoteAnchor(normalizeId(anchorId));
+            if (remote != null) {
+                state(player).selectWorld(remote.compositeWorldId());
+                state(player).selectAnchor(remote.compositeId());
+            }
+            sync(player, false);
+            return;
+        }
+        if (!configuration.worlds().containsKey(anchor.worldId())) {
             sync(player, false);
             return;
         }
@@ -1424,8 +1466,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         String resolvedWorldId = normalizeId(worldId);
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
-            player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
-            return false;
+            // 复合世界 id → 跨服传送到该远程世界出生点
+            MapCrossServerService.RemoteWorldView remote =
+                crossServer == null ? null : crossServer.remoteWorld(resolvedWorldId);
+            if (remote == null) {
+                player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
+                return false;
+            }
+            sendPlayerResult(player,
+                crossServer.requestTeleport(player, remote.nodeId(), remote.worldId(), ""));
+            return true;
         }
         Location spawn = resolveWorldSpawn(resolveWorld(resolvedWorldId));
         if (spawn == null) {
@@ -1851,8 +1901,22 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
         terrainRequestAt.remove(uuid);
+        if (crossServer != null) {
+            crossServer.onPlayerQuit(uuid);
+        }
         // 移除"默认解锁已确保"标记：重登重新尝试，解锁失败的锚点有补救机会
         defaultUnlocksEnsured.remove(uuid);
+    }
+
+    /**
+     * 玩家进服：消费该玩家在目标服上挂起的跨服落地传送（若有）。
+     * 事件在玩家正式加入时触发，crossServer 内部按 arrivalDelayTicks 延迟执行。
+     */
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (crossServer != null && event.getPlayer() != null) {
+            crossServer.onPlayerJoin(event.getPlayer());
+        }
     }
 
     /**
@@ -2085,7 +2149,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         WorldDefinition world = configuration.worlds().get(normalizeId(request.worldId()));
-        if (world == null || !world.hasPreload()) {
+        if (world == null) {
+            // 复合世界 id（nodeId/worldId）→ 远程地形中继到目标节点
+            if (crossServer != null && MapCrossServerService.splitComposite(request.worldId()) != null) {
+                crossServer.relayTerrainRequest(player, normalizeId(request.worldId()), request.chunks());
+            }
+            return;
+        }
+        if (!world.hasPreload()) {
             return;
         }
         World bukkitWorld = resolveWorld(world.id());
@@ -2146,11 +2217,25 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         AnchorDefinition anchor = configuration.anchor(anchorId);
         if (anchor == null) {
+            // 复合锚点 id → 跨服传送握手（目标服落地时才扣费）
+            MapCrossServerService.RemoteAnchorView remote =
+                crossServer == null ? null : crossServer.remoteAnchor(normalizeId(anchorId));
+            if (remote != null) {
+                return crossServer.requestTeleport(player, remote.nodeId(), remote.worldId(), remote.anchorId());
+            }
             return MapOperationResult.failure(message("player.anchor-not-found", anchorId));
         }
         if (!isAnchorUnlocked(player, anchor)) {
             return MapOperationResult.failure(message("player.anchor-locked"));
         }
+        return performAnchorTeleport(player, anchor);
+    }
+
+    /**
+     * 锚点传送的扣费+传送段：权限/世界校验 → 物品预检 → 货币扣费 → 传送 →
+     * 失败回滚。本服 UI 传送与跨服落地传送共用（跨服落地由调用方自行处理解锁要求）。
+     */
+    private MapOperationResult performAnchorTeleport(Player player, AnchorDefinition anchor) {
         MapOperationResult accessResult = validateAnchorAccess(player, anchor);
         if (!accessResult.success()) {
             return accessResult;
@@ -2178,6 +2263,22 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!itemResult.success()) {
             rollbackCurrencies(player, currencyReceipt.successfulCharges());
             return itemResult;
+        }
+        sync(player, false);
+        return MapOperationResult.success(message("player.teleported-to-anchor", anchor.displayName()));
+    }
+
+    /** 免费锚点落地：不扣费，仅做权限/世界校验后传送。 */
+    private MapOperationResult performFreeAnchorTeleport(Player player, AnchorDefinition anchor, World world) {
+        MapOperationResult accessResult = validateAnchorAccess(player, anchor);
+        if (!accessResult.success()) {
+            return accessResult;
+        }
+        boolean teleported = player.teleport(
+            new Location(world, anchor.x(), anchor.y(), anchor.z(), player.getLocation().getYaw(), player.getLocation().getPitch())
+        );
+        if (!teleported) {
+            return MapOperationResult.failure(message("player.teleport-failed"));
         }
         sync(player, false);
         return MapOperationResult.success(message("player.teleported-to-anchor", anchor.displayName()));
@@ -2747,7 +2848,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     world.hasPreload() ? preloadRegionPoints(world) : List.of(),
                     world.hasPreload() ? preloadChunkCoords(world) : List.of(),
                     center == null ? 0 : center.getX(),
-                    center == null ? 0 : center.getZ()
+                    center == null ? 0 : center.getZ(),
+                    false, "", false
                 )
             );
         }
@@ -2773,9 +2875,52 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                     anchor.sortOrder(),
                     toRegionPoints(anchor.lightRegions()),
                     anchor.lightRadius(),
-                    anchor.unlock().radius()
+                    anchor.unlock().radius(),
+                    false, ""
                 )
             );
+        }
+
+        // 远程世界/锚点并入快照：复合 id（nodeId/worldId）与本机世界同列表共存，
+        // 互不覆盖；远程地形维度桶 axsremote.<node>.<dim> 隔离客户端缓存。
+        if (crossServer != null) {
+            for (MapCrossServerService.RemoteWorldView remote : crossServer.remoteWorlds()) {
+                worlds.add(new MapSnapshotBuilder.WorldView(
+                    remote.compositeId(),
+                    remote.displayName().isBlank() ? remote.worldId() : remote.displayName(),
+                    remote.dimensionKey(),
+                    remote.preloadVersion(),
+                    List.of(),
+                    remote.preloadChunkList(),
+                    remote.centerX(),
+                    remote.centerZ(),
+                    true,
+                    remote.serverName(),
+                    remote.allowArrive()
+                ));
+                for (MapCrossServerService.RemoteAnchorView anchor : remote.anchors()) {
+                    anchors.add(new MapSnapshotBuilder.AnchorView(
+                        anchor.compositeId(),
+                        anchor.compositeWorldId(),
+                        anchor.displayName(),
+                        anchor.description(),
+                        anchor.x(),
+                        anchor.y(),
+                        anchor.z(),
+                        true,              // 远程锚点对浏览者展示为可用（落地校验在目标服）
+                        "",
+                        anchor.teleportCost(),
+                        false,             // 本服不可解锁远程锚点
+                        anchor.allowArrive(),
+                        anchor.sortOrder(),
+                        List.of(),
+                        0,
+                        0,
+                        true,
+                        anchor.serverName()
+                    ));
+                }
+            }
         }
 
         Location location = player == null ? null : player.getLocation();
@@ -3158,6 +3303,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("preloadChunks", row.preloadChunks());
             entry.put("centerX", row.centerX());
             entry.put("centerZ", row.centerZ());
+            entry.put("remote", row.remote());
+            entry.put("server", row.server());
+            entry.put("canTeleport", row.canTeleport());
             worldRows.put(Integer.toString(i), entry);
         }
         payload.put("worldRows", worldRows);
@@ -3177,6 +3325,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("teleportCostText", row.teleportCostText());
             entry.put("selected", row.selected());
             entry.put("tracked", row.tracked());
+            entry.put("remote", row.remote());
             anchorRows.put(Integer.toString(i), entry);
         }
         payload.put("anchorRows", anchorRows);
@@ -3258,6 +3407,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailTrackingText", snapshot.detail().trackingText());
         payload.put("detailNavigated", snapshot.detail().navigated());
         payload.put("detailCrossWorldCostText", snapshot.detail().crossWorldCostText());
+        payload.put("detailRemote", snapshot.detail().remote());
+        payload.put("detailServerName", snapshot.detail().serverName());
         payload.put("litEnabled", snapshot.litEnabled());
         payload.put("litRegions", snapshot.litRegions());
         payload.put("maxWorldCount", worldRows.size());
@@ -3606,6 +3757,198 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 }
             }
             return false;
+        }
+    }
+
+    // ─── 跨服地图回调（MapCrossServerService.Handler）───────────────
+    //
+    // 所有回调均在主线程执行（宿主投递保证）。方向分两侧：
+    //   源服 = 发起浏览/传送的服；目标服 = 提供世界/接受落地的服。
+
+    private final class CrossServerHandler implements MapCrossServerService.Handler {
+
+        /**
+         * 本机对外广播的共享世界目录：worlds/<world>.yml 中 cross-server.share=true
+         * 的世界，含显示名/维度/中心点/预加载覆盖/锚点摘要。
+         */
+        @Override
+        public List<MapCrossServerService.SharedWorldInfo> sharedWorldCatalog() {
+            List<MapCrossServerService.SharedWorldInfo> out = new ArrayList<>();
+            for (WorldDefinition world : configuration.worlds().values()) {
+                if (!world.crossShare()) {
+                    continue;
+                }
+                Location center = resolveWorldCenter(world);
+                int preloadVersion = world.hasPreload() ? effectivePreloadVersion(world) : 0;
+                List<MapCrossServerService.SharedAnchor> sharedAnchors = new ArrayList<>();
+                for (AnchorDefinition anchor : configuration.anchors().values()) {
+                    if (!normalizeId(anchor.worldId()).equals(world.id())) {
+                        continue;
+                    }
+                    sharedAnchors.add(new MapCrossServerService.SharedAnchor(
+                        anchor.id(),
+                        anchor.displayName(),
+                        anchor.description(),
+                        anchor.x(),
+                        anchor.y(),
+                        anchor.z(),
+                        anchor.sortOrder(),
+                        formatTeleportCostText(anchor)
+                    ));
+                }
+                out.add(new MapCrossServerService.SharedWorldInfo(
+                    world.id(),
+                    resolveDisplayName(world),
+                    resolveDimension(world),
+                    center == null ? 0 : center.getX(),
+                    center == null ? 0 : center.getZ(),
+                    preloadVersion,
+                    preloadVersion > 0
+                        ? MapCrossServerService.chunkCsv(
+                            preloadChunkCoords(world).stream()
+                                .map(c -> new long[]{c[0], c[1]})
+                                .toList())
+                        : "",
+                    world.crossArrive(),
+                    sharedAnchors
+                ));
+            }
+            return out;
+        }
+
+        /**
+         * 远程目录变化：刷新正在浏览该节点世界的玩家的菜单（选中世界被摘除时
+         * 快照构建会自动回退到玩家当前世界）。
+         */
+        @Override
+        public void remoteCatalogChanged(String nodeId) {
+            String prefix = nodeId + "/";
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                MapPlayerViewState state = viewStates.get(player.getUniqueId());
+                if (state != null && state.selectedWorldId().startsWith(prefix)) {
+                    sync(player, false);
+                }
+            }
+        }
+
+        /**
+         * 目标服侧：校验世界可共享中继并打包票据。
+         * 只接受 crossShare=true 且有预加载的世界；请求块 ⊆ 预加载覆盖。
+         */
+        @Override
+        public MapCrossServerService.TerrainRelayTicket prepareTerrainRelay(String worldId, List<long[]> chunks) {
+            WorldDefinition world = configuration.worlds().get(worldId);
+            if (world == null || !world.crossShare() || !world.hasPreload()) {
+                return null;
+            }
+            World bukkitWorld = resolveWorld(world.id());
+            if (bukkitWorld == null) {
+                return null;
+            }
+            Set<Long> allowed = new HashSet<>();
+            for (int[] c : preloadChunkCoords(world)) {
+                allowed.add(((long) c[0] << 32) | (c[1] & 0xffffffffL));
+            }
+            List<Long> accepted = new ArrayList<>(chunks.size());
+            for (long[] c : chunks) {
+                if (c == null || c.length < 2) {
+                    continue;
+                }
+                long packed = ((long) c[0] << 32) | (c[1] & 0xffffffffL);
+                if (allowed.contains(packed)) {
+                    accepted.add(packed);
+                }
+            }
+            return accepted.isEmpty()
+                ? null
+                : new MapCrossServerService.TerrainRelayTicket(bukkitWorld, accepted, effectivePreloadVersion(world));
+        }
+
+        /**
+         * 目标服侧：落地前校验（玩家此时不在线）。要求 arrivals.enabled、
+         * 世界允许落地、锚点属于该世界；require-anchor-unlock 时查解锁记录。
+         */
+        @Override
+        public MapOperationResult validateArrival(UUID playerUuid, String worldId, String anchorId) {
+            if (!configuration.crossServer().arrivals().enabled()) {
+                return MapOperationResult.failure("arrivals-disabled");
+            }
+            WorldDefinition world = configuration.worlds().get(worldId);
+            if (world == null || !world.crossArrive()) {
+                return MapOperationResult.failure("world-no-arrive");
+            }
+            if (!anchorId.isEmpty()) {
+                AnchorDefinition anchor = configuration.anchor(anchorId);
+                if (anchor == null || !normalizeId(anchor.worldId()).equals(world.id())) {
+                    return MapOperationResult.failure("anchor-unknown");
+                }
+                if (configuration.crossServer().arrivals().requireAnchorUnlock()) {
+                    try {
+                        if (!repository.loadUnlockedAnchors(playerUuid).contains(anchor.id())) {
+                            return MapOperationResult.failure("anchor-locked");
+                        }
+                    } catch (Exception e) {
+                        return MapOperationResult.failure("storage-error");
+                    }
+                }
+            }
+            return resolveWorld(world.id()) == null
+                ? MapOperationResult.failure("world-unloaded")
+                : MapOperationResult.success("");
+        }
+
+        /**
+         * 目标服侧：玩家已进服，执行落地传送。
+         * 锚点落地按 chargeTeleportCost 决定是否走本服锚点传送扣费链；
+         * 世界出生点落地永远免费（与本机 teleportToWorld 一致）。
+         */
+        @Override
+        public void executeArrival(Player player, String worldId, String anchorId) {
+            WorldDefinition world = configuration.worlds().get(worldId);
+            if (world == null || !world.crossArrive()) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.cross-server-arrive-failed", worldId)));
+                return;
+            }
+            World bukkitWorld = resolveWorld(world.id());
+            if (bukkitWorld == null) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-world-unloaded", worldId)));
+                return;
+            }
+            if (anchorId.isEmpty()) {
+                Location spawn = resolveWorldSpawn(bukkitWorld);
+                if (spawn == null) {
+                    sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-world-unloaded", worldId)));
+                    return;
+                }
+                player.teleport(spawn);
+                sendPlayerResult(player, MapOperationResult.success(
+                    message("player.cross-server-arrived", resolveDisplayName(world))));
+                sync(player, false);
+                return;
+            }
+            AnchorDefinition anchor = configuration.anchor(anchorId);
+            if (anchor == null || !normalizeId(anchor.worldId()).equals(world.id())) {
+                sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-not-found", anchorId)));
+                return;
+            }
+            // 收费路径复用本服锚点传送链（扣费→传送→失败回滚）；免费则直传
+            MapOperationResult result = configuration.crossServer().arrivals().chargeTeleportCost()
+                ? performAnchorTeleport(player, anchor)
+                : performFreeAnchorTeleport(player, anchor, bukkitWorld);
+            sendPlayerResult(player, result);
+        }
+
+        @Override
+        public void notifyPlayerResult(UUID playerUuid, MapOperationResult result) {
+            Player player = playerUuid == null ? null : Bukkit.getPlayer(playerUuid);
+            if (player != null) {
+                sendPlayerResult(player, result);
+            }
+        }
+
+        @Override
+        public String resolveMessage(String key, Object... args) {
+            return message(key, args);
         }
     }
 }

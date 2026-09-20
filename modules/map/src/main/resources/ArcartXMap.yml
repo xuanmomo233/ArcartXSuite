@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 4
+config-version: 6
 # AXS Map
 # 作用: 提供全屏地图 GUI、小地图 HUD、世界配置、锚点、路径点、自定义图标和 AXMap 临时导航目标。
 # 依赖: ArcartX；Vault、PlayerPoints、MythicMobs、NeigeItems 按功能选用。
@@ -199,3 +199,44 @@ share:
   card-id: "axs_map_share"
   # 分享链接有效期（分钟）。分享码存内存，重启/重载后失效；过期后点击领取会提示失败
   expire-minutes: 30
+
+# ─── 跨服地图 ──────────────────────────────────────────
+# 前置：宿主 plugins/ArcartX-Suite/config.yml 的 cross-server 节须启用并配好
+# node-id 与 Redis/Proxy 后端，各子服的 node-id 必须互不相同。
+# 开启后：本机把 worlds/<world>.yml 中 cross-server.share=true 的世界广播给其他
+# 子服；地图列表中可浏览远程世界（复合 id "节点/世界"），客户端选中远程世界后
+# 地形经本机中继获取（缓存按 axsremote.<节点>.<维度> 隔离，不覆盖本地地形）。
+cross-server:
+  # 跨服地图总开关：false 时本机不广播目录、不接收远程目录、跨服传送不可用
+  enabled: false
+  # 本机在其他服地图上的显示名（留空 = 宿主 cross-server.node-id）
+  display-name: ""
+  # 本机在 BungeeCord/Velocity 代理上的服务器名（跨服传送 Connect 目标；
+  # 留空 = node-id）。须与代理 config 中的服务器名完全一致
+  proxy-name: ""
+  # 世界目录广播间隔（秒），≥15。每次心跳携带全部共享世界与锚点摘要
+  announce-interval-seconds: 120
+  # 远程节点目录过期时间（秒），≥60。超时未收到心跳即摘除其全部远程世界
+  node-ttl-seconds: 400
+  # 远程地形中继：true = 本机既可为其他服生成地形，也允许本机玩家浏览远程世界。
+  # 远程地形仅在目标世界预加载覆盖范围内中继，无法越权拉取任意地形
+  terrain-relay: true
+  # 跨服传送握手超时（秒），≥3。超时未获目标服应答视为失败
+  request-timeout-seconds: 10
+  # 玩家跨服落地后延迟多少 tick 再执行传送（等待进服稳定），0 = 立即
+  arrival-delay-ticks: 20
+  # 本机作为"目标服"时接受其他服玩家落地的策略
+  arrivals:
+    # 是否接受跨服落地传送（false = 只共享浏览，不接受传送）
+    enabled: true
+    # 锚点落地是否要求玩家在本机已有解锁记录；
+    # false = 广播出去的锚点视为公共传送点，未解锁也可落地
+    require-anchor-unlock: false
+    # 落地锚点是否按本机锚点 teleport 节扣费（货币桥只能操作在线玩家，
+    # 故费用统一在落地后收取，源服不预扣）
+    charge-teleport-cost: true
+  # 通道后端覆盖（可选）：不配置时继承宿主全局 cross-server 后端设置
+  # redis:
+  #   enabled: true
+  # proxy:
+  #   enabled: true

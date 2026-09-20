@@ -28,6 +28,17 @@ preload:
   # points: [[-100, -100], [100, -100], [100, 100], [-100, 100]]
   regions: []
 
+# ─── 跨服共享 ──────────────────────────────────────────
+# 仅在 ArcartXMap.yml 的 cross-server.enabled=true 且宿主 cross-server
+# 基础设施可用时生效。本机把该世界广播给其他子服；远程玩家在地图上看到
+# 本世界（复合 id "节点/世界"），地形经其所在服中继获取（限 preload 覆盖范围）。
+cross-server:
+  # 是否向其他子服广播该世界（世界元数据 + 锚点摘要 + 预加载覆盖）
+  share: true
+  # 是否允许其他子服玩家跨服传送到该世界（落地策略见 ArcartXMap.yml
+  # cross-server.arrivals 节；false = 仅可浏览，不可传送）
+  arrive: true
+
 # 锚点列表。注意：解锁记录 ≠ 使用权限——default 解锁的玩家若锚点配了
 # permission，仍需持有该权限才能传送。
 anchors:

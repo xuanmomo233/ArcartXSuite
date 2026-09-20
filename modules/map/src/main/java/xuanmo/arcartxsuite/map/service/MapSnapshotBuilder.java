@@ -43,7 +43,8 @@ public final class MapSnapshotBuilder {
             worldRows.add(new WorldRow(world.id(), world.displayName(), world.dimension(),
                 world.id().equalsIgnoreCase(selectedWorldId),
                 world.preloadVersion(), serializeChunks(world.preloadChunks()),
-                world.centerX(), world.centerZ()));
+                world.centerX(), world.centerZ(),
+                world.remote(), world.serverName(), world.canTeleport()));
         }
 
         List<AnchorView> visibleAnchors = input.anchors().stream()
@@ -64,7 +65,8 @@ public final class MapSnapshotBuilder {
                     anchor.unlockCostText(),
                     anchor.teleportCostText(),
                     anchor.id().equalsIgnoreCase(input.viewState().selectedAnchorId()),
-                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id()))
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id())),
+                    anchor.remote()
                 )
             );
         }
@@ -282,19 +284,23 @@ public final class MapSnapshotBuilder {
                     ? (Double.isNaN(dist) ? "距离 --" : "距离 " + Math.round(dist) + "m")
                         + " / 需 ≤" + Math.round(radius) + "m"
                     : "";
+                // 远程锚点详情：位置行前冠 [服务器名]，导航/解锁能力由远端权威，本地面板只读
+                String detailWorldName = anchor.remote() && !anchor.serverName().isBlank()
+                    ? "[" + anchor.serverName() + "] " + selectedWorldName
+                    : selectedWorldName;
                 return new DetailSnapshot(
                     "anchor",
                     anchor.id(),
                     anchor.displayName(),
                     anchor.description(),
-                    locationText(selectedWorldName, anchor.x(), anchor.y(), anchor.z()),
+                    locationText(detailWorldName, anchor.x(), anchor.y(), anchor.z()),
                     anchor.unlocked(),
                     anchor.unlockCostText(),
                     anchor.teleportCostText(),
                     false,
                     anchor.canUnlock(),
                     anchor.canTeleport(),
-                    input.navigationEnabled(),
+                    !anchor.remote() && input.navigationEnabled(),
                     false,
                     false,
                     false,
@@ -305,7 +311,9 @@ public final class MapSnapshotBuilder {
                     input.navigationStates().values().stream().anyMatch(state -> state.matchesAnchor(anchor.id())),
                     radius, dist, inRange, rangeText,
                     anchor.worldId().equalsIgnoreCase(input.playerWorldId())
-                        ? "" : anchor.teleportCostText()
+                        ? "" : anchor.teleportCostText(),
+                    anchor.remote(),
+                    anchor.serverName()
                 );
             }
         }
@@ -336,7 +344,9 @@ public final class MapSnapshotBuilder {
                     input.navigationStates().values().stream().anyMatch(state -> state.matchesWaypoint(waypoint.waypointId())),
                     0, -1, true, "",
                     selectedWorldId.equalsIgnoreCase(input.playerWorldId())
-                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, waypoint.x(), waypoint.z())
+                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, waypoint.x(), waypoint.z()),
+                    false,
+                    ""
                 );
             }
         }
@@ -365,7 +375,9 @@ public final class MapSnapshotBuilder {
                     target.navigated(),
                     0, -1, true, "",
                     selectedWorldId.equalsIgnoreCase(input.playerWorldId())
-                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, target.x(), target.z())
+                        ? "" : nearestAnchorTeleportCost(input, selectedWorldId, target.x(), target.z()),
+                    false,
+                    ""
                 );
             }
         }
@@ -393,6 +405,8 @@ public final class MapSnapshotBuilder {
                     trackingText(input.navigationStates()),
                     false,
                     0, -1, true, "",
+                    "",
+                    false,
                     ""
                 );
             }
@@ -419,6 +433,8 @@ public final class MapSnapshotBuilder {
             trackingText(input.navigationStates()),
             false,
             0, -1, true, "",
+            "",
+            false,
             ""
         );
     }
@@ -645,6 +661,9 @@ public final class MapSnapshotBuilder {
      * @param preloadChunks  预加载覆盖的 MapChunk 坐标（64² 网格），逐项 {cx, cz}
      * @param centerX        世界中心 X（preload.center ?? 出生点链；浏览非当前世界时的视野中心）
      * @param centerZ        世界中心 Z
+     * @param remote         是否远程世界（跨服目录投影，id 为 nodeId/worldId 复合 id）
+     * @param serverName     远程节点显示名（本地世界为空串）
+     * @param canTeleport    是否允许跨服落地传送（本地世界恒 false——本地走锚点传送）
      */
     public record WorldView(
         String id,
@@ -654,7 +673,10 @@ public final class MapSnapshotBuilder {
         List<List<int[]>> preloadRegions,
         List<int[]> preloadChunks,
         double centerX,
-        double centerZ
+        double centerZ,
+        boolean remote,
+        String serverName,
+        boolean canTeleport
     ) {
     }
 
@@ -677,6 +699,8 @@ public final class MapSnapshotBuilder {
      * @param lightRegions     解锁后点亮的多边形区域列表
      * @param lightRadius      解锁后点亮的圆形半径（≤0 = 不用圆形）
      * @param unlockRadius     手动解锁三维距离门槛（≤0 = 不限距离）
+     * @param remote           是否远程锚点（id 为 nodeId/anchorId 复合 id，worldId 为复合世界 id）
+     * @param serverName       远程节点显示名（本地锚点为空串）
      */
     public record AnchorView(
         String id,
@@ -694,7 +718,9 @@ public final class MapSnapshotBuilder {
         int sortOrder,
         List<List<int[]>> lightRegions,
         double lightRadius,
-        double unlockRadius
+        double unlockRadius,
+        boolean remote,
+        String serverName
     ) {
     }
 
@@ -823,6 +849,9 @@ public final class MapSnapshotBuilder {
      * @param selected    是否当前选中
      * @param centerX     世界中心 X（出生点链；客户端浏览非当前世界的默认视野中心）
      * @param centerZ     世界中心 Z
+     * @param remote      是否远程世界（跨服目录投影）
+     * @param server      远程节点显示名（本地世界为空串；UI 用作服务器徽标）
+     * @param canTeleport 远程世界是否允许跨服落地传送（本地世界恒 false）
      */
     public record WorldRow(
         String id,
@@ -832,7 +861,10 @@ public final class MapSnapshotBuilder {
         int preloadVersion,
         String preloadChunks,
         double centerX,
-        double centerZ
+        double centerZ,
+        boolean remote,
+        String server,
+        boolean canTeleport
     ) {
     }
 
@@ -850,6 +882,7 @@ public final class MapSnapshotBuilder {
      * @param teleportCostText 传送费用文本
      * @param selected         是否当前选中
      * @param tracked          是否正在追踪
+     * @param remote           是否远程锚点（跨服目录投影，解锁/导航按远端权威展示）
      */
     public record AnchorRow(
         String id,
@@ -862,7 +895,8 @@ public final class MapSnapshotBuilder {
         String unlockCostText,
         String teleportCostText,
         boolean selected,
-        boolean tracked
+        boolean tracked,
+        boolean remote
     ) {
     }
 
@@ -967,6 +1001,8 @@ public final class MapSnapshotBuilder {
      * @param unlockRangeText    距离提示文本（"距离 112m / 需 ≤8m"；无门槛/已解锁/非锚点为空串）
      * @param crossWorldCostText 跨世界导航费用提示（目标在玩家当前世界时为空串；
      *                           锚点=自身传送费，路径点/外部目标=目标世界最近已解锁锚点的传送费）
+     * @param remote             选中目标是否远程（跨服锚点；UI 切换为跨服传送确认流程）
+     * @param serverName         远程节点显示名（本地目标为空串）
      */
     public record DetailSnapshot(
         String selectedType,
@@ -993,7 +1029,9 @@ public final class MapSnapshotBuilder {
         double distanceToAnchor,
         boolean unlockInRange,
         String unlockRangeText,
-        String crossWorldCostText
+        String crossWorldCostText,
+        boolean remote,
+        String serverName
     ) {
     }
 

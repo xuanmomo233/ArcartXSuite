@@ -32,6 +32,7 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
  * @param anchors       锚点定义映射（键为锚点 ID）
  * @param waypoints     路径点功能配置
  * @param share         点位分享配置
+ * @param crossServer   跨服地图配置
  */
 public record MapModuleConfiguration(
     boolean debug,
@@ -42,7 +43,8 @@ public record MapModuleConfiguration(
     Map<String, WorldDefinition> worlds,
     Map<String, AnchorDefinition> anchors,
     WaypointConfiguration waypoints,
-    ShareConfiguration share
+    ShareConfiguration share,
+    CrossServerConfiguration crossServer
 ) {
 
     private static final String DEFAULT_PACKET_ID = "AXS_MAP";
@@ -156,6 +158,9 @@ public record MapModuleConfiguration(
             shareSection == null ? 30 : Math.max(1, shareSection.getInt("expire-minutes", 30))
         );
 
+        CrossServerConfiguration crossServer = loadCrossServer(
+            configuration.getConfigurationSection("cross-server"));
+
         return new MapModuleConfiguration(
             debug,
             client,
@@ -165,7 +170,33 @@ public record MapModuleConfiguration(
             immutableCopy(worlds),
             immutableCopy(anchors),
             waypoints,
-            share
+            share,
+            crossServer
+        );
+    }
+
+    /**
+     * 解析 {@code cross-server} 节。缺省全部关闭/取默认值；
+     * {@code channel} 委托 {@link CrossServerChannelConfigs#fromSection} 解析
+     * （含 enabled 开关与 redis/proxy 后端覆盖，未配置时继承宿主全局后端）。
+     */
+    private static CrossServerConfiguration loadCrossServer(ConfigurationSection section) {
+        ConfigurationSection arrivals = section == null ? null : section.getConfigurationSection("arrivals");
+        return new CrossServerConfiguration(
+            section != null && section.getBoolean("enabled", false),
+            string(section == null ? null : section.getString("display-name"), ""),
+            string(section == null ? null : section.getString("proxy-name"), ""),
+            section == null ? 120 : Math.max(15, section.getInt("announce-interval-seconds", 120)),
+            section == null ? 400 : Math.max(60, section.getInt("node-ttl-seconds", 400)),
+            section == null || section.getBoolean("terrain-relay", true),
+            section == null ? 10 : Math.max(3, section.getInt("request-timeout-seconds", 10)),
+            section == null ? 20 : Math.max(0, section.getInt("arrival-delay-ticks", 20)),
+            new CrossServerArrivalsConfiguration(
+                arrivals == null || arrivals.getBoolean("enabled", true),
+                arrivals != null && arrivals.getBoolean("require-anchor-unlock", false),
+                arrivals == null || arrivals.getBoolean("charge-teleport-cost", true)
+            ),
+            xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs.fromSection(section)
         );
     }
 
@@ -257,6 +288,7 @@ public record MapModuleConfiguration(
                     preloadRegions, preloadCenterX, preloadCenterZ,
                     file.lastModified()) & 0x7FFFFFFF)
                 : 0;
+            ConfigurationSection crossSection = yaml.getConfigurationSection("cross-server");
             worlds.put(worldId, new WorldDefinition(
                 worldId,
                 string(yaml.getString("display-name"), ""),
@@ -264,7 +296,9 @@ public record MapModuleConfiguration(
                 preloadRegions,
                 preloadVersion,
                 preloadCenterX,
-                preloadCenterZ
+                preloadCenterZ,
+                crossSection == null || crossSection.getBoolean("share", true),
+                crossSection == null || crossSection.getBoolean("arrive", true)
             ));
             // 解析 anchors 节
             ConfigurationSection anchorsSection = yaml.getConfigurationSection("anchors");
@@ -288,7 +322,7 @@ public record MapModuleConfiguration(
             worlds.put(id, new WorldDefinition(
                 id,
                 string(child.getString("display-name"), ""),
-                0D, List.of(), 0, null, null
+                0D, List.of(), 0, null, null, false, false
             ));
         }
     }
@@ -859,6 +893,8 @@ public record MapModuleConfiguration(
      * @param preloadRadius  预加载半径（方块，以世界出生点为圆心）；≤0 = 不用圆形预加载
      * @param preloadRegions 预加载多边形区域列表；空 = 无区域预加载
      * @param preloadVersion 预加载版本号（配置内容+文件 mtime 哈希；0 = 无预加载）
+     * @param crossShare     是否向其他子服广播该世界（worlds/<world>.yml cross-server.share）
+     * @param crossArrive    是否允许其他子服玩家跨服传送到该世界（cross-server.arrive）
      */
     public record WorldDefinition(
         String id,
@@ -867,7 +903,9 @@ public record MapModuleConfiguration(
         List<PolygonRegion> preloadRegions,
         int preloadVersion,
         Double preloadCenterX,
-        Double preloadCenterZ
+        Double preloadCenterZ,
+        boolean crossShare,
+        boolean crossArrive
     ) {
         /** 该世界是否配置了任何预加载（圆形或区域）。 */
         public boolean hasPreload() {
@@ -1026,6 +1064,55 @@ public record MapModuleConfiguration(
         boolean enabled,
         String cardId,
         int expireMinutes
+    ) {
+    }
+
+    /**
+     * 跨服地图配置（ArcartXMap.yml {@code cross-server} 节）。
+     * <p>
+     * 依赖宿主 {@code config.yml} 的 {@code cross-server} 基础设施（node-id 与
+     * Redis/Proxy 后端）；本配置只控制 map 通道的开关与协议参数。
+     *
+     * @param enabled                  跨服地图总开关
+     * @param displayName              本机在其他服地图上的显示名（空 = node-id）
+     * @param proxyName                本机在 BungeeCord/Velocity 上的服务器名（空 = node-id）；
+     *                                 跨服传送 Connect 子消息使用
+     * @param announceIntervalSeconds  世界目录广播间隔（秒）
+     * @param nodeTtlSeconds           远程节点目录过期时间（秒）
+     * @param terrainRelay             远程地形中继：允许本机作为目标服生成地形，
+     *                                 也允许本机玩家浏览远程世界时发起中继
+     * @param requestTimeoutSeconds    跨服传送请求响应超时（秒）
+     * @param arrivalDelayTicks        跨服落地延迟执行 tick（等玩家进服稳定）
+     * @param arrivals                 跨服落地传送配置
+     * @param channel                  宿主跨服通道配置（enabled/redis/proxy 覆盖）
+     */
+    public record CrossServerConfiguration(
+        boolean enabled,
+        String displayName,
+        String proxyName,
+        int announceIntervalSeconds,
+        int nodeTtlSeconds,
+        boolean terrainRelay,
+        int requestTimeoutSeconds,
+        int arrivalDelayTicks,
+        CrossServerArrivalsConfiguration arrivals,
+        xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig channel
+    ) {
+    }
+
+    /**
+     * 跨服落地传送配置（{@code cross-server.arrivals} 节）——本机作为"目标服"时的策略。
+     *
+     * @param enabled              是否接受其他服玩家的跨服落地传送
+     * @param requireAnchorUnlock  锚点落地是否要求玩家在本机已有解锁记录
+     *                             （false = 广播的锚点视为公共传送点）
+     * @param chargeTeleportCost   落地锚点传送是否按本机锚点 teleport 节扣费；
+     *                             货币桥只能操作在线玩家，故费用统一在落地时收取
+     */
+    public record CrossServerArrivalsConfiguration(
+        boolean enabled,
+        boolean requireAnchorUnlock,
+        boolean chargeTeleportCost
     ) {
     }
 }

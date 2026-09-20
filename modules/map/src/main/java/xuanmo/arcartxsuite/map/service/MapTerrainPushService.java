@@ -73,23 +73,30 @@ public final class MapTerrainPushService {
         final String dimKey;
         final int sourceVersion;
         final ArrayDeque<Long> chunks; // packed MapChunk 坐标
+        /** 非 null = 跨服中继模式：产出块体（不含 dimKey 前缀）交给 sink 而非发玩家。 */
+        final java.util.function.Consumer<byte[]> relaySink;
 
-        PushJob(UUID playerUuid, UUID worldUuid, String dimKey, int sourceVersion, ArrayDeque<Long> chunks) {
+        PushJob(UUID playerUuid, UUID worldUuid, String dimKey, int sourceVersion,
+                ArrayDeque<Long> chunks, java.util.function.Consumer<byte[]> relaySink) {
             this.playerUuid = playerUuid;
             this.worldUuid = worldUuid;
             this.dimKey = dimKey;
             this.sourceVersion = sourceVersion;
             this.chunks = chunks;
+            this.relaySink = relaySink;
         }
     }
 
     private static final class PendingPacket {
         final UUID playerUuid;
         final byte[] bytes;
+        /** 中继模式：非 null 时 pump 直接回调（bytes = 块体，无 dimKey 前缀）。 */
+        final java.util.function.Consumer<byte[]> relaySink;
 
-        PendingPacket(UUID playerUuid, byte[] bytes) {
+        PendingPacket(UUID playerUuid, byte[] bytes, java.util.function.Consumer<byte[]> relaySink) {
             this.playerUuid = playerUuid;
             this.bytes = bytes;
+            this.relaySink = relaySink;
         }
     }
 
@@ -137,7 +144,36 @@ public final class MapTerrainPushService {
         }
         synchronized (jobs) {
             jobs.addLast(new PushJob(player.getUniqueId(), world.getUID(),
-                world.getKey().toString(), sourceVersion, deque));
+                world.getKey().toString(), sourceVersion, deque, null));
+        }
+    }
+
+    /**
+     * 跨服中继入队：抓取并组包后不发给玩家，逐块把<b>块体</b>（不含 dimKey
+     * 前缀的 {@code int cx | int cz | int ver | palette | columns}）交给 sink。
+     * 供 {@code MapCrossServerService} 把本机地形回传给请求节点。
+     *
+     * @param world         Bukkit 世界
+     * @param chunkCoords   MapChunk 坐标集合（packed {@code cx<<32|cz}）
+     * @param sourceVersion 数据版本（写入包体，远端缓存去重用）
+     * @param chunkBodySink 块体回调（主线程触发，逐块一次）
+     */
+    public void submitForRelay(World world, Iterable<Long> chunkCoords, int sourceVersion,
+                               java.util.function.Consumer<byte[]> chunkBodySink) {
+        if (stopped || world == null || chunkCoords == null || chunkBodySink == null) {
+            return;
+        }
+        ArrayDeque<Long> deque = new ArrayDeque<>();
+        for (Long packed : chunkCoords) {
+            if (packed != null) {
+                deque.add(packed);
+            }
+        }
+        if (deque.isEmpty()) {
+            return;
+        }
+        synchronized (jobs) {
+            jobs.addLast(new PushJob(null, world.getUID(), "", sourceVersion, deque, chunkBodySink));
         }
     }
 
@@ -151,6 +187,14 @@ public final class MapTerrainPushService {
         PendingPacket packet;
         int sent = 0;
         while (sent++ < 8 && (packet = outbox.poll()) != null) {
+            if (packet.relaySink != null) {
+                try {
+                    packet.relaySink.accept(packet.bytes);
+                } catch (Exception e) {
+                    logger.fine("[Map] 中继地形包回调失败: " + e.getMessage());
+                }
+                continue;
+            }
             Player player = Bukkit.getPlayer(packet.playerUuid);
             if (player != null && player.isOnline()) {
                 try {
@@ -189,8 +233,10 @@ public final class MapTerrainPushService {
         int cx = (int) (packed >> 32);
         int cz = (int) (packed);
         World world = Bukkit.getWorld(job.worldUuid);
-        Player player = Bukkit.getPlayer(job.playerUuid);
-        if (world == null || player == null || !player.isOnline()) {
+        // 中继模式无玩家对象：只要求世界在线，块体产出后由 sink 回传请求节点
+        Player player = job.relaySink == null && job.playerUuid != null
+            ? Bukkit.getPlayer(job.playerUuid) : null;
+        if (world == null || (job.relaySink == null && (player == null || !player.isOnline()))) {
             return;
         }
         Location probe = new Location(world, cx * 64.0 + 32, 64, cz * 64.0 + 32);
@@ -217,20 +263,44 @@ public final class MapTerrainPushService {
                 }
             }
             AxsScheduler.runAsync(plugin, () -> {
-                byte[] bytes = buildPacket(job.dimKey, cx, cz, job.sourceVersion, snaps);
+                byte[] bytes = job.relaySink != null
+                    ? buildChunkBody(cx, cz, job.sourceVersion, snaps)
+                    : buildPacket(job.dimKey, cx, cz, job.sourceVersion, snaps);
                 if (bytes != null) {
-                    outbox.offer(new PendingPacket(job.playerUuid, bytes));
+                    outbox.offer(new PendingPacket(job.playerUuid, bytes, job.relaySink));
                 }
             });
         });
     }
 
     /**
-     * 快照 → 包体：每列 topY（short）+ 材质色板索引（byte）。
-     * 色板按材质 key 去重，客户端解成 MapColor。
+     * 快照 → 完整地形包：{@code writeUTF(dimKey)} + {@link #buildChunkBody}。
      */
     private static byte[] buildPacket(String dimKey, int cx, int cz, int sourceVersion,
                                       ChunkSnapshot[] snaps) {
+        byte[] body = buildChunkBody(cx, cz, sourceVersion, snaps);
+        if (body == null) {
+            return null;
+        }
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(body.length + 32);
+            DataOutputStream out = new DataOutputStream(bos);
+            out.writeUTF(dimKey);
+            out.write(body);
+            out.flush();
+            return bos.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 快照 → 块体（不含 dimKey 前缀）：{@code int cx | int cz | int sourceVersion
+     * | byte paletteSize | palette | 4096 × (short topY | byte paletteIdx)}。
+     * 中继链路复用——远端收到后自行补 writeUTF(dimKey) 前缀再发客户端。
+     */
+    public static byte[] buildChunkBody(int cx, int cz, int sourceVersion,
+                                        ChunkSnapshot[] snaps) {
         try {
             short[] topY = new short[4096];
             byte[] paletteIdx = new byte[4096];
@@ -264,7 +334,6 @@ public final class MapTerrainPushService {
             }
             ByteArrayOutputStream bos = new ByteArrayOutputStream(12500);
             DataOutputStream out = new DataOutputStream(bos);
-            out.writeUTF(dimKey);
             out.writeInt(cx);
             out.writeInt(cz);
             out.writeInt(sourceVersion);

@@ -55,7 +55,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.5.0")
+            .version("1.6.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -70,7 +70,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                     .dynamicSection("anchors")
                     .dynamicSection("waypoints")
                 .build())
-            .currentVersion(5)
+            .currentVersion(6)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -175,7 +175,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             messages(),
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
             () -> getCapability(xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class),
-            worldTextureBridge
+            worldTextureBridge,
+            crossServer
         );
         service.start();
 

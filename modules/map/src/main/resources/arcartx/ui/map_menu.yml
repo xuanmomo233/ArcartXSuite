@@ -64,6 +64,8 @@ ui:
       var.detailUnlockInRange = packet['detailUnlockInRange']
       var.detailUnlockRangeText = packet['detailUnlockRangeText']
       var.detailCrossWorldCostText = packet['detailCrossWorldCostText']
+      var.detailRemote = packet['detailRemote']
+      var.detailServerName = packet['detailServerName']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
@@ -209,6 +211,8 @@ ui:
       var.detailUnlockInRange = packet['detailUnlockInRange']
       var.detailUnlockRangeText = packet['detailUnlockRangeText']
       var.detailCrossWorldCostText = packet['detailCrossWorldCostText']
+      var.detailRemote = packet['detailRemote']
+      var.detailServerName = packet['detailServerName']
       var.maxWorldCount = packet['maxWorldCount']
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
@@ -314,20 +318,13 @@ ui:
       if(var.detailSelectedType != var.lastDetailType || var.detailSelectedId != var.lastDetailId) {
         var.lastDetailType = var.detailSelectedType
         var.lastDetailId = var.detailSelectedId
-        if(var.detailSelectedType == 'waypoint') {
-          if(val.路径点名称输入框 != none) {
-            val.路径点名称输入框.setContent(var.detailTitle)
+        var.editPanelVisible = false
+        if(var.detailSelectedType == 'waypoint' || var.detailSelectedType == 'pin') {
+          if(val.编辑名称输入框 != none) {
+            val.编辑名称输入框.setContent(var.detailTitle)
           }
-          if(val.路径点描述输入框 != none) {
-            val.路径点描述输入框.setContent(var.detailDescription)
-          }
-        }
-        if(var.detailSelectedType == 'pin') {
-          if(val.标记点名称输入框 != none) {
-            val.标记点名称输入框.setContent(var.detailTitle)
-          }
-          if(val.标记点描述输入框 != none) {
-            val.标记点描述输入框.setContent(var.detailDescription)
+          if(val.编辑描述输入框 != none) {
+            val.编辑描述输入框.setContent(var.detailDescription)
           }
         }
       }
@@ -335,6 +332,7 @@ ui:
   action:
     load: |-
       var.showHudSettings = false
+      var.editPanelVisible = false
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       var.scale = sx < sy ? sx : sy
@@ -539,7 +537,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,100"
+                  normal: "~Frosted:30;100,100,100,255"
                 effect:
                   stroke:
                     width: 4
@@ -559,7 +557,7 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 60
-                  texts: "'&f地图总览 &8/ &7' + var.selectedWorldName"
+                  texts: "'&f地图总览 &8/ &f' + var.selectedWorldName"
                   fontSize: 36
               追踪文字:
                 type: Text
@@ -637,7 +635,7 @@ controls:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&7地图加载中...
+              texts: ~&f地图加载中...
               fontSize: 36
               through: true
               visible: "var.mapRenderer == none"
@@ -658,7 +656,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,100"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 20
                 effect:
@@ -670,7 +668,7 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 28
-                  texts: ~&6◎
+                  texts: "var.detailRemote == true ? '&b☁' : '&6◎'"
                   fontSize: 100
                   through: true
               锚点详情标题:
@@ -680,12 +678,22 @@ controls:
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
+              # 远程锚点徽标：来源服务器名
+              锚点远程徽标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 108
+                  texts: "'&b☁ 跨服 &7· &f' + var.detailServerName"
+                  fontSize: 32
+                  visible: "var.detailRemote == true"
+                  through: true
               锚点位置信息:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 112
-                  texts: "'&7' + var.detailLocation"
+                  y: "var.detailRemote == true ? 140 : 112"
+                  texts: "'&f' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
@@ -693,7 +701,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 142
+                  y: "var.detailRemote == true ? 172 : 142"
                   texts: "var.detailDescription"
                   fontSize: 48
               锚点解锁费用:
@@ -702,22 +710,23 @@ controls:
                   point: ~top_center
                   x: -105
                   y: 200
-                  texts: "'&7解锁: &f' + var.detailUnlockCostText"
+                  texts: "'&f解锁: &f' + var.detailUnlockCostText"
                   fontSize: 48
+                  visible: "var.detailRemote != true"
               锚点传送费用:
                 type: Text
                 attribute:
                   point: ~top_center
                   x: 105
                   y: 200
-                  texts: "'&7传送: &f' + var.detailTeleportCostText"
+                  texts: "'&f传送: &f' + var.detailTeleportCostText"
                   fontSize: 48
               锚点解锁距离:
                 type: Text
                 attribute:
                   point: ~top_center
                   y: 250
-                  texts: "'&7' + var.detailUnlockRangeText"
+                  texts: "'&f' + var.detailUnlockRangeText"
                   fontSize: 48
                   visible: "var.detailUnlockRangeText != none && var.detailUnlockRangeText != ''"
               锚点解锁按钮:
@@ -730,6 +739,8 @@ controls:
                   width: 110
                   height: 44
                   enable: "!var.actionBusy && var.actionToken != none && var.detailUnlockInRange"
+                  # 远程锚点不可在本服解锁（解锁/费用均由目标服权威）
+                  visible: "var.detailRemote != true"
                 action:
                   clickLeft: |-
                     if (var.detailCanUnlock && var.detailUnlockInRange) {
@@ -770,10 +781,12 @@ controls:
                 action:
                   clickLeft: |-
                     if (var.detailCanTeleport) {
-                      // 跨世界传送同导航一样先弹确认（L16 统一确认）
+                      // 跨世界传送同导航一样先弹确认（L16 统一确认）；
+                      // 远程锚点（复合 id）同样走该确认，服务端按 id 前缀路由到跨服握手
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
-                      if (var.isCrossWorld) {
+                      if (var.isCrossWorld || var.detailRemote == true) {
                       var.crossWorldPromptType = 'teleport'
+                      var.crossWorldRemote = var.detailRemote == true
                       var.crossWorldPromptVisible = true
                       } else {
                         var.actionBusy = true
@@ -810,6 +823,8 @@ controls:
                   y: 300
                   width: 110
                   height: 44
+                  # 远程锚点不支持本服导航（追踪信标无法跨服渲染）
+                  visible: "var.detailRemote != true"
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
@@ -818,6 +833,7 @@ controls:
                       var.isCrossWorld = var.playerWorldId != '' && var.selectedWorldId != var.playerWorldId
                       if (var.isCrossWorld) {
                       var.crossWorldPromptType = 'navigate'
+                      var.crossWorldRemote = false
                       var.crossWorldPromptVisible = true
                       } else {
                         if (var.detailCanTrackAnchor) {
@@ -863,7 +879,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,100"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 20
                 effect:
@@ -890,73 +906,48 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 106
-                  texts: "'&7' + var.detailLocation"
+                  texts: "'&f' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
-              路径点名称标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 30
-                  y: 130
-                  texts: ~&7名称
-                  fontSize: 36
-                  through: true
-              路径点名称输入框:
-                type: TextBox
-                val: 路径点名称输入框
-                attribute:
-                  point: ~top_left
-                  x: 100
-                  y: 126
-                  width: 280
-                  height: 32
-                  length: 64
-                  emptyText: "~输入名称"
-                  background: "~Frosted:20;255,255,255,30"
-                  canLoseFocus: true
               路径点描述标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 30
-                  y: 175
-                  texts: ~&7描述
+                  y: 140
+                  texts: ~&f描述
                   fontSize: 36
                   through: true
-              路径点描述输入框:
-                type: TextBox
-                val: 路径点描述输入框
+              路径点描述内容:
+                type: Text
                 attribute:
                   point: ~top_left
-                  x: 100
-                  y: 171
-                  width: 280
-                  height: 64
-                  length: 256
-                  allowNewLine: true
-                  emptyText: "~输入描述（可选）"
-                  background: "~Frosted:20;255,255,255,30"
-                  canLoseFocus: true
-              路径点保存按钮:
+                  x: 104
+                  y: 140
+                  texts: "var.detailDescription != none && var.detailDescription != '' ? '&f' + var.detailDescription : '&f该路径点暂无描述'"
+                  fontSize: 36
+                  through: true
+              路径点编辑按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f保存路径点
+                  tip: ~&f编辑路径点
                   point: ~top_left
                   x: 24
                   y: 260
                   width: 90
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
-                    var.actionBusy = true
-                    var.wpName = val.路径点名称输入框.getContent()
-                    var.wpDesc = val.路径点描述输入框.getContent()
-                    Packet.send(var.packetId, 'update_waypoint', var.detailSelectedId, var.wpName, var.wpDesc, var.actionToken)
+                    var.editPanelVisible = true
+                    if(val.编辑名称输入框 != none) {
+                      val.编辑名称输入框.setContent(var.detailTitle)
+                    }
+                    if(val.编辑描述输入框 != none) {
+                      val.编辑描述输入框.setContent(var.detailDescription)
+                    }
                 children:
-                  路径点保存按钮底:
+                  路径点编辑按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -969,11 +960,11 @@ controls:
                       stroke:
                         width: "self.isHovered() ? '4' : '3'"
                         color: ~255,255,255,255
-                  路径点保存按钮文字:
+                  路径点编辑按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f保存
+                      texts: ~&f编辑
                       fontSize: 36
                       through: true
               路径点导航按钮:
@@ -1109,7 +1100,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,100"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 20
                 effect:
@@ -1136,7 +1127,7 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 112
-                  texts: "'&7' + var.detailLocation"
+                  texts: "'&f' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
@@ -1209,7 +1200,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,100"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 20
                 effect:
@@ -1236,73 +1227,48 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 106
-                  texts: "'&7' + var.detailLocation"
+                  texts: "'&f' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
-              标记点名称标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 30
-                  y: 130
-                  texts: ~&7名称
-                  fontSize: 36
-                  through: true
-              标记点名称输入框:
-                type: TextBox
-                val: 标记点名称输入框
-                attribute:
-                  point: ~top_left
-                  x: 100
-                  y: 126
-                  width: 280
-                  height: 32
-                  length: 64
-                  emptyText: "~输入名称"
-                  background: "~Frosted:20;255,255,255,30"
-                  canLoseFocus: true
               标记点描述标签:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 30
-                  y: 175
-                  texts: ~&7描述
+                  y: 140
+                  texts: ~&f描述
                   fontSize: 36
                   through: true
-              标记点描述输入框:
-                type: TextBox
-                val: 标记点描述输入框
+              标记点描述内容:
+                type: Text
                 attribute:
                   point: ~top_left
-                  x: 100
-                  y: 171
-                  width: 280
-                  height: 64
-                  length: 256
-                  allowNewLine: true
-                  emptyText: "~输入描述（可选）"
-                  background: "~Frosted:20;255,255,255,30"
-                  canLoseFocus: true
-              标记点保存按钮:
+                  x: 104
+                  y: 140
+                  texts: "var.detailDescription != none && var.detailDescription != '' ? '&f' + var.detailDescription : '&f该标记点暂无描述'"
+                  fontSize: 36
+                  through: true
+              标记点编辑按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f保存标记点
+                  tip: ~&f编辑标记点
                   point: ~top_left
                   x: 24
                   y: 260
                   width: 110
                   height: 44
-                  enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
-                    var.actionBusy = true
-                    var.pinName = val.标记点名称输入框.getContent()
-                    var.pinDesc = val.标记点描述输入框.getContent()
-                    Packet.send(var.packetId, 'update_pin', var.detailSelectedId, var.pinName, var.pinDesc, var.actionToken)
+                    var.editPanelVisible = true
+                    if(val.编辑名称输入框 != none) {
+                      val.编辑名称输入框.setContent(var.detailTitle)
+                    }
+                    if(val.编辑描述输入框 != none) {
+                      val.编辑描述输入框.setContent(var.detailDescription)
+                    }
                 children:
-                  标记点保存按钮底:
+                  标记点编辑按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -1315,11 +1281,11 @@ controls:
                       stroke:
                         width: "self.isHovered() ? '4' : '3'"
                         color: ~255,255,255,255
-                  标记点保存按钮文字:
+                  标记点编辑按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f保存
+                      texts: ~&f编辑
                       fontSize: 36
                       through: true
               标记点分享按钮:
@@ -1528,7 +1494,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,110
+                  normal: ~Frosted:30;100,100,100,255
                   shape: ~round_rect
                   radius: 16
                 effect:
@@ -1682,7 +1648,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: ~255,255,255,255
               浏览滑块:
                 type: Texture
                 val: 浏览滑块
@@ -1759,14 +1725,14 @@ controls:
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255.255.255.150
+                                    color: ~255,255,255,255
                               浏览锚点项图标:
                                 type: Text
                                 attribute:
                                   point: ~middle_left
                                   x: 18
-                                  texts: ~&a◎
-                                  fontSize: 91
+                                  texts: "self.parent.entry != none && self.parent.entry['remote'] == true ? '&b☁' : '&a◎'"
+                                  fontSize: "self.parent.entry != none && self.parent.entry['remote'] == true ? '60' : '91'"
                                   through: true
                               浏览锚点项名称:
                                 type: Text
@@ -1781,7 +1747,7 @@ controls:
                                 attribute:
                                   point: ~middle_right
                                   x: -16
-                                  texts: "'&7' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 路径点列表 ──
@@ -1824,7 +1790,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255.255.255.150
+                                    color: ~255,255,255,255
                               浏览路径点项图标:
                                 type: Text
                                 attribute:
@@ -1846,7 +1812,7 @@ controls:
                                 attribute:
                                   point: ~middle_right
                                   x: -16
-                                  texts: "'&7' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 标记点列表 ──
@@ -1889,7 +1855,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255.255.255.150
+                                    color: ~255,255,255,255
                               浏览标记点项图标:
                                 type: Text
                                 attribute:
@@ -1911,7 +1877,7 @@ controls:
                                 attribute:
                                   point: ~middle_right
                                   x: -16
-                                  texts: "'&7' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 其它目标列表 ──
@@ -1954,7 +1920,7 @@ controls:
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255.255.255.150
+                                    color: ~255,255,255,255
                               浏览其它项图标:
                                 type: Text
                                 attribute:
@@ -1976,7 +1942,7 @@ controls:
                                 attribute:
                                   point: ~middle_right
                                   x: -16
-                                  texts: "'&7' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
           # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
@@ -2042,7 +2008,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,110"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 16
                 effect:
@@ -2072,7 +2038,7 @@ controls:
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: ~255,255,255,255
               世界浮层滑块:
                 type: Texture
                 val: 世界浮层滑块
@@ -2139,7 +2105,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: ~255,255,255,150
+                                color: ~255,255,255,255
                           地图项目图标:
                             type: Text
                             attribute:
@@ -2156,8 +2122,19 @@ controls:
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['displayName'] : none"
                               fontSize: 40
                               through: true
+                          # 远程世界徽标：显示来源服务器名（worldRows[].remote/server 由服务端下发）
+                          地图项目服务器:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -56
+                              texts: "self.parent.entry != none && self.parent.entry['remote'] == true ? '&b☁ &f' + self.parent.entry['server'] : ''"
+                              fontSize: 32
+                              visible: "self.parent.entry != none && self.parent.entry['remote'] == true"
+                              through: true
                           # 跨世界传送按钮：只对"非玩家当前世界"的条目显示，
-                          # 点击直接传送到该世界出生点（tokenized 写操作）
+                          # 点击直接传送到该世界出生点（tokenized 写操作）。
+                          # 远程世界额外要求 canTeleport（目标服 allowArrive）
                           地图项目传送:
                             type: Canvas
                             attribute:
@@ -2166,15 +2143,16 @@ controls:
                               x: -10
                               width: 40
                               height: 40
-                              visible: "self.parent.entry != none && self.parent.entry['id'] != var.playerWorldId"
+                              visible: "self.parent.entry != none && self.parent.entry['id'] != var.playerWorldId && (self.parent.entry['remote'] != true || self.parent.entry['canTeleport'] == true)"
                             action:
                               clickLeft: |-
                                 // 跨世界传送统一走确认框（L16）：类型 teleport_world，
-                                // 确认后由对话框按钮发 teleport_to_world
+                                // 确认后由对话框按钮发 teleport_to_world；远程世界复合 id 原样回传
                                 if (self.parent.entry != none && var.actionToken != none) {
                                   var.crossWorldPromptType = 'teleport_world'
                                   var.crossWorldTargetWorld = self.parent.entry['id']
-                                  var.crossWorldTargetName = self.parent.entry['displayName']
+                                  var.crossWorldTargetName = self.parent.entry['remote'] == true ? self.parent.entry['displayName'] + ' &7@ &f' + self.parent.entry['server'] : self.parent.entry['displayName']
+                                  var.crossWorldRemote = self.parent.entry['remote'] == true
                                   var.crossWorldPromptVisible = true
                                 }
                             children:
@@ -2284,7 +2262,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;30,34,42,235"
+                  normal: "~Frosted:30;100,100,100,255"
                   shape: ~round_rect
                   radius: 14
                 effect:
@@ -2612,7 +2590,7 @@ controls:
                   x: 278
                   y: 198
                   center: true
-                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &7px' : '&7-'"
+                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &fpx' : '&f-'"
                   fontSize: 36
                   through: true
               尺寸加按钮:
@@ -2703,7 +2681,7 @@ controls:
                   x: 278
                   y: 256
                   center: true
-                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&7%' : '&7-'"
+                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&f%' : '&f-'"
                   fontSize: 36
                   through: true
               缩放加按钮:
@@ -2747,8 +2725,171 @@ controls:
                 attribute:
                   point: ~top_center
                   y: 320
-                  texts: ~&7选择位置后将同步移动地图、边框与文字
+                  texts: ~&f选择位置后将同步移动地图、边框与文字
                   fontSize: 36
+          # ─── 路径点/标记点编辑面板（模态遮罩，居中弹窗）───
+          编辑面板层:
+            type: Canvas
+            attribute:
+              point: ~stretch_all
+              visible: "var.editPanelVisible"
+              mapCapture: true
+            children:
+              编辑遮罩:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~0,0,0,160
+              编辑对话框:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: 520
+                  height: 340
+                children:
+                  编辑对话框底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~Frosted:30;100,100,100,255
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 4
+                        color: ~255,255,255,255
+                  编辑标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 22
+                      texts: "var.detailSelectedType == 'pin' ? '&f编辑标记点' : '&f编辑路径点'"
+                      fontSize: 48
+                      through: true
+                  编辑名称标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 36
+                      y: 92
+                      texts: ~&f名称
+                      fontSize: 36
+                      through: true
+                  编辑名称输入框:
+                    type: TextBox
+                    val: 编辑名称输入框
+                    attribute:
+                      point: ~top_left
+                      x: 112
+                      y: 88
+                      width: 370
+                      height: 34
+                      length: 64
+                      fontSize: 48
+                      emptyText: "~输入名称"
+                      background: "~Frosted:20;255,255,255,30"
+                      canLoseFocus: true
+                  编辑描述标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 36
+                      y: 142
+                      texts: ~&f描述
+                      fontSize: 36
+                      through: true
+                  编辑描述输入框:
+                    type: TextBox
+                    val: 编辑描述输入框
+                    attribute:
+                      point: ~top_left
+                      x: 112
+                      y: 138
+                      width: 370
+                      height: 96
+                      length: 256
+                      allowNewLine: true
+                      fontSize: 48
+                      emptyText: "~输入描述（可选）"
+                      background: "~Frosted:20;255,255,255,30"
+                      canLoseFocus: true
+                  编辑保存按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f保存修改
+                      point: ~bottom_left
+                      x: 60
+                      y: -30
+                      width: 170
+                      height: 52
+                      enable: "!var.actionBusy && var.actionToken != none"
+                    action:
+                      clickLeft: |-
+                        var.actionBusy = true
+                        var.editName = val.编辑名称输入框.getContent()
+                        var.editDesc = val.编辑描述输入框.getContent()
+                        var.editPanelVisible = false
+                        if (var.detailSelectedType == 'pin') {
+                          Packet.send(var.packetId, 'update_pin', var.detailSelectedId, var.editName, var.editDesc, var.actionToken)
+                        } else {
+                          Packet.send(var.packetId, 'update_waypoint', var.detailSelectedId, var.editName, var.editDesc, var.actionToken)
+                        }
+                    children:
+                      编辑保存底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~130,200,130,255
+                          hover: ~150,220,150,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      编辑保存文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f保存
+                          fontSize: 36
+                          through: true
+                  编辑取消按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f取消
+                      point: ~bottom_right
+                      x: -60
+                      y: -30
+                      width: 170
+                      height: 52
+                    action:
+                      clickLeft: |-
+                        var.editPanelVisible = false
+                    children:
+                      编辑取消底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      编辑取消文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f取消
+                          fontSize: 36
+                          through: true
           # ─── 跨世界导航确认弹窗（模态遮罩，挡住下层一切点击）───
           跨世界确认层:
             type: Canvas
@@ -2775,7 +2916,7 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~Frosted:30;255,255,255,110
+                      normal: ~Frosted:30;100,100,100,255
                       shape: ~round_rect
                       radius: 16
                     effect:
@@ -2787,7 +2928,7 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 24
-                      texts: "var.crossWorldPromptType == 'navigate' ? '&f跨世界导航' : '&f跨世界传送'"
+                      texts: "var.crossWorldRemote == true ? '&b☁ &f跨服传送' : (var.crossWorldPromptType == 'navigate' ? '&f跨世界导航' : '&f跨世界传送')"
                       fontSize: 36
                       through: true
                   对话框内容:
@@ -2795,8 +2936,18 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 72
-                      texts: "var.crossWorldPromptType == 'teleport_world' ? ('&7是否传送到世界 &f' + var.crossWorldTargetName + '&7？') : ('&7目标位于 &f' + var.selectedWorldName + '&7，是否传送到该世界？')"
+                      texts: "var.crossWorldPromptType == 'teleport_world' ? (var.crossWorldRemote == true ? '&f是否跨服传送到 &f' + var.crossWorldTargetName + '&f？' : '&f是否传送到世界 &f' + var.crossWorldTargetName + '&f？') : (var.crossWorldRemote == true ? '&f目标位于远程服务器 &f' + var.detailServerName + '&f，是否跨服传送？' : '&f目标位于 &f' + var.selectedWorldName + '&f，是否传送到该世界？')"
                       fontSize: 48
+                      through: true
+                  # 远程传送提示：费用在目标服落地时扣除
+                  对话框远程提示:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 142
+                      texts: ~&7费用将在进入目标服务器后扣除
+                      fontSize: 32
+                      visible: "var.crossWorldRemote == true"
                       through: true
                   对话框费用:
                     type: Text
@@ -2848,7 +2999,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.crossWorldPromptType == 'navigate' ? '&f传送并导航' : '&f传送'"
+                          texts: "var.crossWorldRemote == true ? '&f跨服传送' : (var.crossWorldPromptType == 'navigate' ? '&f传送并导航' : '&f传送')"
                           fontSize: 36
                           through: true
                   取消按钮:
