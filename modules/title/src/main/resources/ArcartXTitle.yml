@@ -85,7 +85,7 @@ ui:
   # 后端会把这个前缀加到 selected_display_attributes_text / display_attributes_text 等
   # List<String> 字段的每一项之前，UI 直接通过 texts: "var.xxx 渲染即可。"
   # 支持 &0~&f 颜色码、&l 加粗等。留空 "" 表示不加任何前缀。
-  attribute-line-color: "&0"
+  attribute-line-color: "&f"
 
   # 当某个属性列表为空时，后端会发送的占位字符串（已带 attribute-line-color 前缀）。
   empty-attribute-placeholder: "暂无属性"

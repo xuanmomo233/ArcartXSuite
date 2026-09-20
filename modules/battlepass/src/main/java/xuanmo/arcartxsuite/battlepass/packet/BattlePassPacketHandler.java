@@ -355,6 +355,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * packetId: AXS_BATTLEPASS
      * seasonName: 赛季名称
      * currentLevel: 玩家当前等级
+     * premiumUnlocked: 是否已解锁高级版
+     * deluxeUnlocked: 是否已解锁豪华版
      * settlementCount: 结算奖励条目数
      * settlements: { "0": { id, minLevel, reached, free: { type, name, claimed }, premium: {...}, deluxe: {...} }, ... }
      * iconJson0..iconJsonN: 各奖励的图标 JSON
@@ -419,6 +421,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("packetId", PACKET_ID);
         payload.put("seasonName", season.displayName());
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
+        payload.put("premiumUnlocked", String.valueOf(progress.unlockedPremium()));
+        payload.put("deluxeUnlocked", String.valueOf(progress.unlockedDeluxe()));
         payload.put("settlements", settlementsMap);
         payload.put("settlementCount", String.valueOf(idx));
 

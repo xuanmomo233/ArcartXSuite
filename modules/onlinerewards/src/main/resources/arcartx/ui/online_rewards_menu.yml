@@ -4,7 +4,7 @@
 # 视觉规范:
 #   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
 #   卡片 62,66,74,240  描边 255,255,255,230
-#   主色（天青蓝）90,150,250  已签到 124,196,142  过期 210,120,120  进行中 232,180,90
+#   主色（天青蓝）90,150,250  已签到 124,196,142  过期 120,70,70  进行中 232,180,90
 # 前置依赖: ArcartX；OnlineRewards 模块启用后会自动注册或导出。
 # 关联文件: ArcartXOnlineRewards.yml
 # 重载命令: /axs onlinereward reload
@@ -142,13 +142,13 @@ ui:
           }
         }
       }
-      var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
+      var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round() : 0
       // 日历网格固定创建 31 个格子（最大天数），通过 visible 自动隐藏超出当月天数的格子
       while(val.日历网格.childrenCount() > 1){
         val.日历网格.get(1).remove()
       }
       for(i in range(1, 31)){
-        key = i.round()()
+        key = i.round()
         if(val.日历网格['日历模板'] != none) {
           e = val.日历网格['日历模板'].copy('日历项_' + key)
           e.entryKey = key
@@ -158,7 +158,7 @@ ui:
         val.阶段堆叠.get(1).remove()
       }
       for(i in range(1, var.maxRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         if(val.阶段堆叠['阶段奖励项'] != none) {
           e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
           e.entryKey = key
@@ -169,7 +169,7 @@ ui:
         val.阶段堆叠['阶段奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.阶段堆叠['阶段奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -179,7 +179,7 @@ ui:
         val.周期堆叠.get(1).remove()
       }
       for(i in range(1, var.maxPeriodicCount - 1)){
-        key = i.round()()
+        key = i.round()
         if(val.周期堆叠['周期奖励项'] != none) {
           e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
           e.entryKey = key
@@ -190,7 +190,7 @@ ui:
         val.周期堆叠['周期奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxPeriodicCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.周期堆叠['周期奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -200,7 +200,7 @@ ui:
         val.签到堆叠.get(1).remove()
       }
       for(i in range(1, var.maxSigninRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         if(val.签到堆叠['签到奖励项'] != none) {
           e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
           e.entryKey = key
@@ -211,7 +211,7 @@ ui:
         val.签到堆叠['签到奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxSigninRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.签到堆叠['签到奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -221,7 +221,7 @@ ui:
         val.选中奖励堆叠.get(1).remove()
       }
       for(i in range(1, var.maxSelectedRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         if(val.选中奖励堆叠['选中奖励项'] != none) {
           e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
           e.entryKey = key
@@ -321,14 +321,14 @@ ui:
           }
         }
       }
-      var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
+      var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round() : 0
       // ── 阶段奖励堆叠：仅在数量变化时重建 ──
       if(var.maxRewardCount != oldMaxRewardCount){
         while(val.阶段堆叠.childrenCount() > 1){
           val.阶段堆叠.get(1).remove()
         }
         for(i in range(1, var.maxRewardCount - 1)){
-          key = i.round()()
+          key = i.round()
         if(val.阶段堆叠['阶段奖励项'] != none) {
           e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
           e.entryKey = key
@@ -340,7 +340,7 @@ ui:
         val.阶段堆叠['阶段奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.阶段堆叠['阶段奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -352,7 +352,7 @@ ui:
           val.周期堆叠.get(1).remove()
         }
         for(i in range(1, var.maxPeriodicCount - 1)){
-          key = i.round()()
+          key = i.round()
         if(val.周期堆叠['周期奖励项'] != none) {
           e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
           e.entryKey = key
@@ -364,7 +364,7 @@ ui:
         val.周期堆叠['周期奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxPeriodicCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.周期堆叠['周期奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -376,7 +376,7 @@ ui:
           val.签到堆叠.get(1).remove()
         }
         for(i in range(1, var.maxSigninRewardCount - 1)){
-          key = i.round()()
+          key = i.round()
         if(val.签到堆叠['签到奖励项'] != none) {
           e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
           e.entryKey = key
@@ -388,7 +388,7 @@ ui:
         val.签到堆叠['签到奖励项']['图标'].seticon()
       }
       for(i in range(1, var.maxSigninRewardCount - 1)){
-        key = i.round()()
+        key = i.round()
         e = val.签到堆叠['签到奖励项_' + key]
         if(e != none && e['图标'] != none){
           e['图标'].seticon()
@@ -400,7 +400,7 @@ ui:
           val.选中奖励堆叠.get(1).remove()
         }
         for(i in range(1, var.maxSelectedRewardCount - 1)){
-          key = i.round()()
+          key = i.round()
         if(val.选中奖励堆叠['选中奖励项'] != none) {
           e = val.选中奖励堆叠['选中奖励项'].copy('选中奖励项_' + key)
           e.entryKey = key
@@ -785,7 +785,7 @@ controls:
               point: ~top_left
               x: 20
               y: 282
-              texts: "'&f连续 &e' + var.signInStreak.round(0) + ' &f天'"
+              texts: "'&f连续 &e' + var.signInStreak.round() + ' &f天'"
               fontSize: 30
           累计签到:
             type: Text
@@ -793,7 +793,7 @@ controls:
               point: ~top_left
               x: 20
               y: 316
-              texts: "'&f累计 &e' + var.signInTotal.round(0) + ' &f天'"
+              texts: "'&f累计 &e' + var.signInTotal.round() + ' &f天'"
               fontSize: 30
           补签卡数:
             type: Text
@@ -801,7 +801,7 @@ controls:
               point: ~top_left
               x: 20
               y: 350
-              texts: "'&f补签卡 &e' + var.makeupCardCount.round(0) + ' &f张'"
+              texts: "'&f补签卡 &e' + var.makeupCardCount.round() + ' &f张'"
               fontSize: 30
           导航提示:
             type: Text
@@ -909,7 +909,7 @@ controls:
                           point: ~middle_center
                           width: 40
                           texts: "~&f<"
-                          fontSize: 48
+                          fontSize: 32
                           through: true
                   本月按钮:
                     type: Canvas
@@ -1006,7 +1006,7 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '124,196,142,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : (self.parent.entry['status'] == 'future' ? '62,66,74,240' : '90,150,250,230')))"
+                              normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '124,196,142,230' : (self.parent.entry['status'] == 'expired' ? '120,70,70,190' : (self.parent.entry['status'] == 'future' ? '62,66,74,240' : '90,150,250,230')))"
                               shape: ~round_rect
                               radius: 8
                             effect:
@@ -1055,7 +1055,7 @@ controls:
                       point: ~top_left
                       x: 28
                       y: 580
-                      texts: "'&f已签到 &a' + var.calendarSignedCount + ' &f/ &7' + var.calendarCount.round(0) + ' &f天'"
+                      texts: "'&f已签到 &a' + var.calendarSignedCount.round() + ' &f/ &7' + var.calendarCount.round() + ' &f天'"
                       fontSize: 30
                   签到进度:
                     type: Text
@@ -1444,7 +1444,7 @@ controls:
                       point: ~top_left
                       x: 28
                       y: 56
-                      texts: "'&f今日已签到 &e' + var.serverSignInGoalCurrent.round(0) + ' &f人  下一目标 &e' + var.serverSignInGoalNext.round(0) + ' &f人'"
+                      texts: "'&f今日已签到 &e' + var.serverSignInGoalCurrent.round() + ' &f人  下一目标 &e' + var.serverSignInGoalNext.round() + ' &f人'"
                       fontSize: 30
                   目标进度条背景:
                     type: Texture

@@ -34,6 +34,8 @@ ui:
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
       var.currentLevel = packet['currentLevel']
+      var.premiumUnlocked = packet['premiumUnlocked']
+      var.deluxeUnlocked = packet['deluxeUnlocked']
       var.settlements = packet['settlements']
       var.settlementCount = packet['settlementCount']
       // 构建 iconJsons 映射（iconJsonX_Y → key "X_Y"）
@@ -77,6 +79,8 @@ ui:
       var.seasonName = '等待同步'
       var.packetId = 'AXS_BATTLEPASS'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.premiumUnlocked = 'false'
+      var.deluxeUnlocked = 'false'
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -428,13 +432,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~62,66,74,210
+                  normal: "var.premiumUnlocked == 'true' ? '150,130,90,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: "var.premiumUnlocked == 'true' ? '232,180,90,230' : '255,255,255,230'"
               高级圆点:
                 type: Texture
                 attribute:
@@ -442,7 +446,7 @@ controls:
                   x: 14
                   width: 10
                   height: 10
-                  normal: ~196,200,208,200
+                  normal: "var.premiumUnlocked == 'true' ? '232,180,90,255' : '196,200,208,200'"
                   shape: ~circle
               高级文字:
                 type: Text
@@ -456,7 +460,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -16
-                  texts: "~&f未解锁"
+                  texts: "var.premiumUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
                   fontSize: 30
           典藏档行:
             type: Canvas
@@ -471,13 +475,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~62,66,74,210
+                  normal: "var.deluxeUnlocked == 'true' ? '130,110,160,210' : '62,66,74,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,230
+                    color: "var.deluxeUnlocked == 'true' ? '186,140,232,230' : '255,255,255,230'"
               典藏圆点:
                 type: Texture
                 attribute:
@@ -485,7 +489,7 @@ controls:
                   x: 14
                   width: 10
                   height: 10
-                  normal: ~196,200,208,200
+                  normal: "var.deluxeUnlocked == 'true' ? '186,140,232,255' : '196,200,208,200'"
                   shape: ~circle
               典藏文字:
                 type: Text
@@ -499,7 +503,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -16
-                  texts: "~&f未解锁"
+                  texts: "var.deluxeUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
                   fontSize: 30
 
       # ── 内容区（结算奖励）───────────────────────────────

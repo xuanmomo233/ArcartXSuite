@@ -1,6 +1,6 @@
 # 称号总览菜单 UI 配置（金色重写版）
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左导航 + 称号列表栏 + 详情栏 + 右侧栏
-# 布局: 顶栏(标题+统计摘要+关闭) + 左导航(筛选模式/分组/品质) + 称号列表栏(滚动) + 详情栏(弹性宽,滚动) + 右侧栏(已装备/总属性/操作按钮)
+# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左导航 + 称号列表栏 + 详情栏 + 装备总览悬浮弹窗
+# 布局: 顶栏(标题+统计摘要+主展示+装备总览按钮+关闭) + 左导航(筛选模式/分组/品质) + 称号列表栏(滚动) + 详情栏(弹性宽,滚动+操作按钮) + 装备总览悬浮弹窗(已装备/总属性/全局操作)
 # 配色: 琥珀金 主色232,180,90 底30,32,38,110 面板Frosted:30;255,255,255,100 卡片255,255,255,125 描边232,180,90,240
 # 数据来源: 后端通过 AXS_TITLE_MENU 数据包推送 titles/groups/qualities/sets 等数据，由 packetHandler 接收。
 # 操作交互: 点击称号项发送 select 包，装备/卸下/隐藏/设为主展示等按钮发送对应操作包。
@@ -37,11 +37,13 @@ ui:
       var.filterMode = 'all'
       var.filterGroup = 'all'
       var.filterQuality = 'all'
+      var.showLoadout = false
+      var.attrTab = 0
       // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
       // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
       // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
       // contentW = 内容区宽度（左 48 + 左导航 300 + 间距 24 + 右 48 = 420）
-      // detailW  = 详情栏弹性宽度（称号列表 440 + 右侧栏 440 + 两个间距 16*2 = 912）
+      // detailW  = 详情栏弹性宽度（称号列表 440 + 间距 16 + 右内边距 16 = 472；右侧栏已移除，详情栏铺满余宽）
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -49,19 +51,17 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.detailW = var.contentW - 912
+      var.detailW = var.contentW - 472
       // 各滚动区高度（子栏高 viewH-176，减去标题/按钮区/内边距）
       var.titleScrollH = var.viewH - 256
-      var.detailScrollH = var.viewH - 328
-      var.rightScrollH = var.viewH - 350
+      var.detailScrollH = var.viewH - 436
       // 左导航分组/品质竖向滚动区高度（导航高 viewH-144，减去顶部 176 + 底部 16 + 中间品质标题 44）
       var.groupScrollH = (var.viewH - 380) / 2
       var.qualityScrollY = 176 + var.groupScrollH + 44
       var.qualityScrollH = var.groupScrollH
-      // 右侧栏按钮区 y 坐标（top_left，相对栏左上角，子栏 y=136 起）
-      var.btnRow1Y = var.viewH - 326
-      var.btnRow2Y = var.viewH - 276
-      var.btnRefreshY = var.viewH - 226
+      // 详情栏底部操作按钮行 y 坐标（top_left，相对详情栏左上角，详情栏高 viewH-176）
+      var.detailBtnY1 = var.viewH - 292
+      var.detailBtnY2 = var.viewH - 236
     # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -71,16 +71,14 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.detailW = var.contentW - 912
+      var.detailW = var.contentW - 472
       var.titleScrollH = var.viewH - 256
-      var.detailScrollH = var.viewH - 328
-      var.rightScrollH = var.viewH - 350
+      var.detailScrollH = var.viewH - 436
       var.groupScrollH = (var.viewH - 380) / 2
       var.qualityScrollY = 176 + var.groupScrollH + 44
       var.qualityScrollH = var.groupScrollH
-      var.btnRow1Y = var.viewH - 326
-      var.btnRow2Y = var.viewH - 276
-      var.btnRefreshY = var.viewH - 226
+      var.detailBtnY1 = var.viewH - 292
+      var.detailBtnY2 = var.viewH - 236
   packetHandler:
     # packetHandler: init
     # 首次接收后端数据包时执行，初始化所有界面变量。
@@ -462,9 +460,39 @@ controls:
             type: Text
             attribute:
               point: ~middle_right
-              x: -100
+              x: -280
               texts: "'&f总展示: &f' + (var.displayTitleName == none ? '无' : var.displayTitleName)"
               fontSize: 32
+          装备总览按钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -96
+              width: 150
+              height: 44
+            action:
+              clickLeft: |-
+                var.showLoadout = true
+            children:
+              总览底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,240
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '232,180,90,255' : '255,255,255,230'"
+              总览字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f装备总览"
+                  fontSize: 30
+                  through: true
           关闭按钮:
             type: Canvas
             attribute:
@@ -650,11 +678,13 @@ controls:
               moveY: "self.parent['分组滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                if(!var.showLoadout){
+                  if(self.moveY >= 0 && self.wheelValue > 0){
+                    self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                  if(self.moveY <= 1 && self.wheelValue < 0){
+                    self.parent['分组滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
                 }
             children:
               分组列表:
@@ -756,11 +786,13 @@ controls:
               moveY: "self.parent['品质滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                if(!var.showLoadout){
+                  if(self.moveY >= 0 && self.wheelValue > 0){
+                    self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                  if(self.moveY <= 1 && self.wheelValue < 0){
+                    self.parent['品质滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
                 }
             children:
               品质列表:
@@ -844,7 +876,7 @@ controls:
               radius: 5
               maxDragY: "var.qualityScrollH - 50"
 
-      # ── 内容区面板（包裹称号列表栏+详情栏+右侧栏）─────────
+      # ── 内容区面板（包裹称号列表栏+详情栏）─────────
       内容区面板:
         type: Canvas
         attribute:
@@ -906,11 +938,13 @@ controls:
               moveY: "self.parent['称号滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                if(!var.showLoadout){
+                  if(self.moveY >= 0 && self.wheelValue > 0){
+                    self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                  if(self.moveY <= 1 && self.wheelValue < 0){
+                    self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
                 }
             children:
               称号列表:
@@ -1070,11 +1104,13 @@ controls:
               moveY: "self.parent['详情滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                if(!var.showLoadout){
+                  if(self.moveY >= 0 && self.wheelValue > 0){
+                    self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                  if(self.moveY <= 1 && self.wheelValue < 0){
+                    self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
                 }
             children:
               详情堆叠:
@@ -1258,226 +1294,22 @@ controls:
               shape: ~round_rect
               radius: 5
               maxDragY: "var.detailScrollH - 50"
-
-      # ── 右侧栏（已装备 + 总属性 + 操作按钮）────────────
-      右侧栏:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: "844 + var.detailW - var.offX"
-          y: 136
-          width: 424
-          height: "var.viewH - 176"
-        children:
-          右侧栏底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~42,46,58,210
-              shape: ~round_rect
-              radius: 10
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          右栏滚动区:
-            type: Scroll
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 16
-              width: 364
-              height: "var.rightScrollH"
-              moveY: "self.parent['右栏滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['右栏滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['右栏滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              右栏内容:
-                type: VStack
-                attribute:
-                  width: 364
-                  spaceBetween: 12
-                children:
-                  已装备标题:
-                    type: Text
-                    attribute:
-                      fontSize: 48
-                      texts: "~&f当前已装备"
-                  已装备列表:
-                    val: equipped_list
-                    type: VStack
-                    attribute:
-                      width: 364
-                      spaceBetween: 8
-                    children:
-                      已装备模板:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.equippedByGroup[self.entryKey]
-                          width: 364
-                          height: 52
-                          visible: self.entryKey != none && self.entry != none
-                        children:
-                          已装备底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~42,46,58,210
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              stroke:
-                                width: 3
-                                color: ~255,255,255,230
-                          已装备色条:
-                            type: Texture
-                            attribute:
-                              point: ~middle_left
-                              x: 10
-                              width: 4
-                              height: 34
-                              normal: ~232,180,90,255
-                              shape: ~round_rect
-                              radius: 2
-                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['title_id'] != none"
-                          已装备信息:
-                            type: Text
-                            attribute:
-                              point: ~top_left
-                              x: 28
-                              y: 6
-                              texts:
-                                - "'&f' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'])"
-                                - "self.parent.entry['title_id'] != none ? '&f' + self.parent.entry['quality_name'] : ''"
-                              fontSize: 32
-                              visible: self.parent.entry != none
-                              through: true
-                  当前装备属性标题:
-                    type: Text
-                    attribute:
-                      fontSize: 48
-                      texts: "~&f当前装备属性"
-                  当前装备属性值:
-                    type: Text
-                    attribute:
-                      fontSize: 36
-                      lineSpace: 12
-                      texts: "var.displayAttributesText != none && var.displayAttributesText != '' ? var.displayAttributesText : '&7暂无属性'"
-                  当前收集属性标题:
-                    type: Text
-                    attribute:
-                      fontSize: 48
-                      texts: "~&f当前收集属性"
-                  当前收集属性值:
-                    type: Text
-                    attribute:
-                      fontSize: 36
-                      lineSpace: 12
-                      texts: "var.collectionAttributesText != none && var.collectionAttributesText != '' ? var.collectionAttributesText : '&7暂无属性'"
-                  总属性标题:
-                    type: Text
-                    attribute:
-                      fontSize: 48
-                      texts: "~&f总属性汇总"
-                  总属性汇总值:
-                    type: Text
-                    attribute:
-                      fontSize: 36
-                      lineSpace: 12
-                      texts: "var.totalAttributesText != none && var.totalAttributesText != '' ? var.totalAttributesText : '&7暂无属性数据'"
-                  主展示标题:
-                    type: Text
-                    attribute:
-                      fontSize: 48
-                      texts: "~&f当前主展示"
-                  主展示值:
-                    type: Text
-                    attribute:
-                      fontSize: 36
-                      texts: "var.displayTitleName != none && var.displayTitleName != '' ? '&f' + var.displayTitleName : '&0未设置'"
-          右栏滑块轨道:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 390
-              y: 16
-              width: 10
-              height: "var.rightScrollH"
-              normal: ~42,46,58,210
-              shape: ~round_rect
-              radius: 5
-              through: true
-            effect:
-              stroke:
-                width: 2
-                color: ~255,255,255,230
-          右栏滑块:
-            type: Texture
-            val: 右栏滑块
-            attribute:
-              point: ~top_left
-              x: 390
-              y: 16
-              width: 10
-              height: 40
-              normal: ~232,180,90,220
-              shape: ~round_rect
-              radius: 5
-              maxDragY: "var.rightScrollH - 40"
-          # ── 操作按钮区（固定在右侧栏底部）──────────────
-          按钮行1:
+          # ── 详情栏底部操作行（操作对象为当前选中称号）────────
+          操作按钮行1:
             type: HStack
             attribute:
               point: ~top_left
               x: 14
-              y: "var.btnRow1Y"
-              width: 412
-              height: 42
+              y: "var.detailBtnY1"
+              width: "var.detailW - 28"
+              height: 44
               spaceBetween: 12
             children:
-              设为主展示按钮:
-                type: Canvas
-                attribute:
-                  width: 196
-                  height: 42
-                  visible: var.selectedIsEquipped && !var.selectedIsDisplayTitle
-                action:
-                  clickLeft: |-
-                    Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
-                children:
-                  设为主展示底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~232,180,90,235
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
-                  设为主展示文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&0设为主展示"
-                      fontSize: 36
-                      through: true
               装备按钮:
                 type: Canvas
                 attribute:
-                  width: 196
-                  height: 42
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
                   visible: var.selectedCanEquip
                   enable: "!var.actionBusy"
                 action:
@@ -1503,13 +1335,13 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "~&0装备本组"
-                      fontSize: 36
+                      fontSize: 34
                       through: true
               卸下本组按钮:
                 type: Canvas
                 attribute:
-                  width: 196
-                  height: 42
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
                   visible: var.selectedIsEquipped
                   enable: "!var.actionBusy"
                 action:
@@ -1535,35 +1367,26 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "~&0卸下本组"
-                      fontSize: 36
+                      fontSize: 34
                       through: true
-          按钮行2:
-            type: HStack
-            attribute:
-              point: ~top_left
-              x: 14
-              y: "var.btnRow2Y"
-              width: 412
-              height: 42
-              spaceBetween: 12
-            children:
-              全部卸下按钮:
+              设为主展示按钮:
                 type: Canvas
                 attribute:
-                  width: 196
-                  height: 42
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
+                  visible: var.selectedIsEquipped && !var.selectedIsDisplayTitle
                   enable: "!var.actionBusy"
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'unequip_all')
+                    Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
                 children:
-                  全部卸下底:
+                  设为主展示底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~42,46,58,210
+                      normal: ~232,180,90,235
                       shape: ~round_rect
                       radius: 10
                     effect:
@@ -1571,18 +1394,28 @@ controls:
                       stroke:
                         width: 3
                         color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
-                  全部卸下文字:
+                  设为主展示文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f全部卸下"
-                      fontSize: 36
+                      texts: "~&0设为主展示"
+                      fontSize: 34
                       through: true
+          操作按钮行2:
+            type: HStack
+            attribute:
+              point: ~top_left
+              x: 14
+              y: "var.detailBtnY2"
+              width: "var.detailW - 28"
+              height: 44
+              spaceBetween: 12
+            children:
               隐藏按钮:
                 type: Canvas
                 attribute:
-                  width: 196
-                  height: 42
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
                   visible: var.selectedOwned && !var.selectedHidden
                   enable: "!var.actionBusy"
                 action:
@@ -1595,7 +1428,7 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~42,46,58,210
+                      normal: ~62,66,74,210
                       shape: ~round_rect
                       radius: 10
                     effect:
@@ -1608,13 +1441,13 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "~&f隐藏"
-                      fontSize: 36
+                      fontSize: 34
                       through: true
               取消隐藏按钮:
                 type: Canvas
                 attribute:
-                  width: 196
-                  height: 42
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
                   visible: var.selectedOwned && var.selectedHidden
                   enable: "!var.actionBusy"
                 action:
@@ -1640,37 +1473,489 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "~&0取消隐藏"
-                      fontSize: 36
+                      fontSize: 34
                       through: true
-          刷新按钮:
+              刷新按钮:
+                type: Canvas
+                attribute:
+                  width: "(var.detailW - 52) / 3"
+                  height: 44
+                  enable: "!var.actionBusy"
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'refresh')
+                children:
+                  刷新底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  刷新文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f刷新"
+                      fontSize: 34
+                      through: true
+
+      # ── 装备总览悬浮弹窗（顶栏按钮开启，点遮罩或 ✕ 关闭）─────
+      # 弹窗覆盖整窗（含超宽屏两侧溢出区）：与顶栏同法，x 负向偏移 + 宽度取 viewW
+      装备总览弹窗:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
+          visible: var.showLoadout
+        children:
+          弹窗遮罩:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 14
-              y: "var.btnRefreshY"
-              width: 404
-              height: 42
+              point: ~stretch_all
             action:
               clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'refresh')
+                var.showLoadout = false
             children:
-              刷新底:
+              遮罩底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~42,46,58,210
+                  normal: ~10,12,16,170
+          弹窗卡片:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              width: 1240
+              height: 720
+            children:
+              卡片底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,46,58,248
                   shape: ~round_rect
-                  radius: 10
+                  radius: 14
                 effect:
-                  ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
-              刷新文字:
+                    color: ~232,180,90,240
+              弹窗标题:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f刷新"
-                  fontSize: 36
+                  point: ~top_left
+                  x: 36
+                  y: 26
+                  texts: "~&f装备总览"
+                  fontSize: 48
                   through: true
+              弹窗关闭:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 22
+                  width: 44
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.showLoadout = false
+                children:
+                  弹窗关闭底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  弹窗关闭字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f✕"
+                      fontSize: 40
+                      through: true
+              弹窗分割线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 86
+                  width: 1168
+                  height: 2
+                  normal: ~255,255,255,230
+                  through: true
+              已装备标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 106
+                  texts: "~&f当前已装备"
+                  fontSize: 44
+                  through: true
+              已装备滚动区:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 158
+                  width: 540
+                  height: 380
+                  moveY: "self.parent['装备滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['装备滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['装备滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  已装备列表:
+                    val: equipped_list
+                    type: VStack
+                    attribute:
+                      width: 540
+                      spaceBetween: 8
+                    children:
+                      已装备模板:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.equippedByGroup[self.entryKey]
+                          width: 540
+                          height: 64
+                          visible: self.entryKey != none && self.entry != none
+                        children:
+                          已装备底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~255,255,255,230
+                          已装备色条:
+                            type: Texture
+                            attribute:
+                              point: ~middle_left
+                              x: 12
+                              width: 4
+                              height: 40
+                              normal: ~232,180,90,255
+                              shape: ~round_rect
+                              radius: 2
+                              visible: "self.parent.parent.entry != none && self.parent.parent.entry['title_id'] != none"
+                              through: true
+                          已装备信息:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 30
+                              texts: "'&f' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'] + '  &f' + self.parent.entry['quality_name'])"
+                              fontSize: 36
+                              visible: self.parent.entry != none
+                              through: true
+              装备滑块轨道:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 584
+                  y: 158
+                  width: 8
+                  height: 380
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
+              装备滑块:
+                type: Texture
+                val: 装备滑块
+                attribute:
+                  point: ~top_left
+                  x: 584
+                  y: 158
+                  width: 8
+                  height: 40
+                  normal: ~232,180,90,220
+                  shape: ~round_rect
+                  radius: 4
+                  maxDragY: 340
+              主展示行:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 556
+                  texts: "'&f当前主展示: &f' + (var.displayTitleName != none && var.displayTitleName != '' ? var.displayTitleName : '&7未设置')"
+                  fontSize: 40
+                  through: true
+              弹窗竖分割线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 608
+                  y: 106
+                  width: 2
+                  height: 480
+                  normal: ~62,66,74,210
+                  through: true
+              属性标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 632
+                  y: 106
+                  texts: "~&f属性汇总"
+                  fontSize: 44
+                  through: true
+              装备属性页签:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 632
+                  y: 158
+                  width: 172
+                  height: 46
+                action:
+                  clickLeft: |-
+                    var.attrTab = 0
+                    self.parent['属性滑块'].setDragYRatio(0)
+                children:
+                  装备页签底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.attrTab == 0 ? '232,180,90,230' : '62,66,74,210'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  装备页签文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "(var.attrTab == 0 ? '&0' : '&f') + '装备属性'"
+                      fontSize: 34
+                      through: true
+              收集属性页签:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 814
+                  y: 158
+                  width: 172
+                  height: 46
+                action:
+                  clickLeft: |-
+                    var.attrTab = 1
+                    self.parent['属性滑块'].setDragYRatio(0)
+                children:
+                  收集页签底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.attrTab == 1 ? '232,180,90,230' : '62,66,74,210'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  收集页签文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "(var.attrTab == 1 ? '&0' : '&f') + '收集属性'"
+                      fontSize: 34
+                      through: true
+              总属性页签:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 996
+                  y: 158
+                  width: 172
+                  height: 46
+                action:
+                  clickLeft: |-
+                    var.attrTab = 2
+                    self.parent['属性滑块'].setDragYRatio(0)
+                children:
+                  总页签底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.attrTab == 2 ? '232,180,90,230' : '62,66,74,210'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  总页签文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "(var.attrTab == 2 ? '&0' : '&f') + '总属性'"
+                      fontSize: 34
+                      through: true
+              属性滚动区:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 632
+                  y: 216
+                  width: 536
+                  height: 368
+                  moveY: "self.parent['属性滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['属性滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['属性滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  属性堆叠:
+                    type: VStack
+                    attribute:
+                      width: 536
+                      spaceBetween: 14
+                    children:
+                      属性内容:
+                        type: Text
+                        attribute:
+                          fontSize: 36
+                          lineSpace: 14
+                          texts: "var.attrTab == 1 ? (var.collectionAttributesText != none && var.collectionAttributesText != '' ? var.collectionAttributesText : '&7暂无属性') : (var.attrTab == 2 ? (var.totalAttributesText != none && var.totalAttributesText != '' ? var.totalAttributesText : '&7暂无属性数据') : (var.displayAttributesText != none && var.displayAttributesText != '' ? var.displayAttributesText : '&7暂无属性'))"
+                          through: true
+              属性滑块轨道:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 1176
+                  y: 216
+                  width: 8
+                  height: 368
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,230
+              属性滑块:
+                type: Texture
+                val: 属性滑块
+                attribute:
+                  point: ~top_left
+                  x: 1176
+                  y: 216
+                  width: 8
+                  height: 40
+                  normal: ~232,180,90,220
+                  shape: ~round_rect
+                  radius: 4
+                  maxDragY: 328
+              全部卸下按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 656
+                  width: 260
+                  height: 48
+                  enable: "!var.actionBusy"
+                action:
+                  clickLeft: |-
+                    var.actionBusy = true
+                    Packet.send('AXS_TITLE_MENU', 'unequip_all')
+                children:
+                  全部卸下底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  全部卸下文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f全部卸下"
+                      fontSize: 36
+                      through: true
+              弹窗刷新按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 308
+                  y: 656
+                  width: 260
+                  height: 48
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'refresh')
+                children:
+                  弹窗刷新底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                  弹窗刷新文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "~&f刷新"
+                      fontSize: 36
+                      through: true
+
