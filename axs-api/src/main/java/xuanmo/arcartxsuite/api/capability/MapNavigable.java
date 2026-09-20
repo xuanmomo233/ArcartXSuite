@@ -24,6 +24,9 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
  *   <li>{@code axs.map.nav_cleared} —— 玩家停止导航</li>
  *   <li>{@code axs.map.external_navigate} —— 面板点击外部目标"导航"</li>
  *   <li>{@code axs.map.external_nav_cancel} —— 面板点击外部目标"取消"</li>
+ *   <li>{@code axs.map.ready} —— 地图模块（重）载完成，按在线玩家逐个发布；
+ *       外部目标/导航回调/委托已由地图自动续传恢复，来源可订阅此事件
+ *       决定是否重推最新数据（如目标坐标已变化）</li>
  * </ul>
  * <p>
  * 互斥约定：同一时间一个玩家只有一个活跃导航。来源开始自身导航时应调用

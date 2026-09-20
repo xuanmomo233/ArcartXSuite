@@ -44,6 +44,7 @@ ui:
       var.detailSelectedId = packet['detailSelectedId']
       var.detailTitle = packet['detailTitle']
       var.detailDescription = packet['detailDescription']
+      var.detailLocation = packet['detailLocation']
       var.detailUnlocked = packet['detailUnlocked']
       var.detailUnlockCostText = packet['detailUnlockCostText']
       var.detailTeleportCostText = packet['detailTeleportCostText']
@@ -188,6 +189,7 @@ ui:
       var.detailSelectedId = packet['detailSelectedId']
       var.detailTitle = packet['detailTitle']
       var.detailDescription = packet['detailDescription']
+      var.detailLocation = packet['detailLocation']
       var.detailUnlocked = packet['detailUnlocked']
       var.detailUnlockCostText = packet['detailUnlockCostText']
       var.detailTeleportCostText = packet['detailTeleportCostText']
@@ -540,8 +542,8 @@ controls:
                   normal: "~Frosted:30;255,255,255,100"
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               标题色块:
                 type: Texture
                 attribute:
@@ -592,8 +594,8 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   小地图按钮文字:
                     type: Text
                     attribute:
@@ -661,8 +663,8 @@ controls:
                   radius: 20
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               锚点类型图标:
                 type: Text
                 attribute:
@@ -678,11 +680,20 @@ controls:
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
+              锚点位置信息:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 112
+                  texts: "'&7' + var.detailLocation"
+                  fontSize: 36
+                  visible: "var.detailLocation != none && var.detailLocation != ''"
+                  through: true
               锚点详情描述:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 124
+                  y: 142
                   texts: "var.detailDescription"
                   fontSize: 48
               锚点解锁费用:
@@ -737,8 +748,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   锚点解锁按钮文字:
                     type: Text
                     attribute:
@@ -781,8 +792,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   锚点传送按钮文字:
                     type: Text
                     attribute:
@@ -826,8 +837,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   锚点导航按钮文字:
                     type: Text
                     attribute:
@@ -857,8 +868,8 @@ controls:
                   radius: 20
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               路径点类型图标:
                 type: Text
                 attribute:
@@ -874,6 +885,15 @@ controls:
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
+              路径点位置信息:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 106
+                  texts: "'&7' + var.detailLocation"
+                  fontSize: 36
+                  visible: "var.detailLocation != none && var.detailLocation != ''"
+                  through: true
               路径点名称标签:
                 type: Text
                 attribute:
@@ -947,8 +967,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   路径点保存按钮文字:
                     type: Text
                     attribute:
@@ -992,8 +1012,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   路径点导航按钮文字:
                     type: Text
                     attribute:
@@ -1026,8 +1046,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   路径点分享按钮文字:
                     type: Text
                     attribute:
@@ -1063,8 +1083,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   路径点删除按钮文字:
                     type: Text
                     attribute:
@@ -1094,8 +1114,8 @@ controls:
                   radius: 20
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               外部目标类型图标:
                 type: Text
                 attribute:
@@ -1111,11 +1131,20 @@ controls:
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
+              外部目标位置信息:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 112
+                  texts: "'&7' + var.detailLocation"
+                  fontSize: 36
+                  visible: "var.detailLocation != none && var.detailLocation != ''"
+                  through: true
               外部目标详情描述:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 124
+                  y: 142
                   texts: "var.detailDescription"
                   fontSize: 48
               外部目标导航按钮:
@@ -1154,8 +1183,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   外部目标导航按钮文字:
                     type: Text
                     attribute:
@@ -1185,8 +1214,8 @@ controls:
                   radius: 20
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               标记点类型图标:
                 type: Text
                 attribute:
@@ -1202,6 +1231,15 @@ controls:
                   y: 76
                   texts: "var.detailTitle"
                   fontSize: 38
+              标记点位置信息:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 106
+                  texts: "'&7' + var.detailLocation"
+                  fontSize: 36
+                  visible: "var.detailLocation != none && var.detailLocation != ''"
+                  through: true
               标记点名称标签:
                 type: Text
                 attribute:
@@ -1275,8 +1313,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   标记点保存按钮文字:
                     type: Text
                     attribute:
@@ -1309,8 +1347,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   标记点分享按钮文字:
                     type: Text
                     attribute:
@@ -1346,8 +1384,8 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   标记点删除按钮文字:
                     type: Text
                     attribute:
@@ -1385,8 +1423,8 @@ controls:
                   radius: 12
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
               新建路径点按钮文字:
                 type: Text
                 attribute:
@@ -1428,8 +1466,8 @@ controls:
                   radius: 12
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
               新建标记点按钮文字:
                 type: Text
                 attribute:
@@ -1459,14 +1497,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,200"
-                  hover: "~Frosted:30;255,255,255,240"
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
               浏览标记按钮图标:
                 type: Text
                 attribute:
@@ -1495,8 +1533,8 @@ controls:
                   radius: 16
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               # 面板内顶部分类按钮（锚点/路径点/标记点/其它目标）
               分类锚点按钮:
                 type: Canvas
@@ -1522,8 +1560,8 @@ controls:
                       radius: 10
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   分类锚点字:
                     type: Text
                     attribute:
@@ -1555,8 +1593,8 @@ controls:
                       radius: 10
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   分类路径点字:
                     type: Text
                     attribute:
@@ -1588,8 +1626,8 @@ controls:
                       radius: 10
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   分类标记点字:
                     type: Text
                     attribute:
@@ -1621,8 +1659,8 @@ controls:
                       radius: 10
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   分类其它字:
                     type: Text
                     attribute:
@@ -1963,14 +2001,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;255,255,255,200"
-                  hover: "~Frosted:30;255,255,255,240"
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
               世界槽位图标:
                 type: Text
                 attribute:
@@ -2009,8 +2047,8 @@ controls:
                   radius: 16
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               世界浮层标题:
                 type: Text
                 attribute:
@@ -2151,8 +2189,8 @@ controls:
                                   radius: 10
                                 effect:
                                   stroke:
-                                    width: 3
-                                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                                    width: "self.isHovered() ? '4' : '3'"
+                                    color: ~255,255,255,255
                               地图项目传送图标:
                                 type: Text
                                 attribute:
@@ -2181,14 +2219,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~Frosted:30;255,255,255,200
-                  hover: ~Frosted:30;255,255,255,240
+                  normal: ~Frosted:30;200,200,200,255
+                  hover: ~Frosted:30;255,255,255,255
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
               复位按钮文字:
                 type: Text
                 attribute:
@@ -2251,8 +2289,8 @@ controls:
                   radius: 14
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                    width: 4
+                    color: ~255,255,255,255
               设置面板标题:
                 type: Text
                 attribute:
@@ -2325,14 +2363,14 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   圆形按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f圆形
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               方形按钮:
                 type: Canvas
@@ -2361,14 +2399,14 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   方形按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f方形
-                      fontSize: 30
+                      fontSize: 36
                       through: true
               位置标签:
                 type: Text
@@ -2385,7 +2423,7 @@ controls:
                   point: ~top_left
                   x: 130
                   y: 124
-                  width: 66
+                  width: 72
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2403,12 +2441,16 @@ controls:
                       hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '94,164,246,255' : '72,76,84,255'"
                       shape: ~round_rect
                       radius: 10
+                    effect:
+                      stroke:
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   左上按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f左上
-                      fontSize: 28
+                      fontSize: 36
                       through: true
               右上按钮:
                 type: Canvas
@@ -2417,7 +2459,7 @@ controls:
                   point: ~top_left
                   x: 206
                   y: 124
-                  width: 66
+                  width: 72
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2435,12 +2477,16 @@ controls:
                       hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
                       shape: ~round_rect
                       radius: 10
+                    effect:
+                      stroke:
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   右上按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f右上
-                      fontSize: 28
+                      fontSize: 36
                       through: true
               左下按钮:
                 type: Canvas
@@ -2449,7 +2495,7 @@ controls:
                   point: ~top_left
                   x: 282
                   y: 124
-                  width: 66
+                  width: 72
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2467,12 +2513,16 @@ controls:
                       hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '94,164,246,255' : '72,76,84,255'"
                       shape: ~round_rect
                       radius: 10
+                    effect:
+                      stroke:
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   左下按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f左下
-                      fontSize: 28
+                      fontSize: 36
                       through: true
               右下按钮:
                 type: Canvas
@@ -2481,7 +2531,7 @@ controls:
                   point: ~top_left
                   x: 358
                   y: 124
-                  width: 66
+                  width: 72
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2499,12 +2549,16 @@ controls:
                       hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
                       shape: ~round_rect
                       radius: 10
+                    effect:
+                      stroke:
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   右下按钮字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       texts: ~&f右下
-                      fontSize: 28
+                      fontSize: 36
                       through: true
               # 尺寸：- 值 +
               尺寸标签:
@@ -2542,8 +2596,8 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   尺寸减字:
                     type: Text
                     attribute:
@@ -2559,7 +2613,7 @@ controls:
                   y: 198
                   center: true
                   texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &7px' : '&7-'"
-                  fontSize: 30
+                  fontSize: 36
                   through: true
               尺寸加按钮:
                 type: Canvas
@@ -2588,8 +2642,8 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   尺寸加字:
                     type: Text
                     attribute:
@@ -2633,8 +2687,8 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   缩放减字:
                     type: Text
                     attribute:
@@ -2650,7 +2704,7 @@ controls:
                   y: 256
                   center: true
                   texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&7%' : '&7-'"
-                  fontSize: 30
+                  fontSize: 36
                   through: true
               缩放加按钮:
                 type: Canvas
@@ -2679,8 +2733,8 @@ controls:
                       radius: 12
                     effect:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '255,255,255,255' : '255,255,255,230'"
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
                   缩放加字:
                     type: Text
                     attribute:
@@ -2694,7 +2748,7 @@ controls:
                   point: ~top_center
                   y: 320
                   texts: ~&7选择位置后将同步移动地图、边框与文字
-                  fontSize: 28
+                  fontSize: 36
           # ─── 跨世界导航确认弹窗（模态遮罩，挡住下层一切点击）───
           跨世界确认层:
             type: Canvas
@@ -2726,8 +2780,8 @@ controls:
                       radius: 16
                     effect:
                       stroke:
-                        width: 3
-                        color: ~255,255,255,230
+                        width: 4
+                        color: ~255,255,255,255
                   对话框标题:
                     type: Text
                     attribute:
@@ -2786,6 +2840,10 @@ controls:
                           hover: ~94,164,246,255
                           shape: ~round_rect
                           radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
                       确认文字:
                         type: Text
                         attribute:
@@ -2815,6 +2873,10 @@ controls:
                           hover: ~72,76,84,255
                           shape: ~round_rect
                           radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
                       取消文字:
                         type: Text
                         attribute:

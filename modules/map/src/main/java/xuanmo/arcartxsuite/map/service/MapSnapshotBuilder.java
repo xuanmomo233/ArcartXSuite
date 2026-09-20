@@ -157,7 +157,7 @@ public final class MapSnapshotBuilder {
         }
 
         boolean canCreateWaypoint = input.waypointsEnabled() && visibleWaypoints.size() < input.waypointLimit();
-        DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, visiblePins, canCreateWaypoint, selectedWorldId);
+        DetailSnapshot detail = buildDetail(input, visibleAnchors, visibleWaypoints, visibleExternalTargets, visiblePins, canCreateWaypoint, selectedWorldId, selectedWorldName);
 
         // HUD 数据完全按"玩家当前世界"构建，与菜单选中世界解耦：
         // 菜单里浏览其他世界时 HUD 仍应显示玩家所在世界的地形/标记/迷雾
@@ -268,7 +268,8 @@ public final class MapSnapshotBuilder {
         List<MapExternalTarget> visibleExternalTargets,
         List<MapPin> visiblePins,
         boolean canCreateWaypoint,
-        String selectedWorldId
+        String selectedWorldId,
+        String selectedWorldName
     ) {
         for (AnchorView anchor : visibleAnchors) {
             if (anchor.id().equalsIgnoreCase(input.viewState().selectedAnchorId())) {
@@ -286,6 +287,7 @@ public final class MapSnapshotBuilder {
                     anchor.id(),
                     anchor.displayName(),
                     anchor.description(),
+                    locationText(selectedWorldName, anchor.x(), anchor.y(), anchor.z()),
                     anchor.unlocked(),
                     anchor.unlockCostText(),
                     anchor.teleportCostText(),
@@ -313,7 +315,10 @@ public final class MapSnapshotBuilder {
                     "waypoint",
                     waypoint.waypointId(),
                     waypoint.name(),
-                    waypoint.description().isBlank() ? "世界: " + selectedWorldId + "  坐标: " + trim(waypoint.x()) + ", " + trim(waypoint.y()) + ", " + trim(waypoint.z()) : waypoint.description(),
+                    // 描述只回传玩家真实填写的内容——坐标信息走 location 独立展示，
+                    // 不再把自动生成的"世界/坐标"串灌进可编辑描述框（保存时会当真值入库）
+                    waypoint.description(),
+                    locationText(selectedWorldName, waypoint.x(), waypoint.y(), waypoint.z()),
                     true,
                     "",
                     "",
@@ -342,6 +347,7 @@ public final class MapSnapshotBuilder {
                     target.targetId(),
                     target.title(),
                     target.description(),
+                    locationText(selectedWorldName, target.x(), target.y(), target.z()),
                     true,
                     "",
                     "",
@@ -369,7 +375,8 @@ public final class MapSnapshotBuilder {
                     "pin",
                     pin.pinId(),
                     pin.name(),
-                    pin.description().isBlank() ? "世界: " + selectedWorldId + "  坐标: " + trim(pin.x()) + ", " + trim(pin.z()) : pin.description(),
+                    pin.description(),
+                    locationText(selectedWorldName, pin.x(), pin.z()),
                     true,
                     "",
                     "",
@@ -395,6 +402,7 @@ public final class MapSnapshotBuilder {
             "",
             "未选中目标",
             "请选择一个锚点、自定义路径点或任务目标。",
+            "",
             true,
             "",
             "",
@@ -544,8 +552,16 @@ public final class MapSnapshotBuilder {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static String trim(double value) {
-        return BigDecimalString.of(value);
+    /** 详情面板位置信息行：世界显示名 + 整数坐标（世界名为空时只显示坐标）。 */
+    private static String locationText(String worldName, double x, double y, double z) {
+        String coords = Math.round(x) + ", " + Math.round(y) + ", " + Math.round(z);
+        return worldName == null || worldName.isBlank() ? coords : worldName + "  ·  " + coords;
+    }
+
+    /** 二维点位版本（标记点无 Y）。 */
+    private static String locationText(String worldName, double x, double z) {
+        String coords = Math.round(x) + ", " + Math.round(z);
+        return worldName == null || worldName.isBlank() ? coords : worldName + "  ·  " + coords;
     }
 
     static String trackingText(Map<String, MapNavigationState> navigationStates) {
@@ -927,7 +943,9 @@ public final class MapSnapshotBuilder {
      * @param selectedType       选中目标类型（anchor / waypoint / external / none）
      * @param selectedId         选中目标 ID
      * @param title              详情标题
-     * @param description        详情描述
+     * @param description        详情描述（路径点/标记点只回传玩家真实填写的内容，
+     *                           不再塞自动生成的"世界/坐标"串——那部分走 location）
+     * @param location           位置信息行（"世界名 · x, y, z" 整数坐标）
      * @param unlocked           是否已解锁
      * @param unlockCostText     解锁费用文本
      * @param teleportCostText   传送费用文本
@@ -955,6 +973,7 @@ public final class MapSnapshotBuilder {
         String selectedId,
         String title,
         String description,
+        String location,
         boolean unlocked,
         String unlockCostText,
         String teleportCostText,
@@ -978,14 +997,4 @@ public final class MapSnapshotBuilder {
     ) {
     }
 
-    private static final class BigDecimalString {
-
-        private BigDecimalString() {
-        }
-
-        private static String of(double value) {
-            java.math.BigDecimal decimal = java.math.BigDecimal.valueOf(value);
-            return decimal.stripTrailingZeros().toPlainString();
-        }
-    }
 }

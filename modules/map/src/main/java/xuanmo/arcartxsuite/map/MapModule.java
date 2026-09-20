@@ -48,6 +48,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     private MapModuleConfiguration configuration;
     private MapService service;
+    /** reload 跨 service 实例暂存的外部运行时状态（外部目标/导航回调/委托）。 */
+    private MapService.ExternalRuntime carriedExternalRuntime;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -108,7 +110,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             "axs.map.nav_started",
             "axs.map.nav_cleared",
             "axs.map.external_navigate",
-            "axs.map.external_nav_cancel"
+            "axs.map.external_nav_cancel",
+            "axs.map.ready"
         );
     }
 
@@ -175,6 +178,13 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             worldTextureBridge
         );
         service.start();
+
+        // reload 续传：恢复第三方来源推送的外部目标与导航回调，并重推视图。
+        // 随后发布 axs.map.ready，来源可订阅该事件主动重推最新数据。
+        if (carriedExternalRuntime != null) {
+            service.importExternalRuntime(carriedExternalRuntime);
+            carriedExternalRuntime = null;
+        }
 
         // 导出分享卡片模板到 ArcartX/chat_card/（已存在则保留用户改动）
         ensureMapShareCardDefaults();
@@ -358,6 +368,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(
             plugin, MapTerrainPushService.CHANNEL_TERRAIN);
         if (service != null) {
+            // 先导出外部运行时状态再 shutdown——shutdown 会清空 externalTargets
+            carriedExternalRuntime = service.exportExternalRuntime();
             service.shutdown();
             storageManager.closeModuleDataSource("map");
             service = null;

@@ -721,6 +721,71 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return navigationDelegate != null;
     }
 
+    /**
+     * 模块 reload 跨 service 实例续传的外部运行时状态。
+     * <p>
+     * reload 会重建整个 MapService，若不留存，第三方来源推送的外部目标、
+     * 导航回调与全局委托会随 {@link #shutdown()} 全部丢失且来源无感知——
+     * 由 MapModule 在 stopService/startService 之间暂存并回灌。
+     */
+    public record ExternalRuntime(
+        ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets,
+        ConcurrentMap<String, MapNavigationHandler> navigationSources,
+        ConcurrentMap<Plugin, Set<String>> navigationSourceOwners,
+        MapNavigationDelegate navigationDelegate,
+        Plugin navigationDelegateOwner
+    ) {
+    }
+
+    /**
+     * 导出外部运行时状态（深拷贝）。必须在 {@link #shutdown()} 之前调用——
+     * shutdown 会清空 externalTargets。
+     */
+    public ExternalRuntime exportExternalRuntime() {
+        ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> targets = new ConcurrentHashMap<>();
+        externalTargets.forEach((uuid, map) -> targets.put(uuid, new ConcurrentHashMap<>(map)));
+        ConcurrentMap<Plugin, Set<String>> owners = new ConcurrentHashMap<>();
+        navigationSourceOwners.forEach((owner, sources) -> {
+            Set<String> copy = ConcurrentHashMap.newKeySet(sources.size());
+            copy.addAll(sources);
+            owners.put(owner, copy);
+        });
+        return new ExternalRuntime(targets, new ConcurrentHashMap<>(navigationSources),
+            owners, navigationDelegate, navigationDelegateOwner);
+    }
+
+    /**
+     * 回灌外部运行时状态（reload 后调用）：只恢复仍在线玩家的外部目标，
+     * 导航回调/委托全量恢复（handler 是来源插件持有的对象，本身仍有效），
+     * 随后对恢复了目标的玩家重推视图，并向全体在线玩家发布
+     * {@code axs.map.ready}——来源可订阅该事件决定是否重推最新数据。
+     */
+    public void importExternalRuntime(ExternalRuntime state) {
+        if (state == null) {
+            return;
+        }
+        state.externalTargets().forEach((uuid, map) -> {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline() && !map.isEmpty()) {
+                externalTargets.put(uuid, new ConcurrentHashMap<>(map));
+            }
+        });
+        navigationSources.putAll(state.navigationSources());
+        state.navigationSourceOwners().forEach((owner, sources) ->
+            navigationSourceOwners.computeIfAbsent(owner, ignored -> ConcurrentHashMap.newKeySet())
+                .addAll(sources));
+        if (state.navigationDelegate() != null) {
+            navigationDelegate = state.navigationDelegate();
+            navigationDelegateOwner = state.navigationDelegateOwner();
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (externalTargets.containsKey(player.getUniqueId())) {
+                sync(player, false);
+            }
+            publishBusEvent("axs.map.ready", player, Map.of());
+        }
+    }
+
     /** 导航是否可用：本地导航可用，或已注册全局委托。 */
     private boolean navigationAvailable() {
         return (configuration.navigation().enabled() && waypointRuntimeReady()) || navigationDelegate != null;
@@ -3173,6 +3238,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailSelectedId", snapshot.detail().selectedId());
         payload.put("detailTitle", snapshot.detail().title());
         payload.put("detailDescription", snapshot.detail().description());
+        payload.put("detailLocation", snapshot.detail().location());
         payload.put("detailUnlocked", snapshot.detail().unlocked());
         payload.put("detailUnlockCostText", snapshot.detail().unlockCostText());
         payload.put("detailTeleportCostText", snapshot.detail().teleportCostText());
