@@ -138,6 +138,9 @@ ui:
       var.packetId = 'AXS_MAP'
       var.trackingText = '当前未导航'
       var.hudShape = 'CIRCLE'
+      var.hudPosition = 'TOP_RIGHT'
+      var.viewW = 1920
+      var.viewH = 1080
       var.hudSession = -1
       // api4 = 客户端 mod 是否带会话化 API（4参 setHudAnchor / deactivateHud /
       // closeHud(session)）；未定义即 none = 未探测，首次拿到 mapRenderer 后探测固定
@@ -182,9 +185,18 @@ ui:
         sx = Screen.getWidth() / 1920
         sy = Screen.getHeight() / 1080
         s = sx < sy ? sx : sy
-        // 小地图右上角锚点：设计坐标系 (1920-28, 24)
-        anchorX = Screen.getWidth() - 28 * s
-        anchorY = 24 * s
+        var.viewW = Screen.getWidth() / s
+        var.viewH = Screen.getHeight() / s
+        var.hudPosition = 'TOP_RIGHT'
+        try {
+          var.hudPosition = '' + var.mapRenderer.getHudPosition()
+        } catch(e) {
+        }
+        hudSize = var.mapRenderer.getHudSize()
+        isLeft = var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT'
+        isBottom = var.hudPosition == 'BOTTOM_LEFT' || var.hudPosition == 'BOTTOM_RIGHT'
+        anchorX = isLeft ? 28 * s + hudSize : Screen.getWidth() - 28 * s
+        anchorY = isBottom ? Screen.getHeight() - 70 * s - hudSize : 24 * s
         if(var.api4) {
           var.mapRenderer.setHudAnchor(anchorX, anchorY, s, var.hudSession)
         } else {
@@ -233,11 +245,11 @@ controls:
       地图边框范围布局:
         type: Canvas
         attribute:
-          point: ~top_right
+          point: ~top_left
           # 注意: 边框越厚的地图，x、y、width、height也需要做相应调整
           strokewidth: 4
-          x: -28 + self.strokewidth
-          y: 22 - self.strokewidth
+          x: "var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT' ? 28 - self.strokewidth : var.viewW - 28 - var.hudSizeDesign - self.strokewidth"
+          y: "var.hudPosition == 'BOTTOM_LEFT' || var.hudPosition == 'BOTTOM_RIGHT' ? var.viewH - 70 - var.hudSizeDesign - self.strokewidth : 22 - self.strokewidth"
           width: var.hudSizeDesign + 2 * self.strokewidth
           height: var.hudSizeDesign + 2 * self.strokewidth
           through: true

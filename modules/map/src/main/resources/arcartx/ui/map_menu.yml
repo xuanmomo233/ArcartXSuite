@@ -2234,10 +2234,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -456
-              y: 104
-              width: 420
-              height: 280
+              x: -496
+              y: 96
+              width: 460
+              height: 368
               visible: var.showHudSettings
               mapCapture: true
             children:
@@ -2293,19 +2293,19 @@ controls:
               形状标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 86
-                  texts: ~&7形状
-                  fontSize: 36
+                  point: ~top_left
+                  x: 36
+                  y: 70
+                  texts: ~&f形状
+                  fontSize: 48
               圆形按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f圆形小地图
                   point: ~top_left
-                  x: 128
+                  x: 130
                   y: 64
-                  width: 120
+                  width: 140
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2332,16 +2332,16 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f圆形
-                      fontSize: 36
+                      fontSize: 30
                       through: true
               方形按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f方形小地图
                   point: ~top_left
-                  x: 264
+                  x: 286
                   y: 64
-                  width: 120
+                  width: 140
                   height: 44
                   enable: "var.mapRenderer != none"
                 action:
@@ -2368,24 +2368,160 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f方形
-                      fontSize: 36
+                      fontSize: 30
+                      through: true
+              位置标签:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 36
+                  y: 130
+                  texts: ~&f位置
+                  fontSize: 48
+              左上按钮:
+                type: Canvas
+                attribute:
+                  tip: ~&f小地图置于左上角
+                  point: ~top_left
+                  x: 130
+                  y: 124
+                  width: 66
+                  height: 44
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.setHudPosition('top_left')
+                    }
+                children:
+                  左上按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                      shape: ~round_rect
+                      radius: 10
+                  左上按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f左上
+                      fontSize: 28
+                      through: true
+              右上按钮:
+                type: Canvas
+                attribute:
+                  tip: ~&f小地图置于右上角
+                  point: ~top_left
+                  x: 206
+                  y: 124
+                  width: 66
+                  height: 44
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.setHudPosition('top_right')
+                    }
+                children:
+                  右上按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                      shape: ~round_rect
+                      radius: 10
+                  右上按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f右上
+                      fontSize: 28
+                      through: true
+              左下按钮:
+                type: Canvas
+                attribute:
+                  tip: ~&f小地图置于左下角
+                  point: ~top_left
+                  x: 282
+                  y: 124
+                  width: 66
+                  height: 44
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.setHudPosition('bottom_left')
+                    }
+                children:
+                  左下按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                      shape: ~round_rect
+                      radius: 10
+                  左下按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f左下
+                      fontSize: 28
+                      through: true
+              右下按钮:
+                type: Canvas
+                attribute:
+                  tip: ~&f小地图置于右下角
+                  point: ~top_left
+                  x: 358
+                  y: 124
+                  width: 66
+                  height: 44
+                  enable: "var.mapRenderer != none"
+                action:
+                  clickLeft: |-
+                    if (var.mapRenderer != none) {
+                      var.mapRenderer.setHudPosition('bottom_right')
+                    }
+                children:
+                  右下按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
+                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                      shape: ~round_rect
+                      radius: 10
+                  右下按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f右下
+                      fontSize: 28
                       through: true
               # 尺寸：- 值 +
               尺寸标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 142
-                  texts: ~&7尺寸
-                  fontSize: 36
+                  point: ~top_left
+                  x: 36
+                  y: 195
+                  texts: ~&f尺寸
+                  fontSize: 48
               尺寸减按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f减小小地图尺寸
                   point: ~top_left
-                  x: 128
-                  y: 120
+                  x: 130
+                  y: 188
                   width: 44
                   height: 44
                   enable: "var.mapRenderer != none"
@@ -2418,19 +2554,20 @@ controls:
               尺寸值文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  x: 46
-                  y: 142
-                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &8px' : '&8-'"
-                  fontSize: 36
+                  point: ~top_left
+                  x: 278
+                  y: 198
+                  center: true
+                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &7px' : '&7-'"
+                  fontSize: 30
                   through: true
               尺寸加按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f增大小地图尺寸
                   point: ~top_left
-                  x: 340
-                  y: 120
+                  x: 382
+                  y: 188
                   width: 44
                   height: 44
                   enable: "var.mapRenderer != none"
@@ -2464,18 +2601,18 @@ controls:
               缩放标签:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 24
-                  y: 198
-                  texts: ~&7缩放
-                  fontSize: 36
+                  point: ~top_left
+                  x: 36
+                  y: 252
+                  texts: ~&f缩放
+                  fontSize: 48
               缩放减按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f缩小地图缩放
                   point: ~top_left
-                  x: 128
-                  y: 176
+                  x: 130
+                  y: 246
                   width: 44
                   height: 44
                   enable: "var.mapRenderer != none"
@@ -2508,19 +2645,20 @@ controls:
               缩放值文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  x: 46
-                  y: 198
-                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&8%' : '&8-'"
-                  fontSize: 36
+                  point: ~top_left
+                  x: 278
+                  y: 256
+                  center: true
+                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&7%' : '&7-'"
+                  fontSize: 30
                   through: true
               缩放加按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f放大地图缩放
                   point: ~top_left
-                  x: 340
-                  y: 176
+                  x: 382
+                  y: 246
                   width: 44
                   height: 44
                   enable: "var.mapRenderer != none"
@@ -2554,9 +2692,9 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 240
-                  texts: ~&8快捷键 [ 形状 · -/+ 尺寸 · ,/. 缩放
-                  fontSize: 36
+                  y: 320
+                  texts: ~&7选择位置后将同步移动地图、边框与文字
+                  fontSize: 28
           # ─── 跨世界导航确认弹窗（模态遮罩，挡住下层一切点击）───
           跨世界确认层:
             type: Canvas
