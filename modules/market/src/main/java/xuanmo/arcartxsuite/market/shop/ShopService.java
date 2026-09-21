@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.market.shop;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -20,6 +19,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
@@ -45,6 +47,7 @@ public class ShopService {
     private final MarketRepository repository;
     private final CurrencyBridgeAPI currencyManager;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final ScriptConditionEvaluator conditionEvaluator;
     private final File dataFolder;
     private final Logger logger;
 
@@ -58,13 +61,15 @@ public class ShopService {
 
     public ShopService(JavaPlugin plugin, ShopConfiguration config, MessagesConfiguration messages,
                        MarketRepository repository, CurrencyBridgeAPI currencyManager,
-                       ItemSourceRegistry itemSourceRegistry, File dataFolder, Logger logger) {
+                       ItemSourceRegistry itemSourceRegistry, ScriptConditionEvaluator conditionEvaluator,
+                       File dataFolder, Logger logger) {
         this.plugin = plugin;
         this.config = config;
         this.messages = messages;
         this.repository = repository;
         this.currencyManager = currencyManager;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.conditionEvaluator = conditionEvaluator;
         this.dataFolder = dataFolder;
         this.logger = logger;
     }
@@ -81,7 +86,7 @@ public class ShopService {
 
     public void start() {
         loadShops();
-        refreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
+        refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
         logger.info("[Shop] 系统商店已加载 " + shops.size() + " 个商店");
     }
 
@@ -173,10 +178,14 @@ public class ShopService {
                 }
             }
 
+            // 上架条件：走 AXS 统一条件系统（内联行 / Map 列表 / 嵌套节三种形态均可）
+            List<ScriptCondition> conditions = ScriptConditionsLoader.loadModuleConditions(
+                itemSec, logger, "[Shop] 商品 " + itemKey + " 的 conditions 配置无效: ");
+
             items.put(itemKey, new ShopItem(
                 itemKey, type, itemIcon, rewardCommands, itemDefinition,
                 itemDisplayName, buyPrice, sellPrice, currency,
-                stockMode, stockAmount, limitPerPlayer, limitReset, discount
+                stockMode, stockAmount, limitPerPlayer, limitReset, discount, conditions
             ));
         }
 
@@ -195,6 +204,14 @@ public class ShopService {
 
         ShopItem shopItem = shop.items().get(itemId);
         if (shopItem == null) return BuyResult.fail("商品不存在");
+
+        // 上架条件校验（AXS 统一条件系统）
+        // 正常途径下不满足条件的商品不会出现在商店 UI 中，此处为伪造包兜底
+        List<ScriptCondition> conditions = shopItem.conditions();
+        if (conditions != null && !conditions.isEmpty()
+            && conditionEvaluator.firstFailed(player, conditions) != null) {
+            return BuyResult.fail(messages.shopConditionDenied());
+        }
 
         // 数量校验：防止客户端传入 <=0 或超大值（整数溢出绕过限购 / 刷物品）
         if (amount < 1 || amount > MAX_PURCHASE_AMOUNT) {
@@ -287,6 +304,15 @@ public class ShopService {
     }
 
     /**
+     * 玩家是否满足商品上架条件（items.&lt;key&gt;.conditions，AXS 统一条件系统评估）。
+     */
+    public boolean meetsConditions(Player player, ShopItem item) {
+        List<ScriptCondition> conditions = item.conditions();
+        if (conditions == null || conditions.isEmpty()) return true;
+        return conditionEvaluator.passes(player, conditions);
+    }
+
+    /**
      * 获取所有商店列表。
      */
     public Map<String, ShopDefinition> getShops() {
@@ -333,7 +359,8 @@ public class ShopService {
                         item.buyPrice() * multiplier,
                         item.sellPrice() * multiplier,
                         item.currency(), item.stockMode(), item.stockAmount(),
-                        item.limitPerPlayer(), item.limitReset(), item.discount()
+                        item.limitPerPlayer(), item.limitReset(), item.discount(),
+                        item.conditions()
                     );
                 }
                 pricedItems.put(key, item);
@@ -378,7 +405,7 @@ public class ShopService {
         if (Bukkit.isPrimaryThread()) {
             dispatchRewardCommands(player, shopItem, commands, amount);
         } else {
-            AxsScheduler.runTask(
+            Bukkit.getScheduler().runTask(
                 plugin,
                 () -> dispatchRewardCommands(player, shopItem, commands, amount)
             );
@@ -470,6 +497,199 @@ public class ShopService {
         }
     }
 
+    // ─── 商店编辑（管理 UI 持久化）──────────────────────────
+
+    /** 商店/商品 ID 合法字符（文件名与 YAML key 安全，杜绝路径穿越）。 */
+    private static final java.util.regex.Pattern ID_PATTERN =
+        java.util.regex.Pattern.compile("[a-zA-Z0-9_-]{1,64}");
+
+    public static boolean isValidId(String id) {
+        return id != null && ID_PATTERN.matcher(id).matches();
+    }
+
+    /** 按商店 ID 查找已有的 yml/yaml 文件，找不到返回 null。 */
+    private @Nullable File findShopFile(String shopId) {
+        File dir = new File(dataFolder, config.shopsDirectory());
+        File yml = new File(dir, shopId + ".yml");
+        if (yml.isFile()) return yml;
+        File yaml = new File(dir, shopId + ".yaml");
+        return yaml.isFile() ? yaml : null;
+    }
+
+    /**
+     * 保存商店基础信息（新建或覆盖编辑），仅写管理字段，保留 items 节不动。
+     *
+     * @return null 表示成功，否则为错误信息
+     */
+    public synchronized @Nullable String saveShop(String shopId, boolean create, ShopEdit edit) {
+        if (!isValidId(shopId)) return "商店ID非法（仅允许字母/数字/_/-，1-64位）";
+        File dir = new File(dataFolder, config.shopsDirectory());
+        File file = findShopFile(shopId);
+        if (create && file != null) return "商店ID已存在: " + shopId;
+        if (!create && file == null) return "商店不存在: " + shopId;
+        if (file == null) file = new File(dir, shopId + ".yml");
+        try {
+            if (!dir.isDirectory() && !dir.mkdirs()) return "商店目录创建失败";
+            YamlConfiguration yaml = file.isFile()
+                ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+            yaml.set("display-name",
+                edit.displayName() == null || edit.displayName().isBlank() ? shopId : edit.displayName());
+            yaml.set("permission", edit.permission() == null ? "" : edit.permission().trim());
+            yaml.set("tags", edit.tags() == null ? List.of() : edit.tags());
+            writeIcon(yaml, "icon", edit.icon());
+            if (yaml.getConfigurationSection("items") == null) yaml.createSection("items");
+            yaml.save(file);
+            loadShops();
+            return null;
+        } catch (Exception exception) {
+            logger.log(Level.WARNING, "[Shop] 保存商店失败: " + shopId, exception);
+            return "保存商店失败: " + exception.getMessage();
+        }
+    }
+
+    /**
+     * 删除商店：移除文件与内存定义。返回 null 表示成功。
+     */
+    public synchronized @Nullable String deleteShop(String shopId) {
+        if (!isValidId(shopId)) return "商店ID非法";
+        File file = findShopFile(shopId);
+        if (file == null) return "商店不存在: " + shopId;
+        if (!file.delete()) return "删除商店文件失败: " + file.getName();
+        shops.remove(shopId);
+        return null;
+    }
+
+    /**
+     * 保存商品（新建或覆盖编辑）。返回 null 表示成功。
+     */
+    public synchronized @Nullable String saveShopItem(String shopId, boolean create, ItemEdit edit) {
+        if (!isValidId(shopId)) return "商店ID非法";
+        File file = findShopFile(shopId);
+        if (file == null) return "商店不存在: " + shopId;
+        String key = edit.key();
+        if (!isValidId(key)) return "商品ID非法（仅允许字母/数字/_/-，1-64位）";
+        boolean command = "command".equalsIgnoreCase(edit.type());
+        if (!command && (edit.itemId() == null || edit.itemId().isBlank())) {
+            return "物品商品必须填写物品ID";
+        }
+        List<String> commands = edit.rewardCommands() == null ? List.of()
+            : edit.rewardCommands().stream()
+                .filter(c -> c != null && !c.isBlank()).map(String::trim).toList();
+        if (command && commands.isEmpty()) {
+            return "指令商品必须至少填写一条奖励指令";
+        }
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            ConfigurationSection items = yaml.getConfigurationSection("items");
+            if (items == null) items = yaml.createSection("items");
+            if (create && items.contains(key)) return "商品ID已存在: " + key;
+            if (!create && !items.isConfigurationSection(key)) return "商品不存在: " + key;
+            String base = "items." + key + ".";
+            yaml.set(base + "type", command ? "command" : "item");
+            if (command) {
+                yaml.set(base + "item", null);
+            } else {
+                yaml.set(base + "item.source", edit.itemSource());
+                yaml.set(base + "item.id", edit.itemId());
+                yaml.set(base + "item.nbt",
+                    edit.itemNbt() == null || edit.itemNbt().isBlank() ? null : edit.itemNbt());
+            }
+            yaml.set(base + "display-name",
+                edit.displayName() == null || edit.displayName().isBlank() ? key : edit.displayName());
+            yaml.set(base + "buy-price", Math.max(0, edit.buyPrice()));
+            yaml.set(base + "sell-price", Math.max(0, edit.sellPrice()));
+            yaml.set(base + "currency",
+                edit.currency() == null || edit.currency().isBlank()
+                    ? config.defaultCurrency() : edit.currency());
+            yaml.set(base + "stock-mode", edit.stockMode());
+            yaml.set(base + "stock-amount", Math.max(0, edit.stockAmount()));
+            yaml.set(base + "limit-per-player", Math.max(0, edit.limitPerPlayer()));
+            yaml.set(base + "limit-reset", edit.limitReset());
+            yaml.set(base + "reward-commands", commands.isEmpty() ? null : commands);
+            ConfigurationSection itemSec = yaml.getConfigurationSection("items." + key);
+            // discount 的 key 是权限节点（含 '.'），必须以 Map 整体写入避免路径拆分
+            itemSec.set("discount", null);
+            if (edit.discount() != null && !edit.discount().isEmpty()) {
+                itemSec.set("discount", new LinkedHashMap<>(edit.discount()));
+            }
+            // conditions 以原始表达式行写回（loader 支持内联行形态，round-trip 完整）
+            List<String> conditionLines = edit.conditionLines() == null ? List.of()
+                : edit.conditionLines().stream()
+                    .filter(c -> c != null && !c.isBlank()).map(String::trim).toList();
+            itemSec.set("conditions", conditionLines.isEmpty() ? null : conditionLines);
+            writeIcon(itemSec, "icon", edit.icon());
+            yaml.save(file);
+            loadShops();
+            return null;
+        } catch (Exception exception) {
+            logger.log(Level.WARNING, "[Shop] 保存商品失败: " + shopId + "/" + key, exception);
+            return "保存商品失败: " + exception.getMessage();
+        }
+    }
+
+    /**
+     * 删除商品并回写商店文件。返回 null 表示成功。
+     */
+    public synchronized @Nullable String deleteShopItem(String shopId, String itemKey) {
+        if (!isValidId(shopId) || !isValidId(itemKey)) return "ID非法";
+        File file = findShopFile(shopId);
+        if (file == null) return "商店不存在: " + shopId;
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            if (!yaml.isConfigurationSection("items." + itemKey)) {
+                return "商品不存在: " + itemKey;
+            }
+            yaml.set("items." + itemKey, null);
+            yaml.save(file);
+            loadShops();
+            return null;
+        } catch (Exception exception) {
+            logger.log(Level.WARNING, "[Shop] 删除商品失败: " + shopId + "/" + itemKey, exception);
+            return "删除商品失败: " + exception.getMessage();
+        }
+    }
+
+    /** 按编辑模式写入 icon 节：keep 不动 / none 移除 / material / json。 */
+    private void writeIcon(ConfigurationSection parent, String key, @Nullable IconEdit icon) {
+        if (icon == null || "keep".equals(icon.mode())) return;
+        parent.set(key, null);
+        switch (icon.mode()) {
+            case "json" -> {
+                if (icon.json() != null && !icon.json().isBlank()) {
+                    parent.set(key + ".json", icon.json());
+                }
+            }
+            case "material" -> {
+                if (icon.material() != null && !icon.material().isBlank()) {
+                    parent.set(key + ".material", icon.material());
+                }
+            }
+            default -> { /* none: 仅移除 */ }
+        }
+    }
+
+    /** 图标编辑输入：mode = keep（不修改）/ none（移除）/ material / json（物品 JSON）。 */
+    public record IconEdit(String mode, String material, String json) {
+        public static IconEdit keep() { return new IconEdit("keep", "", ""); }
+        public static IconEdit none() { return new IconEdit("none", "", ""); }
+        public static IconEdit ofMaterial(String material) { return new IconEdit("material", material, ""); }
+        public static IconEdit ofJson(String json) { return new IconEdit("json", "", json); }
+    }
+
+    /** 商店编辑输入。 */
+    public record ShopEdit(String displayName, String permission, List<String> tags, IconEdit icon) {}
+
+    /** 商品编辑输入。 */
+    public record ItemEdit(
+        String key, String type, String displayName,
+        double buyPrice, double sellPrice, String currency,
+        String stockMode, int stockAmount, int limitPerPlayer, String limitReset,
+        List<String> conditionLines,
+        List<String> rewardCommands, Map<String, Double> discount,
+        String itemSource, String itemId, @Nullable String itemNbt,
+        IconEdit icon
+    ) {}
+
     // ─── 数据模型 ───────────────────────────────────────────
 
     public record ShopDefinition(
@@ -498,11 +718,18 @@ public class ShopService {
         }
     }
 
+    /**
+     * @param conditions 商品上架条件（配置节 items.&lt;key&gt;.conditions），
+     *                   由 AXS 统一条件系统（{@link ScriptConditionEvaluator}）评估，
+     *                   支持 PAPI 占位符 / aria: / js: / {context} 表达式；
+     *                   不满足条件的商品对该玩家不显示且无法购买
+     */
     public record ShopItem(
         String key, ShopItemType type, @Nullable IconDefinition icon, List<String> rewardCommands,
         ItemDefinition item, String displayName, double buyPrice, double sellPrice,
         String currency, String stockMode, int stockAmount,
-        int limitPerPlayer, String limitReset, Map<String, Double> discount
+        int limitPerPlayer, String limitReset, Map<String, Double> discount,
+        List<ScriptCondition> conditions
     ) {}
 
     public record BuyResult(boolean success, @Nullable String error, double totalPrice, String currency) {

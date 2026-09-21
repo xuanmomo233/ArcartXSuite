@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.qqbot.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
@@ -295,7 +294,7 @@ public final class QQBotCommandRouter {
                     String wlCmd = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(config.whitelist().removeCommand())
                         .bindPlayerName("name", result.message())
                         .build();
-                    AxsScheduler.runTask(plugin, () ->
+                    Bukkit.getScheduler().runTask(plugin, () ->
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), wlCmd));
                 } catch (IllegalArgumentException ignored) {
                     // 玩家名不合法时跳过白名单移除
@@ -355,7 +354,7 @@ public final class QQBotCommandRouter {
             reply(event, "非法玩家名: " + playerName);
             return;
         }
-        AxsScheduler.runTask(plugin, () ->
+        Bukkit.getScheduler().runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistAdded().replace("{name}", playerName));
     }
@@ -389,7 +388,7 @@ public final class QQBotCommandRouter {
             reply(event, "非法玩家名: " + playerName);
             return;
         }
-        AxsScheduler.runTask(plugin, () ->
+        Bukkit.getScheduler().runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistRemoved().replace("{name}", playerName));
     }
@@ -414,7 +413,7 @@ public final class QQBotCommandRouter {
     private void handleBuiltinCommand(OneBotEvent event, String builtinId, String args) {
         switch (builtinId) {
             case "online-list" -> {
-                AxsScheduler.runTask(plugin, () -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
                     var players = Bukkit.getOnlinePlayers();
                     EssentialsQueryable ess = essentialsProvider != null ? essentialsProvider.get() : null;
                     StringBuilder sb = new StringBuilder();
@@ -439,7 +438,7 @@ public final class QQBotCommandRouter {
             }
             case "server-status" -> {
                 // 必须在主线程获取实体/区块数据
-                AxsScheduler.runTask(plugin, () -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
                     double[] tps = getServerTps();
                     Runtime rt = Runtime.getRuntime();
                     long maxMem = rt.maxMemory() / 1024 / 1024;
@@ -581,7 +580,7 @@ public final class QQBotCommandRouter {
         var ac = config.announce();
         String gameMsg = org.bukkit.ChatColor.translateAlternateColorCodes('&',
             ac.gameFormat().replace("{content}", content));
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             Bukkit.broadcastMessage(gameMsg);
             if (ac.titleEnabled()) {
                 String title = org.bukkit.ChatColor.translateAlternateColorCodes('&', ac.titleText());
@@ -614,7 +613,7 @@ public final class QQBotCommandRouter {
                 .bindPlayerName("name", name)
                 .bindQuoted("reason", reason)
                 .build();
-            AxsScheduler.runTask(plugin, () ->
+            Bukkit.getScheduler().runTask(plugin, () ->
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         } catch (IllegalArgumentException e) {
             reply(event, "非法玩家名: " + name);
@@ -640,7 +639,7 @@ public final class QQBotCommandRouter {
                 .bindPlayerName("name", name)
                 .bindQuoted("reason", reason)
                 .build();
-            AxsScheduler.runTask(plugin, () ->
+            Bukkit.getScheduler().runTask(plugin, () ->
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         } catch (IllegalArgumentException e) {
             reply(event, "非法玩家名: " + name);
@@ -657,7 +656,7 @@ public final class QQBotCommandRouter {
         String command = xuanmo.arcartxsuite.api.command.SafeCommandExecutor.builder(cmd.command())
             .bindQuoted("args", args)
             .build();
-        AxsScheduler.runTask(plugin, () ->
+        Bukkit.getScheduler().runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
         reply(event, config.messages().commandExecuted().replace("{command}", command));
     }
@@ -674,7 +673,7 @@ public final class QQBotCommandRouter {
             return;
         }
 
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 String format = cmd.format().replace("{name}", player.getName());
                 List<String> placeholders = cmd.placeholders();
@@ -748,7 +747,7 @@ public final class QQBotCommandRouter {
             logger.info("[Admin] QQ=" + qqId + " 执行控制台命令: " + commandLine);
         }
         String cmd = commandLine;
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                 if (dispatched) {

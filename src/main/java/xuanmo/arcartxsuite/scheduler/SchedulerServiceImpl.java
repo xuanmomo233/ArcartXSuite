@@ -23,13 +23,14 @@ import redis.clients.jedis.params.SetParams;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
+import org.bukkit.Bukkit;
 
 /**
  * {@link SchedulerAPI} 的默认实现。
  * <p>
- * 固定间隔调度委托 {@link AxsScheduler}（自动兼容 Folia）；
+ * 固定间隔调度委托 {@code Bukkit.getScheduler()}；
  * 日历触发调度通过一个每分钟 tick 的守护任务检查所有注册的日历规格；
  * 跨服单点调度通过 Redis 分布式锁（优先）或数据库租约表（兜底）实现选主。
  *
@@ -87,10 +88,10 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         }
 
         // 每分钟守护任务：检查所有日历触发任务
-        minuteDaemonTask = AxsScheduler.runTaskTimer(plugin, this::tickCalendarTasks, 1200L, 1200L);
+        minuteDaemonTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCalendarTasks, 1200L, 1200L);
 
         // 选主心跳任务：每 30 秒更新心跳
-        leaderHeartbeatTask = AxsScheduler.runAsyncTimer(plugin, this::heartbeatLeaders,
+        leaderHeartbeatTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::heartbeatLeaders,
             LEADER_HEARTBEAT_INTERVAL_MS / 50, LEADER_HEARTBEAT_INTERVAL_MS / 50);
 
         logger.fine("[Scheduler] 调度服务已启动 (nodeId=" + nodeId
@@ -113,14 +114,14 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
     @Override
     public @NotNull ScheduledTask scheduleAtFixedRate(@NotNull Plugin p, @NotNull Runnable task,
                                                       long delayTicks, long periodTicks) {
-        org.bukkit.scheduler.BukkitTask bt = AxsScheduler.runTaskTimer(p, task, delayTicks, periodTicks);
+        org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskTimer(p, task, delayTicks, periodTicks);
         return new BukkitTaskWrapper(bt);
     }
 
     @Override
     public @NotNull ScheduledTask scheduleAsyncAtFixedRate(@NotNull Plugin p, @NotNull Runnable task,
                                                            long delayTicks, long periodTicks) {
-        org.bukkit.scheduler.BukkitTask bt = AxsScheduler.runAsyncTimer(p, task, delayTicks, periodTicks);
+        org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskTimerAsynchronously(p, task, delayTicks, periodTicks);
         return new BukkitTaskWrapper(bt);
     }
 
@@ -161,7 +162,7 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
             String leaderKey = "leader:" + taskKey;
             LeaderEntry entry = new LeaderEntry(leaderKey, p, task, spec, null);
             // 固定间隔调度，每次执行前检查是否为主
-            org.bukkit.scheduler.BukkitTask bt = AxsScheduler.runTaskTimer(p,
+            org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskTimer(p,
                 () -> executeIfLeader(entry), spec.intervalTicks(), spec.intervalTicks());
             entry.setUnderlyingTask(bt);
             leaderTasks.put(leaderKey, entry);
@@ -408,12 +409,12 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
             }
             lastExecution = ZonedDateTime.now(ZoneId.systemDefault());
             if (async) {
-                AxsScheduler.runAsync(plugin, task);
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
             } else {
                 if (org.bukkit.Bukkit.isPrimaryThread()) {
                     task.run();
                 } else {
-                    AxsScheduler.runTask(plugin, task);
+                    Bukkit.getScheduler().runTask(plugin, task);
                 }
             }
         }

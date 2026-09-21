@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.chat.storage;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -8,11 +9,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
@@ -20,6 +23,13 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
+import xuanmo.arcartxsuite.chat.model.RedPacket;
+import xuanmo.arcartxsuite.chat.model.RedPacketClaim;
+import xuanmo.arcartxsuite.chat.model.RedPacketClaimOutcome;
+import xuanmo.arcartxsuite.chat.model.RedPacketEntryRow;
+import xuanmo.arcartxsuite.chat.model.RedPacketReward;
+import xuanmo.arcartxsuite.chat.model.RedPacketRewardKind;
+import xuanmo.arcartxsuite.chat.model.RedPacketType;
 
 /**
  * 基于 JDBC 的聊天数据仓储实现，支持 SQLite 与 MySQL 两种后端。
@@ -42,12 +52,13 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("chat_player_states", "chat_player_mutes", "chat_player_profiles", "chat_ignored_players");
+        return List.of("chat_player_states", "chat_player_mutes", "chat_player_profiles", "chat_ignored_players", "chat_red_packet_claims");
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of("chat_player_states", "chat_player_mutes", "chat_player_profiles", "chat_ignored_players");
+        return List.of("chat_player_states", "chat_player_mutes", "chat_player_profiles", "chat_ignored_players",
+            "chat_red_packets", "chat_red_packet_entries", "chat_red_packet_claims");
     }
 
     @Override
@@ -224,6 +235,433 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
         }
     }
 
+    // ── 红包 ─────────────────────────────────────────────
+
+    @Override
+    public void insertRedPacket(RedPacket packet, List<RedPacketEntryRow> entries) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO chat_red_packets (packet_id, packet_type, sender_uuid, sender_name, sender_display, channel_id,"
+                        + " currency_id, total_amount, per_amounts, total_count, claimed_count, remaining_amount, wish, preset_id,"
+                        + " admin_packet, status, created_at, expires_at, origin_node)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                )) {
+                    statement.setString(1, packet.id());
+                    statement.setString(2, packet.type().name());
+                    statement.setString(3, nullToEmpty(packet.senderUuid()));
+                    statement.setString(4, nullToEmpty(packet.senderName()));
+                    statement.setString(5, nullToEmpty(packet.senderDisplay()));
+                    statement.setString(6, nullToEmpty(packet.channelId()));
+                    statement.setString(7, nullToEmpty(packet.currencyId()));
+                    statement.setString(8, packet.totalAmount() == null ? "0" : packet.totalAmount().toPlainString());
+                    statement.setString(9, encodeAmounts(packet.amounts()));
+                    statement.setInt(10, packet.totalCount());
+                    statement.setInt(11, packet.claimedCount());
+                    statement.setString(12, packet.remainingAmount() == null ? "0" : packet.remainingAmount().toPlainString());
+                    statement.setString(13, nullToEmpty(packet.wish()));
+                    statement.setString(14, nullToEmpty(packet.presetId()));
+                    statement.setBoolean(15, packet.admin());
+                    statement.setString(16, packet.status());
+                    statement.setLong(17, packet.createdAt().toEpochMilli());
+                    statement.setLong(18, packet.expiresAt().toEpochMilli());
+                    statement.setString(19, nullToEmpty(packet.originNode()));
+                    statement.executeUpdate();
+                }
+                if (entries != null && !entries.isEmpty()) {
+                    try (PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO chat_red_packet_entries (packet_id, entry_index, reward_type, currency_id, amount,"
+                            + " item_data, command_text, description, weight, remaining) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    )) {
+                        for (RedPacketEntryRow entry : entries) {
+                            RedPacketReward reward = entry.reward();
+                            statement.setString(1, packet.id());
+                            statement.setInt(2, entry.entryIndex());
+                            statement.setString(3, reward.kind().name());
+                            statement.setString(4, nullToEmpty(reward.currencyId()));
+                            statement.setString(5, reward.amount() == null ? "" : reward.amount().toPlainString());
+                            statement.setString(6, nullToEmpty(reward.itemData()));
+                            statement.setString(7, nullToEmpty(reward.command()));
+                            statement.setString(8, nullToEmpty(reward.description()));
+                            statement.setInt(9, entry.weight());
+                            statement.setInt(10, entry.remaining());
+                            statement.addBatch();
+                        }
+                        statement.executeBatch();
+                    }
+                }
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
+    public Optional<RedPacket> findRedPacket(String packetId) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT packet_id, packet_type, sender_uuid, sender_name, sender_display, channel_id, currency_id,"
+                     + " total_amount, per_amounts, total_count, claimed_count, remaining_amount, wish, preset_id,"
+                     + " admin_packet, status, created_at, expires_at, origin_node"
+                     + " FROM chat_red_packets WHERE packet_id = ? LIMIT 1"
+             )) {
+            statement.setString(1, packetId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(readPacket(resultSet)) : Optional.empty();
+            }
+        }
+    }
+
+    @Override
+    public List<RedPacket> loadActiveRedPackets() throws SQLException {
+        List<RedPacket> result = new ArrayList<>();
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT packet_id, packet_type, sender_uuid, sender_name, sender_display, channel_id, currency_id,"
+                     + " total_amount, per_amounts, total_count, claimed_count, remaining_amount, wish, preset_id,"
+                     + " admin_packet, status, created_at, expires_at, origin_node"
+                     + " FROM chat_red_packets WHERE status = 'active' ORDER BY created_at ASC"
+             );
+             ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                result.add(readPacket(resultSet));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public RedPacketClaimOutcome claimRedPacket(String packetId, UUID playerUuid, String playerName,
+                                              boolean senderCanClaim, Instant now) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                RedPacket packet = selectPacketForUpdate(connection, packetId);
+                if (packet == null) {
+                    connection.rollback();
+                    return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.NOT_FOUND);
+                }
+                if (packet.expired(now)) {
+                    connection.rollback();
+                    return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.EXPIRED, packet);
+                }
+                if (!RedPacket.STATUS_ACTIVE.equals(packet.status()) || packet.claimedCount() >= packet.totalCount()) {
+                    connection.rollback();
+                    return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.EXHAUSTED, packet);
+                }
+                if (!senderCanClaim && packet.senderUuid() != null
+                        && packet.senderUuid().equals(playerUuid.toString())) {
+                    connection.rollback();
+                    return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.SENDER_DENIED, packet);
+                }
+                try (PreparedStatement dupCheck = connection.prepareStatement(
+                    "SELECT 1 FROM chat_red_packet_claims WHERE packet_id = ? AND player_uuid = ? LIMIT 1"
+                )) {
+                    dupCheck.setString(1, packetId);
+                    dupCheck.setString(2, playerUuid.toString());
+                    try (ResultSet rs = dupCheck.executeQuery()) {
+                        if (rs.next()) {
+                            connection.rollback();
+                            return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.ALREADY_CLAIMED, packet);
+                        }
+                    }
+                }
+
+                int slotIndex = packet.claimedCount();
+                RedPacketReward reward;
+                BigDecimal currencyAmount = null;
+                boolean poolDrained = false;
+                if (packet.type() == RedPacketType.POOL) {
+                    List<RedPacketEntryRow> entries = selectPacketEntries(connection, packetId);
+                    RedPacketEntryRow picked = pickWeighted(entries);
+                    if (picked == null) {
+                        markPacketStatus(connection, packetId, RedPacket.STATUS_EXHAUSTED);
+                        connection.commit();
+                        return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.EXHAUSTED, packet);
+                    }
+                    if (picked.remaining() > 0) {
+                        try (PreparedStatement update = connection.prepareStatement(
+                            "UPDATE chat_red_packet_entries SET remaining = remaining - 1 WHERE packet_id = ? AND entry_index = ?"
+                        )) {
+                            update.setString(1, packetId);
+                            update.setInt(2, picked.entryIndex());
+                            update.executeUpdate();
+                        }
+                    }
+                    // 扣减后检查池是否仍有可抽奖项
+                    List<RedPacketEntryRow> after = selectPacketEntries(connection, packetId);
+                    poolDrained = pickWeighted(after) == null;
+                    reward = picked.reward();
+                    if (reward.kind() == RedPacketRewardKind.CURRENCY && reward.amount() != null) {
+                        currencyAmount = reward.amount();
+                    }
+                } else {
+                    List<BigDecimal> amounts = packet.amounts();
+                    if (slotIndex >= amounts.size()) {
+                        connection.rollback();
+                        return RedPacketClaimOutcome.of(RedPacketClaimOutcome.Status.EXHAUSTED, packet);
+                    }
+                    currencyAmount = amounts.get(slotIndex);
+                    reward = RedPacketReward.currency(packet.currencyId(), currencyAmount,
+                        currencyAmount.toPlainString() + " " + packet.currencyId());
+                }
+
+                String rewardDesc = reward.description().isBlank()
+                    ? reward.kind().name().toLowerCase(java.util.Locale.ROOT)
+                    : reward.description();
+                try (PreparedStatement insert = connection.prepareStatement(
+                    "INSERT INTO chat_red_packet_claims (packet_id, player_uuid, player_name, reward_desc, amount, claimed_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)"
+                )) {
+                    insert.setString(1, packetId);
+                    insert.setString(2, playerUuid.toString());
+                    insert.setString(3, nullToEmpty(playerName));
+                    insert.setString(4, rewardDesc);
+                    insert.setString(5, currencyAmount == null ? null : currencyAmount.toPlainString());
+                    insert.setLong(6, now.toEpochMilli());
+                    insert.executeUpdate();
+                }
+
+                int newClaimed = packet.claimedCount() + 1;
+                BigDecimal newRemaining = packet.remainingAmount()
+                    .subtract(currencyAmount == null ? BigDecimal.ZERO : currencyAmount);
+                String newStatus = (newClaimed >= packet.totalCount() || poolDrained)
+                    ? RedPacket.STATUS_EXHAUSTED : RedPacket.STATUS_ACTIVE;
+                try (PreparedStatement update = connection.prepareStatement(
+                    "UPDATE chat_red_packets SET claimed_count = ?, remaining_amount = ?, status = ? WHERE packet_id = ?"
+                )) {
+                    update.setInt(1, newClaimed);
+                    update.setString(2, newRemaining.toPlainString());
+                    update.setString(3, newStatus);
+                    update.setString(4, packetId);
+                    update.executeUpdate();
+                }
+                connection.commit();
+
+                RedPacket updated = new RedPacket(
+                    packet.id(), packet.type(), packet.senderUuid(), packet.senderName(), packet.senderDisplay(),
+                    packet.channelId(), packet.currencyId(), packet.totalAmount(), newRemaining, packet.amounts(),
+                    packet.totalCount(), newClaimed, packet.wish(), packet.presetId(), packet.admin(),
+                    newStatus, packet.createdAt(), packet.expiresAt(), packet.originNode()
+                );
+                return RedPacketClaimOutcome.success(updated, reward, slotIndex, currencyAmount);
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
+    public boolean updateRedPacketStatus(String packetId, String status) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE chat_red_packets SET status = ? WHERE packet_id = ? AND status = 'active'"
+             )) {
+            statement.setString(1, status);
+            statement.setString(2, packetId);
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    @Override
+    public void updateRedPacketRemaining(String packetId, BigDecimal remainingAmount) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE chat_red_packets SET remaining_amount = ? WHERE packet_id = ?"
+             )) {
+            statement.setString(1, remainingAmount == null ? "0" : remainingAmount.toPlainString());
+            statement.setString(2, packetId);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public List<RedPacketClaim> listRedPacketClaims(String packetId) throws SQLException {
+        List<RedPacketClaim> result = new ArrayList<>();
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT packet_id, player_uuid, player_name, reward_desc, amount, claimed_at"
+                     + " FROM chat_red_packet_claims WHERE packet_id = ? ORDER BY claimed_at ASC"
+             )) {
+            statement.setString(1, packetId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    result.add(new RedPacketClaim(
+                        resultSet.getString("packet_id"),
+                        resultSet.getString("player_uuid"),
+                        nullToEmpty(resultSet.getString("player_name")),
+                        nullToEmpty(resultSet.getString("reward_desc")),
+                        parseAmountOrNull(resultSet.getString("amount")),
+                        Instant.ofEpochMilli(resultSet.getLong("claimed_at"))
+                    ));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 读取并锁定红包行（MySQL 使用 FOR UPDATE，SQLite 由单写连接串行化）。 */
+    private RedPacket selectPacketForUpdate(Connection connection, String packetId) throws SQLException {
+        String sql = "SELECT packet_id, packet_type, sender_uuid, sender_name, sender_display, channel_id, currency_id,"
+            + " total_amount, per_amounts, total_count, claimed_count, remaining_amount, wish, preset_id,"
+            + " admin_packet, status, created_at, expires_at, origin_node"
+            + " FROM chat_red_packets WHERE packet_id = ?" + (isMysql() ? " FOR UPDATE" : "");
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, packetId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? readPacket(resultSet) : null;
+            }
+        }
+    }
+
+    private List<RedPacketEntryRow> selectPacketEntries(Connection connection, String packetId) throws SQLException {
+        List<RedPacketEntryRow> result = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "SELECT entry_index, reward_type, currency_id, amount, item_data, command_text, description, weight, remaining"
+                + " FROM chat_red_packet_entries WHERE packet_id = ? ORDER BY entry_index ASC"
+        )) {
+            statement.setString(1, packetId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    RedPacketRewardKind kind = RedPacketRewardKind.parse(resultSet.getString("reward_type"));
+                    if (kind == null) {
+                        continue;
+                    }
+                    RedPacketReward reward = new RedPacketReward(
+                        kind,
+                        nullToEmpty(resultSet.getString("currency_id")),
+                        parseAmountOrNull(resultSet.getString("amount")),
+                        nullToEmpty(resultSet.getString("item_data")),
+                        nullToEmpty(resultSet.getString("command_text")),
+                        nullToEmpty(resultSet.getString("description"))
+                    );
+                    result.add(new RedPacketEntryRow(
+                        resultSet.getInt("entry_index"), reward,
+                        resultSet.getInt("weight"), resultSet.getInt("remaining")
+                    ));
+                }
+            }
+        }
+        return result;
+    }
+
+    /** 在可抽取条目（remaining != 0）中按权重随机选取。 */
+    private static RedPacketEntryRow pickWeighted(List<RedPacketEntryRow> entries) {
+        int totalWeight = 0;
+        for (RedPacketEntryRow entry : entries) {
+            if (entry.drawable()) {
+                totalWeight += Math.max(1, entry.weight());
+            }
+        }
+        if (totalWeight <= 0) {
+            return null;
+        }
+        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
+        for (RedPacketEntryRow entry : entries) {
+            if (!entry.drawable()) {
+                continue;
+            }
+            roll -= Math.max(1, entry.weight());
+            if (roll < 0) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private void markPacketStatus(Connection connection, String packetId, String status) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+            "UPDATE chat_red_packets SET status = ? WHERE packet_id = ?"
+        )) {
+            statement.setString(1, status);
+            statement.setString(2, packetId);
+            statement.executeUpdate();
+        }
+    }
+
+    private static RedPacket readPacket(ResultSet resultSet) throws SQLException {
+        String senderUuid = nullToEmpty(resultSet.getString("sender_uuid"));
+        RedPacketType type = RedPacketType.parse(resultSet.getString("packet_type"));
+        return new RedPacket(
+            resultSet.getString("packet_id"),
+            type == null ? RedPacketType.NORMAL : type,
+            senderUuid.isBlank() ? null : senderUuid,
+            nullToEmpty(resultSet.getString("sender_name")),
+            nullToEmpty(resultSet.getString("sender_display")),
+            nullToEmpty(resultSet.getString("channel_id")),
+            nullToEmpty(resultSet.getString("currency_id")),
+            parseAmount(resultSet.getString("total_amount")),
+            parseAmount(resultSet.getString("remaining_amount")),
+            decodeAmounts(resultSet.getString("per_amounts")),
+            resultSet.getInt("total_count"),
+            resultSet.getInt("claimed_count"),
+            nullToEmpty(resultSet.getString("wish")),
+            nullToEmpty(resultSet.getString("preset_id")),
+            resultSet.getBoolean("admin_packet"),
+            nullToEmpty(resultSet.getString("status")),
+            Instant.ofEpochMilli(resultSet.getLong("created_at")),
+            Instant.ofEpochMilli(resultSet.getLong("expires_at")),
+            nullToEmpty(resultSet.getString("origin_node"))
+        );
+    }
+
+    /** 金额列以纯文本存储（VARCHAR），读取时还原为 BigDecimal，空串/非法值回退 0。 */
+    private static BigDecimal parseAmount(String raw) {
+        BigDecimal value = parseAmountOrNull(raw);
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    /** 解析可空金额列，空串/NULL/非法值返回 {@code null}。 */
+    private static BigDecimal parseAmountOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(raw.trim());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static String encodeAmounts(List<BigDecimal> amounts) {
+        if (amounts == null || amounts.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < amounts.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(amounts.get(i).toPlainString());
+        }
+        return builder.toString();
+    }
+
+    private static List<BigDecimal> decodeAmounts(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<BigDecimal> result = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            try {
+                result.add(new BigDecimal(part.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return result;
+    }
+
     @Override
     public void close() {
         shutdown();
@@ -267,6 +705,55 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
                         last_server TEXT NOT NULL
                     );
                     """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packets (
+                        packet_id TEXT PRIMARY KEY,
+                        packet_type TEXT NOT NULL,
+                        sender_uuid TEXT NOT NULL,
+                        sender_name TEXT NOT NULL,
+                        sender_display TEXT NOT NULL,
+                        channel_id TEXT NOT NULL,
+                        currency_id TEXT NOT NULL,
+                        total_amount TEXT NOT NULL DEFAULT '0',
+                        per_amounts TEXT NOT NULL,
+                        total_count INTEGER NOT NULL,
+                        claimed_count INTEGER NOT NULL DEFAULT 0,
+                        remaining_amount TEXT NOT NULL DEFAULT '0',
+                        wish TEXT NOT NULL,
+                        preset_id TEXT NOT NULL,
+                        admin_packet INTEGER NOT NULL DEFAULT 0,
+                        status TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        expires_at INTEGER NOT NULL,
+                        origin_node TEXT NOT NULL
+                    );
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packet_entries (
+                        packet_id TEXT NOT NULL,
+                        entry_index INTEGER NOT NULL,
+                        reward_type TEXT NOT NULL,
+                        currency_id TEXT NOT NULL,
+                        amount TEXT NOT NULL DEFAULT '',
+                        item_data TEXT NOT NULL,
+                        command_text TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        weight INTEGER NOT NULL,
+                        remaining INTEGER NOT NULL,
+                        PRIMARY KEY (packet_id, entry_index)
+                    );
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packet_claims (
+                        packet_id TEXT NOT NULL,
+                        player_uuid TEXT NOT NULL,
+                        player_name TEXT NOT NULL,
+                        reward_desc TEXT NOT NULL,
+                        amount TEXT,
+                        claimed_at INTEGER NOT NULL,
+                        PRIMARY KEY (packet_id, player_uuid)
+                    );
+                    """);
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_chat_profiles_name ON chat_player_profiles(last_known_name_lower);");
             } else {
                 statement.execute("""
@@ -303,6 +790,56 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
                         last_seen_at BIGINT NOT NULL,
                         last_server VARCHAR(64) NOT NULL,
                         INDEX idx_chat_profiles_name (last_known_name_lower)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packets (
+                        packet_id VARCHAR(16) PRIMARY KEY,
+                        packet_type VARCHAR(16) NOT NULL,
+                        sender_uuid VARCHAR(36) NOT NULL,
+                        sender_name VARCHAR(64) NOT NULL,
+                        sender_display VARCHAR(191) NOT NULL,
+                        channel_id VARCHAR(64) NOT NULL,
+                        currency_id VARCHAR(64) NOT NULL,
+                        total_amount VARCHAR(64) NOT NULL DEFAULT '0',
+                        per_amounts MEDIUMTEXT NOT NULL,
+                        total_count INT NOT NULL,
+                        claimed_count INT NOT NULL DEFAULT 0,
+                        remaining_amount VARCHAR(64) NOT NULL DEFAULT '0',
+                        wish VARCHAR(255) NOT NULL,
+                        preset_id VARCHAR(64) NOT NULL,
+                        admin_packet BOOLEAN NOT NULL DEFAULT FALSE,
+                        status VARCHAR(16) NOT NULL,
+                        created_at BIGINT NOT NULL,
+                        expires_at BIGINT NOT NULL,
+                        origin_node VARCHAR(64) NOT NULL,
+                        INDEX idx_rp_status (status)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packet_entries (
+                        packet_id VARCHAR(16) NOT NULL,
+                        entry_index INT NOT NULL,
+                        reward_type VARCHAR(16) NOT NULL,
+                        currency_id VARCHAR(64) NOT NULL,
+                        amount VARCHAR(64) NOT NULL DEFAULT '',
+                        item_data MEDIUMTEXT NOT NULL,
+                        command_text MEDIUMTEXT NOT NULL,
+                        description VARCHAR(255) NOT NULL,
+                        weight INT NOT NULL,
+                        remaining INT NOT NULL,
+                        PRIMARY KEY (packet_id, entry_index)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS chat_red_packet_claims (
+                        packet_id VARCHAR(16) NOT NULL,
+                        player_uuid VARCHAR(36) NOT NULL,
+                        player_name VARCHAR(64) NOT NULL,
+                        reward_desc VARCHAR(255) NOT NULL,
+                        amount VARCHAR(64) NULL,
+                        claimed_at BIGINT NOT NULL,
+                        PRIMARY KEY (packet_id, player_uuid)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
             }

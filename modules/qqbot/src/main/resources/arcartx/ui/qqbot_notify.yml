@@ -21,11 +21,6 @@ ui:
       var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
       var.maxDisplay = packet['maxDisplay']
       var.showCount = var.notifications.size()
-    # packetHandler: clear
-    # 包字段: 无（清空所有通知）
-    clear: |-
-      var.showCount = 0
-      var.notifications = []
   action:
     load: |-
       var.notifications = []

@@ -4,9 +4,10 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
 import xuanmo.arcartxsuite.entitytracker.scheduler.RankingRewardScheduler;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -20,17 +21,17 @@ public class RankingRewardCommand {
     private final Logger logger;
     private final RankingRewardService rewardService;
     private final RankingRewardScheduler scheduler;
-    private final JavaPlugin plugin;
+    private final File moduleConfigFile;
     private final MessageProvider messages;
 
-    public RankingRewardCommand(RankingRewardService rewardService, 
-                               RankingRewardScheduler scheduler, 
-                               JavaPlugin plugin,
+    public RankingRewardCommand(RankingRewardService rewardService,
+                               RankingRewardScheduler scheduler,
+                               File moduleConfigFile,
                                Logger logger,
                                 MessageProvider messages) {
         this.rewardService = rewardService;
         this.scheduler = scheduler;
-        this.plugin = plugin;
+        this.moduleConfigFile = moduleConfigFile;
         this.logger = logger;
         this.messages = messages;
     }
@@ -63,6 +64,7 @@ public class RankingRewardCommand {
             case "history" -> openRewardHistory(sender);
             case "distribute" -> handleDistribute(sender, args);
             case "status" -> showSchedulerStatus(sender);
+            case "reload" -> reloadScheduler(sender);
             default -> showHelp(sender, label);
         }
 
@@ -75,7 +77,7 @@ public class RankingRewardCommand {
         }
 
         if (args.length == 1) {
-            return Arrays.asList("help", "manage", "history", "distribute", "status")
+            return Arrays.asList("help", "manage", "history", "distribute", "status", "reload")
                 .stream()
                 .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
                 .collect(Collectors.toList());
@@ -101,6 +103,7 @@ public class RankingRewardCommand {
         sender.sendMessage(fullMsg("ranking.help.history", cmd));
         sender.sendMessage(fullMsg("ranking.help.distribute", cmd));
         sender.sendMessage(fullMsg("ranking.help.status", cmd));
+        sender.sendMessage(fullMsg("ranking.help.reload", cmd));
     }
 
     /**
@@ -194,10 +197,13 @@ public class RankingRewardCommand {
      */
     private void reloadScheduler(CommandSender sender) {
         sender.sendMessage(fullMsg("rewards.reload.reloading"));
-        
+
         try {
-            // 重新加载配置
-            scheduler.updateSchedule(plugin.getConfig());
+            // 重新读取模块配置文件并刷新调度
+            if (!moduleConfigFile.exists()) {
+                throw new IllegalStateException("模块配置文件缺失: " + moduleConfigFile.getPath());
+            }
+            scheduler.updateSchedule(YamlConfiguration.loadConfiguration(moduleConfigFile));
             
             sender.sendMessage(fullMsg("rewards.reload.success"));
             logger.info("排行榜奖励调度器配置已重新加载");

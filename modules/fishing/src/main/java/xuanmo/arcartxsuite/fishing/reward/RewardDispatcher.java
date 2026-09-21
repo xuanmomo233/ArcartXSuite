@@ -21,6 +21,7 @@ import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 /**
  * 奖励发放器，处理等级奖励与结算奖励的实际发放。
@@ -144,7 +145,7 @@ public final class RewardDispatcher {
     private void dispatchCommand(@NotNull Player player, @NotNull SeasonRewardDefinition reward) {
         if (reward.commands() == null) return;
         for (String cmd : reward.commands()) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
+            ThrottledCommandExecutor.dispatch(
                 cmd.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName())));
         }
     }

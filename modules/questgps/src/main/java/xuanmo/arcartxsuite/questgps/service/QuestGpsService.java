@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.questgps.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import ink.ptms.chemdah.api.ChemdahAPI;
 import ink.ptms.chemdah.core.PlayerProfile;
@@ -33,6 +32,7 @@ import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
@@ -79,6 +79,7 @@ public final class QuestGpsService implements Listener {
     private final QuestGpsSnapshotBuilder snapshotBuilder = new QuestGpsSnapshotBuilder();
     private final QuestGpsUiPacketHandler uiPacketHandler;
     private final MessageProvider messages;
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
     private Supplier<EventBusCapability> eventBusProvider;
     private final ConcurrentMap<UUID, QuestGpsViewState> viewStates = new ConcurrentHashMap<>();
     private final List<Listener> chemdahEventListeners = new ArrayList<>();
@@ -338,7 +339,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
 
-        template.acceptTo(profile).whenComplete((result, throwable) -> AxsScheduler.runTask(plugin, () -> {
+        template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
                 player.sendMessage(PREFIX + message("player.accept-failed"));
                 this.logger.log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
@@ -382,7 +383,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
 
-        activeQuest.failQuestFuture().whenComplete((success, throwable) -> AxsScheduler.runTask(plugin, () -> {
+        activeQuest.failQuestFuture().whenComplete((success, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null || success == null || !success) {
                 player.sendMessage(PREFIX + message("player.abandon-failed"));
                 if (throwable != null) {
@@ -604,7 +605,28 @@ public final class QuestGpsService implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         viewStates.remove(uuid);
+        tokenGuard.clear(uuid);
         navigationService.handleQuit(event.getPlayer());
+    }
+
+    /** 写操作令牌的 scope：主菜单 runtime UI id。 */
+    private String menuTokenScope() {
+        return menuUiIds.isEmpty() ? "" : menuUiIds.get(0);
+    }
+
+    /**
+     * 校验写操作令牌：要求主菜单已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
+     */
+    boolean beginWriteAction(Player player, java.util.List<String> data) {
+        String supplied = data != null && data.size() > 1 ? data.get(1) : "";
+        String scope = menuTokenScope();
+        return !scope.isEmpty() && bridge != null && bridge.isUiOpen(player, scope)
+            && tokenGuard.begin(player.getUniqueId(), scope, supplied);
+    }
+
+    /** 释放玩家的在途写操作槽位。 */
+    void finishWriteAction(Player player) {
+        tokenGuard.finish(player.getUniqueId());
     }
 
     /**
@@ -614,7 +636,7 @@ public final class QuestGpsService implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        AxsScheduler.runTaskLater(plugin, () -> syncQuestMapTargets(player), 40L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> syncQuestMapTargets(player), 40L);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -983,17 +1005,14 @@ public final class QuestGpsService implements Listener {
         state.setCategory(snapshot.category());
         state.setPage(snapshot.page());
         state.setSelectedQuestId(snapshot.detail().questId());
-        bridge.sendPacketToAll(
-            player,
-            menuUiIds,
-            initPacket ? "init" : "update",
-            QuestGpsMenuPacketFactory.build(
-                configuration,
-                snapshot,
-                navigationService.runtimeReady(),
-                detailNavExtras(player, profile, snapshot.detail().questId())
-            )
+        java.util.Map<String, Object> payload = QuestGpsMenuPacketFactory.build(
+            configuration,
+            snapshot,
+            navigationService.runtimeReady(),
+            detailNavExtras(player, profile, snapshot.detail().questId())
         );
+        payload.put("action_token", tokenGuard.issue(player.getUniqueId(), menuTokenScope()));
+        bridge.sendPacketToAll(player, menuUiIds, initPacket ? "init" : "update", payload);
     }
 
     /** 详情面板导航附加信息：跨世界标记 + 传送点可用性 + 目标世界名。 */

@@ -1,6 +1,6 @@
 package xuanmo.arcartxsuite.module;
 
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -64,7 +64,7 @@ public final class VersionCheckService implements Listener {
      * 异步发起版本检查。
      */
     public void checkAsync() {
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(TIMEOUT)
@@ -143,7 +143,7 @@ public final class VersionCheckService implements Listener {
         if (updateMessage == null) return;
         Player player = event.getPlayer();
         if (player.hasPermission("arcartxsuite.admin")) {
-            AxsScheduler.runTaskLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     player.sendMessage(PREFIX + ChatColor.YELLOW + updateMessage);
                 }

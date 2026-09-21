@@ -18,6 +18,7 @@ ui:
       var.rewardType = packet['rewardType']
       var.configs = packet['configs']
       var.total = packet['total']
+      var.actionToken = packet['action_token']
       var.view = 'list'
       var.resultMsg = none
     scheduler-status: |-
@@ -194,7 +195,7 @@ controls:
                   height: 48
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.rewardType)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.actionToken, var.rewardType)
                 children:
                   手动发放背景:
                     type: Texture
@@ -366,7 +367,7 @@ controls:
                           height: 36
                         action:
                           click: |-
-                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', each.id)
+                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', var.actionToken, each.id)
                         children:
                           切换背景:
                             type: Texture

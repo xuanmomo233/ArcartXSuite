@@ -79,7 +79,7 @@ public final class OnlineRewardsStateEngine {
      * @return 本次触发的周期奖励列表
      */
     public List<OnlineRewardsPeriodicReward> checkWeeklyRewards(OnlineRewardsPlayerState state) {
-        return checkPeriodicRewards(state, configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds());
+        return checkPeriodicRewards(state, configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds(), true);
     }
 
     /**
@@ -89,14 +89,20 @@ public final class OnlineRewardsStateEngine {
      * @return 本次触发的周期奖励列表
      */
     public List<OnlineRewardsPeriodicReward> checkMonthlyRewards(OnlineRewardsPlayerState state) {
-        return checkPeriodicRewards(state, configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds());
+        return checkPeriodicRewards(state, configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds(), false);
     }
 
+    /**
+     * @param weekly true=周奖励，false=月奖励。显式周期标记，
+     *               替代原来的 {@code rewards == configuration.weeklyRewards()} 引用相等判断——
+     *               若配置每次返回新 list，引用相等恒 false 会把周奖励记录错写到月字段。
+     */
     private List<OnlineRewardsPeriodicReward> checkPeriodicRewards(
         OnlineRewardsPlayerState state,
         List<OnlineRewardsPeriodicReward> rewards,
         int minutes,
-        Set<String> claimedIds
+        Set<String> claimedIds,
+        boolean weekly
     ) {
         List<OnlineRewardsPeriodicReward> triggered = new ArrayList<>();
         Set<String> newlyClaimed = new HashSet<>(claimedIds);
@@ -107,7 +113,7 @@ public final class OnlineRewardsStateEngine {
             }
         }
         if (!triggered.isEmpty()) {
-            if (rewards == configuration.weeklyRewards()) {
+            if (weekly) {
                 state.setClaimedWeeklyRewardIds(newlyClaimed);
             } else {
                 state.setClaimedMonthlyRewardIds(newlyClaimed);

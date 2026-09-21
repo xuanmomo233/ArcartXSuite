@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.config.UiIdParser;
@@ -25,7 +24,6 @@ public record PluginConfiguration(
 
     private static final String DEFAULT_UI_ID = "AXS:boss_tracker";
     private static final String LEGACY_UI_ID = "ArcartXSuite:boss_tracker";
-    private static final Set<String> RESERVED_ROOT_KEYS = Set.of("settings", "bosses");
 
     public static PluginConfiguration from(ConfigurationSection config) {
         return from(config, null, null);
@@ -140,33 +138,6 @@ public record PluginConfiguration(
         return String.join(", ", preview) + " ... +" + (ids.size() - safeLimit);
     }
 
-    private static void loadBossesFromSection(
-        Map<String, BossDefinition> bosses,
-        ConfigurationSection section,
-        double defaultViewerRange,
-        boolean rootCompatibilityMode
-    ) {
-        if (section == null) {
-            return;
-        }
-        for (String key : section.getKeys(false)) {
-            if (rootCompatibilityMode && RESERVED_ROOT_KEYS.contains(key.toLowerCase(Locale.ROOT))) {
-                continue;
-            }
-
-            ConfigurationSection bossSection = section.getConfigurationSection(key);
-            if (bossSection == null) {
-                continue;
-            }
-            if (rootCompatibilityMode && !isLikelyBossSection(bossSection)) {
-                continue;
-            }
-
-            String normalizedKey = key.toLowerCase(Locale.ROOT);
-            bosses.putIfAbsent(normalizedKey, BossDefinition.from(key, bossSection, defaultViewerRange));
-        }
-    }
-
     private static void loadBossesFromDirectory(
         Map<String, BossDefinition> bosses,
         File directory,
@@ -185,18 +156,6 @@ public record PluginConfiguration(
                 // silently skip malformed files
             }
         }
-    }
-
-    private static boolean isLikelyBossSection(ConfigurationSection section) {
-        return section.contains("enabled")
-            || section.contains("priority")
-            || section.contains("viewer-range")
-            || section.contains("title-format")
-            || section.contains("subtitle-format")
-            || section.contains("damage-ranking")
-            || section.contains("spawn-chat-card")
-            || section.contains("death-chat-card")
-            || section.contains("despawn-chat-card");
     }
 
     private static String normalizeUiId(String rawValue) {

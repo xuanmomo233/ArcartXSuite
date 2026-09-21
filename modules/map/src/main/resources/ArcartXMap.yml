@@ -225,6 +225,15 @@ cross-server:
   request-timeout-seconds: 10
   # 玩家跨服落地后延迟多少 tick 再执行传送（等待进服稳定），0 = 立即
   arrival-delay-ticks: 20
+  # 远程共享世界总数上限（全部节点合计），防止恶意/异常节点无限广播世界撑内存
+  max-remote-worlds: 256
+  # 远程锚点总数上限（全部节点合计），单世界另有 60 条上限
+  max-remote-anchors-total: 4096
+  # 跨服传送握手策略（本机作为"目标服"接收 tpreq 时）
+  teleport:
+    # true = 只接受通过宿主 HMAC 验签（cross-server.signature.enabled）的传送握手；
+    # 未签名消息直接丢弃。跨服签名未开启的部署请保持 false（否则握手全部失效）
+    require-signed-request: false
   # 本机作为"目标服"时接受其他服玩家落地的策略
   arrivals:
     # 是否接受跨服落地传送（false = 只共享浏览，不接受传送）

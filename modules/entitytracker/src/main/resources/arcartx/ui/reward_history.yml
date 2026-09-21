@@ -18,11 +18,7 @@ ui:
       var.currentPage = packet['page']
       var.totalPages = packet['totalPages']
       var.totalCount = packet['totalCount']
-    statistics: |-
-      var.totalCount = packet['totalCount']
-      var.successCount = packet['successCount']
-      var.failedCount = packet['failedCount']
-      var.pendingCount = packet['pendingCount']
+      var.actionToken = packet['action_token']
     result: |-
       var.resultMsg = packet['message']
 
@@ -442,7 +438,7 @@ controls:
                             each.status == 'failed'
                         action:
                           click: |-
-                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', each.id)
+                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', var.actionToken, each.id)
                         children:
                           重试背景:
                             type: Texture

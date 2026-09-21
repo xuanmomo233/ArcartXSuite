@@ -27,6 +27,7 @@ public record TabModuleConfiguration(
     TabStyleConfiguration style,
     TabPrivacyConfiguration privacy,
     CrossServerChannelConfig crossServer,
+    boolean crossServerRequireSignature,
     List<TabDefinition> definitions
 ) {
 
@@ -60,6 +61,7 @@ public record TabModuleConfiguration(
         CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
             configuration.getConfigurationSection("cross-server")
         );
+        boolean crossServerRequireSignature = configuration.getBoolean("cross-server.require-signature", false);
 
         Map<String, TabDefinition> definitionMap = new LinkedHashMap<>();
         if (tabsDirectory != null && tabsDirectory.isDirectory()) {
@@ -73,7 +75,7 @@ public record TabModuleConfiguration(
         return new TabModuleConfiguration(
             refreshIntervalTicks, debug, registerUiOnEnable, overwriteUiFile,
             serverId, crossServerDefault, staleSnapshotMs, batchWindowTicks, leaveGraceMs,
-            dryRun, style, privacy, crossServer, definitions
+            dryRun, style, privacy, crossServer, crossServerRequireSignature, definitions
         );
     }
 

@@ -312,7 +312,17 @@ public final class VanillaService {
         try {
             return Material.valueOf(id.replace("minecraft:", "").toUpperCase());
         } catch (IllegalArgumentException e) {
+            warnMaterialParseOnce(id);
             return Material.AIR;
+        }
+    }
+
+    /** 解析失败的材料 id 一次性告警集合（避免刷屏）。 */
+    private final java.util.Set<String> materialParseWarned = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void warnMaterialParseOnce(String id) {
+        if (materialParseWarned.add(id)) {
+            logger.warning("[Vanilla] 无法解析物品材料 id '" + id + "'（可能为新版/Mod 物品），按 AIR 处理");
         }
     }
 

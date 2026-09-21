@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.loginview.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.security.SecureRandom;
 import java.sql.SQLException;
@@ -82,7 +81,9 @@ public final class LoginViewService implements Listener {
     private final MessageProvider messages;
     private Supplier<EventBusCapability> eventBusProvider;
     private final Set<UUID> authenticatedPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private final Map<UUID, Integer> failedAttempts = new HashMap<>();
+    private final Map<UUID, Integer> failedAttempts = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 失败计数持久化有效窗口：超过后历史计数清零，避免长期累积误伤正常玩家 */
+    private static final long FAILURE_ATTEMPT_WINDOW_MS = 24L * 3600_000L;
     private final Set<String> allowedCommandPrefixes = new HashSet<>();
     private final Set<UUID> loginViewInvulnerablePlayers = new HashSet<>();
     private boolean started;
@@ -140,13 +141,14 @@ public final class LoginViewService implements Listener {
             this.logger.info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        registerPaperChatLock();
         started = true;
         for (Player player : Bukkit.getOnlinePlayers()) {
             scheduleOpen(player);
         }
         // 每小时清理一次过期 session
         long cleanupInterval = 20L * 60 * 60;
-        cleanupTask = AxsScheduler.runAsyncTimer(plugin, () -> {
+        cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             if (!started) {
                 return;
             }
@@ -299,11 +301,12 @@ public final class LoginViewService implements Listener {
                 ? online.getUniqueId()
                 : Bukkit.getOfflinePlayer(account.realName()).getUniqueId();
             repository.deleteSession(uuid);
+            repository.deleteFailureAttempts(uuid);
             if (online != null) {
                 authenticatedPlayers.remove(uuid);
                 failedAttempts.remove(uuid);
                 online.sendMessage(color(messages.get("reset-notify-player")));
-                AxsScheduler.runTask(plugin, () -> openFor(online, true));
+                Bukkit.getScheduler().runTask(plugin, () -> openFor(online, true));
             }
             return new ResetOutcome(ResetStatus.SUCCESS, effective);
         } catch (SQLException exception) {
@@ -473,7 +476,7 @@ public final class LoginViewService implements Listener {
         if (result.success()) {
             sendResult(player, color("&a" + result.message()), true);
             // 绑定成功后刷新面板（切换为已绑定状态）
-            AxsScheduler.runTaskLater(plugin, () -> openFor(player, true), 5L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> openFor(player, true), 5L);
         } else {
             sendResult(player, color("&c" + result.message()), false);
         }
@@ -485,6 +488,11 @@ public final class LoginViewService implements Listener {
     }
 
     private void handleChangePassword(Player player, String oldPassword, String newPassword, String confirmPassword) {
+        // 必须先完成认证才能改密——否则未认证状态可无限次探测旧密码，绕过 maxAttempts 防护
+        if (!isAuthenticated(player)) {
+            sendResult(player, color("&c请先完成登录。"), false);
+            return;
+        }
         if (!validatePasswordShape(player, newPassword, true)) {
             return;
         }
@@ -503,6 +511,7 @@ public final class LoginViewService implements Listener {
                     return;
                 }
                 if (!authMeBridge.checkPassword(player.getName(), oldPassword)) {
+                    recordFailure(player);
                     sendResult(player, color(configuration.messages().wrongPassword()), false);
                     return;
                 }
@@ -513,6 +522,7 @@ public final class LoginViewService implements Listener {
 
             LoginViewAccount account = repository.find(player.getName()).orElse(null);
             if (account == null || !passwordHasher.verify(oldPassword, account.passwordHash(), account.hashAlgorithm())) {
+                recordFailure(player);
                 sendResult(player, color(configuration.messages().wrongPassword()), false);
                 return;
             }
@@ -567,7 +577,14 @@ public final class LoginViewService implements Listener {
     }
 
     private void completeLogin(Player player, String message) {
-        failedAttempts.remove(player.getUniqueId());
+        UUID loginUuid = player.getUniqueId();
+        failedAttempts.remove(loginUuid);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                repository.deleteFailureAttempts(loginUuid);
+            } catch (SQLException ignored) {
+            }
+        });
         if (loginViewInvulnerablePlayers.remove(player.getUniqueId())) {
             player.setInvulnerable(false);
         }
@@ -576,7 +593,7 @@ public final class LoginViewService implements Listener {
         teleportToSpawnIfEnabled(player);
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
-            AxsScheduler.runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
         }
         // 持久化 session，支持重启/重连后免重新登录
         int ttl = configuration.security().sessionTtlMinutes();
@@ -615,9 +632,18 @@ public final class LoginViewService implements Listener {
 
     private void recordFailure(Player player) {
         int attempts = failedAttempts.merge(player.getUniqueId(), 1, Integer::sum);
+        // 持久化失败计数：重启/换会话不重置，防止绕过 maxAttempts 爆破
+        UUID uuid = player.getUniqueId();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                repository.saveFailureAttempts(uuid, attempts);
+            } catch (SQLException e) {
+                this.logger.warning("LoginView 失败计数持久化失败: " + e.getMessage());
+            }
+        });
         sendResult(player, color(configuration.messages().wrongPassword()) + " (" + attempts + "/" + configuration.security().maxAttempts() + ")", false);
         if (attempts >= configuration.security().maxAttempts() && configuration.security().kickOnMaxAttempts()) {
-            AxsScheduler.runTask(plugin, () -> player.kickPlayer(color(configuration.messages().kicked())));
+            Bukkit.getScheduler().runTask(plugin, () -> player.kickPlayer(color(configuration.messages().kicked())));
         }
     }
 
@@ -651,7 +677,7 @@ public final class LoginViewService implements Listener {
         }
         long delay = configuration.ui().openDelayTicks();
         prewarmAccountType(player, () ->
-            AxsScheduler.runTaskLater(plugin, () -> openFor(player), delay));
+            Bukkit.getScheduler().runTaskLater(plugin, () -> openFor(player), delay));
     }
 
     /**
@@ -667,10 +693,10 @@ public final class LoginViewService implements Listener {
         }
         UUID playerId = player.getUniqueId();
         String playerName = player.getName();
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             accountTypeService.resolveBlocking(playerId, playerName);
             if (callback != null) {
-                AxsScheduler.runTask(plugin, callback);
+                Bukkit.getScheduler().runTask(plugin, callback);
             }
         });
     }
@@ -724,6 +750,19 @@ public final class LoginViewService implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        // 恢复持久化的失败计数（24h 窗口内）：防止重启/换会话重置爆破计数
+        UUID uuid = event.getPlayer().getUniqueId();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                int persisted = repository.loadFailureAttempts(uuid, FAILURE_ATTEMPT_WINDOW_MS);
+                if (persisted > 0) {
+                    // merge 而非 put：异步加载返回期间玩家可能已产生新失败，直接 put 会覆盖丢失
+                    failedAttempts.merge(uuid, persisted, Integer::sum);
+                }
+            } catch (SQLException e) {
+                this.logger.warning("LoginView 失败计数加载失败: " + e.getMessage());
+            }
+        });
         scheduleOpen(event.getPlayer());
     }
 
@@ -755,7 +794,8 @@ public final class LoginViewService implements Listener {
         }
         String command = event.getMessage().replaceFirst("^/", "").toLowerCase(Locale.ROOT);
         for (String allowed : allowedCommandPrefixes) {
-            if (command.startsWith(allowed)) {
+            // 精确匹配整条命令或以"允许命令+空格"开头——防止 /loginabc 粘连绕过白名单
+            if (command.equals(allowed) || command.startsWith(allowed + " ")) {
                 return;
             }
         }
@@ -768,6 +808,41 @@ public final class LoginViewService implements Listener {
         if (configuration.security().lockChat() && !isAuthenticated(event.getPlayer())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(color(configuration.messages().locked()));
+        }
+    }
+
+    /**
+     * Paper 聊天锁：Paper 服务端默认走 Adventure {@code AsyncChatEvent}，legacy
+     * {@link AsyncPlayerChatEvent} 在无监听时不触发——仅监听 legacy 会让 lockChat 在
+     * Paper 上完全失效。通过反射注册 Paper 事件（编译期不依赖 paper-api），Spigot
+     * 上探测失败自动回退 legacy 监听。
+     */
+    @SuppressWarnings("unchecked")
+    private void registerPaperChatLock() {
+        try {
+            Class<?> paperChat = Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
+            java.lang.reflect.Method getPlayer = paperChat.getMethod("getPlayer");
+            java.lang.reflect.Method setCancelled = paperChat.getMethod("setCancelled", boolean.class);
+            Bukkit.getPluginManager().registerEvent(
+                (Class<? extends org.bukkit.event.Event>) paperChat,
+                new Listener() {},
+                org.bukkit.event.EventPriority.NORMAL,
+                (listener, event) -> {
+                    if (!paperChat.isInstance(event)) return;
+                    try {
+                        Player player = (Player) getPlayer.invoke(event);
+                        if (configuration.security().lockChat() && !isAuthenticated(player)) {
+                            setCancelled.invoke(event, true);
+                            player.sendMessage(color(configuration.messages().locked()));
+                        }
+                    } catch (Exception ignored) {}
+                },
+                plugin);
+            logger.info("LoginView: 检测到 Paper AsyncChatEvent，聊天锁已注册 Paper 监听。");
+        } catch (ClassNotFoundException ignored) {
+            // Spigot/旧 Paper：legacy AsyncPlayerChatEvent 监听已覆盖
+        } catch (Exception e) {
+            logger.warning("LoginView: 注册 Paper AsyncChatEvent 监听失败，聊天锁可能失效: " + e.getMessage());
         }
     }
 

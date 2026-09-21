@@ -1,8 +1,8 @@
-# AXS 钓鱼小游戏界面（Menu 模式，星露谷风格）
-# 删除主卡片底+关闭 ui.background，让玩家能透过 UI 看到周围环境
-# 核心组件悬浮在游戏画面上：轨道区（鱼图标+绿条）+ 信息面板 + 结果覆盖层
+# AXS 钓鱼小游戏界面（Menu 承载，HUD 观感）
+# 无背景无面板——玩家透过 UI 看到环境，核心组件悬浮在屏幕中右部
+# 布局: 鱼名胶囊(顶部小药丸) + 轨道区(中右 96x560) + 进度条(轨道右侧竖条) + 操作提示(底部裸文字) + 结果覆盖层
 # 视觉规范:
-#   组件底 26,34,46,200  组件描边 80,200,220,240
+#   组件底 12,28,42,190  描边 80,200,220  文字/图标无底板
 #   主色（青蓝）50,170,200  绿条 80,220,160  成功 124,196,142  失败 230,100,90
 
 ui:
@@ -35,6 +35,7 @@ ui:
         var.fishIconJson = var.emptyItemJson
       }
       val.鱼图标.seticon()
+      val.结果图标.seticon()
     update: |-
       var.fishY = packet['fishY']
       var.barY = packet['barY']
@@ -63,6 +64,9 @@ ui:
       if(self.currentKeyPress() == ' ' || self.currentKeyPress() == 'SPACE'){
         Packet.send(var.packetId, 'input', true)
       }
+      if((self.currentKeyPress() == 'q' || self.currentKeyPress() == 'Q') && var.state == 'playing'){
+        Packet.send(var.packetId, 'give_up')
+      }
     keyRelease: |-
       if(self.currentKeyReleased() == ' ' || self.currentKeyReleased() == 'SPACE'){
         Packet.send(var.packetId, 'input', false)
@@ -82,120 +86,95 @@ controls:
       width: 1920
       height: 1080
     children:
-      # ── 顶部标题栏（悬浮，无大卡片底）──────────────────
-      标题栏:
+      # ── 鱼名胶囊（顶部小药丸：鱼名·稀有度 | 倒计时）──────────
+      鱼名胶囊:
         type: Canvas
         attribute:
           point: ~top_center
-          y: 80
-          width: 600
-          height: 60
+          y: 176
+          width: 400
+          height: 48
+          visible: "var.state == 'playing'"
         children:
-          标题背景:
+          胶囊底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:20;26,34,46,200
+              normal: ~Frosted:12;12,28,42,150
               shape: ~round_rect
-              radius: 14
+              radius: 22
             effect:
               stroke:
-                width: 2
-                color: ~80,200,220,230
-          标题文字:
+                width: 1
+                color: ~80,200,220,180
+          鱼名文字:
             type: Text
             attribute:
-              point: ~middle_center
-              width: 600
-              texts: "~&b⚓ &f钓鱼中"
-              fontSize: 36
+              point: ~middle_left
+              x: 24
+              texts: "var.rarityTag + '◆ ' + var.fishName + ' · ' + var.rarityLabel"
+              fontSize: 28
               through: true
-          # 放弃按钮（标题栏右侧）
-          放弃按钮:
-            type: Canvas
+          时间文字:
+            type: Text
             attribute:
-              point: ~top_right
-              x: 8
-              y: 10
-              width: 100
-              height: 40
-            action:
-              click: |-
-                Packet.send(var.packetId, 'give_up')
-            children:
-              放弃背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~80,30,30,200
-                  hover: ~180,50,50,230
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~200,80,80,160
-              放弃文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 100
-                  texts: "~&f放弃"
-                  fontSize: 26
-                  through: true
+              point: ~middle_right
+              x: -24
+              texts: "(var.timeLeft < 100 ? '&c' : '&f') + (var.timeLeft / 20).round() + 's'"
+              fontSize: 24
+              through: true
 
-      # ── 轨道区（左侧竖直轨道，悬浮毛玻璃面板）──────────
+      # ── 轨道区（屏幕中右竖直轨道，HUD 化窄条）──────────
       轨道区:
         type: Canvas
         attribute:
-          point: ~middle_left
-          x: 420
+          point: ~middle_center
+          x: 140
           y: -20
-          width: 220
-          height: 620
+          width: 96
+          height: 560
+          visible: "var.state == 'playing'"
         children:
-          轨道背景:
+          轨道底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:20;26,34,46,200
+              normal: ~Frosted:14;12,28,42,190
               shape: ~round_rect
-              radius: 16
+              radius: 20
             effect:
               stroke:
                 width: 2
-                color: ~80,200,220,235
+                color: ~80,200,220,200
           水深渐变:
             type: Texture
             attribute:
               point: ~top_left
-              x: 8
-              y: 8
-              width: 204
-              height: 604
+              x: 6
+              y: 6
+              width: 84
+              height: 548
               normal: ~12,28,42,255
               shape: ~round_rect
-              radius: 14
+              radius: 16
             effect:
               gradient:
                 color1: ~18,45,70,200
                 color2: ~8,22,38,200
                 type: 0
                 angleDeg: 90
-          # 绿条（玩家控制的捕获区域）
+          # 绿条（玩家控制的捕获区域，鱼入内时增亮）
           绿条:
             type: Texture
             attribute:
               point: ~top_left
-              x: 16
-              y: "(1 - var.barY - var.barHeight / 2) * 604 + 8"
-              width: 188
-              height: "var.barHeight * 604"
-              normal: ~80,220,160,200
+              x: 10
+              y: "(1 - var.barY - var.barHeight / 2) * 548 + 6"
+              width: 76
+              height: "var.barHeight * 548"
+              normal: "var.fishInside ? '100,240,180,235' : '80,220,160,190'"
               shape: ~round_rect
               radius: 12
-              visible: "var.state == 'playing'"
             effect:
               stroke:
                 width: 2
@@ -208,224 +187,74 @@ controls:
               slotType: ~Icon
               itemScale: 1.0
               point: ~top_left
-              x: 70
-              y: "math.max(8, math.min(532, (1 - var.fishY) * 604 + 8 - 40))"
-              width: 80
-              height: 80
+              x: 24
+              y: "math.max(6, math.min(506, (1 - var.fishY) * 548 + 6 - 24))"
+              width: 48
+              height: 48
               normal: ~0,0,0,0
               through: true
-              visible: "var.state == 'playing'"
               seticon: "self.setItemIcon(var.fishIconJson)"
 
-      # ── 信息面板（右侧，悬浮毛玻璃面板）──────────────
-      信息面板:
+      # ── 进度条（轨道右侧竖条，HUD 化细条）──────────
+      进度条:
         type: Canvas
         attribute:
-          point: ~middle_left
-          x: 680
+          point: ~middle_center
+          x: 248
           y: -20
-          width: 560
-          height: 620
+          width: 24
+          height: 560
+          visible: "var.state == 'playing'"
         children:
-          信息背景:
+          进度底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:20;26,34,46,200
+              normal: ~12,28,42,180
               shape: ~round_rect
-              radius: 16
+              radius: 12
             effect:
               stroke:
-                width: 2
-                color: ~80,200,220,235
-          # 鱼名称区
-          鱼名称区:
-            type: Canvas
+                width: 1
+                color: ~80,200,220,200
+          进度填充:
+            type: Texture
             attribute:
               point: ~top_left
-              x: 20
-              y: 20
-              width: 520
-              height: 100
-            children:
-              鱼名称背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.rarityColor + ',40'"
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: "var.rarityColor + ',80'"
-              鱼名称:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 20
-                  texts: "var.rarityTag + var.fishName"
-                  fontSize: 40
-                  through: true
-          # 稀有度区
-          稀有度区:
-            type: Canvas
+              x: 4
+              y: "(1 - var.progress) * 552 + 4"
+              width: 16
+              height: "var.progress * 552"
+              normal: "var.progress >= 1.0 ? '124,196,142,255' : (var.fishInside ? '50,170,200,245' : '230,100,90,245')"
+              shape: ~round_rect
+              radius: 8
+          进度数字:
+            type: Text
             attribute:
-              point: ~top_left
-              x: 20
-              y: 140
-              width: 520
-              height: 64
-            children:
-              稀有度背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.rarityColor + ',30'"
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 1
-                    color: "var.rarityColor + ',60'"
-              稀有度文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 20
-                  texts: "var.rarityTag + '◆ ' + var.rarityLabel + '  &7尺寸: &f' + var.caughtSize + ' cm'"
-                  fontSize: 28
-                  through: true
-          # 时间区
-          时间区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 224
-              width: 520
-              height: 64
-            children:
-              时间背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~26,34,46,180
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,200,220,220
-              时间文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 20
-                  texts: "'&7剩余时间: &f' + (var.timeLeft / 20).round() + ' 秒'"
-                  fontSize: 28
-                  through: true
-          # 进度区
-          进度区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 308
-              width: 520
-              height: 110
-            children:
-              进度标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 0
-                  texts: "'&7进度: &f' + (var.progress * 100).round() + '%'"
-                  fontSize: 26
-                  through: true
-              进度条背景:
-                type: Texture
-                attribute:
-                  point: ~top_left
-                  x: 0
-                  y: 40
-                  width: 520
-                  height: 48
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,200,220,225
-              进度条填充:
-                type: Texture
-                attribute:
-                  point: ~top_left
-                  x: 4
-                  y: 44
-                  width: "var.progress * 512"
-                  height: 40
-                  normal: "var.progress >= 1.0 ? '124,196,142,255' : (var.fishInside ? '50,170,200,245' : '230,100,90,245')"
-                  shape: ~round_rect
-                  radius: 10
-          # 操作提示区
-          操作提示区:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 20
-              y: 440
-              width: 520
-              height: 160
-            children:
-              提示背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~26,34,46,180
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~80,200,220,220
-              提示标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 16
-                  texts: "~&e操作说明"
-                  fontSize: 26
-                  through: true
-              提示内容:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 54
-                  texts: "~&7按住 &f空格 &7或 &f鼠标 &7控制绿条"
-                  fontSize: 30
-                  through: true
-              提示内容2:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 88
-                  texts: "~&7让绿条追踪鱼的位置以填满进度"
-                  fontSize: 30
-                  through: true
+              point: ~top_center
+              y: 568
+              texts: "'&f' + (var.progress * 100).round() + '%'"
+              fontSize: 20
+              through: true
+
+      # ── 操作提示（底部裸文字，无底板）──────────
+      操作提示:
+        type: Text
+        attribute:
+          point: ~bottom_center
+          y: -110
+          texts: "~&7按住 &f空格 &7或 &f左键 &7让绿条追踪鱼 · &fQ &7放弃"
+          fontSize: 22
+          through: true
+          visible: "var.state == 'playing'"
 
       # ── 结果覆盖层（成功/失败时显示，居中悬浮）──────────
       结果覆盖层:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 600
-          height: 360
+          width: 560
+          height: 280
           visible: "var.state == 'success' || var.state == 'failed'"
         children:
           结果背景:
@@ -443,23 +272,37 @@ controls:
             type: Text
             attribute:
               point: ~top_center
-              y: 60
+              y: 44
               texts: "var.state == 'success' ? '&a✓ 捕获成功！' : '&c✕ 鱼逃走了...'"
-              fontSize: 52
+              fontSize: 48
               through: true
+          结果图标:
+            type: Slot
+            val: 结果图标
+            attribute:
+              slotType: ~Icon
+              itemScale: 1.2
+              point: ~top_center
+              y: 104
+              width: 56
+              height: 56
+              normal: ~0,0,0,0
+              through: true
+              visible: "var.state == 'success'"
+              seticon: "self.setItemIcon(var.fishIconJson)"
           结果详情:
             type: Text
             attribute:
               point: ~top_center
-              y: 150
+              y: 176
               texts: "var.state == 'success' ? (var.rarityTag + var.fishName + ' &7尺寸: &f' + var.caughtSize + ' cm') : '&7再试一次吧'"
-              fontSize: 32
+              fontSize: 30
               through: true
           结果稀有度:
             type: Text
             attribute:
               point: ~top_center
-              y: 210
+              y: 224
               texts: "var.state == 'success' ? (var.rarityTag + '◆ ' + var.rarityLabel) : ''"
-              fontSize: 28
+              fontSize: 26
               through: true

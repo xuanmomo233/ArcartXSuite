@@ -936,12 +936,10 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return;
         }
         ItemStack remaining = addToHotbar(player, stack);
-        if (remaining == null || remaining.getAmount() <= 0) {
-            page[slot] = null;
-        } else {
-            page[slot] = remaining;
-            player.getWorld().dropItemNaturally(player.getLocation(), stack.clone());
-            page[slot] = null;
+        page[slot] = null;
+        if (remaining != null && remaining.getAmount() > 0) {
+            // 快捷栏放不下的剩余部分掉落在地上，避免复制整组物品
+            player.getWorld().dropItemNaturally(player.getLocation(), remaining);
         }
         persist(player.getUniqueId());
         refresh(player);

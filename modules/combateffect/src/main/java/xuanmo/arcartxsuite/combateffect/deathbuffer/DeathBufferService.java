@@ -1,5 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.deathbuffer;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
 import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
 
@@ -199,7 +199,7 @@ public final class DeathBufferService implements Listener {
         dispatchDeathPackets(victim, killer);
 
         // 调度延迟任务：缓冲结束后执行真正死亡
-        BukkitTask task = AxsScheduler.runTaskLater(plugin, () -> {
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             exitBuffer(victim);
         }, config.durationTicks());
 

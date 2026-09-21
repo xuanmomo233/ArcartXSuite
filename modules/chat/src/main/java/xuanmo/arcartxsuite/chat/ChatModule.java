@@ -31,6 +31,7 @@ import xuanmo.arcartxsuite.chat.command.ChatPlayerCommand;
 import xuanmo.arcartxsuite.chat.config.ChatModuleConfiguration;
 import xuanmo.arcartxsuite.chat.placeholder.ChatPlaceholderExpansion;
 import xuanmo.arcartxsuite.chat.service.ChatService;
+import xuanmo.arcartxsuite.chat.service.RedPacketService;
 import xuanmo.arcartxsuite.chat.storage.JdbcChatRepository;
 
 /**
@@ -51,6 +52,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     private ChatModuleConfiguration configuration;
     private ChatService service;
+    private RedPacketService redPacketService;
     private JdbcChatRepository repository;
     private String completionUiId;
 
@@ -58,7 +60,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("chat")
             .name("Chat")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -72,7 +74,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
                     .dynamicSection("function.custom-components")
                     .obsoletePath("settings.server-id")
                 .build())
-            .currentVersion(2)
+            .currentVersion(3)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -153,6 +155,17 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         // 注入 Tooltip 数据提供者，用于聊天物品预览时注入动态 tooltip Lore
         service.setTooltipDataProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.TooltipDataCapable.class));
         service.start();
+
+        // 红包服务：仅在共享 MySQL 存储下启用跨服领取
+        ensureRedPacketPresetDefaults();
+        redPacketService = new RedPacketService(
+            plugin, logger, configuration, chatRepo, service,
+            packetBridge, currencyManager, itemRewardDispatcher, pendingRewardService,
+            itemSourceRegistry, vanillaItemNameBridge, messages(),
+            dataFolder, itemStackBridge, chatDesc.isMysql()
+        );
+        service.setRedPacketService(redPacketService);
+        redPacketService.start();
         adminCommand = new ChatAdminCommand(() -> service, messages());
 
         // 注册 ChatCardSendable capability，通过 packetBridge 转发
@@ -239,6 +252,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void stopService() {
+        if (redPacketService != null) {
+            redPacketService.shutdown();
+            redPacketService = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;
@@ -304,21 +321,38 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         if (!chatCardDir.exists()) {
             chatCardDir.mkdirs();
         }
-        File[] existing = chatCardDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing != null && existing.length > 0) {
-            return;
-        }
+        // 逐文件检查：chat_card 目录可能已有 mail/map 等其他模块卡片，不能整体跳过
         String[] cards = {
             "axs_item_preview",
             "axs_chat_mention",
             "axs_chat_private",
-            "axs_chat_system"
+            "axs_chat_system",
+            "axs_chat_redpacket"
         };
         for (String card : cards) {
             File target = new File(chatCardDir, card + ".yml");
             if (!target.exists()) {
                 exportResource("chat/card/" + card + ".yml", target, false);
             }
+        }
+    }
+
+    /** 导出默认红包预设示例（目录为空时）。 */
+    private void ensureRedPacketPresetDefaults() {
+        if (configuration == null || !configuration.redPacket().enabled()) {
+            return;
+        }
+        File presetsDir = new File(dataFolder, configuration.redPacket().presetsDirectory());
+        if (!presetsDir.exists()) {
+            presetsDir.mkdirs();
+        }
+        File[] existing = presetsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
+        File target = new File(presetsDir, "example.yml");
+        if (!target.exists()) {
+            exportResource("chat/redpackets/example.yml", target, false);
         }
     }
 

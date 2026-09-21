@@ -1,0 +1,61 @@
+from-version: 2
+to-version: 3
+description: "新增 redpacket 红包功能配置节（开关/权限/限额/过期/预设目录）"
+operations:
+  - type: set-if-missing
+    path: redpacket.enabled
+    value: true
+  - type: set-if-missing
+    path: redpacket.send-permission
+    value: ""
+  - type: set-if-missing
+    path: redpacket.claim-permission
+    value: ""
+  - type: set-if-missing
+    path: redpacket.admin-permission
+    value: ""
+  - type: set-if-missing
+    path: redpacket.currency
+    value: "money"
+  - type: set-if-missing
+    path: redpacket.card-id
+    value: "axs_chat_redpacket"
+  - type: set-if-missing
+    path: redpacket.presets-directory
+    value: "chat/redpackets"
+  - type: set-if-missing
+    path: redpacket.admin-channel
+    value: ""
+  - type: set-if-missing
+    path: redpacket.min-total
+    value: 1.0
+  - type: set-if-missing
+    path: redpacket.max-total
+    value: 1000000.0
+  - type: set-if-missing
+    path: redpacket.min-per-claim
+    value: 0.01
+  - type: set-if-missing
+    path: redpacket.max-count
+    value: 50
+  - type: set-if-missing
+    path: redpacket.send-cooldown-seconds
+    value: 10
+  - type: set-if-missing
+    path: redpacket.expire-minutes
+    value: 5
+  - type: set-if-missing
+    path: redpacket.refund-on-expire
+    value: true
+  - type: set-if-missing
+    path: redpacket.sender-can-claim
+    value: true
+  - type: set-if-missing
+    path: redpacket.announce-claims
+    value: true
+  - type: set-if-missing
+    path: redpacket.announce-finish
+    value: true
+  - type: set-if-missing
+    path: redpacket.text-alongside
+    value: true

@@ -96,7 +96,9 @@ public final class PickupModule extends AbstractAXSModule {
                 return false;
             }
             String action = (data == null || data.isEmpty()) ? "pick" : data.get(0).toLowerCase();
-            return scannerService.handleClientPacket(player, action, data);
+            // 剥离 action 段：handleClientPacket 的 data 语义是参数列表，token 在首位
+            List<String> params = (data == null || data.size() <= 1) ? List.of() : data.subList(1, data.size());
+            return scannerService.handleClientPacket(player, action, params);
         }, 0, null, null);
     }
 

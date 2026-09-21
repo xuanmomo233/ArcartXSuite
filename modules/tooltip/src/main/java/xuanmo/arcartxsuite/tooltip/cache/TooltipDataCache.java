@@ -20,6 +20,15 @@ public final class TooltipDataCache {
     /** 单条缓存数据的 TTL（毫秒） */
     private static final long TTL_MILLIS = 60_000L;
 
+    /** 每玩家最多缓存的物品指纹数——客户端可发任意指纹，无上限会在 TTL 窗口内堆积内存 */
+    private static final int MAX_ENTRIES_PER_PLAYER = 256;
+
+    /** 单条 tooltip 文本行数上限 */
+    private static final int MAX_TEXT_LINES = 64;
+
+    /** 单条结构化数据最大字节数（32KB） */
+    private static final int MAX_STRUCTURED_DATA_LENGTH = 32 * 1024;
+
     private final ConcurrentMap<UUID, ConcurrentMap<String, CachedEntry>> cache = new ConcurrentHashMap<>();
 
     /**
@@ -32,8 +41,14 @@ public final class TooltipDataCache {
      */
     public void put(@NotNull Player player, @NotNull String fingerprint,
                     @NotNull List<String> textLines, @NotNull String structuredData) {
+        if (textLines.size() > MAX_TEXT_LINES || structuredData.length() > MAX_STRUCTURED_DATA_LENGTH) {
+            return;
+        }
         ConcurrentMap<String, CachedEntry> playerCache = cache.computeIfAbsent(
             player.getUniqueId(), k -> new ConcurrentHashMap<>());
+        if (!playerCache.containsKey(fingerprint) && playerCache.size() >= MAX_ENTRIES_PER_PLAYER) {
+            return;
+        }
         playerCache.put(fingerprint, new CachedEntry(textLines, structuredData, System.currentTimeMillis()));
     }
 

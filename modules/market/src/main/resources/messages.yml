@@ -22,6 +22,7 @@ help:
   reload: "&7{0} reload&f - 重载"
   clear-expired: "&7{0} clear-expired&f - 处理到期"
   remove: "&7{0} remove <ID>&f - 强制移除"
+  edit: "&7{0} edit [商店ID]&f - 编辑系统商店"
 
 # ── 状态查询 ──────────────────────────────────────────
 status:
@@ -90,6 +91,7 @@ auction-cancelled: "&7已取消上架。"                    # 取消上架成�
 # ── 系统商店消息 ──
 shop-bought: "&a购买成功！花费: &e%amount%"            # %amount%=花费金额
 shop-limit-reached: "&c该商品已达购买上限。"           # 限购商品达到上限
+shop-condition-denied: "&c你不满足该商品的上架条件。"      # 商品 conditions 条件不满足
 # ── 回收商店消息 ──
 recycle-success: "&a回收成功！获得: &e%amount%"        # %amount%=获得金额
 recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回收物品

@@ -64,6 +64,8 @@ import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
 import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
 import xuanmo.arcartxsuite.fishing.task.TaskEngine;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 
 public final class FishingService {
 
@@ -105,6 +107,7 @@ public final class FishingService {
     private final RewardDispatcher rewardDispatcher;
     private final SettlementEngine settlementEngine;
     private final TaskEngine taskEngine;
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
     private MessageProvider messageProvider;
 
     // 跨模块能力提供者（懒加载，避免循环依赖）
@@ -596,7 +599,7 @@ public final class FishingService {
                     .replace("{fish}", fish.id())
                     .replace("{size}", String.valueOf(size));
                 try {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), executed);
+                    ThrottledCommandExecutor.dispatch( executed);
                 } catch (Exception e) {
                     logger.warning("执行鱼命令奖励失败: " + executed + " — " + e.getMessage());
                 }
@@ -949,7 +952,27 @@ public final class FishingService {
     private void sendUiInitPacket(@NotNull Player player, @NotNull String uiId,
                                   @NotNull java.util.Map<String, Object> payload) {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
+        // 每次推送轮换动作令牌：写操作回包必须携带最新 token（防重放/防外部注入）。
+        payload.put("action_token", tokenGuard.rotate(player.getUniqueId(), uiId));
         packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 校验写操作令牌：要求 UI 已打开、客户端回传 token 与当前签发值一致、且玩家无在途写操作。
+     *
+     * @param player   玩家
+     * @param uiId     动作来源 UI（token 命名空间）
+     * @param supplied 客户端回传的 action_token
+     * @return {@code true} 表示校验通过且已占用在途槽位（须配对 {@link #finishWriteAction}）
+     */
+    public boolean beginWriteAction(@NotNull Player player, @NotNull String uiId, @Nullable String supplied) {
+        return packetBridge != null && packetBridge.isUiOpen(player, uiId)
+            && tokenGuard.begin(player.getUniqueId(), uiId, supplied);
+    }
+
+    /** 释放玩家的在途写操作槽位。 */
+    public void finishWriteAction(@NotNull Player player) {
+        tokenGuard.finish(player.getUniqueId());
     }
 
     private @NotNull String getDefaultCurrency() {
@@ -1281,12 +1304,6 @@ public final class FishingService {
         return repository.loadPermanentData(uuid);
     }
 
-    /** @deprecated 使用 {@link #getSeasonData(UUID)} 代替 */
-    @Deprecated
-    public @NotNull FishingSeasonData getPlayerData(@NotNull UUID uuid) {
-        return getSeasonData(uuid);
-    }
-
     public @NotNull XpCurve getXpCurve() {
         return configuration.season().xpCurve();
     }
@@ -1444,8 +1461,10 @@ public final class FishingService {
      * @param uuid 玩家 UUID
      */
     public void onPlayerQuit(@NotNull UUID uuid) {
+        tokenGuard.clear(uuid);
         recentCatches.remove(uuid);
         fishingCooldowns.remove(uuid);
+        taskEngine.onPlayerQuit(uuid);
     }
 
     // ─── 疲惫值 ────────────────────────────────────────────────
@@ -1711,9 +1730,21 @@ public final class FishingService {
                 eventBus.publish("axs.fishing.perfect", player, payload);
             }
             if (isFirstCatch) {
-                int totalCollection = repository.loadCollection(player.getUniqueId()).size();
-                payload.put("total_collection_count", String.valueOf(totalCollection));
-                eventBus.publish("axs.fishing.collection_unlock", player, payload);
+                // loadCollection 是 DB 查询，挪异步读完后回主线程 publish（保持订阅者在主线程）
+                UUID uid = player.getUniqueId();
+                Map<String, String> collectionPayload = new LinkedHashMap<>(payload);
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    int totalCollection;
+                    try {
+                        totalCollection = repository.loadCollection(uid).size();
+                    } catch (Exception e) {
+                        logger.warning("读取图鉴计数失败 [" + uid + "]: " + e.getMessage());
+                        return;
+                    }
+                    collectionPayload.put("total_collection_count", String.valueOf(totalCollection));
+                    Bukkit.getScheduler().runTask(plugin, () ->
+                        eventBus.publish("axs.fishing.collection_unlock", player, collectionPayload));
+                });
             }
             if (gotTreasure) {
                 Map<String, String> treasurePayload = new LinkedHashMap<>();
@@ -2412,8 +2443,8 @@ public final class FishingService {
     public void handleUiAction(@NotNull Player player, @NotNull String action, @NotNull java.util.List<String> data) {
         switch (action.toLowerCase()) {
             case "level_up_talent" -> {
-                if (data.size() > 1) {
-                    String nodeId = data.get(1);
+                if (data.size() > 2) {
+                    String nodeId = data.get(2);
                     if (levelUpTalent(player.getUniqueId(), nodeId)) {
                         player.sendMessage("§a天赋升级成功: " + nodeId);
                     } else {
@@ -2426,8 +2457,8 @@ public final class FishingService {
                 player.sendMessage("§a天赋树已重置，所有天赋点已退还。");
             }
             case "claim_reward" -> {
-                if (data.size() > 1) {
-                    String rewardId = data.get(1);
+                if (data.size() > 2) {
+                    String rewardId = data.get(2);
                     if (claimReward(player, rewardId)) {
                         player.sendMessage("§a奖励领取成功！");
                     } else {

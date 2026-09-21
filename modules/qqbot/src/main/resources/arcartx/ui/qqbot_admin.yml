@@ -26,6 +26,7 @@ ui:
     init: |-
       var.bindPage = 0
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.botConnected = packet['botConnected']
       var.totalBindings = packet['totalBindings']
       var.onlinePlayers = packet['onlinePlayers']
@@ -504,7 +505,7 @@ controls:
                                   height: 30
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'admin_unbind', self.parent.entry['name'])
+                                    Packet.send(var.packetId, 'admin_unbind', var.actionToken, self.parent.entry['name'])
                                 children:
                                   解绑操作背景:
                                     type: Texture
@@ -692,7 +693,7 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.cmdInput != none){
-                      Packet.send(var.packetId, 'exec_command', var.cmdInput)
+                      Packet.send(var.packetId, 'exec_command', var.actionToken, var.cmdInput)
                       var.cmdInput = none
                     }
                 children:

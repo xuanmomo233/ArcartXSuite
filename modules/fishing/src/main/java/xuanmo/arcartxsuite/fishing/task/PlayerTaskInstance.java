@@ -47,11 +47,6 @@ public record PlayerTaskInstance(
             targetCount, Math.min(progress, targetCount), done, rewardClaimed, assignedDate);
     }
 
-    public PlayerTaskInstance withRewardClaimed() {
-        return new PlayerTaskInstance(playerUuid, instanceId, templateId, category,
-            targetCount, currentProgress, completed, true, assignedDate);
-    }
-
     public double progressPercent() {
         return Math.min(100.0, (currentProgress * 100.0) / targetCount);
     }

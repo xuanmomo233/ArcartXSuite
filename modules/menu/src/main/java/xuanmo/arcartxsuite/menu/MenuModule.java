@@ -209,6 +209,9 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void stopService() {
+        if (service != null) {
+            service.shutdown();
+        }
         packetHandler = null;
         adminCommand = null;
         service = null;

@@ -1,6 +1,6 @@
 # AXS 钓鱼图鉴界面
 # 打开方式: /fishing collection 或主界面导航跳转
-# 数据交互: packetHandler init/update
+# 数据交互: packetHandler init
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务）+ 内容区
 #       内容区 = 统计栏 + 标签栏（全部/普通/罕见/稀有/传说）+ 5列网格卡片
 # 视觉规范:
@@ -53,35 +53,6 @@ ui:
         }
       }
       var.needRebuild = true
-    # packetHandler: update
-    # 包字段: 同 init
-    update: |-
-      var.packetId = packet['packetId']
-      var.playerLevel = packet['playerLevel']
-      var.currentXp = packet['currentXp']
-      var.totalCaught = packet['totalCaught']
-      var.collectionCount = packet['collectionCount']
-      var.totalFishTypes = packet['totalFishTypes']
-      var.collectionPercent = packet['collectionPercent']
-      var.fishList = packet['fishList']
-      oldMaxFishCount = var.maxFishCount
-      var.maxFishCount = packet['maxFishCount']
-      var.itemJsons = {}
-      if(var.fishList != none){
-        for(key in var.fishList.keys()){
-          json = packet['fishIconJson' + key]
-          if(json != none && json != ''){
-            var.itemJsons[key] = json
-          } else {
-            var.itemJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      // 仅在鱼种数量变化时才标记重建网格，避免全量重建闪烁
-      // 鱼卡片数据通过 entry 绑定自动刷新，图标通过 seticon 属性自动刷新
-      if(var.maxFishCount != oldMaxFishCount){
-        var.needRebuild = true
-      }
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-

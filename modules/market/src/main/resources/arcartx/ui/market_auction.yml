@@ -2,7 +2,7 @@
 # 打开方式: /market 或 /market auction
 # 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航+分类筛选) + 内容区(工具栏+物品网格+分页)
 # 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
-# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+# 数据交互: packetHandler update；客户端 Packet.send(var.packetId, action, ...)
 
 ui:
   isHud: false
@@ -29,78 +29,6 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    # packetHandler: init
-    # 首次收到服务端数据包时执行，初始化界面所有变量和动态控件
-    # 包字段:
-    #   - packetId: 数据包通信 ID
-    #   - page: 当前页码（从 0 开始）
-    #   - totalPages: 总页数
-    #   - pageText: 页码显示文本（如 "1/5"）
-    #   - currentCategory: 当前选中的分类 ID
-    #   - categories: 分类字典（key=序号, value=分类对象含 id/displayName）
-    #   - categoryTexts: 分类显示文本字典
-    #   - listings: 拍卖列表字典（key=序号, value=拍卖条目）
-    #   - listingTexts: 拍卖条目显示文本字典
-    #   - itemJson{key}: 各拍卖物品的 NBT JSON 字符串
-    #   - maxCategoryCount: 分类最大数量
-    #   - maxListingCount: 拍卖条目最大数量
-    #   - action_token: 操作令牌
-    init: |-
-      var.itemJsons = {}
-      var.packetId = packet['packetId']
-      var.page = packet['page']
-      var.totalPages = packet['totalPages']
-      var.pageText = packet['pageText']
-      var.currentCategory = packet['currentCategory']
-      var.categories = packet['categories']
-      var.categoryTexts = packet['categoryTexts']
-      var.listings = packet['listings']
-      var.listingTexts = packet['listingTexts']
-      var.maxCategoryCount = packet['maxCategoryCount']
-      var.maxListingCount = packet['maxListingCount']
-      var.actionToken = packet['action_token']
-      for(key in var.listings.keys()){
-        json = packet['itemJson' + key]
-        if(json != none && json != ''){
-          var.itemJsons[key] = json
-        } else {
-          var.itemJsons[key] = var.emptyItemJson
-        }
-      }
-      while(val.分类列表.childrenCount() > 1){
-        val.分类列表.get(1).remove()
-      }
-      if(var.maxCategoryCount > 1){
-        for(i in range(1, var.maxCategoryCount - 1)){
-          key = i.round()
-          if(val.分类列表['分类项'] != none) {
-            e = val.分类列表['分类项'].copy('分类项' + key)
-            e.entryKey = key
-          }
-        }
-      }
-      while(val.物品列表.childrenCount() > 1){
-        val.物品列表.get(1).remove()
-      }
-      if(var.maxListingCount > 1){
-        for(i in range(1, var.maxListingCount - 1)){
-          key = i.round()
-          if(val.物品列表['拍卖卡片'] != none) {
-            e = val.物品列表['拍卖卡片'].copy('拍卖卡片' + key)
-            e.entryKey = key
-          }
-        }
-      }
-      for(i in range(0, var.maxListingCount - 1)){
-        key = i.round()
-        if(val.物品列表 != none) {
-          e = val.物品列表.get(key)
-        }
-        if(e != none && e['物品图标'] != none){
-          e['物品图标'].seticon()
-        }
-      }
-      var.actionBusy = false
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同
     update: |-

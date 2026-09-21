@@ -182,6 +182,7 @@ public record MapModuleConfiguration(
      */
     private static CrossServerConfiguration loadCrossServer(ConfigurationSection section) {
         ConfigurationSection arrivals = section == null ? null : section.getConfigurationSection("arrivals");
+        ConfigurationSection teleport = section == null ? null : section.getConfigurationSection("teleport");
         return new CrossServerConfiguration(
             section != null && section.getBoolean("enabled", false),
             string(section == null ? null : section.getString("display-name"), ""),
@@ -191,6 +192,9 @@ public record MapModuleConfiguration(
             section == null || section.getBoolean("terrain-relay", true),
             section == null ? 10 : Math.max(3, section.getInt("request-timeout-seconds", 10)),
             section == null ? 20 : Math.max(0, section.getInt("arrival-delay-ticks", 20)),
+            section == null ? 256 : Math.max(1, section.getInt("max-remote-worlds", 256)),
+            section == null ? 4096 : Math.max(1, section.getInt("max-remote-anchors-total", 4096)),
+            teleport != null && teleport.getBoolean("require-signed-request", false),
             new CrossServerArrivalsConfiguration(
                 arrivals == null || arrivals.getBoolean("enabled", true),
                 arrivals != null && arrivals.getBoolean("require-anchor-unlock", false),
@@ -1083,6 +1087,10 @@ public record MapModuleConfiguration(
      *                                 也允许本机玩家浏览远程世界时发起中继
      * @param requestTimeoutSeconds    跨服传送请求响应超时（秒）
      * @param arrivalDelayTicks        跨服落地延迟执行 tick（等玩家进服稳定）
+     * @param maxRemoteWorlds          远程共享世界总数上限（全部节点合计），防止恶意节点广播撑爆内存
+     * @param maxRemoteAnchorsTotal    远程锚点总数上限（全部节点合计）
+     * @param teleportRequireSignedRequest true 时丢弃未通过宿主 HMAC 验签的 tpreq
+     *                                     （跨服签名关闭部署下应保留 false）
      * @param arrivals                 跨服落地传送配置
      * @param channel                  宿主跨服通道配置（enabled/redis/proxy 覆盖）
      */
@@ -1095,6 +1103,9 @@ public record MapModuleConfiguration(
         boolean terrainRelay,
         int requestTimeoutSeconds,
         int arrivalDelayTicks,
+        int maxRemoteWorlds,
+        int maxRemoteAnchorsTotal,
+        boolean teleportRequireSignedRequest,
         CrossServerArrivalsConfiguration arrivals,
         xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig channel
     ) {

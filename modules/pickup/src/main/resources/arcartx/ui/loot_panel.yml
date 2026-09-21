@@ -54,6 +54,7 @@ ui:
     # 包字段: 无（仅通知客户端打开交互菜单）
     open_interact: |-
       var.menuOpen = true
+      var.actionToken = packet['action_token']
       Screen.open('AXS:loot_interact')
     # packetHandler: menu_closed
     # 包字段: 无（仅通知客户端交互菜单已关闭）
@@ -129,7 +130,7 @@ controls:
     action:
       click: |-
         if(var.count > 0 && !var.menuOpen){
-          Packet.send('pickup', 'pick')
+          Packet.send('pickup', 'pick', var.actionToken)
         }
     children:
       拾取面板:
@@ -180,7 +181,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_0')
+                        Packet.send('pickup', 'pick_0', var.actionToken)
                   图标0:
                     val: loot_slot_0
                     type: Slot
@@ -220,7 +221,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_1')
+                        Packet.send('pickup', 'pick_1', var.actionToken)
                   图标1:
                     val: loot_slot_1
                     type: Slot
@@ -260,7 +261,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_2')
+                        Packet.send('pickup', 'pick_2', var.actionToken)
                   图标2:
                     val: loot_slot_2
                     type: Slot
@@ -300,7 +301,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_3')
+                        Packet.send('pickup', 'pick_3', var.actionToken)
                   图标3:
                     val: loot_slot_3
                     type: Slot
@@ -340,7 +341,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_4')
+                        Packet.send('pickup', 'pick_4', var.actionToken)
                   图标4:
                     val: loot_slot_4
                     type: Slot
@@ -380,7 +381,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_5')
+                        Packet.send('pickup', 'pick_5', var.actionToken)
                   图标5:
                     val: loot_slot_5
                     type: Slot
@@ -420,7 +421,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_6')
+                        Packet.send('pickup', 'pick_6', var.actionToken)
                   图标6:
                     val: loot_slot_6
                     type: Slot
@@ -460,7 +461,7 @@ controls:
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick_7')
+                        Packet.send('pickup', 'pick_7', var.actionToken)
                   图标7:
                     val: loot_slot_7
                     type: Slot

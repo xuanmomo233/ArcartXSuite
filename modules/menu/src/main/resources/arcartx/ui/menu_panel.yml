@@ -33,6 +33,7 @@ ui:
     #   - maxFooterCount: 页脚按钮最大数量
     init: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.menuId = packet['menuId']
       var.layout = packet['layout']
       var.title = packet['title']
@@ -91,6 +92,7 @@ ui:
     # 包字段: 与 init 相同（全量刷新菜单数据）
     update: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.menuId = packet['menuId']
       var.layout = packet['layout']
       var.title = packet['title']
@@ -283,7 +285,7 @@ controls:
                     action:
                       clickLeft: |-
                         if(self.entry != none && self.entry['enabled']){
-                          Packet.send(var.packetId, 'click', self.entry['id'])
+                          Packet.send(var.packetId, 'click', var.actionToken, self.entry['id'])
                         }
                     children:
                       图标:
@@ -403,7 +405,7 @@ controls:
                           }elif(self.entry['clientAction'] == 'quit'){
                             Game.quit()
                           } else {
-                            Packet.send(var.packetId, 'footer', self.entry['id'])
+                            Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
                           }
                         }
                     children:

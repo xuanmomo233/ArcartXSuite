@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.qqbot.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -59,7 +58,7 @@ public final class QQBotScheduledMessageService {
             if (sm.isInterval()) lastIntervalSent.put(sm.id(), now);
         }
         // 每 20 tick（约 1 秒）检查一次
-        task = AxsScheduler.runTaskTimer(plugin, this::tick, 20L, 20L);
+        task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
         logger.info("定时消息服务已启用 | 条目数=" + config.scheduledMessages().size());
     }
 

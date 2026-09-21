@@ -2,19 +2,25 @@
 # 禁言提示、敏感词拦截等系统通知时显示此卡片
 # data['type'] 可能的值: mute, filter
 # 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
-卡片根布局:
-  type: Card
+root_control:
+  type: card
   attribute:
-    width: "Math.max(val.标题文字.width, val.详情文字.width) + 200 < 500 ? 500 : Math.max(val.标题文字.width, val.详情文字.width) + 200"
-    height: "Math.max(100, val.详情文字.y + val.详情文字.height + 20)"
+    width: "Math.max(val.title_label.width, val.detail_label.width) + 200 < 500 ? 500 : Math.max(val.title_label.width, val.detail_label.width) + 200"
+    height: "Math.max(100, val.detail_label.y + val.detail_label.height + 20)"
   children:
-    卡片背景:
+    background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
         normal: ~25,25,35,200
-    图标文字:
+        shape: ~round_rect
+        radius: 12
+      effect:
+        stroke:
+          width: 2
+          color: ~255,255,255,120
+    icon:
       type: Text
       attribute:
         fontSize: 200
@@ -22,18 +28,18 @@
         y: 3
         texts: "'§c⚠'"
         through: true
-    标题文字:
+    title_label:
       type: Text
-      val: 标题文字
+      val: title_label
       attribute:
         fontSize: 64
         x: 160
         y: 15
         texts: "self.parent.data['type'] == 'mute' ? '§c§l你已被禁言' : '§c§l消息被拦截'"
         through: true
-    详情文字:
+    detail_label:
       type: Text
-      val: 详情文字
+      val: detail_label
       attribute:
         fontSize: 64
         x: 160

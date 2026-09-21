@@ -94,7 +94,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
         pathfinder = new NavigationPathfinder(config.pathMaxIterations());
 
         int ticks = Math.max(1, config.pathUpdateTicks());
-        updateTask = AxsScheduler.runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
+        updateTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
 
         logger.info("导航标记已启动: model=" + config.modelId() + " scale=" + config.scale()
             + " interval=" + config.pathInterval() + " maxMarkers=" + config.pathMaxMarkers()
@@ -175,7 +175,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
                 + " key=" + key + " goal=(" + x + "," + y + "," + z + ")");
         }
 
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (!player.isOnline()) return;
             computeAndApplyPath(player, state);
         });
@@ -354,7 +354,7 @@ public final class NavigationMarkerService implements NavigationRouteRenderer {
                 state.markerEntities.add(entity);
 
                 final Object ent = entity;
-                AxsScheduler.runTaskLater(plugin, () -> {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (!player.isOnline()) return;
                     npcBridge.applyModelForPlayer(player, ent, config.modelId(), config.scale());
                     if (config.animation() != null && !config.animation().isBlank()) {

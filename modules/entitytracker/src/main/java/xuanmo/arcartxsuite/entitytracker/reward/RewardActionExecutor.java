@@ -143,11 +143,17 @@ public final class RewardActionExecutor {
         }
 
         String rendered = renderTemplate(action.command(), target, variables);
-        boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), stripLeadingSlash(rendered));
+        // 占位符/PAPI 展开后统一校验最终命令：非玩家名占位符与 PAPI 值可能携带分隔符
+        try {
+            rendered = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(rendered);
+        } catch (IllegalArgumentException e) {
+            return RewardActionResult.fail(action.type().configKey(), "命令含分隔符已拒绝: " + rendered);
+        }
+        boolean dispatched = xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(stripLeadingSlash(rendered));
         return new RewardActionResult(
             action.type().configKey(),
             dispatched,
-            dispatched ? rendered : "控制台命令执行失败: " + rendered
+            dispatched ? rendered : "控制台命令受理失败(队列已满或执行异常): " + rendered
         );
     }
 

@@ -61,7 +61,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
@@ -101,23 +101,17 @@ public final class WarehouseService implements Listener {
     private final MessageProvider messages;
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
-    private static final String OWNER_PERSONAL = "personal";
-    private static final String OWNER_SHARED = "shared";
+    static final String OWNER_PERSONAL = "personal";
+    static final String OWNER_SHARED = "shared";
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
     private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
     private static final String MANAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_manage.yml";
     private static final String MANAGE_UI_FILE_PATH = "ui/warehouse_manage.yml";
     private static final String BANK_UI_RESOURCE_PATH = "arcartx/ui/warehouse_bank.yml";
     private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
-    private static final int SLOT_COUNT = 54;
-    private static final long MAX_AGGREGATED_AMOUNT = Integer.MAX_VALUE;
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
-    private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
-
-    static {
-        PINYIN_FORMAT.setCaseType(HanyuPinyinCaseType.LOWERCASE);
-        PINYIN_FORMAT.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
-    }
+    static final int SLOT_COUNT = 54;
+    static final long MAX_AGGREGATED_AMOUNT = Integer.MAX_VALUE;
+    static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     /**
      * UI 资源导出函数。
@@ -130,20 +124,21 @@ public final class WarehouseService implements Listener {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final PacketBridgeAPI packetBridge;
-    private final xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge;
+    final xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge;
     private final PacketGuardAPI packetGuard;
     private final UiResourceExporter uiResourceExporter;
-    private final WarehouseModuleConfiguration configuration;
-    private final WarehouseRepository repository;
-    private final ItemSourceRegistry itemSourceRegistry;
-    private final ItemMatcherAPI itemMatcherSupport;
+    final WarehouseModuleConfiguration configuration;
+    final WarehouseRepository repository;
+    final ItemSourceRegistry itemSourceRegistry;
+    final ItemMatcherAPI itemMatcherSupport;
     private final CurrencyBridgeAPI currencyBridgeManager;
-    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
+    final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private Supplier<PickupInterceptor> pickupInterceptorSupplier = () -> null;
-    private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
+    final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
-    private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
+    final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
+    final WarehousePacketFactory packetFactory;
     /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者（含子服 nodeId）。 */
     private final ConcurrentMap<String, SharedEditLock> sharedEditLocks = new ConcurrentHashMap<>();
     private final CrossServerAPI crossServerApi;
@@ -154,17 +149,17 @@ public final class WarehouseService implements Listener {
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     /** 仓库级互斥锁：ownerType:ownerId:warehouseId → lock object，防止 deposit/withdraw 竞态。 */
     private final ConcurrentMap<String, Object> warehouseLocks = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, String> storageActionTokens = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
+    final ConcurrentMap<UUID, String> storageActionTokens = new ConcurrentHashMap<>();
+    final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
+    final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Object> actionTokenLocks = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     private final ThreadLocal<Set<UUID>> committedActionTokens =
         ThreadLocal.withInitial(HashSet::new);
     private final ThreadLocal<TokenLease> activeActionToken = new ThreadLocal<>();
-    private String storageRuntimeUiId = "";
-    private String manageRuntimeUiId = "";
-    private String bankRuntimeUiId = "";
+    String storageRuntimeUiId = "";
+    String manageRuntimeUiId = "";
+    String bankRuntimeUiId = "";
     private String storageRegisteredUiId = "";
     private String manageRegisteredUiId = "";
     private String bankRegisteredUiId = "";
@@ -230,6 +225,7 @@ public final class WarehouseService implements Listener {
         this.crossServerChannelConfig = crossServerChannelConfig == null
             ? CrossServerChannelConfig.disabled() : crossServerChannelConfig;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.packetFactory = new WarehousePacketFactory(this);
     }
 
     public WarehouseService(
@@ -283,7 +279,7 @@ public final class WarehouseService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 模块重载后，向所有 UI 仍开着的在线玩家重新签发 token 并推送 update 包，
         // 避免重载导致 token 丢失后玩家操作被静默丢弃。
-        AxsScheduler.runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
+        Bukkit.getScheduler().runTaskLater(plugin, this::reissueTokensForOpenUis, 20L);
     }
 
     /**
@@ -419,7 +415,7 @@ public final class WarehouseService implements Listener {
             return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "服务器已关闭战利品入库功能。");
         }
         try {
-            DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
+            DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), packetFactory.firstPersonalWarehouseId(), stack);
             if (result.success()) {
                 publishDepositEvent(player, stack, result.storedAmount());
             }
@@ -612,7 +608,7 @@ public final class WarehouseService implements Listener {
         if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
             return false;
         }
-        String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
+        String action = data == null || data.isEmpty() ? "refresh" : WarehouseTexts.safe(data.get(0)).toLowerCase(Locale.ROOT);
         debug("IN player=" + player.getName() + " packetId=" + packetId + " action=" + action + " data=" + data);
         if (!isUiOpenForAction(player, action)) {
             sendMessage(player, false, message("player.ui-required"));
@@ -629,14 +625,14 @@ public final class WarehouseService implements Listener {
             ViewState currentViewState = viewStates.get(player.getUniqueId());
             if (currentViewState != null && currentViewState.previewMode()) {
                 switch (action) {
-                    case "page" -> setPage(player, parseInt(value(data, 1, "1"), 1));
-                    case "category" -> setCategory(player, value(data, 1, "all"));
-                    case "search" -> setSearch(player, value(data, 1, ""));
-                    case "sort" -> setSort(player, value(data, 1, ""));
-                    case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
+                    case "page" -> setPage(player, WarehouseTexts.parseInt(WarehouseTexts.value(data, 1, "1"), 1));
+                    case "category" -> setCategory(player, WarehouseTexts.value(data, 1, "all"));
+                    case "search" -> setSearch(player, WarehouseTexts.value(data, 1, ""));
+                    case "sort" -> setSort(player, WarehouseTexts.value(data, 1, ""));
+                    case "select" -> selectSlot(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")));
                     case "refresh" -> refreshBoth(player);
-                    case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
-                    case "shared" -> selectPreviewSharedWarehouse(player, value(data, 1, ""));
+                    case "warehouse" -> selectPersonalWarehouse(player, WarehouseTexts.value(data, 1, packetFactory.firstPersonalWarehouseId()));
+                    case "shared" -> selectPreviewSharedWarehouse(player, WarehouseTexts.value(data, 1, ""));
                     case "close" -> handleUiClosed(player);
                     default -> sendMessage(player, false, message("player.preview-read-only"));
                 }
@@ -668,38 +664,38 @@ public final class WarehouseService implements Listener {
                         sendMessage(player, false, result.message());
                     }
                 }
-                case "page" -> setPage(player, parseInt(value(data, 1, "1"), 1));
+                case "page" -> setPage(player, WarehouseTexts.parseInt(WarehouseTexts.value(data, 1, "1"), 1));
         case "warehouse_upgrade" -> upgradeCurrentWarehouse(player);
-                case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
-                case "shared" -> selectSharedWarehouse(player, value(data, 1, ""));
-                case "shared_mode" -> setSharedMode(player, value(data, 1, "readonly"));
-                case "category" -> setCategory(player, value(data, 1, "all"));
-                case "search" -> setSearch(player, value(data, 1, ""));
-                case "sort" -> setSort(player, value(data, 1, ""));
-                case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
-                case "deposit_slot" -> depositSlot(player, value(data, 1, ""), parseLong(value(data, 2, "1"), 1L));
+                case "warehouse" -> selectPersonalWarehouse(player, WarehouseTexts.value(data, 1, packetFactory.firstPersonalWarehouseId()));
+                case "shared" -> selectSharedWarehouse(player, WarehouseTexts.value(data, 1, ""));
+                case "shared_mode" -> setSharedMode(player, WarehouseTexts.value(data, 1, "readonly"));
+                case "category" -> setCategory(player, WarehouseTexts.value(data, 1, "all"));
+                case "search" -> setSearch(player, WarehouseTexts.value(data, 1, ""));
+                case "sort" -> setSort(player, WarehouseTexts.value(data, 1, ""));
+                case "select" -> selectSlot(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")));
+                case "deposit_slot" -> depositSlot(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L));
                 case "deposit_all_backpack" -> depositAllBackpack(player);
-                case "withdraw" -> withdraw(player, parsePacketSlot(value(data, 1, "-1")), parseLong(value(data, 2, "1"), 1L), false);
-                case "withdraw_all" -> withdraw(player, parsePacketSlot(value(data, 1, "-1")), Long.MAX_VALUE, true);
-                case "bank_deposit" -> bankDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
-                case "bank_withdraw" -> bankWithdraw(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
-                case "select_currency" -> selectCurrency(player, value(data, 1, ""));
-                case "fixed_create" -> createFixedDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
-                case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
-                case "fixed_delete" -> deleteFixedDeposit(player, value(data, 1, ""));
-                case "shared_create" -> createSharedWarehouse(player, value(data, 1, "共享仓库"));
-                case "shared_rename" -> renameSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
-                case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, value(data, 1, ""));
-                case "personal_rename" -> renamePersonalWarehouse(player, value(data, 1, ""), value(data, 2, ""));
-                case "personal_showcase_toggle" -> togglePersonalWarehouseShowcase(player, value(data, 1, ""));
-                case "shared_delete" -> deleteSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
-                case "shared_invite" -> inviteSharedMember(player, value(data, 1, ""), value(data, 2, ""), value(data, 3, "member"));
-                case "shared_remove" -> removeSharedMember(player, value(data, 1, ""), value(data, 2, ""));
-                case "shared_transfer" -> transferSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
-                case "shared_transfer_confirm" -> confirmPendingTransfer(player, value(data, 1, ""));
-                case "shared_transfer_reject" -> rejectPendingTransfer(player, value(data, 1, ""));
-                case "password_unlock" -> unlockPassword(player, value(data, 1, ""));
-                case "password_set" -> setPassword(player, value(data, 1, ""));
+                case "withdraw" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L), false);
+                case "withdraw_all" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), Long.MAX_VALUE, true);
+                case "bank_deposit" -> bankDeposit(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseDecimal(WarehouseTexts.value(data, 2, "0")));
+                case "bank_withdraw" -> bankWithdraw(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseDecimal(WarehouseTexts.value(data, 2, "0")));
+                case "select_currency" -> selectCurrency(player, WarehouseTexts.value(data, 1, ""));
+                case "fixed_create" -> createFixedDeposit(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseDecimal(WarehouseTexts.value(data, 2, "0")));
+                case "fixed_claim" -> claimFixedDeposit(player, WarehouseTexts.value(data, 1, ""));
+                case "fixed_delete" -> deleteFixedDeposit(player, WarehouseTexts.value(data, 1, ""));
+                case "shared_create" -> createSharedWarehouse(player, WarehouseTexts.value(data, 1, "共享仓库"));
+                case "shared_rename" -> renameSharedWarehouse(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""));
+                case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, WarehouseTexts.value(data, 1, ""));
+                case "personal_rename" -> renamePersonalWarehouse(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""));
+                case "personal_showcase_toggle" -> togglePersonalWarehouseShowcase(player, WarehouseTexts.value(data, 1, ""));
+                case "shared_delete" -> deleteSharedWarehouse(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""));
+                case "shared_invite" -> inviteSharedMember(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""), WarehouseTexts.value(data, 3, "member"));
+                case "shared_remove" -> removeSharedMember(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""));
+                case "shared_transfer" -> transferSharedWarehouse(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.value(data, 2, ""));
+                case "shared_transfer_confirm" -> confirmPendingTransfer(player, WarehouseTexts.value(data, 1, ""));
+                case "shared_transfer_reject" -> rejectPendingTransfer(player, WarehouseTexts.value(data, 1, ""));
+                case "password_unlock" -> unlockPassword(player, WarehouseTexts.value(data, 1, ""));
+                case "password_set" -> setPassword(player, WarehouseTexts.value(data, 1, ""));
                 case "password_lock" -> lockPassword(player);
                 case "toggle_auto_pickup" -> toggleAutoPickup(player, "pickup");
                 case "toggle_auto_mythic" -> toggleAutoPickup(player, "mythic");
@@ -812,14 +808,14 @@ public final class WarehouseService implements Listener {
      */
     public void adminAdjustWallet(UUID playerUuid, String currencyId, String mode, String amountText, Consumer<ActionResult> callback) {
         try {
-            String normalizedCurrency = normalizeId(currencyId);
+            String normalizedCurrency = WarehouseTexts.normalizeId(currencyId);
             if (!currencyBridgeManager.currencyIds().contains(normalizedCurrency)) {
                 callback.accept(ActionResult.failure(message("admin.unknown-currency", normalizedCurrency)));
                 return;
             }
-            BigDecimal amount = parseDecimal(amountText);
+            BigDecimal amount = WarehouseTexts.parseDecimal(amountText);
             BigDecimal current = bankBalance(playerUuid, normalizedCurrency);
-            BigDecimal updated = switch (normalizeId(mode)) {
+            BigDecimal updated = switch (WarehouseTexts.normalizeId(mode)) {
                 case "set" -> amount;
                 case "add" -> current.add(amount);
                 case "take" -> current.subtract(amount).max(BigDecimal.ZERO);
@@ -861,7 +857,7 @@ public final class WarehouseService implements Listener {
         try {
             long capacity = 0L;
             for (WarehouseRecord record : personalRecords(playerUuid)) {
-                capacity += resolveCapacity(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
+                capacity += packetFactory.resolveCapacity(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
             }
             return capacity;
         } catch (Exception exception) {
@@ -871,7 +867,7 @@ public final class WarehouseService implements Listener {
 
     public long categoryAmount(UUID playerUuid, String categoryId) {
         try {
-            String normalized = normalizeId(categoryId);
+            String normalized = WarehouseTexts.normalizeId(categoryId);
             return personalRecords(playerUuid).stream()
                 .flatMap(record -> loadSlots(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId()).stream())
                 .filter(item -> normalized.equals(item.categoryId()))
@@ -884,7 +880,7 @@ public final class WarehouseService implements Listener {
 
     public BigDecimal bankBalance(UUID playerUuid, String currencyId) {
         try {
-            return repository.loadBankBalances(playerUuid).getOrDefault(normalizeId(currencyId), BigDecimal.ZERO);
+            return repository.loadBankBalances(playerUuid).getOrDefault(WarehouseTexts.normalizeId(currencyId), BigDecimal.ZERO);
         } catch (Exception exception) {
             return BigDecimal.ZERO;
         }
@@ -892,7 +888,7 @@ public final class WarehouseService implements Listener {
 
     public long fixedActive(UUID playerUuid, String currencyId) {
         try {
-            String normalized = normalizeId(currencyId);
+            String normalized = WarehouseTexts.normalizeId(currencyId);
             return repository.loadFixedDeposits(playerUuid).stream().filter(d -> !d.claimed() && normalized.equals(d.currencyId())).count();
         } catch (Exception exception) {
             return 0L;
@@ -902,7 +898,7 @@ public final class WarehouseService implements Listener {
     public long fixedMatured(UUID playerUuid, String currencyId) {
         try {
             long now = System.currentTimeMillis();
-            String normalized = normalizeId(currencyId);
+            String normalized = WarehouseTexts.normalizeId(currencyId);
             return repository.loadFixedDeposits(playerUuid).stream().filter(d -> !d.claimed() && d.maturesAt() <= now && normalized.equals(d.currencyId())).count();
         } catch (Exception exception) {
             return 0L;
@@ -970,7 +966,7 @@ public final class WarehouseService implements Listener {
         // 导致后续 notifyPickup 收到 AIR 物品而 early-return，HUD 提示不显示。
         ItemStack displayPrototype = stack.clone();
         try {
-            DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
+            DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), packetFactory.firstPersonalWarehouseId(), stack);
             if (!result.success()) {
                 return;
             }
@@ -1130,7 +1126,7 @@ public final class WarehouseService implements Listener {
     /**
      * 刷新已打开的仓库 UI 数据包（storage / manage / bank），跳过未打开的界面。
      */
-    private void refreshBoth(Player player) throws Exception {
+    void refreshBoth(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         sendStorage(player, "update");
@@ -1140,8 +1136,8 @@ public final class WarehouseService implements Listener {
 
     private void sendStorage(Player player, String handler) throws Exception {
         if (packetBridge != null && !storageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, storageRuntimeUiId)) {
-            Map<String, Object> packet = buildStoragePacket(player, state(player));
-            debug("OUT storage player=" + player.getName() + " uiId=" + storageRuntimeUiId + " handler=" + handler + " " + summarizeStoragePacket(packet));
+            Map<String, Object> packet = packetFactory.buildStoragePacket(player, state(player));
+            debug("OUT storage player=" + player.getName() + " uiId=" + storageRuntimeUiId + " handler=" + handler + " " + WarehouseTexts.summarizeStoragePacket(packet));
             boolean success = packetBridge.sendPacket(player, storageRuntimeUiId, handler, packet);
             debug("OUT storage-result player=" + player.getName() + " handler=" + handler + " success=" + success);
         }
@@ -1149,8 +1145,8 @@ public final class WarehouseService implements Listener {
 
     private void sendManage(Player player, String handler) throws Exception {
         if (packetBridge != null && !manageRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, manageRuntimeUiId)) {
-            Map<String, Object> packet = buildManagePacket(player, state(player));
-            debug("OUT manage player=" + player.getName() + " uiId=" + manageRuntimeUiId + " handler=" + handler + " " + summarizeManagePacket(packet));
+            Map<String, Object> packet = packetFactory.buildManagePacket(player, state(player));
+            debug("OUT manage player=" + player.getName() + " uiId=" + manageRuntimeUiId + " handler=" + handler + " " + WarehouseTexts.summarizeManagePacket(packet));
             boolean success = packetBridge.sendPacket(player, manageRuntimeUiId, handler, packet);
             debug("OUT manage-result player=" + player.getName() + " handler=" + handler + " success=" + success);
         }
@@ -1158,8 +1154,8 @@ public final class WarehouseService implements Listener {
 
     private void sendBank(Player player, String handler) throws Exception {
         if (packetBridge != null && !bankRuntimeUiId.isBlank() && packetBridge.isUiOpen(player, bankRuntimeUiId)) {
-            Map<String, Object> packet = buildBankPacket(player, state(player));
-            debug("OUT bank player=" + player.getName() + " uiId=" + bankRuntimeUiId + " handler=" + handler + " balances=" + mapValue(packet.get("balances")).size());
+            Map<String, Object> packet = packetFactory.buildBankPacket(player, state(player));
+            debug("OUT bank player=" + player.getName() + " uiId=" + bankRuntimeUiId + " handler=" + handler + " balances=" + WarehouseTexts.mapValue(packet.get("balances")).size());
             boolean success = packetBridge.sendPacket(player, bankRuntimeUiId, handler, packet);
             debug("OUT bank-result player=" + player.getName() + " handler=" + handler + " success=" + success);
         }
@@ -1246,7 +1242,7 @@ public final class WarehouseService implements Listener {
         }
         String supplied = data == null || data.isEmpty()
             ? ""
-            : safe(data.get(data.size() - 1));
+            : WarehouseTexts.safe(data.get(data.size() - 1));
         if (supplied.isBlank()) {
             return null;
         }
@@ -1356,271 +1352,13 @@ public final class WarehouseService implements Listener {
         }
     }
 
-    /**
-     * 构建仓库存取界面的数据包，包含分页槽位、选中物品、背包信息、容量与权限状态。
-     */
-    private Map<String, Object> buildStoragePacket(Player player, ViewState state) throws Exception {
-        List<SlotItemRecord> visibleSlots = visibleSlots(state);
-        String slotOrder = visibleSlots.stream().map(i -> String.valueOf(i.slot())).collect(Collectors.joining(","));
-        debug("buildStoragePacket visibleSlots order: " + slotOrder);
-        Map<String, Object> slots = new LinkedHashMap<>();
-        Map<String, Object> packet = basePacket(player, state);
-        int pageSize = pageSize();
-        int pageTotal = Math.max(1, (visibleSlots.size() + pageSize - 1) / pageSize);
-        state.setPage(Math.max(1, Math.min(state.page(), pageTotal)));
-        int start = (state.page() - 1) * pageSize;
-        for (int displaySlot = 0; displaySlot < pageSize; displaySlot++) {
-            int index = start + displaySlot;
-            SlotItemRecord item = index >= 0 && index < visibleSlots.size()
-                ? visibleSlots.get(index)
-                : null;
-            Map<String, Object> row = item != null
-                ? slotPacket(item)
-                : emptySlotPacket(displaySlot);
-            String key = Integer.toString(displaySlot);
-            row.put("key", key);
-            slots.put(key, row);
-            if (item != null) {
-                String itemJson = displayItemJson(item);
-                if (!itemJson.isBlank()) {
-                    packet.put("slotItemJson" + key, itemJson);
-                }
-            }
-        }
-        String slotKeys = String.join(",", slots.keySet());
-        debug("buildStoragePacket slots keys order: " + slotKeys);
-        int selectedDisplaySlot = selectedDisplaySlot(state, visibleSlots);
-        SlotItemRecord selected = validSlot(state.selectedSlot())
-            ? repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), state.selectedSlot()).orElse(null)
-            : null;
-        packet.put("ui", "storage");
-        packet.put("action_token", storageActionTokens.getOrDefault(player.getUniqueId(), ""));
-        packet.put("sortId", state.sortId());
-        packet.put("sortText", sortText(state.sortId()));
-        packet.put("slots", slots);
-        packet.put("slotCount", pageSize);
-        packet.put("selectedSlot", selectedDisplaySlot);
-        packet.put("selectedActualSlot", state.selectedSlot());
-        packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected));
-        packet.put("backpack", backpackPacket(player));
-        packet.put("page", state.page());
-        packet.put("pageTotal", pageTotal);
-        packet.put("pageText", state.page() + "/" + pageTotal);
-        packet.put("usedSlots", loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).size());
-        packet.put("matchedSlots", visibleSlots.size());
-        putCapacityFields(player, state, packet);
-        packet.put("readOnly", !canModifyCurrent(player, state));
-        packet.put("sharedEditMode", OWNER_SHARED.equals(state.ownerType()) && state.sharedEditMode());
-        packet.put("sharedCanEdit", sharedCanEdit(player, state));
-        packet.put("lockOwner", lockOwnerName(state));
-        packet.put("maxPersonalCount", ((java.util.Map<?,?>) packet.getOrDefault("personalWarehouses", java.util.Map.of())).size());
-        packet.put("maxSharedCount", ((java.util.Map<?,?>) packet.getOrDefault("sharedWarehouses", java.util.Map.of())).size());
-        packet.put("maxCategoryCount", ((java.util.Map<?,?>) packet.getOrDefault("categories", java.util.Map.of())).size());
-        return packet;
-    }
-
-    private Comparator<SlotItemRecord> sortComparator(String sortId) {
-        Comparator<SlotItemRecord> comparator = null;
-        for (SortField field : configuration.sortProfile(sortId).fields()) {
-            Comparator<SlotItemRecord> fieldComparator = switch (field.key().toLowerCase(Locale.ROOT)) {
-                case "name" -> Comparator.comparing(
-                    SlotItemRecord::displayName,
-                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
-                );
-                case "amount" -> Comparator.comparingLong(SlotItemRecord::amount);
-                case "updated" -> Comparator.comparingLong(SlotItemRecord::updatedAt);
-                case "created" -> Comparator.comparingLong(SlotItemRecord::createdAt);
-                case "material" -> Comparator.comparing(
-                    SlotItemRecord::materialId,
-                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
-                );
-                case "category" -> Comparator.comparing(
-                    SlotItemRecord::categoryId,
-                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
-                );
-                case "warehouse" -> Comparator.comparing(
-                    SlotItemRecord::warehouseId,
-                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
-                );
-                default -> null;
-            };
-            if (fieldComparator == null) {
-                continue;
-            }
-            if (field.descending()) {
-                fieldComparator = fieldComparator.reversed();
-            }
-            comparator = comparator == null
-                ? fieldComparator
-                : comparator.thenComparing(fieldComparator);
-        }
-        Comparator<SlotItemRecord> slotComparator = Comparator.comparingInt(SlotItemRecord::slot);
-        return comparator == null ? slotComparator : comparator.thenComparing(slotComparator);
-    }
-
-    private String sortText(String sortId) {
-        return switch (normalizeId(sortId)) {
-            case "time" -> message("ui.sort-time");
-            case "name" -> message("ui.sort-name");
-            case "amount" -> message("ui.sort-amount");
-            default -> safe(sortId);
-        };
-    }
-
-    private List<SlotItemRecord> visibleSlots(ViewState state) {
-        String normalizedSearch = normalizeToken(state.search());
-        return loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).stream()
-            .filter(item -> slotMatches(item, state.categoryId(), normalizedSearch))
-            .sorted(sortComparator(state.sortId()))
-            .toList();
-    }
-
-    private int selectedDisplaySlot(ViewState state, List<SlotItemRecord> precomputedSlots) {
-        if (!validSlot(state.selectedSlot())) {
-            return -1;
-        }
-        int pageSize = pageSize();
-        int start = (Math.max(1, state.page()) - 1) * pageSize;
-        for (int index = start; index < Math.min(precomputedSlots.size(), start + pageSize); index++) {
-            if (precomputedSlots.get(index).slot() == state.selectedSlot()) {
-                return index - start;
-            }
-        }
-        return -1;
-    }
-
-    private int actualSlotFromDisplay(ViewState state, int displaySlot) {
-        int pageSize = pageSize();
-        if (displaySlot < 0 || displaySlot >= pageSize) {
-            return -1;
-        }
-        List<SlotItemRecord> visibleSlots = visibleSlots(state);
-        int index = (Math.max(1, state.page()) - 1) * pageSize + displaySlot;
-        return index >= 0 && index < visibleSlots.size() ? visibleSlots.get(index).slot() : -1;
-    }
-
-    /**
-     * 构建共享管理界面的数据包，包含成员列表、搜索结果、自动拾取设置等。
-     */
-    private Map<String, Object> buildManagePacket(Player player, ViewState state) throws Exception {
-        Map<String, Object> packet = basePacket(player, state);
-        Map<String, Object> sharedMembers = sharedMemberPacket(player, state);
-        Map<String, Object> searchResults = searchResultPacket(state);
-        packet.put("ui", "manage");
-        packet.put("action_token", manageActionTokens.getOrDefault(player.getUniqueId(), ""));
-        putCapacityFields(player, state, packet);
-        packet.put("sharedMembers", sharedMembers);
-        packet.put("sharedMemberTexts", fieldMap(sharedMembers, "text"));
-        packet.put("sharedMemberNames", fieldMap(sharedMembers, "name"));
-        packet.put("sharedMemberRoles", fieldMap(sharedMembers, "role"));
-        packet.put("searchResults", searchResults);
-        packet.put("searchResultTexts", fieldMap(searchResults, "text"));
-        packet.put("searchResultSlots", fieldMap(searchResults, "slot"));
-        packet.put("readOnly", !canModifyCurrent(player, state));
-        packet.put("sharedEditMode", OWNER_SHARED.equals(state.ownerType()) && state.sharedEditMode());
-        packet.put("sharedCanEdit", sharedCanEdit(player, state));
-        packet.put("lockOwner", lockOwnerName(state));
-        packet.put("autoPickup", state.autoPickup());
-        packet.put("autoPickupMythic", state.autoPickupMythic());
-        packet.put("autoPickupNotify", state.autoPickupNotify());
-        packet.put("serverAutoPickup", configuration.pickup().enabled());
-        packet.put("serverMythicLoot", configuration.pickup().mythicLootEnabled());
-        packet.put("showcaseEnabled", currentShowcaseEnabled(player, state));
-        packet.put("maxManageCount", ((java.util.Map<?,?>) packet.getOrDefault("manageWarehouses", java.util.Map.of())).size());
-        packet.put("maxMemberCount", sharedMembers.size());
-        return packet;
-    }
-
-    /**
-     * 构建银行界面的数据包，包含活期余额、定期产品和当前定期列表。
-     */
-    private Map<String, Object> buildBankPacket(Player player, ViewState state) throws Exception {
-        Map<String, Object> packet = basePacket(player, state);
-        Map<String, Object> balances = bankBalancePacket(player);
-        Map<String, Object> products = depositProductPacket(player, state.selectedCurrency());
-        Map<String, Object> fixedDeposits = fixedDepositPacket(player);
-        packet.put("ui", "bank");
-        packet.put("action_token", bankActionTokens.getOrDefault(player.getUniqueId(), ""));
-        packet.put("balances", balances);
-        packet.put("balanceTexts", fieldMap(balances, "text"));
-        packet.put("products", products);
-        packet.put("productTexts", fieldMap(products, "text"));
-        packet.put("fixedDeposits", fixedDeposits);
-        packet.put("fixedDepositTexts", fieldMap(fixedDeposits, "text"));
-        packet.put("maxBalanceCount", balances.size());
-        packet.put("maxProductCount", products.size());
-        packet.put("maxFixedCount", fixedDeposits.size());
-        packet.put("selectedCurrency", state.selectedCurrency());
-        return packet;
-    }
-
-    private Map<String, Object> basePacket(Player player, ViewState state) throws Exception {
-        Map<String, Object> packet = new LinkedHashMap<>();
-        Map<String, Object> categories = categoryPacket();
-        Map<String, Object> personalWarehouses;
-        Map<String, Object> sharedWarehouses;
-        if (state.previewMode() && state.previewTargetUuid() != null) {
-            personalWarehouses = previewPersonalWarehousePacket(state.previewTargetUuid());
-            sharedWarehouses = previewSharedWarehousePacket(state.previewTargetUuid());
-        } else {
-            personalWarehouses = personalWarehousePacket(player);
-            sharedWarehouses = sharedWarehousePacket(player);
-        }
-        Map<String, Object> manageWarehouses = manageWarehousePacket(personalWarehouses, sharedWarehouses, state);
-        packet.put("packetId", configuration.ui().packetId());
-        packet.put("ownerType", state.ownerType());
-        packet.put("ownerId", state.ownerId());
-        packet.put("warehouseId", state.warehouseId());
-        packet.put("warehouseName", currentWarehouseName(player, state));
-        packet.put("categoryId", state.categoryId());
-        packet.put("search", state.search());
-        packet.put("categories", categories);
-        packet.put("categoryTexts", fieldMap(categories, "text"));
-        SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
-            ? null : secondaryPasswordSupplier.get();
-        packet.put("unlocked", passwordAccess != null && passwordAccess.isUnlocked(player));
-        packet.put("hasPassword", passwordAccess != null && passwordAccess.isPasswordSet(player));
-        packet.put("personalWarehouses", personalWarehouses);
-        packet.put("personalWarehouseTexts", fieldMap(personalWarehouses, "text"));
-        packet.put("sharedWarehouses", sharedWarehouses);
-        packet.put("sharedWarehouseStorageTexts", fieldMap(sharedWarehouses, "storageText"));
-        packet.put("sharedWarehouseManageTexts", fieldMap(sharedWarehouses, "manageText"));
-        packet.put("manageWarehouses", manageWarehouses);
-        packet.put("manageWarehouseTexts", fieldMap(manageWarehouses, "text"));
-        packet.put("manageWarehouseTypes", fieldMap(manageWarehouses, "ownerType"));
-        packet.put("manageWarehouseTargets", fieldMap(manageWarehouses, "target"));
-        packet.put("manageWarehouseSelected", fieldMap(manageWarehouses, "selected"));
-        packet.put("sharedCreateCostText", sharedCreateCostText());
-        packet.put("sharedRoleOwnerName", sharedRoleName("owner"));
-        packet.put("sharedRoleMemberName", sharedRoleName("member"));
-        packet.put("sharedRoleViewerName", sharedRoleName("viewer"));
-        packet.put("storageUiId", storageRuntimeUiId);
-        packet.put("manageUiId", manageRuntimeUiId);
-        packet.put("bankUiId", bankRuntimeUiId);
-        return packet;
-    }
-
-    private Map<String, Object> fieldMap(Map<String, Object> rows, String field) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : rows.entrySet()) {
-            Object row = entry.getValue();
-            if (row instanceof Map<?, ?> map) {
-                Object value = map.get(field);
-                result.put(entry.getKey(), value == null ? "" : value);
-            } else {
-                result.put(entry.getKey(), "");
-            }
-        }
-        return result;
-    }
-
     private void setSort(Player player, String sortId) throws Exception {
         ViewState state = state(player);
         List<String> sortIds = configuration.sortProfileIds();
         if (sortIds.isEmpty()) {
             return;
         }
-        String normalized = normalizeId(sortId);
+        String normalized = WarehouseTexts.normalizeId(sortId);
         String selected;
         if (normalized.isBlank()) {
             int currentIndex = sortIds.indexOf(state.sortId());
@@ -1628,27 +1366,27 @@ public final class WarehouseService implements Listener {
         } else if (sortIds.contains(normalized)) {
             selected = normalized;
         } else {
-            selected = sortIds.contains(normalizeId(configuration.search().defaultSortId()))
-                ? normalizeId(configuration.search().defaultSortId())
+            selected = sortIds.contains(WarehouseTexts.normalizeId(configuration.search().defaultSortId()))
+                ? WarehouseTexts.normalizeId(configuration.search().defaultSortId())
                 : sortIds.get(0);
         }
         state.setSortId(selected);
         state.setPage(1);
-        clearFilteredSelection(state);
+        packetFactory.clearFilteredSelection(state);
         refreshBoth(player);
     }
 
-    private void setCategory(Player player, String categoryId) throws Exception {
+    void setCategory(Player player, String categoryId) throws Exception {
         ViewState state = state(player);
-        state.setCategoryId(normalizeId(categoryId).isBlank() ? "all" : normalizeId(categoryId));
+        state.setCategoryId(WarehouseTexts.normalizeId(categoryId).isBlank() ? "all" : WarehouseTexts.normalizeId(categoryId));
         state.setPage(1);
-        clearFilteredSelection(state);
+        packetFactory.clearFilteredSelection(state);
         refreshBoth(player);
     }
 
     private void selectCurrency(Player player, String currencyId) throws Exception {
         ViewState state = state(player);
-        String normalized = normalizeId(currencyId);
+        String normalized = WarehouseTexts.normalizeId(currencyId);
         if (normalized.isBlank() || !configuration.bankCurrencies().contains(normalized)) {
             refreshBoth(player);
             return;
@@ -1659,22 +1397,22 @@ public final class WarehouseService implements Listener {
 
     private void setSearch(Player player, String search) throws Exception {
         ViewState state = state(player);
-        state.setSearch(crop(safe(search), 32));
+        state.setSearch(WarehouseTexts.crop(WarehouseTexts.safe(search), 32));
         state.setPage(1);
-        clearFilteredSelection(state);
+        packetFactory.clearFilteredSelection(state);
         refreshBoth(player);
     }
 
     private void setPage(Player player, int page) throws Exception {
         ViewState state = state(player);
         state.setPage(Math.max(1, page));
-        clearFilteredSelection(state);
+        packetFactory.clearFilteredSelection(state);
         sendStorage(player, "update");
     }
 
     private void selectSlot(Player player, int displaySlot) throws Exception {
         ViewState state = state(player);
-        state.setSelectedSlot(actualSlotFromDisplay(state, displaySlot));
+        state.setSelectedSlot(packetFactory.actualSlotFromDisplay(state, displaySlot));
         sendStorage(player, "update");
     }
 
@@ -1687,7 +1425,7 @@ public final class WarehouseService implements Listener {
         } else {
             state.setOwnerId(player.getUniqueId().toString());
         }
-        state.setWarehouseId(normalizeId(warehouseId).isBlank() ? firstPersonalWarehouseId() : normalizeId(warehouseId));
+        state.setWarehouseId(WarehouseTexts.normalizeId(warehouseId).isBlank() ? packetFactory.firstPersonalWarehouseId() : WarehouseTexts.normalizeId(warehouseId));
         state.setSelectedSlot(-1);
         state.setPage(1);
         state.setSharedEditMode(false);
@@ -1741,7 +1479,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        if ("edit".equalsIgnoreCase(normalizeId(mode))) {
+        if ("edit".equalsIgnoreCase(WarehouseTexts.normalizeId(mode))) {
             if (!sharedCanEdit(player, state)) {
                 state.setSharedEditMode(false);
                 sendMessage(player, false, message("player.shared-no-permission"));
@@ -1804,7 +1542,7 @@ public final class WarehouseService implements Listener {
      */
     private void depositSlot(Player player, String rawSlotValue, long requestedAmount) throws Exception {
         ViewState state = state(player);
-        debug("DEPOSIT start player=" + player.getName() + " rawArg=" + safe(rawSlotValue)
+        debug("DEPOSIT start player=" + player.getName() + " rawArg=" + WarehouseTexts.safe(rawSlotValue)
             + " amount=" + requestedAmount + " ownerType=" + state.ownerType() + " ownerId=" + state.ownerId() + " warehouseId=" + state.warehouseId());
         if (!isSecondaryUnlocked(player)) {
             debug("DEPOSIT reject player=" + player.getName() + " reason=secondary-locked");
@@ -1820,14 +1558,14 @@ public final class WarehouseService implements Listener {
         }
         int rawSlot = parseRawBackpackSlot(rawSlotValue);
         if (rawSlot < 9 || rawSlot > 44) {
-            debug("DEPOSIT reject player=" + player.getName() + " reason=invalid-raw rawArg=" + safe(rawSlotValue) + " parsed=" + rawSlot);
-            sendMessage(player, false, message("player.invalid-slot", safe(rawSlotValue)));
+            debug("DEPOSIT reject player=" + player.getName() + " reason=invalid-raw rawArg=" + WarehouseTexts.safe(rawSlotValue) + " parsed=" + rawSlot);
+            sendMessage(player, false, message("player.invalid-slot", WarehouseTexts.safe(rawSlotValue)));
             refreshBoth(player);
             return;
         }
         int slot = toBukkitBackpackSlot(rawSlot);
         ItemStack stack = player.getInventory().getItem(slot);
-        debug("DEPOSIT slot player=" + player.getName() + " rawSlot=" + rawSlot + " bukkitSlot=" + slot + " stack=" + describeStack(stack));
+        debug("DEPOSIT slot player=" + player.getName() + " rawSlot=" + rawSlot + " bukkitSlot=" + slot + " stack=" + WarehouseTexts.describeStack(stack));
         if (stack == null || stack.getType().isAir()) {
             debug("DEPOSIT reject player=" + player.getName() + " reason=empty rawSlot=" + rawSlot + " bukkitSlot=" + slot);
             sendMessage(player, false, message("player.slot-empty"));
@@ -1835,7 +1573,7 @@ public final class WarehouseService implements Listener {
             return;
         }
         if (itemMatcherSupport.matches(configuration.blacklist(), stack)) {
-            debug("DEPOSIT reject player=" + player.getName() + " reason=blacklist stack=" + describeStack(stack));
+            debug("DEPOSIT reject player=" + player.getName() + " reason=blacklist stack=" + WarehouseTexts.describeStack(stack));
             sendMessage(player, false, message("player.item-blocked"));
             refreshBoth(player);
             return;
@@ -1861,7 +1599,7 @@ public final class WarehouseService implements Listener {
             player.getInventory().setItem(slot, remaining);
         }
         player.updateInventory();
-        debug("DEPOSIT inventory-updated player=" + player.getName() + " bukkitSlot=" + slot + " newStack=" + describeStack(player.getInventory().getItem(slot)));
+        debug("DEPOSIT inventory-updated player=" + player.getName() + " bukkitSlot=" + slot + " newStack=" + WarehouseTexts.describeStack(player.getInventory().getItem(slot)));
         sendMessage(player, true, message("player.deposit-success", result.storedAmount()));
         refreshBoth(player);
     }
@@ -1948,7 +1686,7 @@ public final class WarehouseService implements Listener {
      */
     private DepositResult depositStack(Player player, String ownerType, String ownerId, String warehouseId, ItemStack stack) throws Exception {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || itemMatcherSupport.matches(configuration.blacklist(), stack)) {
-            debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=invalid-stack stack=" + describeStack(stack));
+            debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=invalid-stack stack=" + WarehouseTexts.describeStack(stack));
             return DepositResult.failure(message("player.item-not-depositable"));
         }
         if (OWNER_SHARED.equals(ownerType) && !canModifyCurrent(player, state(player))) {
@@ -1974,7 +1712,7 @@ public final class WarehouseService implements Listener {
             }
         }
         String itemData = Base64.getEncoder().encodeToString(bytes);
-        String itemHash = sha256Hex(bytes);
+        String itemHash = WarehouseTexts.sha256Hex(bytes);
         long now = System.currentTimeMillis();
         int remaining = stack.getAmount();
         long stored = 0L;
@@ -1984,7 +1722,7 @@ public final class WarehouseService implements Listener {
         synchronized (warehouseLock) {
             currentSlots = repository.loadSlots(ownerType, ownerId, warehouseId);
         debug("DEPOSIT-STACK load player=" + player.getName() + " ownerType=" + ownerType + " ownerId=" + ownerId
-            + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + shortHash(itemHash)
+            + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + WarehouseTexts.shortHash(itemHash)
             + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " blockState=" + blockStateItem);
 
         for (SlotItemRecord current : currentSlots) {
@@ -2003,12 +1741,12 @@ public final class WarehouseService implements Listener {
         }
 
         if (remaining > 0) {
-            int emptySlot = firstEmptySlot(currentSlots, currentWarehouseCapacity(player, ownerType, ownerId, warehouseId));
+            int emptySlot = firstEmptySlot(currentSlots, packetFactory.currentWarehouseCapacity(player, ownerType, ownerId, warehouseId));
             if (emptySlot >= 0) {
                 String displayName = resolveDisplayName(prototype);
                 String categoryId = resolveCategory(prototype);
                 // searchText 写 displayName（原版物品为中文翻译名，自定义物品为自定义名）
-                SearchTokens searchTokens = toSearchTokens(displayName);
+                SearchTokens searchTokens = WarehouseTexts.toSearchTokens(displayName);
                 String displayJson = itemJson(prototype, 1L);
                 repository.upsertSlot(new SlotItemRecord(
                     ownerType,
@@ -2029,7 +1767,7 @@ public final class WarehouseService implements Listener {
                     now
                 ));
                 debug("DEPOSIT-STACK insert player=" + player.getName() + " slot=" + emptySlot + " amount=" + remaining
-                    + " item=" + describeStack(prototype) + " itemJsonEmpty=" + displayJson.isBlank());
+                    + " item=" + WarehouseTexts.describeStack(prototype) + " itemJsonEmpty=" + displayJson.isBlank());
                 stored += remaining;
                 remaining = 0;
             } else {
@@ -2082,7 +1820,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        int selectedSlot = slot >= 0 && slot < pageSize() ? actualSlotFromDisplay(state, slot) : -1;
+        int selectedSlot = slot >= 0 && slot < packetFactory.pageSize() ? packetFactory.actualSlotFromDisplay(state, slot) : -1;
         if (!validSlot(selectedSlot)) {
             sendMessage(player, false, message("player.no-slot-selected"));
             refreshBoth(player);
@@ -2143,7 +1881,7 @@ public final class WarehouseService implements Listener {
      * 先通过货币桥接扣款，再写入数据库；失败时自动回滚。
      */
     private void bankDeposit(Player player, String currencyId, BigDecimal amount) throws Exception {
-        String normalized = normalizeId(currencyId);
+        String normalized = WarehouseTexts.normalizeId(currencyId);
         var bridge = currencyBridgeManager.bridge(normalized);
         if (bridge == null || !bridge.available()) {
             sendMessage(player, false, bridge == null ? message("player.unknown-currency") : bridge.unavailableReason());
@@ -2182,7 +1920,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        String normalized = normalizeId(currencyId);
+        String normalized = WarehouseTexts.normalizeId(currencyId);
         var bridge = currencyBridgeManager.bridge(normalized);
         if (bridge == null || !bridge.available()) {
             sendMessage(player, false, bridge == null ? message("player.unknown-currency") : bridge.unavailableReason());
@@ -2219,7 +1957,7 @@ public final class WarehouseService implements Listener {
      */
     private void createFixedDeposit(Player player, String productId, BigDecimal amount) throws Exception {
         DepositProductDefinition product = configuration.depositProduct(productId);
-        if (product == null || !canUseProduct(player, product)) {
+        if (product == null || !packetFactory.canUseProduct(player, product)) {
             sendMessage(player, false, message("player.fixed-deposit-unavailable"));
             refreshBoth(player);
             return;
@@ -2336,13 +2074,13 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        SharedPermissionTier tier = resolveSharedTier(player);
+        SharedPermissionTier tier = packetFactory.resolveSharedTier(player);
         if (repository.countOwnedSharedWarehouses(player.getUniqueId()) >= tier.maxOwned()) {
             sendMessage(player, false, message("player.shared-limit"));
             refreshBoth(player);
             return;
         }
-        WarehouseLevelDefinition initialLevel = sharedInitialLevel();
+        WarehouseLevelDefinition initialLevel = packetFactory.sharedInitialLevel();
         if (initialLevel == null) {
             sendMessage(player, false, message("player.shared-level-missing"));
             refreshBoth(player);
@@ -2358,7 +2096,7 @@ public final class WarehouseService implements Listener {
         long now = System.currentTimeMillis();
         String id = UUID.randomUUID().toString();
         try {
-            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "共享仓库" : rawName, 64), level, capacity, now, now, "owner", true));
+            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), WarehouseTexts.crop(rawName.isBlank() ? "共享仓库" : rawName, 64), level, capacity, now, now, "owner", true));
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
@@ -2396,7 +2134,7 @@ public final class WarehouseService implements Listener {
         if (OWNER_SHARED.equals(state.ownerType()) && sharedId.equals(state.ownerId())) {
             state.setOwnerType(OWNER_PERSONAL);
             state.setOwnerId(player.getUniqueId().toString());
-            state.setWarehouseId(firstPersonalWarehouseId());
+            state.setWarehouseId(packetFactory.firstPersonalWarehouseId());
             state.setSelectedSlot(-1);
         }
         sendMessage(player, true, message("player.shared-deleted"));
@@ -2405,7 +2143,7 @@ public final class WarehouseService implements Listener {
     }
 
     private void renameSharedWarehouse(Player player, String sharedId, String rawName) throws Exception {
-        String name = crop(safe(rawName), 64);
+        String name = WarehouseTexts.crop(WarehouseTexts.safe(rawName), 64);
         if (name.isBlank()) {
             sendMessage(player, false, message("player.shared-name-empty"));
             refreshBoth(player);
@@ -2442,7 +2180,7 @@ public final class WarehouseService implements Listener {
     }
 
     private void renamePersonalWarehouse(Player player, String warehouseId, String rawName) throws Exception {
-        String name = crop(safe(rawName), 64);
+        String name = WarehouseTexts.crop(WarehouseTexts.safe(rawName), 64);
         if (name.isBlank()) {
             sendMessage(player, false, message("player.warehouse-name-empty"));
             refreshBoth(player);
@@ -2501,13 +2239,13 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        SharedPermissionTier tier = resolveSharedTier(player);
+        SharedPermissionTier tier = packetFactory.resolveSharedTier(player);
         if (repository.countSharedMembers(sharedId) >= tier.maxMembers()) {
             sendMessage(player, false, message("player.shared-member-limit"));
             refreshBoth(player);
             return;
         }
-        String normalizedRole = switch (normalizeId(role)) {
+        String normalizedRole = switch (WarehouseTexts.normalizeId(role)) {
             case "viewer" -> "viewer";
             case "owner" -> "member";
             default -> "member";
@@ -2667,7 +2405,7 @@ public final class WarehouseService implements Listener {
     private void unlockPassword(Player player, String password) throws Exception {
         SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
             ? null : secondaryPasswordSupplier.get();
-        if (passwordAccess != null && passwordAccess.verify(player, safe(password))) {
+        if (passwordAccess != null && passwordAccess.verify(player, WarehouseTexts.safe(password))) {
             sendMessage(player, true, message("player.password-unlocked"));
         } else {
             sendMessage(player, false, message(passwordAccess == null
@@ -2684,7 +2422,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        String trimmed = safe(newPassword);
+        String trimmed = WarehouseTexts.safe(newPassword);
         int minLen = configuration.security().minLength();
         int maxLen = configuration.security().maxLength();
         if (trimmed.length() < minLen || trimmed.length() > maxLen) {
@@ -2741,11 +2479,11 @@ public final class WarehouseService implements Listener {
         state.setOwnerType(OWNER_PERSONAL);
         state.setOwnerId(player.getUniqueId().toString());
         if (state.warehouseId().isBlank() || !personalWarehouseMap(player.getUniqueId()).containsKey(state.warehouseId())) {
-            state.setWarehouseId(firstPersonalWarehouseId());
+            state.setWarehouseId(packetFactory.firstPersonalWarehouseId());
         }
     }
 
-    private ViewState state(Player player) {
+    ViewState state(Player player) {
         return viewStates.computeIfAbsent(player.getUniqueId(), ignored -> {
             // 优先从数据库加载玩家个人设置，没有记录时回退到 config.yml 全局默认值
             boolean autoPickup = configuration.pickup().autoStoreOnPickup();
@@ -2771,7 +2509,7 @@ public final class WarehouseService implements Listener {
         return repository.loadPersonalWarehouses(playerUuid);
     }
 
-    private Map<String, WarehouseRecord> personalWarehouseMap(UUID playerUuid) throws Exception {
+    Map<String, WarehouseRecord> personalWarehouseMap(UUID playerUuid) throws Exception {
         Map<String, WarehouseRecord> records = new LinkedHashMap<>();
         for (WarehouseRecord record : repository.loadPersonalWarehouses(playerUuid)) {
             records.put(record.warehouseId(), record);
@@ -2779,7 +2517,7 @@ public final class WarehouseService implements Listener {
         return records;
     }
 
-    private List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) {
+    List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) {
         try {
             return repository.loadSlots(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
@@ -2806,7 +2544,7 @@ public final class WarehouseService implements Listener {
         return -1;
     }
 
-    private boolean canModifyCurrent(Player player, ViewState state) throws Exception {
+    boolean canModifyCurrent(Player player, ViewState state) throws Exception {
         if (OWNER_PERSONAL.equals(state.ownerType())) {
             return player.getUniqueId().toString().equals(state.ownerId());
         }
@@ -2824,7 +2562,7 @@ public final class WarehouseService implements Listener {
         return lock.heldBy(player.getUniqueId());
     }
 
-    private boolean sharedCanEdit(Player player, ViewState state) throws Exception {
+    boolean sharedCanEdit(Player player, ViewState state) throws Exception {
         if (!OWNER_SHARED.equals(state.ownerType())) {
             return false;
         }
@@ -2833,7 +2571,7 @@ public final class WarehouseService implements Listener {
             .orElse(false);
     }
 
-    private boolean currentShowcaseEnabled(Player player, ViewState state) throws Exception {
+    boolean currentShowcaseEnabled(Player player, ViewState state) throws Exception {
         if (!OWNER_SHARED.equals(state.ownerType())) {
             return personalWarehouseMap(player.getUniqueId()).getOrDefault(state.warehouseId(), new WarehouseRecord(player.getUniqueId(), state.warehouseId(), 1, "", true, 0L)).showcaseEnabled();
         }
@@ -2876,7 +2614,7 @@ public final class WarehouseService implements Listener {
     }
 
     private boolean canEditShared(String role) {
-        String normalized = normalizeId(role);
+        String normalized = WarehouseTexts.normalizeId(role);
         return "owner".equals(normalized) || "member".equals(normalized);
     }
 
@@ -2964,7 +2702,7 @@ public final class WarehouseService implements Listener {
         return crossServerLockService != null ? crossServerLockService.nodeId() : "local";
     }
 
-    private String lockOwnerName(ViewState state) {
+    String lockOwnerName(ViewState state) {
         if (!OWNER_SHARED.equals(state.ownerType())) {
             return "";
         }
@@ -2977,109 +2715,6 @@ public final class WarehouseService implements Listener {
             return player == null ? lock.playerName() : player.getName();
         }
         return lock.playerName() + "@" + lock.nodeId();
-    }
-
-    private void clearFilteredSelection(ViewState state) throws Exception {
-        if (!validSlot(state.selectedSlot())) {
-            return;
-        }
-        Optional<SlotItemRecord> selected = repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), state.selectedSlot());
-        if (selected.isEmpty() || !slotMatches(selected.get(), state.categoryId(), normalizeToken(state.search()))) {
-            state.setSelectedSlot(-1);
-        }
-    }
-
-    private int pageSize() {
-        return Math.max(1, configuration.ui().pageSize());
-    }
-
-    /** 解析仓库当前容量：优先读取已购买容量，缺省回退配置初始容量，并夹在 [初始, 上限] 之间。 */
-    private long resolveCapacity(String ownerType, String ownerId, String warehouseId) throws Exception {
-        if (!OWNER_PERSONAL.equals(ownerType)) {
-            return SLOT_COUNT;
-        }
-        WarehouseDefinition definition = configuration.warehouse(warehouseId);
-        WarehouseRecord record = personalWarehouseMap(UUID.fromString(ownerId)).get(warehouseId);
-        if (definition == null || record == null) {
-            return SLOT_COUNT;
-        }
-        WarehouseLevelDefinition level = definition.level(record.level());
-        return level == null ? SLOT_COUNT : Math.max(SLOT_COUNT, level.capacity());
-    }
-
-    private long currentWarehouseCapacity(Player player, String ownerType, String ownerId, String warehouseId) throws Exception {
-        if (OWNER_SHARED.equals(ownerType)) {
-            return repository.loadSharedWarehouse(player.getUniqueId(), ownerId)
-                .map(SharedWarehouseRecord::capacity)
-                .orElse((long) SLOT_COUNT);
-        }
-        return resolveCapacity(ownerType, ownerId, warehouseId);
-    }
-
-    private void putCapacityFields(Player player, ViewState state, Map<String, Object> packet) throws Exception {
-        String ownerType = state.ownerType();
-        long capacity = currentWarehouseCapacity(player, ownerType, state.ownerId(), state.warehouseId());
-        long used = loadSlots(ownerType, state.ownerId(), state.warehouseId()).size();
-        packet.put("capacity", capacity);
-        packet.put("used", used);
-        packet.put("capacityText", used + "/" + capacity);
-        packet.put("slotCount", capacity);
-        packet.put("pageSize", pageSize());
-        packet.put("level", 1);
-        packet.put("canUpgrade", false);
-        packet.put("nextUpgradeText", message("ui.upgrade-unavailable"));
-        if (OWNER_SHARED.equals(state.ownerType())) {
-            Optional<SharedWarehouseRecord> shared = currentSharedRecord(player, state);
-            if (shared.isEmpty()) {
-                packet.put("nextUpgradeText", message("ui.select-shared"));
-                return;
-            }
-            SharedWarehouseRecord record = shared.get();
-            packet.put("level", record.level());
-            Map<Integer, WarehouseLevelDefinition> levels = configuration.shared().levels();
-            if (levels.isEmpty()) {
-                packet.put("nextUpgradeText", message("ui.shared-upgrade-not-configured"));
-                return;
-            }
-            WarehouseLevelDefinition next = levels.get(record.level() + 1);
-            if (next == null) {
-                packet.put("nextUpgradeText", message("ui.max-level"));
-                return;
-            }
-            if (!"owner".equalsIgnoreCase(record.viewerRole())) {
-                packet.put("nextUpgradeText", message("ui.shared-upgrade-owner"));
-                return;
-            }
-            WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(levels, record.level());
-            packet.put("canUpgrade", true);
-            packet.put("nextLevel", next.level());
-            packet.put("nextCapacity", next.capacity());
-            packet.put("nextUpgradeText", cost == null
-                ? message("ui.upgrade-to", next.level(), next.capacity())
-                : message("ui.upgrade-to-cost", next.level(), next.capacity(), formatCurrencyWithName(cost.currencyId(), cost.amount())));
-            return;
-        }
-        if (!OWNER_PERSONAL.equals(state.ownerType())) {
-            return;
-        }
-        WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
-        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(state.warehouseId());
-        if (definition == null || record == null) {
-            return;
-        }
-        packet.put("level", record.level());
-        WarehouseLevelDefinition next = definition.levels().get(record.level() + 1);
-        if (next == null) {
-            packet.put("nextUpgradeText", message("ui.max-level"));
-            return;
-        }
-        WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(definition.levels(), record.level());
-        packet.put("canUpgrade", true);
-        packet.put("nextLevel", next.level());
-        packet.put("nextCapacity", next.capacity());
-        packet.put("nextUpgradeText", cost == null
-            ? message("ui.upgrade-to", next.level(), next.capacity())
-            : message("ui.upgrade-to-cost", next.level(), next.capacity(), formatCurrencyWithName(cost.currencyId(), cost.amount())));
     }
 
     /**
@@ -3115,7 +2750,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(definition.levels(), record.level());
+        WarehouseModuleConfiguration.UpgradeCost cost = packetFactory.upgradeCost(definition.levels(), record.level());
         if (!withdrawCost(player, cost, message("player.unknown-upgrade-currency"))) {
             refreshBoth(player);
             return;
@@ -3132,7 +2767,7 @@ public final class WarehouseService implements Listener {
     }
 
     private void upgradeCurrentSharedWarehouse(Player player, ViewState state) throws Exception {
-        Optional<SharedWarehouseRecord> shared = currentSharedRecord(player, state);
+        Optional<SharedWarehouseRecord> shared = packetFactory.currentSharedRecord(player, state);
         if (shared.isEmpty() || !"owner".equalsIgnoreCase(shared.get().viewerRole())) {
             sendMessage(player, false, message("player.shared-upgrade-owner"));
             refreshBoth(player);
@@ -3151,7 +2786,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(levels, record.level());
+        WarehouseModuleConfiguration.UpgradeCost cost = packetFactory.upgradeCost(levels, record.level());
         if (!withdrawCost(player, cost, message("player.unknown-shared-upgrade-currency"))) {
             refreshBoth(player);
             return;
@@ -3167,395 +2802,8 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
-    private Map<String, Object> categoryPacket() {
-        Map<String, Object> result = new LinkedHashMap<>();
-        int idx = 0;
-        Map<String, Object> allRow = new LinkedHashMap<>();
-        allRow.put("id", "all");
-        allRow.put("name", message("ui.all"));
-        allRow.put("text", message("ui.all-text"));
-        result.put(Integer.toString(idx), allRow);
-        idx++;
-        for (CategoryDefinition category : configuration.categories().values().stream()
-                .sorted(Comparator.comparingInt(CategoryDefinition::priority))
-                .toList()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", category.id());
-            row.put("name", category.displayName());
-            row.put("text", message("ui.category-name", category.displayName()));
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> personalWarehousePacket(Player player) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, WarehouseRecord> records = personalWarehouseMap(player.getUniqueId());
-        int idx = 0;
-        for (WarehouseDefinition definition : configuration.warehouses().values()) {
-            if (!records.containsKey(definition.id())) {
-                continue;
-            }
-            WarehouseRecord record = records.get(definition.id());
-            WarehouseLevelDefinition level = definition.level(record.level());
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", definition.id());
-            row.put("name", ChatColor.translateAlternateColorCodes('&', definition.displayName()));
-            row.put("text", message("ui.warehouse-name", ChatColor.translateAlternateColorCodes('&', definition.displayName())));
-            row.put("level", record.level());
-            row.put("capacity", resolveCapacity(OWNER_PERSONAL, player.getUniqueId().toString(), definition.id()));
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> previewPersonalWarehousePacket(UUID targetUuid) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, WarehouseRecord> records = personalWarehouseMap(targetUuid);
-        int idx = 0;
-        for (WarehouseDefinition definition : configuration.warehouses().values()) {
-            if (!records.containsKey(definition.id())) {
-                continue;
-            }
-            WarehouseRecord record = records.get(definition.id());
-            if (!record.showcaseEnabled()) {
-                continue;
-            }
-            WarehouseLevelDefinition level = definition.level(record.level());
-            String name = record.customName() == null || record.customName().isBlank()
-                ? ChatColor.translateAlternateColorCodes('&', definition.displayName())
-                : record.customName();
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", definition.id());
-            row.put("name", name);
-            row.put("text", message("ui.warehouse-name", name));
-            row.put("level", record.level());
-            row.put("capacity", resolveCapacity(OWNER_PERSONAL, targetUuid.toString(), definition.id()));
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> previewSharedWarehousePacket(UUID targetUuid) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        int idx = 0;
-        for (SharedWarehouseRecord shared : repository.loadSharedWarehousesByOwner(targetUuid)) {
-            if (!shared.showcaseEnabled()) {
-                continue;
-            }
-            Map<String, Object> rowMap = new LinkedHashMap<>();
-            rowMap.put("id", shared.id());
-            rowMap.put("name", shared.name());
-            rowMap.put("role", shared.viewerRole());
-            rowMap.put("roleName", sharedRoleName(shared.viewerRole()));
-            rowMap.put("level", shared.level());
-            rowMap.put("storageText", message("ui.shared-name", shared.name()));
-            rowMap.put("manageText", message("ui.shared-entry", shared.name(), sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
-            rowMap.put("capacity", shared.capacity());
-            rowMap.put("lockedBy", "");
-            result.put(Integer.toString(idx), rowMap);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> manageWarehousePacket(Map<String, Object> personalWarehouses, Map<String, Object> sharedWarehouses, ViewState state) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        int idx = 0;
-        for (Map.Entry<String, Object> entry : personalWarehouses.entrySet()) {
-            if (!(entry.getValue() instanceof Map<?, ?> row)) {
-                continue;
-            }
-            String target = safe(String.valueOf(row.get("id")));
-            Map<String, Object> rowMap = new LinkedHashMap<>();
-            rowMap.put("ownerType", OWNER_PERSONAL);
-            rowMap.put("target", target);
-            rowMap.put("selected", OWNER_PERSONAL.equals(state.ownerType()) && target.equals(state.warehouseId()));
-            rowMap.put("name", safe(String.valueOf(row.get("name"))));
-            rowMap.put("text", message("ui.personal-entry", safe(String.valueOf(row.get("name"))), row.get("level"), row.get("capacity")));
-            result.put(Integer.toString(idx), rowMap);
-            idx++;
-        }
-        for (Map.Entry<String, Object> entry : sharedWarehouses.entrySet()) {
-            if (!(entry.getValue() instanceof Map<?, ?> row)) {
-                continue;
-            }
-            String target = safe(String.valueOf(row.get("id")));
-            Map<String, Object> rowMap = new LinkedHashMap<>();
-            rowMap.put("ownerType", OWNER_SHARED);
-            rowMap.put("target", target);
-            rowMap.put("selected", OWNER_SHARED.equals(state.ownerType()) && target.equals(state.ownerId()));
-            rowMap.put("name", safe(String.valueOf(row.get("name"))));
-            rowMap.put("text", safe(String.valueOf(row.get("manageText"))));
-            result.put(Integer.toString(idx), rowMap);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> sharedWarehousePacket(Player player) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        int idx = 0;
-        for (SharedWarehouseRecord shared : repository.loadSharedWarehouses(player.getUniqueId())) {
-            Map<String, Object> rowMap = new LinkedHashMap<>();
-            rowMap.put("id", shared.id());
-            rowMap.put("name", shared.name());
-            rowMap.put("role", shared.viewerRole());
-            rowMap.put("roleName", sharedRoleName(shared.viewerRole()));
-            rowMap.put("level", shared.level());
-            rowMap.put("storageText", message("ui.shared-name", shared.name()));
-            rowMap.put("manageText", message("ui.shared-entry", shared.name(), sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
-            rowMap.put("capacity", shared.capacity());
-            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false, "", configuration.search().defaultSortId())));
-            result.put(Integer.toString(idx), rowMap);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> sharedMemberPacket(Player player, ViewState state) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        if (!OWNER_SHARED.equals(state.ownerType())) {
-            return result;
-        }
-        Optional<SharedWarehouseRecord> shared = repository.loadSharedWarehouse(player.getUniqueId(), state.ownerId());
-        if (shared.isEmpty() || !"owner".equalsIgnoreCase(shared.get().viewerRole())) {
-            return result;
-        }
-        UUID ownerUuid = shared.get().ownerUuid();
-        int idx = 0;
-        for (SharedMemberRecord member : repository.loadSharedMembers(state.ownerId())) {
-            if (member.playerUuid().equals(ownerUuid)) {
-                continue;
-            }
-            OfflinePlayer offline = Bukkit.getOfflinePlayer(member.playerUuid());
-            String memberName = offline.getName() != null
-                ? offline.getName() : member.playerUuid().toString();
-            Map<String, Object> rowMap = new LinkedHashMap<>();
-            rowMap.put("uuid", member.playerUuid().toString());
-            rowMap.put("name", memberName);
-            rowMap.put("role", member.role());
-            rowMap.put("roleName", sharedRoleName(member.role()));
-            rowMap.put("text", memberName + " " + sharedRoleName(member.role()));
-            result.put(Integer.toString(idx), rowMap);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> backpackPacket(Player player) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        PlayerInventory inventory = player.getInventory();
-        for (int raw = 9; raw <= 44; raw++) {
-            int slot = toBukkitBackpackSlot(raw);
-            ItemStack item = slot >= 0 && slot < inventory.getSize() ? inventory.getItem(slot) : null;
-            if (item == null || item.getType().isAir()) {
-                result.put(Integer.toString(raw), emptyBackpackPacket(raw, slot));
-                continue;
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("key", Integer.toString(raw));
-            row.put("rawSlot", raw);
-            row.put("slot", slot);
-            row.put("empty", false);
-            row.put("name", resolveDisplayName(item));
-            row.put("amount", item.getAmount());
-            row.put("category", resolveCategory(item));
-            row.put("material", item.getType().name());
-            row.put("itemJson", itemJson(item, item.getAmount()));
-            row.put("lore", loreLines(item));
-            result.put(Integer.toString(raw), row);
-        }
-        return result;
-    }
-
-    private Map<String, Object> emptyBackpackPacket(int rawSlot, int slot) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("key", Integer.toString(rawSlot));
-        row.put("rawSlot", rawSlot);
-        row.put("slot", slot);
-        row.put("empty", true);
-        row.put("name", "");
-        row.put("amount", 0L);
-        row.put("category", "");
-        row.put("material", "");
-        row.put("itemJson", "");
-        row.put("lore", List.of());
-        return row;
-    }
-
-    private Map<String, Object> slotPacket(SlotItemRecord item) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("key", Integer.toString(item.slot()));
-        row.put("slot", item.slot());
-        row.put("empty", false);
-        row.put("name", item.displayName());
-        row.put("amount", item.amount());
-        row.put("category", item.categoryId());
-        row.put("material", item.materialId());
-        row.put("updated", TIME_FORMATTER.format(Instant.ofEpochMilli(item.updatedAt())));
-        row.put("lore", storedLoreLines(item));
-        return row;
-    }
-
-    private String displayItemJson(SlotItemRecord item) {
-        try {
-            ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-            String json = itemJson(stack, 1L);
-            return json.isBlank() ? item.itemJson() : json;
-        } catch (RuntimeException exception) {
-            return item.itemJson();
-        }
-    }
-
-    private Map<String, Object> emptySlotPacket(int slot) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("key", Integer.toString(slot));
-        row.put("slot", slot);
-        row.put("empty", true);
-        row.put("name", "");
-        row.put("amount", 0L);
-        row.put("category", "");
-        row.put("material", "");
-        row.put("updated", "");
-        row.put("lore", List.of());
-        return row;
-    }
-
-    private Map<String, Object> emptySelectionPacket() {
-        Map<String, Object> row = emptySlotPacket(-1);
-        row.put("name", message("ui.no-selected-item"));
-        row.put("lore", List.of(message("ui.select-slot")));
-        return row;
-    }
-
-    private Map<String, Object> bankBalancePacket(Player player) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        Map<String, BigDecimal> balances = repository.loadBankBalances(player.getUniqueId());
-        int idx = 0;
-        for (String currencyId : configuration.bankCurrencies()) {
-            BigDecimal balance = balances.getOrDefault(currencyId, BigDecimal.ZERO);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", currencyId);
-            row.put("name", currencyDisplayName(currencyId));
-            row.put("balance", formatCurrency(currencyId, balance));
-            row.put("text", currencyDisplayName(currencyId) + "  " + formatCurrency(currencyId, balance));
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> depositProductPacket(Player player, String selectedCurrency) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        String currencyFilter = normalizeId(selectedCurrency);
-        int idx = 0;
-        for (DepositProductDefinition product : configuration.depositProducts().values()) {
-            if (!canUseProduct(player, product)) {
-                continue;
-            }
-            if (!currencyFilter.isBlank() && !normalizeId(product.currencyId()).equals(currencyFilter)) {
-                continue;
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", product.id());
-            row.put("name", product.displayName());
-            row.put("description", product.description());
-            row.put("currency", product.currencyId());
-            row.put("currencyName", currencyDisplayName(product.currencyId()));
-            row.put("duration", product.durationSeconds());
-            row.put("durationText", formatDuration(product.durationSeconds()));
-            row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
-            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()));
-            // 利率阶梯文本：如 "1%" 或 "1%~2%"
-            String rateText;
-            if (product.interestTiers().isEmpty()) {
-                rateText = "—";
-            } else if (product.interestTiers().size() == 1) {
-                rateText = product.interestTiers().get(0).rate().multiply(BigDecimal.valueOf(100)).toPlainString() + "%";
-            } else {
-                BigDecimal minRate = product.interestTiers().stream()
-                    .map(InterestTier::rate).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-                BigDecimal maxRate = product.interestTiers().stream()
-                    .map(InterestTier::rate).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-                rateText = minRate.multiply(BigDecimal.valueOf(100)).toPlainString() + "%~" + maxRate.multiply(BigDecimal.valueOf(100)).toPlainString() + "%";
-            }
-            row.put("rateText", rateText);
-            // 利率阶梯数据，供 UI 端根据输入金额计算预期收益
-            List<Map<String, Object>> tiers = new ArrayList<>();
-            for (InterestTier tier : product.interestTiers()) {
-                Map<String, Object> tierMap = new LinkedHashMap<>();
-                tierMap.put("min", tier.minAmount().toPlainString());
-                tierMap.put("max", tier.maxAmount().toPlainString());
-                tierMap.put("rate", tier.rate().toPlainString());
-                tiers.add(tierMap);
-            }
-            row.put("tiers", tiers);
-            row.put("text", product.displayName());
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> fixedDepositPacket(Player player) throws Exception {
-        Map<String, Object> result = new LinkedHashMap<>();
-        long now = System.currentTimeMillis();
-        int idx = 0;
-        for (FixedDepositRecord deposit : repository.loadFixedDeposits(player.getUniqueId())) {
-            DepositProductDefinition productDef = configuration.depositProduct(deposit.productId());
-            String productName = productDef != null ? productDef.displayName() : deposit.productId();
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", deposit.id());
-            row.put("product", deposit.productId());
-            row.put("productName", productName);
-            row.put("currency", deposit.currencyId());
-            row.put("currencyName", currencyDisplayName(deposit.currencyId()));
-            row.put("principal", formatCurrency(deposit.currencyId(), deposit.principal()));
-            row.put("rate", deposit.interestRate().multiply(BigDecimal.valueOf(100)).toPlainString() + "%");
-            row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
-            boolean matured = deposit.maturesAt() <= now;
-            row.put("matured", matured);
-            row.put("claimed", deposit.claimed());
-            row.put("statusText", deposit.claimed() ? "&7已领取" : (matured ? "&a可领取" : "&e未到期"));
-            // 预期本息 = 本金 + 本金 × 利率
-            BigDecimal payout = deposit.principal()
-                .add(deposit.principal().multiply(deposit.interestRate()))
-                .setScale(8, java.math.RoundingMode.DOWN)
-                .stripTrailingZeros();
-            row.put("payout", formatCurrency(deposit.currencyId(), payout));
-            row.put("text", productName);
-            result.put(Integer.toString(idx), row);
-            idx++;
-        }
-        return result;
-    }
-
-    private Map<String, Object> searchResultPacket(ViewState state) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        String keyword = normalizeToken(state.search());
-        int index = 0;
-        for (SlotItemRecord item : loadSlots(state.ownerType(), state.ownerId(), state.warehouseId())) {
-            if (!slotMatches(item, state.categoryId(), keyword)) {
-                continue;
-            }
-            result.put(Integer.toString(index++), Map.of(
-                "slot", item.slot(),
-                "name", item.displayName(),
-                "amount", item.amount(),
-                "category", item.categoryId(),
-                "material", item.materialId(),
-                "text", "&0#" + item.slot() + " " + item.displayName() + "\n&7x" + item.amount() + " " + item.categoryId()
-            ));
-        }
-        return result;
-    }
-
-    private boolean slotMatches(SlotItemRecord item, String categoryId, String keyword) {
-        String normalizedCategory = normalizeId(categoryId);
+    boolean slotMatches(SlotItemRecord item, String categoryId, String keyword) {
+        String normalizedCategory = WarehouseTexts.normalizeId(categoryId);
         if (!normalizedCategory.isBlank() && !"all".equals(normalizedCategory) && !normalizedCategory.equals(item.categoryId())) {
             return false;
         }
@@ -3575,12 +2823,12 @@ public final class WarehouseService implements Listener {
         if (keyword == null || keyword.isBlank()) {
             return true;
         }
-        String normalizedSearchText = normalizeToken(searchText);
+        String normalizedSearchText = WarehouseTexts.normalizeToken(searchText);
         String normalizedPinyin = pinyin == null ? "" : pinyin.replace(" ", "");
         String normalizedInitials = initials == null ? "" : initials.replace(" ", "");
         String[] parts = keyword.split("\\s+");
         for (String part : parts) {
-            String normalizedPart = normalizeToken(part);
+            String normalizedPart = WarehouseTexts.normalizeToken(part);
             if (normalizedPart.isBlank()) {
                 continue;
             }
@@ -3593,28 +2841,7 @@ public final class WarehouseService implements Listener {
         return true;
     }
 
-    private String currentWarehouseName(Player player, ViewState state) throws Exception {
-        UUID lookupUuid = state.previewMode() && state.previewTargetUuid() != null ? state.previewTargetUuid() : player.getUniqueId();
-        if (OWNER_SHARED.equals(state.ownerType())) {
-            return repository.loadSharedWarehousesByOwner(lookupUuid).stream()
-                .filter(shared -> shared.id().equals(state.ownerId()))
-                .map(SharedWarehouseRecord::name)
-                .findFirst()
-                .orElse("共享仓库");
-        }
-        WarehouseRecord record = personalWarehouseMap(lookupUuid).get(state.warehouseId());
-        if (record != null && record.customName() != null && !record.customName().isBlank()) {
-            return record.customName();
-        }
-        WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
-        return definition == null ? "个人仓库" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
-    }
-
-    private String firstPersonalWarehouseId() {
-        return configuration.warehouses().isEmpty() ? "personal" : configuration.warehouses().keySet().iterator().next();
-    }
-
-    private int toBukkitBackpackSlot(int rawSlot) {
+    int toBukkitBackpackSlot(int rawSlot) {
         if (rawSlot >= 36 && rawSlot <= 44) {
             return rawSlot - 36;
         }
@@ -3622,7 +2849,7 @@ public final class WarehouseService implements Listener {
     }
 
     private int parseRawBackpackSlot(String rawValue) {
-        String value = safe(rawValue);
+        String value = WarehouseTexts.safe(rawValue);
         if (value.isBlank()) {
             return -1;
         }
@@ -3637,11 +2864,11 @@ public final class WarehouseService implements Listener {
         return parseRawBackpackSlot(rawValue);
     }
 
-    private boolean validSlot(int slot) {
+    boolean validSlot(int slot) {
         return slot >= 0;
     }
 
-    private String resolveDisplayName(ItemStack itemStack) {
+    String resolveDisplayName(ItemStack itemStack) {
         if (vanillaItemNameBridge != null) {
             return vanillaItemNameBridge.resolveDisplayName(itemStack);
         }
@@ -3652,7 +2879,7 @@ public final class WarehouseService implements Listener {
         return itemStack.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 
-    private String itemJson(ItemStack itemStack, long displayAmount) {
+    String itemJson(ItemStack itemStack, long displayAmount) {
         if (itemStackBridge == null || itemStack == null || itemStack.getType().isAir()) {
             return "";
         }
@@ -3660,39 +2887,14 @@ public final class WarehouseService implements Listener {
         display.setAmount((int) Math.max(1L, Math.min(displayAmount, Math.max(1, itemStack.getMaxStackSize()))));
         return itemStackBridge.itemToJson(display).orElse("");
     }
-
-    private List<String> storedLoreLines(SlotItemRecord item) {
-        try {
-            ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-            return loreLines(stack);
-        } catch (RuntimeException exception) {
-            return List.of("&f物品描述读取失败。");
-        }
-    }
-
-    private List<String> loreLines(ItemStack itemStack) {
-        if (itemStack == null) {
-            return List.of("&f这个物品没有额外描述。");
-        }
-        ItemMeta meta = itemStack.getItemMeta();
-        if (meta == null || !meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty()) {
-            return List.of("&f这个物品没有额外描述。");
-        }
-        List<String> result = new ArrayList<>();
-        for (String line : meta.getLore()) {
-            result.add(line == null ? "" : line.replace("k!", "§"));
-        }
-        return List.copyOf(result);
-    }
-
-    private String resolveCategory(ItemStack itemStack) {
+    String resolveCategory(ItemStack itemStack) {
         List<CategoryDefinition> definitions = new ArrayList<>(configuration.categories().values());
         definitions.sort(Comparator.comparingInt(CategoryDefinition::priority));
         for (CategoryDefinition definition : definitions) {
             if (definition.fallback() || definition.nbtPath().isBlank() || definition.values().isEmpty()) {
                 continue;
             }
-            String value = normalizeId(resolvePath(itemStack, definition.nbtPath()));
+            String value = WarehouseTexts.normalizeId(resolvePath(itemStack, definition.nbtPath()));
             if (!value.isBlank() && definition.values().contains(value)) {
                 return definition.id();
             }
@@ -3701,7 +2903,7 @@ public final class WarehouseService implements Listener {
     }
 
     private String resolvePath(ItemStack itemStack, String rawPath) {
-        String path = safe(rawPath).toLowerCase(Locale.ROOT);
+        String path = WarehouseTexts.safe(rawPath).toLowerCase(Locale.ROOT);
         ItemMeta meta = itemStack.getItemMeta();
         if ("material".equals(path)) {
             return itemStack.getType().name();
@@ -3736,91 +2938,40 @@ public final class WarehouseService implements Listener {
         return longValue == null ? "" : Long.toString(longValue);
     }
 
-    private boolean isSecondaryUnlocked(Player player) {
+    boolean isSecondaryUnlocked(Player player) {
         SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
             ? null : secondaryPasswordSupplier.get();
         return passwordAccess != null && passwordAccess.isUnlocked(player);
     }
 
-    private boolean verifySecondaryPassword(Player player, String password) {
+    boolean verifySecondaryPassword(Player player, String password) {
         SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
             ? null : secondaryPasswordSupplier.get();
-        return passwordAccess != null && passwordAccess.verify(player, safe(password));
+        return passwordAccess != null && passwordAccess.verify(player, WarehouseTexts.safe(password));
     }
 
-    private SharedPermissionTier resolveSharedTier(Player player) {
-        return configuration.shared().permissionTiers().values().stream()
-            .filter(tier -> tier.permission().isBlank() || player.hasPermission(tier.permission()))
-            .max(Comparator.comparingInt(SharedPermissionTier::priority))
-            .orElseGet(() -> configuration.shared().permissionTiers().values().iterator().next());
-    }
-
-    private boolean canUseProduct(Player player, DepositProductDefinition product) {
-        return product.permission().isBlank() || player.hasPermission(product.permission());
-    }
-
-    private WarehouseLevelDefinition sharedInitialLevel() {
-        Map<Integer, WarehouseLevelDefinition> levels = configuration.shared().levels();
-        if (levels.isEmpty()) {
-            return null;
-        }
-        WarehouseLevelDefinition level = levels.get(configuration.shared().defaultLevel());
-        return level == null ? levels.values().iterator().next() : level;
-    }
-
-    private WarehouseModuleConfiguration.UpgradeCost upgradeCost(Map<Integer, WarehouseLevelDefinition> levels, int currentLevel) {
-        WarehouseLevelDefinition current = levels.get(currentLevel);
-        WarehouseLevelDefinition next = levels.get(currentLevel + 1);
-        return current == null || current.upgradeCost() == null ? next == null ? null : next.upgradeCost() : current.upgradeCost();
-    }
-
-    private Optional<SharedWarehouseRecord> currentSharedRecord(Player player, ViewState state) throws Exception {
-        if (!OWNER_SHARED.equals(state.ownerType())) {
-            return Optional.empty();
-        }
-        return repository.loadSharedWarehouse(player.getUniqueId(), state.ownerId());
-    }
-
-    private String formatCurrency(String currencyId, BigDecimal amount) {
+    String formatCurrency(String currencyId, BigDecimal amount) {
         return currencyBridgeManager.format(currencyId, amount == null ? BigDecimal.ZERO : amount);
     }
-
-    /** 将秒数格式化为人类可读的期限文本，如 "7天"、"30天"、"1小时"。 */
-    private String formatDuration(long seconds) {
-        if (seconds <= 0) {
-            return "—";
-        }
-        if (seconds % 86400 == 0) {
-            return (seconds / 86400) + "天";
-        }
-        if (seconds % 3600 == 0) {
-            return (seconds / 3600) + "小时";
-        }
-        if (seconds % 60 == 0) {
-            return (seconds / 60) + "分钟";
-        }
-        return seconds + "秒";
-    }
-
-    private String currencyDisplayName(String currencyId) {
+    String currencyDisplayName(String currencyId) {
         CurrencyDefinition definition = currencyBridgeManager.definition(currencyId);
         return definition == null ? currencyId : definition.displayName();
     }
 
-    private String formatCurrencyWithName(String currencyId, BigDecimal amount) {
+    String formatCurrencyWithName(String currencyId, BigDecimal amount) {
         return formatCurrency(currencyId, amount) + " " + currencyDisplayName(currencyId);
     }
 
-    private String sharedRoleName(String role) {
+    String sharedRoleName(String role) {
         WarehouseModuleConfiguration.SharedRoleNames names = configuration.shared().roleNames();
-        return switch (normalizeId(role)) {
+        return switch (WarehouseTexts.normalizeId(role)) {
             case "owner" -> names.owner();
             case "viewer" -> names.viewer();
             default -> names.member();
         };
     }
 
-    private String sharedCreateCostText() {
+    String sharedCreateCostText() {
         WarehouseModuleConfiguration.UpgradeCost cost = configuration.shared().createCost();
         return cost == null ? message("ui.shared-create-free") : message("ui.shared-create-cost", formatCurrencyWithName(cost.currencyId(), cost.amount()));
     }
@@ -3852,7 +3003,7 @@ public final class WarehouseService implements Listener {
         }
     }
 
-    private String message(String key, Object... args) {
+    String message(String key, Object... args) {
         return messages == null ? "" : messages.get(key, args);
     }
 
@@ -3860,207 +3011,10 @@ public final class WarehouseService implements Listener {
         player.sendMessage(PREFIX + (success ? ChatColor.GREEN : ChatColor.RED) + message);
     }
 
-    private void debug(String message) {
+    void debug(String message) {
         if (configuration.debug()) {
             this.logger.info("[WarehouseDebug] " + message);
         }
-    }
-
-    private String summarizeStoragePacket(Map<String, Object> packet) {
-        Map<?, ?> slots = mapValue(packet.get("slots"));
-        Map<?, ?> backpack = mapValue(packet.get("backpack"));
-        return "ownerType=" + packet.get("ownerType")
-            + " ownerId=" + packet.get("ownerId")
-            + " warehouseId=" + packet.get("warehouseId")
-            + " page=" + packet.get("page")
-            + "/" + packet.get("pageTotal")
-            + " pageText=" + packet.get("pageText")
-            + " matchedSlots=" + packet.get("matchedSlots")
-            + " selectedSlot=" + packet.get("selectedSlot")
-            + " slots=" + slots.size()
-            + " nonEmptySlots=" + countRows(slots, false)
-            + " slotItemJson=" + countNonBlankField(slots, "itemJson")
-            + " backpack=" + backpack.size()
-            + " nonEmptyBackpack=" + countRows(backpack, false)
-            + " readOnly=" + packet.get("readOnly")
-            + " lockOwner=" + packet.get("lockOwner");
-    }
-
-    private String summarizeManagePacket(Map<String, Object> packet) {
-        return "ownerType=" + packet.get("ownerType")
-            + " ownerId=" + packet.get("ownerId")
-            + " warehouseId=" + packet.get("warehouseId")
-            + " categories=" + mapValue(packet.get("categories")).size()
-            + " personalWarehouses=" + mapValue(packet.get("personalWarehouses")).size()
-            + " sharedWarehouses=" + mapValue(packet.get("sharedWarehouses")).size()
-            + " balances=" + mapValue(packet.get("balances")).size()
-            + " products=" + mapValue(packet.get("products")).size()
-            + " fixedDeposits=" + mapValue(packet.get("fixedDeposits")).size()
-            + " sharedMembers=" + mapValue(packet.get("sharedMembers")).size()
-            + " searchResults=" + mapValue(packet.get("searchResults")).size()
-            + " readOnly=" + packet.get("readOnly")
-            + " lockOwner=" + packet.get("lockOwner");
-    }
-
-    private Map<?, ?> mapValue(Object value) {
-        return value instanceof Map<?, ?> map ? map : Map.of();
-    }
-
-    private long countRows(Map<?, ?> rows, boolean emptyValue) {
-        return rows.values().stream()
-            .filter(row -> row instanceof Map<?, ?> map && Boolean.valueOf(emptyValue).equals(map.get("empty")))
-            .count();
-    }
-
-    private long countNonBlankField(Map<?, ?> rows, String field) {
-        return rows.values().stream()
-            .filter(row -> row instanceof Map<?, ?> map && !safe(String.valueOf(map.get(field))).isBlank() && !"null".equals(String.valueOf(map.get(field))))
-            .count();
-    }
-
-    private String describeStack(ItemStack stack) {
-        if (stack == null) {
-            return "null";
-        }
-        if (stack.getType().isAir()) {
-            return stack.getType().name() + " x" + stack.getAmount();
-        }
-        ItemMeta meta = stack.getItemMeta();
-        String name = meta != null && meta.hasDisplayName() ? meta.getDisplayName() : "";
-        return stack.getType().name()
-            + " x" + stack.getAmount()
-            + " max=" + stack.getMaxStackSize()
-            + " hasMeta=" + (meta != null)
-            + (name.isBlank() ? "" : " name=" + name);
-    }
-
-    private String shortHash(String hash) {
-        String safeHash = safe(hash);
-        return safeHash.length() <= 12 ? safeHash : safeHash.substring(0, 12);
-    }
-
-    private BigDecimal parseDecimal(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(rawValue.trim());
-        } catch (NumberFormatException exception) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private int parseInt(String rawValue, int defaultValue) {
-        String value = safe(rawValue).trim();
-        if (value.isBlank()) {
-            return defaultValue;
-        }
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException exception) {
-            try {
-                return new BigDecimal(value).intValueExact();
-            } catch (ArithmeticException | NumberFormatException decimalException) {
-                return defaultValue;
-            }
-        }
-    }
-
-    private long parseLong(String rawValue, long defaultValue) {
-        String value = safe(rawValue).trim();
-        if (value.isBlank()) {
-            return defaultValue;
-        }
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException exception) {
-            try {
-                return new BigDecimal(value).longValueExact();
-            } catch (ArithmeticException | NumberFormatException decimalException) {
-                return defaultValue;
-            }
-        }
-    }
-
-    private SearchTokens toSearchTokens(String rawValue) {
-        String stripped = ChatColor.stripColor(safe(rawValue));
-        String normalized = normalizeToken(stripped);
-        StringBuilder pinyin = new StringBuilder();
-        StringBuilder initials = new StringBuilder();
-        for (char character : stripped.toCharArray()) {
-            if (Character.isWhitespace(character)) {
-                continue;
-            }
-            String[] values;
-            try {
-                values = PinyinHelper.toHanyuPinyinStringArray(character, PINYIN_FORMAT);
-            } catch (BadHanyuPinyinOutputFormatCombination ignored) {
-                values = null;
-            }
-            if (values != null && values.length > 0) {
-                // 多音字：遍历所有读音，同一字的多读音连续拼接
-                // 字之间用空格分隔，支持跨词搜索（如 "zs jian" 匹配 "钻石剑"）
-                StringBuilder charPinyin = new StringBuilder();
-                StringBuilder charInitials = new StringBuilder();
-                for (String value : values) {
-                    String candidate = value.replaceAll("[^a-z0-9]", "");
-                    if (!candidate.isBlank()) {
-                        charPinyin.append(candidate);
-                        charInitials.append(candidate.charAt(0));
-                    }
-                }
-                if (charPinyin.length() > 0) {
-                    if (pinyin.length() > 0) pinyin.append(' ');
-                    if (initials.length() > 0) initials.append(' ');
-                    pinyin.append(charPinyin);
-                    initials.append(charInitials);
-                    continue;
-                }
-            }
-            if (Character.isLetterOrDigit(character)) {
-                if (pinyin.length() > 0) pinyin.append(' ');
-                if (initials.length() > 0) initials.append(' ');
-                pinyin.append(Character.toLowerCase(character));
-                initials.append(Character.toLowerCase(character));
-            }
-        }
-        return new SearchTokens(normalized, pinyin.toString(), initials.toString());
-    }
-
-    private String sha256Hex(byte[] payload) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(payload);
-            StringBuilder builder = new StringBuilder(digest.length * 2);
-            for (byte current : digest) {
-                builder.append(Character.forDigit((current >> 4) & 0xF, 16));
-                builder.append(Character.forDigit(current & 0xF, 16));
-            }
-            return builder.toString();
-        } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("Unable to build warehouse item fingerprint.", exception);
-        }
-    }
-
-    private static String value(List<String> data, int index, String defaultValue) {
-        return data != null && data.size() > index ? safe(data.get(index)) : defaultValue;
-    }
-
-    private static String safe(String value) {
-        return value == null ? "" : value.trim();
-    }
-
-    private static String normalizeId(String value) {
-        return safe(value).toLowerCase(Locale.ROOT);
-    }
-
-    private static String normalizeToken(String value) {
-        String stripped = ChatColor.stripColor(safe(value));
-        return stripped == null ? "" : stripped.toLowerCase(Locale.ROOT).replace(" ", "");
-    }
-
-    private static String crop(String value, int maxLength) {
-        String safe = safe(value);
-        return safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
     }
 
     public record ActionResult(boolean success, String message) {
@@ -4073,7 +3027,7 @@ public final class WarehouseService implements Listener {
         }
     }
 
-    private record SearchTokens(String searchText, String pinyin, String initials) {
+    record SearchTokens(String searchText, String pinyin, String initials) {
     }
 
     private record DepositResult(boolean success, long storedAmount, int remainingAmount, String message) {
@@ -4086,7 +3040,7 @@ public final class WarehouseService implements Listener {
         }
     }
 
-    private static final class ViewState {
+    static final class ViewState {
         private String ownerType;
         private String ownerId;
         private String warehouseId;

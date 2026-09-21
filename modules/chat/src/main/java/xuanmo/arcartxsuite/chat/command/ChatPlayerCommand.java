@@ -12,7 +12,9 @@ import java.util.function.Supplier;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
+import xuanmo.arcartxsuite.chat.model.RedPacketType;
 import xuanmo.arcartxsuite.chat.service.ChatService;
+import xuanmo.arcartxsuite.chat.service.RedPacketService;
 
 /**
  * 聊天模块玩家命令处理器，实现 {@link org.bukkit.command.TabExecutor}。
@@ -22,8 +24,9 @@ import xuanmo.arcartxsuite.chat.service.ChatService;
  */
 public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> CHAT_ACTIONS = List.of("help", "channel", "toggle", "ignore", "unignore", "socialspy");
+    private static final List<String> CHAT_ACTIONS = List.of("help", "channel", "toggle", "ignore", "unignore", "socialspy", "redpacket", "grab");
     private static final List<String> TOGGLE_ACTIONS = List.of("private", "mentions");
+    private static final List<String> REDPACKET_TYPES = List.of("normal", "lucky");
     private final Supplier<ChatService> serviceProvider;
     private final CommandMode mode;
     private final MessageProvider messages;
@@ -83,6 +86,9 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
             }
             if (args.length == 2 && "toggle".equalsIgnoreCase(args[0])) {
                 return filter(TOGGLE_ACTIONS, args[1]);
+            }
+            if (args.length == 2 && "redpacket".equalsIgnoreCase(args[0])) {
+                return filter(REDPACKET_TYPES, args[1]);
             }
             if (args.length == 3 && ("toggle".equalsIgnoreCase(args[0]) || "socialspy".equalsIgnoreCase(args[0]))) {
                 return filter(List.of("on", "off"), args[2]);
@@ -172,6 +178,23 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
                 }
                 result = service.setSocialSpy(player, enabled);
             }
+            case "redpacket" -> {
+                handleRedPacketSend(player, label, args, service);
+                return true;
+            }
+            case "grab" -> {
+                if (args.length < 2) {
+                    player.sendMessage(fullMsg("player.grab-usage", label));
+                    return true;
+                }
+                RedPacketService redPacketService = service.redPacketService();
+                if (redPacketService == null) {
+                    player.sendMessage(fullMsg("redpacket.disabled"));
+                    return true;
+                }
+                redPacketService.claimPacket(player, args[1]);
+                return true;
+            }
             default -> {
                 player.sendMessage(fullMsg("player.chat-usage", label));
                 return true;
@@ -214,6 +237,43 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
         player.sendMessage(fullMsg("player.help.ignore"));
         player.sendMessage(fullMsg("player.help.unignore"));
         player.sendMessage(fullMsg("player.help.socialspy"));
+        player.sendMessage(fullMsg("player.help.redpacket"));
+        player.sendMessage(fullMsg("player.help.grab"));
+    }
+
+    /** /chat redpacket normal|lucky <总金额> <个数> [祝福语]。 */
+    private boolean handleRedPacketSend(Player player, String label, String[] args, ChatService service) {
+        RedPacketService redPacketService = service.redPacketService();
+        if (redPacketService == null) {
+            player.sendMessage(fullMsg("redpacket.disabled"));
+            return true;
+        }
+        if (args.length < 4) {
+            player.sendMessage(fullMsg("player.redpacket-usage", label));
+            return true;
+        }
+        RedPacketType type = RedPacketType.parse(args[1]);
+        if (type != RedPacketType.NORMAL && type != RedPacketType.LUCKY) {
+            player.sendMessage(fullMsg("player.redpacket-usage", label));
+            return true;
+        }
+        java.math.BigDecimal total;
+        try {
+            total = new java.math.BigDecimal(args[2]);
+        } catch (NumberFormatException exception) {
+            player.sendMessage(fullMsg("redpacket.invalid-amount"));
+            return true;
+        }
+        int count;
+        try {
+            count = Integer.parseInt(args[3]);
+        } catch (NumberFormatException exception) {
+            player.sendMessage(fullMsg("redpacket.invalid-count", 50));
+            return true;
+        }
+        String wish = args.length >= 5 ? joinTail(args, 4) : "";
+        sendResult(player, redPacketService.sendPlayerPacket(player, type, total, count, wish));
+        return true;
     }
 
     private void sendResult(Player player, ChatOperationResult result) {

@@ -25,9 +25,13 @@ import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
  */
 public final class QQBotPlayerCommand implements TabExecutor {
 
+    /** at 子命令的每玩家冷却（毫秒）——无限制时可向所有 QQ 群刷任意文本 */
+    private static final long AT_COOLDOWN_MS = 10_000L;
+
     private final Supplier<QQBotService> serviceProvider;
     private final Supplier<QQBotUiService> uiServiceProvider;
     private final MessageProvider messages;
+    private final java.util.Map<java.util.UUID, Long> atCooldowns = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 构造玩家命令处理器。
@@ -159,6 +163,17 @@ public final class QQBotPlayerCommand implements TabExecutor {
                 uiService.openAdminPanel(player);
             }
             case "at" -> {
+                // @群成员会向所有已配置 QQ 群广播文本——必须限权+冷却，防骚扰刷屏
+                if (!player.hasPermission("arcartxsuite.qqbot.at")) {
+                    player.sendMessage(fullMsg("player.admin.no-permission"));
+                    return true;
+                }
+                Long lastAt = atCooldowns.get(player.getUniqueId());
+                long now = System.currentTimeMillis();
+                if (lastAt != null && now - lastAt < AT_COOLDOWN_MS) {
+                    player.sendMessage(fullMsg("player.at.cooldown", (AT_COOLDOWN_MS - (now - lastAt)) / 1000 + 1));
+                    return true;
+                }
                 if (args.length < 3) {
                     player.sendMessage(fullMsg("player.at.usage", label));
                     return true;
@@ -176,6 +191,7 @@ public final class QQBotPlayerCommand implements TabExecutor {
                     sb.append(args[i]);
                 }
                 String msg = sb.toString();
+                atCooldowns.put(player.getUniqueId(), now);
                 // 发送到所有群（玩家绑定关系所在群由服务层处理）
                 service.sendToAllGroups("[MC] " + player.getName() + " @QQ " + targetQq + ": " + msg);
                 player.sendMessage(fullMsg("player.at.sent", targetQq));

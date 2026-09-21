@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.conversation.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import ink.ptms.chemdah.core.conversation.PlayerReply;
 import ink.ptms.chemdah.core.conversation.Session;
@@ -436,7 +435,7 @@ final class ChemdahAxRenderer {
 
     private void scheduleDialogSync(UUID playerId, DialogState state, String source) {
         try {
-            AxsScheduler.runTaskLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!plugin.isEnabled()) {
                     return;
                 }

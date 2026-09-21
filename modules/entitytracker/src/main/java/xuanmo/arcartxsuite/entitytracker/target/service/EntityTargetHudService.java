@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.entitytracker.target.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,7 +62,7 @@ public final class EntityTargetHudService implements Listener {
 
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        refreshTask = AxsScheduler.runTaskTimer(
+        refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::refreshAll,
             configuration.refreshIntervalTicks(),

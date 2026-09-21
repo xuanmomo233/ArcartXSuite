@@ -2,6 +2,8 @@ package xuanmo.arcartxsuite.menu.listener;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.bukkit.ChatColor;
@@ -28,6 +30,9 @@ import xuanmo.arcartxsuite.menu.service.MenuService;
  * 通过 {@link java.util.function.Supplier} 延迟获取 {@link MenuService} 以兼容热重载。
  */
 public final class MenuBindingListener implements Listener {
+
+    /** 物品名正则编译缓存（正则来自配置绑定，规模受配置条目约束） */
+    private static final ConcurrentMap<String, Pattern> REGEX_CACHE = new ConcurrentHashMap<>();
 
     private final Supplier<MenuService> serviceSupplier;
 
@@ -136,8 +141,10 @@ public final class MenuBindingListener implements Listener {
             }
         }
         if (binding.nameRegex() != null && !binding.nameRegex().isBlank()) {
-            if (!Pattern.compile(binding.nameRegex(), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
-                .matcher(displayName).find()) {
+            Pattern pattern = REGEX_CACHE.computeIfAbsent(
+                binding.nameRegex(),
+                r -> Pattern.compile(r, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE));
+            if (!pattern.matcher(displayName).find()) {
                 return false;
             }
         }

@@ -326,14 +326,6 @@ public record PluginConfiguration(
         return value == null ? "" : value;
     }
 
-    private static Object readPackNode(ConfigurationSection section, String path) {
-        if (section.isConfigurationSection(path)) {
-            ConfigurationSection childSection = section.getConfigurationSection(path);
-            return childSection == null ? "" : convertSection(childSection);
-        }
-        return normalizeNode(section.get(path));
-    }
-
     private static Object normalizeNode(Object node) {
         if (node == null) {
             return "";

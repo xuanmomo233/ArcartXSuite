@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.menu.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -36,6 +35,10 @@ public final class MenuActionExecutor {
     private final MenuService menuService;
     private final Logger logger;
     private final Supplier<SignalDispatchable> signalProvider;
+    /** 在途 DELAY 任务句柄——模块卸载/服务停止时统一取消，防止卸载后继续执行动作链 */
+    private final java.util.Set<org.bukkit.scheduler.BukkitTask> pendingDelayTasks =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private volatile boolean stopped;
 
     public MenuActionExecutor(
         JavaPlugin plugin,
@@ -72,7 +75,14 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                AxsScheduler.runTask(plugin, () -> player.performCommand(command));
+                // 占位符展开后统一校验：展开值（称号/displayname 等）可能携带分隔符注入多命令
+                try {
+                    xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(command);
+                } catch (IllegalArgumentException e) {
+                    logger.warning("Menu COMMAND 动作命令含分隔符，已拒绝: " + command);
+                    yield false;
+                }
+                Bukkit.getScheduler().runTask(plugin, () -> player.performCommand(command));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case CHAT -> {
@@ -81,7 +91,7 @@ public final class MenuActionExecutor {
                     yield false;
                 }
                 final String chatMessage = raw.trim();
-                AxsScheduler.runTask(plugin, () -> player.chat(chatMessage));
+                Bukkit.getScheduler().runTask(plugin, () -> player.chat(chatMessage));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case CONNECT -> {
@@ -91,7 +101,7 @@ public final class MenuActionExecutor {
                 }
                 targetServer = targetServer.trim();
                 final String serverName = targetServer;
-                AxsScheduler.runTask(plugin, () -> connectToServer(player, serverName));
+                Bukkit.getScheduler().runTask(plugin, () -> connectToServer(player, serverName));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case PLAYER_OP -> {
@@ -99,7 +109,13 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                AxsScheduler.runTask(
+                try {
+                    xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(command);
+                } catch (IllegalArgumentException e) {
+                    logger.warning("Menu PLAYER_OP 动作命令含分隔符，已拒绝: " + command);
+                    yield false;
+                }
+                Bukkit.getScheduler().runTask(
                 plugin,
                 () -> TemporaryOpExecutor.execute(player, command)
             );
@@ -110,9 +126,15 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                // 防止命令注入：清理命令分隔符
-                final String safeCommand = xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(command);
-                AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), safeCommand));
+                // 防命令注入：展开后含分隔符直接拒绝（strip 会把注入语句降级为仍可能带参数的命令继续执行）
+                try {
+                    command = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(command);
+                } catch (IllegalArgumentException e) {
+                    logger.warning("Menu CONSOLE 动作命令含分隔符，已拒绝: " + command);
+                    yield false;
+                }
+                final String safeCommand = command;
+                xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(safeCommand);
                 yield menuService.configuration().settings().closeOnAction();
             }
             case MESSAGE -> {
@@ -126,7 +148,7 @@ public final class MenuActionExecutor {
                 if (menuId.isBlank()) {
                     yield false;
                 }
-                AxsScheduler.runTask(plugin, () -> menuService.openMenu(player, menuId, 0));
+                Bukkit.getScheduler().runTask(plugin, () -> menuService.openMenu(player, menuId, 0));
                 yield false;
             }
             case CLOSE -> {
@@ -209,7 +231,19 @@ public final class MenuActionExecutor {
         executeAllFrom(player, actions, 0);
     }
 
+    /** 模块卸载/服务停止：取消全部在途延迟动作链，后续调度点不再执行。 */
+    public void shutdown() {
+        stopped = true;
+        for (org.bukkit.scheduler.BukkitTask task : pendingDelayTasks) {
+            task.cancel();
+        }
+        pendingDelayTasks.clear();
+    }
+
     private void executeAllFrom(Player player, List<MenuActionDefinition> actions, int startIndex) {
+        if (stopped) {
+            return;
+        }
         boolean shouldClose = false;
         for (int i = startIndex; i < actions.size(); i++) {
             MenuActionDefinition action = actions.get(i);
@@ -224,11 +258,19 @@ public final class MenuActionExecutor {
                     continue;
                 }
                 int nextIndex = i + 1;
-                AxsScheduler.runTaskLater(plugin, () -> {
-                    if (player.isOnline() && nextIndex < actions.size()) {
+                // holder 用于 lambda 内自移除：任务体执行时句柄已回填（调度到下一 tick 才运行）
+                org.bukkit.scheduler.BukkitTask[] holder = new org.bukkit.scheduler.BukkitTask[1];
+                holder[0] = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (holder[0] != null) {
+                        pendingDelayTasks.remove(holder[0]);
+                    }
+                    if (!stopped && player.isOnline() && nextIndex < actions.size()) {
                         executeAllFrom(player, actions, nextIndex);
                     }
                 }, delayTicks);
+                if (holder[0] != null) {
+                    pendingDelayTasks.add(holder[0]);
+                }
                 return;
             }
             shouldClose |= execute(player, action);

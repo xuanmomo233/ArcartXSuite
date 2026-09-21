@@ -125,6 +125,7 @@ ui:
     #   - max_equipped_count: 已装备分组最大数量（用于动态复制已装备项控件）
     init: |-
       var.actionBusy = false
+      var.actionToken = packet['action_token']
       var.titleListScrollRatio = 0
       var.groupScrollRatio = 0
       var.qualityScrollRatio = 0
@@ -256,6 +257,7 @@ ui:
     # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
       var.actionBusy = false
+      var.actionToken = packet['action_token']
       // 保存旧数量，用于判断是否需要重建列表
       oldMaxTitleCount = var.maxTitleCount
       oldMaxGroupCount = var.maxGroupCount
@@ -1315,7 +1317,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
+                    Packet.send('AXS_TITLE_MENU', 'equip', var.actionToken, var.selectedId)
                 children:
                   装备底:
                     type: Texture
@@ -1347,7 +1349,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
+                    Packet.send('AXS_TITLE_MENU', 'unequip_group', var.actionToken, var.selectedGroupId)
                 children:
                   卸下本组底:
                     type: Texture
@@ -1379,7 +1381,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
+                    Packet.send('AXS_TITLE_MENU', 'set_display', var.actionToken, var.selectedId)
                 children:
                   设为主展示底:
                     type: Texture
@@ -1421,7 +1423,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
+                    Packet.send('AXS_TITLE_MENU', 'hide', var.actionToken, var.selectedId)
                 children:
                   隐藏底:
                     type: Texture
@@ -1453,7 +1455,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
+                    Packet.send('AXS_TITLE_MENU', 'unhide', var.actionToken, var.selectedId)
                 children:
                   取消隐藏底:
                     type: Texture
@@ -1904,7 +1906,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send('AXS_TITLE_MENU', 'unequip_all')
+                    Packet.send('AXS_TITLE_MENU', 'unequip_all', var.actionToken)
                 children:
                   全部卸下底:
                     type: Texture

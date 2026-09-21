@@ -1,6 +1,6 @@
 # AXS 钓鱼赛季等级奖励界面
 # 打开方式: Packet.send(packetId, 'open_rewards') 或通过钓鱼主界面导航入口
-# 数据交互: packetHandler init/update
+# 数据交互: packetHandler init
 # 布局: 全屏暗色玻璃 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务）+ 垂直滚动奖励列表
 # 每个条目展示：等级要求、图标、名称、领取状态（可领取/已领取/未达标）
 # 视觉规范（钓鱼青蓝主题）:
@@ -37,6 +37,7 @@ ui:
       var.claimableCount = 0
       var.iconJsons = {}
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.level = packet['level']
       var.claimedRewards = packet['claimedRewards']
       var.rewards = packet['rewards']
@@ -74,57 +75,6 @@ ui:
         }
       }
       // 数据就绪后触发每个奖励图标的 seticon()
-      if(val.奖励列表['奖励条目'] != none && val.奖励列表['奖励条目']['图标'] != none){
-        val.奖励列表['奖励条目']['图标'].seticon()
-      }
-      for(i in range(1, var.rewardCount)){
-        key = i.round()
-        e = val.奖励列表['奖励条目' + key]
-        if(e != none && e['图标'] != none){
-          e['图标'].seticon()
-        }
-      }
-    # packetHandler: update（同 init，服务端领取后推送最新状态）
-    update: |-
-      var.packetId = packet['packetId']
-      var.level = packet['level']
-      var.claimedRewards = packet['claimedRewards']
-      var.rewards = packet['rewards']
-      oldRewardCount = var.rewardCount
-      var.rewardCount = packet['rewardCount']
-      if(var.rewards != none){
-        for(key in var.rewards.keys()){
-          json = packet['iconJson' + key]
-          if(json != none && json != ''){
-            var.iconJsons[key] = json
-          } else {
-            var.iconJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      var.claimableCount = 0
-      if(var.rewards != none){
-        for(key in var.rewards.keys()){
-          entry = var.rewards[key]
-          if(entry != none && entry['claimable'] == true){
-            var.claimableCount = var.claimableCount + 1
-          }
-        }
-      }
-      // 仅在数量变化时才 remove+copy 重建列表，避免全量重建闪烁
-      if(var.rewardCount != oldRewardCount){
-        while(val.奖励列表.childrenCount() > 1){
-          val.奖励列表.get(1).remove()
-        }
-        for(i in range(1, var.rewardCount)){
-          key = i.round()
-        if(val.奖励列表['奖励条目'] != none) {
-          e = val.奖励列表['奖励条目'].copy('奖励条目' + key)
-          e.entryKey = key
-        }
-        }
-      }
-      // 重新触发每个奖励图标的 seticon（数据变了但 seticon 不会自动刷新）
       if(val.奖励列表['奖励条目'] != none && val.奖励列表['奖励条目']['图标'] != none){
         val.奖励列表['奖励条目']['图标'].seticon()
       }
@@ -725,7 +675,7 @@ controls:
                           visible: "self.parent.entry != none && self.parent.entry['claimable'] == true"
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'claim_reward', self.parent.entry['id'])
+                            Packet.send(var.packetId, 'claim_reward', var.actionToken, self.parent.entry['id'])
                         children:
                           领取背景:
                             type: Texture

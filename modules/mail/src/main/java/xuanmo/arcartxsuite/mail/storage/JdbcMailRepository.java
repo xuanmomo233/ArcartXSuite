@@ -589,6 +589,39 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     @Override
+    public void releaseCdkClaim(String code, UUID playerUuid) throws SQLException {
+        try (Connection connection = getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement deleteClaim = connection.prepareStatement(
+                    "DELETE FROM mail_cdk_claims WHERE code = ? AND player_uuid = ?"
+                )) {
+                    deleteClaim.setString(1, code);
+                    deleteClaim.setString(2, playerUuid.toString());
+                    if (deleteClaim.executeUpdate() <= 0) {
+                        connection.rollback();
+                        return;
+                    }
+                }
+                try (PreparedStatement decrement = connection.prepareStatement(
+                    "UPDATE mail_cdk_definitions SET claimed_count = claimed_count - 1, updated_at = ? "
+                        + "WHERE code = ? AND claimed_count > 0"
+                )) {
+                    decrement.setLong(1, System.currentTimeMillis());
+                    decrement.setString(2, code);
+                    decrement.executeUpdate();
+                }
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
     public int cleanupCdks(Instant now) throws SQLException {
         int deleted;
         try (Connection connection = getConnection()) {

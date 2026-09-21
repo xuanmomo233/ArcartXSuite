@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
@@ -77,6 +78,7 @@ public final class PropDefinitionLoader {
         String permission = readString(configuration, "permission", "");
         List<String> effects = readEffects(configuration);
         List<ScriptCondition> conditions = readConditions(configuration, normalizedId, logger);
+        PropAutoTriggerDefinition auto = readAutoTrigger(configuration, normalizedId, logger);
 
         if (displayName.isBlank()) {
             displayName = normalizedId;
@@ -99,7 +101,8 @@ public final class PropDefinitionLoader {
             key,
             permission,
             effects,
-            conditions
+            conditions,
+            auto
         );
     }
 
@@ -134,6 +137,31 @@ public final class PropDefinitionLoader {
             configuration,
             logger,
             "Prop " + propId + " 条件格式无效，已跳过: "
+        );
+    }
+
+    private static PropAutoTriggerDefinition readAutoTrigger(FileConfiguration configuration, String propId, Logger logger) {
+        ConfigurationSection section = configuration.getConfigurationSection("auto");
+        if (section == null) {
+            return PropAutoTriggerDefinition.DISABLED;
+        }
+        List<ScriptCondition> conditions = ScriptConditionsLoader.load(section, "conditions");
+        if (conditions.isEmpty() && logger != null) {
+            List<?> rawConditions = section.getList("conditions");
+            if (rawConditions != null) {
+                for (Object rawCondition : rawConditions) {
+                    String line = rawCondition == null ? "" : String.valueOf(rawCondition).trim();
+                    if (!line.isBlank()) {
+                        logger.warning("Prop " + propId + " 自动触发条件格式无效，已跳过: " + line);
+                    }
+                }
+            }
+        }
+        return new PropAutoTriggerDefinition(
+            section.getBoolean("enabled", false),
+            Math.max(0, section.getInt("interval", 0)),
+            section.getBoolean("notify", true),
+            conditions
         );
     }
 

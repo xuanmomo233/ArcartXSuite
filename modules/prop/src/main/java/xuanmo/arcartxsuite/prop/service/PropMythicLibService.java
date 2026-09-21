@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.prop.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -174,7 +173,7 @@ public final class PropMythicLibService {
     }
 
     private void scheduleCleanup(UUID playerUuid, PropMythicLibModifierSpec modifier, Object handle) {
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Map<String, Object> modifiersByKey = activeModifiers.get(playerUuid);
             if (modifiersByKey == null) {
                 return;

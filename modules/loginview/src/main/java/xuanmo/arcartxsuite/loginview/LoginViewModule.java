@@ -46,7 +46,7 @@ import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
  */
 public final class LoginViewModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "migrate-authme", "migration-commands", "set-spawn", "reset-password");
+    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "migrate-authme", "migration-commands", "set-spawn", "reset-password");
     private LoginViewModuleConfiguration configuration;
     private LoginViewService service;
     private LoginViewRepository repository;
@@ -135,6 +135,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         switch (action) {
             case "help" -> sendHelp(sender, label, args[0]);
             case "status" -> sendStatus(sender);
+            case "reload" -> reload(sender);
             case "open" -> open(sender, args);
             case "migrate-authme" -> migrateAuthMe(sender, args);
             case "migration-commands" -> sendMigrationCommands(sender);
@@ -305,12 +306,12 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         String commandPrefix = "/" + label + " " + commandAlias;
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", commandPrefix));
+        sender.sendMessage(msg("help.reload", commandPrefix));
         sender.sendMessage(msg("help.open", commandPrefix));
         sender.sendMessage(msg("help.migrate", commandPrefix));
         sender.sendMessage(msg("help.migration-commands", commandPrefix));
         sender.sendMessage(msg("help.set-spawn", commandPrefix));
         sender.sendMessage(msg("help.reset-password", commandPrefix));
-        sender.sendMessage(msg("help.setup-authlib", commandPrefix));
     }
 
     private void sendStatus(CommandSender sender) {

@@ -25,38 +25,53 @@ final class QuestGpsUiPacketHandler {
         if (player == null || !player.isOnline() || packetId == null || !this.packetId.equalsIgnoreCase(packetId)) {
             return false;
         }
+        // 客户端包入口与命令路径同权限——伪造包不能绕过 questgps.use 门控
+        if (!player.hasPermission("arcartxsuite.questgps.use")) {
+            return true;
+        }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
-        switch (action) {
-            case "refresh" -> service.refreshMenu(player);
-            case "switch_category" -> service.switchCategory(player, QuestGpsCategory.parse(data.size() > 1 ? data.get(1) : "", service.categoryRegistry()));
-            case "switch_page" -> service.switchPage(player, QuestGpsPage.parse(data.size() > 1 ? data.get(1) : ""));
-            case "select_quest" -> service.selectQuest(player, data.size() > 1 ? data.get(1) : "");
-            case "accept_quest" -> service.acceptQuest(player, data.size() > 1 ? data.get(1) : "");
-            case "abandon_quest" -> service.abandonQuest(player, data.size() > 1 ? data.get(1) : "");
-            case "track_quest" -> service.trackQuest(player, data.size() > 1 ? data.get(1) : "");
-            case "track_task" -> service.trackTask(
-                player,
-                data.size() > 1 ? data.get(1) : "",
-                data.size() > 2 ? data.get(2) : ""
-            );
-            case "untrack_quest" -> service.untrackQuest(player, data.size() > 1 ? data.get(1) : "");
-            case "untrack_task" -> service.untrackTask(
-                player,
-                data.size() > 1 ? data.get(1) : "",
-                data.size() > 2 ? data.get(2) : ""
-            );
-            case "cross_world_track" -> service.crossWorldTrack(player, data.size() > 1 ? data.get(1) : "");
-            case "clear_track" -> service.clearTrack(player);
-            case "open_map" -> {
-                xuanmo.arcartxsuite.api.capability.MapNavigable map = service.mapNavigableProvider().get();
-                if (map != null) {
-                    map.openMenuFor(player, "");
-                } else {
-                    service.refreshMenu(player);
+        // 写操作需要有效动作令牌：data[1] 为 token，业务参数从 data[2] 起
+        boolean writeAction = switch (action) {
+            case "accept_quest", "abandon_quest", "track_quest", "track_task",
+                 "untrack_quest", "untrack_task", "cross_world_track", "clear_track" -> true;
+            default -> false;
+        };
+        if (writeAction && !service.beginWriteAction(player, data)) return true;
+        try {
+            switch (action) {
+                case "refresh" -> service.refreshMenu(player);
+                case "switch_category" -> service.switchCategory(player, QuestGpsCategory.parse(data.size() > 1 ? data.get(1) : "", service.categoryRegistry()));
+                case "switch_page" -> service.switchPage(player, QuestGpsPage.parse(data.size() > 1 ? data.get(1) : ""));
+                case "select_quest" -> service.selectQuest(player, data.size() > 1 ? data.get(1) : "");
+                case "accept_quest" -> service.acceptQuest(player, data.size() > 2 ? data.get(2) : "");
+                case "abandon_quest" -> service.abandonQuest(player, data.size() > 2 ? data.get(2) : "");
+                case "track_quest" -> service.trackQuest(player, data.size() > 2 ? data.get(2) : "");
+                case "track_task" -> service.trackTask(
+                    player,
+                    data.size() > 2 ? data.get(2) : "",
+                    data.size() > 3 ? data.get(3) : ""
+                );
+                case "untrack_quest" -> service.untrackQuest(player, data.size() > 2 ? data.get(2) : "");
+                case "untrack_task" -> service.untrackTask(
+                    player,
+                    data.size() > 2 ? data.get(2) : "",
+                    data.size() > 3 ? data.get(3) : ""
+                );
+                case "cross_world_track" -> service.crossWorldTrack(player, data.size() > 2 ? data.get(2) : "");
+                case "clear_track" -> service.clearTrack(player);
+                case "open_map" -> {
+                    xuanmo.arcartxsuite.api.capability.MapNavigable map = service.mapNavigableProvider().get();
+                    if (map != null) {
+                        map.openMenuFor(player, "");
+                    } else {
+                        service.refreshMenu(player);
+                    }
                 }
+                default -> service.refreshMenu(player);
             }
-            default -> service.refreshMenu(player);
+        } finally {
+            if (writeAction) service.finishWriteAction(player);
         }
         return true;
     }

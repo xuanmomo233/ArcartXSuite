@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.market;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -54,12 +53,12 @@ public class PendingDeliveryService implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         final UUID uuid = event.getPlayer().getUniqueId();
         // 异步读取队列，主线程发放（延迟确保玩家完全加载）
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             List<PendingDelivery> pending = repository.getPendingDeliveries(uuid);
             if (pending.isEmpty()) {
                 return;
             }
-            AxsScheduler.runTask(plugin, () -> flush(uuid, pending));
+            Bukkit.getScheduler().runTask(plugin, () -> flush(uuid, pending));
         }, 40L);
     }
 

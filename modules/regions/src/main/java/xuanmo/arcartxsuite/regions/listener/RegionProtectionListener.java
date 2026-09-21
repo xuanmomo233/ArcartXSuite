@@ -67,6 +67,40 @@ public final class RegionProtectionListener implements Listener {
         this.eventBusProvider = eventBusProvider;
     }
 
+    /**
+     * Paper 聊天锁（SEND_CHAT flag）：Paper 默认走 Adventure AsyncChatEvent，legacy
+     * 事件不触发。反射注册避免编译期依赖 paper-api；Spigot 上探测失败回退 legacy。
+     *
+     * @param plugin 宿主插件实例
+     */
+    @SuppressWarnings("unchecked")
+    public void registerPaperChatGuard(org.bukkit.plugin.Plugin plugin) {
+        try {
+            Class<?> paperChat = Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
+            java.lang.reflect.Method getPlayer = paperChat.getMethod("getPlayer");
+            java.lang.reflect.Method setCancelled = paperChat.getMethod("setCancelled", boolean.class);
+            org.bukkit.Bukkit.getPluginManager().registerEvent(
+                (Class<? extends org.bukkit.event.Event>) paperChat,
+                new Listener() {},
+                EventPriority.HIGH,
+                (listener, event) -> {
+                    if (!paperChat.isInstance(event)) return;
+                    try {
+                        Player player = (Player) getPlayer.invoke(event);
+                        if (isDenied(player.getLocation(), RegionFlag.SEND_CHAT, player)) {
+                            setCancelled.invoke(event, true);
+                            msg(player, config.messages().noPermissionRegion());
+                        }
+                    } catch (Exception ignored) {}
+                },
+                plugin);
+        } catch (ClassNotFoundException ignored) {
+            // Spigot/旧 Paper：legacy 监听已覆盖
+        } catch (Exception e) {
+            org.bukkit.Bukkit.getLogger().warning("[Regions] 注册 Paper AsyncChatEvent 失败: " + e.getMessage());
+        }
+    }
+
     // ─── 方块破坏 ───
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
@@ -88,8 +122,34 @@ public final class RegionProtectionListener implements Listener {
     // ─── 玩家交互 ───
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
+        // 踩踏（物理交互）：耕地 → TRAMPLE，其余压力板等 → 不归 USE 管
+        if (event.getAction() == org.bukkit.event.block.Action.PHYSICAL) {
+            if (event.getClickedBlock() != null
+                && event.getClickedBlock().getType() == Material.FARMLAND
+                && isDenied(event.getClickedBlock().getLocation(), RegionFlag.TRAMPLE, event.getPlayer())) {
+                event.setCancelled(true);
+            }
+            return;
+        }
         if (event.getClickedBlock() == null) return;
+        // 重生锚优先按 RESPAWN_ANCHORS flag 判定
+        if (event.getClickedBlock().getType() == Material.RESPAWN_ANCHOR) {
+            if (isDenied(event.getClickedBlock().getLocation(), RegionFlag.RESPAWN_ANCHORS, event.getPlayer())) {
+                event.setCancelled(true);
+                msg(event.getPlayer(), config.messages().noInteract());
+            }
+            return;
+        }
         if (isDenied(event.getClickedBlock().getLocation(), RegionFlag.USE, event.getPlayer())) {
+            event.setCancelled(true);
+            msg(event.getPlayer(), config.messages().noInteract());
+        }
+    }
+
+    // ─── 实体交互（喂食/上马/交易等，归 USE）───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onInteractEntity(PlayerInteractEntityEvent event) {
+        if (isDenied(event.getRightClicked().getLocation(), RegionFlag.USE, event.getPlayer())) {
             event.setCancelled(true);
             msg(event.getPlayer(), config.messages().noInteract());
         }
@@ -158,6 +218,8 @@ public final class RegionProtectionListener implements Listener {
         RegionFlag flag;
         if (event.getEntity() instanceof org.bukkit.entity.TNTPrimed) flag = RegionFlag.TNT;
         else if (event.getEntity() instanceof org.bukkit.entity.Creeper) flag = RegionFlag.CREEPER_EXPLOSION;
+        else if (event.getEntity() instanceof org.bukkit.entity.Wither) flag = RegionFlag.WITHER_DAMAGE;
+        else if (event.getEntity() instanceof org.bukkit.entity.Fireball) flag = RegionFlag.GHAST_FIREBALL;
         else flag = RegionFlag.OTHER_EXPLOSION;
 
         event.blockList().removeIf(block -> isDeniedAt(block.getLocation(), flag));
@@ -289,11 +351,15 @@ public final class RegionProtectionListener implements Listener {
         }
     }
 
-    // ─── 末影人拿方块 ───
+    // ─── 末影人拿方块 / 凋灵破坏 ───
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEndermanGrief(EntityChangeBlockEvent event) {
         if (event.getEntity() instanceof org.bukkit.entity.Enderman) {
             if (isDeniedAt(event.getBlock().getLocation(), RegionFlag.ENDERMAN_GRIEF)) {
+                event.setCancelled(true);
+            }
+        } else if (event.getEntity() instanceof org.bukkit.entity.Wither) {
+            if (isDeniedAt(event.getBlock().getLocation(), RegionFlag.WITHER_DAMAGE)) {
                 event.setCancelled(true);
             }
         }
@@ -427,6 +493,101 @@ public final class RegionProtectionListener implements Listener {
     public void onPotionSplash(PotionSplashEvent event) {
         if (isDeniedAt(event.getEntity().getLocation(), RegionFlag.POTION_SPLASH)) {
             event.setCancelled(true);
+        }
+    }
+
+    // ─── 载具 ───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onVehicleDestroy(org.bukkit.event.vehicle.VehicleDestroyEvent event) {
+        if (event.getAttacker() instanceof Player player) {
+            if (isDenied(event.getVehicle().getLocation(), RegionFlag.VEHICLE_DESTROY, player)) {
+                event.setCancelled(true);
+                msg(player, config.messages().noBuild());
+            }
+        } else if (isDeniedAt(event.getVehicle().getLocation(), RegionFlag.VEHICLE_DESTROY)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onVehicleCreate(org.bukkit.event.vehicle.VehicleCreateEvent event) {
+        if (isDeniedAt(event.getVehicle().getLocation(), RegionFlag.VEHICLE_PLACE)) {
+            event.setCancelled(true);
+        }
+    }
+
+    // ─── 骑乘 ───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityMount(org.spigotmc.event.entity.EntityMountEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (isDenied(event.getMount().getLocation(), RegionFlag.RIDE, player)) {
+            event.setCancelled(true);
+            msg(player, config.messages().noInteract());
+        }
+    }
+
+    // ─── 睡觉 ───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBedEnter(org.bukkit.event.player.PlayerBedEnterEvent event) {
+        if (isDenied(event.getBed().getLocation(), RegionFlag.SLEEP, event.getPlayer())) {
+            event.setCancelled(true);
+            msg(event.getPlayer(), config.messages().noInteract());
+        }
+    }
+
+    // ─── 经验掉落（死亡不掉经验）───
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        if (isDeniedAt(event.getEntity().getLocation(), RegionFlag.EXP_DROP)) {
+            event.setDroppedExp(0);
+        }
+    }
+
+    // ─── 飞行 ───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onToggleFlight(org.bukkit.event.player.PlayerToggleFlightEvent event) {
+        if (!event.isFlying()) return;
+        if (isDenied(event.getPlayer().getLocation(), RegionFlag.FLY, event.getPlayer())) {
+            event.setCancelled(true);
+            event.getPlayer().setFlying(false);
+            msg(event.getPlayer(), config.messages().noPermissionRegion());
+        }
+    }
+
+    // ─── 聊天发送（legacy 事件——Paper 上由 Adventure 事件覆盖，见模块文档局限）───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onSendChat(org.bukkit.event.player.AsyncPlayerChatEvent event) {
+        if (isDenied(event.getPlayer().getLocation(), RegionFlag.SEND_CHAT, event.getPlayer())) {
+            event.setCancelled(true);
+            msg(event.getPlayer(), config.messages().noPermissionRegion());
+        }
+    }
+
+    // ─── 挂物破坏（画/物品框，归 BLOCK_BREAK）───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onHangingBreak(HangingBreakByEntityEvent event) {
+        if (event.getRemover() instanceof Player player) {
+            if (isDenied(event.getEntity().getLocation(), RegionFlag.BLOCK_BREAK, player)) {
+                event.setCancelled(true);
+                msg(player, config.messages().noBuild());
+            }
+        }
+    }
+
+    // ─── 桶装/倒液体（倒=BLOCK_PLACE，装=BLOCK_BREAK）───
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        if (isDenied(event.getBlockClicked().getLocation(), RegionFlag.BLOCK_PLACE, event.getPlayer())) {
+            event.setCancelled(true);
+            msg(event.getPlayer(), config.messages().noBuild());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        if (isDenied(event.getBlockClicked().getLocation(), RegionFlag.BLOCK_BREAK, event.getPlayer())) {
+            event.setCancelled(true);
+            msg(event.getPlayer(), config.messages().noBuild());
         }
     }
 

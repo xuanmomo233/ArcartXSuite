@@ -139,17 +139,21 @@ public final class AriaPlayer {
     // ── 动作（副作用）────────────────────────────────────────
     /** 以玩家身份执行命令（等同玩家自己输入），返回是否执行成功。 */
     public boolean command(@NotNull String command) {
-        return player.performCommand(strip(papi(command)));
+        // 占位符展开后统一校验：含命令分隔符即拒绝（PAPI 展开值可能携带分隔符注入多命令）
+        String resolved = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(papi(command));
+        return player.performCommand(strip(resolved));
     }
 
     /** 以控制台身份执行命令，返回是否执行成功。 */
     public boolean console(@NotNull String command) {
-        return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), strip(papi(command)));
+        String resolved = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(papi(command));
+        return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), strip(resolved));
     }
 
     /** 临时给玩家 OP 权限执行命令，执行后恢复原状态。 */
     public boolean op(@NotNull String command) {
-        return TemporaryOpExecutor.execute(player, strip(papi(command)));
+        String resolved = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(papi(command));
+        return TemporaryOpExecutor.execute(player, strip(resolved));
     }
 
     /** 推荐使用的消息发送方法。 */

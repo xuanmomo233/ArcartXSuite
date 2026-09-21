@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.battlepass.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -156,13 +155,13 @@ public final class BattlePassService {
         active = true;
         // 延迟 1 tick 启动 TaskEngine，确保所有模块的 publishedTopics() 已注册到 EventBus
         // （模块加载顺序不确定，延迟到下一个 tick 时 loadAll 已完成）
-        org.bukkit.scheduler.BukkitTask delayedStart = AxsScheduler.runTask(plugin, () -> {
+        org.bukkit.scheduler.BukkitTask delayedStart = Bukkit.getScheduler().runTask(plugin, () -> {
             if (active) {
                 taskEngine.start(eventBusProvider);
             }
         });
-        saveTask = AxsScheduler.runAsyncTimer(plugin, this::flushDirtyProgress, 300L, 300L);
-        resetTask = AxsScheduler.runAsyncTimer(plugin, this::checkResets, 6000L, 6000L);
+        saveTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::flushDirtyProgress, 300L, 300L);
+        resetTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkResets, 6000L, 6000L);
     }
 
     public void shutdown() {
@@ -451,28 +450,43 @@ failedLoads.remove(uuid);
     public int claimAllRewards(Player player) {
         UUID uuid = player.getUniqueId();
         BattlePassPlayerProgress loaded = getProgress(player);
+        List<java.util.concurrent.CompletableFuture<Boolean>> futures = new ArrayList<>();
         synchronized (playerLock(uuid)) {
             BattlePassPlayerProgress progress = cachedProgress.get(uuid);
             if (progress == null) progress = loaded;
             int currentLevel = progress.currentLevel();
-            int claimedCount = 0;
             for (BattlePassReward reward : configuration.rewards()) {
                 if (reward.level() > currentLevel) continue;
                 if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
                 if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
                 String rewardId = reward.rewardId();
                 if (progress.claimedRewards().contains(rewardId)) continue;
-                rewardDispatcher.dispatch(player, reward);
-                progress = progress.withClaimedReward(rewardId);
-                persistClaimAsync(uuid, rewardId);
-                claimedCount++;
+                String seasonId = configuration.season().seasonId();
+                java.util.concurrent.CompletableFuture<Boolean> future = rewardDispatcher.dispatch(player, reward);
+                future.whenComplete((ok, err) -> {
+                    if (err == null && Boolean.TRUE.equals(ok)) {
+                        synchronized (playerLock(uuid)) {
+                            BattlePassPlayerProgress p = cachedProgress.get(uuid);
+                            if (p != null) {
+                                cachedProgress.put(uuid, p.withClaimedReward(rewardId));
+                                dirtyPlayers.add(uuid);
+                            }
+                        }
+                        persistClaimAsync(uuid, rewardId);
+                    } else {
+                        logger.warning("战令奖励发放失败 [" + uuid + "/" + rewardId + "]"
+                            + (err != null ? ": " + err.getMessage() : ""));
+                    }
+                });
+                futures.add(future);
             }
-            if (claimedCount > 0) {
-                cachedProgress.put(uuid, progress);
-                dirtyPlayers.add(uuid);
-            }
-            return claimedCount;
         }
+        // 锁外等待全部 dispatch 完成，返回真实成功数（而非发起数），供上层如实提示玩家
+        if (!futures.isEmpty()) {
+            java.util.concurrent.CompletableFuture
+                .allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+        }
+        return (int) futures.stream().filter(f -> Boolean.TRUE.equals(f.getNow(false))).count();
     }
 
     /** 领取指定等级下当前可领的全部档位奖励。 */
@@ -491,14 +505,24 @@ failedLoads.remove(uuid);
                 found = true;
                 String rewardId = reward.rewardId();
                 if (progress.claimedRewards().contains(rewardId)) continue;
-                rewardDispatcher.dispatch(player, reward);
-                progress = progress.withClaimedReward(rewardId);
+                rewardDispatcher.dispatch(player, reward).whenComplete((ok, err) -> {
+                    if (err == null && Boolean.TRUE.equals(ok)) {
+                        synchronized (playerLock(uuid)) {
+                            BattlePassPlayerProgress p = cachedProgress.get(uuid);
+                            if (p != null) {
+                                cachedProgress.put(uuid, p.withClaimedReward(rewardId));
+                                dirtyPlayers.add(uuid);
+                            }
+                        }
+                        persistClaimAsync(uuid, rewardId);
+                    } else {
+                        logger.warning("战令奖励发放失败 [" + uuid + "/" + rewardId + "]"
+                            + (err != null ? ": " + err.getMessage() : ""));
+                    }
+                });
                 claimed = true;
-                persistClaimAsync(uuid, rewardId);
             }
             if (claimed) {
-                cachedProgress.put(uuid, progress);
-                dirtyPlayers.add(uuid);
                 return ClaimResult.SUCCESS;
             }
             return found ? ClaimResult.ALREADY_CLAIMED : ClaimResult.NOT_FOUND;
@@ -507,7 +531,7 @@ failedLoads.remove(uuid);
 
     /** 领取成功后立即异步落盘，缩小崩服重复领取窗口。 */
     private void persistClaimAsync(UUID uuid, String rewardId) {
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 repository.saveClaimedReward(uuid, configuration.season().seasonId(), rewardId);
             } catch (SQLException e) {
@@ -521,7 +545,7 @@ failedLoads.remove(uuid);
         if (failedLoads.contains(uuid)) return;
         BattlePassPlayerProgress progress = cachedProgress.get(uuid);
         if (progress == null) return;
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 repository.saveProgress(progress);
                 if (cachedProgress.get(uuid) == progress) {
@@ -801,7 +825,7 @@ failedLoads.remove(playerUuid);
             boolean weeklyNeedsReset = progress.lastWeeklyResetDate() == null
                 || ChronoUnit.DAYS.between(progress.lastWeeklyResetDate(), today) >= 7;
             if (dailyNeedsReset || weeklyNeedsReset) {
-                AxsScheduler.runAsync(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
             }
         }
     }

@@ -19,3 +19,6 @@ NO_HAND: "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用"
 # {NAME} 为道具名，{CONDITION} 为未满足的条件原文。
 # 使用条件不满足提示
 CONDITION_NOT_MET: "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}"
+
+# {NAME} 为道具名。自动触发成功时发送（道具 auto.notify 控制开关）。
+AUTO_USED: "&7[&dArcartXProp&7]&f已自动使用 &a{NAME}"

@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.essentials.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -83,7 +82,7 @@ public final class TeleportService implements Listener {
     public void shutdown() {
         HandlerList.unregisterAll(this);
         for (int taskId : warmups.values()) {
-            AxsScheduler.cancelTask(taskId);
+            Bukkit.getScheduler().cancelTask(taskId);
         }
         warmups.clear();
         pendingTpa.clear();
@@ -356,7 +355,7 @@ public final class TeleportService implements Listener {
             : config.messages().tpaReceived().replace("{player}", sender.getName())));
 
         // 自动过期
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             TpaRequest req = pendingTpa.get(targetUuid);
             if (req != null && req.sender().equals(sender.getUniqueId())) {
                 pendingTpa.remove(targetUuid);
@@ -459,7 +458,7 @@ public final class TeleportService implements Listener {
             .replace("{seconds}", String.valueOf(delay)));
 
         Location startLoc = player.getLocation().clone();
-        int taskId = AxsScheduler.runTaskLater(plugin, () -> {
+        int taskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             warmups.remove(player.getUniqueId());
             if (player.isOnline()) {
                 executeTeleport(player, target, successMessage);
@@ -525,7 +524,7 @@ public final class TeleportService implements Listener {
             || player.hasPlayedBefore()) return;
         Location spawn = localSpawnBackend().getSpawn(player.getWorld());
         if (spawn == null) return;
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 player.teleport(spawn);
             }
@@ -541,7 +540,7 @@ public final class TeleportService implements Listener {
 
         if (event.getTo() != null && !event.getFrom().getBlock().equals(event.getTo().getBlock())) {
             int taskId = warmups.remove(uuid);
-            AxsScheduler.cancelTask(taskId);
+            Bukkit.getScheduler().cancelTask(taskId);
             player.sendMessage(prefix() + config.messages().teleportCancelled());
         }
     }
@@ -551,7 +550,7 @@ public final class TeleportService implements Listener {
         UUID uuid = event.getPlayer().getUniqueId();
         pendingTpa.remove(uuid);
         Integer taskId = warmups.remove(uuid);
-        if (taskId != null) AxsScheduler.cancelTask(taskId);
+        if (taskId != null) Bukkit.getScheduler().cancelTask(taskId);
     }
 
     private String prefix() {

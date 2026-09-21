@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.market;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,6 +34,7 @@ import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration;
 import xuanmo.arcartxsuite.market.listener.MarketEventListener;
 import xuanmo.arcartxsuite.market.placeholder.MarketPlaceholderExpansion;
 import xuanmo.arcartxsuite.market.storage.JdbcMarketRepository;
+import org.bukkit.Bukkit;
 
 /**
  * Market 模块主类，整合商店、拍卖、回收三大子功能。
@@ -56,6 +56,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     private static final String RECYCLE_UI_FILE_PATH = "ui/market_recycle.yml";
     private static final String HISTORY_UI_RESOURCE_PATH = "arcartx/ui/market_history.yml";
     private static final String HISTORY_UI_FILE_PATH = "ui/market_history.yml";
+    private static final String SHOP_EDIT_UI_RESOURCE_PATH = "arcartx/ui/market_shop_edit.yml";
+    private static final String SHOP_EDIT_UI_FILE_PATH = "ui/market_shop_edit.yml";
 
     private MarketModuleConfiguration configuration;
     private MarketService service;
@@ -114,6 +116,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         mappings.put(PLAYER_SHOP_UI_RESOURCE_PATH, PLAYER_SHOP_UI_FILE_PATH);
         mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
         mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
+        mappings.put(SHOP_EDIT_UI_RESOURCE_PATH, SHOP_EDIT_UI_FILE_PATH);
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 
@@ -129,7 +132,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             if (org.bukkit.Bukkit.isPrimaryThread()) {
                 current.handleClientPacket(player, packetId, data);
             } else {
-                AxsScheduler.runTask(plugin,
+                Bukkit.getScheduler().runTask(plugin,
                     () -> current.handleClientPacket(player, packetId, data));
             }
             return true;
@@ -223,7 +226,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, itemMatcher, logger, crossServer, scheduler, messages(), contentModerator);
+            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, itemMatcher, logger, crossServer, scheduler, messages(), contentModerator, scriptConditionEvaluator);
         service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setEventBusProvider(() -> getCapability(
@@ -242,6 +245,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi(configuration.ui().playerShopId(), PLAYER_SHOP_UI_FILE_PATH);
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().shopEditId(), SHOP_EDIT_UI_FILE_PATH);
 
         registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {

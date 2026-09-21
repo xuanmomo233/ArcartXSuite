@@ -20,7 +20,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.lottery.LotteryService;
 import xuanmo.arcartxsuite.lottery.config.CostConfig;
 import xuanmo.arcartxsuite.lottery.config.CasePoolConfig;
@@ -71,7 +71,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                                       @NotNull List<String> data) {
         if (!GACHA.equalsIgnoreCase(packetId) && !WISH.equalsIgnoreCase(packetId) && !CASE.equalsIgnoreCase(packetId)) return false;
         Runnable operation = () -> handle(player, packetId.toUpperCase(Locale.ROOT), data);
-        if (Bukkit.isPrimaryThread()) operation.run(); else AxsScheduler.runTask(plugin, operation);
+        if (Bukkit.isPrimaryThread()) operation.run(); else Bukkit.getScheduler().runTask(plugin, operation);
         return true;
     }
 

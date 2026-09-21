@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.eventpacket.service;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.scheduler.ScheduleSpec;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,8 +60,8 @@ public final class ScheduledCommandService {
                     );
                     runningTasks.add(handle);
                 } else {
-                    // 降级到 AxsScheduler
-                    org.bukkit.scheduler.BukkitTask bt = AxsScheduler.runTaskTimer(plugin, () -> executeTask(task), delayTicks, intervalTicks);
+                    // 降级到 Bukkit Scheduler
+                    org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskTimer(plugin, () -> executeTask(task), delayTicks, intervalTicks);
                     runningTasks.add(new ScheduledTaskHandle(bt));
                 }
             }
@@ -89,8 +88,13 @@ public final class ScheduledCommandService {
                 if (processed.contains("{player}")) {
                     // 对每个在线玩家执行一次
                     for (Player player : Bukkit.getOnlinePlayers()) {
-                        String cmd = processed.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                        try {
+                            String cmd = processed.replace("{player}",
+                                xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                        } catch (IllegalArgumentException e) {
+                            // 非法玩家名跳过该玩家，不中断整批
+                        }
                     }
                 } else {
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), processed);
@@ -102,8 +106,14 @@ public final class ScheduledCommandService {
                         && !player.hasPermission(task.permission())) {
                         continue;
                     }
-                    String cmd = processed.replace("{player}", player.getName());
-                    player.performCommand(cmd);
+                    // {player} 展开为真实玩家名，仍统一过 validatePlayerName 防线（离线服可注册特殊字符名）
+                    String safeName;
+                    try {
+                        safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
+                    } catch (IllegalArgumentException e) {
+                        continue;
+                    }
+                    player.performCommand(processed.replace("{player}", safeName));
                 }
             }
         }

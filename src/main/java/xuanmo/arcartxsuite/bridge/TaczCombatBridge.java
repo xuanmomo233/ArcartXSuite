@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,7 +29,6 @@ public final class TaczCombatBridge {
     private static final String TACZ_HURT_EVENT_CLASS = "com.tacz.guns.api.event.common.EntityHurtByGunEvent$Pre";
     private static final String TACZ_KILL_EVENT_CLASS = "com.tacz.guns.api.event.common.EntityKillByGunEvent";
     private static final String FORGE_CLASS = "net.minecraftforge.common.MinecraftForge";
-    private static final String FORGE_EVENT_BUS_INTERFACE = "net.minecraftforge.eventbus.api.IEventBus";
     private static final String FORGE_PRIORITY_CLASS = "net.minecraftforge.eventbus.api.EventPriority";
     private static final String NMS_ENTITY_CLASS = "net.minecraft.world.entity.Entity";
 
@@ -265,7 +264,7 @@ public final class TaczCombatBridge {
             if (Bukkit.isPrimaryThread()) {
                 fireEvent.run();
             } else {
-                AxsScheduler.runTask(plugin, fireEvent);
+                Bukkit.getScheduler().runTask(plugin, fireEvent);
             }
         } catch (Exception e) {
             if (debug) {
@@ -340,7 +339,7 @@ public final class TaczCombatBridge {
             if (Bukkit.isPrimaryThread()) {
                 fireEvent.run();
             } else {
-                AxsScheduler.runTask(plugin, fireEvent);
+                Bukkit.getScheduler().runTask(plugin, fireEvent);
             }
 
             if (debug) {
@@ -353,15 +352,6 @@ public final class TaczCombatBridge {
             if (debug) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().log(Level.WARNING, "[TaczCombat] 处理 TACZ 击杀事件异常", e);
             }
-        }
-    }
-
-    private void logTaczGunDamageEvent(Player attacker, LivingEntity target, double damage, boolean headShot) {
-        if (debug) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().info("[TaczCombat] 广播 TACZ 伤害 -> attacker=" + attacker.getName()
-                + ", target=" + target.getType() + "(" + target.getUniqueId() + ")"
-                + ", damage=" + String.format("%.2f", damage)
-                + ", headshot=" + headShot);
         }
     }
 

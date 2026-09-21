@@ -60,6 +60,21 @@ permission: ""
 #   - "%luckperms_primary_group% regex (战士|法师|弓手)"  # 职业为三者之一
 conditions: []
 
+# 自动触发配置（可选，整节可省略）。
+# 开启后服务端按间隔轮询该道具所在的 ArcartX 快捷槽；
+# auto.conditions 全部满足时自动使用（独立于 hand/key 开关）。
+# 自动使用仍要经过冷却、权限与上方 conditions 使用条件校验，失败一律静默跳过。
+# auto:
+#   # 是否启用自动触发。
+#   enabled: false
+#   # 检查间隔（tick，20 = 1 秒）；0 或缺省表示使用全局 auto-trigger.interval。
+#   interval: 0
+#   # 自动使用成功时是否给玩家发送提示（language.yml 的 AUTO_USED）。
+#   notify: true
+#   # 触发条件列表；格式与上方 conditions 一致，全部满足才尝试使用。
+#   conditions:
+#     - "%player_health% < 10"
+
 # 效果列表示例:
 # cmd|say hello {player}        -> 执行后台命令
 # msg|hello {player}            -> 给玩家发送消息

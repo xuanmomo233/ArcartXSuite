@@ -2,7 +2,7 @@
 # 打开方式: /market sell 或导航跳转
 # 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航) + 内容区(三区横排: 背包+信息+设置)
 # 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
-# 数据交互: packetHandler init/update
+# 数据交互: packetHandler update
 
 ui:
   isHud: false
@@ -29,43 +29,6 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    # packetHandler: init
-    # 首次接收服务端推送的上架配置数据
-    # 包字段:
-    #   - packetId: 数据包通信 ID
-    #   - auctionCurrencies: 拍卖行货币列表
-    #   - auctionMaxCurrencyCount: 拍卖行货币最大数量
-    #   - auctionDefaultCurrency: 拍卖行默认货币
-    #   - auctionPriceMin/Max: 拍卖行价格范围
-    #   - auctionMessageMaxLength: 拍卖行留言最大长度
-    #   - auctionEnabled: 拍卖行是否启用
-    #   - pshopCurrencies: 玩家商店货币列表
-    #   - pshopMaxCurrencyCount: 玩家商店货币最大数量
-    #   - pshopDefaultCurrency: 玩家商店默认货币
-    #   - pshopPriceMin/Max: 玩家商店价格范围
-    #   - pshopMessageMaxLength: 玩家商店留言最大长度
-    #   - pshopEnabled: 玩家商店是否启用
-    #   - action_token: 操作令牌
-    init: |-
-      var.packetId = packet['packetId']
-      var.auctionCurrencies = packet['auctionCurrencies']
-      var.auctionMaxCurrencyCount = packet['auctionMaxCurrencyCount']
-      var.auctionDefaultCurrency = packet['auctionDefaultCurrency']
-      var.auctionPriceMin = packet['auctionPriceMin']
-      var.auctionPriceMax = packet['auctionPriceMax']
-      var.auctionMessageMaxLength = packet['auctionMessageMaxLength']
-      var.auctionEnabled = packet['auctionEnabled']
-      var.pshopCurrencies = packet['pshopCurrencies']
-      var.pshopMaxCurrencyCount = packet['pshopMaxCurrencyCount']
-      var.pshopDefaultCurrency = packet['pshopDefaultCurrency']
-      var.pshopPriceMin = packet['pshopPriceMin']
-      var.pshopPriceMax = packet['pshopPriceMax']
-      var.pshopMessageMaxLength = packet['pshopMessageMaxLength']
-      var.pshopEnabled = packet['pshopEnabled']
-      var.actionToken = packet['action_token']
-      var.selectedMode = var.auctionEnabled ? 'auction' : 'pshop'
-      var.syncMode()
-      var.actionBusy = false
     # packetHandler: update
     update: |-
       var.auctionCurrencies = packet['auctionCurrencies']

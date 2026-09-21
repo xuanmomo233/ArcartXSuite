@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.chat.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.sql.SQLException;
@@ -96,6 +95,7 @@ public final class ChatService implements Listener {
     private final VanillaItemNameBridge vanillaItemNameBridge;
 
     private CrossServerChannel crossServerChannel;
+    private RedPacketService redPacketService;
     private BukkitTask cleanupTask;
     private boolean paperChatEventRegistered;
     private volatile boolean paperChatEventObserved;
@@ -163,6 +163,20 @@ public final class ChatService implements Listener {
     }
 
     /**
+     * 注入红包服务（由 ChatModule 在 startService 后设置）。
+     */
+    public void setRedPacketService(RedPacketService redPacketService) {
+        this.redPacketService = redPacketService;
+    }
+
+    /**
+     * 红包服务实例，供玩家/管理员命令调用。未接入时返回 {@code null}。
+     */
+    public RedPacketService redPacketService() {
+        return redPacketService;
+    }
+
+    /**
      * 注入 Tooltip 数据提供者（由 ChatModule 在 startService 后设置）。
      * <p>
      * 用于聊天物品预览时，将客户端采集的动态 tooltip 文本行注入物品 NBT Lore，
@@ -188,7 +202,7 @@ public final class ChatService implements Listener {
             state(player.getUniqueId());
             currentMute(player.getUniqueId());
         }
-        cleanupTask = AxsScheduler.runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
+        cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
         broadcastCompletionPlayerList();
     }
 
@@ -203,6 +217,10 @@ public final class ChatService implements Listener {
     }
 
     public void shutdown() {
+        if (redPacketService != null) {
+            redPacketService.shutdown();
+            redPacketService = null;
+        }
         if (cleanupTask != null) {
             cleanupTask.cancel();
             cleanupTask = null;
@@ -546,7 +564,7 @@ public final class ChatService implements Listener {
     private void dispatchOrDeferToPaper(Player player, String message) {
         if (paperChatEventRegistered) {
             if (!paperChatEventObserved) {
-                AxsScheduler.runTaskLater(plugin, () -> {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (!paperChatEventObserved) {
                         scheduleChatMessage(player, message);
                     }
@@ -564,6 +582,10 @@ public final class ChatService implements Listener {
         currentMute(event.getPlayer().getUniqueId());
         updateMentionCompletions(event.getPlayer(), true);
         broadcastCompletionPlayerList();
+        RedPacketService service = redPacketService;
+        if (service != null) {
+            service.onPlayerJoin(event.getPlayer());
+        }
     }
 
     @EventHandler
@@ -935,6 +957,13 @@ public final class ChatService implements Listener {
         if (payload == null || payload.isBlank()) {
             return;
         }
+        if (payload.startsWith(RedPacketService.CROSS_PREFIX)) {
+            RedPacketService service = redPacketService;
+            if (service != null) {
+                service.handleRemotePayload(payload);
+            }
+            return;
+        }
         try {
             handleRemoteEnvelope(ChatEnvelopeCodec.decode(payload));
         } catch (Exception exception) {
@@ -1211,7 +1240,7 @@ public final class ChatService implements Listener {
             return;
         }
         // Delay 1 tick: client may not be ready to receive chat completions during PlayerJoinEvent
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             try {
                 if (join) {
                     if (!player.isOnline()) return;
@@ -1253,7 +1282,7 @@ public final class ChatService implements Listener {
         if (!configuration.functions().mentionEnabled()) {
             return;
         }
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             try {
                 List<String> names = new ArrayList<>();
                 for (Player online : Bukkit.getOnlinePlayers()) {
@@ -1271,7 +1300,7 @@ public final class ChatService implements Listener {
     }
 
     private void scheduleChatMessage(Player player, String message) {
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             ChatOperationResult result = handleChatMessage(player, message);
             if (!result.success() && !result.cardNotified()) {
                 player.sendMessage(PREFIX + ChatColor.RED + result.message());
@@ -1279,7 +1308,7 @@ public final class ChatService implements Listener {
         });
     }
 
-    private boolean canReceivePublic(ChatChannelDefinition channel, Player localSender, UUID senderUuid, Player recipient) {
+    boolean canReceivePublic(ChatChannelDefinition channel, Player localSender, UUID senderUuid, Player recipient) {
         if (recipient == null || !recipient.isOnline()) {
             return false;
         }
@@ -1397,11 +1426,27 @@ public final class ChatService implements Listener {
         console.sendMessage(ChatColor.stripColor(ChatFormatSupport.plainText(consoleText, itemPreview)));
     }
 
-    private ChatChannelDefinition channel(String channelId) {
+    ChatChannelDefinition channel(String channelId) {
         if (channelId == null || channelId.isBlank()) {
             return configuration.channel(configuration.defaultChannelId());
         }
         return configuration.channel(channelId);
+    }
+
+    /** 玩家当前所在频道，缺失时回退默认频道。 */
+    ChatChannelDefinition currentChannel(Player player) {
+        if (player == null) {
+            return channel(configuration.defaultChannelId());
+        }
+        ChatChannelDefinition channel = channel(state(player.getUniqueId()).currentChannelId());
+        return channel == null ? channel(configuration.defaultChannelId()) : channel;
+    }
+
+    /** 向跨服通道发布自定义负载（红包等非聊天信封消息）。 */
+    void publishCrossServer(String payload) {
+        if (crossServerChannel != null && crossServerChannel.isActive()) {
+            crossServerChannel.publish(payload);
+        }
     }
 
     private ChatChannelDefinition privateChannel() {
@@ -1671,7 +1716,7 @@ public final class ChatService implements Listener {
         tabRefreshable.requestViewerRefresh(viewer, reason);
     }
 
-    private String nodeId() {
+    String nodeId() {
         return crossServer.nodeId();
     }
 

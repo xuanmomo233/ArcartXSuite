@@ -1,6 +1,6 @@
 # AXS 钓鱼饵料管理界面
 # 打开方式: /fishing baits 或钓鱼主界面点击饵料按钮
-# 数据交互: packetHandler init/update（服务端 pushBaitsData 发送 init/update 包）
+# 数据交互: packetHandler init（服务端 pushBaitsData 发送 init 包）
 # 全屏布局 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务/饵料，当前高亮"饵料"）+ 右侧内容区
 # 右侧内容区分为两部分：
 #   上方：饵料队列槽位（横向排列，数量由 packet.baitSlots 决定，每个槽位显示饵料图标+数量，点击取出）
@@ -12,7 +12,7 @@
 #   主色（青蓝）50,170,200   悬停高亮 80,200,220
 #   文字默认 &f
 #
-# 数据包格式（packetHandler init/update）:
+# 数据包格式（packetHandler init）:
 #   packetId: "AXS_FISHING_BAITS"
 #   baitSlots: 饵料槽数量（int）
 #   queue:    { "0": {slotIndex, baitId, amount, displayName}, ... }  — 当前队列中各槽位的饵料
@@ -49,6 +49,7 @@ ui:
       var.selectedInvSlot = none
       var.selectedQueueSlot = none
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.baitSlots = packet['baitSlots']
       var.baitSlotsBase = packet['baitSlotsBase']
       var.baitSlotsBonus = packet['baitSlotsBonus']
@@ -94,51 +95,6 @@ ui:
       // 操作后清除选中状态
       var.selectedInvSlot = none
       var.selectedQueueSlot = none
-    # packetHandler: update
-    # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
-    update: |-
-      var.queueIconJsons = {}
-      var.packetId = packet['packetId']
-      var.baitSlots = packet['baitSlots']
-      var.baitSlotsBase = packet['baitSlotsBase']
-      var.baitSlotsBonus = packet['baitSlotsBonus']
-      var.queue = packet['queue']
-      var.baits = packet['baits']
-      if(var.queue != none){
-        for(key in var.queue.keys()){
-          json = packet['queueIconJson' + key]
-          if(json != none && json != ''){
-            var.queueIconJsons[key] = json
-          } else {
-            var.queueIconJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      while(val.饵料队列.childrenCount() > 1){
-        val.饵料队列.get(1).remove()
-      }
-      if(var.baitSlots != none && var.baitSlots > 1){
-        for(i in range(1, var.baitSlots - 1)){
-          key = i.round()
-          if(val.饵料队列['队列槽'] != none) {
-            e = val.饵料队列['队列槽'].copy('队列槽' + key)
-            e.entryKey = key
-          }
-        }
-      }
-      if(val.饵料队列['队列槽'] != none && val.饵料队列['队列槽']['队列槽图标'] != none){
-        val.饵料队列['队列槽']['队列槽图标'].seticon()
-      }
-      if(var.baitSlots != none && var.baitSlots > 1){
-        for(i in range(1, var.baitSlots - 1)){
-          key = i.round()
-          e = val.饵料队列['队列槽' + key]
-          if(e != none && e['队列槽图标'] != none){
-            e['队列槽图标'].seticon()
-          }
-        }
-      }
-      // 不重置 selectedInvSlot/selectedQueueSlot，保留选中状态供连续操作
   action:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
@@ -671,18 +627,18 @@ controls:
                       clickLeft: |-
                         if(var.selectedInvSlot != none){
                           // 选中背包槽：左键放1个
-                          Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, 1.round())
+                          Packet.send(var.packetId, 'put_bait', var.actionToken, var.selectedInvSlot, self.entryKey, 1.round())
                         } else {
                           // 未选中背包槽：左键取出，同时清除队列选中状态
                           var.selectedQueueSlot = none
                           if(self.queueEntry != none){
-                            Packet.send(var.packetId, 'take_bait', self.entryKey, 0.round())
+                            Packet.send(var.packetId, 'take_bait', var.actionToken, self.entryKey, 0.round())
                           }
                         }
                       clickRight: |-
                         if(var.selectedInvSlot != none){
                           // 选中背包槽：右键放全部（amount=-1）
-                          Packet.send(var.packetId, 'put_bait', var.selectedInvSlot, self.entryKey, (-1).round())
+                          Packet.send(var.packetId, 'put_bait', var.actionToken, var.selectedInvSlot, self.entryKey, (-1).round())
                         } else {
                           // 未选中背包槽：右键选中队列槽用于交换
                           if(var.selectedQueueSlot == self.entryKey){
@@ -691,7 +647,7 @@ controls:
                           } else {
                             if(var.selectedQueueSlot != none){
                               // 已选中队列槽 → 与当前槽位交换
-                              Packet.send(var.packetId, 'swap_bait', var.selectedQueueSlot, self.entryKey)
+                              Packet.send(var.packetId, 'swap_bait', var.actionToken, var.selectedQueueSlot, self.entryKey)
                               var.selectedQueueSlot = none
                             } else {
                               // 选中当前队列槽

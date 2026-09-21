@@ -55,8 +55,8 @@ public class ScheduledSwapStrategy implements DynamicShopStrategy {
     public void onTrigger(DynamicShopContext context) {
         if (config == null || config.itemSets().isEmpty()) return;
 
-        // 轮换到下一个商品集
-        int idx = currentSetIndex.getAndIncrement() % config.itemSets().size();
+        // 轮换到下一个商品集（floorMod：计数器溢出为负时仍得到合法非负索引）
+        int idx = Math.floorMod(currentSetIndex.getAndIncrement(), config.itemSets().size());
         String setName = new java.util.ArrayList<>(config.itemSets().keySet()).get(idx);
         List<PoolEntry> entries = config.itemSets().get(setName);
 
@@ -85,7 +85,8 @@ public class ScheduledSwapStrategy implements DynamicShopStrategy {
             new ItemDefinition(entry.itemSource(), entry.itemId(), entry.itemNbt()),
             entry.displayName(), entry.buyPrice(), entry.sellPrice(), entry.currency(),
             entry.stockMode(), entry.stockAmount(),
-            entry.limitPerPlayer(), entry.limitReset(), java.util.Map.of()
+            entry.limitPerPlayer(), entry.limitReset(), java.util.Map.of(),
+            java.util.List.of()
         );
     }
 
@@ -133,7 +134,8 @@ public class ScheduledSwapStrategy implements DynamicShopStrategy {
             key, ShopItemType.ITEM, null, java.util.List.of(),
             new ItemDefinition(source, id, null),
             display, buyPrice, sellPrice, currency,
-            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of()
+            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of(),
+            java.util.List.of()
         );
     }
 }

@@ -564,10 +564,6 @@ public final class MapSnapshotBuilder {
         return null;
     }
 
-    private static double clip(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
     /** 详情面板位置信息行：世界显示名 + 整数坐标（世界名为空时只显示坐标）。 */
     private static String locationText(String worldName, double x, double y, double z) {
         String coords = Math.round(x) + ", " + Math.round(y) + ", " + Math.round(z);

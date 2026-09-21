@@ -18,3 +18,15 @@ mythiclib:
   # 最终会生成:
   #   <前缀>_<PROP_ID>_<STAT>
   source-prefix: "AXS_PROP"
+
+auto-trigger:
+  # 自动触发总开关。开启后服务端按固定间隔轮询在线玩家的快捷槽，
+  # 对配置了 auto.enabled 且满足 auto.conditions 的道具自动执行使用流程。
+  enabled: false
+  # 全局轮询间隔（tick，20 = 1 秒）。
+  # 单个道具可用 auto.interval 覆盖，但实际检查粒度不会比该值更细。
+  interval: 20
+  # 同一轮多个槽位道具同时满足触发条件时的处理模式:
+  #   all   -> 全部尝试触发（各自受自己的冷却组限制）
+  #   first -> 按槽位顺序，第一个成功触发后停止本轮
+  mode: "all"

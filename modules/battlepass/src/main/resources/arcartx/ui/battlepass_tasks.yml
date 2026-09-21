@@ -1,6 +1,6 @@
 # AXS BattlePass 任务列表界面
 # 打开方式: 主界面点击任务按钮 或 /bp tasks 命令
-# 数据交互: packetHandler init/update/progress
+# 数据交互: packetHandler init
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/奖励/任务）+ 每日/每周/赛季三区滚动列表
 # 视觉规范:
 #   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
@@ -78,81 +78,6 @@ ui:
           e.entryKey = key
         }
       }
-    # packetHandler: update
-    # 数据更新时接收服务端任务数据包，刷新 UI 变量（字段与 init 相同）
-    # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
-    # 任务项子控件通过 entry: 数据绑定自动刷新，无需重建即可更新文本/进度/颜色
-    update: |-
-      var.packetId = packet['packetId']
-      var.dailyTasks = packet['dailyTasks']
-      var.weeklyTasks = packet['weeklyTasks']
-      var.seasonTasks = packet['seasonTasks']
-      var.dailyTaskCount = packet['dailyTaskCount']
-      var.weeklyTaskCount = packet['weeklyTaskCount']
-      var.seasonTaskCount = packet['seasonTaskCount']
-      var.totalTaskCount = packet['totalTaskCount']
-      var.dailyCompletedCount = packet['dailyCompletedCount']
-      var.weeklyCompletedCount = packet['weeklyCompletedCount']
-      var.seasonCompletedCount = packet['seasonCompletedCount']
-      // 保存旧数量，用于判断是否需要重建列表
-      oldMaxDailyCount = var.maxDailyCount
-      oldMaxWeeklyCount = var.maxWeeklyCount
-      oldMaxSeasonCount = var.maxSeasonCount
-      // 更新数量
-      var.maxDailyCount = packet['maxDailyCount']
-      var.maxWeeklyCount = packet['maxWeeklyCount']
-      var.maxSeasonCount = packet['maxSeasonCount']
-      // ── 每日任务列表：仅在数量变化时重建 ──
-      if(var.maxDailyCount != oldMaxDailyCount){
-        while(val.每日任务列表.childrenCount() > 1){
-          val.每日任务列表.get(1).remove()
-        }
-        for(i in range(1, var.maxDailyCount - 1)){
-          key = i.round()
-        if(val.每日任务列表['任务项'] != none) {
-          e = val.每日任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
-        }
-        }
-      }
-      // ── 每周任务列表：仅在数量变化时重建 ──
-      if(var.maxWeeklyCount != oldMaxWeeklyCount){
-        while(val.每周任务列表.childrenCount() > 1){
-          val.每周任务列表.get(1).remove()
-        }
-        for(i in range(1, var.maxWeeklyCount - 1)){
-          key = i.round()
-        if(val.每周任务列表['任务项'] != none) {
-          e = val.每周任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
-        }
-        }
-      }
-      // ── 赛季任务列表：仅在数量变化时重建 ──
-      if(var.maxSeasonCount != oldMaxSeasonCount){
-        while(val.赛季任务列表.childrenCount() > 1){
-          val.赛季任务列表.get(1).remove()
-        }
-        for(i in range(1, var.maxSeasonCount - 1)){
-          key = i.round()
-        if(val.赛季任务列表['任务项'] != none) {
-          e = val.赛季任务列表['任务项'].copy('任务项' + key)
-          e.entryKey = key
-        }
-        }
-      }
-    progress: |-
-      var.packetId = packet['packetId']
-      var.dailyTasks = packet['dailyTasks']
-      var.weeklyTasks = packet['weeklyTasks']
-      var.seasonTasks = packet['seasonTasks']
-      var.dailyTaskCount = packet['dailyTaskCount']
-      var.weeklyTaskCount = packet['weeklyTaskCount']
-      var.seasonTaskCount = packet['seasonTaskCount']
-      var.totalTaskCount = packet['totalTaskCount']
-      var.dailyCompletedCount = packet['dailyCompletedCount']
-      var.weeklyCompletedCount = packet['weeklyCompletedCount']
-      var.seasonCompletedCount = packet['seasonCompletedCount']
   action:
     load: |-
       var.dailyCompletedCount = 0

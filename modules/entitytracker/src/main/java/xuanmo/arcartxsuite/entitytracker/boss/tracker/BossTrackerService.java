@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.entitytracker.boss.tracker;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent;
@@ -189,7 +188,7 @@ public final class BossTrackerService implements Listener {
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         restoreTrackedBosses("启动扫描", true);
-        refreshTask = AxsScheduler.runTaskTimer(
+        refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::refreshViewers,
             configuration.refreshIntervalTicks(),
@@ -499,7 +498,7 @@ public final class BossTrackerService implements Listener {
         if (queuedRefreshTask != null) {
             return;
         }
-        queuedRefreshTask = AxsScheduler.runTask(plugin, () -> {
+        queuedRefreshTask = Bukkit.getScheduler().runTask(plugin, () -> {
             queuedRefreshTask = null;
             refreshViewers();
         });
@@ -511,7 +510,7 @@ public final class BossTrackerService implements Listener {
         }
 
         hybridWarmupRescanAttempts = 0;
-        hybridWarmupRescanTask = AxsScheduler.runTaskTimer(
+        hybridWarmupRescanTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             () -> {
                 hybridWarmupRescanAttempts++;
@@ -531,7 +530,7 @@ public final class BossTrackerService implements Listener {
 
         hybridPersistentEmptyStreak = 0;
         hybridPersistentCurrentInterval = HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS;
-        hybridPersistentRescanTask = AxsScheduler.runTaskTimer(
+        hybridPersistentRescanTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             () -> {
                 int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
@@ -548,7 +547,7 @@ public final class BossTrackerService implements Listener {
                             hybridPersistentCurrentInterval = newInterval;
                             if (hybridPersistentRescanTask != null) {
                                 hybridPersistentRescanTask.cancel();
-                                hybridPersistentRescanTask = AxsScheduler.runTaskTimer(
+                                hybridPersistentRescanTask = Bukkit.getScheduler().runTaskTimer(
                                     plugin,
                                     this::runPersistentRescan,
                                     newInterval,

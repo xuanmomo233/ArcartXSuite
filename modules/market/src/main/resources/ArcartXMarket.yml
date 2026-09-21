@@ -63,6 +63,9 @@ ui:
   # 玩家商店浏览 UI ID
   player-shop-ui-id: "AXS:market_player_shop"
   player-shop-file: "arcartx/ui/market_player_shop.yml"
+  # 系统商店编辑 UI ID（管理员，/axs market edit 打开）
+  shop-edit-ui-id: "AXS:market_shop_edit"
+  shop-edit-file: "arcartx/ui/market_shop_edit.yml"
   # 客户端数据包 ID，所有 Market UI 通信均通过此 ID
   packet-id: "AXS_MARKET"
   # 是否在模块启动时自动将 UI 文件注册到 ArcartX 桥接层
@@ -121,6 +124,13 @@ redis:
 cross-server:
   # 是否启用跨服同步（多服架构下建议启用，单服无需开启）
   enabled: false
+  # 严格业务校验：对入站 BID_PLACED 校验挂单存在/活跃/拍卖类型/金额范围与最小加价；
+  # 对 DYNAMIC_SHOP_UPDATE 的价格/乘数/库存做范围 clamp，阻断伪造消息注入非法数值。
+  # 建议多服部署开启；仅影响入站校验，不影响出站广播。
+  strict-validation: false
+  # 要求入站消息必须验签通过（宿主 cross-server 签名开启的前提下生效）。
+  # 开启后未签名消息直接丢弃；宿主签名未启用时开启此项等于拒绝全部跨服消息。
+  require-signature: false
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子系统配置 - 拍卖行

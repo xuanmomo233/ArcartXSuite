@@ -121,6 +121,8 @@ moderation:
   max-warnings-before-ban: 5
   # 警告过期时间（天），0 = 永不过期
   warning-expire-days: 30
+  # 封禁时是否记录玩家 IP 地址（false = 存 null，用于隐私合规/数据最小化场景）
+  record-ban-ip: true
 
 # ─── Sit/Lay ───
 interaction:

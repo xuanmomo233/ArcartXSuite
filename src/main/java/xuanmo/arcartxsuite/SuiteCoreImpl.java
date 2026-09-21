@@ -39,7 +39,7 @@ import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
 import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 import xuanmo.arcartxsuite.security.SecondaryPasswordService;
 
@@ -180,6 +180,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 1. ClientPacketGuard
         reloadClientPacketGuard();
 
+        // 1.5 节流命令执行器（奖励/结算类命令削峰队列，每 tick 限量执行）
+        xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.init(
+            host, getConfig().getInt("command-throttle-per-tick", 20));
+
         // 2. Bridges
         bridgeLifecycleManager = new BridgeLifecycleManager(host);
         if (!bridgeLifecycleManager.initialize(
@@ -242,6 +246,11 @@ public final class SuiteCoreImpl implements SuiteCore {
             schedulerService
         );
         moduleRegistry.attachCore(this);
+        // 待发放奖励认领标识：跨服部署时用 nodeId 标记认领方，便于诊断与 TTL 回收
+        if (crossServerService != null
+            && moduleRegistry.pendingRewardService() instanceof xuanmo.arcartxsuite.bridge.DefaultPendingRewardService prs) {
+            prs.setClaimOwner(crossServerService.nodeId());
+        }
         // 外部插件公开 API 门面：AxsCapabilities.get() 直连 capability 注册表，
         // 仅 @PublicCapability 标记的类型对外可见（过滤逻辑在 axs-api 门面侧）
         xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(moduleRegistry::getCapability);
@@ -324,7 +333,7 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 10. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
         cloudModuleService = new CloudModuleService(this, moduleRegistry);
         cloudModuleService.syncModules().thenRun(() -> {
-            AxsScheduler.runTask(host, () ->
+            Bukkit.getScheduler().runTask(host, () ->
                 consoleInfo("[Cloud] 云端模块同步完成")
             );
         });
@@ -564,6 +573,7 @@ public final class SuiteCoreImpl implements SuiteCore {
             clientPacketGuard.shutdown();
             clientPacketGuard = null;
         }
+        xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.shutdown();
         clientPacketGuardConfiguration = null;
         // 保护子系统的关闭由宿主薄壳负责（ProtectionInit.shutdown）。
     }

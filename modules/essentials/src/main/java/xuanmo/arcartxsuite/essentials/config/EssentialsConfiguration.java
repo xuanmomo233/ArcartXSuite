@@ -168,13 +168,15 @@ public record EssentialsConfiguration(
      * @param muteMessage          禁言消息
      * @param maxWarningsBeforeBan 触发自动封禁的累计警告数（0 表示不自动封禁）
      * @param warningExpireDays    警告记录过期天数（0 表示永不过期）
+     * @param recordBanIp          封禁时是否记录玩家 IP（false 时存 null，满足合规/隐私最小化需求）
      */
     public record ModerationConfiguration(
         String banMessage,
         String kickMessage,
         String muteMessage,
         int maxWarningsBeforeBan,
-        int warningExpireDays
+        int warningExpireDays,
+        boolean recordBanIp
     ) {
         static ModerationConfiguration load(ConfigurationSection s) {
             return new ModerationConfiguration(
@@ -182,7 +184,8 @@ public record EssentialsConfiguration(
                 color(s.getString("kick-message", "&c你已被踢出服务器。")),
                 color(s.getString("mute-message", "&c你已被禁言。")),
                 Math.max(0, s.getInt("max-warnings-before-ban", 5)),
-                Math.max(0, s.getInt("warning-expire-days", 30))
+                Math.max(0, s.getInt("warning-expire-days", 30)),
+                s.getBoolean("record-ban-ip", true)
             );
         }
     }

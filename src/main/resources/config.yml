@@ -32,6 +32,10 @@ cloud:
   # 每项为 Base64 编码的 Ed25519 SubjectPublicKeyInfo 公钥，支持配置多个公钥，便于密钥轮换或多环境部署。
   # 当前响应校验由 NativeBridge 的构建时公钥和安全库执行；空列表 [] 不提供额外公钥，是否启用校验仍由安全库是否可用及其内置公钥决定。
   response-signature-public-keys: []
+  # 强制要求 native 验签可用：false（默认）= 安全库未加载时云端响应按明文信任（fail-open，
+  #   适用于明文开发构建）；true = 安全库不可用时所有云端请求按暂时故障拒绝（fail-closed，
+  #   生产环境建议开启，防止验签失效被静默降级）。
+  require-native-verify: false
 
 
 # ========== 安全设置 ==========
@@ -464,6 +468,8 @@ client-packet-guard:
     notify-message: "&c操作过快，请稍后再试。"
     # 提示消息的冷却时间（毫秒），防止消息刷屏。
     notify-cooldown-ms: 3000
+    # 惩罚命令的冷却时间（毫秒），防止连续超限反复执行控制台命令（kick/ban 刷屏）。
+    punish-cooldown-ms: 5000
     # 当 mode 为 punish 时执行的控制台命令。
     # 可用占位符: {player}（玩家名）, {uuid}（玩家 UUID）, {action}（动作名）, {module}（模块名）。
     punish-command: ""
@@ -677,6 +683,13 @@ client-packet-guard:
           window-ms: 1000
           max-hits: 3
           mode: "notify"
+
+# ========== 奖励命令节流 ==========
+# 各模块的奖励/结算类控制台命令（发奖、签到、结算等）统一进入队列，
+# 每 tick 最多执行此条数，削平全服结算等场景的瞬时尖峰。
+# 命令仍在主线程执行（Bukkit API 约束），此处仅控制每 tick 的释放速率。
+# 调大可减少到账延迟但尖峰更明显；调小反之。设为 0 表示关闭节流（直发）。
+command-throttle-per-tick: 20
 
 modules:
   entitytracker:

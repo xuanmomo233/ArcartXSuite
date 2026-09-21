@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.qqbot;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.util.List;
@@ -214,7 +213,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         final OneBotClient obc = oneBotClient;
         final String wsUrl = configuration.onebot().wsUrl();
         final boolean autoStartSnowLuma = configuration.onebot().snowluma().autoStart();
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             if (closed) return;                       // 已关闭：不再拉起进程
             slm.init();
             boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
@@ -339,6 +338,16 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         uiService.setSendToGroupCallback(msg -> svc.sendToAllGroups(msg));
         uiService.setServiceConnectedSupplier(() -> svc.isConnected());
 
+        // 玩家退出时清理 UI 动作令牌与在途标记
+        Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler
+            public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+                if (uiService != null) {
+                    uiService.clearPlayerState(event.getPlayer().getUniqueId());
+                }
+            }
+        }, plugin);
+
         // 注入群消息监听器到 UI 服务
         QQBotUiService uiSvc = uiService;
         final boolean notifyEnabled = configuration.ui().notifyEnabled();
@@ -346,7 +355,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             uiSvc.cacheGroupMessage(nick, message, groupId);
             // 广播通知到所有在线玩家（受 ui.notify-enabled 控制）
             if (notifyEnabled) {
-                AxsScheduler.runTask(plugin, () ->
+                Bukkit.getScheduler().runTask(plugin, () ->
                     uiSvc.broadcastNotification(nick, message));
             }
         });
@@ -428,7 +437,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 20. 红包过期退款定时器（每小时检查一次）
         if (configuration.signin().enabled()) {
-            redPacketRefundTask = AxsScheduler.runAsyncTimer(plugin,
+            redPacketRefundTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin,
                 () -> {
                     // 双重保险：stopService 会 cancel 本任务，但仍可能在 cancel 前一刻被调度执行
                     xuanmo.arcartxsuite.qqbot.service.QQBotSignInService signSvc = signInService;

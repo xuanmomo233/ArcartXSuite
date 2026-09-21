@@ -22,7 +22,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.PlayerShopConfiguration;
@@ -85,7 +85,7 @@ public class PlayerShopService {
     }
 
     public void start(long intervalTicks) {
-        schedulerTask = AxsScheduler.runAsyncTimer(plugin, this::processExpired, intervalTicks, intervalTicks);
+        schedulerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::processExpired, intervalTicks, intervalTicks);
         logger.info("[PlayerShop] 玩家商店服务已启动，到期检查间隔: " + intervalTicks + " ticks");
     }
 
@@ -440,7 +440,7 @@ public class PlayerShopService {
     }
 
     private void deliverItemSafe(UUID target, PlayerShopListing listing, String reason) {
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             final ItemStack item = itemSerializer.deserialize(listing.getItemData());
             if (item == null) {
                 logger.warning("[PlayerShop] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
@@ -449,7 +449,7 @@ public class PlayerShopService {
             }
             Player online = Bukkit.getPlayer(target);
             if (online != null && online.isOnline()) {
-                AxsScheduler.runTask(plugin, () -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
                     xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
                         xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
                             .sourceDetail("pshop-settlement:" + listing.getId())
@@ -489,7 +489,7 @@ public class PlayerShopService {
         if (Bukkit.isPrimaryThread()) {
             task.run();
         } else {
-            AxsScheduler.runTask(plugin, task);
+            Bukkit.getScheduler().runTask(plugin, task);
         }
     }
 

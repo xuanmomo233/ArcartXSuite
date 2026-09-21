@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.entitytracker.entity.RankingRewardRecord;
@@ -26,7 +27,7 @@ import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
 /**
  * 排行榜奖励 UI 的客户端包处理器。
  * <p>
- * 处理来自 ranking_rewards / reward_editor / reward_history 三个 UI 的 9 个 action。
+ * 处理来自 ranking_rewards / reward_history 两个 UI 的 8 个 action。
  */
 public final class RewardPacketHandler implements ClientPacketHandler {
 
@@ -39,13 +40,15 @@ public final class RewardPacketHandler implements ClientPacketHandler {
     private final RankingRewardScheduler rewardScheduler;
     private final Supplier<PluginConfiguration> configurationSupplier;
     private final String managerUiId;
-    private final String editorUiId;
     private final String historyUiId;
     private final File dataFolder;
     private final Logger logger;
 
     /** 记录每个玩家当前查看的奖励周期类型，用于 toggle action */
     private final Map<UUID, String> currentRewardType = new ConcurrentHashMap<>();
+
+    /** 写操作动作令牌守卫（按 UI scope 隔离） */
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
 
     public RewardPacketHandler(
         JavaPlugin plugin,
@@ -55,7 +58,6 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         RankingRewardScheduler rewardScheduler,
         Supplier<PluginConfiguration> configurationSupplier,
         String managerUiId,
-        String editorUiId,
         String historyUiId,
         File dataFolder,
         Logger logger
@@ -67,7 +69,6 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         this.rewardScheduler = rewardScheduler;
         this.configurationSupplier = configurationSupplier;
         this.managerUiId = managerUiId;
-        this.editorUiId = editorUiId;
         this.historyUiId = historyUiId;
         this.dataFolder = dataFolder;
         this.logger = logger;
@@ -76,23 +77,62 @@ public final class RewardPacketHandler implements ClientPacketHandler {
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
+        // 全部动作均为管理操作（配置/手动发放/重试），必须与命令路径同权限门控
+        if (!player.hasPermission("entitytracker.rewards.admin")) {
+            pushResult(player, managerUiId, "§c你没有权限执行这个操作。");
+            return true;
+        }
 
         String action = data.isEmpty() ? "list-configs" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
 
-        switch (action) {
-            case "list-configs" -> handleListConfigs(player, data);
-            case "scheduler-status" -> handleSchedulerStatus(player);
-            case "open-history" -> handleOpenHistory(player);
-            case "manual-distribute" -> handleManualDistribute(player, data);
-            case "toggle" -> handleToggle(player, data);
-            case "history-list" -> handleHistoryList(player, data);
-            case "open-manage" -> handleOpenManage(player);
-            case "retry" -> handleRetry(player, data);
-            case "save-config" -> handleSaveConfig(player, data);
-            default -> pushResult(player, managerUiId, "§c未知操作: " + action);
+        // 写操作需要有效动作令牌：data[1] 为 token，参数从 data[2] 起
+        String scope = writeActionScope(action);
+        if (scope != null && !beginActionToken(player, scope, data)) return true;
+        try {
+            switch (action) {
+                case "list-configs" -> handleListConfigs(player, data);
+                case "scheduler-status" -> handleSchedulerStatus(player);
+                case "open-history" -> handleOpenHistory(player);
+                case "manual-distribute" -> handleManualDistribute(player, data);
+                case "toggle" -> handleToggle(player, data);
+                case "history-list" -> handleHistoryList(player, data);
+                case "open-manage" -> handleOpenManage(player);
+                case "retry" -> handleRetry(player, data);
+                default -> pushResult(player, managerUiId, "§c未知操作: " + action);
+            }
+        } finally {
+            if (scope != null) tokenGuard.finish(player.getUniqueId());
         }
         return true;
+    }
+
+    /**
+     * 写操作对应的 UI scope；返回 {@code null} 表示读操作无需令牌。
+     */
+    private String writeActionScope(String action) {
+        return switch (action) {
+            case "manual-distribute", "toggle" -> managerUiId;
+            case "retry" -> historyUiId;
+            default -> null;
+        };
+    }
+
+    /**
+     * 校验写操作令牌：要求对应 UI 已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
+     */
+    private boolean beginActionToken(Player player, String scope, List<String> data) {
+        String supplied = data.size() > 1 ? safe(data.get(1)) : "";
+        return scope != null && packetBridge != null && packetBridge.isUiOpen(player, scope)
+            && tokenGuard.begin(player.getUniqueId(), scope, supplied);
+    }
+
+    /**
+     * 玩家退出时清理 token 与在途标记。
+     */
+    public void clearPlayerState(UUID playerId) {
+        currentRewardType.remove(playerId);
+        tokenGuard.clear(playerId);
     }
 
     // ─── Action 1: list-configs ───────────────────────────
@@ -112,6 +152,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         payload.put("rewardType", rewardType);
         payload.put("total", Integer.toString(configs.size()));
         payload.put("configs", configs);
+        payload.put("action_token", tokenGuard.issue(player.getUniqueId(), managerUiId));
 
         packetBridge.sendPacket(player, managerUiId, "config-list", payload);
     }
@@ -165,7 +206,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
             return;
         }
 
-        String rewardType = safe(data.size() > 1 ? data.get(1) : "weekly");
+        String rewardType = safe(data.size() > 2 ? data.get(2) : "weekly");
         if (!"weekly".equals(rewardType) && !"monthly".equals(rewardType)) {
             pushResult(player, managerUiId, "§c无效的奖励周期: " + rewardType);
             return;
@@ -195,7 +236,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
     // ─── Action 5: toggle ──────────────────────────────────
 
     private void handleToggle(Player player, List<String> data) {
-        String configId = safe(data.size() > 1 ? data.get(1) : "");
+        String configId = safe(data.size() > 2 ? data.get(2) : "");
         if (configId.isBlank()) {
             pushResult(player, managerUiId, "§c缺少配置 ID");
             return;
@@ -249,6 +290,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
                 payload.put("page", Integer.toString(safePage));
                 payload.put("totalPages", Integer.toString(totalPages));
                 payload.put("totalCount", Integer.toString(totalCount));
+                payload.put("action_token", tokenGuard.issue(player.getUniqueId(), historyUiId));
 
                 packetBridge.sendPacket(player, historyUiId, "history-list", payload);
             })
@@ -270,7 +312,7 @@ public final class RewardPacketHandler implements ClientPacketHandler {
     // ─── Action 8: retry ───────────────────────────────────
 
     private void handleRetry(Player player, List<String> data) {
-        String recordIdStr = safe(data.size() > 1 ? data.get(1) : "");
+        String recordIdStr = safe(data.size() > 2 ? data.get(2) : "");
         int recordId = parseInt(recordIdStr, -1);
         if (recordId < 0) {
             pushResult(player, historyUiId, "§c无效的记录 ID");
@@ -283,38 +325,6 @@ public final class RewardPacketHandler implements ClientPacketHandler {
         // 刷新历史列表
         if (packetBridge != null && historyUiId != null && packetBridge.isUiOpen(player, historyUiId)) {
             handleHistoryList(player, List.of("history-list", "none", "none", "1"));
-        }
-    }
-
-    // ─── Action 9: save-config ─────────────────────────────
-
-    private void handleSaveConfig(Player player, List<String> data) {
-        // data: save-config, configId, rewardType, rankingType, bossId, rankStart, rankEnd,
-        //       rewardName, rewardDescription, rewardMoney, rewardDkp
-        String configId = safe(data.size() > 1 ? data.get(1) : "");
-        String rewardType = safe(data.size() > 2 ? data.get(2) : "weekly");
-        String rankingType = safe(data.size() > 3 ? data.get(3) : "boss_damage");
-        String bossId = safe(data.size() > 4 ? data.get(4) : "");
-        int rankStart = parseInt(safe(data.size() > 5 ? data.get(5) : "1"), 1);
-        int rankEnd = parseInt(safe(data.size() > 6 ? data.get(6) : "1"), 1);
-        String rewardName = safe(data.size() > 7 ? data.get(7) : "");
-        String rewardDescription = safe(data.size() > 8 ? data.get(8) : "");
-        int rewardMoney = parseInt(safe(data.size() > 9 ? data.get(9) : "0"), 0);
-        int rewardDkp = parseInt(safe(data.size() > 10 ? data.get(10) : "0"), 0);
-
-        String message = rewardService.saveConfig(
-            configId, rewardType, rankingType, bossId,
-            rankStart, rankEnd, rewardName, rewardDescription,
-            rewardMoney, rewardDkp
-        );
-
-        boolean success = message.startsWith("§a");
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("packetId", PACKET_ID);
-        payload.put("message", message);
-        payload.put("success", Boolean.toString(success));
-        if (packetBridge != null && editorUiId != null) {
-            packetBridge.sendPacket(player, editorUiId, "result", payload);
         }
     }
 

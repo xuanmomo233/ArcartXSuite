@@ -64,11 +64,15 @@ public class MarketService {
     private final Logger logger;
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
+    private final xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator;
     private final Map<String, Map<UUID, String>> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
+    /** 打开商店/编辑 UI 时预选商店的暂存（在对应 list 包处理时消费）。 */
+    private final Map<UUID, String> pendingShopSelections = new ConcurrentHashMap<>();
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
+    private static final String SHOP_ADMIN_PERMISSION = "arcartxsuite.market.admin";
     private static final int HISTORY_PAGE_SIZE = 20;
     private static final int PSHOP_PAGE_SIZE = 20;
     private static final int PSHOP_SELLERS_PAGE_SIZE = 20;
@@ -111,7 +115,8 @@ public class MarketService {
                          CrossServerAPI crossServer,
                          SchedulerAPI scheduler,
                          MessageProvider messages,
-                         xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator) {
+                         xuanmo.arcartxsuite.api.bridge.ContentModerator contentModerator,
+                         xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator) {
         this.plugin = plugin;
         this.config = config;
         this.packetBridge = packetBridge;
@@ -129,6 +134,9 @@ public class MarketService {
         this.scheduler = scheduler;
         this.messages = messages;
         this.contentModerator = contentModerator != null ? contentModerator : new xuanmo.arcartxsuite.market.NoopContentModerator();
+        this.scriptConditionEvaluator = scriptConditionEvaluator != null
+            ? scriptConditionEvaluator
+            : xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator.noop();
     }
 
     public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
@@ -157,7 +165,7 @@ public class MarketService {
         crossServerChannel = crossServer.openChannel(
             "market",
             config.crossServer(),
-            delivery -> handleCrossServerMessage(delivery.payload())
+            delivery -> handleCrossServerMessage(delivery)
         );
         java.util.function.Consumer<String> crossServerPublisher = message -> {
             if (crossServerChannel != null && crossServerChannel.isActive()) {
@@ -175,7 +183,7 @@ public class MarketService {
 
         if (config.shop().enabled()) {
             shopService = new ShopService(plugin, config.shop(), config.messages(),
-                repository, currencyManager, itemSourceRegistry, dataFolder, logger);
+                repository, currencyManager, itemSourceRegistry, scriptConditionEvaluator, dataFolder, logger);
             // 注入跨服限购广播回调
             shopService.setLimitBroadcaster((playerUuid, shopId, itemId, newCount, timestamp, resetTime) -> {
                 if (crossServerChannel != null && crossServerChannel.isActive()) {
@@ -354,14 +362,52 @@ public class MarketService {
     }
 
     public void openShopListUi(Player player) {
-        packetBridge.openUi(player, config.ui().shopId());
-        issueActionToken(player, config.ui().shopId());
+        openShopUi(player);
     }
 
     // 当前所有商店共用一个 UI ID；未来若支持多商店，可在此按 shopId 查找对应 UI
     public void openShopUi(Player player) {
+        openShopUi(player, null);
+    }
+
+    /**
+     * 打开系统商店 UI，可预选商店（由下一个 shop_list 包消费）。
+     */
+    public void openShopUi(Player player, @Nullable String shopId) {
+        if (shopId != null && !shopId.isBlank()) {
+            pendingShopSelections.put(player.getUniqueId(), shopId);
+        } else {
+            pendingShopSelections.remove(player.getUniqueId());
+        }
         packetBridge.openUi(player, config.ui().shopId());
         issueActionToken(player, config.ui().shopId());
+    }
+
+    /**
+     * 打开系统商店编辑 UI（仅管理员），可预选商店（由 shop_edit_list 包消费）。
+     */
+    public void openShopEditUi(Player player, @Nullable String shopId) {
+        if (!isShopAdmin(player)) {
+            player.sendMessage(messages.get("common.no-permission"));
+            return;
+        }
+        if (shopId != null && !shopId.isBlank()) {
+            pendingShopSelections.put(player.getUniqueId(), shopId);
+        } else {
+            pendingShopSelections.remove(player.getUniqueId());
+        }
+        packetBridge.openUi(player, shopEditUiId());
+        issueActionToken(player, shopEditUiId());
+    }
+
+    /** 商店编辑 UI 与编辑包的服务端权限门槛。 */
+    public boolean isShopAdmin(Player player) {
+        return player.hasPermission(SHOP_ADMIN_PERMISSION);
+    }
+
+    /** 商店编辑 UI 的运行时 ID（可在 ArcartXMarket.yml 的 ui.shop-edit-ui-id 重映射）。 */
+    private String shopEditUiId() {
+        return config.ui().shopEditId();
     }
 
     public void openRecycleUi(Player player) {
@@ -401,6 +447,8 @@ public class MarketService {
 
         // data[0] = action, 后续字段为参数
         String action = data.get(0);
+        // 商店编辑系列包全部要求管理员权限（UI 内按钮不可信）
+        if (action.startsWith("shop_edit") && !isShopAdmin(player)) return true;
         if (requiresActionToken(action) && !beginActionToken(player, action, data)) return true;
         switch (action) {
             case "auction_list" -> handleAuctionListPacket(player, data);
@@ -421,6 +469,15 @@ public class MarketService {
             case "auction_ui_open" -> openAuctionUi(player);
             case "pshop_ui_open" -> openPlayerShopUi(player);
             case "shop_ui_open" -> openShopUi(player);
+            case "shop_edit_ui_open" -> openShopEditUi(player, data.size() > 1 ? data.get(1) : null);
+            case "shop_edit_list" -> handleShopEditList(player);
+            case "shop_edit_shop" -> handleShopEditShop(player, data);
+            case "shop_edit_item" -> handleShopEditItem(player, data);
+            case "shop_edit_pick" -> handleShopEditPick(player, data);
+            case "shop_edit_shop_save" -> handleShopEditShopSave(player, data);
+            case "shop_edit_shop_delete" -> handleShopEditShopDelete(player, data);
+            case "shop_edit_item_save" -> handleShopEditItemSave(player, data);
+            case "shop_edit_item_delete" -> handleShopEditItemDelete(player, data);
             case "recycle_ui_open" -> openRecycleUi(player);
             case "history_ui_open" -> openHistoryUi(player);
             case "pshop_list" -> handlePlayerShopListPacket(player, data);
@@ -443,6 +500,15 @@ public class MarketService {
     // auction_favorite: [action, listingId]
     // shop_list: [action, shopId?]
     // shop_buy: [action, shopId, itemId, amount]
+    // shop_edit_ui_open: [action, shopId?]
+    // shop_edit_list: [action]
+    // shop_edit_shop: [action, shopId]
+    // shop_edit_item: [action, shopId, itemKey]
+    // shop_edit_pick: [action, rawSlot(9-44), target(shop_icon|item_icon|item_def)]
+    // shop_edit_shop_save: [action, shopId, isNew(0/1), json, token]
+    // shop_edit_shop_delete: [action, shopId, token]
+    // shop_edit_item_save: [action, shopId, isNew(0/1), json, token]
+    // shop_edit_item_delete: [action, shopId, itemKey, token]
     // recycle_all: [action]
     // recycle_single: [action, slot]
     // recycle_preview: [action]
@@ -914,6 +980,10 @@ public class MarketService {
     private void handleShopListPacket(Player player, List<String> data) {
         if (shopService == null) return;
         String shopId = data.size() > 1 ? data.get(1) : "";
+        if (shopId.isBlank()) {
+            String pending = pendingShopSelections.remove(player.getUniqueId());
+            if (pending != null) shopId = pending;
+        }
         Map<String, Object> packet = buildShopPacket(player, shopId);
         sendUiPacket(player, config.ui().shopId(), "update", packet);
     }
@@ -972,6 +1042,473 @@ public class MarketService {
         sendUiPacket(player, config.ui().historyId(), "update", packet);
     }
 
+    // ─── 系统商店编辑（管理员）────────────────────────────
+
+    private void handleShopEditList(Player player) {
+        if (shopService == null) return;
+        // 打开/刷新列表时轮换 token，保证后续保存操作携带最新 token
+        issueActionToken(player, shopEditUiId());
+        sendUiPacket(player, shopEditUiId(), "edit_list", buildShopEditListPacket(player));
+        String pending = pendingShopSelections.remove(player.getUniqueId());
+        if (pending != null && shopService.getShop(pending) != null) {
+            sendUiPacket(player, shopEditUiId(), "edit_shop", buildShopEditShopPacket(player, pending));
+        }
+    }
+
+    private void handleShopEditShop(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1) : "";
+        sendUiPacket(player, shopEditUiId(), "edit_shop", buildShopEditShopPacket(player, shopId));
+    }
+
+    private void handleShopEditItem(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1) : "";
+        String key = data.size() > 2 ? data.get(2) : "";
+        sendUiPacket(player, shopEditUiId(), "edit_item", buildShopEditItemPacket(player, shopId, key));
+    }
+
+    /**
+     * 背包槽位选物：只接收 raw slot(9-44)，服务端读真实背包，不信任客户端物品内容。
+     * target: shop_icon（商店图标）/ item_icon（商品图标）/ item_def（商品物品定义）
+     */
+    private void handleShopEditPick(Player player, List<String> data) {
+        int rawSlot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
+        if (rawSlot < 9 || rawSlot > 44) return;
+        String target = data.size() > 2 ? data.get(2) : "";
+        if (!target.equals("shop_icon") && !target.equals("item_icon") && !target.equals("item_def")) return;
+        ItemStack item = player.getInventory().getItem(toBukkitBackpackSlot(rawSlot));
+        if (item == null || item.getType().isAir()) return;
+        ItemStack single = item.clone();
+        single.setAmount(1);
+        String json = itemToJson(single);
+        if (json.isBlank()) return;
+
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        packet.put("target", target);
+        packet.put("itemJson", json);
+        packet.put("name", itemDisplayName(item));
+
+        String source = "minecraft";
+        String id = item.getType().name();
+        if ("item_def".equals(target) && itemSourceRegistry != null) {
+            try {
+                if (itemSourceRegistry.mmoBridgeAvailable() && itemSourceRegistry.isMmoItem(item)) {
+                    source = "mmoitems";
+                    id = nullToEmpty(itemSourceRegistry.mmoItemId(item));
+                } else if (itemSourceRegistry.mythicBridgeAvailable() && itemSourceRegistry.isMythicItem(item)) {
+                    source = "mythic";
+                    id = nullToEmpty(itemSourceRegistry.mythicItemId(item));
+                } else if (itemSourceRegistry.neigeBridgeAvailable() && itemSourceRegistry.isNeigeItem(item)) {
+                    source = "neige";
+                    id = nullToEmpty(itemSourceRegistry.neigeItemId(item));
+                } else if (itemSourceRegistry.overtureBridgeAvailable() && itemSourceRegistry.isOvertureItem(item)) {
+                    source = "overture";
+                    id = nullToEmpty(itemSourceRegistry.overtureItemId(item));
+                }
+            } catch (RuntimeException ignored) {
+                // 外部物品桥异常时按原版物品处理
+            }
+            if (id.isBlank()) {
+                source = "minecraft";
+                id = item.getType().name();
+            }
+            packet.put("source", source);
+            packet.put("id", id);
+            String nbt = "";
+            if ("minecraft".equals(source)) {
+                String tag = snbtTopLevelValue(json, "tag");
+                if (tag != null) nbt = tag;
+            }
+            packet.put("nbt", nbt);
+        }
+        sendUiPacket(player, shopEditUiId(), "edit_pick", packet);
+    }
+
+    private void handleShopEditShopSave(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1).trim() : "";
+        boolean create = "1".equals(data.size() > 2 ? data.get(2) : "");
+        Map<String, Object> form = parseJsonMap(data.size() > 3 ? data.get(3) : "");
+        if (form == null) {
+            sendEditResult(player, false, "表单数据解析失败", "shop_save");
+            return;
+        }
+        String displayName = capStr(jsonString(form, "displayName"), 128);
+        String permission = capStr(jsonString(form, "permission"), 128);
+        List<String> tags = splitCsv(jsonString(form, "tags"), 32, 32);
+        ShopService.IconEdit icon = parseIconEdit(form);
+        String error = shopService.saveShop(shopId, create,
+            new ShopService.ShopEdit(displayName, permission, tags, icon));
+        sendEditResult(player, error == null, error == null ? "商店已保存" : error, "shop_save");
+        if (error == null) {
+            rotateToken(player, shopEditUiId());
+            sendUiPacket(player, shopEditUiId(), "edit_list", buildShopEditListPacket(player));
+            sendUiPacket(player, shopEditUiId(), "edit_shop", buildShopEditShopPacket(player, shopId));
+        }
+    }
+
+    private void handleShopEditShopDelete(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1).trim() : "";
+        String error = shopService.deleteShop(shopId);
+        sendEditResult(player, error == null, error == null ? "商店已删除" : error, "shop_delete");
+        if (error == null) {
+            rotateToken(player, shopEditUiId());
+            sendUiPacket(player, shopEditUiId(), "edit_list", buildShopEditListPacket(player));
+            Map<String, Object> cleared = new LinkedHashMap<>();
+            cleared.put("packetId", config.ui().packetId());
+            cleared.put("found", false);
+            cleared.put("shopId", shopId);
+            sendUiPacket(player, shopEditUiId(), "edit_shop", cleared);
+        }
+    }
+
+    private void handleShopEditItemSave(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1).trim() : "";
+        boolean create = "1".equals(data.size() > 2 ? data.get(2) : "");
+        Map<String, Object> form = parseJsonMap(data.size() > 3 ? data.get(3) : "");
+        if (form == null) {
+            sendEditResult(player, false, "表单数据解析失败", "item_save");
+            return;
+        }
+        String key = capStr(jsonString(form, "key"), 64).trim();
+        String type = "command".equalsIgnoreCase(jsonString(form, "type")) ? "command" : "item";
+        String displayName = capStr(jsonString(form, "displayName"), 128);
+        double buyPrice = clampDouble(parseDoubleSafe(jsonString(form, "buyPrice"), 0), 0, 1_000_000_000);
+        double sellPrice = clampDouble(parseDoubleSafe(jsonString(form, "sellPrice"), 0), 0, 1_000_000_000);
+        String currency = capStr(jsonString(form, "currency"), 64);
+        String stockMode = normalizeStockMode(jsonString(form, "stockMode"));
+        int stockAmount = clampInt(parseIntSafe(jsonString(form, "stockAmount"), 0), 0, 1_000_000);
+        int limitPerPlayer = clampInt(parseIntSafe(jsonString(form, "limitPerPlayer"), 0), 0, 1_000_000);
+        String limitReset = normalizeLimitReset(jsonString(form, "limitReset"));
+        List<String> conditionLines = splitLines(jsonString(form, "conditions"), 64, 512);
+        List<String> commands = splitLines(jsonString(form, "commands"), 64, 256);
+        Map<String, Double> discount = parseDiscounts(jsonString(form, "discounts"));
+        String source = normalizeItemSource(jsonString(form, "source"));
+        String itemId = capStr(jsonString(form, "itemId"), 128).trim();
+        String nbt = capStr(jsonString(form, "nbt"), 4096).trim();
+
+        if ("item".equals(type)) {
+            if (itemId.isBlank()) {
+                sendEditResult(player, false, "物品ID不能为空", "item_save");
+                return;
+            }
+            if ("minecraft".equals(source)) {
+                org.bukkit.Material material = org.bukkit.Material.matchMaterial(itemId);
+                if (material == null) {
+                    material = org.bukkit.Material.matchMaterial(itemId.toUpperCase(java.util.Locale.ROOT));
+                }
+                if (material == null) {
+                    sendEditResult(player, false, "无效的原版物品ID: " + itemId, "item_save");
+                    return;
+                }
+                itemId = material.name();
+            }
+            if (!nbt.isBlank() && !(nbt.startsWith("{") && nbt.endsWith("}"))) {
+                sendEditResult(player, false, "NBT 必须是 {…} 形式的 SNBT 对象", "item_save");
+                return;
+            }
+        }
+        if ("command".equals(type) && commands.isEmpty()) {
+            sendEditResult(player, false, "指令商品至少填写一条奖励指令", "item_save");
+            return;
+        }
+
+        ShopService.IconEdit icon = parseIconEdit(form);
+        var edit = new ShopService.ItemEdit(key, type, displayName, buyPrice, sellPrice, currency,
+            stockMode, stockAmount, limitPerPlayer, limitReset,
+            conditionLines, commands, discount,
+            source, itemId, nbt, icon);
+        String error = shopService.saveShopItem(shopId, create, edit);
+        sendEditResult(player, error == null, error == null ? "商品已保存" : error, "item_save");
+        if (error == null) {
+            rotateToken(player, shopEditUiId());
+            sendUiPacket(player, shopEditUiId(), "edit_shop", buildShopEditShopPacket(player, shopId));
+            sendUiPacket(player, shopEditUiId(), "edit_item", buildShopEditItemPacket(player, shopId, key));
+        }
+    }
+
+    private void handleShopEditItemDelete(Player player, List<String> data) {
+        if (shopService == null) return;
+        String shopId = data.size() > 1 ? data.get(1).trim() : "";
+        String key = data.size() > 2 ? data.get(2).trim() : "";
+        String error = shopService.deleteShopItem(shopId, key);
+        sendEditResult(player, error == null, error == null ? "商品已删除" : error, "item_delete");
+        if (error == null) {
+            rotateToken(player, shopEditUiId());
+            sendUiPacket(player, shopEditUiId(), "edit_shop", buildShopEditShopPacket(player, shopId));
+            Map<String, Object> cleared = new LinkedHashMap<>();
+            cleared.put("packetId", config.ui().packetId());
+            cleared.put("found", false);
+            cleared.put("shopId", shopId);
+            cleared.put("key", key);
+            sendUiPacket(player, shopEditUiId(), "edit_item", cleared);
+        }
+    }
+
+    private Map<String, Object> buildShopEditListPacket(Player player) {
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        Map<String, Object> shops = new LinkedHashMap<>();
+        Map<String, Object> shopTexts = new LinkedHashMap<>();
+        int idx = 0;
+        for (var entry : shopService.getShops().entrySet()) {
+            ShopService.ShopDefinition shop = entry.getValue();
+            String key = Integer.toString(idx);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", shop.id());
+            row.put("name", shop.displayName());
+            row.put("itemCount", shop.items().size());
+            row.put("permission", shop.permission());
+            shops.put(key, row);
+            shopTexts.put(key, shop.displayName());
+            packet.put("shopIconJson" + key, iconResolver.resolveItemJson(player, shop.icon()));
+            idx++;
+        }
+        packet.put("shops", shops);
+        packet.put("shopTexts", shopTexts);
+        packet.put("maxShopCount", idx);
+        packet.put("defaultCurrency", config.shop().defaultCurrency());
+        return packet;
+    }
+
+    /** 商店详情（编辑用，读取静态定义，不含动态商品）。 */
+    private Map<String, Object> buildShopEditShopPacket(Player player, String shopId) {
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        ShopService.ShopDefinition shop = shopService.getShop(shopId);
+        packet.put("found", shop != null);
+        packet.put("shopId", shopId);
+        if (shop == null) return packet;
+        packet.put("displayName", shop.displayName());
+        packet.put("permission", shop.permission());
+        packet.put("tags", String.join(",", shop.tags()));
+        packet.put("iconPreview", iconResolver.resolveItemJson(player, shop.icon()));
+        Map<String, Object> items = new LinkedHashMap<>();
+        int idx = 0;
+        for (var entry : shop.items().entrySet()) {
+            ShopService.ShopItem item = entry.getValue();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", entry.getKey());
+            row.put("name", item.displayName());
+            row.put("type", item.type() == ShopService.ShopItemType.COMMAND ? "command" : "item");
+            row.put("price", formatPrice(item.buyPrice()));
+            row.put("currencyName", currencyDisplayName(item.currency()));
+            row.put("stock", formatEditStock(item));
+            row.put("limit", item.limitPerPlayer() > 0 ? String.valueOf(item.limitPerPlayer()) : "");
+            items.put(Integer.toString(idx), row);
+            packet.put("editItemJson" + idx, shopItemJson(player, item));
+            idx++;
+        }
+        packet.put("items", items);
+        packet.put("maxItemCount", idx);
+        return packet;
+    }
+
+    /** 商品详情（编辑用）。 */
+    private Map<String, Object> buildShopEditItemPacket(Player player, String shopId, String key) {
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        ShopService.ShopDefinition shop = shopService.getShop(shopId);
+        ShopService.ShopItem item = shop == null ? null : shop.items().get(key);
+        packet.put("found", item != null);
+        packet.put("shopId", shopId);
+        packet.put("key", key);
+        if (item == null) return packet;
+        packet.put("type", item.type() == ShopService.ShopItemType.COMMAND ? "command" : "item");
+        packet.put("displayName", item.displayName());
+        packet.put("buyPrice", formatPrice(item.buyPrice()));
+        packet.put("sellPrice", formatPrice(item.sellPrice()));
+        packet.put("currency", item.currency());
+        packet.put("stockMode", item.stockMode());
+        packet.put("stockAmount", String.valueOf(item.stockAmount()));
+        packet.put("limitPerPlayer", String.valueOf(item.limitPerPlayer()));
+        packet.put("limitReset", item.limitReset());
+        // 条件回显为原始表达式行（每行一条），UI 多行编辑后原样写回
+        List<xuanmo.arcartxsuite.api.condition.ScriptCondition> conditions = item.conditions();
+        packet.put("conditions", conditions == null ? ""
+            : conditions.stream()
+                .map(xuanmo.arcartxsuite.api.condition.ScriptCondition::raw)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.joining("\n")));
+        packet.put("commands", String.join("\n", item.rewardCommands()));
+        StringBuilder discounts = new StringBuilder();
+        for (var entry : item.discount().entrySet()) {
+            if (discounts.length() > 0) discounts.append('\n');
+            discounts.append(entry.getKey()).append('=').append(formatPrice(entry.getValue()));
+        }
+        packet.put("discounts", discounts.toString());
+        ShopService.ItemDefinition def = item.item();
+        packet.put("source", def != null ? def.source() : "minecraft");
+        packet.put("itemId", def != null ? def.id() : "");
+        packet.put("nbt", def != null && def.nbt() != null ? def.nbt() : "");
+        packet.put("iconPreview", iconResolver.resolveItemJson(player, item.icon()));
+        packet.put("itemPreview", shopItemJson(player, item));
+        packet.put("defaultCurrency", config.shop().defaultCurrency());
+        return packet;
+    }
+
+    private static String formatEditStock(ShopService.ShopItem item) {
+        return switch (item.stockMode()) {
+            case "global" -> "全服 " + item.stockAmount();
+            case "per-player" -> "每人 " + item.stockAmount();
+            default -> "无限";
+        };
+    }
+
+    private void sendEditResult(Player player, boolean success, String message, String op) {
+        Map<String, Object> packet = new LinkedHashMap<>();
+        packet.put("packetId", config.ui().packetId());
+        packet.put("success", success);
+        packet.put("message", message);
+        packet.put("op", op);
+        sendUiPacket(player, shopEditUiId(), "edit_result", packet);
+    }
+
+    /**
+     * 从 itemToJson 产生的顶层 JSON 对象中提取指定字段的 {...} 值（如 "tag"），
+     * 按花括号配平扫描，字符串内转义已处理。提取不到返回 null。
+     */
+    private static @Nullable String snbtTopLevelValue(String json, String key) {
+        if (json == null || json.isEmpty()) return null;
+        String needle = "\"" + key + "\"";
+        int i = json.indexOf(needle);
+        if (i < 0) return null;
+        i += needle.length();
+        while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+        if (i >= json.length() || json.charAt(i) != ':') return null;
+        i++;
+        while (i < json.length() && Character.isWhitespace(json.charAt(i))) i++;
+        if (i >= json.length() || json.charAt(i) != '{') return null;
+        int start = i;
+        int depth = 0;
+        boolean inStr = false;
+        boolean esc = false;
+        for (; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (esc) { esc = false; continue; }
+            if (c == '\\') { esc = true; continue; }
+            if (c == '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) return json.substring(start, i + 1);
+            }
+        }
+        return null;
+    }
+
+    // ─── 商店编辑表单解析 ─────────────────────────────────
+
+    private static @Nullable Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return xuanmo.arcartxsuite.api.util.SimpleJsonParser.parse(json);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private static String jsonString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static String capStr(String s, int max) {
+        if (s == null) return "";
+        return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static List<String> splitCsv(String s, int maxEntries, int maxLen) {
+        if (s == null || s.isBlank()) return List.of();
+        List<String> out = new java.util.ArrayList<>();
+        for (String part : s.split("[,，]")) {
+            String t = part.trim();
+            if (!t.isEmpty() && out.size() < maxEntries) out.add(capStr(t, maxLen));
+        }
+        return out;
+    }
+
+    private static List<String> splitLines(String s, int maxLines, int maxLen) {
+        if (s == null || s.isBlank()) return List.of();
+        List<String> out = new java.util.ArrayList<>();
+        for (String line : s.split("\\R")) {
+            String t = line.trim();
+            if (!t.isEmpty() && out.size() < maxLines) out.add(capStr(t, maxLen));
+        }
+        return out;
+    }
+
+    private static Map<String, Double> parseDiscounts(String s) {
+        Map<String, Double> map = new LinkedHashMap<>();
+        if (s == null || s.isBlank()) return map;
+        for (String line : s.split("\\R")) {
+            String t = line.trim();
+            int eq = t.indexOf('=');
+            if (eq <= 0) continue;
+            String perm = capStr(t.substring(0, eq).trim(), 128);
+            if (perm.isEmpty()) continue;
+            double ratio = parseDoubleSafe(t.substring(eq + 1).trim(), -1);
+            if (ratio < 0 || ratio > 100 || Double.isNaN(ratio)) continue;
+            map.put(perm, ratio);
+            if (map.size() >= 32) break;
+        }
+        return map;
+    }
+
+    private static String normalizeStockMode(String s) {
+        return switch (s == null ? "" : s.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "global" -> "global";
+            case "per-player", "perplayer", "player" -> "per-player";
+            default -> "unlimited";
+        };
+    }
+
+    private static String normalizeLimitReset(String s) {
+        return switch (s == null ? "" : s.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "daily" -> "daily";
+            case "weekly" -> "weekly";
+            case "monthly" -> "monthly";
+            default -> "never";
+        };
+    }
+
+    private static String normalizeItemSource(String s) {
+        return switch (s == null ? "" : s.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "mythic", "mythicmobs" -> "mythic";
+            case "neige", "neigeitems" -> "neige";
+            case "overture" -> "overture";
+            case "mmoitems", "mmo" -> "mmoitems";
+            default -> "minecraft";
+        };
+    }
+
+    private static ShopService.IconEdit parseIconEdit(Map<String, Object> form) {
+        return switch (jsonString(form, "iconMode")) {
+            case "none" -> ShopService.IconEdit.none();
+            case "material" -> ShopService.IconEdit.ofMaterial(capStr(jsonString(form, "iconMaterial"), 128));
+            case "json" -> ShopService.IconEdit.ofJson(capStr(jsonString(form, "iconJson"), 8192));
+            default -> ShopService.IconEdit.keep();
+        };
+    }
+
+    private static int clampInt(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double clampDouble(double value, double min, double max) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) return min;
+        return Math.max(min, Math.min(max, value));
+    }
+
     // ─── UI 数据包构建 ──────────────────────────────────────
 
     private void sendUiPacket(Player player, String uiId, String handler, Map<String, Object> packet) {
@@ -986,7 +1523,9 @@ public class MarketService {
         return switch (action) {
             case "auction_bid", "auction_cancel", "auction_list_create",
                 "shop_buy", "recycle_all", "recycle_single",
-                "pshop_buy", "pshop_cancel", "pshop_create" -> true;
+                "pshop_buy", "pshop_cancel", "pshop_create",
+                "shop_edit_shop_save", "shop_edit_shop_delete",
+                "shop_edit_item_save", "shop_edit_item_delete" -> true;
             default -> false;
         };
     }
@@ -994,7 +1533,8 @@ public class MarketService {
     private boolean requiresUiToken(String uiId) {
         return uiId.equals(config.ui().auctionId()) || uiId.equals(AUCTION_SELL_UI_ID)
             || uiId.equals(config.ui().shopId()) || uiId.equals(config.ui().recycleId())
-            || uiId.equals(config.ui().sellId()) || uiId.equals(config.ui().playerShopId());
+            || uiId.equals(config.ui().sellId()) || uiId.equals(config.ui().playerShopId())
+            || uiId.equals(shopEditUiId());
     }
 
     private Map<UUID, String> tokenMap(String uiId) {
@@ -1016,6 +1556,8 @@ public class MarketService {
             case "pshop_buy", "pshop_cancel" -> config.ui().playerShopId();
             case "shop_buy" -> config.ui().shopId();
             case "recycle_all", "recycle_single" -> config.ui().recycleId();
+            case "shop_edit_shop_save", "shop_edit_shop_delete",
+                "shop_edit_item_save", "shop_edit_item_delete" -> shopEditUiId();
             default -> config.ui().auctionId();
         };
         int index = switch (action) {
@@ -1027,6 +1569,9 @@ public class MarketService {
             case "pshop_buy" -> 2;
             case "pshop_cancel" -> 2;
             case "pshop_create" -> 7;
+            case "shop_edit_shop_delete" -> 2;
+            case "shop_edit_item_delete" -> 3;
+            case "shop_edit_shop_save", "shop_edit_item_save" -> 4;
             default -> 1;
         };
         String supplied = data.size() > index ? data.get(index) : "";
@@ -1127,6 +1672,7 @@ public class MarketService {
     private Map<String, Object> buildShopPacket(Player player, String selectedShopId) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
+        packet.put("isAdmin", isShopAdmin(player));
 
         // 商店列表
         Map<String, Object> shops = new LinkedHashMap<>();
@@ -1167,6 +1713,8 @@ public class MarketService {
                 int idx = 0;
                 for (var itemEntry : shopDef.items().entrySet()) {
                     var shopItem = itemEntry.getValue();
+                    // 上架条件不满足的商品对该玩家不显示
+                    if (!shopService.meetsConditions(player, shopItem)) continue;
                     String key = Integer.toString(idx);
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("key", itemEntry.getKey());
@@ -1500,10 +2048,19 @@ public class MarketService {
         return auctionService.adminForceCancelListing(listingId);
     }
 
-    private void handleCrossServerMessage(String message) {
+    private void handleCrossServerMessage(xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery delivery) {
+        String message = delivery == null ? null : delivery.payload();
         if (message == null || message.isBlank()) {
             return;
         }
+
+        // require-signature：开启时丢弃未验签通过的消息（签名未启用时等于拒绝全部入站，属管理员显式选择）
+        if (config.crossServerSecurity().requireSignature() && !delivery.signed()) {
+            logger.warning("cross-server require-signature 开启，丢弃未签名消息: "
+                + (message.length() > 64 ? message.substring(0, 64) : message));
+            return;
+        }
+        boolean strict = config.crossServerSecurity().strictValidation();
 
         if (message.startsWith("BID_PLACED:")) {
             String[] parts = message.split(":", -1);
@@ -1512,7 +2069,7 @@ public class MarketService {
                     long listingId = Long.parseLong(parts[1]);
                     double amount = Double.parseDouble(parts[2]);
                     java.util.UUID bidder = java.util.UUID.fromString(parts[3]);
-                    if (amount > 0
+                    if (amount > 0 && (!strict || validateRemoteBid(listingId, amount))
                             && repository.updateListingBidIfHigher(
                                 listingId,
                                 amount,
@@ -1538,7 +2095,7 @@ public class MarketService {
                     int newCount = Integer.parseInt(parts[4]);
                     long timestamp = Long.parseLong(parts[5]);
                     long resetTime = Long.parseLong(parts[6]);
-                    if (newCount >= 0) {
+                    if (newCount >= 0 && (!strict || newCount <= 1_000_000)) {
                         repository.upsertShopLimit(new xuanmo.arcartxsuite.market.shop.ShopLimitRecord(
                             playerUuid, shopId, itemId, newCount, timestamp, resetTime
                         ));
@@ -1575,7 +2132,7 @@ public class MarketService {
             if (parts.length == 4) {
                 try {
                     dynamicShopService.handleCrossServerMessage(
-                        "DYNAMIC_SHOP_UPDATE", parts[1], parts[2], parts[3]);
+                        "DYNAMIC_SHOP_UPDATE", parts[1], parts[2], parts[3], strict);
                     logger.fine("applied remote dynamic shop update: strategy=" + parts[1]);
                 } catch (Exception e) {
                     logger.warning("failed to apply remote dynamic shop update: " + e.getMessage());
@@ -1583,6 +2140,29 @@ public class MarketService {
             }
         }
     }
+    /**
+     * strict-validation 下的远程出价校验：挂单存在且活跃、拍卖类型、金额在配置范围内、
+     * 满足最小加价幅度。伪造/畸形消息在这里被拦截，不写库。
+     */
+    private boolean validateRemoteBid(long listingId, double amount) {
+        xuanmo.arcartxsuite.market.auction.AuctionListing listing = repository.getListing(listingId);
+        if (listing == null || !listing.isActive()) {
+            return false;
+        }
+        if (listing.getType() == xuanmo.arcartxsuite.market.auction.AuctionListing.ListingType.BUY_NOW) {
+            return false;
+        }
+        var auctionConfig = config.auction();
+        if (amount < auctionConfig.minPrice() || amount > auctionConfig.maxPrice()) {
+            return false;
+        }
+        double current = Math.max(listing.getCurrentBid(), listing.getStartingBid());
+        double minIncrement = Math.max(
+            current * auctionConfig.minBidIncrementRatio(),
+            auctionConfig.minBidIncrementAbsolute());
+        return amount >= current + minIncrement;
+    }
+
     private void dispatchSignal(String signal, Player player, Map<String, String> variables) {
         if (signalProvider == null) return;
         SignalDispatchable sd = signalProvider.get();

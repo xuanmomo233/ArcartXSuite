@@ -343,48 +343,6 @@ public record QuestGpsModuleConfiguration(
         );
     }
 
-    private static Map<String, QuestDefinition> loadQuests(ConfigurationSection section, Logger logger) {
-        Map<String, QuestDefinition> quests = new LinkedHashMap<>();
-        if (section == null) {
-            return quests;
-        }
-        for (String questId : section.getKeys(false)) {
-            ConfigurationSection questSection = section.getConfigurationSection(questId);
-            if (questSection == null) {
-                logger.warning("QuestGPS: 任务配置格式无效，已跳过: " + questId);
-                continue;
-            }
-            boolean enabled = questSection.getBoolean("enabled", true);
-            if (!enabled) {
-                continue;
-            }
-            QuestGpsCategory categoryOverride = readOptionalCategory(questSection, null, logger, questId);
-            List<RewardPreviewDefinition> rewards = readRewardList(questSection.getMapList("rewards"), logger, questId);
-            ConfigurationSection taskSection = questSection.getConfigurationSection("tasks");
-            Map<String, TaskDefinition> tasks = loadTasks(taskSection, logger, questId);
-            QuestNavigation navigation = loadQuestNavigation(questSection.getConfigurationSection("navigation"));
-            HookSignals hooks = loadHooks(questSection.getConfigurationSection("hooks"));
-            QuestPresentationOverride presentation = loadQuestPresentation(questSection.getConfigurationSection("presentation"));
-            QuestDefinition definition = new QuestDefinition(
-                questId.trim(),
-                true,
-                categoryOverride,
-                string(questSection.getString("display-name-override"), ""),
-                normalizeMultiline(questSection.get("description")),
-                questSection.getInt("sort-order", 0),
-                questSection.getBoolean("allow-abandon", false),
-                normalizeStringList(questSection.getStringList("required-mainline")),
-                rewards,
-                navigation,
-                hooks,
-                presentation,
-                tasks
-            );
-            quests.put(normalizeKey(questId), definition);
-        }
-        return quests;
-    }
-
     private static void loadQuestsFromDirectory(File directory, Map<String, QuestDefinition> target, Map<String, QuestGpsCategory> categoryRegistry, Logger logger) {
         File[] files = directory.listFiles((dir, name) -> name.endsWith(".yml"));
         if (files == null) return;

@@ -27,6 +27,11 @@ final class JavaScriptExecutor {
             engine = manager.getEngineByName("nashorn");
         }
         this.jsEngine = engine;
+        if (engine == null) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "[Script] JavaScript ScriptEngine 不可用（需 Nashorn/GraalJS），所有 JS 动作与条件将被跳过"
+            );
+        }
     }
 
     @Nullable
@@ -35,9 +40,6 @@ final class JavaScriptExecutor {
             return null;
         }
         if (jsEngine == null) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                "[Script] JS 动作无法执行：JavaScript ScriptEngine 不可用"
-            );
             return null;
         }
         try {
@@ -59,9 +61,6 @@ final class JavaScriptExecutor {
             return false;
         }
         if (jsEngine == null) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                "[Script] JS 条件执行失败：JavaScript ScriptEngine 不可用"
-            );
             return false;
         }
         try {

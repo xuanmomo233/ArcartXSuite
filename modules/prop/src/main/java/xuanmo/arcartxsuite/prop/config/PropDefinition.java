@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.api.condition.ScriptCondition;
  * @param permission          使用所需权限节点，空字符串表示无限制
  * @param effects             效果行列表，格式为 {@code type|payload}
  * @param conditions          使用条件列表，全部满足才可使用
+ * @param auto                自动触发定义，未配置时为 {@link PropAutoTriggerDefinition#DISABLED}
  */
 public record PropDefinition(
     String id,
@@ -32,7 +33,8 @@ public record PropDefinition(
     boolean key,
     String permission,
     List<String> effects,
-    List<ScriptCondition> conditions
+    List<ScriptCondition> conditions,
+    PropAutoTriggerDefinition auto
 ) {
 
     public PropDefinition {

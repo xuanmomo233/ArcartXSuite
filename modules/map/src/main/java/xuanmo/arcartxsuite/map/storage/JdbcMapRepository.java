@@ -391,23 +391,6 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
-    private String unlockUpsertSql() {
-        if (!isMysql()) {
-            return """
-                INSERT INTO AXS_map_unlocks (uuid, anchor_id, unlock_time)
-                VALUES (?, ?, ?)
-                ON CONFLICT(uuid, anchor_id) DO UPDATE SET
-                    unlock_time = excluded.unlock_time
-                """;
-        }
-        return """
-            INSERT INTO AXS_map_unlocks (uuid, anchor_id, unlock_time)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                unlock_time = VALUES(unlock_time)
-            """;
-    }
-
     private String waypointUpsertSql() {
         if (!isMysql()) {
             return """

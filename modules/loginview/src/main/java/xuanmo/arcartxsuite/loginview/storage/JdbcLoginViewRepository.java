@@ -25,12 +25,14 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     private final String accountsTable;
     private final String sessionsTable;
+    private final String failuresTable;
 
     public JdbcLoginViewRepository(DataSource dataSource, StorageDescriptor descriptor,
                                    File dataFolder, Logger logger) {
         super("AXS-LoginView", dataSource, descriptor, dataFolder, logger);
         this.accountsTable = tablePrefix() + "accounts";
         this.sessionsTable = tablePrefix() + "sessions";
+        this.failuresTable = tablePrefix() + "failures";
     }
 
     @Override
@@ -60,6 +62,14 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
                     + "expires_at BIGINT NOT NULL DEFAULT 0"
                     + ")"
             );
+            // 密码失败计数持久化：防止重启/重进重置爆破计数
+            statement.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS " + failuresTable + " ("
+                    + "uuid VARCHAR(36) PRIMARY KEY,"
+                    + "attempts INTEGER NOT NULL DEFAULT 0,"
+                    + "last_failed_at BIGINT NOT NULL DEFAULT 0"
+                    + ")"
+            );
         }
         logger.fine("LoginView 账户与 session 存储已初始化: " + (isMysql() ? "mysql" : "sqlite")
             + " | accounts=" + accountsTable + " | sessions=" + sessionsTable);
@@ -73,7 +83,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     @Override
     protected List<String> allTables() {
-        return List.of(accountsTable, sessionsTable);
+        return List.of(accountsTable, sessionsTable, failuresTable);
     }
 
     @Override
@@ -297,6 +307,51 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
             if (deleted > 0) {
                 logger.fine("LoginView 已清理 " + deleted + " 条过期 session");
             }
+        }
+    }
+
+    // ── 失败计数持久化 ─────────────────────────────────────
+
+    @Override
+    public int loadFailureAttempts(UUID uuid, long maxAgeMillis) throws SQLException {
+        String sql = "SELECT attempts, last_failed_at FROM " + failuresTable + " WHERE uuid = ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    return 0;
+                }
+                long lastFailedAt = rs.getLong("last_failed_at");
+                if (Instant.now().toEpochMilli() - lastFailedAt > maxAgeMillis) {
+                    return 0;
+                }
+                return rs.getInt("attempts");
+            }
+        }
+    }
+
+    @Override
+    public void saveFailureAttempts(UUID uuid, int attempts) throws SQLException {
+        long now = Instant.now().toEpochMilli();
+        String sql = (!isMysql())
+            ? "INSERT INTO " + failuresTable + " (uuid, attempts, last_failed_at) VALUES (?, ?, ?)"
+                + " ON CONFLICT(uuid) DO UPDATE SET attempts = excluded.attempts, last_failed_at = excluded.last_failed_at"
+            : "INSERT INTO " + failuresTable + " (uuid, attempts, last_failed_at) VALUES (?, ?, ?)"
+                + " ON DUPLICATE KEY UPDATE attempts = VALUES(attempts), last_failed_at = VALUES(last_failed_at)";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            statement.setInt(2, attempts);
+            statement.setLong(3, now);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void deleteFailureAttempts(UUID uuid) throws SQLException {
+        String sql = "DELETE FROM " + failuresTable + " WHERE uuid = ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            statement.executeUpdate();
         }
     }
 }

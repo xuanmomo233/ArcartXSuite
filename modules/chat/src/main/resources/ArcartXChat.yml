@@ -1,5 +1,5 @@
 # 配置文件版本号；用于自动迁移程序识别当前版本并执行升级。
-config-version: 2
+config-version: 3
 # AXS Chat
 # 作用: 频道聊天、私聊、回复、监听、忽略、禁言、跨服转发、聊天卡片、物品展示和过滤。
 # 依赖: ArcartX；PlaceholderAPI、Redis、数据库按功能选用。
@@ -107,6 +107,50 @@ function:
   #     pattern: ":star:"
   #     replacement: "★"
   custom-components: {}
+
+# ── 红包 ───────────────────────────────────────────
+# 玩家命令: /chat redpacket <normal|lucky> <总金额> <个数> [祝福语]  /chat grab <红包ID>
+# 管理员命令: /axs chat redpacket <normal|lucky> <金额> <个数> [祝福语]  /axs chat redpacket <预设ID> [个数]
+# 跨服说明: 红包跨服可见/可抢需要频道开启 cross-server 且存储为共享 MySQL；
+#           SQLite 存储下红包仅本服有效。
+redpacket:
+  # 功能总开关。
+  enabled: true
+  # 发送红包权限节点；留空表示所有玩家可用。
+  send-permission: ""
+  # 领取红包权限节点；留空表示所有玩家可领。
+  claim-permission: ""
+  # 管理员发红包权限节点；留空表示仅需管理员命令本身权限。
+  admin-permission: ""
+  # 玩家红包使用的货币 ID（对应宿主 config.yml currencies 节）。
+  currency: "money"
+  # 红包聊天卡片 ID；留空则仅发送文字。
+  card-id: "axs_chat_redpacket"
+  # 预设红包目录，相对于模块数据目录。
+  presets-directory: "chat/redpackets"
+  # 控制台执行管理员红包时使用的频道 ID；留空使用默认频道。
+  admin-channel: ""
+  # 红包总金额上下限。
+  min-total: 1.0
+  max-total: 1000000.0
+  # 每份最小金额。
+  min-per-claim: 0.01
+  # 单个红包最大份数。
+  max-count: 50
+  # 发送红包冷却（秒）。
+  send-cooldown-seconds: 10
+  # 红包有效期（分钟）。
+  expire-minutes: 5
+  # 过期未领完的货币红包是否退款给发送者（管理员红包不退）。
+  refund-on-expire: true
+  # 发送者能否领取自己发的红包。
+  sender-can-claim: true
+  # 是否在频道内播报玩家领取信息。
+  announce-claims: true
+  # 抢完时是否播报（拼手气红包附带手气王）。
+  announce-finish: true
+  # 发送卡片的同时是否附带可点击的文字行（客户端不支持卡片时也有兜底）。
+  text-alongside: true
 
 # ── 敏感词过滤 ───────────────────────────────────────
 # 【已迁移】敏感词过滤已统一到宿主 config.yml 的 moderation 节。

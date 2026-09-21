@@ -25,8 +25,6 @@ import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
  */
 final class MarkdownReportWriter {
 
-    private static final int MAX_TABLE_WIDTH = 100;
-
     private MarkdownReportWriter() {
     }
 

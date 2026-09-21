@@ -128,10 +128,6 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         player.sendMessage(fullMsg("player.help.help"));
     }
 
-    private String plainMsg(String key, Object... args) {
-        return messages == null ? key : messages.get(key, args);
-    }
-
     private String fullMsg(String key, Object... args) {
         if (messages == null) return key;
         String prefix = messages.get("prefix");

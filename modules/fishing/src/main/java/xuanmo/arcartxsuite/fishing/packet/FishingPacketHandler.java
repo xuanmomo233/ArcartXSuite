@@ -219,11 +219,19 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                 }
             }
             case "level_up_talent", "reset_talents" -> {
-                service.handleUiAction(player, action, data);
-                // 操作后刷新数据
+                // 写操作：data[1] 为 action_token，业务参数自 data[2] 起
                 String uiId = talentsUiIdSupplier != null ? talentsUiIdSupplier.get() : null;
-                if (uiId != null && !uiId.isBlank()) {
+                String supplied = data.size() > 1 ? data.get(1) : "";
+                if (uiId == null || uiId.isBlank()
+                    || !service.beginWriteAction(player, uiId, supplied)) {
+                    return true;
+                }
+                try {
+                    service.handleUiAction(player, action, data);
+                    // 操作后刷新数据
                     service.pushTalentsData(player, uiId);
+                } finally {
+                    service.finishWriteAction(player);
                 }
             }
         }
@@ -242,10 +250,18 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                 }
             }
             case "claim_reward" -> {
-                service.handleUiAction(player, action, data);
+                // 写操作：data[1] 为 action_token，业务参数自 data[2] 起
                 String uiId = rewardsUiIdSupplier != null ? rewardsUiIdSupplier.get() : null;
-                if (uiId != null && !uiId.isBlank()) {
+                String supplied = data.size() > 1 ? data.get(1) : "";
+                if (uiId == null || uiId.isBlank()
+                    || !service.beginWriteAction(player, uiId, supplied)) {
+                    return true;
+                }
+                try {
+                    service.handleUiAction(player, action, data);
                     service.pushRewardsData(player, uiId);
+                } finally {
+                    service.finishWriteAction(player);
                 }
             }
         }
@@ -277,46 +293,67 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                 }
             }
             case "put_bait" -> {
-                // data: [put_bait, invSlot, queueSlot, amount]
-                if (data.size() >= 4) {
-                    try {
-                        int invSlot = Integer.parseInt(data.get(1));
-                        int queueSlot = Integer.parseInt(data.get(2));
-                        int amount = Integer.parseInt(data.get(3));
-                        String result = service.putBait(player, invSlot, queueSlot, amount);
-                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
-                    } catch (NumberFormatException ignored) {}
+                // data: [put_bait, token, invSlot, queueSlot, amount]
+                String supplied = data.size() > 1 ? data.get(1) : "";
+                if (uiId == null || uiId.isBlank()
+                    || !service.beginWriteAction(player, uiId, supplied)) {
+                    return true;
                 }
-                if (uiId != null && !uiId.isBlank()) {
+                try {
+                    if (data.size() >= 5) {
+                        try {
+                            int invSlot = Integer.parseInt(data.get(2));
+                            int queueSlot = Integer.parseInt(data.get(3));
+                            int amount = Integer.parseInt(data.get(4));
+                            String result = service.putBait(player, invSlot, queueSlot, amount);
+                            player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                        } catch (NumberFormatException ignored) {}
+                    }
                     service.pushBaitsData(player, uiId);
+                } finally {
+                    service.finishWriteAction(player);
                 }
             }
             case "take_bait" -> {
-                // data: [take_bait, queueSlot, amount]
-                if (data.size() >= 3) {
-                    try {
-                        int queueSlot = Integer.parseInt(data.get(1));
-                        int amount = Integer.parseInt(data.get(2));
-                        String result = service.takeBait(player, queueSlot, amount);
-                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
-                    } catch (NumberFormatException ignored) {}
+                // data: [take_bait, token, queueSlot, amount]
+                String supplied = data.size() > 1 ? data.get(1) : "";
+                if (uiId == null || uiId.isBlank()
+                    || !service.beginWriteAction(player, uiId, supplied)) {
+                    return true;
                 }
-                if (uiId != null && !uiId.isBlank()) {
+                try {
+                    if (data.size() >= 4) {
+                        try {
+                            int queueSlot = Integer.parseInt(data.get(2));
+                            int amount = Integer.parseInt(data.get(3));
+                            String result = service.takeBait(player, queueSlot, amount);
+                            player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                        } catch (NumberFormatException ignored) {}
+                    }
                     service.pushBaitsData(player, uiId);
+                } finally {
+                    service.finishWriteAction(player);
                 }
             }
             case "swap_bait" -> {
-                // data: [swap_bait, slotA, slotB]
-                if (data.size() >= 3) {
-                    try {
-                        int slotA = Integer.parseInt(data.get(1));
-                        int slotB = Integer.parseInt(data.get(2));
-                        String result = service.swapBaitQueue(player, slotA, slotB);
-                        player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
-                    } catch (NumberFormatException ignored) {}
+                // data: [swap_bait, token, slotA, slotB]
+                String supplied = data.size() > 1 ? data.get(1) : "";
+                if (uiId == null || uiId.isBlank()
+                    || !service.beginWriteAction(player, uiId, supplied)) {
+                    return true;
                 }
-                if (uiId != null && !uiId.isBlank()) {
+                try {
+                    if (data.size() >= 4) {
+                        try {
+                            int slotA = Integer.parseInt(data.get(2));
+                            int slotB = Integer.parseInt(data.get(3));
+                            String result = service.swapBaitQueue(player, slotA, slotB);
+                            player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', result));
+                        } catch (NumberFormatException ignored) {}
+                    }
                     service.pushBaitsData(player, uiId);
+                } finally {
+                    service.finishWriteAction(player);
                 }
             }
         }

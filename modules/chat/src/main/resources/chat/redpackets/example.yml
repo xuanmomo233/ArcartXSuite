@@ -1,0 +1,63 @@
+# ============================================================
+#  红包预设示例 —— 奖励池红包
+# ------------------------------------------------------------
+#  部署位置: plugins/ArcartX-Suite/data/chat/chat/redpackets/*.yml
+#  发送方式: /axs chat redpacket <预设ID> [份数]
+#  重载方式: /axs chat redpacket reload
+#
+#  奖励池说明:
+#    - replacement: false（默认）无放回抽取，quantity 为奖项份数，
+#      抽中即消耗一份，份数抽完的奖项不再被选中。
+#    - replacement: true 有放回抽取，quantity 为该奖项全局最大中奖次数
+#      （0 或负数表示不限次数）。
+#    - weight 为抽取权重，越大越容易中。
+#    - 奖励类型: currency（货币）/ item（物品）/ command（控制台指令）。
+# ============================================================
+
+preset:
+  # 预设唯一 ID（管理员命令按此引用），缺省时取文件名。
+  id: "example"
+  # 是否启用该预设。
+  enabled: true
+  # 显示名称（卡片与播报中作为发送者展示，留空显示操作者名）。
+  display-name: "&6&l节日红包"
+  # 祝福语，显示在红包卡片上。
+  wish: "恭喜发财，大吉大利！"
+  # 默认份数（可被命令行参数覆盖；无放回时自动收缩至池内总量）。
+  count: 5
+  # 是否有放回抽取。
+  replacement: false
+  # 过期时长（分钟），0 表示使用主配置 redpacket.expire-minutes。
+  expire-minutes: 0
+
+  # 奖励池条目列表。
+  rewards:
+    - type: currency
+      currency: "money"        # 货币 ID（宿主 config.yml currencies 节）
+      amount: 100
+      weight: 50
+      quantity: 3
+      description: "100 金币"
+    - type: currency
+      currency: "money"
+      amount: 500
+      weight: 10
+      quantity: 1
+      description: "500 金币（大奖）"
+    - type: item
+      source: minecraft        # minecraft / mythic / neige / overture / mmo
+      id: DIAMOND
+      amount: 1
+      weight: 20
+      quantity: 2
+      description: "钻石 x1"
+      # 可选附加属性（material 路径生效）:
+      # name: "&b幸运钻石"
+      # lore: ["&7红包开出的幸运钻石"]
+      # custom-model-data: 10001
+      # glow: true
+    - type: command
+      command: "give {player} apple 5"   # {player} 自动替换为领取者名
+      weight: 5
+      quantity: 1
+      description: "神秘小礼包"

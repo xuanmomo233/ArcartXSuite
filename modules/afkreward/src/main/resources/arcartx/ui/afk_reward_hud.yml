@@ -9,23 +9,6 @@ ui:
   through: true            # 是否允许点击穿透（不拦截鼠标操作）
   show: true               # 是否显示此 HUD
   packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - area: 挂机区域名称
-    #   - time: 当前挂机时长（已格式化的文本）
-    #   - next: 距离下次发放奖励的剩余秒数
-    #   - players: 当前区域挂机人数
-    #   - session_rewards: 本次挂机已获得奖励的次数
-    #   - session_time: 本次挂机累计时长（已格式化的文本）
-    #   - visible: HUD 是否可见（布尔值）
-    init: |-
-      var.area = packet['area']
-      var.time = packet['time']
-      var.next = packet['next']
-      var.players = packet['players']
-      var.session_rewards = packet['session_rewards']
-      var.session_time = packet['session_time']
-      var.visible = packet['visible']
     # packetHandler: update
     # 包字段:
     #   - area: 挂机区域名称

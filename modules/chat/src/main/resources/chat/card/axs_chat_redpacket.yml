@@ -1,0 +1,70 @@
+# ArcartXSuite Chat — 红包卡片模板
+# 玩家/管理员发放红包时，在聊天栏中显示此卡片
+# 点击卡片 → Chat.say('/chat grab <packetId>') 领取（与可点击文字兜底一致）
+# 数据字段（服务端 payload）: packetId / senderName / senderDisplayName / typeName / wish / count / expire
+# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
+root_control:
+  type: card
+  attribute:
+    width: "Math.max(560, Math.max(val.title_label.width, val.info_label.width) + 220)"
+    height: "Math.max(160, val.info_label.y + val.info_label.height + 18)"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.width"
+        height: "self.parent.height"
+        normal: ~196,50,43,235
+        shape: ~round_rect
+        radius: 14
+      effect:
+        stroke:
+          width: 3
+          color: ~255,205,100,200
+      action:
+        click: |-
+          Chat.say('/chat grab ' + self.parent.data['packetId'])
+    coin:
+      type: Texture
+      attribute:
+        x: 30
+        y: "self.parent.height/2 - 45"
+        width: 90
+        height: 90
+        normal: ~255,205,90,255
+        shape: ~circle
+        through: true
+      effect:
+        stroke:
+          width: 2
+          color: ~255,235,170,255
+    coin_label:
+      type: Text
+      attribute:
+        fontSize: 54
+        x: 75
+        y: "self.parent.height/2 - 15"
+        center: true
+        texts: "'§c开'"
+        through: true
+    title_label:
+      type: Text
+      val: title_label
+      attribute:
+        fontSize: 48
+        x: 160
+        y: 18
+        texts: "'§f' + self.parent.data['senderDisplayName'] + ' §7发出 §e' + self.parent.data['typeName']"
+        through: true
+    info_label:
+      type: Text
+      val: info_label
+      attribute:
+        fontSize: 36
+        x: 160
+        y: 74
+        through: true
+        texts:
+          - "self.parent.data['wish'] != none && self.parent.data['wish'] != '' ? '§e' + self.parent.data['wish'] : none"
+          - "'§7共 §e' + self.parent.data['count'] + ' §7份'"
+          - "'§8点击卡片领取 · §7约 ' + self.parent.data['expire'] + ' §8分钟内有效'"

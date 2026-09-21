@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.qqbot.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -15,6 +14,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
@@ -45,6 +45,7 @@ public final class QQBotUiService {
     private final QQBotBindService bindService;
     private final PacketBridgeAPI packetBridge;
     private final Logger logger;
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
 
     private String bindUiId;
     private String notifyUiId;
@@ -91,7 +92,7 @@ public final class QQBotUiService {
         if (bindUiId == null) return;
         packetBridge.openUi(player, bindUiId);
 
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             QQBotBinding binding = repository.findByPlayerName(player.getName());
             Map<String, Object> payload = new HashMap<>();
@@ -103,6 +104,7 @@ public final class QQBotUiService {
                 ? TIME_FMT.format(java.time.Instant.ofEpochMilli(binding.boundAt())) : "");
             payload.put("messages", getRecentMessagesPayload());
             payload.put("msgCount", recentMessages.size());
+            payload.put("action_token", tokenGuard.issue(player.getUniqueId(), bindUiId));
             packetBridge.sendPacket(player, bindUiId, "init", payload);
         }, 2L);
     }
@@ -116,7 +118,7 @@ public final class QQBotUiService {
         if (adminUiId == null) return;
         packetBridge.openUi(player, adminUiId);
 
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             Map<String, Object> payload = new HashMap<>();
             payload.put("packetId", ADMIN_PACKET_ID);
@@ -127,6 +129,7 @@ public final class QQBotUiService {
             payload.put("groups", buildGroupList());
             payload.put("bindings", buildBindingsPage(0));
             payload.put("bindTotal", repository.countBindings());
+            payload.put("action_token", tokenGuard.issue(player.getUniqueId(), adminUiId));
             packetBridge.sendPacket(player, adminUiId, "init", payload);
         }, 2L);
     }
@@ -182,14 +185,23 @@ public final class QQBotUiService {
      * 处理来自绑定中心 UI 的客户端包。
      */
     public boolean handleBindPacket(Player player, String action, List<String> data) {
-        switch (action) {
-            case "request_code" -> handleRequestCode(player);
-            case "unbind" -> handleUnbind(player);
-            case "fetch_messages" -> sendMessages(player);
-            case "send_message" -> handleSendMessage(player, data);
-            default -> {
-                return false;
+        boolean writeAction = switch (action) {
+            case "request_code", "unbind", "send_message" -> true;
+            default -> false;
+        };
+        if (writeAction && !beginActionToken(player, bindUiId, data)) return true;
+        try {
+            switch (action) {
+                case "request_code" -> handleRequestCode(player);
+                case "unbind" -> handleUnbind(player);
+                case "fetch_messages" -> sendMessages(player);
+                case "send_message" -> handleSendMessage(player, data);
+                default -> {
+                    return false;
+                }
             }
+        } finally {
+            if (writeAction) tokenGuard.finish(player.getUniqueId());
         }
         return true;
     }
@@ -201,27 +213,36 @@ public final class QQBotUiService {
         if (!player.hasPermission("arcartxsuite.qqbot.admin")) {
             return true; // 无权限忽略
         }
-        switch (action) {
-            case "refresh" -> refreshAdmin(player);
-            case "fetch_bindings" -> {
-                int page = data.isEmpty() ? 0 : parseIntSafe(data.get(0), 0);
-                sendBindingsPage(player, page);
+        boolean writeAction = switch (action) {
+            case "admin_unbind", "exec_command" -> true;
+            default -> false;
+        };
+        if (writeAction && !beginActionToken(player, adminUiId, data)) return true;
+        try {
+            switch (action) {
+                case "refresh" -> refreshAdmin(player);
+                case "fetch_bindings" -> {
+                    int page = data.isEmpty() ? 0 : parseIntSafe(data.get(0), 0);
+                    sendBindingsPage(player, page);
+                }
+                case "search_binding" -> {
+                    String keyword = data.isEmpty() ? "" : data.get(0);
+                    handleSearchBinding(player, keyword);
+                }
+                case "admin_unbind" -> {
+                    String name = data.size() > 1 ? data.get(1) : "";
+                    handleAdminUnbind(player, name);
+                }
+                case "exec_command" -> {
+                    String cmd = data.size() > 1 ? data.get(1) : "";
+                    handleExecCommand(player, cmd);
+                }
+                default -> {
+                    return false;
+                }
             }
-            case "search_binding" -> {
-                String keyword = data.isEmpty() ? "" : data.get(0);
-                handleSearchBinding(player, keyword);
-            }
-            case "admin_unbind" -> {
-                String name = data.isEmpty() ? "" : data.get(0);
-                handleAdminUnbind(player, name);
-            }
-            case "exec_command" -> {
-                String cmd = data.isEmpty() ? "" : data.get(0);
-                handleExecCommand(player, cmd);
-            }
-            default -> {
-                return false;
-            }
+        } finally {
+            if (writeAction) tokenGuard.finish(player.getUniqueId());
         }
         return true;
     }
@@ -264,8 +285,8 @@ public final class QQBotUiService {
     }
 
     private void handleSendMessage(Player player, List<String> data) {
-        if (data.isEmpty()) return;
-        String message = data.get(0);
+        if (data.size() < 2) return;
+        String message = data.get(1);
         if (message == null || message.isBlank()) return;
 
         // 通过 QQBot 发送到所有群
@@ -274,7 +295,7 @@ public final class QQBotUiService {
         String formatted = "[游戏] " + displayName + ": " + message;
 
         // 需要通过 QQBotService 发送，这里仅做回调
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (sendToGroupCallback != null) {
                 sendToGroupCallback.accept(formatted);
             }
@@ -333,7 +354,7 @@ public final class QQBotUiService {
             logger.info("[Admin UI] " + player.getName() + " 执行命令: " + command);
         }
         String cmd = command;
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                 Map<String, Object> payload = new HashMap<>();
@@ -352,6 +373,29 @@ public final class QQBotUiService {
     }
 
     // ─── 工具方法 ──────────────────────────────────────
+
+    /**
+     * 校验写操作令牌：要求 UI 已打开、data[0] 与当前签发 token 一致、且玩家无在途写操作。
+     */
+    private boolean beginActionToken(Player player, String uiId, List<String> data) {
+        String supplied = data != null && !data.isEmpty() ? data.get(0) : "";
+        return uiId != null && packetBridge != null && packetBridge.isUiOpen(player, uiId)
+            && tokenGuard.begin(player.getUniqueId(), uiId, supplied);
+    }
+
+    /**
+     * 玩家退出时清理其 token 与在途标记。
+     */
+    public void clearPlayerState(java.util.UUID playerId) {
+        tokenGuard.clear(playerId);
+    }
+
+    /**
+     * 模块卸载时清空全部 token。
+     */
+    public void clearAllTokens() {
+        tokenGuard.clearAll();
+    }
 
     private void sendBindResult(Player player, String message, String type) {
         Map<String, Object> payload = new HashMap<>();

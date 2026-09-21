@@ -28,7 +28,7 @@ public class MarketAdminCommand {
     }
 
     public List<String> actions() {
-        return List.of("help", "status", "clear-expired", "remove");
+        return List.of("help", "status", "clear-expired", "remove", "edit");
     }
 
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
@@ -63,6 +63,14 @@ public class MarketAdminCommand {
                 int cleared = service.clearExpired();
                 sender.sendMessage(fullMsg("admin.clear-expired-success", cleared));
             }
+            case "edit" -> {
+                if (!(sender instanceof org.bukkit.entity.Player player)) {
+                    sender.sendMessage(fullMsg("common.only-player"));
+                    return true;
+                }
+                String shopId = args.length >= 3 ? args[2] : null;
+                service.openShopEditUi(player, shopId);
+            }
             case "remove" -> {
                 if (args.length < 3) {
                     sender.sendMessage(fullMsg("admin.remove-usage"));
@@ -86,6 +94,13 @@ public class MarketAdminCommand {
             String input = args[1].toLowerCase();
             return actions().stream().filter(s -> s.startsWith(input)).toList();
         }
+        if (args.length == 3 && "edit".equalsIgnoreCase(args[1])) {
+            MarketService service = serviceSupplier.get();
+            if (service == null) return List.of();
+            String input = args[2].toLowerCase();
+            return service.getShopIds().stream()
+                .filter(s -> s.toLowerCase().startsWith(input)).sorted().toList();
+        }
         return List.of();
     }
 
@@ -95,5 +110,6 @@ public class MarketAdminCommand {
         sender.sendMessage(fullMsg("help.status", cmd));
         sender.sendMessage(fullMsg("help.clear-expired", cmd));
         sender.sendMessage(fullMsg("help.remove", cmd));
+        sender.sendMessage(fullMsg("help.edit", cmd));
     }
 }

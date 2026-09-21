@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -251,7 +251,7 @@ public final class KeybindService implements Listener {
         if (Bukkit.isPrimaryThread()) {
             doDispatch(player, keyName);
         } else {
-            AxsScheduler.runTask(plugin, () -> doDispatch(player, keyName));
+            Bukkit.getScheduler().runTask(plugin, () -> doDispatch(player, keyName));
         }
     }
 

@@ -99,9 +99,10 @@ public final class SafeCommandExecutor {
      *
      * @param sender 命令发送者（通常为 {@code Bukkit.getConsoleSender()}）
      * @return {@code true} 如果命令被成功分发
+     * @throws IllegalArgumentException 展开后的最终命令含命令分隔符（bindQuoted/bindRaw 值仍可携带）
      */
     public boolean execute(CommandSender sender) {
-        String command = build();
+        String command = CommandSanitizer.validateExpandedCommand(build());
         return Bukkit.dispatchCommand(sender, command);
     }
 }

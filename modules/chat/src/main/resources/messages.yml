@@ -23,6 +23,7 @@ help:
   mute: "&7{0} mute <玩家> <时长> [原因]&f - 禁言"      # mute 子命令说明
   unmute: "&7{0} unmute <玩家>&f - 解除禁言"            # unmute 子命令说明
   spy: "&7{0} spy <玩家> <on|off>&f - 私聊监听"         # spy 子命令说明
+  redpacket: "&7{0} redpacket <normal|lucky|预设ID> <金额> <个数>&f - 发放红包"  # redpacket 子命令说明
 
 # ── status ────────────────────────────────────────────
 status:
@@ -51,9 +52,11 @@ player:
   toggle-invalid: "&c状态只能是 on 或 off。"                    # 无效开关值
   ignore-usage: "&e用法: /{0} ignore <player>"                 # ignore 子命令用法
   unignore-usage: "&e用法: /{0} unignore <player>"             # unignore 子命令用法
-  chat-usage: "&e用法: /{0} channel|toggle|ignore|unignore|socialspy"  # chat 总用法
+  chat-usage: "&e用法: /{0} channel|toggle|ignore|unignore|socialspy|redpacket|grab"  # chat 总用法
   msg-usage: "&e用法: /{0} <player> <message>"                 # msg 命令用法
   reply-usage: "&e用法: /{0} <message>"                        # reply 命令用法
+  redpacket-usage: "&e用法: /{0} redpacket <normal|lucky> <总金额> <个数> [祝福语]"  # 发红包用法
+  grab-usage: "&e用法: /{0} grab <红包ID>"                     # 抢红包用法
   help:
     title: "&6聊天 命令"
     channel: "&7/chat channel <频道ID>&f - 切换聊天频道"
@@ -61,6 +64,8 @@ player:
     ignore: "&7/chat ignore <玩家>&f - 忽略玩家私聊"
     unignore: "&7/chat unignore <玩家>&f - 取消忽略玩家"
     socialspy: "&7/chat socialspy [on|off]&f - 切换社交监听"
+    redpacket: "&7/chat redpacket <normal|lucky> <金额> <个数> [祝福]&f - 发送红包"
+    grab: "&7/chat grab <id>&f - 领取红包"
 
 # ── service results ─────────────────────────────────────
 result:
@@ -105,3 +110,43 @@ result:
   too-fast: "发言过快，请稍后再试。"                    # 触发发言冷却
   duplicate: "请勿重复发送相同内容。"                   # 触发重复消息检测
   message-too-long: "消息长度不能超过 {0} 个字符。"      # 消息超长提示
+
+# ── 红包 ─────────────────────────────────────────────
+redpacket:
+  disabled: "红包功能当前未启用。"                        # 功能开关关闭
+  no-send-permission: "你没有权限发送红包。"              # 发送权限不足
+  no-claim-permission: "你没有权限领取红包。"             # 领取权限不足
+  no-admin-permission: "你没有权限发放管理员红包。"        # 管理员发放权限不足
+  invalid-type: "红包类型只能是 normal（普通）或 lucky（拼手气）。"  # 类型非法
+  invalid-amount: "红包金额无效。"                        # 金额非法
+  invalid-count: "红包份数无效（最多 {0} 份）。"           # 份数非法
+  amount-range: "红包总金额需在 {0} ~ {1} 之间。"          # 金额超出配置范围
+  amount-too-small: "总金额过小，每份至少 {0}。"           # 每份金额低于下限
+  insufficient: "余额不足，当前余额: {0}。"               # 余额不足
+  withdraw-failed: "扣款失败: {0}"                        # 货币扣款失败
+  currency-unavailable: "货币类型 {0} 当前不可用。"        # 货币桥接不可用
+  send-failed: "红包创建失败，已退回扣款。"               # 入库失败已退款
+  cooldown: "发送红包过快，请 {0} 秒后再试。"             # 发送冷却中
+  sent: "红包已发出：{0} / {1} 份。"                     # 发红包成功
+  sent-preset: "预设红包 {0} 已发出，共 {1} 份。"          # 预设红包发送成功
+  not-found: "红包不存在或已失效。"                       # 红包 ID 不存在
+  expired: "红包已过期。"                                 # 红包过期
+  exhausted: "红包已被抢完。"                             # 红包抢完
+  already-claimed: "你已经领取过这个红包了。"              # 重复领取
+  sender-denied: "不能领取自己发的红包。"                  # 发送者不可领取
+  claimed: "领取成功：{0}。"                              # 领取成功反馈
+  refunded: "红包过期退款：{0} 已退回你的账户。"           # 过期退款通知
+  broadcast-line: "&c🧧 &f{0} &7发了一个&e{1}&7：&f{2} "    # 红包广播文字行（发送者/类型/祝福）
+  claim-button: "&e&l[点击领取]"                          # 文字行领取按钮
+  claim-hover: "&7点击领取红包 &f{0}"                     # 按钮悬浮提示（{0}=红包ID）
+  broadcast-claim: "&f{0} &7抢到了 &f{1} &7的红包：&e{2}"   # 领取播报（领取者/发送者/奖励）
+  broadcast-claim-remote: "&f{0} &7在远端抢到了 &f{1} &7的红包：&e{2}"  # 远端领取播报
+  broadcast-finish: "&f{0} &7的红包已被抢完。"             # 抢完播报
+  broadcast-luckiest: " &7手气王：&f{0} &e{1}"             # 拼手气手气王播报（玩家/金额）
+  preset-not-found: "红包预设不存在: {0}"                 # 预设 ID 未找到
+  preset-list: "&7可用红包预设: &f{0}"                    # 预设列表
+  preset-reloaded: "红包预设已重载，共 {0} 个。"            # 预设重载结果
+  admin-usage: "&e用法: {0} redpacket <normal|lucky> <金额> <个数> [祝福语] 或 {0} redpacket <预设ID> [个数] 或 {0} redpacket list|reload"  # 管理员用法
+  type-normal: "普通红包"                                 # 普通红包类型名
+  type-lucky: "拼手气红包"                                # 拼手气红包类型名
+  type-pool: "福利红包"                                   # 预设奖励池红包类型名

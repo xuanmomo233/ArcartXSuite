@@ -34,6 +34,7 @@ help:
   security-header: "&7── 管理 ──"
   ban: "  &f/{0} {1} ban/tempban/unban/mute/tempmute/unmute&7 - 封禁/禁言"
   admin: "  &f/{0} {1} kick/warn/sudo/inv&7 - 踢出/警告/强制/背包"
+  reload: "  &f/{0} {1} reload&7 - 重载模块配置与服务"
   interact-header: "&7── 交互 ──"
   sit-lay: "  &f/{0} {1} sit/lay&7 - 坐/躺"
 

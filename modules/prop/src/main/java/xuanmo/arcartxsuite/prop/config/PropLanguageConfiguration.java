@@ -12,13 +12,15 @@ import org.bukkit.configuration.file.FileConfiguration;
  * @param noKey            无法按键使用提示，支持 {NAME} 占位符
  * @param noHand           无法手持使用提示，支持 {NAME} 占位符
  * @param conditionNotMet 条件不满足提示，支持 {NAME} 和 {CONDITION} 占位符
+ * @param autoUsed        自动触发成功提示，支持 {NAME} 占位符
  */
 public record PropLanguageConfiguration(
     String coolDown,
     String noPermission,
     String noKey,
     String noHand,
-    String conditionNotMet
+    String conditionNotMet,
+    String autoUsed
 ) {
 
     private static final String DEFAULT_COOLDOWN = "&7[&dArcartXProp&7]&c{NAME}&f还在冷却,你还需要等待&a{TIME}秒&f才能使用道具";
@@ -26,6 +28,7 @@ public record PropLanguageConfiguration(
     private static final String DEFAULT_NO_KEY = "&7[&dArcartXProp&7]&c{NAME} &f无法按键使用";
     private static final String DEFAULT_NO_HAND = "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用";
     private static final String DEFAULT_CONDITION_NOT_MET = "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}";
+    private static final String DEFAULT_AUTO_USED = "&7[&dArcartXProp&7]&f已自动使用 &a{NAME}";
 
     /**
      * 从 YAML 配置加载语言配置。
@@ -39,7 +42,8 @@ public record PropLanguageConfiguration(
             readString(configuration, "NO_PERMISSION", DEFAULT_NO_PERMISSION),
             readString(configuration, "NO_KEY", DEFAULT_NO_KEY),
             readString(configuration, "NO_HAND", DEFAULT_NO_HAND),
-            readString(configuration, "CONDITION_NOT_MET", DEFAULT_CONDITION_NOT_MET)
+            readString(configuration, "CONDITION_NOT_MET", DEFAULT_CONDITION_NOT_MET),
+            readString(configuration, "AUTO_USED", DEFAULT_AUTO_USED)
         );
     }
 

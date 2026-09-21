@@ -15,7 +15,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.Selection;
@@ -62,8 +62,8 @@ public final class SelectionParticleTask {
     }
 
     public void start() {
-        selectionTask = AxsScheduler.runTaskTimer(plugin, this::tickSelection, SELECTION_PERIOD, SELECTION_PERIOD);
-        regionTask = AxsScheduler.runTaskTimer(plugin, this::tickRegionBorders, REGION_PERIOD, REGION_PERIOD);
+        selectionTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickSelection, SELECTION_PERIOD, SELECTION_PERIOD);
+        regionTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickRegionBorders, REGION_PERIOD, REGION_PERIOD);
     }
 
     public void shutdown() {

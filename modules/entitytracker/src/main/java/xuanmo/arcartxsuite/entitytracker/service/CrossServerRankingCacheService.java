@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.entitytracker.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -63,7 +62,7 @@ public final class CrossServerRankingCacheService {
             return;
         }
         long intervalTicks = settings.updateIntervalSeconds() * 20L;
-        refreshTask = AxsScheduler.runAsyncTimer(
+        refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
             plugin, this::refreshAll, intervalTicks, intervalTicks
         );
         requestRefresh();
@@ -83,7 +82,7 @@ public final class CrossServerRankingCacheService {
         if (!refreshPending.compareAndSet(false, true)) {
             return;
         }
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 refreshAll();
             } finally {

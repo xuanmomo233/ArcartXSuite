@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.pickup.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +15,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -75,6 +75,7 @@ public final class LootScannerService implements Listener {
     private final Set<UUID> hudOpenPlayers = new HashSet<>();
     /** 当前 Menu 已打开的玩家集合 */
     private final Set<UUID> menuOpenPlayers = new HashSet<>();
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
     /** 手动关闭拾取功能的玩家集合 */
     private final Set<UUID> disabledPlayers = new HashSet<>();
 
@@ -117,11 +118,11 @@ public final class LootScannerService implements Listener {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         ScannerConfig scannerConfig = configuration.scanner();
-        scanTask = AxsScheduler.runTaskTimer(
+        scanTask = Bukkit.getScheduler().runTaskTimer(
             plugin, this::scanTick, PREOPEN_DELAY_TICKS, scannerConfig.scanIntervalTicks()
         );
         // reload 场景：为已在线玩家重新打开 HUD
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 openHudForPlayer(player);
             }
@@ -173,8 +174,10 @@ public final class LootScannerService implements Listener {
             return false;
         }
 
-        // 服务端校验通过 → 通知客户端打开交互菜单
-        packetBridge.sendPacket(player, uiId, "open_interact", java.util.Map.of());
+        // 服务端校验通过 → 通知客户端打开交互菜单，并签发会话 token
+        // （会话内固定不轮换，避免高频 update 推送与在途 pick 包的 token 竞态）
+        packetBridge.sendPacket(player, uiId, "open_interact",
+            java.util.Map.of("action_token", tokenGuard.issue(playerId, uiId)));
         menuOpenPlayers.add(playerId);
         return true;
     }
@@ -257,6 +260,7 @@ public final class LootScannerService implements Listener {
         playerStates.remove(playerId);
         hudOpenPlayers.remove(playerId);
         menuOpenPlayers.remove(playerId);
+        tokenGuard.clear(playerId);
     }
 
     /**
@@ -272,8 +276,14 @@ public final class LootScannerService implements Listener {
             return false;
         }
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查。
+        // pick / pick_N 为拾取写操作：要求面板已打开且 data[0] 与当前签发 token 一致。
+        // 使用 verify（不占用 in-flight 槽位）以允许快速连续拾取；物品合法性由
+        // handlePick 内 visibleItems + 距离重校验兜底。
         switch (action) {
-            case "pick" -> handlePick(player, -1);
+            case "pick" -> {
+                if (!verifyActionToken(player, data)) return true;
+                handlePick(player, -1);
+            }
             case "open_menu" -> menuOpenPlayers.add(player.getUniqueId());
             case "scroll_up" -> handleScroll(player, -1);
             case "scroll_down" -> handleScroll(player, 1);
@@ -287,6 +297,7 @@ public final class LootScannerService implements Listener {
                 if (action.startsWith("pick_")) {
                     try {
                         int index = Integer.parseInt(action.substring(5));
+                        if (!verifyActionToken(player, data)) return true;
                         handlePick(player, index);
                     } catch (NumberFormatException ignored) {
                         return false;
@@ -299,14 +310,14 @@ public final class LootScannerService implements Listener {
         return true;
     }
 
-    private static String guardAction(String action) {
-        if (action == null || action.isBlank()) {
-            return "pick";
-        }
-        if (action.startsWith("pick_")) {
-            return "pick";
-        }
-        return action;
+    /**
+     * 校验拾取令牌：要求 loot_panel 已打开且 data[0] 与当前签发 token 一致。
+     * 不占用 in-flight 槽位——拾取是高频连点操作，单次 token 在面板会话内可复用。
+     */
+    private boolean verifyActionToken(Player player, List<String> data) {
+        String supplied = data != null && !data.isEmpty() ? data.get(0) : "";
+        return uiId != null && packetBridge != null && packetBridge.isUiOpen(player, uiId)
+            && tokenGuard.verify(player.getUniqueId(), uiId, supplied);
     }
 
     /**
@@ -552,7 +563,7 @@ public final class LootScannerService implements Listener {
             hudOpenPlayers.add(playerId);
             debug("HUD_OPEN player=" + player.getName());
             // 打开后稍延迟推送当前状态
-            AxsScheduler.runTaskLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline() && hudOpenPlayers.contains(playerId)) {
                     scanForPlayer(player);
                 }

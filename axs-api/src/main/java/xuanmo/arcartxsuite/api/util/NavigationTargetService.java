@@ -120,7 +120,7 @@ public final class NavigationTargetService {
 
     public void start() {
         int ticks = Math.max(1, config.refreshTicks());
-        refreshTask = AxsScheduler.runTaskTimer(plugin, this::tick, ticks, ticks);
+        refreshTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, ticks, ticks);
     }
 
     public void shutdown() {
@@ -565,6 +565,14 @@ public final class NavigationTargetService {
                 .replace("%x%", String.valueOf((int) resolved.getX()))
                 .replace("%y%", String.valueOf((int) resolved.getY()))
                 .replace("%z%", String.valueOf((int) resolved.getZ()));
+            // 占位符展开后校验：玩家名/世界名理论上无分隔符，但占位符值可被配置注入，
+            // 最终命令统一过校验——命中分隔符拒绝执行
+            try {
+                command = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(command);
+            } catch (IllegalArgumentException e) {
+                logger.warning("到达命令含分隔符已拒绝 navId=" + target.navId() + " [" + command + "]");
+                continue;
+            }
             try {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             } catch (Throwable e) {

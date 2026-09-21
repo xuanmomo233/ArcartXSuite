@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.fishing.config.FatigueConfig;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 /**
  * 疲惫值引擎，负责：
@@ -240,7 +241,7 @@ public final class FatigueEngine {
             case "command" -> {
                 if (entry.command() != null && !entry.command().isEmpty()) {
                     String cmd = entry.command().replace("{player}", player.getName());
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                    ThrottledCommandExecutor.dispatch( cmd);
                 }
             }
             case "item" -> {

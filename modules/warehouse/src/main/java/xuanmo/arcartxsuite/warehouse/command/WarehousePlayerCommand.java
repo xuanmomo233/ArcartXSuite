@@ -126,6 +126,11 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
                 }
             }
             case "spreview" -> {
+                // 静默预览他人仓库与 preview 同级敏感——必须校验管理员权限
+                if (!player.hasPermission("arcartxsuite.warehouse.admin")) {
+                    player.sendMessage(fullMsg("player.no-permission"));
+                    return true;
+                }
                 if (args.length < 2) {
                     return true;
                 }

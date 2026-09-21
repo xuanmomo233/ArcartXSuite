@@ -27,6 +27,7 @@ ui:
       var.codeExpire = 0
       var.result = none
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.bound = packet['bound']
       var.qqId = packet['qqId']
       var.playerName = packet['playerName']
@@ -262,7 +263,7 @@ controls:
                   visible: "!var.bound"
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'request_code')
+                    Packet.send(var.packetId, 'request_code', var.actionToken)
                 children:
                   获取验证码背景:
                     type: Texture
@@ -301,7 +302,7 @@ controls:
                   visible: var.bound
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'unbind')
+                    Packet.send(var.packetId, 'unbind', var.actionToken)
                 children:
                   解绑背景:
                     type: Texture
@@ -419,7 +420,7 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.replyText != none){
-                      Packet.send(var.packetId, 'send_message', var.replyText)
+                      Packet.send(var.packetId, 'send_message', var.actionToken, var.replyText)
                       var.replyText = none
                     }
                 children:

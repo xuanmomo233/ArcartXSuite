@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.qqbot.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Map;
@@ -94,7 +93,7 @@ public final class QQBotService implements Listener {
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 定时清理过期验证码
-        cleanupTask = AxsScheduler.runAsyncTimer(plugin, () -> {
+        cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             bindService.cleanupExpiredCodes();
             // 清理已处理消息 ID 缓存
             processedMessageIds.clear();
@@ -199,6 +198,13 @@ public final class QQBotService implements Listener {
 
         if (!event.isGroupMessage()) return;
 
+        // 消息去重：OneBot 重连重放/多端上报可能重复投递同一 message_id，
+        // 重复处理会导致签到/积分/红包等指令被执行两次（set 每 5 分钟清空，覆盖重放窗口）
+        int messageId = event.messageId();
+        if (messageId != 0 && !processedMessageIds.add(event.userId() + ":" + messageId)) {
+            return;
+        }
+
         long groupId = event.groupId();
         QQBotGroupConfig groupConfig = findGroupConfig(groupId);
         if (groupConfig == null) return;
@@ -249,7 +255,7 @@ public final class QQBotService implements Listener {
 
             String colored = ChatColor.translateAlternateColorCodes('&', formatted);
             // 在主线程广播
-            AxsScheduler.runTask(plugin, () ->
+            Bukkit.getScheduler().runTask(plugin, () ->
                 Bukkit.broadcastMessage(colored));
 
             // 通知 UI 服务
@@ -348,7 +354,7 @@ public final class QQBotService implements Listener {
             if (binding == null) continue;
             Player player = Bukkit.getPlayerExact(binding.playerName());
             if (player == null || !player.isOnline()) continue;
-            AxsScheduler.runTask(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 player.sendTitle("", messages.get("player.at-title", nick), 10, 70, 20);
                 player.sendMessage(messages.get("player.at-message", nick));
             });
@@ -436,7 +442,7 @@ public final class QQBotService implements Listener {
                             .bindRaw("duration", mc.syncBanUseDuration() ? durationStr : "")
                             .bindQuoted("reason", mc.syncBanReason())
                             .build();
-                        AxsScheduler.runTask(plugin, () ->
+                        Bukkit.getScheduler().runTask(plugin, () ->
                             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
                     } catch (IllegalArgumentException e) {
                         logger.warning("禁言同步跳过: 非法玩家名 " + playerName);

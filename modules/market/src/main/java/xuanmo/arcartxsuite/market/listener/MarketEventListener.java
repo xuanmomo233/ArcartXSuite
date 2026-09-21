@@ -40,8 +40,11 @@ public class MarketEventListener implements Listener {
         if (service.isRecyclable(item)) {
             // 自动回收：取消拾取并给钱，向玩家发送反馈
             event.setCancelled(true);
-            service.recycleAuto(player, item.clone());
-            event.getItem().remove();
+            RecycleService.RecycleResult result = service.recycleAuto(player, item.clone());
+            // 仅回收成功才删除掉落物——货币桥不可用/存款失败时保留物品，避免吞物
+            if (result.success()) {
+                event.getItem().remove();
+            }
         }
     }
 

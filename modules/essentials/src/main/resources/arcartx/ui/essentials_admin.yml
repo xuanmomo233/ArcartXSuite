@@ -37,6 +37,7 @@ ui:
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.players = packet['players']
       var.playerCount = packet['playerCount']
       var.warps = packet['warps']
@@ -596,7 +597,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'heal', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'heal', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       治疗底:
                                         type: Texture
@@ -626,7 +627,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'feed', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'feed', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       喂食底:
                                         type: Texture
@@ -656,7 +657,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'fly', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'fly', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       飞行底:
                                         type: Texture
@@ -686,7 +687,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'god', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'god', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       无敌底:
                                         type: Texture
@@ -716,7 +717,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'teleport_to', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'teleport_to', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       传至底:
                                         type: Texture
@@ -746,7 +747,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'teleport_here', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'teleport_here', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       召来底:
                                         type: Texture
@@ -777,7 +778,7 @@ controls:
                                       visible: "var.chatAvailable == 'true'"
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'mute', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'mute', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       禁言按钮底:
                                         type: Texture
@@ -807,7 +808,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'kick', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'kick', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       踢出底:
                                         type: Texture
@@ -837,7 +838,7 @@ controls:
                                       height: 48
                                     action:
                                       clickLeft: |-
-                                        Packet.send(var.packetId, 'ban', self.parent.parent.parent.entry['name'])
+                                        Packet.send(var.packetId, 'ban', var.actionToken, self.parent.parent.parent.entry['name'])
                                     children:
                                       封禁底:
                                         type: Texture
@@ -1005,7 +1006,7 @@ controls:
                               height: 48
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'unban', self.parent.entry['uuid'])
+                                Packet.send(var.packetId, 'unban', var.actionToken, self.parent.entry['uuid'])
                             children:
                               解封底:
                                 type: Texture
@@ -1173,7 +1174,7 @@ controls:
                               height: 48
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'unmute', self.parent.entry['name'])
+                                Packet.send(var.packetId, 'unmute', var.actionToken, self.parent.entry['name'])
                             children:
                               解禁底:
                                 type: Texture
@@ -1227,7 +1228,7 @@ controls:
                   height: 44
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_warp', 'new_warp')
+                    Packet.send(var.packetId, 'set_warp', var.actionToken, 'new_warp')
                 children:
                   新建底:
                     type: Texture
@@ -1338,7 +1339,7 @@ controls:
                               height: 48
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'del_warp', self.parent.entry)
+                                Packet.send(var.packetId, 'del_warp', var.actionToken, self.parent.entry)
                             children:
                               删除底:
                                 type: Texture
@@ -1429,7 +1430,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_time', 'day')
+                    Packet.send(var.packetId, 'set_time', var.actionToken, 'day')
                 children:
                   白天底:
                     type: Texture
@@ -1462,7 +1463,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_time', 'night')
+                    Packet.send(var.packetId, 'set_time', var.actionToken, 'night')
                 children:
                   夜晚底:
                     type: Texture
@@ -1495,7 +1496,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_time', 'noon')
+                    Packet.send(var.packetId, 'set_time', var.actionToken, 'noon')
                 children:
                   正午底:
                     type: Texture
@@ -1537,7 +1538,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_weather', 'clear')
+                    Packet.send(var.packetId, 'set_weather', var.actionToken, 'clear')
                 children:
                   晴天底:
                     type: Texture
@@ -1570,7 +1571,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_weather', 'rain')
+                    Packet.send(var.packetId, 'set_weather', var.actionToken, 'rain')
                 children:
                   雨天底:
                     type: Texture
@@ -1603,7 +1604,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_weather', 'thunder')
+                    Packet.send(var.packetId, 'set_weather', var.actionToken, 'thunder')
                 children:
                   雷暴底:
                     type: Texture
@@ -1637,7 +1638,7 @@ controls:
                   height: 48
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'set_spawn')
+                    Packet.send(var.packetId, 'set_spawn', var.actionToken)
                 children:
                   出生点底:
                     type: Texture

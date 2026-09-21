@@ -169,7 +169,8 @@ final class DynamicShopContextImpl implements DynamicShopContext {
                     item.buyPrice() * multiplier,
                     item.sellPrice() * multiplier,
                     item.currency(), item.stockMode(), item.stockAmount(),
-                    item.limitPerPlayer(), item.limitReset(), item.discount()
+                    item.limitPerPlayer(), item.limitReset(), item.discount(),
+                    item.conditions()
                 );
             }
             pricedItems.put(key, item);
@@ -231,16 +232,30 @@ final class DynamicShopContextImpl implements DynamicShopContext {
         return sb.toString();
     }
 
-    /** 从跨服同步数据反序列化。 */
-    @SuppressWarnings("unchecked")
+    /** 从跨服同步数据反序列化（非严格模式，保持原行为）。 */
     void deserializeFromSync(String json) {
+        deserializeFromSync(json, false);
+    }
+
+    /**
+     * 从跨服同步数据反序列化。
+     *
+     * @param strict 严格校验：价格/乘数/库存做范围 clamp，非法数值归零而非原样写入，
+     *               阻断伪造消息注入 0 元购/负价/超大乘数
+     */
+    @SuppressWarnings("unchecked")
+    void deserializeFromSync(String json, boolean strict) {
         try {
             Map<String, Object> parsed = xuanmo.arcartxsuite.api.util.SimpleJsonParser.parse(json);
             // 动态商品
             dynamicItems.clear();
             Object itemsObj = parsed.get("dynamicItems");
             if (itemsObj instanceof java.util.List<?> itemsList) {
+                int accepted = 0;
                 for (Object itemObj : itemsList) {
+                    if (strict && accepted >= 512) {
+                        break;
+                    }
                     if (itemObj instanceof Map<?, ?> rawMap) {
                         Map<String, Object> itemMap = (Map<String, Object>) rawMap;
                         String key = String.valueOf(itemMap.get("key"));
@@ -254,12 +269,23 @@ final class DynamicShopContextImpl implements DynamicShopContext {
                         int stockAmount = ((Number) itemMap.getOrDefault("stockAmount", 0)).intValue();
                         int limitPerPlayer = ((Number) itemMap.getOrDefault("limitPerPlayer", 0)).intValue();
                         String limitReset = String.valueOf(itemMap.getOrDefault("limitReset", "never"));
+                        if (strict) {
+                            buyPrice = clampFinite(buyPrice, 0, 1_000_000_000.0);
+                            sellPrice = clampFinite(sellPrice, 0, 1_000_000_000.0);
+                            stockAmount = Math.max(0, Math.min(stockAmount, 1_000_000));
+                            limitPerPlayer = Math.max(0, Math.min(limitPerPlayer, 1_000_000));
+                            if (key == null || key.isBlank() || key.length() > 128 || itemId.isBlank()) {
+                                continue;
+                            }
+                        }
                         dynamicItems.put(key, new ShopItem(
                             key, ShopItemType.ITEM, null, java.util.List.of(),
                             new ItemDefinition(itemSource, itemId, null),
                             display, buyPrice, sellPrice, currency,
-                            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of()
+                            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of(),
+                            java.util.List.of()
                         ));
+                        accepted++;
                     }
                 }
             }
@@ -268,7 +294,12 @@ final class DynamicShopContextImpl implements DynamicShopContext {
             Object pmObj = parsed.get("priceMultipliers");
             if (pmObj instanceof Map<?, ?> pmMap) {
                 for (Map.Entry<?, ?> entry : pmMap.entrySet()) {
-                    priceMultipliers.put(String.valueOf(entry.getKey()), ((Number) entry.getValue()).doubleValue());
+                    double multiplier = ((Number) entry.getValue()).doubleValue();
+                    if (strict) {
+                        // 乘数合法区间 [0, 100]——0 等价免费是策略允许的，超界 clamp
+                        multiplier = clampFinite(multiplier, 0, 100.0);
+                    }
+                    priceMultipliers.put(String.valueOf(entry.getKey()), multiplier);
                 }
             }
             // 成交量
@@ -276,7 +307,9 @@ final class DynamicShopContextImpl implements DynamicShopContext {
             Object pcObj = parsed.get("purchaseCounts");
             if (pcObj instanceof Map<?, ?> pcMap) {
                 for (Map.Entry<?, ?> entry : pcMap.entrySet()) {
-                    purchaseCounts.put(String.valueOf(entry.getKey()), ((Number) entry.getValue()).intValue());
+                    int count = ((Number) entry.getValue()).intValue();
+                    purchaseCounts.put(String.valueOf(entry.getKey()),
+                        strict ? Math.max(0, Math.min(count, Integer.MAX_VALUE - 1)) : count);
                 }
             }
             // 状态 JSON
@@ -292,5 +325,13 @@ final class DynamicShopContextImpl implements DynamicShopContext {
     private static String escape(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** strict 模式的有限数 clamp：NaN/无穷按 0 处理，阻断注入非法数值。 */
+    private static double clampFinite(double value, double min, double max) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            return 0;
+        }
+        return Math.max(min, Math.min(max, value));
     }
 }

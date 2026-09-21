@@ -89,6 +89,10 @@ public final class CloudModuleService {
     /** 为 true 时输出签名、密钥 hash 等敏感诊断日志（见 config.yml cloud.debug）。 */
 
     private final boolean debugLogging;
+    /** true 时 native 验签不可用（明文构建/库缺失）云端响应一律按暂时故障拒绝 */
+    private final boolean requireNativeVerify;
+    /** 验签不可用告警只发一次（启动后首条云端响应），避免每请求刷屏 */
+    private volatile boolean insecureVerifyWarned;
     private volatile String apiBaseUrl;
     private final String qq;
     private final String apiKey;
@@ -124,6 +128,7 @@ public final class CloudModuleService {
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
         this.debugLogging = config.getBoolean("cloud.debug", false);
+        this.requireNativeVerify = config.getBoolean("cloud.require-native-verify", false);
         this.qq = config.getString("cloud.qq", "").trim();
         this.apiKey = config.getString("cloud.apiKey", "").trim();
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
@@ -355,6 +360,17 @@ public final class CloudModuleService {
 
     private SignedCloudResponse validateSignedResponse(String endpointKey, String label, SignedCloudResponse resp) {
         if (!responseSignatureVerifier.isActive()) {
+            // 验签不可用 = 明文信任。默认 fail-open 兼容开发构建；
+            // require-native-verify=true 时改 fail-closed，防验签失效被静默降级
+            if (requireNativeVerify) {
+                plugin.consoleWarn(label + " Native 验签不可用（cloud.require-native-verify=true），按暂时故障拒绝响应。");
+                return transientSignedResponse(resp, "native signature verifier unavailable");
+            }
+            if (!insecureVerifyWarned) {
+                insecureVerifyWarned = true;
+                plugin.consoleWarn("⚠ Native 验签不可用，云端响应将不做签名校验（明文信任）。"
+                    + "生产环境建议修复 native 安全库或开启 cloud.require-native-verify。");
+            }
             return resp;
         }
         if (resp == null) {

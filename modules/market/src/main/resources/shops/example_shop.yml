@@ -140,12 +140,14 @@ items:
     discount:
       "axsmarket.vip": 0.9    # VIP 享受 9 折
       "axsmarket.mvp": 0.8    # MVP 享受 8 折
-    # 上架条件（满足所有条件才显示在商店中）
-    conditions:
-      # 查看此商品所需的权限（空字符串表示无限制）
-      permission: ""
-      # 玩家最低等级要求（0 = 无限制，依赖等级插件支持）
-      min-level: 0
+    # 上架条件（满足所有条件才显示在商店中，由 AXS 统一条件系统评估）
+    # 每行一条表达式，支持写法：
+    #   "%player_level% >= 30"                        - PAPI 占位符比较（需 PlaceholderAPI）
+    #   "aria: player.hasPermission('xxx')"           - Aria 脚本（可判断权限等）
+    #   "js: player.getLevel() >= 10"                 - JS 脚本
+    #   "{variable} == value"                         - 上下文变量
+    # 也可使用 Map 列表或嵌套节（type: aria/js 或 placeholder+operator+value）
+    conditions: []              # 空 = 无限制
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 2: 原版 Minecraft 物品（带 NBT，每人每日限量）
@@ -167,9 +169,7 @@ items:
     limit-per-player: 128     # 每人每日最多购买 128 个
     limit-reset: "daily"
     discount: {}              # 空对象表示无折扣
-    conditions:
-      permission: ""
-      min-level: 0
+    conditions: []            # 无上架条件
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 3: MythicMobs 自定义物品（全服限量，周限购）
@@ -189,9 +189,9 @@ items:
     limit-reset: "weekly"
     discount: {}
     conditions:
-      # 购买此商品需要拥有特定权限
-      permission: "axsmarket.shop.legendary"
-      min-level: 30             # 最低等级 30 级
+      # 需要权限节点 + 原版等级 >= 30
+      - "aria: player.hasPermission('axsmarket.shop.legendary')"
+      - "%player_level% >= 30"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 4: NeigeItems 自定义物品（全服限量，日限购）
@@ -211,8 +211,7 @@ items:
     limit-reset: "daily"
     discount: {}
     conditions:
-      permission: ""
-      min-level: 10             # 最低等级 10 级
+      - "%player_level% >= 10"  # 原版等级 >= 10
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 5: Overture 自定义物品（全服限量，终身限购，VIP折扣）
@@ -233,8 +232,7 @@ items:
     discount:
       "axsmarket.vip": 0.85   # VIP 享受 8.5 折
     conditions:
-      permission: "axsmarket.shop.vip"
-      min-level: 0
+      - "aria: player.hasPermission('axsmarket.shop.vip')"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 6: MMOItems 自定义物品（每人限量，周限购）
@@ -255,8 +253,7 @@ items:
     limit-reset: "weekly"
     discount: {}
     conditions:
-      permission: ""
-      min-level: 20             # 最低等级 20 级
+      - "%player_level% >= 20"  # 原版等级 >= 20
 
   # ═══════════════════════════════════════════════════════════════════════════
   # 示例 7: 指令商品（不发放物品，只执行奖励指令）

@@ -16,7 +16,7 @@ import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 
@@ -85,7 +85,7 @@ public final class DefaultItemRewardDispatcher implements ItemRewardDispatcher {
         // 异步调用时调度到主线程并等待结果（通过同步阻塞队列）
         final java.util.concurrent.atomic.AtomicReference<DispatchResult> ref = new java.util.concurrent.atomic.AtomicReference<>();
         final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 ref.set(doDispatch(player, item, options));
             } finally {

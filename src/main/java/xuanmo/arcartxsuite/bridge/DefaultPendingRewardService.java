@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 /**
  * 统一待发放奖励服务的宿主默认实现。
@@ -47,10 +48,19 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
     /** 最大补发尝试次数，超过后自动丢弃 */
     private static final int MAX_ATTEMPTS = 10;
 
+    /** 认领 TTL：节点崩溃后其 claimed 行在该时长后被其他节点回收补发 */
+    private static final long CLAIM_TTL_MS = 600_000L;
+
     private final JavaPlugin plugin;
     private final Logger logger;
     private final StorageManager storageManager;
     private final ModuleRegistry registry;
+
+    /**
+     * 本节点认领标识（claimed_by 写入值）。
+     * 默认为启动随机 UUID；宿主在跨服服务就绪后经 {@link #setClaimOwner} 注入 nodeId。
+     */
+    private volatile String claimOwner = UUID.randomUUID().toString();
 
     public DefaultPendingRewardService(JavaPlugin plugin, Logger logger,
                                        StorageManager storageManager, ModuleRegistry registry) {
@@ -58,6 +68,12 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         this.logger = logger;
         this.storageManager = storageManager;
         this.registry = registry;
+    }
+
+    /** 设置认领标识（通常为跨服 nodeId；截断至 64 字符）。 */
+    public void setClaimOwner(@NotNull String owner) {
+        String trimmed = owner.trim();
+        this.claimOwner = trimmed.length() > 64 ? trimmed.substring(0, 64) : trimmed;
     }
 
     /**
@@ -104,6 +120,9 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                 tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_player ON axs_pending_rewards(player_uuid)");
                 tryExecute(stmt, "CREATE INDEX IF NOT EXISTS idx_pending_module_player ON axs_pending_rewards(source_module, player_uuid)");
             }
+            // 认领列：老表无此列则 ALTER 补齐（重复执行被 tryExecute 吞掉）
+            tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_at " + (isMysql ? "BIGINT" : "INTEGER"));
+            tryExecute(stmt, "ALTER TABLE axs_pending_rewards ADD COLUMN claimed_by " + (isMysql ? "VARCHAR(64)" : "TEXT"));
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "初始化 axs_pending_rewards 表失败", e);
         }
@@ -185,17 +204,92 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
         // 延迟 40 tick 补发，确保玩家数据加载完成
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
-            // 异步加载 pending 数据，避免主线程 DB 查询
+            // 异步认领+加载 pending 数据，避免主线程 DB 查询；
+            // 原子认领保证多节点部署下同一条目只被一个节点补发
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                List<PendingReward> pendingList = loadPending(uuid);
+                List<PendingReward> pendingList = claimAndLoadPending(uuid);
                 if (pendingList.isEmpty()) return;
                 // 物品发放等操作需在主线程执行
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) return;
+                    if (!player.isOnline()) {
+                        // 玩家在主线程切换前离线：释放认领，等待下次上线重试
+                        releaseClaimsAsync(pendingList);
+                        return;
+                    }
                     flushPending(player, pendingList);
                 });
             });
         }, 40L);
+    }
+
+    /**
+     * 原子认领并加载玩家的待发放奖励。
+     * <p>
+     * 先用单条 UPDATE 抢认领（仅未认领或认领已过 TTL 的行可被抢到），
+     * 再 SELECT 本次认领的行。并发节点间靠 claimed_at 的 WHERE 条件天然互斥：
+     * 后到者的 UPDATE 不影响已被认领且未过期的行。
+     * 节点崩溃时其 claimed 行在 {@link #CLAIM_TTL_MS} 后被其他节点回收。
+     */
+    private @NotNull List<PendingReward> claimAndLoadPending(@NotNull UUID playerUuid) {
+        long claimStamp = System.currentTimeMillis();
+        long expiredBefore = claimStamp - CLAIM_TTL_MS;
+        String owner = claimOwner;
+        try (Connection conn = storageManager.getHostConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE axs_pending_rewards SET claimed_at = ?, claimed_by = ? "
+                + "WHERE player_uuid = ? AND (claimed_at IS NULL OR claimed_at < ?)")) {
+                ps.setLong(1, claimStamp);
+                ps.setString(2, owner);
+                ps.setString(3, playerUuid.toString());
+                ps.setLong(4, expiredBefore);
+                ps.executeUpdate();
+            }
+            // 只取本次认领的行（claimed_by+claimed_at 精确匹配，不拿其他节点历史的行）
+            try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT * FROM axs_pending_rewards WHERE player_uuid = ? AND claimed_by = ? AND claimed_at = ? "
+                + "ORDER BY created_at ASC")) {
+                ps.setString(1, playerUuid.toString());
+                ps.setString(2, owner);
+                ps.setLong(3, claimStamp);
+                try (ResultSet rs = ps.executeQuery()) {
+                    List<PendingReward> result = new ArrayList<>();
+                    while (rs.next()) {
+                        result.add(new PendingReward(
+                            rs.getLong("id"),
+                            UUID.fromString(rs.getString("player_uuid")),
+                            rs.getString("source_module"),
+                            PendingReward.Type.valueOf(rs.getString("reward_type")),
+                            rs.getString("payload"),
+                            rs.getString("description"),
+                            rs.getLong("created_at"),
+                            rs.getInt("attempts")
+                        ));
+                    }
+                    return result;
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "认领待发放奖励失败: player=" + playerUuid, e);
+            return List.of();
+        }
+    }
+
+    /** 释放一组奖励的认领（玩家离线/不补发时调用，使其可被后续认领）。 */
+    private void releaseClaimsAsync(List<PendingReward> pendingList) {
+        if (pendingList.isEmpty()) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try (Connection conn = storageManager.getHostConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE axs_pending_rewards SET claimed_at = NULL, claimed_by = NULL WHERE id = ?")) {
+                for (PendingReward p : pendingList) {
+                    ps.setLong(1, p.id());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            } catch (SQLException e) {
+                logger.log(Level.WARNING, "释放待发放奖励认领失败", e);
+            }
+        });
     }
 
     /**
@@ -266,8 +360,10 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
                     }
                 }
                 if (!toIncrement.isEmpty()) {
+                    // 失败行递增 attempts 并清认领：本节点下次上线或其他节点（TTL 后）可重试
                     try (PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE axs_pending_rewards SET attempts = attempts + 1 WHERE id = ?")) {
+                        "UPDATE axs_pending_rewards SET attempts = attempts + 1, "
+                        + "claimed_at = NULL, claimed_by = NULL WHERE id = ?")) {
                         for (Long id : toIncrement) {
                             ps.setLong(1, id);
                             ps.addBatch();
@@ -371,7 +467,7 @@ public final class DefaultPendingRewardService implements PendingRewardService, 
             String parsed = cmd.replace("{player}", player.getName());
             // strip 前导 / ，Bukkit.dispatchCommand 期望不带 / 的命令
             if (parsed.startsWith("/")) parsed = parsed.substring(1);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+            ThrottledCommandExecutor.dispatch( parsed);
         }
         return true;
     }

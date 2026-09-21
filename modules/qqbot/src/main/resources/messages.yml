@@ -85,6 +85,7 @@ player:
   at:
     usage: "&c用法: /{0} at <QQ号> <消息>"
     invalid-qq: "&c无效的QQ号: &7{0}"
+    cooldown: "&c操作过于频繁，请 &e{0} &c秒后再试。"
     sent: "&a消息已通过QQ群发送给 &e{0}&a。"
   admin:
     no-permission: "&c你没有管理员权限。"

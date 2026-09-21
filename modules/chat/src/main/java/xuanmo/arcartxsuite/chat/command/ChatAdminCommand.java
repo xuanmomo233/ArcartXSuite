@@ -15,7 +15,9 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
+import xuanmo.arcartxsuite.chat.model.RedPacketType;
 import xuanmo.arcartxsuite.chat.service.ChatService;
+import xuanmo.arcartxsuite.chat.service.RedPacketService;
 
 /**
  * 聊天模块管理员命令处理器。
@@ -25,7 +27,8 @@ import xuanmo.arcartxsuite.chat.service.ChatService;
  */
 public final class ChatAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "mute", "unmute", "spy");
+    private static final List<String> ACTIONS = List.of("help", "status", "mute", "unmute", "spy", "redpacket");
+    private static final List<String> REDPACKET_KEYWORDS = List.of("normal", "lucky", "list", "reload");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
 
     private final Supplier<ChatService> serviceProvider;
@@ -57,6 +60,7 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
             case "mute" -> handleMute(sender, args);
             case "unmute" -> handleUnmute(sender, args);
             case "spy" -> handleSpy(sender, args);
+            case "redpacket" -> handleRedPacket(sender, label, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -67,6 +71,14 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         if (args.length == 2) return filter(ACTIONS, args[1]);
         if (args.length == 3 && List.of("mute", "unmute", "spy").contains(args[1].toLowerCase(Locale.ROOT))) {
             return null; // player names
+        }
+        if (args.length == 3 && "redpacket".equalsIgnoreCase(args[1])) {
+            ChatService svc = serviceProvider.get();
+            List<String> candidates = new ArrayList<>(REDPACKET_KEYWORDS);
+            if (svc != null && svc.redPacketService() != null) {
+                candidates.addAll(svc.redPacketService().presetIds());
+            }
+            return filter(candidates, args[2]);
         }
         if (args.length == 4) {
             if ("mute".equalsIgnoreCase(args[1])) return filter(List.of("permanent", "7d", "12h", "30m"), args[3]);
@@ -82,6 +94,7 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.mute", cmd));
         sender.sendMessage(fullMsg("help.unmute", cmd));
         sender.sendMessage(fullMsg("help.spy", cmd));
+        sender.sendMessage(fullMsg("help.redpacket", cmd));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -120,6 +133,70 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         boolean enabled = "on".equalsIgnoreCase(args[3]);
         ChatOperationResult result = svc.setSocialSpy(args[2], enabled, sender.getName());
         sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+    }
+
+    /**
+     * /axs chat redpacket 子命令：
+     * <ul>
+     *   <li>{@code redpacket normal|lucky <金额> <个数> [祝福语]} — 免扣款货币红包</li>
+     *   <li>{@code redpacket <presetId> [个数]} — 预设奖励池红包</li>
+     *   <li>{@code redpacket list} — 列出可用预设</li>
+     *   <li>{@code redpacket reload} — 重载预设</li>
+     * </ul>
+     */
+    private void handleRedPacket(CommandSender sender, String label, String[] args) {
+        ChatService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        RedPacketService rp = svc.redPacketService();
+        if (rp == null) { sender.sendMessage(fullMsg("redpacket.disabled")); return; }
+        if (args.length < 3) { sender.sendMessage(fullMsg("redpacket.admin-usage", "/" + label + " chat")); return; }
+        String sub = args[2].toLowerCase(Locale.ROOT);
+        ChatOperationResult result;
+        switch (sub) {
+            case "list" -> {
+                List<String> ids = rp.presetIds();
+                sender.sendMessage(fullMsg("redpacket.preset-list", ids.isEmpty() ? "-" : String.join(", ", ids)));
+                return;
+            }
+            case "reload" -> {
+                int loaded = rp.reloadPresets();
+                sender.sendMessage(fullMsg("redpacket.preset-reloaded", loaded));
+                return;
+            }
+            case "normal", "lucky" -> {
+                if (args.length < 5) { sender.sendMessage(fullMsg("redpacket.admin-usage", "/" + label + " chat")); return; }
+                java.math.BigDecimal total;
+                try {
+                    total = new java.math.BigDecimal(args[3]);
+                } catch (NumberFormatException exception) {
+                    sender.sendMessage(fullMsg("redpacket.invalid-amount"));
+                    return;
+                }
+                int count;
+                try {
+                    count = Integer.parseInt(args[4]);
+                } catch (NumberFormatException exception) {
+                    sender.sendMessage(fullMsg("redpacket.invalid-count", 50));
+                    return;
+                }
+                String wish = args.length >= 6 ? joinArgs(args, 5) : "";
+                result = rp.sendAdminPacket(sender, RedPacketType.parse(sub), total, count, wish);
+            }
+            default -> {
+                Integer count = null;
+                if (args.length >= 4) {
+                    try {
+                        count = Integer.parseInt(args[3]);
+                    } catch (NumberFormatException exception) {
+                        sender.sendMessage(fullMsg("redpacket.invalid-count", 50));
+                        return;
+                    }
+                }
+                result = rp.sendPresetPacket(sender, sub, count);
+            }
+        }
+        sender.sendMessage((messages != null ? messages.get("prefix") : "")
+            + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 
     private Instant parseDuration(String input) {

@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.market.dynamic.DynamicStrategyConfig;
  * @param storage                 存储配置
  * @param redis                   Redis 配置
  * @param crossServer             跨服通道配置
+ * @param crossServerSecurity     跨服入站消息安全策略
  * @param auction                 拍卖配置
  * @param shop                    商店配置
  * @param recycle                 回收配置
@@ -37,6 +38,7 @@ public record MarketModuleConfiguration(
     StorageConfiguration storage,
     RedisConfiguration redis,
     CrossServerChannelConfig crossServer,
+    CrossServerSecurityConfiguration crossServerSecurity,
     AuctionConfiguration auction,
     ShopConfiguration shop,
     RecycleConfiguration recycle,
@@ -52,8 +54,11 @@ public record MarketModuleConfiguration(
         UiConfiguration ui = loadUi(config);
         StorageConfiguration storage = loadStorage(config);
         RedisConfiguration redis = loadRedis(config);
-        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
-            config.getConfigurationSection("cross-server")
+        ConfigurationSection crossServerSection = config.getConfigurationSection("cross-server");
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(crossServerSection);
+        CrossServerSecurityConfiguration crossServerSecurity = new CrossServerSecurityConfiguration(
+            crossServerSection != null && crossServerSection.getBoolean("strict-validation", false),
+            crossServerSection != null && crossServerSection.getBoolean("require-signature", false)
         );
         AuctionConfiguration auction = loadAuction(config, logger);
         ShopConfiguration shop = loadShop(config);
@@ -62,7 +67,7 @@ public record MarketModuleConfiguration(
         PlayerShopConfiguration playerShop = loadPlayerShop(config, logger);
         MessagesConfiguration messages = loadMessages(messagesConfig);
 
-        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, auction, shop, recycle, dynamic, playerShop, messages);
+        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, crossServerSecurity, auction, shop, recycle, dynamic, playerShop, messages);
     }
 
     private static UiConfiguration loadUi(FileConfiguration config) {
@@ -79,6 +84,8 @@ public record MarketModuleConfiguration(
             readStr(config, "ui.sell-file", "arcartx/ui/market_sell.yml"),
             readStr(config, "ui.player-shop-ui-id", "AXS:market_player_shop"),
             readStr(config, "ui.player-shop-file", "arcartx/ui/market_player_shop.yml"),
+            readStr(config, "ui.shop-edit-ui-id", "AXS:market_shop_edit"),
+            readStr(config, "ui.shop-edit-file", "arcartx/ui/market_shop_edit.yml"),
             readStr(config, "ui.packet-id", "AXS_MARKET"),
             config.getBoolean("ui.register-ui-on-enable", true),
             config.getBoolean("ui.overwrite-ui-files", false)
@@ -263,6 +270,7 @@ public record MarketModuleConfiguration(
             readStr(sec, "auction-cancelled", "&7已取消上架。"),
             readStr(sec, "shop-bought", "&a购买成功！花费: &e%amount%"),
             readStr(sec, "shop-limit-reached", "&c该商品已达购买上限。"),
+            readStr(sec, "shop-condition-denied", "&c你不满足该商品的上架条件。"),
             readStr(sec, "recycle-success", "&a回收成功！获得: &e%amount%"),
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
@@ -290,6 +298,7 @@ public record MarketModuleConfiguration(
         String historyId, String historyFile,
         String sellId, String sellFile,
         String playerShopId, String playerShopFile,
+        String shopEditId, String shopEditFile,
         String packetId,
         boolean registerOnEnable, boolean overwriteUiFiles
     ) {}
@@ -360,6 +369,23 @@ public record MarketModuleConfiguration(
          */
         public boolean hasOverride() {
             return !shared;
+        }
+    }
+
+    /**
+     * 跨服入站消息安全策略。
+     *
+     * @param strictValidation 严格业务校验：BID_PLACED 校验挂单存在/有效/拍卖类型/金额范围，
+     *                         DYNAMIC_SHOP_UPDATE 对价格与乘数做范围 clamp
+     * @param requireSignature 要求入站消息必须带有效签名（宿主跨服签名开启且验签通过），
+     *                         未签名消息直接丢弃；签名未启用时开启此项等于拒绝全部跨服消息
+     */
+    public record CrossServerSecurityConfiguration(
+        boolean strictValidation,
+        boolean requireSignature
+    ) {
+        public static CrossServerSecurityConfiguration defaults() {
+            return new CrossServerSecurityConfiguration(false, false);
         }
     }
 
@@ -484,6 +510,7 @@ public record MarketModuleConfiguration(
         String auctionBidPlaced, String auctionOutbid, String auctionExpired,
         String auctionSold, String auctionCancelled,
         String shopBought, String shopLimitReached,
+        String shopConditionDenied,
         String recycleSuccess, String recycleNothing,
         String insufficientFunds, String itemBlacklisted, String batchRecycleDisabled,
         String playerShopListed, String playerShopBought, String playerShopSold,
@@ -495,6 +522,7 @@ public record MarketModuleConfiguration(
                 "&a出价成功！当前最高出价: &e%amount%", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%",
                 "&7您上架的 &e%item% &7已到期，已退回。", "&a您上架的 &e%item% &a已售出！收入: &e%amount%",
                 "&7已取消上架。", "&a购买成功！花费: &e%amount%", "&c该商品已达购买上限。",
+                "&c你不满足该商品的上架条件。",
                 "&a回收成功！获得: &e%amount%", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",

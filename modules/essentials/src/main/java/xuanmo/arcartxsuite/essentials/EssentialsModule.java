@@ -90,6 +90,8 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     private EssentialsAdminPacketHandler adminPacketHandler;
     private EssentialsCommandDelegate commandDelegate;
     private final Map<UUID, BukkitTask> poseMonitorTasks = new ConcurrentHashMap<>();
+    /** 坐下姿势的坐垫实体映射（玩家 UUID → ArmorStand），与命令委派器共享以便统一清理 */
+    private final Map<UUID, org.bukkit.entity.Entity> seatEntities = new ConcurrentHashMap<>();
 
     /**
      * 返回模块描述符（id=essentials，名称=Essentials，版本=1.0.0-beta）。
@@ -252,7 +254,9 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                 adminPacketHandler = new EssentialsAdminPacketHandler(
                     plugin, packetBridge, packetGuard,
                     playerService, teleportService, repository,
-                    chatMutableSupplier, adminBinding.runtimeUiId());
+                    chatMutableSupplier,
+                    () -> configuration.moderation().recordBanIp(),
+                    adminBinding.runtimeUiId());
             }
         }
 
@@ -343,10 +347,22 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             configuration, playerService, teleportService, repository,
             inventoryActionsService, chatMutableSupplier,
             menuPacketHandler, adminPacketHandler,
-            plugin, this::messages, poseMonitorTasks
+            plugin, this::messages, this::reloadSelf, poseMonitorTasks, seatEntities
         );
 
         logger.info("Essentials 模块已启动。");
+    }
+
+    /**
+     * 供 {@link EssentialsCommandDelegate} 的 reload 子命令回调：包装 {@link #onReload()}
+     * 的受检异常为运行时异常，由委派器统一捕获并回报失败消息。
+     */
+    private void reloadSelf() {
+        try {
+            onReload();
+        } catch (Exception e) {
+            throw new IllegalStateException(e.getMessage(), e);
+        }
     }
 
     /**
@@ -357,6 +373,12 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         commandDelegate = null;
         poseMonitorTasks.values().forEach(BukkitTask::cancel);
         poseMonitorTasks.clear();
+        seatEntities.values().forEach(entity -> {
+            if (entity.isValid()) {
+                entity.remove();
+            }
+        });
+        seatEntities.clear();
         menuPacketHandler = null;
         adminPacketHandler = null;
         if (inventoryActionsService != null) { inventoryActionsService.shutdown(); inventoryActionsService = null; }
@@ -412,6 +434,12 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             @EventHandler
             public void onPlayerQuit(PlayerQuitEvent event) {
                 cancelPoseTask(event.getPlayer().getUniqueId());
+                if (adminPacketHandler != null) {
+                    adminPacketHandler.clearPlayer(event.getPlayer().getUniqueId());
+                }
+                if (menuPacketHandler != null) {
+                    menuPacketHandler.clearPlayer(event.getPlayer().getUniqueId());
+                }
             }
         });
     }
@@ -420,6 +448,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         BukkitTask task = poseMonitorTasks.remove(playerId);
         if (task != null) {
             task.cancel();
+        }
+        org.bukkit.entity.Entity seat = seatEntities.remove(playerId);
+        if (seat != null && seat.isValid()) {
+            seat.remove();
         }
     }
 

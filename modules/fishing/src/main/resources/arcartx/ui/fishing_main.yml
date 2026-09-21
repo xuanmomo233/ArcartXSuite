@@ -1,6 +1,6 @@
 # AXS 钓鱼主界面（总览）
 # 打开方式: /fishing 或 /fishing main 或 Packet 触发
-# 数据交互: packetHandler init/update
+# 数据交互: packetHandler init
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务）+ 内容区
 #       内容区 = 等级大卡 + 图鉴卡 + 统计卡 + 快捷入口 + 最近捕获记录流
 # 视觉规范:
@@ -92,67 +92,6 @@ ui:
         }
       }
       // 数据就绪后触发每个条目图标的 seticon()
-      if(val.最近列表['捕获条目'] != none && val.最近列表['捕获条目']['鱼图标'] != none){
-        val.最近列表['捕获条目']['鱼图标'].seticon()
-      }
-      for(i in range(1, var.recentCount - 1)){
-        key = i.round()
-        e = val.最近列表['捕获条目' + key]
-        if(e != none && e['鱼图标'] != none){
-          e['鱼图标'].seticon()
-        }
-      }
-    # packetHandler: update
-    # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
-    update: |-
-      var.packetId = packet['packetId']
-      var.seasonName = packet['seasonName']
-      var.playerLevel = packet['playerLevel']
-      var.maxLevel = packet['maxLevel']
-      var.currentXp = packet['currentXp']
-      var.xpForNext = packet['xpForNext']
-      var.progressRatio = packet['progressRatio']
-      var.totalCaught = packet['totalCaught']
-      var.perfectCatches = packet['perfectCatches']
-      var.treasureCaught = packet['treasureCaught']
-      var.collectionCount = packet['collectionCount']
-      var.totalFishTypes = packet['totalFishTypes']
-      var.collectionPercent = packet['collectionPercent']
-      var.unspentTalentPoints = packet['unspentTalentPoints']
-      var.totalTalentPoints = packet['totalTalentPoints']
-      var.unlockedTalentCount = packet['unlockedTalentCount']
-      var.claimableRewardCount = packet['claimableRewardCount']
-      var.claimedRewardCount = packet['claimedRewardCount']
-      var.totalRewardCount = packet['totalRewardCount']
-      var.recentCatches = packet['recentCatches']
-      oldRecentCount = var.recentCount
-      var.recentCount = packet['recentCount']
-      if(var.recentCatches != none){
-        for(key in var.recentCatches.keys()){
-          json = packet['recentIconJson' + key]
-          if(json != none && json != ''){
-            var.recentIconJsons[key] = json
-          } else {
-            var.recentIconJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      // 仅在数量变化时才 remove+copy 重建列表，避免全量重建闪烁
-      if(var.recentCount != oldRecentCount){
-        while(val.最近列表.childrenCount() > 1){
-          val.最近列表.get(1).remove()
-        }
-        if(var.recentCount != none && var.recentCount > 1){
-          for(i in range(1, var.recentCount - 1)){
-            key = i.round()
-            if(val.最近列表['捕获条目'] != none) {
-              e = val.最近列表['捕获条目'].copy('捕获条目' + key)
-              e.entryKey = key
-            }
-          }
-        }
-      }
-      // 重新触发每个条目图标的 seticon（数据变了但 seticon 不会自动刷新）
       if(val.最近列表['捕获条目'] != none && val.最近列表['捕获条目']['鱼图标'] != none){
         val.最近列表['捕获条目']['鱼图标'].seticon()
       }

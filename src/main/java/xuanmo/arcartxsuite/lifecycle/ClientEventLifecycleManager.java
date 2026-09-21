@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -53,7 +53,7 @@ public final class ClientEventLifecycleManager implements Listener {
         if (Bukkit.isPrimaryThread()) {
             route.run();
         } else {
-            AxsScheduler.runTask(plugin, route);
+            Bukkit.getScheduler().runTask(plugin, route);
         }
     }
 
@@ -66,7 +66,7 @@ public final class ClientEventLifecycleManager implements Listener {
         if (Bukkit.isPrimaryThread()) {
             route.run();
         } else {
-            AxsScheduler.runTask(plugin, route);
+            Bukkit.getScheduler().runTask(plugin, route);
         }
     }
 }

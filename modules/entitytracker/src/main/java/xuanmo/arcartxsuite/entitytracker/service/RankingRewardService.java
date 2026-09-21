@@ -1,6 +1,6 @@
 package xuanmo.arcartxsuite.entitytracker.service;
 
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankRewardDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardAction;
@@ -210,7 +210,7 @@ public class RankingRewardService {
         }
 
         try {
-            return AxsScheduler.callSyncMethod(plugin, () ->
+            return Bukkit.getScheduler().callSyncMethod(plugin, () ->
                 actionExecutor.executeActions(
                     rewardDef.actions(), target, variables
                 )
@@ -421,99 +421,6 @@ public class RankingRewardService {
         } catch (Exception e) {
             logger.severe("切换奖励配置失败: " + e.getMessage());
             return "§c切换失败: " + e.getMessage();
-        }
-    }
-
-    /**
-     * 保存奖励配置到 Boss yml 文件。
-     *
-     * @param configId          配置 ID（可为空，新建时为空）
-     * @param rewardType        "weekly" 或 "monthly"
-     * @param rankingType       排行类型（如 "boss_damage"）
-     * @param bossId            Boss ID
-     * @param rankStart         起始名次
-     * @param rankEnd           结束名次
-     * @param rewardName        奖励名称
-     * @param rewardDescription 奖励描述
-     * @param rewardMoney       金钱奖励
-     * @param rewardDkp         DKP 奖励
-     * @return 操作结果消息
-     */
-    public String saveConfig(String configId, String rewardType, String rankingType, String bossId,
-                             int rankStart, int rankEnd, String rewardName, String rewardDescription,
-                             int rewardMoney, int rewardDkp) {
-        if (bossId == null || bossId.isBlank()) {
-            return "§c缺少 Boss ID";
-        }
-        if (rankStart < 1 || rankEnd < rankStart) {
-            return "§c名次范围无效";
-        }
-        if (!"weekly".equals(rewardType) && !"monthly".equals(rewardType)) {
-            return "§c奖励周期类型无效: " + rewardType;
-        }
-
-        File bossFile = findBossFile(bossId);
-        if (bossFile == null || !bossFile.exists()) {
-            return "§c找不到 Boss 配置文件: " + bossId;
-        }
-
-        try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(bossFile);
-            String ranksBasePath = "damage-ranking.ranking-rewards." + rewardType + ".ranks";
-
-            // 确保 enabled 字段存在
-            String enabledPath = "damage-ranking.ranking-rewards." + rewardType + ".enabled";
-            if (!yaml.contains(enabledPath)) {
-                yaml.set(enabledPath, true);
-            }
-
-            // 为名次范围内的每个名次写入奖励配置
-            for (int rank = rankStart; rank <= rankEnd; rank++) {
-                String rankPath = ranksBasePath + "." + rank + ".actions";
-                List<Map<String, Object>> actions = new ArrayList<>();
-
-                if (rewardMoney > 0) {
-                    Map<String, Object> action = new LinkedHashMap<>();
-                    action.put("type", "command");
-                    action.put("command", "points give {player} " + rewardMoney);
-                    actions.add(action);
-                }
-
-                if (rewardDkp > 0) {
-                    Map<String, Object> action = new LinkedHashMap<>();
-                    action.put("type", "command");
-                    action.put("command", "dkp give {player} " + rewardDkp);
-                    actions.add(action);
-                }
-
-                if (rewardName != null && !rewardName.isBlank()) {
-                    Map<String, Object> action = new LinkedHashMap<>();
-                    action.put("type", "message");
-                    action.put("target", "player");
-                    action.put("text", "&6" + rewardName);
-                    actions.add(action);
-                }
-
-                if (rewardDescription != null && !rewardDescription.isBlank()) {
-                    Map<String, Object> action = new LinkedHashMap<>();
-                    action.put("type", "message");
-                    action.put("target", "player");
-                    action.put("text", "&7" + rewardDescription);
-                    actions.add(action);
-                }
-
-                if (actions.isEmpty()) {
-                    yaml.set(rankPath, List.of());
-                } else {
-                    yaml.set(rankPath, actions);
-                }
-            }
-
-            yaml.save(bossFile);
-            return "§a配置保存成功: " + bossId + " " + ("weekly".equals(rewardType) ? "周" : "月") + "奖励 第" + rankStart + "-" + rankEnd + "名";
-        } catch (IOException e) {
-            logger.severe("保存奖励配置失败: " + e.getMessage());
-            return "§c保存失败: " + e.getMessage();
         }
     }
 

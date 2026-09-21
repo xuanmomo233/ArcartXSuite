@@ -20,7 +20,6 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 /**
  * 地形预加载推送服务：把服务端已生成区块的地形（每列 topY + 顶层方块材质）
@@ -29,7 +28,7 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
  * 管线：
  * <ol>
  *   <li>{@link #submit} 入队 MapChunk（64² 方块）坐标集合</li>
- *   <li>每 tick 泵：取队头 MapChunk → {@link AxsScheduler#runLocationTask} 在所属区域
+ *   <li>每 tick 泵：取队头 MapChunk → {@code Bukkit.getScheduler().runTask} 在所属区域
  *       线程内收集 16 个 MC chunk 的 {@link ChunkSnapshot}（只取已生成区块，不触发世界生成）</li>
  *   <li>快照齐了 → 异步线程提取列数据（topY + 材质 key 色板）→ 组包</li>
  *   <li>回到主线程 {@code player.sendPluginMessage} 逐块下发</li>
@@ -64,7 +63,7 @@ public final class MapTerrainPushService {
     /** 待发送的成品包（异步线程生产，主线程消费）。 */
     private final ConcurrentLinkedQueue<PendingPacket> outbox = new ConcurrentLinkedQueue<>();
 
-    private Object pumpTask;
+    private org.bukkit.scheduler.BukkitTask pumpTask;
     private volatile boolean stopped;
 
     private static final class PushJob {
@@ -108,13 +107,13 @@ public final class MapTerrainPushService {
     /** 启动每 tick 泵（主线程/global scheduler）。 */
     public void start() {
         stopped = false;
-        pumpTask = AxsScheduler.runTaskTimer(plugin, this::pump, 1L, 1L);
+        pumpTask = Bukkit.getScheduler().runTaskTimer(plugin, this::pump, 1L, 1L);
     }
 
     public void shutdown() {
         stopped = true;
         if (pumpTask != null) {
-            AxsScheduler.cancelTask(pumpTask);
+            pumpTask.cancel();
             pumpTask = null;
         }
         jobs.clear();
@@ -240,7 +239,7 @@ public final class MapTerrainPushService {
             return;
         }
         Location probe = new Location(world, cx * 64.0 + 32, 64, cz * 64.0 + 32);
-        AxsScheduler.runLocationTask(plugin, probe, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (stopped) {
                 return;
             }
@@ -262,7 +261,7 @@ public final class MapTerrainPushService {
                     // 单块失败跳过——该 1/16 区域留空
                 }
             }
-            AxsScheduler.runAsync(plugin, () -> {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 byte[] bytes = job.relaySink != null
                     ? buildChunkBody(cx, cz, job.sourceVersion, snaps)
                     : buildPacket(job.dimKey, cx, cz, job.sourceVersion, snaps);

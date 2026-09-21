@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.afkreward.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.LocalDate;
 import java.time.DayOfWeek;
@@ -419,7 +418,7 @@ public final class AfkRewardService {
 
         for (String cmd : commands != null ? commands : List.<String>of()) {
             String parsed = replaceRewardPlaceholders(cmd, player, afkStates.get(uuid), area);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+            xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(parsed);
         }
         // 发放物品奖励（统一通过 ItemRewardDispatcher：背包满转邮件，无邮件则掉落）
         dispatchItemRewards(player, itemRewards);
@@ -985,7 +984,7 @@ public final class AfkRewardService {
             }
             for (String cmd : commands != null ? commands : List.<String>of()) {
                 String parsed = replaceRewardPlaceholders(cmd, player, state, area);
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+                xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor.dispatch(parsed);
             }
             // 发放物品奖励（统一通过 ItemRewardDispatcher：背包满转邮件，无邮件则掉落）
             dispatchItemRewards(player, itemRewards);
@@ -1159,7 +1158,7 @@ public final class AfkRewardService {
 
     public List<AfkRewardRepository.PlayerStats> getLeaderboard() {
         if (System.currentTimeMillis() - leaderboardLastUpdate > 60000) {
-            AxsScheduler.runAsync(plugin, this::refreshLeaderboard);
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshLeaderboard);
         }
         return leaderboardCache;
     }

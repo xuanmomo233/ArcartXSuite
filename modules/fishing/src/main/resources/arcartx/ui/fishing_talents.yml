@@ -1,6 +1,6 @@
 # AXS 钓鱼天赋网络界面（五系常驻布局）
 # 打开方式: /fishing talents 或主界面导航跳转
-# 数据交互: packetHandler init/update (AXS_FISHING_TALENTS)
+# 数据交互: packetHandler init (AXS_FISHING_TALENTS)
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航 + 内容区
 #       内容区 = 天赋点信息栏 + 滚动树画布（5棵树横向排列+联动天赋底部一排）
 #       每棵树 = 网格布局+xy位移调控，Texture纯色块连线，正方形Slot显示icon
@@ -37,6 +37,7 @@ ui:
   packetHandler:
     init: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.seasonId = packet['seasonId']
       var.playerLevel = packet['level']
       var.talentPoints = packet['talentPoints']
@@ -50,108 +51,6 @@ ui:
       }
       var.activeBonuses = packet['activeBonuses']
       var.needRebuild = true
-    update: |-
-      var.allNodes = []
-      var.packetId = packet['packetId']
-      var.seasonId = packet['seasonId']
-      var.playerLevel = packet['level']
-      var.talentPoints = packet['talentPoints']
-      var.unspentTalentPoints = packet['unspentTalentPoints']
-      // 保存旧结构签名（节点总数 + 联动数），用于判断是否需要重建控件
-      oldLinkCount = var.linkCount
-      oldNodeTotal = 0
-      if(var.trees != none){
-        for(ti in range(0, var.treeIds.size() - 1)){
-          treeData = var.trees[var.treeIds[ti]]
-          if(treeData != none){
-            cnt = treeData['nodeCount']
-            if(cnt == none) {
-              cnt = 0
-            }
-            oldNodeTotal = oldNodeTotal + cnt
-          }
-        }
-      }
-      var.unlockedTalents = packet['unlockedTalents']
-      var.trees = packet['trees']
-      var.links = packet['links']
-      var.linkCount = packet['linkCount']
-      if(var.linkCount == none) {
-        var.linkCount = 0
-      }
-      var.activeBonuses = packet['activeBonuses']
-      // 重建 allNodeById，使节点控件的 entry 绑定能读取最新状态（unlocked/level/canLevelUp）
-      var.allNodeById = {}
-      for(ti in range(0, var.treeIds.size() - 1)){
-        treeKey = var.treeIds[ti]
-        treeData = var.trees[treeKey]
-        if(treeData != none){
-          nodes = treeData['nodes']
-          count = treeData['nodeCount']
-          if(count == none) {
-            count = 0
-          }
-          if(count > 0){
-            for(i in range(0, count - 1)){
-              node = nodes[i.round()]
-              if(node != none){
-                var.allNodes.add(node)
-                var.allNodeById[node['id']] = node
-              }
-            }
-          }
-        }
-      }
-      if(var.linkCount > 0){
-        for(i in range(0, var.linkCount - 1)){
-          link = var.links[i.round()]
-          if(link != none){
-            var.allNodes.add(link)
-            var.allNodeById[link['id']] = link
-          }
-        }
-      }
-      // 计算新结构签名：仅在节点总数或联动数变化时才重建控件
-      newNodeTotal = 0
-      for(ti in range(0, var.treeIds.size() - 1)){
-        treeData = var.trees[var.treeIds[ti]]
-        if(treeData != none){
-          cnt = treeData['nodeCount']
-          if(cnt == none) {
-            cnt = 0
-          }
-          newNodeTotal = newNodeTotal + cnt
-        }
-      }
-      if(newNodeTotal != oldNodeTotal || var.linkCount != oldLinkCount){
-        var.needRebuild = true
-      } else {
-        // 结构未变，仅刷新连线颜色（节点状态通过 entry 绑定自动更新）
-        for(node in var.allNodes){
-          childId = node['id']
-          prereqs = node['prerequisites']
-          if(prereqs == none || prereqs.size() == 0) {
-            continue
-          }
-          childUnlocked = node['unlocked'] == true
-          treeId = node['treeId']
-          if(treeId == '') {
-            treeId = 'meta'
-          }
-          dimColor = var.treeColors[treeId][0]
-          brightColor = var.treeColors[treeId][1]
-          lineColor = childUnlocked ? brightColor : '160,160,170,200'
-          if(treeId == 'meta'){
-            lineColor = childUnlocked ? '220,220,230,255' : '160,160,170,200'
-          }
-          for(prereq in prereqs){
-            lineCtrl = val.树画布['线_' + childId + '_' + prereq]
-            if(lineCtrl != none){
-              lineCtrl.normal = lineColor
-            }
-          }
-        }
-      }
   action:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
@@ -957,7 +856,7 @@ controls:
               height: 52
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'reset_talents')
+                Packet.send(var.packetId, 'reset_talents', var.actionToken)
             children:
               重置底:
                 type: Texture
@@ -1145,7 +1044,7 @@ controls:
                           clickLeft: |-
                             if(self.parent.entry != none){
                               if(self.parent.entry['canLevelUp'] == true){
-                                Packet.send(var.packetId, 'level_up_talent', self.parent.entry['id'])
+                                Packet.send(var.packetId, 'level_up_talent', var.actionToken, self.parent.entry['id'])
                               }
                             }
                       # 等级标签（右下角显示 当前等级/最大等级）

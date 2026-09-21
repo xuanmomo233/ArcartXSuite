@@ -1,6 +1,6 @@
 # AXS BattlePass 主界面（总览）
 # 打开方式: /bp open 或 Packet 触发
-# 数据交互: packetHandler init/update
+# 数据交互: packetHandler init
 # 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/奖励/任务）+ 内容区
 # 视觉规范:
 #   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
@@ -35,21 +35,6 @@ ui:
     #   - tierDisplay: 档位显示文本（含颜色代码）
     #   - progressRatio: 当前等级进度比例（0~1）
     init: |-
-      var.packetId = packet['packetId']
-      var.seasonName = packet['seasonName']
-      var.currentLevel = packet['currentLevel']
-      var.maxLevel = packet['maxLevel']
-      var.currentXp = packet['currentXp']
-      var.xpPerLevel = packet['xpPerLevel']
-      var.xpNeeded = packet['xpNeeded']
-      var.premiumUnlocked = packet['premiumUnlocked']
-      var.deluxeUnlocked = packet['deluxeUnlocked']
-      var.tier = packet['tier']
-      var.tierDisplay = packet['tierDisplay']
-      var.progressRatio = packet['progressRatio']
-    # packetHandler: update
-    # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
-    update: |-
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
       var.currentLevel = packet['currentLevel']

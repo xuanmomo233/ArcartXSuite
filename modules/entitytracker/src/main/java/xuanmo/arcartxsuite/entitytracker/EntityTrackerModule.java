@@ -57,8 +57,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private static final String TARGET_UI_FILE_PATH = "ui/attack_target_hud.yml";
     private static final String REWARD_MANAGER_UI_RESOURCE_PATH = "arcartx/ui/ranking_rewards.yml";
     private static final String REWARD_MANAGER_UI_FILE_PATH = "ui/ranking_rewards.yml";
-    private static final String REWARD_EDITOR_UI_RESOURCE_PATH = "arcartx/ui/reward_editor.yml";
-    private static final String REWARD_EDITOR_UI_FILE_PATH = "ui/reward_editor.yml";
     private static final String REWARD_HISTORY_UI_RESOURCE_PATH = "arcartx/ui/reward_history.yml";
     private static final String REWARD_HISTORY_UI_FILE_PATH = "ui/reward_history.yml";
 
@@ -117,7 +115,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         mappings.put(BOSS_UI_RESOURCE_PATH, BOSS_UI_FILE_PATH);
         mappings.put(TARGET_UI_RESOURCE_PATH, TARGET_UI_FILE_PATH);
         mappings.put(REWARD_MANAGER_UI_RESOURCE_PATH, REWARD_MANAGER_UI_FILE_PATH);
-        mappings.put(REWARD_EDITOR_UI_RESOURCE_PATH, REWARD_EDITOR_UI_FILE_PATH);
         mappings.put(REWARD_HISTORY_UI_RESOURCE_PATH, REWARD_HISTORY_UI_FILE_PATH);
         return new ModuleUiSpec(mappings, configuration != null && configuration.overwriteUiFile());
     }
@@ -126,15 +123,23 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     protected @NotNull PacketHandlerSpec createPacketHandlerSpec() {
         if (rewardService == null) return PacketHandlerSpec.NONE;
         String managerUiId = getModuleUiId(REWARD_MANAGER_UI_FILE_PATH);
-        String editorUiId = getModuleUiId(REWARD_EDITOR_UI_FILE_PATH);
         String historyUiId = getModuleUiId(REWARD_HISTORY_UI_FILE_PATH);
         rewardPacketHandler = new xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler(
             plugin, packetBridge, packetGuard,
             rewardService, rewardScheduler,
             () -> configuration,
-            managerUiId, editorUiId, historyUiId,
+            managerUiId, historyUiId,
             dataFolder, logger
         );
+        // 玩家退出时清理 UI 动作令牌与在途标记
+        org.bukkit.Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler
+            public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+                if (rewardPacketHandler != null) {
+                    rewardPacketHandler.clearPlayerState(event.getPlayer().getUniqueId());
+                }
+            }
+        }, plugin);
         return PacketHandlerSpec.of(rewardPacketHandler, 0, "AXS_ENTITY_TRACKER_REWARD", "entitytracker");
     }
 
@@ -461,7 +466,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 ds, actionExecutor, plugin, logger, () -> configuration, bossesDirectory
             );
             rewardScheduler = new RankingRewardScheduler(rewardService, plugin, logger);
-            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, plugin, logger, messages());
+            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, new File(dataFolder, "config.yml"), logger, messages());
 
             // 初始化调度器（传入主配置）
             rewardScheduler.initialize(moduleYaml);

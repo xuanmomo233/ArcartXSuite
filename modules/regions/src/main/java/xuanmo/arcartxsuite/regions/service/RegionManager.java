@@ -38,10 +38,6 @@ public final class RegionManager {
 
     /** 按世界分桶的空间索引：world -> cellKey -> 该 cell 内的区域列表 */
     private final Map<String, Map<Long, List<Region>>> spatialIndex = new ConcurrentHashMap<>();
-    /** 网格单元大小（X/Z 用 16，Y 用 16，便于按位打包成 long key） */
-    private static final int CELL = 16;
-    private static final int CELL_MASK = 0xFFFF; // 16 位掩码（支持负数位移）
-    private static final int Y_BITS = 16;
 
     public RegionManager(RegionsRepository repository, RegionsConfiguration config, Logger logger) {
         this.repository = repository;

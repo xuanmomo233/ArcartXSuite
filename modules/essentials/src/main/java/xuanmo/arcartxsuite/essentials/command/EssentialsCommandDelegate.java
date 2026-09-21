@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.essentials.command;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,7 +37,7 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 public final class EssentialsCommandDelegate {
 
     private static final List<String> ACTIONS = List.of(
-        "help", "status", "menu", "admin",
+        "help", "status", "reload", "menu", "admin",
         "fly", "god", "heal", "feed", "gamemode", "speed", "vanish", "afk", "back",
         "repair", "hat", "enderchest", "workbench", "anvil", "trash", "nick", "seen",
         "home", "sethome", "delhome", "warp", "setwarp", "delwarp",
@@ -60,7 +59,10 @@ public final class EssentialsCommandDelegate {
     private final EssentialsAdminPacketHandler adminPacketHandler;
     private final org.bukkit.plugin.Plugin plugin;
     private final Supplier<MessageProvider> messagesSupplier;
+    private final Runnable reloadAction;
     private final Map<UUID, BukkitTask> poseMonitorTasks;
+    /** 坐下姿势生成的坐垫实体（玩家 UUID → ArmorStand），用于退出/重坐/卸载时清理，防实体泄漏 */
+    private final Map<UUID, org.bukkit.entity.Entity> seatEntities;
 
     /**
      * 构造命令委派器，注入所有依赖的服务与组件。
@@ -76,6 +78,7 @@ public final class EssentialsCommandDelegate {
      * @param plugin                 宿主插件实例
      * @param messagesSupplier       消息提供者延迟供应者
      * @param poseMonitorTasks       姿势监控任务映射（坐/躺）
+     * @param seatEntities           坐下姿势的坐垫实体映射（与模块共享，用于统一清理）
      */
     public EssentialsCommandDelegate(
         EssentialsConfiguration configuration,
@@ -88,7 +91,9 @@ public final class EssentialsCommandDelegate {
         EssentialsAdminPacketHandler adminPacketHandler,
         org.bukkit.plugin.Plugin plugin,
         Supplier<MessageProvider> messagesSupplier,
-        Map<UUID, BukkitTask> poseMonitorTasks
+        Runnable reloadAction,
+        Map<UUID, BukkitTask> poseMonitorTasks,
+        Map<UUID, org.bukkit.entity.Entity> seatEntities
     ) {
         this.configuration = configuration;
         this.playerService = playerService;
@@ -100,7 +105,9 @@ public final class EssentialsCommandDelegate {
         this.adminPacketHandler = adminPacketHandler;
         this.plugin = plugin;
         this.messagesSupplier = messagesSupplier;
+        this.reloadAction = reloadAction;
         this.poseMonitorTasks = poseMonitorTasks;
+        this.seatEntities = seatEntities;
     }
 
     /**
@@ -116,6 +123,7 @@ public final class EssentialsCommandDelegate {
         switch (action) {
             case "help" -> sendHelp(sender, label, args[0]);
             case "status" -> sendStatus(sender);
+            case "reload" -> requirePermission(sender, "axs.essentials.admin", () -> reload(sender));
             case "menu" -> requirePlayer(sender, p -> {
                 if (menuPacketHandler != null) menuPacketHandler.openMenu(p);
                 else p.sendMessage(fullMsg("admin.ui.offline"));
@@ -279,7 +287,7 @@ public final class EssentialsCommandDelegate {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.gamemode.usage")); return; }
         GameMode mode = parseGameMode(args[2]);
         if (mode == null) { sender.sendMessage(fullMsg("admin.gamemode.invalid", args[2])); return; }
-        Player target = args.length >= 4 ? Bukkit.getPlayer(args[3]) : (sender instanceof Player p ? p : null);
+        Player target = args.length >= 4 ? Bukkit.getPlayerExact(args[3]) : (sender instanceof Player p ? p : null);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args.length >= 4 ? args[3] : ""));
             return;
@@ -317,7 +325,7 @@ public final class EssentialsCommandDelegate {
 
     private void handleSeen(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.seen.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target != null) {
             sender.sendMessage(fullMsg("admin.seen.online", args[2]));
             sender.sendMessage(fullMsg("admin.seen.ip", (target.getAddress() != null ? target.getAddress().getHostString() : "\u672a\u77e5")));
@@ -330,7 +338,7 @@ public final class EssentialsCommandDelegate {
             return;
         }
         requirePlayer(sender, p -> {
-            Player target = Bukkit.getPlayer(args[2]);
+            Player target = Bukkit.getPlayerExact(args[2]);
             if (target == null || !target.isOnline()) {
                 p.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
                 return;
@@ -341,13 +349,13 @@ public final class EssentialsCommandDelegate {
 
     private void handleTp(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.tp.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
         }
         if (args.length >= 4) {
-            Player dest = Bukkit.getPlayer(args[3]);
+            Player dest = Bukkit.getPlayerExact(args[3]);
             if (dest == null) {
                 sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[3]));
                 return;
@@ -422,7 +430,7 @@ public final class EssentialsCommandDelegate {
             sender.sendMessage(fullMsg("admin.ban.usage", temp ? "tempban" : "ban"));
             return;
         }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         String operator = sender.getName();
         long expiresAt = -1;
         int reasonStart = 3;
@@ -434,7 +442,8 @@ public final class EssentialsCommandDelegate {
         String reason = joinArgs(args, reasonStart, "\u65e0");
         if (target != null) {
             try {
-                String ip = target.getAddress() != null ? target.getAddress().getHostString() : null;
+                String ip = configuration.moderation().recordBanIp() && target.getAddress() != null
+                    ? target.getAddress().getHostString() : null;
                 repository.ban(target.getUniqueId(), target.getName(), reason, operator, expiresAt, ip);
                 String banMsg = configuration.moderation().banMessage()
                     .replace("{reason}", reason)
@@ -451,7 +460,7 @@ public final class EssentialsCommandDelegate {
     private void handleUnban(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.unban.usage")); return; }
         sender.sendMessage(fullMsg("admin.unban.tip"));
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target != null) {
             try {
                 repository.unban(target.getUniqueId());
@@ -492,7 +501,7 @@ public final class EssentialsCommandDelegate {
 
     private void handleKick(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.kick.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
@@ -506,7 +515,7 @@ public final class EssentialsCommandDelegate {
 
     private void handleWarn(CommandSender sender, String[] args) {
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.warn.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
@@ -534,7 +543,7 @@ public final class EssentialsCommandDelegate {
 
     private void handleSudo(CommandSender sender, String[] args) {
         if (args.length < 4) { sender.sendMessage(fullMsg("admin.sudo.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
@@ -548,7 +557,7 @@ public final class EssentialsCommandDelegate {
     private void handleInv(CommandSender sender, String[] args) {
         if (!(sender instanceof Player p)) { sender.sendMessage(fullMsg("common.only-player")); return; }
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.inv.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
+        Player target = Bukkit.getPlayerExact(args[2]);
         if (target == null) {
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[2]));
             return;
@@ -566,10 +575,13 @@ public final class EssentialsCommandDelegate {
                 stand.setMarker(true); stand.setInvulnerable(true);
             });
         seat.addPassenger(player);
+        seatEntities.put(player.getUniqueId(), seat);
         player.sendMessage(prefix() + configuration.messages().sitDown());
-        BukkitTask monitorTask = AxsScheduler.runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (!seat.isValid() || seat.getPassengers().isEmpty()) {
-                seat.remove(); cancelPoseTask(player.getUniqueId());
+                seat.remove();
+                seatEntities.remove(player.getUniqueId(), seat);
+                cancelPoseTask(player.getUniqueId());
             }
         }, 20L, 20L);
         poseMonitorTasks.put(player.getUniqueId(), monitorTask);
@@ -592,7 +604,7 @@ public final class EssentialsCommandDelegate {
         }
         player.sendMessage(prefix() + configuration.messages().layDown());
         // 定时检查玩家是否还处于睡觉状态，脱离后清理任务
-        BukkitTask monitorTask = AxsScheduler.runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (!player.isOnline() || !player.isSleeping()) {
                 cancelPoseTask(player.getUniqueId());
             }
@@ -603,6 +615,11 @@ public final class EssentialsCommandDelegate {
     private void cancelPoseTask(UUID playerId) {
         BukkitTask task = poseMonitorTasks.remove(playerId);
         if (task != null) task.cancel();
+        // 同步移除坐垫实体，避免重坐/退出后遗留隐形 ArmorStand
+        org.bukkit.entity.Entity seat = seatEntities.remove(playerId);
+        if (seat != null && seat.isValid()) {
+            seat.remove();
+        }
     }
 
     // --- Help / Status / Reload ---
@@ -626,6 +643,7 @@ public final class EssentialsCommandDelegate {
         sender.sendMessage(ChatColor.GRAY + messages().get("help.security-header"));
         sender.sendMessage(fullMsg("help.ban", label, alias));
         sender.sendMessage(fullMsg("help.admin", label, alias));
+        sender.sendMessage(fullMsg("help.reload", label, alias));
         sender.sendMessage(ChatColor.GRAY + messages().get("help.interact-header"));
         sender.sendMessage(fullMsg("help.sit-lay", label, alias));
     }
@@ -644,7 +662,7 @@ public final class EssentialsCommandDelegate {
 
     private void reload(CommandSender sender) {
         try {
-            // 通过回调触发 Module 重载
+            reloadAction.run();
             sender.sendMessage(fullMsg("reload.success"));
         } catch (Exception e) { sender.sendMessage(fullMsg("reload.failed", e.getMessage())); }
     }
@@ -653,7 +671,7 @@ public final class EssentialsCommandDelegate {
 
     private Player resolveTarget(CommandSender sender, String[] args, int index, Player fallback) {
         if (args.length > index) {
-            Player target = Bukkit.getPlayer(args[index]);
+            Player target = Bukkit.getPlayerExact(args[index]);
             if (target != null) return target;
             sender.sendMessage(prefix() + configuration.messages().playerNotFound().replace("{player}", args[index]));
         }

@@ -34,6 +34,7 @@ ui:
       var.renameValue = ''
       var.page = packet['page']
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.regions = packet['regions']
       var.regionCount = packet['regionCount']
       var.selId = packet['selId']
@@ -271,7 +272,7 @@ controls:
                     action:
                       click: |-
                         if(var.newRegionName != null && var.newRegionName != ''){
-                          Packet.send(var.packetId, 'create_region', var.newRegionName)
+                          Packet.send(var.packetId, 'create_region', var.actionToken, var.newRegionName)
                         }
                     children:
                       创建按钮背景:
@@ -412,7 +413,7 @@ controls:
                                   height: 34
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'delete_region', self.parent.entry['id'])
+                                    Packet.send(var.packetId, 'delete_region', var.actionToken, self.parent.entry['id'])
                                 children:
                                   删除按钮背景:
                                     type: Texture
@@ -457,7 +458,7 @@ controls:
                       height: 40
                     action:
                       click: |-
-                        Packet.send(var.packetId, 'redefine_region', var.selId)
+                        Packet.send(var.packetId, 'redefine_region', var.actionToken, var.selId)
                     children:
                       重定义按钮背景:
                         type: Texture
@@ -505,7 +506,7 @@ controls:
                     action:
                       click: |-
                         if(var.renameValue != null && var.renameValue != ''){
-                          Packet.send(var.packetId, 'rename_region', var.selId, var.renameValue)
+                          Packet.send(var.packetId, 'rename_region', var.actionToken, var.selId, var.renameValue)
                         }
                     children:
                       重命名按钮背景:
@@ -619,7 +620,7 @@ controls:
                                   height: 28
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'remove_member', var.selId, self.parent.entry['uuid'])
+                                    Packet.send(var.packetId, 'remove_member', var.actionToken, var.selId, self.parent.entry['uuid'])
                                 children:
                                   移除成员背景:
                                     type: Texture
@@ -733,7 +734,7 @@ controls:
                                   height: 30
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'allow')
+                                    Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'allow')
                                 children:
                                   允许按钮背景:
                                     type: Texture
@@ -760,7 +761,7 @@ controls:
                                   height: 30
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'deny')
+                                    Packet.send(var.packetId, 'set_flag', var.actionToken, var.selId, self.parent.entry['key'], 'deny')
                                 children:
                                   拒绝按钮背景:
                                     type: Texture
@@ -787,7 +788,7 @@ controls:
                                   height: 30
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'remove_flag', var.selId, self.parent.entry['key'])
+                                    Packet.send(var.packetId, 'remove_flag', var.actionToken, var.selId, self.parent.entry['key'])
                                 children:
                                   清除按钮背景:
                                     type: Texture
@@ -929,7 +930,7 @@ controls:
                                   height: 34
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'toggle_no_fly', self.parent.entry['name'])
+                                    Packet.send(var.packetId, 'toggle_no_fly', var.actionToken, self.parent.entry['name'])
                                 children:
                                   禁飞按钮背景:
                                     type: Texture
@@ -956,7 +957,7 @@ controls:
                                   height: 34
                                 action:
                                   click: |-
-                                    Packet.send(var.packetId, 'toggle_no_piston', self.parent.entry['name'])
+                                    Packet.send(var.packetId, 'toggle_no_piston', var.actionToken, self.parent.entry['name'])
                                 children:
                                   禁活塞按钮背景:
                                     type: Texture

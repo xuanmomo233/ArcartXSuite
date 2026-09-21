@@ -16,7 +16,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.item.PendingRewardService;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
@@ -179,16 +178,30 @@ public final class SeasonSettlementService {
             if (claimedRewards.contains(reward.rewardId())) continue;
 
             if (onlinePlayer != null) {
-                dispatcher.dispatch(onlinePlayer, reward);
+                dispatcher.dispatch(onlinePlayer, reward).whenComplete((ok, err) -> {
+                    if (err == null && Boolean.TRUE.equals(ok)) {
+                        markClaimed(uuid, seasonId, reward.rewardId());
+                    } else {
+                        // 发放失败：不标记领取，转入统一 PendingRewardService 补发
+                        logger.warning("战令等级奖励发放失败，转待补发 [" + uuid + "/" + reward.rewardId() + "]"
+                            + (err != null ? ": " + err.getMessage() : ""));
+                        savePendingToUnifiedService(uuid, reward, "战令等级奖励: " + reward.rewardId());
+                        markClaimed(uuid, seasonId, reward.rewardId());
+                    }
+                });
             } else {
                 // 离线玩家：暂存到统一 PendingRewardService，由宿主上线时补发
                 savePendingToUnifiedService(uuid, reward, "战令等级奖励: " + reward.rewardId());
+                markClaimed(uuid, seasonId, reward.rewardId());
             }
-            try {
-                repository.saveClaimedReward(uuid, seasonId, reward.rewardId());
-            } catch (SQLException e) {
-                logger.warning("标记结算奖励领取记录失败 [" + uuid + "/" + reward.rewardId() + "]: " + e.getMessage());
-            }
+        }
+    }
+
+    private void markClaimed(UUID uuid, String seasonId, String rewardId) {
+        try {
+            repository.saveClaimedReward(uuid, seasonId, rewardId);
+        } catch (SQLException e) {
+            logger.warning("标记结算奖励领取记录失败 [" + uuid + "/" + rewardId + "]: " + e.getMessage());
         }
     }
 
@@ -223,19 +236,24 @@ public final class SeasonSettlementService {
             if (claimedRewards.contains(settlementKey)) continue;
 
             if (onlinePlayer != null) {
-                dispatcher.dispatch(onlinePlayer, reward);
+                dispatcher.dispatch(onlinePlayer, reward).whenComplete((ok, err) -> {
+                    if (err != null || !Boolean.TRUE.equals(ok)) {
+                        // 发放失败：转统一 PendingRewardService 补发兜底
+                        logger.warning("战令结算奖励发放失败，转待补发 [" + uuid + "/" + settlementKey + "]"
+                            + (err != null ? ": " + err.getMessage() : ""));
+                        savePendingToUnifiedService(uuid, reward, "战令结算奖励: " + settlementKey);
+                    }
+                    // 标记已发放/已安排补发（防止重复入队）
+                    markClaimed(uuid, seasonId, settlementKey);
+                });
             } else {
                 // 离线玩家：mail 类型尝试通过邮件发送，其他类型暂存到统一 PendingRewardService
                 boolean sent = dispatcher.dispatchOffline(uuid, getPlayerName(uuid), reward);
                 if (!sent) {
                     savePendingToUnifiedService(uuid, reward, "战令结算奖励: " + settlementKey);
                 }
-            }
-            // 标记已发放（防止补发时重复）
-            try {
-                repository.saveClaimedReward(uuid, seasonId, settlementKey);
-            } catch (SQLException e) {
-                logger.warning("标记结算奖励发放记录失败 [" + uuid + "/" + settlementKey + "]: " + e.getMessage());
+                // 标记已发放（防止补发时重复）
+                markClaimed(uuid, seasonId, settlementKey);
             }
         }
     }

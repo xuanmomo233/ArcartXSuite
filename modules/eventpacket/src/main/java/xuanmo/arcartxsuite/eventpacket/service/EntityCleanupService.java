@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.eventpacket.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,10 +40,10 @@ public final class EntityCleanupService {
         long intervalTicks = config.intervalSeconds() * 20L;
         long warningTicks = intervalTicks - (config.warningSeconds() * 20L);
 
-        cleanupTask = AxsScheduler.runTaskTimer(plugin, this::executeCleanup, intervalTicks, intervalTicks);
+        cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::executeCleanup, intervalTicks, intervalTicks);
 
         if (config.warningSeconds() > 0 && config.warningSeconds() < config.intervalSeconds()) {
-            warningTask = AxsScheduler.runTaskTimer(plugin, () -> {
+            warningTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
                 String msg = ChatColor.translateAlternateColorCodes('&', config.warningMessage()
                     .replace("{seconds}", String.valueOf(config.warningSeconds())));
                 Bukkit.broadcastMessage(msg);

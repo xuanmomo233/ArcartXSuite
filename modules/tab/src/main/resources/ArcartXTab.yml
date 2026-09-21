@@ -74,6 +74,9 @@ settings:
 #跨服：连接参数见宿主 plugins/ArcartXSuite/config.yml cross-server 节
 cross-server:
   enabled: false  # 是否启用跨服玩家列表聚合（需宿主 cross-server 配置支持）
+  # 是否要求入站跨服消息必须带签名（宿主 cross-server 签名启用后建议开启；
+  # 默认 false 兼容无签名部署，但恶意/伪造节点可注入假玩家列表数据）
+  require-signature: false
 
 # Tab 定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件为一个 Tab 定义，文件名（去掉 .yml）即为定义 ID。

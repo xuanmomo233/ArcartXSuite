@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.map.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -100,19 +99,19 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     /** axsmap:request 同玩家最小请求间隔（防伪造客户端刷推送队列）。 */
     private static final long TERRAIN_REQUEST_INTERVAL_NANOS = 3_000_000_000L;
 
-    private final JavaPlugin plugin;
-    private final Logger logger;
+    final JavaPlugin plugin;
+    final Logger logger;
     private final PacketGuardAPI packetGuard;
-    private final MapModuleConfiguration configuration;
-    private final MapRepository repository;
-    private final PacketBridgeAPI bridge;
+    final MapModuleConfiguration configuration;
+    final MapRepository repository;
+    final PacketBridgeAPI bridge;
     private final String menuUiId;
     private final String hudUiId;
     private final MapSnapshotBuilder snapshotBuilder = new MapSnapshotBuilder();
     private final MapUiPacketHandler uiPacketHandler;
-    private final CurrencyBridgeAPI currencyBridgeManager;
+    final CurrencyBridgeAPI currencyBridgeManager;
     private final ItemSourceRegistry itemSourceRegistry;
-    private final ItemMatcherAPI itemMatcherSupport;
+    final ItemMatcherAPI itemMatcherSupport;
     private final WaypointBridgeAPI waypointBridge;
     private final AdyeshachNpcBridgeAPI npcBridge;
     private final xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge;
@@ -131,7 +130,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private NavigationTargetService targetService;
     /** 地形预加载推送服务（axsmap:terrain / axsmap:request 通道）。 */
     private MapTerrainPushService terrainPush;
-    private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
+    final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
+    final MapPreloadService preload;
+    final MapShareService share;
+    final MapChargeService charge;
     /** 玩家 → (导航键 type:id → 导航状态)，同一玩家可并行多个导航目标。 */
     private final ConcurrentMap<UUID, LinkedHashMap<String, MapNavigationState>> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
@@ -154,29 +156,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ConcurrentMap<UUID, Long> terrainRequestAt = new ConcurrentHashMap<>();
 
     /** 分享码 → 点位快照（内存缓存，过期/重启/重载后失效）。 */
-    private final ConcurrentMap<String, SharedPoint> shareCache = new ConcurrentHashMap<>();
 
     private record CachedPlayerMapData(Set<String> unlockedAnchors, List<MapWaypoint> waypoints) {
     }
-
-    /**
-     * 一条被分享的点位快照。
-     * <p>
-     * 路径点/标记点是玩家私有数据，分享不直接引用原记录 ID——
-     * 存完整快照，原主改名/删除不影响已领取和待领取的副本。
-     *
-     * @param type        {@code "waypoint"} 或 {@code "pin"}
-     * @param name        点位名称
-     * @param description 点位描述
-     * @param world       所在世界 ID（已 normalize）
-     * @param expiresAt   过期时间戳（毫秒）
-     */
-    private record SharedPoint(
-        String type, String name, String description, String world,
-        double x, double y, double z, String senderName, long expiresAt
-    ) {
-    }
-
     public MapService(
         JavaPlugin plugin,
         Logger logger,
@@ -224,6 +206,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.menuUiId = menuUiId;
         this.hudUiId = hudUiId;
         this.uiPacketHandler = new MapUiPacketHandler(this, configuration.client().packetId());
+        this.share = new MapShareService(this);
+        this.charge = new MapChargeService(this);
+        this.preload = new MapPreloadService(this);
         this.currencyBridgeManager = currencyBridgeManager;
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
@@ -236,7 +221,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.crossServerApi = crossServerApi;
     }
 
-    private String message(String key, Object... args) {
+    String message(String key, Object... args) {
         return messages == null ? "" : messages.get(key, args);
     }
 
@@ -247,7 +232,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      */
     public void start() throws Exception {
         repository.initialize();
-        loadPreloadVersionBumps();
+        preload.loadPreloadVersionBumps();
         if (configuration.navigation().enabled()) {
             waypointBridge.initialize("Map 导航");
         }
@@ -299,7 +284,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (configuration.crossServer().enabled() && crossServerApi != null) {
             crossServer = new MapCrossServerService(
                 plugin, logger, configuration.crossServer(), crossServerApi,
-                terrainPush, new CrossServerHandler());
+                terrainPush, new MapCrossServerHandler(this));
             crossServer.start();
             logger.info("[Map] 跨服地图已启用，节点 " + crossServer.nodeId()
                 + "，远程节点 " + crossServer.remoteNodeCount() + " 个");
@@ -347,7 +332,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         hudSessions.clear();
         defaultUnlocksEnsured.clear();
         playerDataCache.clear();
-        shareCache.clear();
+        share.clearAll();
     }
 
     /**
@@ -376,7 +361,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         long delay = configuration.join().showHudDelayTicks();
-        AxsScheduler.runTaskLater(
+        Bukkit.getScheduler().runTaskLater(
             plugin,
             () -> {
                 if (player.isOnline()) {
@@ -1648,238 +1633,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
         }
     }
-
-    @Override
-    public void shareWaypoint(Player player, String waypointId) {
-        if (player == null || !player.isOnline()) {
-            return;
-        }
-        if (!shareEnabled()) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
-            return;
-        }
-        MapWaypoint waypoint = findWaypoint(player, waypointId);
-        if (waypoint == null) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-not-found", waypointId)));
-            return;
-        }
-        sweepExpiredShares();
-        String code = newShareCode();
-        shareCache.put(code, new SharedPoint(
-            "waypoint", waypoint.name(), waypoint.description(), normalizeId(waypoint.world()),
-            waypoint.x(), waypoint.y(), waypoint.z(), player.getName(),
-            System.currentTimeMillis() + configuration.share().expireMinutes() * 60_000L
-        ));
-        broadcastShare(player, code, "waypoint", waypoint.name(), waypoint.world(),
-            waypoint.x(), waypoint.y(), waypoint.z());
-        sendPlayerResult(player, MapOperationResult.success(message("player.waypoint-shared", waypoint.name())));
-    }
-
-    @Override
-    public void sharePin(Player player, String pinId) {
-        if (player == null || !player.isOnline()) {
-            return;
-        }
-        if (!shareEnabled()) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
-            return;
-        }
-        MapPin pin = findPin(player, pinId);
-        if (pin == null) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.pin-not-found", pinId)));
-            return;
-        }
-        sweepExpiredShares();
-        String code = newShareCode();
-        shareCache.put(code, new SharedPoint(
-            "pin", pin.name(), pin.description(), normalizeId(pin.world()),
-            pin.x(), 0, pin.z(), player.getName(),
-            System.currentTimeMillis() + configuration.share().expireMinutes() * 60_000L
-        ));
-        broadcastShare(player, code, "pin", pin.name(), pin.world(), pin.x(), 0, pin.z());
-        sendPlayerResult(player, MapOperationResult.success(message("player.pin-shared", pin.name())));
-    }
-
-    /**
-     * 领取分享点位（聊天卡片点击 → Packet.send('AXS_MAP', 'claim_share', code)，或 /map claim &lt;code&gt;）。
-     * <p>
-     * 把快照复制为点击者自己的路径点/标记点，受其世界内数量上限约束；
-     * 不需要点击者与分享点位处于同一世界。
-     */
-    @Override
-    public void claimShare(Player player, String code) {
-        if (player == null || !player.isOnline()) {
-            return;
-        }
-        if (!shareEnabled()) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.share-disabled")));
-            return;
-        }
-        String normalized = normalizeId(code);
-        SharedPoint point = shareCache.get(normalized);
-        if (point == null) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.share-not-found", code)));
-            return;
-        }
-        if (point.expiresAt() < System.currentTimeMillis()) {
-            shareCache.remove(normalized);
-            sendPlayerResult(player, MapOperationResult.failure(message("player.share-expired")));
-            return;
-        }
-        if ("pin".equals(point.type())) {
-            claimPinShare(player, point);
-        } else {
-            claimWaypointShare(player, point);
-        }
-    }
-
-    private void claimWaypointShare(Player player, SharedPoint point) {
-        if (!configuration.waypoints().enabled()) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
-            return;
-        }
-        if (!configuration.worlds().containsKey(point.world())) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
-            return;
-        }
-        int limit = resolveWaypointLimit(player);
-        long countInWorld = loadWaypoints(player).stream()
-            .filter(waypoint -> normalizeId(waypoint.world()).equals(point.world())).count();
-        if (countInWorld >= limit) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
-            return;
-        }
-        long now = System.currentTimeMillis();
-        String waypointId = configuration.waypoints().idPrefix() + UUID.randomUUID().toString().replace("-", "");
-        MapWaypoint waypoint = new MapWaypoint(
-            normalizeId(waypointId), point.name(), point.description(),
-            point.world(), point.x(), point.y(), point.z(), now, now
-        );
-        try {
-            if (!repository.createWaypointIfUnderWorldLimit(player.getUniqueId(), waypoint, point.world(), limit)) {
-                sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
-                return;
-            }
-            invalidatePlayerDataCache(player.getUniqueId());
-            state(player).selectWorld(point.world());
-            state(player).selectWaypoint(waypoint.waypointId());
-            sync(player, false);
-            sendPlayerResult(player, MapOperationResult.success(
-                message("player.waypoint-claimed", point.name(), point.senderName())));
-        } catch (Exception e) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
-        }
-    }
-
-    private void claimPinShare(Player player, SharedPoint point) {
-        if (!configuration.waypoints().enabled()) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.custom-waypoints-disabled")));
-            return;
-        }
-        if (!configuration.worlds().containsKey(point.world())) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-world-not-configured")));
-            return;
-        }
-        int limit = resolveWaypointLimit(player);
-        long countInWorld = loadPins(player).stream()
-            .filter(pin -> normalizeId(pin.world()).equals(point.world())).count();
-        if (countInWorld >= limit) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
-            return;
-        }
-        long now = System.currentTimeMillis();
-        String pinId = configuration.waypoints().idPrefix() + "pin-" + UUID.randomUUID().toString().replace("-", "");
-        MapPin pin = new MapPin(
-            normalizeId(pinId), point.name(), point.description(),
-            point.world(), point.x(), point.z(), now, now
-        );
-        try {
-            if (!repository.createPinIfUnderWorldLimit(player.getUniqueId(), pin, point.world(), limit)) {
-                sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-limit-reached", limit)));
-                return;
-            }
-            invalidatePlayerDataCache(player.getUniqueId());
-            state(player).selectWorld(point.world());
-            state(player).selectPin(pin.pinId());
-            sync(player, false);
-            sendPlayerResult(player, MapOperationResult.success(
-                message("player.pin-claimed", point.name(), point.senderName())));
-        } catch (Exception e) {
-            sendPlayerResult(player, MapOperationResult.failure(message("player.waypoint-save-failed")));
-        }
-    }
-
-    /**
-     * 向全服在线玩家广播分享消息。
-     * <p>
-     * {@code share.card-id} 配置非空 → 聊天卡片（ArcartX/chat_card/&lt;card-id&gt;.yml）；
-     * 留空 → 纯文本降级广播，附带可点击的"[点击领取]"（RUN_COMMAND 执行 /map claim &lt;code&gt;）。
-     */
-    private void broadcastShare(Player sender, String code, String type, String name,
-                                String worldId, double x, double y, double z) {
-        WorldDefinition definition = configuration.worlds().get(normalizeId(worldId));
-        String worldName = definition == null ? worldId : resolveDisplayName(definition);
-        String coords = "waypoint".equals(type)
-            ? (long) x + ", " + (long) y + ", " + (long) z
-            : (long) x + ", " + (long) z;
-        String cardId = configuration.share() == null ? "" : configuration.share().cardId();
-        if (cardId != null && !cardId.isBlank() && bridge != null) {
-            Map<String, String> payload = Map.of(
-                "type", type,
-                "title", name == null ? "" : name,
-                "sender", sender.getName(),
-                "world", worldName,
-                "coords", coords,
-                "code", code,
-                "expire", String.valueOf(configuration.share().expireMinutes())
-            );
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                bridge.sendChatCard(online, cardId, payload);
-            }
-            return;
-        }
-        broadcastShareText(sender, code, type, name, worldName, coords);
-    }
-
-    /** 无聊天卡片时的纯文本广播降级：主文本 + 可点击的"[点击领取]"组件。 */
-    private void broadcastShareText(Player sender, String code, String type, String name,
-                                    String worldName, String coords) {
-        String typeName = "pin".equals(type)
-            ? message("player.share-type-pin")
-            : message("player.share-type-waypoint");
-        TextComponent line = new TextComponent(TextComponent.fromLegacyText(
-            ChatColor.translateAlternateColorCodes('&', message("player.share-broadcast",
-                sender.getName(), typeName, name, worldName, coords))));
-        TextComponent claimButton = new TextComponent(TextComponent.fromLegacyText(
-            ChatColor.translateAlternateColorCodes('&', message("player.share-claim-button"))));
-        claimButton.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/map claim " + code));
-        claimButton.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-            new ComponentBuilder(message("player.share-claim-hover", "/map claim " + code)).create()));
-        line.addExtra(claimButton);
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            online.spigot().sendMessage(line);
-        }
-    }
-
-    private boolean shareEnabled() {
-        return configuration.share() == null || configuration.share().enabled();
-    }
-
-    /** 生成不与现有分享冲突的 8 位随机码。 */
-    private String newShareCode() {
-        String code;
-        do {
-            code = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        } while (shareCache.containsKey(code));
-        return code;
-    }
-
-    /** 惰性清扫过期分享（在分享/领取入口调用，无需独立定时任务）。 */
-    private void sweepExpiredShares() {
-        long now = System.currentTimeMillis();
-        shareCache.values().removeIf(point -> point.expiresAt() < now);
-    }
-
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
@@ -2032,7 +1785,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!rangeResult.success()) {
             return rangeResult;
         }
-        PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.unlockItems());
+        MapChargeService.PreparedItemConsumption preparedItems = charge.prepareItemConsumption(player, anchor.unlockItems());
         if (!preparedItems.success()) {
             return MapOperationResult.failure(preparedItems.message());
         }
@@ -2044,14 +1797,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         } catch (Exception exception) {
             return MapOperationResult.failure(message("player.anchor-unlock-save-failed"));
         }
-        CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.unlockCurrencies());
+        MapChargeService.CurrencyChargeReceipt currencyReceipt = charge.chargeCurrencies(player, anchor.unlockCurrencies());
         if (!currencyReceipt.success()) {
             rollbackUnlock(player.getUniqueId(), anchor.id());
             return MapOperationResult.failure(currencyReceipt.message());
         }
-        MapOperationResult itemResult = applyItemConsumption(player, preparedItems);
+        MapOperationResult itemResult = charge.applyItemConsumption(player, preparedItems);
         if (!itemResult.success()) {
-            rollbackCurrencies(player, currencyReceipt.successfulCharges());
+            charge.rollbackCurrencies(player, currencyReceipt.successfulCharges());
             rollbackUnlock(player.getUniqueId(), anchor.id());
             return itemResult;
         }
@@ -2112,10 +1865,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         Set<Long> coords = new HashSet<>();
         for (PolygonRegion region : anchor.lightRegions()) {
-            collectPolygonChunks(coords, region.points());
+            MapPreloadService.collectPolygonChunks(coords, region.points());
         }
         if (anchor.lightRadius() > 0) {
-            collectCircleChunks(coords, anchor.x(), anchor.z(), anchor.lightRadius());
+            MapPreloadService.collectCircleChunks(coords, anchor.x(), anchor.z(), anchor.lightRadius());
         }
         // sourceVersion=0：锚点推送不参与世界预加载版本去重（merge 按列源标记处理）
         terrainPush.submit(player, world, coords, 0);
@@ -2235,7 +1988,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      * 锚点传送的扣费+传送段：权限/世界校验 → 物品预检 → 货币扣费 → 传送 →
      * 失败回滚。本服 UI 传送与跨服落地传送共用（跨服落地由调用方自行处理解锁要求）。
      */
-    private MapOperationResult performAnchorTeleport(Player player, AnchorDefinition anchor) {
+    MapOperationResult performAnchorTeleport(Player player, AnchorDefinition anchor) {
         MapOperationResult accessResult = validateAnchorAccess(player, anchor);
         if (!accessResult.success()) {
             return accessResult;
@@ -2244,11 +1997,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (world == null) {
             return MapOperationResult.failure(message("player.anchor-world-unloaded", anchor.worldId()));
         }
-        PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.teleportItems());
+        MapChargeService.PreparedItemConsumption preparedItems = charge.prepareItemConsumption(player, anchor.teleportItems());
         if (!preparedItems.success()) {
             return MapOperationResult.failure(preparedItems.message());
         }
-        CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.teleportCurrencies());
+        MapChargeService.CurrencyChargeReceipt currencyReceipt = charge.chargeCurrencies(player, anchor.teleportCurrencies());
         if (!currencyReceipt.success()) {
             return MapOperationResult.failure(currencyReceipt.message());
         }
@@ -2256,12 +2009,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             new Location(world, anchor.x(), anchor.y(), anchor.z(), player.getLocation().getYaw(), player.getLocation().getPitch())
         );
         if (!teleported) {
-            rollbackCurrencies(player, currencyReceipt.successfulCharges());
+            charge.rollbackCurrencies(player, currencyReceipt.successfulCharges());
             return MapOperationResult.failure(message("player.teleport-failed"));
         }
-        MapOperationResult itemResult = applyItemConsumption(player, preparedItems);
+        MapOperationResult itemResult = charge.applyItemConsumption(player, preparedItems);
         if (!itemResult.success()) {
-            rollbackCurrencies(player, currencyReceipt.successfulCharges());
+            charge.rollbackCurrencies(player, currencyReceipt.successfulCharges());
             return itemResult;
         }
         sync(player, false);
@@ -2269,7 +2022,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     /** 免费锚点落地：不扣费，仅做权限/世界校验后传送。 */
-    private MapOperationResult performFreeAnchorTeleport(Player player, AnchorDefinition anchor, World world) {
+    MapOperationResult performFreeAnchorTeleport(Player player, AnchorDefinition anchor, World world) {
         MapOperationResult accessResult = validateAnchorAccess(player, anchor);
         if (!accessResult.success()) {
             return accessResult;
@@ -2637,106 +2390,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         return MapOperationResult.success("");
     }
-
-    private CurrencyChargeReceipt chargeCurrencies(Player player, List<CurrencyCost> costs) {
-        if (costs == null || costs.isEmpty()) {
-            return CurrencyChargeReceipt.success(List.of());
-        }
-        for (CurrencyCost cost : costs) {
-            CurrencyBridge bridge = currencyBridgeManager.bridge(cost.currencyId());
-            if (bridge == null || !bridge.available()) {
-                return CurrencyChargeReceipt.failure(message("player.currency-bridge-unavailable", cost.currencyId()));
-            }
-            if (bridge.balance(player).compareTo(cost.amount()) < 0) {
-                return CurrencyChargeReceipt.failure(message("player.insufficient-balance", cost.currencyId()));
-            }
-        }
-        List<CurrencyCost> successfulCharges = new ArrayList<>();
-        for (CurrencyCost cost : costs) {
-            CurrencyBridge bridge = currencyBridgeManager.bridge(cost.currencyId());
-            if (bridge == null || !bridge.available()) {
-                rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure(message("player.currency-bridge-unavailable", cost.currencyId()));
-            }
-            CurrencyTransactionResult result = bridge.withdraw(player, cost.amount());
-            if (!result.success()) {
-                rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure(result.message().isBlank() ? message("player.charge-failed", cost.currencyId()) : result.message());
-            }
-            successfulCharges.add(cost);
-        }
-        return CurrencyChargeReceipt.success(successfulCharges);
-    }
-
-    private void rollbackCurrencies(Player player, List<CurrencyCost> successfulCharges) {
-        for (CurrencyCost cost : successfulCharges) {
-            CurrencyBridge bridge = currencyBridgeManager.bridge(cost.currencyId());
-            if (bridge != null && bridge.available()) {
-                bridge.deposit(player, cost.amount());
-            }
-        }
-    }
-
-    private PreparedItemConsumption prepareItemConsumption(Player player, List<ItemCost> itemCosts) {
-        if (itemCosts == null || itemCosts.isEmpty()) {
-            return PreparedItemConsumption.empty();
-        }
-        ItemStack[] contents = player.getInventory().getStorageContents();
-        ItemStack[] snapshot = cloneContents(contents);
-        int[] remaining = new int[contents.length];
-        int[] deductions = new int[contents.length];
-        for (int slot = 0; slot < contents.length; slot++) {
-            remaining[slot] = contents[slot] == null ? 0 : contents[slot].getAmount();
-        }
-        for (ItemCost cost : itemCosts) {
-            int need = Math.max(1, cost.amount());
-            for (int slot = 0; slot < contents.length && need > 0; slot++) {
-                ItemStack stack = contents[slot];
-                if (stack == null || stack.getType().isAir() || remaining[slot] <= 0 || !itemMatcherSupport.matches(cost.matcher(), stack)) {
-                    continue;
-                }
-                int take = Math.min(need, remaining[slot]);
-                remaining[slot] -= take;
-                deductions[slot] += take;
-                need -= take;
-            }
-            if (need > 0) {
-                return PreparedItemConsumption.failure(message("player.missing-unlock-items"));
-            }
-        }
-        return PreparedItemConsumption.success(snapshot, deductions);
-    }
-
-    private MapOperationResult applyItemConsumption(Player player, PreparedItemConsumption prepared) {
-        if (prepared == null || !prepared.success() || !prepared.hasChanges()) {
-            return MapOperationResult.success("");
-        }
-        ItemStack[] updatedContents = cloneContents(prepared.originalContents());
-        for (int slot = 0; slot < updatedContents.length; slot++) {
-            if (prepared.deductions()[slot] <= 0 || updatedContents[slot] == null) {
-                continue;
-            }
-            int updatedAmount = updatedContents[slot].getAmount() - prepared.deductions()[slot];
-            if (updatedAmount <= 0) {
-                updatedContents[slot] = null;
-            } else {
-                updatedContents[slot].setAmount(updatedAmount);
-            }
-        }
-        player.getInventory().setStorageContents(updatedContents);
-        player.updateInventory();
-        return MapOperationResult.success("");
-    }
-
-    private void rollbackItemConsumption(Player player, PreparedItemConsumption prepared) {
-        if (player == null || prepared == null || !prepared.success() || !prepared.hasChanges()) {
-            return;
-        }
-        player.getInventory().setStorageContents(cloneContents(prepared.originalContents()));
-        player.updateInventory();
-    }
-
-    private void sync(Player player, boolean initPacket) {
+    void sync(Player player, boolean initPacket) {
         // 单次快照供 menu+hud 复用（原来各自 buildSnapshot，每 tick 双倍开销）
         MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
         syncMenu(player, initPacket, snapshot);
@@ -2948,7 +2602,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      * 供客户端 mod 将 worldId 匹配到本地 MC 维度（overworld/the_nether 等）。
      */
     /** PolygonRegion 列表 → 顶点列表列表（SnapshotBuilder 内部传递格式）。 */
-    private static List<List<int[]>> toRegionPoints(List<PolygonRegion> regions) {
+    static List<List<int[]>> toRegionPoints(List<PolygonRegion> regions) {
         if (regions == null || regions.isEmpty()) {
             return List.of();
         }
@@ -2962,7 +2616,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     /** 世界ID→MC维度键的最近成功解析缓存：BSkyBlock 等动态世界卸载瞬间 Bukkit.getWorld 返回 null，用缓存兜底防下发空维度。 */
     private static final ConcurrentMap<String, String> RESOLVED_DIMENSION_CACHE = new ConcurrentHashMap<>();
 
-    private static String resolveDimension(WorldDefinition world) {
+    static String resolveDimension(WorldDefinition world) {
         World bukkitWorld = resolveWorld(world.id());
         if (bukkitWorld != null) {
             String key = bukkitWorld.getKey().toString();
@@ -2973,7 +2627,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     /** worldId → Bukkit World：精确匹配优先，退回 case-insensitive 遍历（文件名可能含大写）。 */
-    private static World resolveWorld(String worldId) {
+    static World resolveWorld(String worldId) {
         World bukkitWorld = Bukkit.getWorld(worldId);
         if (bukkitWorld == null) {
             for (World w : Bukkit.getWorlds()) {
@@ -2994,7 +2648,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      * @param world 已解析的 Bukkit 世界（ess SpawnBackend 的 context）
      * @return 出生点 Location；world 为 null 时返回 null
      */
-    private Location resolveWorldSpawn(World world) {
+    Location resolveWorldSpawn(World world) {
         if (world == null) {
             return null;
         }
@@ -3014,231 +2668,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         return world.getSpawnLocation();
     }
-
-    /** 世界预加载区域 → 多边形并集（preload.radius 圆心=配置 center 或出生点链，16 边形近似）。 */
-    private List<List<int[]>> preloadRegionPoints(WorldDefinition world) {
-        List<List<int[]>> out = new ArrayList<>(toRegionPoints(world.preloadRegions()));
-        if (world.preloadRadius() > 0) {
-            Location center = resolveWorldCenter(world);
-            if (center != null) {
-                out.add(circlePoints(center.getX(), center.getZ(), world.preloadRadius()));
-            }
-        }
-        return out;
-    }
-
-    // ─── 预加载版本手动刷新（/axs map refresh <worldId>）────────────
-    //
-    // 语义：bump 计数持久化在 data/map/preload-bumps.properties，有效版本 =
-    // hash(配置版本, bump)。配置改动 → 基线哈希变 → 版本自然变；手动刷新 →
-    // bump+1 → 版本变。重启后 bump 不丢，版本不回落，避免二次全量重拉。
-    private final Map<String, Integer> preloadVersionBumps = new ConcurrentHashMap<>();
-
-    private File preloadBumpFile() {
-        return new File(plugin.getDataFolder(), "data/map/preload-bumps.properties");
-    }
-
-    private void loadPreloadVersionBumps() {
-        File file = preloadBumpFile();
-        if (!file.isFile()) {
-            return;
-        }
-        java.util.Properties props = new java.util.Properties();
-        try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
-            props.load(in);
-            for (String key : props.stringPropertyNames()) {
-                try {
-                    preloadVersionBumps.put(normalizeId(key), Integer.parseInt(props.getProperty(key).trim()));
-                } catch (NumberFormatException ignored) {
-                    // 单条非法跳过
-                }
-            }
-        } catch (Exception e) {
-            logger.warning("读取预加载版本刷新记录失败: " + e.getMessage());
-        }
-    }
-
-    private void savePreloadVersionBumps() {
-        File file = preloadBumpFile();
-        file.getParentFile().mkdirs();
-        java.util.Properties props = new java.util.Properties();
-        for (Map.Entry<String, Integer> e : preloadVersionBumps.entrySet()) {
-            props.setProperty(e.getKey(), String.valueOf(e.getValue()));
-        }
-        try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
-            props.store(out, "map preload version bumps (manual refresh counters)");
-        } catch (Exception e) {
-            logger.warning("写入预加载版本刷新记录失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 世界有效预加载版本号：手动 bump 优先于配置哈希基线。
-     * payload 下发与 terrainPush sourceVersion 必须同源，否则客户端永判过期。
-     */
-    private int effectivePreloadVersion(WorldDefinition world) {
-        Integer bump = preloadVersionBumps.get(world.id());
-        if (bump == null) {
-            return world.preloadVersion();
-        }
-        return Math.max(1, java.util.Objects.hash(world.preloadVersion(), bump) & 0x7FFFFFFF);
-    }
-
-    /**
-     * 管理员手动刷新某世界的预加载版本：bump+1 持久化。
-     * 下次快照下发新版本号，客户端发现 sourceVersion 过期自动重拉。
-     */
-    public MapOperationResult refreshPreloadVersion(String worldId) {
-        WorldDefinition world = configuration.worlds().get(normalizeId(worldId));
-        if (world == null) {
-            return MapOperationResult.failure(message("refresh.world-unknown", worldId));
-        }
-        if (!world.hasPreload()) {
-            return MapOperationResult.failure(message("refresh.world-no-preload", world.id()));
-        }
-        int bump = preloadVersionBumps.merge(world.id(), 1, Integer::sum);
-        savePreloadVersionBumps();
-        return MapOperationResult.success(
-            message("refresh.done", world.id(), effectivePreloadVersion(world)));
-    }
-
-    /**
-     * 世界中心点：配置 preload.center 优先，否则 ess→Bukkit 出生点链。
-     * 双用途：预加载圆心 + 客户端浏览非当前世界的默认视野中心。
-     */
-    private Location resolveWorldCenter(WorldDefinition world) {
-        World bukkitWorld = resolveWorld(world.id());
-        if (world.hasPreloadCenter()) {
-            return new Location(bukkitWorld, world.preloadCenterX(), 0, world.preloadCenterZ());
-        }
-        return resolveWorldSpawn(bukkitWorld);
-    }
-
-    /** 世界预加载覆盖的 MapChunk 坐标集合（64² 网格，逐项 {cx,cz}）。
-     *  圆形部分实时取当前 spawn（/mv setspawn 即生效），
-     *  多边形部分按 WorldDefinition 缓存（配置重载后新实例自然换键）。 */
-    private final Map<WorldDefinition, Set<Long>> preloadRegionCoordCache = new ConcurrentHashMap<>();
-
-    private List<int[]> preloadChunkCoords(WorldDefinition world) {
-        Set<Long> coords = new HashSet<>();
-        if (world.preloadRadius() > 0) {
-            Location center = resolveWorldCenter(world);
-            if (center != null) {
-                collectCircleChunks(coords, center.getX(), center.getZ(), world.preloadRadius());
-            }
-        }
-        coords.addAll(preloadRegionChunkCoords(world));
-        List<int[]> out = new ArrayList<>(coords.size());
-        for (long packed : coords) {
-            out.add(new int[]{(int) (packed >> 32), (int) packed});
-        }
-        return out;
-    }
-
-    /** 多边形预加载区域覆盖的块坐标（打包 long），按 WorldDefinition 缓存。 */
-    private Set<Long> preloadRegionChunkCoords(WorldDefinition world) {
-        Set<Long> cached = preloadRegionCoordCache.get(world);
-        if (cached != null) {
-            return cached;
-        }
-        Set<Long> coords = new HashSet<>();
-        for (PolygonRegion region : world.preloadRegions()) {
-            collectPolygonChunks(coords, region.points());
-        }
-        preloadRegionCoordCache.putIfAbsent(world, coords);
-        return coords;
-    }
-
-    /**
-     * 圆形区域覆盖到的 MapChunk 集合。判定用"块中心距 ≤ r + 块对角线半长"
-     * （多收边缘块无害——推送量略大但不漏）。
-     */
-    private static void collectCircleChunks(Set<Long> out, double cx, double cz, double radius) {
-        int min = (int) Math.floor((cx - radius) / 64.0);
-        int max = (int) Math.floor((cx + radius) / 64.0);
-        int zMin = (int) Math.floor((cz - radius) / 64.0);
-        int zMax = (int) Math.floor((cz + radius) / 64.0);
-        double limit = radius + 45.3; // 64/2 * √2 ≈ 45.25
-        double limitSq = limit * limit;
-        for (int ccx = min; ccx <= max; ccx++) {
-            for (int ccz = zMin; ccz <= zMax; ccz++) {
-                double dx = ccx * 64.0 + 32 - cx;
-                double dz = ccz * 64.0 + 32 - cz;
-                if (dx * dx + dz * dz <= limitSq) {
-                    out.add(((long) ccx << 32) | (ccz & 0xffffffffL));
-                }
-            }
-        }
-    }
-
-    /**
-     * 多边形区域覆盖到的 MapChunk 集合：包围盒内逐块判定——
-     * 块中心在多边形内、或任一顶点落在块内、或多边形任一边中点落在块内。
-     */
-    private static void collectPolygonChunks(Set<Long> out, List<int[]> points) {
-        if (points == null || points.size() < 3) {
-            return;
-        }
-        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
-        int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
-        for (int[] p : points) {
-            minX = Math.min(minX, p[0]);
-            maxX = Math.max(maxX, p[0]);
-            minZ = Math.min(minZ, p[1]);
-            maxZ = Math.max(maxZ, p[1]);
-        }
-        for (int ccx = (int) Math.floor(minX / 64.0); ccx <= (int) Math.floor(maxX / 64.0); ccx++) {
-            for (int ccz = (int) Math.floor(minZ / 64.0); ccz <= (int) Math.floor(maxZ / 64.0); ccz++) {
-                int bx = ccx * 64, bz = ccz * 64;
-                if (pointInPolygon(points, bx + 32.0, bz + 32.0) || chunkTouchesPolygon(points, bx, bz)) {
-                    out.add(((long) ccx << 32) | (ccz & 0xffffffffL));
-                }
-            }
-        }
-    }
-
-    /** 顶点/边中点是否落在 64² 块内（含边界）。 */
-    private static boolean chunkTouchesPolygon(List<int[]> points, int bx, int bz) {
-        int n = points.size();
-        for (int i = 0, j = n - 1; i < n; j = i++) {
-            int[] a = points.get(i), b = points.get(j);
-            if (a[0] >= bx && a[0] < bx + 64 && a[1] >= bz && a[1] < bz + 64) {
-                return true;
-            }
-            double mx = (a[0] + b[0]) / 2.0, mz = (a[1] + b[1]) / 2.0;
-            if (mx >= bx && mx < bx + 64 && mz >= bz && mz < bz + 64) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** 射线法判点是否在多边形内。 */
-    private static boolean pointInPolygon(List<int[]> pts, double x, double z) {
-        boolean inside = false;
-        for (int i = 0, j = pts.size() - 1; i < pts.size(); j = i++) {
-            double xi = pts.get(i)[0], zi = pts.get(i)[1];
-            double xj = pts.get(j)[0], zj = pts.get(j)[1];
-            if ((zi > z) != (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) {
-                inside = !inside;
-            }
-        }
-        return inside;
-    }
-
-    /** 圆 → 16 边形顶点列表（与 MapSnapshotBuilder 的 circleToPolygon 同款，service 侧自用）。 */
-    private static List<int[]> circlePoints(double cx, double cz, double radius) {
-        List<int[]> points = new ArrayList<>(16);
-        for (int i = 0; i < 16; i++) {
-            double angle = 2 * Math.PI * i / 16;
-            points.add(new int[]{
-                (int) Math.round(cx + radius * Math.cos(angle)),
-                (int) Math.round(cz + radius * Math.sin(angle))
-            });
-        }
-        return points;
-    }
-
     /** MV alias 缓存：worldId → colourlessAlias。启动时一次性补空，避免每次 buildSnapshot 调 MV API。 */
     private final java.util.Map<String, String> mvDisplayNames = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -3246,7 +2675,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      * 解析世界显示名：配置填了就用配置，留空则从 Multiverse-Core 的 colourless alias 补。
      * MV 不存在或世界未在 MV 注册时，降级用 world id。
      */
-    private String resolveDisplayName(WorldDefinition world) {
+    String resolveDisplayName(WorldDefinition world) {
         String configured = world.displayName();
         if (configured != null && !configured.isBlank()) {
             return configured;
@@ -3380,7 +2809,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("waypointLimit", snapshot.waypointLimit());
         payload.put("waypointCount", snapshot.waypointCount());
         payload.put("canCreateWaypoint", snapshot.canCreateWaypoint());
-        payload.put("shareEnabled", shareEnabled());
+        payload.put("shareEnabled", share.shareEnabled());
         payload.put("clearTrackVisible", snapshot.clearTrackVisible());
         payload.put("trackingText", snapshot.trackingText());
         payload.put("detailSelectedType", snapshot.detail().selectedType());
@@ -3464,7 +2893,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return parts.isEmpty() ? "免费解锁" : String.join(" + ", parts);
     }
 
-    private String formatTeleportCostText(AnchorDefinition anchor) {
+    String formatTeleportCostText(AnchorDefinition anchor) {
         List<String> parts = new ArrayList<>();
         for (CurrencyCost cost : anchor.teleportCurrencies()) {
             parts.add(formatCurrencyCost(cost));
@@ -3533,7 +2962,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
     }
 
-    private int resolveWaypointLimit(Player player) {
+    int resolveWaypointLimit(Player player) {
         int limit = configuration.waypoints().defaultMaxCount();
         if (player == null) {
             return limit;
@@ -3546,7 +2975,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return limit;
     }
 
-    private List<MapWaypoint> loadWaypoints(Player player) {
+    List<MapWaypoint> loadWaypoints(Player player) {
         if (player == null) {
             return List.of();
         }
@@ -3570,7 +2999,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
     }
 
-    private void invalidatePlayerDataCache(UUID playerUuid) {
+    void invalidatePlayerDataCache(UUID playerUuid) {
         if (playerUuid != null) {
             playerDataCache.remove(playerUuid);
         }
@@ -3587,7 +3016,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return List.copyOf(state.values());
     }
 
-    private MapWaypoint findWaypoint(Player player, String waypointId) {
+    MapWaypoint findWaypoint(Player player, String waypointId) {
         String normalized = normalizeId(waypointId);
         for (MapWaypoint waypoint : loadWaypoints(player)) {
             if (normalizeId(waypoint.waypointId()).equals(normalized)) {
@@ -3612,7 +3041,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return loadUnlockedAnchors(player).contains(anchor.id());
     }
 
-    private MapPin findPin(Player player, String pinId) {
+    MapPin findPin(Player player, String pinId) {
         String normalized = normalizeId(pinId);
         for (MapPin pin : loadPins(player)) {
             if (normalizeId(pin.pinId()).equals(normalized)) {
@@ -3622,7 +3051,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return null;
     }
 
-    private List<MapPin> loadPins(Player player) {
+    List<MapPin> loadPins(Player player) {
         if (player == null) {
             return List.of();
         }
@@ -3653,7 +3082,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return configuration.worlds().isEmpty() ? "" : configuration.worlds().keySet().iterator().next();
     }
 
-    private MapPlayerViewState state(Player player) {
+    MapPlayerViewState state(Player player) {
         return viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new MapPlayerViewState());
     }
 
@@ -3681,19 +3110,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             textureMarkerService.hideMarker(player);
         }
     }
-
-    private static ItemStack[] cloneContents(ItemStack[] contents) {
-        ItemStack[] clone = new ItemStack[contents == null ? 0 : contents.length];
-        if (contents == null) {
-            return clone;
-        }
-        for (int index = 0; index < contents.length; index++) {
-            clone[index] = contents[index] == null ? null : contents[index].clone();
-        }
-        return clone;
-    }
-
-    private void sendPlayerResult(Player player, MapOperationResult result) {
+    void sendPlayerResult(Player player, MapOperationResult result) {
         if (player == null || result == null || result.message().isBlank()) {
             return;
         }
@@ -3704,7 +3121,45 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return normalizeId(value).replaceAll("[^a-z0-9_\\-]", "_");
     }
 
-    private static String normalizeId(String value) {
+
+    int effectivePreloadVersion(WorldDefinition world) {
+        return preload.effectivePreloadVersion(world);
+    }
+
+    Location resolveWorldCenter(WorldDefinition world) {
+        return preload.resolveWorldCenter(world);
+    }
+
+    List<int[]> preloadChunkCoords(WorldDefinition world) {
+        return preload.preloadChunkCoords(world);
+    }
+
+    public MapOperationResult refreshPreloadVersion(String worldId) {
+        return preload.refreshPreloadVersion(worldId);
+    }
+
+    List<List<int[]>> preloadRegionPoints(WorldDefinition world) {
+        return preload.preloadRegionPoints(world);
+    }
+
+    // ─── 分享/扣费委托（协作者拆分后保留接口契约）────────────
+
+    @Override
+    public void shareWaypoint(Player player, String waypointId) {
+        share.shareWaypoint(player, waypointId);
+    }
+
+    @Override
+    public void sharePin(Player player, String pinId) {
+        share.sharePin(player, pinId);
+    }
+
+    @Override
+    public void claimShare(Player player, String shareCode) {
+        share.claimShare(player, shareCode);
+    }
+
+    static String normalizeId(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
@@ -3714,241 +3169,5 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return "";
         }
         return value.length() <= max ? value : value.substring(0, max);
-    }
-
-    private record CurrencyChargeReceipt(
-        boolean success,
-        String message,
-        List<CurrencyCost> successfulCharges
-    ) {
-
-        private static CurrencyChargeReceipt success(List<CurrencyCost> successfulCharges) {
-            return new CurrencyChargeReceipt(true, "", List.copyOf(successfulCharges));
-        }
-
-        private static CurrencyChargeReceipt failure(String message) {
-            return new CurrencyChargeReceipt(false, message, List.of());
-        }
-    }
-
-    private record PreparedItemConsumption(
-        boolean success,
-        String message,
-        ItemStack[] originalContents,
-        int[] deductions
-    ) {
-
-        private static PreparedItemConsumption empty() {
-            return new PreparedItemConsumption(true, "", new ItemStack[0], new int[0]);
-        }
-
-        private static PreparedItemConsumption success(ItemStack[] originalContents, int[] deductions) {
-            return new PreparedItemConsumption(true, "", originalContents, deductions.clone());
-        }
-
-        private static PreparedItemConsumption failure(String message) {
-            return new PreparedItemConsumption(false, message, new ItemStack[0], new int[0]);
-        }
-
-        private boolean hasChanges() {
-            for (int deduction : deductions) {
-                if (deduction > 0) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
-    // ─── 跨服地图回调（MapCrossServerService.Handler）───────────────
-    //
-    // 所有回调均在主线程执行（宿主投递保证）。方向分两侧：
-    //   源服 = 发起浏览/传送的服；目标服 = 提供世界/接受落地的服。
-
-    private final class CrossServerHandler implements MapCrossServerService.Handler {
-
-        /**
-         * 本机对外广播的共享世界目录：worlds/<world>.yml 中 cross-server.share=true
-         * 的世界，含显示名/维度/中心点/预加载覆盖/锚点摘要。
-         */
-        @Override
-        public List<MapCrossServerService.SharedWorldInfo> sharedWorldCatalog() {
-            List<MapCrossServerService.SharedWorldInfo> out = new ArrayList<>();
-            for (WorldDefinition world : configuration.worlds().values()) {
-                if (!world.crossShare()) {
-                    continue;
-                }
-                Location center = resolveWorldCenter(world);
-                int preloadVersion = world.hasPreload() ? effectivePreloadVersion(world) : 0;
-                List<MapCrossServerService.SharedAnchor> sharedAnchors = new ArrayList<>();
-                for (AnchorDefinition anchor : configuration.anchors().values()) {
-                    if (!normalizeId(anchor.worldId()).equals(world.id())) {
-                        continue;
-                    }
-                    sharedAnchors.add(new MapCrossServerService.SharedAnchor(
-                        anchor.id(),
-                        anchor.displayName(),
-                        anchor.description(),
-                        anchor.x(),
-                        anchor.y(),
-                        anchor.z(),
-                        anchor.sortOrder(),
-                        formatTeleportCostText(anchor)
-                    ));
-                }
-                out.add(new MapCrossServerService.SharedWorldInfo(
-                    world.id(),
-                    resolveDisplayName(world),
-                    resolveDimension(world),
-                    center == null ? 0 : center.getX(),
-                    center == null ? 0 : center.getZ(),
-                    preloadVersion,
-                    preloadVersion > 0
-                        ? MapCrossServerService.chunkCsv(
-                            preloadChunkCoords(world).stream()
-                                .map(c -> new long[]{c[0], c[1]})
-                                .toList())
-                        : "",
-                    world.crossArrive(),
-                    sharedAnchors
-                ));
-            }
-            return out;
-        }
-
-        /**
-         * 远程目录变化：刷新正在浏览该节点世界的玩家的菜单（选中世界被摘除时
-         * 快照构建会自动回退到玩家当前世界）。
-         */
-        @Override
-        public void remoteCatalogChanged(String nodeId) {
-            String prefix = nodeId + "/";
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                MapPlayerViewState state = viewStates.get(player.getUniqueId());
-                if (state != null && state.selectedWorldId().startsWith(prefix)) {
-                    sync(player, false);
-                }
-            }
-        }
-
-        /**
-         * 目标服侧：校验世界可共享中继并打包票据。
-         * 只接受 crossShare=true 且有预加载的世界；请求块 ⊆ 预加载覆盖。
-         */
-        @Override
-        public MapCrossServerService.TerrainRelayTicket prepareTerrainRelay(String worldId, List<long[]> chunks) {
-            WorldDefinition world = configuration.worlds().get(worldId);
-            if (world == null || !world.crossShare() || !world.hasPreload()) {
-                return null;
-            }
-            World bukkitWorld = resolveWorld(world.id());
-            if (bukkitWorld == null) {
-                return null;
-            }
-            Set<Long> allowed = new HashSet<>();
-            for (int[] c : preloadChunkCoords(world)) {
-                allowed.add(((long) c[0] << 32) | (c[1] & 0xffffffffL));
-            }
-            List<Long> accepted = new ArrayList<>(chunks.size());
-            for (long[] c : chunks) {
-                if (c == null || c.length < 2) {
-                    continue;
-                }
-                long packed = ((long) c[0] << 32) | (c[1] & 0xffffffffL);
-                if (allowed.contains(packed)) {
-                    accepted.add(packed);
-                }
-            }
-            return accepted.isEmpty()
-                ? null
-                : new MapCrossServerService.TerrainRelayTicket(bukkitWorld, accepted, effectivePreloadVersion(world));
-        }
-
-        /**
-         * 目标服侧：落地前校验（玩家此时不在线）。要求 arrivals.enabled、
-         * 世界允许落地、锚点属于该世界；require-anchor-unlock 时查解锁记录。
-         */
-        @Override
-        public MapOperationResult validateArrival(UUID playerUuid, String worldId, String anchorId) {
-            if (!configuration.crossServer().arrivals().enabled()) {
-                return MapOperationResult.failure("arrivals-disabled");
-            }
-            WorldDefinition world = configuration.worlds().get(worldId);
-            if (world == null || !world.crossArrive()) {
-                return MapOperationResult.failure("world-no-arrive");
-            }
-            if (!anchorId.isEmpty()) {
-                AnchorDefinition anchor = configuration.anchor(anchorId);
-                if (anchor == null || !normalizeId(anchor.worldId()).equals(world.id())) {
-                    return MapOperationResult.failure("anchor-unknown");
-                }
-                if (configuration.crossServer().arrivals().requireAnchorUnlock()) {
-                    try {
-                        if (!repository.loadUnlockedAnchors(playerUuid).contains(anchor.id())) {
-                            return MapOperationResult.failure("anchor-locked");
-                        }
-                    } catch (Exception e) {
-                        return MapOperationResult.failure("storage-error");
-                    }
-                }
-            }
-            return resolveWorld(world.id()) == null
-                ? MapOperationResult.failure("world-unloaded")
-                : MapOperationResult.success("");
-        }
-
-        /**
-         * 目标服侧：玩家已进服，执行落地传送。
-         * 锚点落地按 chargeTeleportCost 决定是否走本服锚点传送扣费链；
-         * 世界出生点落地永远免费（与本机 teleportToWorld 一致）。
-         */
-        @Override
-        public void executeArrival(Player player, String worldId, String anchorId) {
-            WorldDefinition world = configuration.worlds().get(worldId);
-            if (world == null || !world.crossArrive()) {
-                sendPlayerResult(player, MapOperationResult.failure(message("player.cross-server-arrive-failed", worldId)));
-                return;
-            }
-            World bukkitWorld = resolveWorld(world.id());
-            if (bukkitWorld == null) {
-                sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-world-unloaded", worldId)));
-                return;
-            }
-            if (anchorId.isEmpty()) {
-                Location spawn = resolveWorldSpawn(bukkitWorld);
-                if (spawn == null) {
-                    sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-world-unloaded", worldId)));
-                    return;
-                }
-                player.teleport(spawn);
-                sendPlayerResult(player, MapOperationResult.success(
-                    message("player.cross-server-arrived", resolveDisplayName(world))));
-                sync(player, false);
-                return;
-            }
-            AnchorDefinition anchor = configuration.anchor(anchorId);
-            if (anchor == null || !normalizeId(anchor.worldId()).equals(world.id())) {
-                sendPlayerResult(player, MapOperationResult.failure(message("player.anchor-not-found", anchorId)));
-                return;
-            }
-            // 收费路径复用本服锚点传送链（扣费→传送→失败回滚）；免费则直传
-            MapOperationResult result = configuration.crossServer().arrivals().chargeTeleportCost()
-                ? performAnchorTeleport(player, anchor)
-                : performFreeAnchorTeleport(player, anchor, bukkitWorld);
-            sendPlayerResult(player, result);
-        }
-
-        @Override
-        public void notifyPlayerResult(UUID playerUuid, MapOperationResult result) {
-            Player player = playerUuid == null ? null : Bukkit.getPlayer(playerUuid);
-            if (player != null) {
-                sendPlayerResult(player, result);
-            }
-        }
-
-        @Override
-        public String resolveMessage(String key, Object... args) {
-            return message(key, args);
-        }
     }
 }

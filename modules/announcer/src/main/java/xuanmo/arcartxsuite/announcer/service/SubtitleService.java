@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.announcer.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -302,7 +301,7 @@ public final class SubtitleService implements Listener {
 
             // 计算下一帧延迟 = 动画时间 + 停留时间
             long delayTicks = (frame.timeMs() / 50L) + (long) (frame.keepSeconds() * 20);
-            currentTask = AxsScheduler.runTaskLater(plugin, this::playNextFrame, delayTicks);
+            currentTask = Bukkit.getScheduler().runTaskLater(plugin, this::playNextFrame, delayTicks);
         }
     }
 }

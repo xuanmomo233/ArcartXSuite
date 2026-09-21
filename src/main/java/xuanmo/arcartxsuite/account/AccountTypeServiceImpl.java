@@ -182,8 +182,14 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
             String officialUuid = lookupOfficialUuid(name, true);
             if (officialUuid != null) {
                 if (!officialUuid.isBlank()) {
-                    // 玩家名在 Mojang 存在 → 微软正版（与 API 文档一致，不因 UUID 版本差异误判）
-                    return AccountType.MICROSOFT;
+                    // 玩家名在 Mojang 存在 → 必须比对官方 UUID 与当前连接 UUID。
+                    // 名字命中但 UUID 不一致 = 离线/外置服玩家冒用正版名登录，判 OFFLINE 防同名接管。
+                    if (uuidEqualsIgnoreDashes(uuid, officialUuid)) {
+                        return AccountType.MICROSOFT;
+                    }
+                    logger.warning("[AccountType] 玩家 " + name + " 的名字命中 Mojang 官方账号，但 UUID 不一致"
+                        + "（连接 UUID=" + uuid + "，官方 UUID=" + officialUuid + "）——按 OFFLINE 处理，疑似冒名");
+                    return AccountType.OFFLINE;
                 }
                 // 名字已确认不在 Mojang（404/204）
                 Boolean uuidExists = queryOfficialByUuid(uuid);

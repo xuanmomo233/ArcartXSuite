@@ -322,7 +322,7 @@ public final class EventPacketDispatchService {
                 case "subtitle.play" -> executeSubtitlePlay(action, subject, context);
                 case "chat.card" -> executeChatCard(action, subject, context);
                 case "title.give" -> executeTitleGive(action, subject, context);
-                case "command.dispatch" -> executeCommandDispatch(action, subject, context);
+                case "command.dispatch" -> executeCommandDispatch(rule, action, subject, context);
                 case "ui-packet" -> executeUiPacket(rule, action, subject, context);
                 case "mail.send" -> executeMailSend(action, subject, context);
                 case "qq-broadcast" -> executeQQBroadcast(action, subject, context);
@@ -466,13 +466,18 @@ public final class EventPacketDispatchService {
         return title.giveTitle(subject.getUniqueId(), titleId, duration, "EventPacket");
     }
 
-    private boolean executeCommandDispatch(EventPacketAction action, Player subject, EventPacketContext context) {
+    private boolean executeCommandDispatch(EventPacketRule rule, EventPacketAction action, Player subject, EventPacketContext context) {
         String command = renderString(action.object("command"), context, subject);
         if (command.isBlank()) {
             return false;
         }
-        // 防止命令注入：清理命令分隔符（;、|、&&、||、换行符）
-        command = xuanmo.arcartxsuite.api.command.CommandSanitizer.stripCommandSeparators(command);
+        // 防命令注入：展开后含分隔符直接拒绝（strip 会把注入语句降级为带参命令继续执行）
+        try {
+            command = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(command);
+        } catch (IllegalArgumentException e) {
+            logger.warning("EventPacket 命令含分隔符已拒绝 rule=" + rule.id() + " [" + command + "]");
+            return false;
+        }
         if (command.startsWith("/")) {
             command = command.substring(1);
         }

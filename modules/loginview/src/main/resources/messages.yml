@@ -23,7 +23,6 @@ help:
   migration-commands: "&7{0} migration-commands&f - 查看迁移后的安全操作提示。"
   set-spawn: "&7{0} set-spawn&f - 将当前位置设为登录后传送点。"
   reset-password: "&7{0} reset-password <玩家> [新密码]&f - 重置玩家登录密码（省略新密码则随机生成）。"
-  setup-authlib: "&7{0} setup-authlib&f - 自动下载 authlib-injector 并生成启动脚本。"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -56,11 +55,6 @@ migrate:
   preview: "&aAuthMe 迁移预览完成: 扫描 {0}，可导入 {1}，跳过 {2}"
   done: "&aAuthMe 迁移完成: 扫描 {0}，可导入 {1}，跳过 {2}"
   failed: "&cAuthMe 迁移失败: {0}"
-
-# ── setup-authlib ─────────────────────────────────────
-setup:
-  start: "&6正在配置 authlib-injector..."
-  already: "&aauthlib-injector 已在运行中，无需额外配置。"
 
 # ── set-spawn ───────────────────────────────────────
 set-spawn:

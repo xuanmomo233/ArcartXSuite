@@ -36,7 +36,8 @@ public record ClientPacketGuardConfiguration(
         ClientPacketGuardMode.SILENT,
         "&c操作过快，请稍后再试。",
         3000L,
-        ""
+        "",
+        5000L
     );
 
     public static ClientPacketGuardConfiguration load(FileConfiguration configuration, Logger logger) {
@@ -173,11 +174,12 @@ public record ClientPacketGuardConfiguration(
 
     private static LinkedHashMap<String, ClientPacketGuardRule> hardcodedModuleRules() {
         LinkedHashMap<String, ClientPacketGuardRule> rules = new LinkedHashMap<>();
-        rules.put("title", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
-        rules.put("mail", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
-        rules.put("questgps", new ClientPacketGuardRule(true, 500L, 10, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
-        rules.put("map", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
-        rules.put("pickup", new ClientPacketGuardRule(true, 500L, 8, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
+        long punishCooldown = HARDCODED_DEFAULTS.punishCooldownMs();
+        rules.put("title", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", punishCooldown));
+        rules.put("mail", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", punishCooldown));
+        rules.put("questgps", new ClientPacketGuardRule(true, 500L, 10, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", punishCooldown));
+        rules.put("map", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", punishCooldown));
+        rules.put("pickup", new ClientPacketGuardRule(true, 500L, 8, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", punishCooldown));
         return rules;
     }
 
@@ -242,7 +244,7 @@ public record ClientPacketGuardConfiguration(
     ) {
         return Map.entry(
             normalizeKey(action),
-            new ClientPacketGuardRule(true, windowMs, maxHits, mode, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "")
+            new ClientPacketGuardRule(true, windowMs, maxHits, mode, HARDCODED_DEFAULTS.notifyMessage(), 3000L, "", HARDCODED_DEFAULTS.punishCooldownMs())
         );
     }
 
@@ -274,7 +276,10 @@ public record ClientPacketGuardConfiguration(
         String punishCommand = section.contains("punish-command")
             ? string(section.getString("punish-command"), "")
             : baseRule.punishCommand();
-        return new ClientPacketGuardRule(enabled, windowMs, maxHits, mode, notifyMessage, notifyCooldownMs, punishCommand);
+        long punishCooldownMs = section.contains("punish-cooldown-ms")
+            ? Math.max(0L, section.getLong("punish-cooldown-ms", baseRule.punishCooldownMs()))
+            : baseRule.punishCooldownMs();
+        return new ClientPacketGuardRule(enabled, windowMs, maxHits, mode, notifyMessage, notifyCooldownMs, punishCommand, punishCooldownMs);
     }
 
     private static ClientPacketGuardRule sanitizeRule(
@@ -291,7 +296,8 @@ public record ClientPacketGuardConfiguration(
                 ClientPacketGuardMode.NOTIFY,
                 rule.notifyMessage(),
                 rule.notifyCooldownMs(),
-                ""
+                "",
+                rule.punishCooldownMs()
             );
         }
         return rule;

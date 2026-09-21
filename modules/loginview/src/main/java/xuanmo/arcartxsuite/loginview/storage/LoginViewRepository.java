@@ -36,6 +36,20 @@ public interface LoginViewRepository extends AutoCloseable {
 
     void deleteExpiredSessions() throws SQLException;
 
+    /**
+     * 读取玩家的密码失败计数（持久化）。
+     *
+     * @param maxAgeMillis 计数有效窗口；超过窗口的历史计数视为 0（防止长期累积误伤）
+     * @return 有效失败次数
+     */
+    int loadFailureAttempts(UUID uuid, long maxAgeMillis) throws SQLException;
+
+    /** 保存玩家的密码失败计数（upsert）。 */
+    void saveFailureAttempts(UUID uuid, int attempts) throws SQLException;
+
+    /** 清除玩家的密码失败计数（登录成功/重置密码后调用）。 */
+    void deleteFailureAttempts(UUID uuid) throws SQLException;
+
     @Override
     void close();
 }

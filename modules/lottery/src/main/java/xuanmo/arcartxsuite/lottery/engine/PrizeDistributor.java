@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -117,7 +117,7 @@ public class PrizeDistributor {
         if (Bukkit.isPrimaryThread()) {
             return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized);
         }
-        AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized));
+        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized));
         return true;
     }
 

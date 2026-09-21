@@ -91,6 +91,9 @@ security:
   # 设为 0 则禁用 session 持久化（每次进服都必须重新登录）。
   session-ttl-minutes: 30
   # 是否要求 session 绑定 IP（更严格但可能影响 NAT 切换 / 移动网络用户）。
+  # ⚠ 代理（BungeeCord/Velocity）部署注意：后端服务器看到的玩家 IP 取决于代理转发模式，
+  # 若代理未开启 IP 转发（ip_forward/forwarding），所有玩家的 IP 都是代理内网地址，
+  # 此时开启本项会导致"IP 匹配恒真"形同虚设，或转发配置变更后大面积 session 失效。
   session-strict-ip: false
 
 # ─── 数据存储 ────────────────────────────────────────

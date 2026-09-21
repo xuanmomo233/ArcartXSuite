@@ -350,7 +350,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
         TaskEngine taskEngine = new TaskEngine(dailyTasks, weeklyTasks, seasonTasks,
             3, 3, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
-            () -> service, logger);
+            () -> service, logger, plugin, repo, dataFolder, configuration.season().seasonId());
 
         // 加载疲惫值配置
         FatigueConfig fatigueConfig;

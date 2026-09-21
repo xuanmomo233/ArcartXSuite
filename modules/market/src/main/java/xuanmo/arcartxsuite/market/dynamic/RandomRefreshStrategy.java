@@ -108,7 +108,8 @@ public class RandomRefreshStrategy implements DynamicShopStrategy {
             new ItemDefinition(entry.itemSource(), entry.itemId(), entry.itemNbt()),
             entry.displayName(), entry.buyPrice(), entry.sellPrice(), entry.currency(),
             entry.stockMode(), entry.stockAmount(),
-            entry.limitPerPlayer(), entry.limitReset(), java.util.Map.of()
+            entry.limitPerPlayer(), entry.limitReset(), java.util.Map.of(),
+            java.util.List.of()
         );
     }
 
@@ -155,7 +156,8 @@ public class RandomRefreshStrategy implements DynamicShopStrategy {
             key, ShopItemType.ITEM, null, java.util.List.of(),
             new ItemDefinition(source, id, null),
             display, buyPrice, sellPrice, currency,
-            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of()
+            stockMode, stockAmount, limitPerPlayer, limitReset, java.util.Map.of(),
+            java.util.List.of()
         );
     }
 }

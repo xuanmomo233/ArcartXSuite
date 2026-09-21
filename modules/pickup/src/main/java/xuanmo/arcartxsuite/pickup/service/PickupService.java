@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.pickup.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -42,6 +41,11 @@ public final class PickupService implements Listener {
     private final String uiId;
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new ConcurrentHashMap<>();
+    /** 每玩家待推送队列上限：超出丢最旧（防掉线/未开界面时无界堆积）。 */
+    private static final int MAX_PENDING_PICKUPS = 64;
+    /** 溢出告警节流间隔（毫秒）。 */
+    private static final long OVERFLOW_WARN_INTERVAL_MS = 60_000L;
+    private volatile long lastOverflowWarnAt;
     /** 手动关闭拾取通知的玩家集合 */
     private final Set<UUID> disabledPlayers = ConcurrentHashMap.newKeySet();
     private Supplier<EventBusCapability> eventBusProvider;
@@ -66,9 +70,9 @@ public final class PickupService implements Listener {
     public void start() {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
+        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
         // 二次兜底：首次打开时客户端可能尚未就绪，延迟重试
-        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + OPEN_CONFIRM_DELAY_TICKS);
+        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + OPEN_CONFIRM_DELAY_TICKS);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
@@ -283,7 +287,7 @@ public final class PickupService implements Listener {
         }
         if (opened) {
             logOpenMode(player, "open");
-            AxsScheduler.runTaskLater(plugin, () -> handleUiOpened(player), OPEN_CONFIRM_DELAY_TICKS);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> handleUiOpened(player), OPEN_CONFIRM_DELAY_TICKS);
             return true;
         }
         return false;
@@ -309,7 +313,16 @@ public final class PickupService implements Listener {
 
     private Map<String, Object> enqueuePickup(UUID playerId, Map<String, Object> payload) {
         Map<String, Object> queuedPayload = new LinkedHashMap<>(payload);
-        pendingPickups.computeIfAbsent(playerId, ignored -> new ArrayDeque<>()).addLast(queuedPayload);
+        Deque<Map<String, Object>> queue = pendingPickups.computeIfAbsent(playerId, ignored -> new ArrayDeque<>());
+        if (queue.size() >= MAX_PENDING_PICKUPS) {
+            queue.pollFirst();
+            long now = System.currentTimeMillis();
+            if (now - lastOverflowWarnAt > OVERFLOW_WARN_INTERVAL_MS) {
+                lastOverflowWarnAt = now;
+                logger.warning("[Pickup] 玩家 " + playerId + " 待推送拾取队列超过 " + MAX_PENDING_PICKUPS + "，丢弃最旧条目（可能客户端未打开界面或掉线残留）");
+            }
+        }
+        queue.addLast(queuedPayload);
         return queuedPayload;
     }
 
@@ -336,7 +349,7 @@ public final class PickupService implements Listener {
     }
 
     private void scheduleSend(Player player, Map<String, Object> payload, long delayTicks) {
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!active || !player.isOnline() || !bridge.isAvailable()) {
                 return;
             }

@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.onlinerewards.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -69,6 +68,7 @@ import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 /**
  * 在线奖励核心服务。
@@ -251,15 +251,15 @@ public class OnlineRewardsService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshLeaderboardSnapshots();
         scheduleSyncForOnlinePlayers();
-        // 底层调度：优先使用 SchedulerAPI，降级到 AxsScheduler
+        // 底层调度：优先使用 SchedulerAPI，降级到 Bukkit Scheduler
         if (scheduler != null) {
             schedulerMinuteTask = scheduler.scheduleAtFixedRate(plugin, this::tickOnlinePlayers, 20L, 1200L);
             // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
             schedulerLeaderboardTask = scheduler.scheduleAtFixedRate(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
         } else {
-            minuteTask = AxsScheduler.runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
+            minuteTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
             // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
-            leaderboardRefreshTask = AxsScheduler.runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
+            leaderboardRefreshTask = Bukkit.getScheduler().runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
         }
         // 时刻奖励调度
         if (scheduler != null && configuration.timeBasedRewards() != null) {
@@ -353,7 +353,7 @@ public class OnlineRewardsService implements Listener {
         if (player == null || !player.isOnline()) {
             return;
         }
-        AxsScheduler.runTaskLater(plugin, () -> syncPlayer(player), configuration.clientSyncDelayTicks());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> syncPlayer(player), configuration.clientSyncDelayTicks());
     }
 
     /**
@@ -801,8 +801,15 @@ public class OnlineRewardsService implements Listener {
             return new OnlineRewardsOperationResult(false, renderMakeupText(configuration.signIn().makeup().noCardMessage(), state, date));
         }
 
-        state.setMakeupCards(state.makeupCards() - 1);
+        // 先落库再扣卡：DB 失败/并发重复时补签卡不消耗
         OnlineRewardsSignInResult result = applySignInRecord(player, state, date, true);
+        if (!result.success()) {
+            return new OnlineRewardsOperationResult(false,
+                result.repeated()
+                    ? configuration.signIn().makeup().alreadySignedMessage()
+                    : renderMakeupText(configuration.signIn().makeup().invalidDateMessage(), state, date));
+        }
+        state.setMakeupCards(state.makeupCards() - 1);
         OnlineRewardsPermissionBonusReward permissionBonus = selectedPermissionBonus(player);
         executeCommands(player, resolveSignInCommands(configuration.signIn(), result, permissionBonus), result);
         dispatchSignInMailPresets(player, resolveSignInMailPresetIds(configuration.signIn(), result, permissionBonus));
@@ -1146,7 +1153,7 @@ public class OnlineRewardsService implements Listener {
                 String command = renderCommand(rawCommand, player, new OnlineRewardsSignInResult(
                     false, false, 0, 0, context.rewardDate(), context.date().getDayOfMonth()
                 ));
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                ThrottledCommandExecutor.dispatch( command);
             }
             dispatchMailPresets(player, reward.mailPresetIds(),
                 "时刻奖励 '" + reward.name() + "'", "OnlineRewards:TimeBased:" + reward.id());
@@ -1171,7 +1178,7 @@ public class OnlineRewardsService implements Listener {
                 context.rewardDate(),
                 context.date().getDayOfMonth()
             ));
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+            ThrottledCommandExecutor.dispatch( command);
             if (configuration.debug()) {
                 this.logger.info(
                     "OnlineRewards 发放奖励 -> player="
@@ -1197,7 +1204,7 @@ public class OnlineRewardsService implements Listener {
                 context.rewardDate(),
                 context.date().getDayOfMonth()
             ));
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+            ThrottledCommandExecutor.dispatch( command);
             if (configuration.debug()) {
                 this.logger.info(
                     "OnlineRewards 发放" + periodLabel + "奖励 -> player="
@@ -1275,7 +1282,7 @@ public class OnlineRewardsService implements Listener {
     private void executeCommands(Player player, List<String> commands, OnlineRewardsSignInResult result) {
         for (String rawCommand : commands) {
             String command = renderCommand(rawCommand, player, result);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+            ThrottledCommandExecutor.dispatch( command);
             if (configuration.debug()) {
                 this.logger.info(
                     "OnlineRewards 签到奖励 -> player="
@@ -1311,7 +1318,7 @@ public class OnlineRewardsService implements Listener {
         String rawUuid = message.substring("refresh:".length()).trim();
         try {
             UUID playerUuid = UUID.fromString(rawUuid);
-            AxsScheduler.runTask(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 Player player = Bukkit.getPlayer(playerUuid);
                 if (player == null || !player.isOnline()) {
                     return;
@@ -1585,7 +1592,8 @@ public class OnlineRewardsService implements Listener {
             return repository.hasSignInRecord(playerUuid, date);
         } catch (SQLException exception) {
             this.logger.log(Level.WARNING, "检查签到记录失败: " + playerUuid + " " + date, exception);
-            return false;
+            // fail-closed：DB 异常时按"已有记录"处理，阻止签到/补签，避免重复发奖
+            return true;
         }
     }
 
@@ -1991,7 +1999,7 @@ public class OnlineRewardsService implements Listener {
         for (String rawCommand : target.commands()) {
             try {
                 String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", safeName));
+                ThrottledCommandExecutor.dispatch( rawCommand.replace("{player}", safeName));
             } catch (Exception e) {
                 logger.warning("[OnlineRewards] 执行全服签到目标命令失败: " + rawCommand + " | " + e.getMessage());
             }

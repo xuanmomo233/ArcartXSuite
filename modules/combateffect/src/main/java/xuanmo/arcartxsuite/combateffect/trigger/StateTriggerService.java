@@ -133,11 +133,6 @@ public final class StateTriggerService {
         }
     }
 
-    private String resolveControllerId(Player player) {
-        if (chronosHook == null) return null;
-        return chronosHook.getPlayerControllerId(player);
-    }
-
     private Object renderPayload(PacketDefinition definition, Player player, String stateId, String controllerId) {
         if (definition.packTemplate() == null || definition.packTemplate().isEmpty()) {
             return Map.of();

@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.conversation.cinematic;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Map;
@@ -88,7 +87,7 @@ public final class CinematicActions {
                 double progress = (double) frame / finalFrames;
                 double[] pos = interpolatePath(points, progress);
                 long delay = (long) frame * ticksPerFrame;
-                AxsScheduler.runTaskLater(JavaPlugin.getProvidingPlugin(CinematicActions.class), () -> {
+                Bukkit.getScheduler().runTaskLater(JavaPlugin.getProvidingPlugin(CinematicActions.class), () -> {
                     if (!player.isOnline()) return;
                     player.teleport(new Location(finalWorld, pos[0], pos[1], pos[2],
                         (float) pos[3], (float) pos[4]));
@@ -357,6 +356,12 @@ public final class CinematicActions {
         @Override
         public void execute(Player player, CinematicActionContext ctx) {
             String resolved = command.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()));
+            // 展开后统一校验：命令模板其余部分（含其他占位符）可能携带分隔符
+            try {
+                resolved = xuanmo.arcartxsuite.api.command.CommandSanitizer.validateExpandedCommand(resolved);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
             if (asConsole) {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), resolved);
             } else {

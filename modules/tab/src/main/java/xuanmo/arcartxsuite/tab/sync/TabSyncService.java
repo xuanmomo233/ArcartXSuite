@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.tab.sync;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -126,19 +125,37 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         crossServerChannel = crossServer.openChannel(
             "tab",
             configuration.crossServer(),
-            delivery -> handleRemoteSnapshotPayload(delivery.payload(), delivery.nodeId())
+            delivery -> {
+                if (configuration.crossServerRequireSignature() && !delivery.signed()) {
+                    warnUnsignedOnce();
+                    return;
+                }
+                handleRemoteSnapshotPayload(delivery.payload(), delivery.nodeId());
+            }
         );
         if (crossServerChannel.isActive()) {
             this.logger.fine("ArcartXTab 跨服通道已启用");
         }
+        if (configuration.crossServerRequireSignature() && !crossServerChannel.isActive()) {
+            this.logger.warning("ArcartXTab: cross-server.require-signature=true 但通道未激活");
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        refreshTask = AxsScheduler.runTaskTimer(
+        refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::refresh,
             configuration.refreshIntervalTicks(),
             configuration.refreshIntervalTicks()
         );
         refresh();
+    }
+
+    /** 未签名入站消息告警节流（每节点一次）。 */
+    private final java.util.Set<String> unsignedWarnedNodes = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void warnUnsignedOnce() {
+        if (unsignedWarnedNodes.add("inbound")) {
+            this.logger.warning("ArcartXTab: 丢弃未签名跨服入站消息（cross-server.require-signature=true）");
+        }
     }
 
     public void shutdown() {
@@ -424,7 +441,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         if (flushTask != null) {
             return;
         }
-        flushTask = AxsScheduler.runTask(plugin, () -> {
+        flushTask = Bukkit.getScheduler().runTask(plugin, () -> {
             flushTask = null;
             flushPendingRefreshes(reason);
         });

@@ -1,22 +1,28 @@
 # ArcartXSuite Chat — 私聊通知卡片模板
-# 收到或发送私聊消息时显示此卡片
+# 收到或发送私聊消息时显示此卡片，点击卡片自动填充回复命令
 # 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
-卡片根布局:
-  type: Card
+root_control:
+  type: card
   attribute:
-    width: "Math.max(val.标题文字.width, val.消息文字.width) + 200 < 500 ? 500 : Math.max(val.标题文字.width, val.消息文字.width) + 200"
-    height: "Math.max(100, val.消息文字.y + val.消息文字.height + 20)"
+    width: "Math.max(val.title_label.width, val.message_label.width) + 200 < 500 ? 500 : Math.max(val.title_label.width, val.message_label.width) + 200"
+    height: "Math.max(100, val.message_label.y + val.message_label.height + 20)"
   children:
-    卡片背景:
+    background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
         normal: ~25,25,35,200
+        shape: ~round_rect
+        radius: 12
+      effect:
+        stroke:
+          width: 2
+          color: ~255,255,255,120
       action:
         click: |-
           Chat.setMessage('/msg ' + self.parent.data['senderName'] + ' ')
-    图标文字:
+    icon:
       type: Text
       attribute:
         fontSize: 260
@@ -24,18 +30,18 @@
         y: "self.parent.height/2 - 10"
         texts: "'§d✎'"
         through: true
-    标题文字:
+    title_label:
       type: Text
-      val: 标题文字
+      val: title_label
       attribute:
         fontSize: 64
         x: 160
         y: 15
         texts: "self.parent.data['direction'] == 'sender' ? '§d私聊 → §f' + self.parent.data['targetName'] : '§d私聊 ← §f' + self.parent.data['senderDisplayName']"
         through: true
-    消息文字:
+    message_label:
       type: Text
-      val: 消息文字
+      val: message_label
       attribute:
         fontSize: 64
         x: 160

@@ -39,6 +39,7 @@ ui:
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.playerName = packet['playerName']
       var.isFlying = packet['isFlying']
       var.isGod = packet['isGod']
@@ -510,7 +511,7 @@ controls:
                       height: 44
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'set_home', 'home')
+                        Packet.send(var.packetId, 'set_home', var.actionToken, 'home')
                     children:
                       设置家底:
                         type: Texture
@@ -615,7 +616,7 @@ controls:
                                   height: 40
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'teleport_home', self.parent.entry['name'])
+                                    Packet.send(var.packetId, 'teleport_home', var.actionToken, self.parent.entry['name'])
                                 children:
                                   传送家底:
                                     type: Texture
@@ -647,7 +648,7 @@ controls:
                                   height: 40
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'delete_home', self.parent.entry['name'])
+                                    Packet.send(var.packetId, 'delete_home', var.actionToken, self.parent.entry['name'])
                                 children:
                                   删除家底:
                                     type: Texture
@@ -765,7 +766,7 @@ controls:
                                   height: 40
                                 action:
                                   clickLeft: |-
-                                    Packet.send(var.packetId, 'teleport_warp', self.parent.entry)
+                                    Packet.send(var.packetId, 'teleport_warp', var.actionToken, self.parent.entry)
                                 children:
                                   传送底:
                                     type: Texture
@@ -827,7 +828,7 @@ controls:
                       height: 44
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'accept_tpa')
+                        Packet.send(var.packetId, 'accept_tpa', var.actionToken)
                     children:
                       接受底:
                         type: Texture
@@ -860,7 +861,7 @@ controls:
                       height: 44
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'deny_tpa')
+                        Packet.send(var.packetId, 'deny_tpa', var.actionToken)
                     children:
                       拒绝底:
                         type: Texture
@@ -930,7 +931,7 @@ controls:
                               height: 52
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'send_tpa', self.entry)
+                                Packet.send(var.packetId, 'send_tpa', var.actionToken, self.entry)
                             children:
                               玩家项目底:
                                 type: Texture
@@ -985,7 +986,7 @@ controls:
                       height: 56
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'toggle_replant')
+                        Packet.send(var.packetId, 'toggle_replant', var.actionToken)
                     children:
                       补种底:
                         type: Texture
@@ -1020,7 +1021,7 @@ controls:
                       height: 56
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'toggle_autotool')
+                        Packet.send(var.packetId, 'toggle_autotool', var.actionToken)
                     children:
                       自动工具底:
                         type: Texture
@@ -1055,7 +1056,7 @@ controls:
                       height: 56
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'sort')
+                        Packet.send(var.packetId, 'sort', var.actionToken)
                     children:
                       排序底:
                         type: Texture

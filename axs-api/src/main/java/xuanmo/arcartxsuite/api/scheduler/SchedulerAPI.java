@@ -7,9 +7,9 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
 /**
  * 宿主统一调度 API，封装固定间隔调度、日历触发调度、跨服单点调度。
  * <p>
- * 替代直接使用 {@link xuanmo.arcartxsuite.api.util.AxsScheduler}，提供更高层的抽象：
+ * 替代直接使用 {@code Bukkit.getScheduler()}，提供更高层的抽象：
  * <ul>
- *   <li>固定间隔调度（tick/秒双单位）—— 封装 AxsScheduler，自动兼容 Folia</li>
+ *   <li>固定间隔调度（tick/秒双单位）—— 封装 Bukkit Scheduler</li>
  *   <li>日历触发调度（{@link ScheduleSpec}）—— 支持整点/每日/每周/固定间隔四种模式</li>
  *   <li>跨服单点调度（{@code scheduleCalendarLeaderOnly}）—— 多服中仅一个节点执行，宕机自动接管</li>
  * </ul>
@@ -35,10 +35,10 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
 @ApiStability.Stable
 public interface SchedulerAPI {
 
-    // ── 固定间隔调度（封装 AxsScheduler）──────────────────────
+    // ── 固定间隔调度（封装 Bukkit Scheduler）──────────────────
 
     /**
-     * 固定速率同步任务（tick 单位，自动兼容 Folia）。
+     * 固定速率同步任务（tick 单位）。
      *
      * @param plugin       宿主插件实例
      * @param task         要执行的任务
@@ -50,7 +50,7 @@ public interface SchedulerAPI {
                                                long delayTicks, long periodTicks);
 
     /**
-     * 固定速率异步任务（tick 单位，自动兼容 Folia）。
+     * 固定速率异步任务（tick 单位）。
      *
      * @param plugin       宿主插件实例
      * @param task         要执行的任务

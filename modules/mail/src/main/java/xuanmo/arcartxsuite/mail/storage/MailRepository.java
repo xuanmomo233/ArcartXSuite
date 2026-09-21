@@ -76,6 +76,12 @@ public interface MailRepository {
 
     CdkClaimResult claimCdk(String code, UUID playerUuid, Instant now) throws SQLException;
 
+    /**
+     * 释放一次 CDK 认领（事务：删 claim 行 + claimed_count-1）。
+     * 用于 claimCdk 成功但奖励投递失败的回滚，避免"扣了额度但没发奖"。
+     */
+    void releaseCdkClaim(String code, UUID playerUuid) throws SQLException;
+
     int cleanupCdks(Instant now) throws SQLException;
 
     void close();

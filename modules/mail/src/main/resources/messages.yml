@@ -85,6 +85,7 @@ admin:
   preset-reload-failed: "&c预设重载失败: {0}"
   preset-reloaded: "&a已重载 {0} 个预设"
   preset-not-found: "&c预设不存在: {0}"
+  preset-id-invalid: "&c预设 ID 非法（仅允许字母/数字/下划线/横线，≤64 字符）: {0}"
   preset-disabled: "&c预设已禁用: {0}"
   preset-memory-removed-file-delete-failed: "&e预设已从内存移除，但文件删除失败: {0}"
   # ── CDK 兑换码子命令用法与反馈 ──

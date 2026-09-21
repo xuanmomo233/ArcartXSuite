@@ -312,15 +312,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        String sql = !isMysql()
-            ? """
-                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(player_uuid, currency_id) DO UPDATE SET
-                    balance = CAST(balance AS REAL) + CAST(excluded.balance AS REAL),
-                    updated_at = excluded.updated_at
-                """
-            : """
+        if (!isMysql()) {
+            // SQLite 无 DECIMAL：balance 是文本列，CAST REAL 浮点运算会丢精度。
+            // 改为读-改-CAS 写循环：UPDATE ... WHERE balance=旧文本，并发写冲突重试
+            creditBankBalanceSqlite(playerUuid, currencyId, amount, updatedAt);
+            return;
+        }
+        String sql = """
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
@@ -334,6 +332,64 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setString(3, amount.toPlainString());
             statement.setLong(4, updatedAt);
             statement.executeUpdate();
+        }
+    }
+
+    /** 余额 CAS 冲突重试上限 */
+    private static final int BALANCE_CAS_MAX_RETRIES = 5;
+
+    /** SQLite 分支：BigDecimal 精确读改写 + 文本级 CAS 防并发写冲突。 */
+    private void creditBankBalanceSqlite(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection()) {
+            for (int attempt = 0; attempt < BALANCE_CAS_MAX_RETRIES; attempt++) {
+                String currentText = selectBankBalanceText(connection, playerUuid, currencyId);
+                if (currentText == null) {
+                    try (PreparedStatement insert = connection.prepareStatement(
+                        "INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at) "
+                            + "VALUES (?, ?, ?, ?) ON CONFLICT(player_uuid, currency_id) DO NOTHING")) {
+                        insert.setString(1, playerUuid.toString());
+                        insert.setString(2, currencyId);
+                        insert.setString(3, amount.toPlainString());
+                        insert.setLong(4, updatedAt);
+                        if (insert.executeUpdate() > 0) {
+                            return;
+                        }
+                        continue; // 并发插入冲突，重试
+                    }
+                }
+                BigDecimal updated = decimal(currentText).add(amount);
+                if (updateBankBalanceCas(connection, playerUuid, currencyId, currentText, updated, updatedAt)) {
+                    return;
+                }
+            }
+        }
+        throw new SQLException("creditBankBalance CAS 重试耗尽: " + playerUuid + " " + currencyId);
+    }
+
+    /** 读取余额文本（无行返回 null）。 */
+    private String selectBankBalanceText(Connection connection, UUID playerUuid, String currencyId) throws SQLException {
+        try (PreparedStatement select = connection.prepareStatement(
+            "SELECT balance FROM warehouse_bank_balances WHERE player_uuid = ? AND currency_id = ?")) {
+            select.setString(1, playerUuid.toString());
+            select.setString(2, currencyId);
+            try (ResultSet rs = select.executeQuery()) {
+                return rs.next() ? rs.getString("balance") : null;
+            }
+        }
+    }
+
+    /** CAS 更新余额：仅当当前值仍等于 expectedText 时写入。 */
+    private boolean updateBankBalanceCas(Connection connection, UUID playerUuid, String currencyId,
+                                         String expectedText, BigDecimal newValue, long updatedAt) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement(
+            "UPDATE warehouse_bank_balances SET balance = ?, updated_at = ? "
+                + "WHERE player_uuid = ? AND currency_id = ? AND balance = ?")) {
+            update.setString(1, newValue.toPlainString());
+            update.setLong(2, updatedAt);
+            update.setString(3, playerUuid.toString());
+            update.setString(4, currencyId);
+            update.setString(5, expectedText);
+            return update.executeUpdate() > 0;
         }
     }
 
@@ -352,13 +408,11 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
-        String sql = !isMysql()
-            ? """
-                UPDATE warehouse_bank_balances
-                SET balance = CAST(balance AS REAL) - ?, updated_at = ?
-                WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS REAL) >= ?
-                """
-            : """
+        if (!isMysql()) {
+            // SQLite：读-改-CAS 写，BigDecimal 精确比较，杜绝 REAL 浮点误差的透支/误拒
+            return debitBankBalanceSqlite(playerUuid, currencyId, amount, updatedAt);
+        }
+        String sql = """
                 UPDATE warehouse_bank_balances
                 SET balance = CAST(balance AS DECIMAL(38,8)) - ?, updated_at = ?
                 WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS DECIMAL(38,8)) >= ?
@@ -372,6 +426,27 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setString(5, amount.toPlainString());
             return statement.executeUpdate() > 0;
         }
+    }
+
+    /** SQLite 分支：BigDecimal 精确读改写 + CAS，余额不足返回 false。 */
+    private boolean debitBankBalanceSqlite(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection()) {
+            for (int attempt = 0; attempt < BALANCE_CAS_MAX_RETRIES; attempt++) {
+                String currentText = selectBankBalanceText(connection, playerUuid, currencyId);
+                if (currentText == null) {
+                    return false; // 无余额行即余额不足
+                }
+                BigDecimal current = decimal(currentText);
+                if (current.compareTo(amount) < 0) {
+                    return false;
+                }
+                BigDecimal updated = current.subtract(amount);
+                if (updateBankBalanceCas(connection, playerUuid, currencyId, currentText, updated, updatedAt)) {
+                    return true;
+                }
+            }
+        }
+        throw new SQLException("debitBankBalance CAS 重试耗尽: " + playerUuid + " " + currencyId);
     }
 
     /**
@@ -500,15 +575,34 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         BigDecimal amount,
         long updatedAt
     ) throws SQLException {
-        String sql = !isMysql()
-            ? """
-                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(player_uuid, currency_id) DO UPDATE SET
-                    balance = CAST(balance AS REAL) + CAST(excluded.balance AS REAL),
-                    updated_at = excluded.updated_at
-                """
-            : """
+        if (!isMysql()) {
+            // SQLite：事务内读-改-CAS 写；CAS 失败抛异常由外层事务回滚
+            String currentText = selectBankBalanceText(connection, playerUuid, currencyId);
+            if (currentText == null) {
+                try (PreparedStatement insert = connection.prepareStatement(
+                    "INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at) "
+                        + "VALUES (?, ?, ?, ?) ON CONFLICT(player_uuid, currency_id) DO NOTHING")) {
+                    insert.setString(1, playerUuid.toString());
+                    insert.setString(2, currencyId);
+                    insert.setString(3, amount.toPlainString());
+                    insert.setLong(4, updatedAt);
+                    if (insert.executeUpdate() > 0) {
+                        return;
+                    }
+                }
+                // 并发插入冲突：重读后再 CAS
+                currentText = selectBankBalanceText(connection, playerUuid, currencyId);
+                if (currentText == null) {
+                    throw new SQLException("creditBankBalanceOnConnection 行状态异常: " + playerUuid + " " + currencyId);
+                }
+            }
+            BigDecimal updated = decimal(currentText).add(amount);
+            if (!updateBankBalanceCas(connection, playerUuid, currencyId, currentText, updated, updatedAt)) {
+                throw new SQLException("creditBankBalanceOnConnection CAS 冲突: " + playerUuid + " " + currencyId);
+            }
+            return;
+        }
+        String sql = """
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE

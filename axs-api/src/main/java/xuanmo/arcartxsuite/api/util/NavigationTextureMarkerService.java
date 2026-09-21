@@ -93,7 +93,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
         pathfinder = new NavigationPathfinder(config.pathMaxIterations());
 
         int ticks = Math.max(1, config.pathUpdateTicks());
-        updateTask = AxsScheduler.runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
+        updateTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
 
         logger.info("导航贴图标记已启动: texture=" + config.texture() + " size=" + config.width() + "x" + config.height()
             + " facing=" + config.facing() + " interval=" + config.pathInterval()
@@ -171,7 +171,7 @@ public final class NavigationTextureMarkerService implements NavigationRouteRend
                 + " key=" + key + " goal=(" + x + "," + y + "," + z + ")");
         }
 
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (!player.isOnline()) return;
             computeAndApplyPath(player, state);
         });

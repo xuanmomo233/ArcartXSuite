@@ -56,6 +56,7 @@ ui:
       var.tIndex = 0
       var.rewardItemJsons = {}
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.categories = packet['categories']
       var.pages = packet['pages']
       var.quests = packet['quests']
@@ -147,6 +148,7 @@ ui:
     # 包字段: 与 init 相同，用于增量更新菜单数据
     # 优化: 只更新数据变量，仅在数量变化时才 remove+copy，避免每次刷新全量重建导致闪烁
     update: |-
+      var.actionToken = packet['action_token']
       // 保存旧数量，用于判断是否需要重建列表
       oldCatCount = var.categories != none ? var.categories.keys().size() : 0
       oldQuestCount = var.quests != none ? var.quests.keys().size() : 0
@@ -982,9 +984,9 @@ controls:
                           clickLeft: |-
                             if(self.entry != none){
                               if(self.entry['tracked']){
-                                Packet.send(var.packetId, 'untrack_task', var.selectedQuestId, self.entry['id'])
+                                Packet.send(var.packetId, 'untrack_task', var.actionToken, var.selectedQuestId, self.entry['id'])
                               } else if(self.entry['trackable']){
-                                Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.entry['id'])
+                                Packet.send(var.packetId, 'track_task', var.actionToken, var.selectedQuestId, self.entry['id'])
                               }
                             }
                         children:
@@ -1186,7 +1188,7 @@ controls:
                       visible: var.canAccept
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'accept_quest', var.selectedQuestId)
+                        Packet.send(var.packetId, 'accept_quest', var.actionToken, var.selectedQuestId)
                     children:
                       接取背景:
                         type: Texture
@@ -1216,7 +1218,7 @@ controls:
                       visible: var.canAbandon
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'abandon_quest', var.selectedQuestId)
+                        Packet.send(var.packetId, 'abandon_quest', var.actionToken, var.selectedQuestId)
                     children:
                       放弃背景:
                         type: Texture
@@ -1247,9 +1249,9 @@ controls:
                     action:
                       clickLeft: |-
                         if(var.detailCrossWorld && var.detailTeleportAvailable){
-                          Packet.send(var.packetId, 'cross_world_track', var.selectedQuestId)
+                          Packet.send(var.packetId, 'cross_world_track', var.actionToken, var.selectedQuestId)
                         } else {
-                          Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+                          Packet.send(var.packetId, 'track_quest', var.actionToken, var.selectedQuestId)
                         }
                     children:
                       追踪背景:
@@ -1280,7 +1282,7 @@ controls:
                       visible: var.questTracked
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'untrack_quest', var.selectedQuestId)
+                        Packet.send(var.packetId, 'untrack_quest', var.actionToken, var.selectedQuestId)
                     children:
                       取消背景:
                         type: Texture

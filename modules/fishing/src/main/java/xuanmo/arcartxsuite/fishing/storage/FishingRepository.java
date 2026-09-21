@@ -80,4 +80,21 @@ public interface FishingRepository {
 
     /** 清空玩家饵料队列。 */
     void clearBaitQueue(@NotNull UUID uuid);
+
+    // ─── 任务进度（每日/每周/赛季任务实例持久化） ──────────────────
+
+    /** 加载玩家全部任务实例（含进度与完成态）。 */
+    @NotNull List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> loadTaskProgress(@NotNull UUID uuid);
+
+    /** 保存/更新一条任务实例进度（upsert）。 */
+    void saveTaskProgress(@NotNull xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance instance);
+
+    /**
+     * 清理某分类下 assigned_date 早于指定日期的全部过期任务行（全局，含离线玩家）。
+     * <p>daily 重置传今日日期；weekly 重置传本周一日期。
+     */
+    void purgeTaskProgressBefore(@NotNull String category, @NotNull String assignedDateBefore);
+
+    /** 清理指定分类的全部任务行（赛季重置用，避免误清 daily/weekly）。 */
+    void purgeTaskProgressByCategory(@NotNull String category);
 }

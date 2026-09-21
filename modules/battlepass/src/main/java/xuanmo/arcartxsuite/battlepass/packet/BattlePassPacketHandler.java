@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.battlepass.packet;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -113,11 +112,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             case "open_settlement" -> openSettlement(player);
             case "claim" -> handleClaim(player, data);
             case "claim_all" -> handleClaimAll(player, data);
-            case "refresh" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
-            case "refresh_tasks" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushTasksData(player); });
-            case "refresh_rewards" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushRewardsData(player); });
-            case "refresh_settlement" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushSettlementData(player); });
-            default -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
+            case "refresh" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushMainData(player); });
+            case "refresh_tasks" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushTasksData(player); });
+            case "refresh_rewards" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushRewardsData(player); });
+            case "refresh_settlement" -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushSettlementData(player); });
+            default -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> { if (player.isOnline()) pushMainData(player); });
         }
         return true;
     }
@@ -142,7 +141,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             return;
         }
         // DB 操作异步执行，避免阻塞主线程
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BattlePassService.ClaimResult result;
             try {
                 result = service.claimRewards(player, level);
@@ -180,7 +179,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             return;
         }
         // DB 操作异步执行，避免阻塞主线程
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             int claimedCount;
             try {
                 claimedCount = service.claimAllRewards(player);
@@ -210,7 +209,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
             }
@@ -225,7 +224,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openTasks(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, tasksUiId);
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (player.isOnline()) {
                 pushTasksData(player);
             }
@@ -241,7 +240,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, rewardsUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (player.isOnline()) {
                 pushRewardsData(player);
             }
@@ -256,7 +255,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openSettlement(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, settlementUiId);
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (player.isOnline()) {
                 pushSettlementData(player);
             }
@@ -549,7 +548,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
 
         if (structureChanged) pendingTaskStructureRefresh.add(playerUuid);
         if (packetBridge.isUiOpen(player, tasksUiId) && pendingTaskRefresh.add(playerUuid)) {
-            AxsScheduler.runAsyncLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
                 pendingTaskRefresh.remove(playerUuid);
                 boolean full = pendingTaskStructureRefresh.remove(playerUuid);
                 Player current = Bukkit.getPlayer(playerUuid);
@@ -560,7 +559,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         }
 
         if (packetBridge.isUiOpen(player, mainUiId) && pendingMainRefresh.add(playerUuid)) {
-            AxsScheduler.runAsyncLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
                 pendingMainRefresh.remove(playerUuid);
                 Player current = Bukkit.getPlayer(playerUuid);
                 if (current != null && current.isOnline() && packetBridge.isUiOpen(current, mainUiId)) {
@@ -615,7 +614,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (retryCount >= MAX_PUSH_RETRY) {
             return;
         }
-        AxsScheduler.runAsyncLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (!player.isOnline()) return;
             String uiId = switch (type) {
                 case "rewards" -> rewardsUiId;

@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.menu.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,6 +18,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
@@ -52,6 +52,7 @@ public final class MenuService {
     private MenuModuleConfiguration configuration;
     private final Map<String, MenuDefinition> menus = new LinkedHashMap<>();
     private final Map<UUID, MenuSession> sessions = new ConcurrentHashMap<>();
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
     private final MenuActionExecutor actionExecutor;
     private final IconResolver iconResolver;
     private final MessageProvider messageProvider;
@@ -258,7 +259,7 @@ public final class MenuService {
         }
         if (openUi) {
             packetBridge.openUi(player, runtimeUiId);
-            AxsScheduler.runTaskLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     pushPayload(player, session, definition, true);
                 }
@@ -420,6 +421,16 @@ public final class MenuService {
      */
     public void handlePlayerQuit(Player player) {
         sessions.remove(player.getUniqueId());
+        tokenGuard.clear(player.getUniqueId());
+    }
+
+    /**
+     * 模块卸载/服务停止：取消在途延迟动作链并清空会话，
+     * 防止卸载后延迟动作仍引用旧 service 继续执行。
+     */
+    public void shutdown() {
+        actionExecutor.shutdown();
+        sessions.clear();
     }
 
     /**
@@ -467,6 +478,7 @@ public final class MenuService {
             session,
             iconResolver
         );
+        payload.put("action_token", tokenGuard.issue(player.getUniqueId(), session.runtimeUiId()));
         List<MenuUiTarget> targets = definition.uiTargets();
         if (targets.isEmpty()) {
             packetBridge.sendPacket(
@@ -483,6 +495,23 @@ public final class MenuService {
                 : (initPacket ? "init" : "update");
             packetBridge.sendPacket(player, target.uiId(), handler, payload);
         }
+    }
+
+    /**
+     * 校验写操作令牌：要求会话 UI 已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
+     */
+    public boolean beginWriteAction(Player player, List<String> data) {
+        MenuSession session = sessions.get(player.getUniqueId());
+        if (session == null) return false;
+        String scope = session.runtimeUiId();
+        String supplied = data != null && data.size() > 1 ? data.get(1) : "";
+        return scope != null && packetBridge != null && packetBridge.isUiOpen(player, scope)
+            && tokenGuard.begin(player.getUniqueId(), scope, supplied);
+    }
+
+    /** 释放玩家的在途写操作槽位。 */
+    public void finishWriteAction(Player player) {
+        tokenGuard.finish(player.getUniqueId());
     }
 
     private String primaryRuntimeUiId(MenuDefinition definition) {

@@ -1,12 +1,18 @@
 package xuanmo.arcartxsuite.chat.storage;
 
 import java.sql.SQLException;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
+import xuanmo.arcartxsuite.chat.model.RedPacket;
+import xuanmo.arcartxsuite.chat.model.RedPacketClaim;
+import xuanmo.arcartxsuite.chat.model.RedPacketClaimOutcome;
+import xuanmo.arcartxsuite.chat.model.RedPacketEntryRow;
 
 /**
  * 聊天数据仓储接口，定义玩家状态、禁言记录与玩家档案的持久化操作。
@@ -99,6 +105,83 @@ public interface ChatRepository {
      * @throws SQLException SQL 异常
      */
     Optional<ChatPlayerProfile> findProfileByName(String playerName) throws SQLException;
+
+    // ── 红包 ─────────────────────────────────────────────
+
+    /**
+     * 写入新红包及其奖励池条目（如有）。
+     *
+     * @param packet  红包记录
+     * @param entries 奖励池条目（普通/拼手气红包传空列表）
+     * @throws SQLException SQL 异常
+     */
+    void insertRedPacket(RedPacket packet, List<RedPacketEntryRow> entries) throws SQLException;
+
+    /**
+     * 按 ID 查询红包。
+     *
+     * @param packetId 红包 ID
+     * @return 红包记录，不存在时返回 {@link Optional#empty()}
+     * @throws SQLException SQL 异常
+     */
+    Optional<RedPacket> findRedPacket(String packetId) throws SQLException;
+
+    /**
+     * 加载所有处于 active 状态的红包（用于重启后重播）。
+     *
+     * @return 未结束的红包列表
+     * @throws SQLException SQL 异常
+     */
+    List<RedPacket> loadActiveRedPackets() throws SQLException;
+
+    /**
+     * 在单个事务中尝试领取红包。
+     * <p>
+     * 校验红包存在、未过期、未抢完、玩家未重复领取后，原子递增已领份数并写入领取记录。
+     * 奖励池红包在同一事务内扣减条目剩余量。MySQL 使用行锁保证跨服并发安全；
+     * SQLite 由单连接串行化天然保证。
+     *
+     * @param packetId       红包 ID
+     * @param playerUuid     领取者 UUID
+     * @param playerName     领取者名
+     * @param senderCanClaim 是否允许发送者领取自己的红包
+     * @param now            当前时间
+     * @return 领取结果（含抽中的奖励快照）
+     * @throws SQLException SQL 异常
+     */
+    RedPacketClaimOutcome claimRedPacket(String packetId, UUID playerUuid, String playerName,
+                                         boolean senderCanClaim, Instant now) throws SQLException;
+
+    /**
+     * 将红包原子标记为指定状态（仅当当前状态为 active 时生效）。
+     * <p>
+     * 共享 MySQL 下多个节点同时清理过期红包时，只有成功执行状态翻转的节点
+     * 才负责后续退款，避免重复退款。
+     *
+     * @param packetId 红包 ID
+     * @param status   目标状态（exhausted / expired）
+     * @return {@code true} 表示本次调用完成了状态翻转
+     * @throws SQLException SQL 异常
+     */
+    boolean updateRedPacketStatus(String packetId, String status) throws SQLException;
+
+    /**
+     * 扣减红包剩余金额（退款结算用）。
+     *
+     * @param packetId        红包 ID
+     * @param remainingAmount 新的剩余金额
+     * @throws SQLException SQL 异常
+     */
+    void updateRedPacketRemaining(String packetId, java.math.BigDecimal remainingAmount) throws SQLException;
+
+    /**
+     * 查询红包的全部领取记录（按领取时间升序）。
+     *
+     * @param packetId 红包 ID
+     * @return 领取记录列表
+     * @throws SQLException SQL 异常
+     */
+    List<RedPacketClaim> listRedPacketClaims(String packetId) throws SQLException;
 
     /**
      * 关闭仓储，释放数据库连接池等资源。

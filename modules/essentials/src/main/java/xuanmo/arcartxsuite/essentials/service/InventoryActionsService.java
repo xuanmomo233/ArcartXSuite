@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.essentials.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -149,7 +148,7 @@ public final class InventoryActionsService implements Listener {
         if (!player.getInventory().containsAtLeast(new ItemStack(seed), 1)) return;
 
         // 延迟 1 tick 补种（等方块被破坏后）
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!block.getType().isAir()) return;
             block.setType(cropType);
             // 消耗种子

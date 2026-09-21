@@ -313,12 +313,24 @@ public class RankingRewardScheduler {
     public CompletableFuture<Integer> manualTriggerWeeklyRewards() {
         ZoneId zoneId = ZoneId.of(timeZone);
         LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        LocalDateTime periodStart = now.minusWeeks(1);
-        LocalDateTime periodEnd = now;
-        
+
+        // 与定时任务相同的对齐周期：periodStart 是幂等键（hasSuccessfulIssuance 精确匹配），
+        // 手动触发若用裸 now.minusWeeks(1) 会生成不同 periodStart 绕过幂等检查重复发奖
+        LocalDateTime periodStart = now.minusWeeks(1)
+            .with(TemporalAdjusters.previousOrSame(weeklyDay))
+            .withHour(weeklyHour)
+            .withMinute(weeklyMinute)
+            .withSecond(0)
+            .withNano(0);
+
+        LocalDateTime periodEnd = now
+            .withHour(weeklyHour)
+            .withMinute(weeklyMinute)
+            .withSecond(0)
+            .withNano(0);
+
         logger.info("手动触发周奖励发放: 周期=" + periodStart + " - " + periodEnd);
-        
+
         return rewardService.distributeRewards("weekly", periodStart, periodEnd);
     }
 
@@ -328,12 +340,24 @@ public class RankingRewardScheduler {
     public CompletableFuture<Integer> manualTriggerMonthlyRewards() {
         ZoneId zoneId = ZoneId.of(timeZone);
         LocalDateTime now = LocalDateTime.now(zoneId);
-        
-        LocalDateTime periodStart = now.minusMonths(1);
-        LocalDateTime periodEnd = now;
-        
+
+        // 与定时任务相同的对齐周期（同上，防止幂等键错位重复发奖）
+        LocalDateTime periodStart = now.minusMonths(1)
+            .withDayOfMonth(Math.min(monthlyDay, now.minusMonths(1).toLocalDate().lengthOfMonth()))
+            .withHour(monthlyHour)
+            .withMinute(monthlyMinute)
+            .withSecond(0)
+            .withNano(0);
+
+        LocalDateTime periodEnd = now
+            .withDayOfMonth(Math.min(monthlyDay, now.toLocalDate().lengthOfMonth()))
+            .withHour(monthlyHour)
+            .withMinute(monthlyMinute)
+            .withSecond(0)
+            .withNano(0);
+
         logger.info("手动触发月奖励发放: 周期=" + periodStart + " - " + periodEnd);
-        
+
         return rewardService.distributeRewards("monthly", periodStart, periodEnd);
     }
 

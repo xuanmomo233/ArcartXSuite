@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.regions.packet;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
@@ -38,6 +38,7 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     private final RegionManager regionManager;
     private final RegionsConfiguration config;
     private final String uiId;
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
 
     public RegionsMenuPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, RegionManager regionManager,
@@ -72,8 +73,18 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
                 }
             }
             case "clear_selection" -> {
-                regionManager.clearSelection(player.getUniqueId());
-                pushSelectionData(player);
+                // data: [action, token] — 写操作需有效动作令牌
+                String supplied = hasValue(data, 1) ? data.get(1) : "";
+                if (packetBridge == null || !packetBridge.isUiOpen(player, uiId)
+                    || !tokenGuard.begin(player.getUniqueId(), uiId, supplied)) {
+                    return true;
+                }
+                try {
+                    regionManager.clearSelection(player.getUniqueId());
+                    pushSelectionData(player);
+                } finally {
+                    tokenGuard.finish(player.getUniqueId());
+                }
             }
             case "query_selection" -> pushSelectionData(player);
             default -> pushData(player, "current");
@@ -81,10 +92,16 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
         return true;
     }
 
+    /** 玩家退出时清理其 token 与在途标记（由模块 quit 监听调用）。 */
+    public void clearPlayer(java.util.UUID playerId) {
+        tokenGuard.clear(playerId);
+    }
+
     public void openMenu(Player player) {
         if (packetBridge == null) return;
+        tokenGuard.issue(player.getUniqueId(), uiId);
         packetBridge.openUi(player, uiId);
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushData(player, "current");
             }
@@ -208,6 +225,8 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
         payload.put("selComplete", String.valueOf(sel.isComplete()));
         payload.put("selVolume", String.valueOf(sel.volume()));
         payload.put("maxVolume", String.valueOf(config != null ? config.selection().maxVolume() : 0));
+        // 每次推送轮换动作令牌：写操作回包必须携带最新 token（防重放/防外部注入）。
+        payload.put("action_token", tokenGuard.rotate(player.getUniqueId(), uiId));
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 

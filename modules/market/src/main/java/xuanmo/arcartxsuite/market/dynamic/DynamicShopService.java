@@ -203,16 +203,28 @@ public class DynamicShopService {
      * 处理来自其他服的动态状态同步消息。
      * <p>
      * 由 MarketService 调用。
+     *
+     * @param strict 严格校验模式：对价格/乘数/库存做范围 clamp，阻断伪造消息注入非法数值
      */
-    public void handleCrossServerMessage(String action, String strategyKey, String shopId, String data) {
+    public void handleCrossServerMessage(String action, String strategyKey, String shopId, String data, boolean strict) {
         if (!"DYNAMIC_SHOP_UPDATE".equals(action)) return;
         DynamicShopContextImpl context = contexts.get(strategyKey);
         if (context == null) {
             logger.fine("[DynamicShop] 收到未知策略的跨服同步: " + strategyKey);
             return;
         }
-        context.deserializeFromSync(data);
+        if (strict && !context.shopId().equals(shopId)) {
+            logger.warning("[DynamicShop] 跨服同步 shopId 与策略绑定不符，已拒绝: strategy=" + strategyKey
+                + " msgShop=" + shopId + " boundShop=" + context.shopId());
+            return;
+        }
+        context.deserializeFromSync(data, strict);
         logger.fine("[DynamicShop] 已同步跨服动态状态: " + strategyKey);
+    }
+
+    /** 兼容旧签名的重载（默认非严格模式）。 */
+    public void handleCrossServerMessage(String action, String strategyKey, String shopId, String data) {
+        handleCrossServerMessage(action, strategyKey, shopId, data, false);
     }
 
     // ── 外部查询接口 ──────────────────────────────────────

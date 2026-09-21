@@ -200,15 +200,33 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
      */
     @Override
     public void insertBinding(long qqId, UUID playerUuid, String playerName) {
-        String sql = "INSERT INTO " + tableBindings
+        // 一号一绑/一人一号：事务内先删除该 QQ 或该玩家的既有绑定再插入，
+        // 老表无单列 UNIQUE 约束（复合 UNIQUE(qq_id,player_uuid) 不阻止重复绑定），由本事务保证唯一
+        String deleteSql = "DELETE FROM " + tableBindings + " WHERE qq_id = ? OR player_uuid = ?";
+        String insertSql = "INSERT INTO " + tableBindings
             + " (qq_id, player_uuid, player_name, bound_at) VALUES (?, ?, ?, ?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, qqId);
-            ps.setString(2, playerUuid.toString());
-            ps.setString(3, playerName);
-            ps.setLong(4, System.currentTimeMillis());
-            ps.executeUpdate();
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement del = conn.prepareStatement(deleteSql)) {
+                    del.setLong(1, qqId);
+                    del.setString(2, playerUuid.toString());
+                    del.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setLong(1, qqId);
+                    ps.setString(2, playerUuid.toString());
+                    ps.setString(3, playerName);
+                    ps.setLong(4, System.currentTimeMillis());
+                    ps.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         } catch (SQLException e) {
             logger.warning("QQBot 插入绑定失败: " + e.getMessage());
         }
@@ -527,6 +545,29 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
             logger.warning("QQBot 增加积分失败: " + e.getMessage());
         }
         return getPoints(qqId);
+    }
+
+    /** 在给定连接上执行积分 upsert（供事务内复用，不自行开连接/提交）。 */
+    private void addPointsOnConnection(Connection conn, long qqId, int delta) throws SQLException {
+        long now = System.currentTimeMillis();
+        String upsert = isMysql()
+            ? "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
+                + "VALUES (?, ?, ?, 0, ?) "
+                + "ON DUPLICATE KEY UPDATE balance = balance + ?, total_earned = total_earned + ?, updated_at = ?"
+            : "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
+                + "VALUES (?, ?, ?, 0, ?) "
+                + "ON CONFLICT(qq_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?, updated_at = ?";
+        int earnedDelta = Math.max(0, delta);
+        try (PreparedStatement ps = conn.prepareStatement(upsert)) {
+            ps.setLong(1, qqId);
+            ps.setInt(2, delta);
+            ps.setInt(3, earnedDelta);
+            ps.setLong(4, now);
+            ps.setInt(5, delta);
+            ps.setInt(6, earnedDelta);
+            ps.setLong(7, now);
+            ps.executeUpdate();
+        }
     }
 
     /**
@@ -991,21 +1032,37 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     public void refundExpiredRedPackets() {
         String selectSql = "SELECT id, sender_qq, remaining_amount FROM " + tableRedPackets
             + " WHERE expire_at <= ? AND remaining_amount > 0";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(selectSql)) {
-            ps.setLong(1, System.currentTimeMillis());
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    long id = rs.getLong("id");
-                    long senderQq = rs.getLong("sender_qq");
-                    int remaining = rs.getInt("remaining_amount");
-                    addPoints(senderQq, remaining, "redpacket_refund", "红包过期退款 #" + id);
-                    String clearSql = "UPDATE " + tableRedPackets + " SET remaining_amount = 0 WHERE id = ?";
-                    try (PreparedStatement upd = conn.prepareStatement(clearSql)) {
-                        upd.setLong(1, id);
-                        upd.executeUpdate();
+        // 单事务 + 原子抢占：UPDATE...WHERE remaining_amount>0 返回 0 行表示已被其他节点/轮次处理，
+        // 抢到才加积分，杜绝并发重复退款；任一失败整体回滚
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(selectSql)) {
+                ps.setLong(1, System.currentTimeMillis());
+                List<long[]> rows = new java.util.ArrayList<>();
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        rows.add(new long[]{rs.getLong("id"), rs.getLong("sender_qq"), rs.getInt("remaining_amount")});
                     }
                 }
+                for (long[] row : rows) {
+                    long id = row[0];
+                    long senderQq = row[1];
+                    int remaining = (int) row[2];
+                    try (PreparedStatement upd = conn.prepareStatement(
+                        "UPDATE " + tableRedPackets + " SET remaining_amount = 0 WHERE id = ? AND remaining_amount > 0")) {
+                        upd.setLong(1, id);
+                        if (upd.executeUpdate() <= 0) {
+                            continue; // 已被并发处理
+                        }
+                    }
+                    addPointsOnConnection(conn, senderQq, remaining);
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             logger.warning("QQBot 退还过期红包失败: " + e.getMessage());

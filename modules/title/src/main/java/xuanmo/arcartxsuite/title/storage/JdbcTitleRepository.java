@@ -448,14 +448,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
 
-    private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {
-        if (value == null) {
-            statement.setNull(index, Types.VARCHAR);
-        } else {
-            statement.setString(index, value);
-        }
-    }
-
     private static Instant readInstant(ResultSet resultSet, String column) throws SQLException {
         return Instant.ofEpochMilli(resultSet.getLong(column));
     }
@@ -463,10 +455,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     private static Instant readNullableInstant(ResultSet resultSet, String column) throws SQLException {
         long value = resultSet.getLong(column);
         return resultSet.wasNull() ? null : Instant.ofEpochMilli(value);
-    }
-
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
     }
 
     private static String nullToEmpty(String value) {

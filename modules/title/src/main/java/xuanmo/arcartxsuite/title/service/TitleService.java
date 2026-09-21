@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.title.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,6 +9,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -33,6 +33,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.permissions.Permissible;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.security.ActionTokenGuard;
 import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
@@ -63,6 +64,7 @@ public class TitleService {
     private final TitleModuleConfiguration configuration;
     private final TitleRepository repository;
     private final PacketBridgeAPI bridge;
+    private final ActionTokenGuard tokenGuard = new ActionTokenGuard();
     private final PacketGuardAPI packetGuard;
     private final Supplier<TabRefreshable> tabRefreshableProvider;
     private final UiResourceExporter uiResourceExporter;
@@ -175,7 +177,7 @@ public class TitleService {
             preloadPlayer(player);
         }
 
-        expirationTask = AxsScheduler.runTaskTimer(
+        expirationTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::tickExpirationCleanup,
             configuration.expirationCleanupIntervalTicks(),
@@ -234,12 +236,12 @@ public class TitleService {
         if (player == null) {
             return;
         }
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> AxsScheduler.runTask(plugin, () -> {
+        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null || !player.isOnline()) {
                 return;
             }
             syncExternalAttributes(player, state);
-            AxsScheduler.runTaskLater(
+            Bukkit.getScheduler().runTaskLater(
                 plugin,
                 () -> {
                     if (!player.isOnline()) {
@@ -264,6 +266,7 @@ public class TitleService {
         states.remove(playerUuid);
         loadingStates.remove(playerUuid);
         selectedTitleIds.remove(playerUuid);
+        tokenGuard.clear(playerUuid);
     }
 
     /**
@@ -305,23 +308,42 @@ public class TitleService {
 
         String action = data == null || data.isEmpty() ? "refresh" : data.get(0).trim().toLowerCase(Locale.ROOT);
         // PacketGuard 已由 ClientPacketRouter 在路由层统一调用，此处不再重复检查，避免双重计数导致限流阈值减半。
-        switch (action) {
-            case "open" -> openMenu(player);
-            case "select" -> {
-                if (data.size() > 1) {
-                    selectTitle(player, data.get(1));
+        // 写操作需要有效动作令牌：data[1] 为 token，称号参数从 data[2] 起
+        boolean writeAction = switch (action) {
+            case "equip", "unequip_group", "unequip_all", "hide", "unhide", "set_display" -> true;
+            default -> false;
+        };
+        if (writeAction && !beginActionToken(player, data)) return true;
+        try {
+            switch (action) {
+                case "open" -> openMenu(player);
+                case "select" -> {
+                    if (data.size() > 1) {
+                        selectTitle(player, data.get(1));
+                    }
                 }
+                case "equip" -> equipTitle(player, data.size() > 2 ? data.get(2) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
+                case "unequip_group" -> unequipGroup(player, data.size() > 2 ? data.get(2) : selectedGroupId(player));
+                case "unequip_all" -> unequipAll(player);
+                case "hide" -> hideTitle(player, data.size() > 2 ? data.get(2) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
+                case "unhide" -> unhideTitle(player, data.size() > 2 ? data.get(2) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
+                case "set_display" -> selectDisplayTitle(player, data.size() > 2 ? data.get(2) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
+                case "refresh" -> refreshMenu(player);
+                default -> refreshMenu(player);
             }
-            case "equip" -> equipTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
-            case "unequip_group" -> unequipGroup(player, data.size() > 1 ? data.get(1) : selectedGroupId(player));
-            case "unequip_all" -> unequipAll(player);
-            case "hide" -> hideTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
-            case "unhide" -> unhideTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
-            case "set_display" -> selectDisplayTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
-            case "refresh" -> refreshMenu(player);
-            default -> refreshMenu(player);
+        } finally {
+            if (writeAction) tokenGuard.finish(player.getUniqueId());
         }
         return true;
+    }
+
+    /**
+     * 校验写操作令牌：要求称号菜单已打开、data[1] 与当前签发 token 一致、且玩家无在途写操作。
+     */
+    private boolean beginActionToken(Player player, List<String> data) {
+        String supplied = data != null && data.size() > 1 && data.get(1) != null ? data.get(1).trim() : "";
+        return runtimeUiId != null && bridge != null && bridge.isUiOpen(player, runtimeUiId)
+            && tokenGuard.begin(player.getUniqueId(), runtimeUiId, supplied);
     }
 
     /**
@@ -748,23 +770,20 @@ public class TitleService {
             accessibleGroupIds
         );
         String selectedTitleId = ensureSelectedTitle(player.getUniqueId(), sanitizedState);
-        bridge.sendPacket(
-            player,
-            runtimeUiId,
-            handlerName,
-            TitleMenuPacketFactory.build(
-                configuration,
-                sanitizedState,
-                resolvedState,
-                selectedTitleId,
-                accessibleGroupIds,
-                now
-            )
+        Map<String, Object> payload = TitleMenuPacketFactory.build(
+            configuration,
+            sanitizedState,
+            resolvedState,
+            selectedTitleId,
+            accessibleGroupIds,
+            now
         );
+        payload.put("action_token", tokenGuard.issue(player.getUniqueId(), runtimeUiId));
+        bridge.sendPacket(player, runtimeUiId, handlerName, payload);
     }
 
     private void withLoadedState(Player player, Consumer<PlayerTitleState> consumer, Consumer<Throwable> errorConsumer) {
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> AxsScheduler.runTask(plugin, () -> {
+        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
                 errorConsumer.accept(throwable);
                 return;
@@ -864,7 +883,7 @@ public class TitleService {
         if (player == null || !player.isOnline()) {
             return;
         }
-        AxsScheduler.runTask(plugin, () -> refreshMenu(player));
+        Bukkit.getScheduler().runTask(plugin, () -> refreshMenu(player));
     }
 
     private void syncExternalAttributes(Player player, PlayerTitleState state) {
@@ -890,7 +909,7 @@ public class TitleService {
         if (player == null || !player.isOnline()) {
             return;
         }
-        AxsScheduler.runTask(
+        Bukkit.getScheduler().runTask(
             plugin,
             () -> withLoadedState(player, state -> syncExternalAttributes(player, state), exception -> { })
         );

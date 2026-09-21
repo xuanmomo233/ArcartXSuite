@@ -250,7 +250,7 @@ commands:
     permission: arcartxsuite.mail.use
   chat:
     description: 玩家聊天命令
-    usage: /<command> channel|toggle|ignore|unignore|socialspy
+    usage: /<command> channel|toggle|ignore|unignore|socialspy|redpacket <normal|lucky> <金额> <个数> [祝福]|grab <id>
     aliases: [axschat]
     permission: arcartxsuite.chat.use
   msg:
@@ -345,6 +345,12 @@ permissions:
   arcartxsuite.chat.socialspy:
     default: op
   arcartxsuite.chat.mute:
+    default: op
+  arcartxsuite.chat.redpacket.send:
+    default: true
+  arcartxsuite.chat.redpacket.claim:
+    default: true
+  arcartxsuite.chat.redpacket.admin:
     default: op
   arcartxsuite.onlinerewards.use:
     default: true

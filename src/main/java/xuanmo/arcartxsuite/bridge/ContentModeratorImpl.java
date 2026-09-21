@@ -25,8 +25,9 @@ import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ContentModerator;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.module.AxsLog;
+import org.bukkit.Bukkit;
 
 /**
  * 内容审核桥接实现：敏感词过滤（本地词库 + 云端词库 + 标点穿透防护 + 白名单）。
@@ -103,14 +104,14 @@ public final class ContentModeratorImpl implements ContentModerator {
         cancelCloudRefresh();
         if (cloudEnabled && !cloudUrls.isEmpty()) {
             scheduleCloudRefresh();
-            AxsScheduler.runAsync(plugin, this::refreshCloudWords);
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshCloudWords);
         }
     }
 
     private void scheduleCloudRefresh() {
         long periodTicks = Math.max(1200L, cloudRefreshMinutes * 60L * 20L);
         // 首次拉取已由 reload() 的 runAsync 执行，定时器从第一个完整周期开始
-        cloudRefreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshCloudWords, periodTicks, periodTicks);
+        cloudRefreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshCloudWords, periodTicks, periodTicks);
     }
 
     private void cancelCloudRefresh() {

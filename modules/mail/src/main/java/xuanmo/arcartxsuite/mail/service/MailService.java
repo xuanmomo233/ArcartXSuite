@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.mail.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -84,6 +83,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 public final class MailService implements Listener {
 
@@ -325,7 +325,7 @@ public final class MailService implements Listener {
             touchProfile(player, false);
         }
 
-        cleanupTask = AxsScheduler.runTaskTimer(plugin, this::runCleanup, configuration.retention().cleanupIntervalTicks(), configuration.retention().cleanupIntervalTicks());
+        cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::runCleanup, configuration.retention().cleanupIntervalTicks(), configuration.retention().cleanupIntervalTicks());
         crossServerChannel = crossServer.openChannel(
             "mail",
             configuration.crossServer(),
@@ -450,12 +450,19 @@ public final class MailService implements Listener {
             .toList();
     }
 
+    /** 预设 id 合法字符集——id 直接拼接文件名，必须拒绝 /、.. 等路径穿越字符 */
+    private static final java.util.regex.Pattern PRESET_ID_PATTERN =
+        java.util.regex.Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
+
     /**
      * 创建或更新预设并保存到 YAML 文件。
      */
     public MailOperationResult savePreset(MailPresetDefinition preset) {
         if (preset == null || preset.id() == null || preset.id().isBlank()) {
             return MailOperationResult.failure(message("player.preset-id-required"));
+        }
+        if (!PRESET_ID_PATTERN.matcher(preset.id().trim()).matches()) {
+            return MailOperationResult.failure(message("admin.preset-id-invalid", preset.id()));
         }
         try {
             File directory = new File(baseDataDir, configuration.presetsDirectory());
@@ -476,6 +483,9 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.preset-id-required"));
         }
         String normalized = presetId.trim().toLowerCase(Locale.ROOT);
+        if (!PRESET_ID_PATTERN.matcher(normalized).matches()) {
+            return MailOperationResult.failure(message("admin.preset-id-invalid", presetId));
+        }
         MailPresetDefinition removed = presets.remove(normalized);
         if (removed == null) {
             return MailOperationResult.failure(message("admin.preset-not-found", presetId));
@@ -524,7 +534,7 @@ public final class MailService implements Listener {
         adminEditSessions.put(player.getUniqueId(), session);
         bridge.openUi(player, adminUiId);
 
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline()) {
                 sendAdminPresetList(player);
             }
@@ -583,11 +593,11 @@ public final class MailService implements Listener {
             MailSourceType.SYSTEM,
             "",
             "",
-            crop(subject, configuration.playerSend().subjectMaxLength()),
-            crop(body, configuration.playerSend().bodyMaxLength()),
+            MailTexts.crop(subject, configuration.playerSend().subjectMaxLength()),
+            MailTexts.crop(body, configuration.playerSend().bodyMaxLength()),
             MailStatus.UNREAD,
-            copyAttachments(attachments),
-            copyStrings(claimCommands),
+            MailTexts.copyAttachments(attachments),
+            MailTexts.copyStrings(claimCommands),
             List.of(),
             now,
             expiresAt,
@@ -621,7 +631,7 @@ public final class MailService implements Listener {
             logViewers.remove(player.getUniqueId());
             // 先打开 ArcartX UI（不鼠标重置），再延迟关闭 Bukkit 容器（compose/admin 会话）
             bridge.openUi(player, inboxUiId);
-            AxsScheduler.runTask(plugin, () -> closeOtherMailUis(player));
+            Bukkit.getScheduler().runTask(plugin, () -> closeOtherMailUis(player));
             refreshInbox(player, true);
             return MailOperationResult.success(message("player.mailbox-opened"));
         } catch (Exception exception) {
@@ -654,7 +664,7 @@ public final class MailService implements Listener {
         bridge.openUi(player, composeUiId);
 
         // 延迟 1 tick 发送 init 包（含背包和附件数据）
-        AxsScheduler.runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline()) {
                 sendComposeInitPacket(player, session);
             }
@@ -806,6 +816,13 @@ public final class MailService implements Listener {
                 true
             );
             if (!sendResult.success()) {
+                // 投递失败回滚认领：释放 claim 行与额度，玩家可重试而非白占一次兑换数
+                try {
+                    repository.releaseCdkClaim(code, playerId);
+                } catch (Exception releaseEx) {
+                    this.logger.warning("CDK 投递失败后释放认领失败: code=" + code
+                        + " player=" + playerId + " | " + releaseEx.getMessage());
+                }
                 cdkPreviewStates.put(playerId, new CdkPreviewState(code, "failed", sendResult.message(), false));
                 onCdkRedeemFailure(playerId, now);
                 return sendResult;
@@ -933,7 +950,7 @@ public final class MailService implements Listener {
             }
 
             Instant now = Instant.now();
-            repository.saveCdk(new MailCdkDefinition(code, preset.id(), maxClaims, 0, expiresAt, true, safe(createdBy), now, now));
+            repository.saveCdk(new MailCdkDefinition(code, preset.id(), maxClaims, 0, expiresAt, true, MailTexts.safe(createdBy), now, now));
             return MailOperationResult.success(message("player.cdk-created", code));
         } catch (Exception exception) {
             this.logger.warning("创建 CDK 失败: " + exception.getMessage());
@@ -1020,7 +1037,7 @@ public final class MailService implements Listener {
             return false;
         }
 
-        String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
+        String action = data == null || data.isEmpty() ? "refresh" : MailTexts.safe(data.get(0)).toLowerCase(Locale.ROOT);
         String requiredUi = requiredUiForAction(action);
         if (requiredUi != null
             && (bridge == null || !bridge.isUiOpen(player, requiredUi))) {
@@ -1058,7 +1075,7 @@ public final class MailService implements Listener {
             }
             case "select" -> {
                 if (data != null && data.size() >= 2) {
-                    long mailId = parseLong(data.get(1), -1L);
+                    long mailId = MailTexts.parseLong(data.get(1), -1L);
                     if (mailId > 0L) {
                         selectMail(player, mailId);
                     }
@@ -1079,15 +1096,15 @@ public final class MailService implements Listener {
             }
             case "compose-add-attachment" -> {
                 if (data != null && data.size() >= 3) {
-                    int slot = (int) parseLong(data.get(1), -1);
-                    String countStr = safe(data.get(2));
+                    int slot = (int) MailTexts.parseLong(data.get(1), -1);
+                    String countStr = MailTexts.safe(data.get(2));
                     sendPlayerResult(player, handleComposeAddAttachment(player, slot, countStr));
                 }
                 return true;
             }
             case "compose-remove-attachment" -> {
                 if (data != null && data.size() >= 2) {
-                    int index = (int) parseLong(data.get(1), -1);
+                    int index = (int) MailTexts.parseLong(data.get(1), -1);
                     sendPlayerResult(player, handleComposeRemoveAttachment(player, index));
                 }
                 return true;
@@ -1095,8 +1112,8 @@ public final class MailService implements Listener {
             case "admin-add-attachment" -> {
                 if (!player.hasPermission("arcartxsuite.admin")) return true;
                 if (data != null && data.size() >= 3) {
-                    int slot = (int) parseLong(data.get(1), -1);
-                    String countStr = safe(data.get(2));
+                    int slot = (int) MailTexts.parseLong(data.get(1), -1);
+                    String countStr = MailTexts.safe(data.get(2));
                     sendAdminResult(player, handleAdminAddAttachment(player, slot, countStr), false);
                 }
                 return true;
@@ -1104,7 +1121,7 @@ public final class MailService implements Listener {
             case "admin-remove-attachment" -> {
                 if (!player.hasPermission("arcartxsuite.admin")) return true;
                 if (data != null && data.size() >= 2) {
-                    int index = (int) parseLong(data.get(1), -1);
+                    int index = (int) MailTexts.parseLong(data.get(1), -1);
                     sendAdminResult(player, handleAdminRemoveAttachment(player, index), false);
                 }
                 return true;
@@ -1115,7 +1132,7 @@ public final class MailService implements Listener {
             }
             case "claim" -> {
                 if (data != null && data.size() >= 2) {
-                    long mailId = parseLong(data.get(1), -1L);
+                    long mailId = MailTexts.parseLong(data.get(1), -1L);
                     if (mailId > 0L) {
                         sendPlayerResult(player, claimMail(player, mailId, true));
                     }
@@ -1124,7 +1141,7 @@ public final class MailService implements Listener {
             }
             case "delete" -> {
                 if (data != null && data.size() >= 2) {
-                    long mailId = parseLong(data.get(1), -1L);
+                    long mailId = MailTexts.parseLong(data.get(1), -1L);
                     if (mailId > 0L) {
                         sendPlayerResult(player, deleteMail(player, mailId, true));
                     }
@@ -1216,8 +1233,8 @@ public final class MailService implements Listener {
         for (MailPresetDefinition def : definitions) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", def.id());
-            entry.put("displayName", safe(def.displayName()));
-            entry.put("subject", safe(def.subject()));
+            entry.put("displayName", MailTexts.safe(def.displayName()));
+            entry.put("subject", MailTexts.safe(def.subject()));
             entry.put("enabled", def.enabled());
             entry.put("attachmentCount", def.attachments() != null ? def.attachments().size() : 0);
             entry.put("commandCount", def.claimCommands() != null ? def.claimCommands().size() : 0);
@@ -1237,7 +1254,7 @@ public final class MailService implements Listener {
         Map<String, Object> payload = new LinkedHashMap<>();
         if (def == null) {
             payload.put("found", false);
-            payload.put("id", safe(presetId));
+            payload.put("id", MailTexts.safe(presetId));
             payload.put("itemAttachmentCount", 0);
             payload.put("currencyAttachments", "");
             payload.put("claimCommands", "");
@@ -1247,9 +1264,9 @@ public final class MailService implements Listener {
             payload.put("found", true);
             payload.put("id", def.id());
             payload.put("enabled", def.enabled());
-            payload.put("displayName", safe(def.displayName()));
-            payload.put("subject", safe(def.subject()));
-            payload.put("body", safe(def.body()));
+            payload.put("displayName", MailTexts.safe(def.displayName()));
+            payload.put("subject", MailTexts.safe(def.subject()));
+            payload.put("body", MailTexts.safe(def.body()));
             payload.put("expiresAfterDays", def.expiresAfter() != null ? def.expiresAfter().toDays() : 15);
             // 货币附件：发送结构化字典供 UI 动态行使用（key 为索引字符串，避免 ARIA 对 Java List 的索引访问限制）
             Map<String, Map<String, Object>> currencyMap = new java.util.LinkedHashMap<>();
@@ -1336,16 +1353,16 @@ public final class MailService implements Listener {
             return;
         }
         try {
-            String id = safe(data.get(1)).trim().toLowerCase(Locale.ROOT);
+            String id = MailTexts.safe(data.get(1)).trim().toLowerCase(Locale.ROOT);
             if (id.isBlank()) {
                 sendAdminResult(player, MailOperationResult.failure(message("player.preset-id-required")));
                 return;
             }
-            boolean enabled = "true".equalsIgnoreCase(safe(data.get(2)).trim());
-            String displayName = safe(data.get(3)).trim();
-            String subject = safe(data.get(4)).trim();
-            String body = safe(data.get(5)).trim();
-            long expiresAfterDays = parseLong(safe(data.get(6)).trim(), 15L);
+            boolean enabled = "true".equalsIgnoreCase(MailTexts.safe(data.get(2)).trim());
+            String displayName = MailTexts.safe(data.get(3)).trim();
+            String subject = MailTexts.safe(data.get(4)).trim();
+            String body = MailTexts.safe(data.get(5)).trim();
+            long expiresAfterDays = MailTexts.parseLong(MailTexts.safe(data.get(6)).trim(), 15L);
             if (expiresAfterDays < 1) expiresAfterDays = 15;
 
             List<MailAttachment> attachments = new ArrayList<>();
@@ -1365,9 +1382,9 @@ public final class MailService implements Listener {
             }
 
             // 解析 currency attachments: JSON 数组 [{"currency":"money","amount":88,"description":"..."}]
-            if (data.size() > 7 && !safe(data.get(7)).isBlank()) {
+            if (data.size() > 7 && !MailTexts.safe(data.get(7)).isBlank()) {
                 try {
-                    JsonArray curArray = JsonParser.parseString(safe(data.get(7))).getAsJsonArray();
+                    JsonArray curArray = JsonParser.parseString(MailTexts.safe(data.get(7))).getAsJsonArray();
                     for (JsonElement elem : curArray) {
                         if (!elem.isJsonObject()) continue;
                         JsonObject obj = elem.getAsJsonObject();
@@ -1420,8 +1437,8 @@ public final class MailService implements Listener {
 
             // 领取命令: 每行一条
             List<String> claimCommands = new ArrayList<>();
-            if (data.size() > 8 && !safe(data.get(8)).isBlank()) {
-                for (String line : safe(data.get(8)).split("\\R")) {
+            if (data.size() > 8 && !MailTexts.safe(data.get(8)).isBlank()) {
+                for (String line : MailTexts.safe(data.get(8)).split("\\R")) {
                     String trimmed = line.trim();
                     if (!trimmed.isEmpty()) {
                         claimCommands.add(trimmed);
@@ -1432,8 +1449,8 @@ public final class MailService implements Listener {
             MailPresetDefinition existing = getPreset(id);
             // 领取条件: 每行一条（格式 %placeholder% >= value 或 aria:/js: 前缀）
             List<ScriptCondition> claimConditions = new ArrayList<>();
-            if (data.size() > 9 && !safe(data.get(9)).isBlank()) {
-                for (String line : safe(data.get(9)).split("\\R")) {
+            if (data.size() > 9 && !MailTexts.safe(data.get(9)).isBlank()) {
+                for (String line : MailTexts.safe(data.get(9)).split("\\R")) {
                     String trimmed = line.trim();
                     if (!trimmed.isEmpty()) {
                         try {
@@ -1449,9 +1466,9 @@ public final class MailService implements Listener {
             }
             // CDK: JSON 数组 [{"code":"STARTER2026","enabled":true,"maxClaims":100,"expiresAfter":"30d"}]
             List<MailPresetCdkDefinition> cdks = new ArrayList<>();
-            if (data.size() > 10 && !safe(data.get(10)).isBlank()) {
+            if (data.size() > 10 && !MailTexts.safe(data.get(10)).isBlank()) {
                 try {
-                    JsonArray cdkArray = JsonParser.parseString(safe(data.get(10))).getAsJsonArray();
+                    JsonArray cdkArray = JsonParser.parseString(MailTexts.safe(data.get(10))).getAsJsonArray();
                     for (JsonElement elem : cdkArray) {
                         if (!elem.isJsonObject()) continue;
                         JsonObject obj = elem.getAsJsonObject();
@@ -1532,15 +1549,6 @@ public final class MailService implements Listener {
         player.sendMessage(MESSAGE_PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 
-    /** 将 Duration 格式化为简短字符串（如 30d、12h、30m）。 */
-    private static String formatDuration(java.time.Duration duration) {
-        long seconds = duration.getSeconds();
-        if (seconds % 86400 == 0) return (seconds / 86400) + "d";
-        if (seconds % 3600 == 0) return (seconds / 3600) + "h";
-        if (seconds % 60 == 0) return (seconds / 60) + "m";
-        return seconds + "s";
-    }
-
     static MailSendQuote calculateComposeQuote(
         MailPlayerSendConfiguration configuration,
         Map<String, BigDecimal> attachmentAmounts,
@@ -1551,23 +1559,23 @@ public final class MailService implements Listener {
         Map<String, BigDecimal> attachmentTaxes = new LinkedHashMap<>();
         if (attachmentAmounts != null) {
             for (Map.Entry<String, BigDecimal> entry : attachmentAmounts.entrySet()) {
-                String currencyId = normalizeCurrencyId(entry.getKey());
-                BigDecimal amount = normalizeAmount(entry.getValue());
+                String currencyId = MailTexts.normalizeCurrencyId(entry.getKey());
+                BigDecimal amount = MailTexts.normalizeAmount(entry.getValue());
                 if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                     continue;
                 }
                 normalizedAttachmentAmounts.put(currencyId, amount);
                 BigDecimal taxRate = BigDecimal.valueOf(configuration.attachmentTaxRate(currencyId));
-                attachmentTaxes.put(currencyId, normalizeAmount(amount.multiply(taxRate)));
+                attachmentTaxes.put(currencyId, MailTexts.normalizeAmount(amount.multiply(taxRate)));
             }
         }
 
-        BigDecimal baseFee = normalizeAmount(BigDecimal.valueOf(configuration.baseFee()));
-        BigDecimal itemFee = normalizeAmount(BigDecimal.valueOf(configuration.itemFee()).multiply(BigDecimal.valueOf(Math.max(0, itemAttachmentCount))));
-        BigDecimal totalFee = normalizeAmount(baseFee.add(itemFee));
+        BigDecimal baseFee = MailTexts.normalizeAmount(BigDecimal.valueOf(configuration.baseFee()));
+        BigDecimal itemFee = MailTexts.normalizeAmount(BigDecimal.valueOf(configuration.itemFee()).multiply(BigDecimal.valueOf(Math.max(0, itemAttachmentCount))));
+        BigDecimal totalFee = MailTexts.normalizeAmount(baseFee.add(itemFee));
         String effectiveFeeCurrency = feeCurrencyOverride != null && !feeCurrencyOverride.isBlank()
-            ? normalizeCurrencyId(feeCurrencyOverride)
-            : normalizeCurrencyId(configuration.feeCurrency());
+            ? MailTexts.normalizeCurrencyId(feeCurrencyOverride)
+            : MailTexts.normalizeCurrencyId(configuration.feeCurrency());
         return new MailSendQuote(
             true,
             "",
@@ -1597,7 +1605,7 @@ public final class MailService implements Listener {
     }
 
     static String normalizeRecipientInput(String rawRecipient) {
-        return safe(rawRecipient).trim();
+        return MailTexts.safe(rawRecipient).trim();
     }
 
     private void loadPresets() throws IOException {
@@ -1715,7 +1723,7 @@ public final class MailService implements Listener {
         String rawUuid = message.substring("refresh:".length()).trim();
         try {
             UUID playerUuid = UUID.fromString(rawUuid);
-            AxsScheduler.runTask(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 Player player = Bukkit.getPlayer(playerUuid);
                 if (player != null && player.isOnline()) {
                     refreshPlayerViews(player, false);
@@ -1730,7 +1738,7 @@ public final class MailService implements Listener {
         boolean returned = false;
         PlayerInventory playerInventory = player.getInventory();
         for (ItemStack itemStack : session.attachments()) {
-            if (!isRealItem(itemStack)) continue;
+            if (!MailTexts.isRealItem(itemStack)) continue;
             returned = true;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack);
             for (ItemStack leftover : leftovers.values()) {
@@ -1742,13 +1750,6 @@ public final class MailService implements Listener {
             player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.compose-attachments-returned"));
         }
     }
-
-    private String crop(String rawValue, int maxLength) {
-        String value = rawValue == null ? "" : rawValue.trim();
-        int limit = Math.max(1, maxLength);
-        return value.length() <= limit ? value : value.substring(0, limit);
-    }
-
     private MailOperationResult sendMailInternal(UUID ownerUuid, String logContent, MailMessage message, boolean publishRedis) {
         try {
             repository.insertMail(message);
@@ -1781,12 +1782,12 @@ public final class MailService implements Listener {
         try {
             MailUiConfiguration ui = configuration.ui();
             String subject = message.subject() == null ? "" : message.subject();
-            int textWidth = measureTextWidth(subject, ui.charWidthFull(), ui.charWidthHalf());
+            int textWidth = MailTexts.measureTextWidth(subject, ui.charWidthFull(), ui.charWidthHalf());
             List<String> lines;
             if (textWidth <= ui.maxLineWidth()) {
                 lines = List.of(subject);
             } else {
-                lines = wrapText(subject, ui.maxLineWidth(), ui.charWidthFull(), ui.charWidthHalf());
+                lines = MailTexts.wrapText(subject, ui.maxLineWidth(), ui.charWidthFull(), ui.charWidthHalf());
             }
             Map<String, String> payload = new LinkedHashMap<>();
             payload.put("senderName", message.senderName() == null ? "系统" : message.senderName());
@@ -1802,50 +1803,6 @@ public final class MailService implements Listener {
             }
         }
     }
-
-    private static int measureTextWidth(String text, int charWidthFull, int charWidthHalf) {
-        if (text == null || text.isEmpty()) return 0;
-        int width = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if ((c == '§' || c == '&') && i + 1 < text.length()) {
-                i++;
-                continue;
-            }
-            width += (c >= '\u2E80') ? charWidthFull : charWidthHalf;
-        }
-        return width;
-    }
-
-    private static List<String> wrapText(String text, int maxLineWidth, int charWidthFull, int charWidthHalf) {
-        if (text == null || text.isEmpty()) return List.of("");
-        List<String> lines = new ArrayList<>();
-        StringBuilder currentLine = new StringBuilder();
-        int currentWidth = 0;
-        String lastColor = "";
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if ((c == '§' || c == '&') && i + 1 < text.length()) {
-                lastColor = String.valueOf(c) + text.charAt(i + 1);
-                currentLine.append(c).append(text.charAt(i + 1));
-                i++;
-                continue;
-            }
-            int cw = (c >= '\u2E80') ? charWidthFull : charWidthHalf;
-            if (currentWidth + cw > maxLineWidth && currentLine.length() > 0) {
-                lines.add(currentLine.toString());
-                currentLine = new StringBuilder(lastColor);
-                currentWidth = 0;
-            }
-            currentLine.append(c);
-            currentWidth += cw;
-        }
-        if (currentLine.length() > 0) {
-            lines.add(currentLine.toString());
-        }
-        return lines.isEmpty() ? List.of("") : lines;
-    }
-
     private void refreshInbox(Player player, boolean initPacket) {
         if (player == null || !player.isOnline()) {
             return;
@@ -1906,7 +1863,7 @@ public final class MailService implements Listener {
             inboxViewers.remove(player.getUniqueId());
             // 先打开 ArcartX UI（不鼠标重置），再延迟关闭 Bukkit 容器（compose/admin 会话）
             bridge.openUi(player, logsUiId);
-            AxsScheduler.runTask(plugin, () -> closeOtherMailUis(player));
+            Bukkit.getScheduler().runTask(plugin, () -> closeOtherMailUis(player));
             refreshLogs(player, true);
             return MailOperationResult.success(message("player.logs-opened"));
         } catch (Exception exception) {
@@ -1961,7 +1918,7 @@ public final class MailService implements Listener {
         if (session == null) {
             return MailOperationResult.failure(message("player.compose-session-missing"));
         }
-        String suppliedToken = data == null || data.size() <= 6 ? "" : safe(data.get(6));
+        String suppliedToken = data == null || data.size() <= 6 ? "" : MailTexts.safe(data.get(6));
         synchronized (session) {
             if (session.tokenInFlight
                 || suppliedToken.isBlank()
@@ -1984,7 +1941,7 @@ public final class MailService implements Listener {
         if (session == null) {
             return MailOperationResult.failure(message("player.compose-session-missing"));
         }
-        if (!session.sessionId().toString().equalsIgnoreCase(safe(data.get(1)))) {
+        if (!session.sessionId().toString().equalsIgnoreCase(MailTexts.safe(data.get(1)))) {
             return MailOperationResult.failure(message("player.compose-session-expired"));
         }
 
@@ -2013,8 +1970,8 @@ public final class MailService implements Listener {
         }
 
         String recipientInput = normalizeRecipientInput(data.get(2));
-        String subject = crop(data.get(3), configuration.playerSend().subjectMaxLength());
-        String body = crop(data.get(4), configuration.playerSend().bodyMaxLength());
+        String subject = MailTexts.crop(data.get(3), configuration.playerSend().subjectMaxLength());
+        String body = MailTexts.crop(data.get(4), configuration.playerSend().bodyMaxLength());
         if (recipientInput.isBlank()) {
             MailOperationResult result = MailOperationResult.failure(message("player.recipient-required"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
@@ -2076,7 +2033,7 @@ public final class MailService implements Listener {
                 return attachmentValidation;
             }
 
-            BigDecimal vaultAmount = parseCurrencyAmount(data.get(5));
+            BigDecimal vaultAmount = MailTexts.parseCurrencyAmount(data.get(5));
             if (vaultAmount == null) {
                 MailOperationResult result = MailOperationResult.failure(message("player.currency-amount-invalid"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
@@ -2152,7 +2109,7 @@ public final class MailService implements Listener {
             session.attachments().clear();
             composeSessions.remove(player.getUniqueId());
             composePasswordPanels.remove(player.getUniqueId());
-            AxsScheduler.runTask(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 if (player.isOnline()) {
                     openInbox(player);
                 }
@@ -2177,7 +2134,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.compose-password-unavailable"));
         }
 
-        String password = data != null && data.size() >= 2 ? safe(data.get(1)) : "";
+        String password = data != null && data.size() >= 2 ? MailTexts.safe(data.get(1)) : "";
         if (!passwordAccess.isPasswordSet(player) || passwordAccess.verify(player, password)) {
             composePasswordPanels.remove(player.getUniqueId());
             pushComposeQuote(player, calculateCurrentComposeQuote(player));
@@ -2201,7 +2158,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
         // ArcartX Backpack slot id（9~44）需转换为 Bukkit PlayerInventory slot index
-        int bukkitSlot = arcartxSlotToBukkit(slot);
+        int bukkitSlot = MailTexts.arcartxSlotToBukkit(slot);
         ItemStack item = player.getInventory().getItem(bukkitSlot);
         if (item == null || item.getType().isAir()) {
             return MailOperationResult.failure(message("player.attachment-slot-empty"));
@@ -2262,7 +2219,7 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.attachment-slot-invalid"));
         }
         // ArcartX Backpack slot id（9~44）需转换为 Bukkit PlayerInventory slot index
-        int bukkitSlot = arcartxSlotToBukkit(slot);
+        int bukkitSlot = MailTexts.arcartxSlotToBukkit(slot);
         ItemStack item = player.getInventory().getItem(bukkitSlot);
         if (item == null || item.getType().isAir()) {
             return MailOperationResult.failure(message("player.attachment-slot-empty"));
@@ -2415,7 +2372,7 @@ public final class MailService implements Listener {
             deliverItemRewards(player, itemRewards);
             for (String command : mail.claimCommands()) {
                 try {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), replacePlayerTokens(command, player));
+                    ThrottledCommandExecutor.dispatch( MailTexts.replacePlayerTokens(command, player));
                 } catch (Exception e) {
                     logger.warning("[Mail] 执行领取命令失败: " + command + " | " + e.getMessage());
                 }
@@ -2670,7 +2627,7 @@ public final class MailService implements Listener {
     }
 
     private List<RecipientResolution> resolvePresetRecipients(String target) throws Exception {
-        String normalizedTarget = safe(target).trim();
+        String normalizedTarget = MailTexts.safe(target).trim();
         if (normalizedTarget.isBlank()) {
             return List.of();
         }
@@ -2682,7 +2639,7 @@ public final class MailService implements Listener {
         if ("all-registered".equalsIgnoreCase(normalizedTarget)) {
             return repository.loadAllProfiles().stream()
                 .filter(profile -> profile.playerUuid() != null)
-                .map(profile -> new RecipientResolution(profile.playerUuid(), safe(profile.lastKnownName()).isBlank() ? profile.playerUuid().toString() : profile.lastKnownName()))
+                .map(profile -> new RecipientResolution(profile.playerUuid(), MailTexts.safe(profile.lastKnownName()).isBlank() ? profile.playerUuid().toString() : profile.lastKnownName()))
                 .toList();
         }
 
@@ -2711,16 +2668,16 @@ public final class MailService implements Listener {
             0L,
             recipient.playerUuid(),
             null,
-            safe(senderName).isBlank() ? "System" : senderName,
+            MailTexts.safe(senderName).isBlank() ? "System" : senderName,
             sourceType,
-            safe(presetId).isBlank() ? preset.id() : presetId,
-            safe(cdkCode),
-            crop(preset.subject(), configuration.playerSend().subjectMaxLength()),
-            crop(preset.body(), configuration.playerSend().bodyMaxLength()),
+            MailTexts.safe(presetId).isBlank() ? preset.id() : presetId,
+            MailTexts.safe(cdkCode),
+            MailTexts.crop(preset.subject(), configuration.playerSend().subjectMaxLength()),
+            MailTexts.crop(preset.body(), configuration.playerSend().bodyMaxLength()),
             MailStatus.UNREAD,
-            copyAttachments(preset.attachments()),
-            copyStrings(preset.claimCommands()),
-            copyConditions(preset.claimConditions()),
+            MailTexts.copyAttachments(preset.attachments()),
+            MailTexts.copyStrings(preset.claimCommands()),
+            MailTexts.copyConditions(preset.claimConditions()),
             now,
             expiresAt,
             now,
@@ -2754,7 +2711,7 @@ public final class MailService implements Listener {
         Optional<MailPlayerProfile> profile = repository.findPlayerProfileByName(requestedName);
         if (profile.isPresent()) {
             MailPlayerProfile value = profile.get();
-            return new RecipientResolution(value.playerUuid(), safe(value.lastKnownName()).isBlank() ? requestedName : value.lastKnownName());
+            return new RecipientResolution(value.playerUuid(), MailTexts.safe(value.lastKnownName()).isBlank() ? requestedName : value.lastKnownName());
         }
 
         for (OfflinePlayer offlinePlayer : Bukkit.getOfflinePlayers()) {
@@ -2772,7 +2729,7 @@ public final class MailService implements Listener {
 
     private MailOperationResult validateAttachmentItems(List<ItemStack> attachmentItems) {
         for (ItemStack itemStack : attachmentItems) {
-            if (!isRealItem(itemStack)) {
+            if (!MailTexts.isRealItem(itemStack)) {
                 continue;
             }
             if (configuration.moderation().blockedMaterials().contains(itemStack.getType().name())) {
@@ -2812,7 +2769,7 @@ public final class MailService implements Listener {
                     String expectedKey = entry.getKey();
                     String expectedValue = entry.getValue();
                     String actualValue = readPdcValue(pdc, expectedKey);
-                    if (actualValue != null && valuesEqual(expectedValue, actualValue)) {
+                    if (actualValue != null && MailTexts.valuesEqual(expectedValue, actualValue)) {
                         return MailOperationResult.failure(message("player.attachment-blocked-nbt-value", expectedKey));
                     }
                 }
@@ -2824,7 +2781,7 @@ public final class MailService implements Listener {
     private String readPdcValue(org.bukkit.persistence.PersistentDataContainer pdc, String configuredKey) {
         // 先尝试 plugin 命名空间
         NamespacedKey pluginKey = new NamespacedKey(plugin, configuredKey);
-        String value = readPdcValueByKey(pdc, pluginKey);
+        String value = MailTexts.readPdcValueByKey(pdc, pluginKey);
         if (value != null) {
             return value;
         }
@@ -2832,37 +2789,11 @@ public final class MailService implements Listener {
         for (NamespacedKey key : pdc.getKeys()) {
             if (key.getKey().equalsIgnoreCase(configuredKey)
                 || key.toString().equalsIgnoreCase(configuredKey)) {
-                return readPdcValueByKey(pdc, key);
+                return MailTexts.readPdcValueByKey(pdc, key);
             }
         }
         return null;
     }
-
-    private String readPdcValueByKey(org.bukkit.persistence.PersistentDataContainer pdc, NamespacedKey key) {
-        String stringValue = pdc.get(key, PersistentDataType.STRING);
-        if (stringValue != null) return stringValue;
-        Integer integerValue = pdc.get(key, PersistentDataType.INTEGER);
-        if (integerValue != null) return String.valueOf(integerValue);
-        Long longValue = pdc.get(key, PersistentDataType.LONG);
-        if (longValue != null) return String.valueOf(longValue);
-        Byte byteValue = pdc.get(key, PersistentDataType.BYTE);
-        if (byteValue != null) return String.valueOf(byteValue);
-        Double doubleValue = pdc.get(key, PersistentDataType.DOUBLE);
-        return doubleValue == null ? null : String.valueOf(doubleValue);
-    }
-
-    private static boolean valuesEqual(String expected, String actual) {
-        // 尝试数值比较
-        try {
-            java.math.BigDecimal expectedNum = new java.math.BigDecimal(expected.trim());
-            java.math.BigDecimal actualNum = new java.math.BigDecimal(actual.trim());
-            return expectedNum.compareTo(actualNum) == 0;
-        } catch (NumberFormatException ignored) {
-            // 非数值，走字符串比较
-        }
-        return expected.trim().equalsIgnoreCase(actual.trim());
-    }
-
     private boolean containsBlockedText(String value) {
         if (value == null || value.isBlank()) {
             return false;
@@ -2872,7 +2803,7 @@ public final class MailService implements Listener {
     }
 
     private boolean matchesBlockedLore(String value) {
-        String normalized = safe(value);
+        String normalized = MailTexts.safe(value);
         for (Pattern blockedPattern : configuration.moderation().blockedLorePatterns()) {
             if (blockedPattern.matcher(normalized).find()) {
                 return true;
@@ -2885,7 +2816,7 @@ public final class MailService implements Listener {
         List<ItemStack> items = new ArrayList<>();
         if (session == null) return List.of();
         for (ItemStack item : session.attachments()) {
-            if (isRealItem(item)) {
+            if (MailTexts.isRealItem(item)) {
                 items.add(item.clone());
             }
         }
@@ -2919,20 +2850,6 @@ public final class MailService implements Listener {
                 composeUpdatePacket
             );
         }
-    }
-
-    private void scheduleComposeQuoteRefresh(Player player) {
-        AxsScheduler.runTask(plugin, () -> {
-            if (player == null || !player.isOnline()) {
-                return;
-            }
-            ComposeSession session = composeSessions.get(player.getUniqueId());
-            if (session == null) {
-                return;
-            }
-            int attachmentCount = session.attachments().size();
-            pushComposeQuote(player, calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount, session.feeCurrency()));
-        });
     }
 
     static int effectiveAttachmentSlots(int configuredMaxAttachments, int inventorySize) {
@@ -2997,7 +2914,7 @@ public final class MailService implements Listener {
         if (quote == null) {
             return totals;
         }
-        totals.put(quote.feeCurrencyId(), normalizeAmount(quote.totalFee()));
+        totals.put(quote.feeCurrencyId(), MailTexts.normalizeAmount(quote.totalFee()));
         mergeCurrencyTotals(totals, quote.attachmentAmounts());
         mergeCurrencyTotals(totals, quote.attachmentTaxes());
         return Map.copyOf(totals);
@@ -3008,8 +2925,8 @@ public final class MailService implements Listener {
             return;
         }
         for (Map.Entry<String, BigDecimal> entry : values.entrySet()) {
-            String currencyId = normalizeCurrencyId(entry.getKey());
-            BigDecimal amount = normalizeAmount(entry.getValue());
+            String currencyId = MailTexts.normalizeCurrencyId(entry.getKey());
+            BigDecimal amount = MailTexts.normalizeAmount(entry.getValue());
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
@@ -3035,11 +2952,11 @@ public final class MailService implements Listener {
             );
         }
         for (Map.Entry<String, BigDecimal> entry : attachmentAmounts.entrySet()) {
-            BigDecimal amount = normalizeAmount(entry.getValue());
+            BigDecimal amount = MailTexts.normalizeAmount(entry.getValue());
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
-            String currencyId = normalizeCurrencyId(entry.getKey());
+            String currencyId = MailTexts.normalizeCurrencyId(entry.getKey());
             xuanmo.arcartxsuite.api.icon.IconDefinition vaultIcon = "money".equals(currencyId) ? configuration.playerSend().vaultDefaultIcon() : null;
             attachments.add(
                 new MailAttachment(
@@ -3049,7 +2966,7 @@ public final class MailService implements Listener {
                     "",
                     currencyId,
                     amount.doubleValue(),
-                    currencyDisplay(currencyId) + " " + trimDecimal(amount),
+                    currencyDisplay(currencyId) + " " + MailTexts.trimDecimal(amount),
                     vaultIcon
                 )
             );
@@ -3155,7 +3072,7 @@ public final class MailService implements Listener {
             return;
         }
         try {
-            repository.appendLog(new MailLogEntry(0L, playerUuid, safe(type), safe(content), Instant.now()));
+            repository.appendLog(new MailLogEntry(0L, playerUuid, MailTexts.safe(type), MailTexts.safe(content), Instant.now()));
             Player player = Bukkit.getPlayer(playerUuid);
             if (player != null && player.isOnline() && logViewers.contains(playerUuid)) {
                 refreshLogs(player, false);
@@ -3212,91 +3129,6 @@ public final class MailService implements Listener {
         }
         return page.entries().get(0).id();
     }
-
-    private static int compareNumeric(String actualValue, String expectedValue) {
-        BigDecimal actual = parseNumeric(actualValue);
-        BigDecimal expected = parseNumeric(expectedValue);
-        if (actual == null || expected == null) {
-            return Integer.MIN_VALUE;
-        }
-        return actual.compareTo(expected);
-    }
-
-    private static BigDecimal parseNumeric(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            return null;
-        }
-        try {
-            return new BigDecimal(rawValue.trim().replace(",", ""));
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private static BigDecimal normalizeAmount(BigDecimal amount) {
-        return (amount == null ? BigDecimal.ZERO : amount.max(BigDecimal.ZERO)).setScale(4, RoundingMode.DOWN);
-    }
-
-    private static BigDecimal parseCurrencyAmount(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            return BigDecimal.ZERO.setScale(4, RoundingMode.DOWN);
-        }
-        try {
-            return normalizeAmount(new BigDecimal(rawValue.trim().replace(",", "")));
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private static String normalizeCurrencyId(String currencyId) {
-        return currencyId == null || currencyId.isBlank() ? "money" : currencyId.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String safe(String value) {
-        return value == null ? "" : value;
-    }
-
-    private static long parseLong(String value, long fallback) {
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException exception) {
-            return fallback;
-        }
-    }
-
-    /**
-     * 将 ArcartX Backpack slot id 转换为 Bukkit {@link PlayerInventory} slot index。
-     * <p>ArcartX UI 的 Backpack 槽位 id 映射与原版 Bukkit 不同：
-     * <ul>
-     *   <li>ArcartX 9~35 = 背包主区 → Bukkit 9~35（一致）</li>
-     *   <li>ArcartX 36~44 = 快捷栏   → Bukkit 0~8（需转换）</li>
-     * </ul>
-     *
-     * @param arcartxSlot ArcartX UI Backpack 槽位 id（9~44）
-     * @return Bukkit PlayerInventory slot index，无效范围返回 -1
-     */
-    private static int arcartxSlotToBukkit(int arcartxSlot) {
-        if (arcartxSlot >= 9 && arcartxSlot <= 35) return arcartxSlot;
-        if (arcartxSlot >= 36 && arcartxSlot <= 44) return arcartxSlot - 36;
-        return -1;
-    }
-
-    private static boolean isRealItem(ItemStack itemStack) {
-        return itemStack != null && !itemStack.getType().isAir() && itemStack.getAmount() > 0;
-    }
-
-    private static List<MailAttachment> copyAttachments(List<MailAttachment> attachments) {
-        return attachments == null ? List.of() : List.copyOf(attachments);
-    }
-
-    private static List<String> copyStrings(List<String> values) {
-        return values == null ? List.of() : List.copyOf(values);
-    }
-
-    private static List<ScriptCondition> copyConditions(List<ScriptCondition> conditions) {
-        return conditions == null ? List.of() : List.copyOf(conditions);
-    }
-
     private String resolveItemDescription(ItemStack itemStack) {
         String name;
         if (vanillaItemNameBridge != null) {
@@ -3312,19 +3144,6 @@ public final class MailService implements Listener {
         CurrencyDefinition definition = currencyBridgeManager.definition(currencyId);
         return definition == null || definition.displayName().isBlank() ? currencyId : definition.displayName();
     }
-
-    private String trimDecimal(BigDecimal amount) {
-        return normalizeAmount(amount).stripTrailingZeros().toPlainString();
-    }
-
-    private String replacePlayerTokens(String command, Player player) {
-        String safeName = xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName());
-        return safe(command)
-            .replace("<player>", safeName)
-            .replace("{player}", safeName)
-            .replace("%player%", safeName);
-    }
-
     private String generateUniqueCdkCode() throws Exception {
         for (int attempt = 0; attempt < 8; attempt++) {
             String candidate = normalizeCdkCode(UUID.randomUUID().toString().replace("-", "").substring(0, 10));
@@ -3422,7 +3241,7 @@ public final class MailService implements Listener {
             if (!att.isItem() || att.itemData() == null || att.itemData().isBlank()) continue;
             try {
                 ItemStack item = MailItemSerializer.deserialize(att.itemData());
-                if (isRealItem(item)) {
+                if (MailTexts.isRealItem(item)) {
                     markAsTemplateItem(item);
                     items.add(item);
                 } else {
@@ -3443,7 +3262,7 @@ public final class MailService implements Listener {
         // 先归还旧物品并清空附件列表
         returnAdminItems(player, session);
         session.attachments().clear();
-        session.editingPresetId = safe(presetId).trim().toLowerCase(Locale.ROOT);
+        session.editingPresetId = MailTexts.safe(presetId).trim().toLowerCase(Locale.ROOT);
 
         MailPresetDefinition def = getPreset(presetId);
         if (def == null || def.attachments() == null) {
@@ -3473,7 +3292,7 @@ public final class MailService implements Listener {
         boolean returned = false;
         PlayerInventory playerInventory = player.getInventory();
         for (ItemStack itemStack : session.attachments()) {
-            if (!isRealItem(itemStack)) continue;
+            if (!MailTexts.isRealItem(itemStack)) continue;
             if (isTemplateItem(itemStack)) continue;
             returned = true;
             HashMap<Integer, ItemStack> leftovers = playerInventory.addItem(itemStack.clone());
@@ -3490,20 +3309,11 @@ public final class MailService implements Listener {
         List<ItemStack> result = new ArrayList<>();
         if (session == null) return List.of();
         for (ItemStack itemStack : session.attachments()) {
-            if (isRealItem(itemStack)) {
+            if (MailTexts.isRealItem(itemStack)) {
                 result.add(itemStack.clone());
             }
         }
         return List.copyOf(result);
-    }
-
-    private void scheduleAdminAttachmentCountRefresh(Player player) {
-        AxsScheduler.runTask(plugin, () -> {
-            if (player == null || !player.isOnline()) return;
-            AdminEditSession session = adminEditSessions.get(player.getUniqueId());
-            if (session == null) return;
-            refreshAdminAttachments(player);
-        });
     }
 
     private void markAsTemplateItem(ItemStack item) {

@@ -128,8 +128,11 @@ public class RecycleService {
     /**
      * 自动回收（拾取触发）：执行回收并向玩家发送反馈消息。
      * 供 {@link xuanmo.arcartxsuite.market.listener.MarketEventListener} 调用。
+     *
+     * @return 回收结果——调用方只能在 {@code success()} 时移除掉落物，
+     *         否则货币入账失败时物品照删会吞掉玩家物品
      */
-    public void recycleAuto(Player player, ItemStack item) {
+    public RecycleResult recycleAuto(Player player, ItemStack item) {
         RecycleResult result = recycle(player, item);
         if (result.success()) {
             String earnings = result.earningsByCurrency().entrySet().stream()
@@ -140,6 +143,7 @@ public class RecycleService {
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }
+        return result;
     }
 
     /**

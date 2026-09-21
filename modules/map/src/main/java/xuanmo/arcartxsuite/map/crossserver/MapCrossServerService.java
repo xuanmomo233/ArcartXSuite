@@ -25,7 +25,7 @@ import org.bukkit.plugin.Plugin;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.CrossServerConfiguration;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
 import xuanmo.arcartxsuite.map.service.MapTerrainPushService;
@@ -72,6 +72,14 @@ public final class MapCrossServerService {
     private static final long SWEEP_PERIOD_TICKS = 100L;
     /** 每世界广播的锚点摘要上限（防异常配置撑爆 proxy 后端 32KB 限制）。 */
     private static final int MAX_ANCHORS_PER_WORLD = 60;
+    /** 入站锚点消息单条 list 的解析上限（与出站截断一致）。 */
+    private static final int MAX_ANCHORS_INBOUND = 60;
+    /** 目标服待落地传送（pendingArrivals）全局上限。 */
+    private static final int MAX_PENDING_ARRIVALS = 512;
+    /** 同一玩家两次 tpreq 的最小间隔（毫秒）。 */
+    private static final long TPREQ_MIN_GAP_MS = 30_000L;
+    /** connectName/pname 与签名告警的每节点节流间隔（毫秒）。 */
+    private static final long WARN_THROTTLE_MS = 60_000L;
 
     private final Plugin plugin;
     private final Logger logger;
@@ -89,9 +97,13 @@ public final class MapCrossServerService {
     private final ConcurrentMap<String, PendingRelay> pendingRelays = new ConcurrentHashMap<>();
     /** playerUuid → 目标服已批准的待落地传送（玩家 join 时消费）。 */
     private final ConcurrentMap<UUID, PendingArrival> pendingArrivals = new ConcurrentHashMap<>();
+    /** playerUuid → 上次 tpreq 受理时间（限频，防伪造握手堆积）。 */
+    private final ConcurrentMap<UUID, Long> lastTeleportRequestAt = new ConcurrentHashMap<>();
+    /** 已告警过的 (节点|类别) 键——connectName 不符/未签名等告警节流。 */
+    private final Set<String> throttledWarnings = ConcurrentHashMap.newKeySet();
 
     private volatile CrossServerChannel channel;
-    private volatile Object sweepTask;
+    private volatile org.bukkit.scheduler.BukkitTask sweepTask;
     private volatile long lastAnnounceAt;
 
     public MapCrossServerService(
@@ -130,13 +142,13 @@ public final class MapCrossServerService {
             announceCatalog();
             publish(base("catalog_request"));
         }
-        sweepTask = AxsScheduler.runTaskTimer(plugin, this::sweep, SWEEP_PERIOD_TICKS, SWEEP_PERIOD_TICKS);
+        sweepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::sweep, SWEEP_PERIOD_TICKS, SWEEP_PERIOD_TICKS);
     }
 
     /** 关闭通道、停止清扫并清空全部跨服状态。 */
     public void shutdown() {
         if (sweepTask != null) {
-            AxsScheduler.cancelTask(sweepTask);
+            sweepTask.cancel();
             sweepTask = null;
         }
         if (channel != null) {
@@ -151,6 +163,8 @@ public final class MapCrossServerService {
         pendingTeleports.clear();
         pendingRelays.clear();
         pendingArrivals.clear();
+        lastTeleportRequestAt.clear();
+        throttledWarnings.clear();
     }
 
     /** 跨服通道是否已激活（可收发）。 */
@@ -174,6 +188,17 @@ public final class MapCrossServerService {
         int count = 0;
         for (RemoteNode node : nodes.values()) {
             count += node.worlds.size();
+        }
+        return count;
+    }
+
+    /** 当前已知的远程锚点总数（全节点合计，用于入站上限判定）。 */
+    private int remoteAnchorCount() {
+        int count = 0;
+        for (RemoteNode node : nodes.values()) {
+            for (RemoteWorld world : node.worlds.values()) {
+                count += world.anchors.size();
+            }
         }
         return count;
     }
@@ -346,7 +371,7 @@ public final class MapCrossServerService {
         if (arrival == null || arrival.expiresAt() < System.currentTimeMillis()) {
             return;
         }
-        AxsScheduler.runTaskLater(plugin, () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 handler.executeArrival(player, arrival.worldId(), arrival.anchorId());
             }
@@ -359,6 +384,7 @@ public final class MapCrossServerService {
             return;
         }
         pendingArrivals.remove(playerUuid);
+        lastTeleportRequestAt.remove(playerUuid);
         pendingTeleports.values().removeIf(p -> p.playerUuid().equals(playerUuid));
         pendingRelays.values().removeIf(r -> r.playerUuid().equals(playerUuid));
     }
@@ -468,7 +494,7 @@ public final class MapCrossServerService {
             }
             case "tpreq" -> {
                 if (!dst.isEmpty()) {
-                    onTeleportRequest(source, obj);
+                    onTeleportRequest(source, obj, delivery.signed());
                 }
             }
             case "tprsp" -> {
@@ -488,10 +514,7 @@ public final class MapCrossServerService {
         if (!srv.isEmpty()) {
             node.serverName = srv;
         }
-        String pname = optString(obj, "pname");
-        if (!pname.isEmpty()) {
-            node.connectName = pname;
-        }
+        applyConnectName(node, optString(obj, "pname"));
         Set<String> ids = new HashSet<>();
         JsonArray arr = obj.getAsJsonArray("ids");
         if (arr != null) {
@@ -520,11 +543,15 @@ public final class MapCrossServerService {
         if (!srv.isEmpty()) {
             node.serverName = srv;
         }
-        String pname = optString(obj, "pname");
-        if (!pname.isEmpty()) {
-            node.connectName = pname;
-        }
+        applyConnectName(node, optString(obj, "pname"));
         boolean isNew = !node.worlds.containsKey(worldId);
+        // 入站世界总数上限：恶意节点可无限广播世界 id 撑内存/污染 UI，超限丢弃新条目
+        if (isNew && remoteWorldCount() >= config.maxRemoteWorlds()) {
+            warnThrottled("worlds-cap|" + source,
+                "[Map] 远程共享世界总数已达上限 " + config.maxRemoteWorlds()
+                    + "，丢弃节点 " + source + " 的新世界 " + worldId);
+            return;
+        }
         RemoteWorld world = node.worlds.computeIfAbsent(worldId, RemoteWorld::new);
         world.displayName = optString(obj, "name");
         world.dimension = optString(obj, "dim");
@@ -544,6 +571,36 @@ public final class MapCrossServerService {
         }
     }
 
+    /**
+     * 入站 connectName（pname）校验：必须与来源节点 id 一致。
+     * <p>
+     * 恶意节点广播 {@code pname=任意后端服务器名} 时，玩家跨服传送会被
+     * BungeeCord "Connect" 踢到非预期服务器。强制 pname=nodeId 后，
+     * 合法部署的代理服务器名须与宿主 node-id 保持一致。
+     */
+    private void applyConnectName(RemoteNode node, String pname) {
+        if (pname.isEmpty()) {
+            return;
+        }
+        String normalized = normalizeNode(pname);
+        if (!normalized.equals(node.nodeId)) {
+            warnThrottled("pname|" + node.nodeId,
+                "[Map] 节点 " + node.nodeId + " 广播的 connectName（" + pname + "）与其 nodeId 不符，已丢弃该声明");
+            return;
+        }
+        node.connectName = normalized;
+    }
+
+    /** 每 (键) 节流 WARN_THROTTLE_MS 的告警，防恶意消息刷日志。 */
+    private void warnThrottled(String key, String message) {
+        if (throttledWarnings.add(key)) {
+            logger.warning(message);
+            // 节流窗口后移除键，允许再次告警（长期不一致应持续可见）
+            Bukkit.getScheduler().runTaskLater(plugin,
+                () -> throttledWarnings.remove(key), WARN_THROTTLE_MS / 50L);
+        }
+    }
+
     private void onRemoteAnchors(String source, JsonObject obj) {
         String worldId = normalizeId(optString(obj, "world"));
         if (worldId.isEmpty()) {
@@ -555,6 +612,7 @@ public final class MapCrossServerService {
         RemoteWorld world = node.worlds.computeIfAbsent(worldId, RemoteWorld::new);
         Map<String, RemoteAnchor> fresh = new ConcurrentHashMap<>();
         JsonArray list = obj.getAsJsonArray("list");
+        int anchorBudget = config.maxRemoteAnchorsTotal() - remoteAnchorCount() + world.anchors.size();
         if (list != null) {
             for (JsonElement e : list) {
                 if (!e.isJsonObject()) {
@@ -564,6 +622,13 @@ public final class MapCrossServerService {
                 String anchorId = normalizeId(optString(ao, "id"));
                 if (anchorId.isEmpty()) {
                     continue;
+                }
+                // 入站锚点双重上限：单世界条数 + 全节点总数（防恶意节点广播无限锚点撑内存）
+                if (fresh.size() >= MAX_ANCHORS_INBOUND || fresh.size() >= anchorBudget) {
+                    warnThrottled("anchors-cap|" + source,
+                        "[Map] 节点 " + source + " 的锚点广播超上限（单世界 " + MAX_ANCHORS_INBOUND
+                            + " / 全局 " + config.maxRemoteAnchorsTotal() + "），多余条目已丢弃");
+                    break;
                 }
                 fresh.put(anchorId, new RemoteAnchor(
                     anchorId,
@@ -641,7 +706,13 @@ public final class MapCrossServerService {
         }
     }
 
-    private void onTeleportRequest(String source, JsonObject obj) {
+    private void onTeleportRequest(String source, JsonObject obj, boolean signed) {
+        // 严格模式：要求宿主 HMAC 验签通过，未签名握手直接丢弃（伪造者可替任意玩家预写落地）
+        if (config.teleportRequireSignedRequest() && !signed) {
+            warnThrottled("unsigned-tpreq|" + source,
+                "[Map] 丢弃来自节点 " + source + " 的未签名传送握手（teleport.require-signed-request=true）");
+            return;
+        }
         String requestId = optString(obj, "req");
         UUID playerUuid = parseUuid(optString(obj, "player"));
         String worldId = normalizeId(optString(obj, "world"));
@@ -649,14 +720,29 @@ public final class MapCrossServerService {
         if (requestId.isEmpty() || playerUuid == null) {
             return;
         }
+        long now = System.currentTimeMillis();
+        // 每玩家限频：伪造者可为同一 UUID 反复预写 pendingArrival
+        Long last = lastTeleportRequestAt.get(playerUuid);
+        if (last != null && now - last < TPREQ_MIN_GAP_MS) {
+            respondTeleport(source, requestId, false,
+                handler.resolveMessage("player.cross-server-rate-limited"));
+            return;
+        }
+        // 全局上限：伪造随机 UUID 时限制 pendingArrivals 堆积
+        if (!pendingArrivals.containsKey(playerUuid) && pendingArrivals.size() >= MAX_PENDING_ARRIVALS) {
+            warnThrottled("arrivals-cap",
+                "[Map] pendingArrivals 已达上限 " + MAX_PENDING_ARRIVALS + "，丢弃来自 " + source + " 的传送握手");
+            return;
+        }
         MapOperationResult check = handler.validateArrival(playerUuid, worldId, anchorId);
         if (!check.success()) {
             respondTeleport(source, requestId, false, check.message());
             return;
         }
+        lastTeleportRequestAt.put(playerUuid, now);
         // 只记最近一次：玩家重复发起时旧 pending 直接覆盖
         pendingArrivals.put(playerUuid, new PendingArrival(
-            worldId, anchorId, System.currentTimeMillis() + ARRIVAL_TTL_MS));
+            worldId, anchorId, now + ARRIVAL_TTL_MS));
         respondTeleport(source, requestId, true, "");
     }
 
@@ -738,7 +824,15 @@ public final class MapCrossServerService {
             return true;
         });
         pendingRelays.values().removeIf(r -> r.expiresAt() < now);
-        pendingArrivals.values().removeIf(a -> a.expiresAt() < now);
+        pendingArrivals.values().removeIf(a -> {
+            if (a.expiresAt() >= now) {
+                return false;
+            }
+            // 落地记录过期时同步释放限频槽位
+            return true;
+        });
+        // 限频表随 pendingArrivals 收缩：仅保留仍有 pending 的键（过期 pending 已删）
+        lastTeleportRequestAt.keySet().removeIf(uuid -> !pendingArrivals.containsKey(uuid));
     }
 
     private void maybeAnnounce() {

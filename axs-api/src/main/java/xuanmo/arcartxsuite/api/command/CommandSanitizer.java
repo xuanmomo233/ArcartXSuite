@@ -60,6 +60,27 @@ public final class CommandSanitizer {
     }
 
     /**
+     * 校验占位符/PAPI 展开后的最终命令字符串：包含命令分隔符即拒绝。
+     * <p>
+     * 用于所有"模板 + 展开"的命令执行点（控制台命令、玩家命令、临时 OP），
+     * 在展开之后、执行之前调用。展开值可能携带分隔符（如称号/displayname/参数），
+     * 只有展开后的最终串做统一校验才能覆盖所有注入路径。
+     *
+     * @param command 展开后的最终命令（不含前导 {@code /}）
+     * @return 校验通过的命令字符串
+     * @throws IllegalArgumentException 命令为空或含分隔符时抛出
+     */
+    public static String validateExpandedCommand(String command) {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("命令为空");
+        }
+        if (containsCommandSeparators(command)) {
+            throw new IllegalArgumentException("命令包含分隔符: " + command);
+        }
+        return command;
+    }
+
+    /**
      * 清理命令分隔符：将命令分隔符替换为空格。
      * <p>
      * 用于无法用引号包裹的场景（如命令模板本身不允许引号）。

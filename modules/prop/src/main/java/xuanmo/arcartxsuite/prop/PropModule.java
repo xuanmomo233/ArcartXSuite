@@ -13,6 +13,8 @@ import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
+import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.prop.command.PropAdminCommand;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
@@ -40,7 +42,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("prop")
             .name("Prop")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -50,6 +52,13 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         return ModuleConfig.builder()
             .configFileName("ArcartXProp.yml")
             .messagesFileName("messages.yml")
+            .validations(List.of(
+                ValidationRule.of("auto-trigger.enabled", ValueType.BOOLEAN),
+                ValidationRule.of("auto-trigger.interval", ValueType.INT)
+                    .withRange(1, null),
+                ValidationRule.of("auto-trigger.mode", ValueType.STRING)
+                    .withEnum(java.util.Set.of("all", "first"))
+            ))
             .build();
     }
 

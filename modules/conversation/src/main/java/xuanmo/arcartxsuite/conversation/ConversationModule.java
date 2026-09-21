@@ -43,7 +43,6 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     private static final String SELECTOR_UI_FILE_PATH = "ui/conversation_selector.yml";
     private static final String LETTERBOX_UI_RESOURCE_PATH = "arcartx/ui/conversation_letterbox.yml";
     private static final String LETTERBOX_UI_FILE_PATH = "ui/conversation_letterbox.yml";
-    private static final String DEFAULT_LETTERBOX_UI_ID = "AXS:conversation_letterbox";
 
     private ConversationModuleConfiguration configuration;
     private ConversationService service;

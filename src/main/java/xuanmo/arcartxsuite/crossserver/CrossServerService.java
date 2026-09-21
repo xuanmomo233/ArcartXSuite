@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.bukkit.Bukkit;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -48,6 +48,9 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
     private JedisPubSub redisPubSub;
     private volatile boolean redisSubscriberActive;
     private boolean proxyActive;
+    /** 已告警过的未签名来源节点（签名关闭时每节点只告警一次，避免刷日志）。 */
+    private final java.util.Set<String> unsignedWarnedNodes =
+        ConcurrentHashMap.newKeySet();
 
     public CrossServerService(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -60,6 +63,16 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
         dedupe = new CrossServerDedupe(configuration.dedupeTtlMs());
         if (configuration.signatureEnabled() && configuration.signatureSecret().isBlank()) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] signature.enabled=true 但 secret 为空，跨服消息发送已被禁用（拒绝裸奔）。请配置 cross-server.signature.secret 或将 signature.enabled 设为 false。");
+        }
+        if ((configuration.redisEnabled() || configuration.proxyEnabled()) && !configuration.signatureEnabled()) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "════════════════════════════════════════════════════════════════\n"
+                + " [CrossServer] ⚠ 跨服签名已关闭（cross-server.signature.enabled=false）\n"
+                + " 任何能向 Redis 频道/Proxy 通道投递消息的来源都可伪造跨服消息：\n"
+                + " 注入假玩家、操纵拍卖/动态商店、伪造跨服传送握手等。\n"
+                + " 仅在可信内网/同机部署时可接受；否则请开启 signature 并配置 secret。\n"
+                + "════════════════════════════════════════════════════════════════"
+            );
         }
         if (configuration.redisEnabled()) {
             startRedis();
@@ -274,6 +287,11 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                     xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] 签名无效 module=" + envelope.module());
                     return;
                 }
+            } else if (unsignedWarnedNodes.add(envelope.nodeId())) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                    "[CrossServer] 收到未签名消息 node=" + envelope.nodeId() + " module=" + envelope.module()
+                        + "（signature.enabled=false，无法验证来源真实性；可信内网可忽略，否则请开启签名）"
+                );
             }
             if (!dedupe.registerIfNew(envelope.messageId())) {
                 return;
@@ -286,9 +304,10 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 envelope.module(),
                 envelope.nodeId(),
                 envelope.messageId(),
-                envelope.payload()
+                envelope.payload(),
+                configuration.shouldVerify()
             );
-            AxsScheduler.runTask(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!registration.closed) {
                     registration.consumer.accept(delivery);
                 }

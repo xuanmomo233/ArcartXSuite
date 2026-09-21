@@ -1,5 +1,4 @@
 package xuanmo.arcartxsuite.battlepass.service;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,6 +24,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
+import xuanmo.arcartxsuite.api.command.ThrottledCommandExecutor;
 
 /**
  * 战令奖励发放器，负责根据奖励类型执行实际的奖励发放逻辑。
@@ -100,15 +100,20 @@ public final class BattlePassRewardDispatcher {
      * @param player 目标玩家
      * @param reward 要发放的奖励
      */
-    public void dispatch(Player player, BattlePassReward reward) {
-        if (player == null || !player.isOnline()) return;
+    public java.util.concurrent.CompletableFuture<Boolean> dispatch(Player player, BattlePassReward reward) {
+        if (player == null || !player.isOnline()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
+        }
         String type = reward.type();
         switch (type.toLowerCase()) {
-            case "command" -> dispatchCommands(player, reward.commands());
-            case "item" -> dispatchItem(player, reward);
-            case "currency" -> dispatchCurrency(player, reward);
-            case "mail" -> dispatchMail(player, player.getUniqueId(), player.getName(), reward);
-            default -> logger.warning("未知奖励类型 [" + type + "]: " + reward.rewardId());
+            case "command" -> { return dispatchCommands(player, reward.commands()); }
+            case "item" -> { return java.util.concurrent.CompletableFuture.completedFuture(dispatchItem(player, reward)); }
+            case "currency" -> { return dispatchCurrency(player, reward); }
+            case "mail" -> { return dispatchMail(player, player.getUniqueId(), player.getName(), reward); }
+            default -> {
+                logger.warning("未知奖励类型 [" + type + "]: " + reward.rewardId());
+                return java.util.concurrent.CompletableFuture.completedFuture(false);
+            }
         }
     }
 
@@ -137,37 +142,43 @@ public final class BattlePassRewardDispatcher {
         return false;
     }
 
-    private void dispatchCommands(Player player, List<String> commands) {
-        if (commands == null || commands.isEmpty()) return;
-        AxsScheduler.runTask(plugin, () -> {
+    private java.util.concurrent.CompletableFuture<Boolean> dispatchCommands(Player player, List<String> commands) {
+        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
+        if (commands == null || commands.isEmpty()) {
+            future.complete(true);
+            return future;
+        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
             for (String raw : commands) {
                 if (raw == null || raw.isBlank()) continue;
                 String command = raw.replace("{player}", xuanmo.arcartxsuite.api.command.CommandSanitizer.validatePlayerName(player.getName()))
                     .replace("{uuid}", player.getUniqueId().toString());
                 if (command.startsWith("/")) command = command.substring(1);
                 try {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                    ThrottledCommandExecutor.dispatch( command);
                 } catch (Exception e) {
                     logger.warning("执行战令奖励命令失败: " + command + " | " + e.getMessage());
                 }
             }
+            future.complete(true);
         });
+        return future;
     }
 
-    private void dispatchItem(Player player, BattlePassReward reward) {
+    private boolean dispatchItem(Player player, BattlePassReward reward) {
         IconDefinition itemDef = reward.item();
         if (itemDef == null) {
             logger.warning("物品奖励缺少 item 定义: " + reward.rewardId());
-            return;
+            return false;
         }
         if (itemResolver == null) {
             logger.warning("物品解析器不可用，无法发放物品奖励: " + reward.rewardId());
-            return;
+            return false;
         }
         ItemStack item = itemResolver.resolveItemStack(player, itemDef);
         if (item == null) {
             logger.warning("物品奖励生成失败: " + reward.rewardId());
-            return;
+            return false;
         }
         ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("battlepass")
             .sourceDetail("reward:" + reward.rewardId())
@@ -175,27 +186,28 @@ public final class BattlePassRewardDispatcher {
             .overflowMailBody("您的背包已满，战令奖励物品通过邮件补发。")
             .overflowMailSenderName("战令")
             .build();
-        itemRewardDispatcher.dispatchItem(player, item, options);
+        return itemRewardDispatcher.dispatchItem(player, item, options).success();
     }
 
-    private void dispatchCurrency(Player player, BattlePassReward reward) {
+    private java.util.concurrent.CompletableFuture<Boolean> dispatchCurrency(Player player, BattlePassReward reward) {
         String currencyId = reward.currency();
         double amount = reward.currencyAmount();
         if (currencyId == null || currencyId.isBlank() || amount <= 0) {
             logger.warning("货币奖励配置无效: " + reward.rewardId()
                 + " currency=" + currencyId + " amount=" + amount);
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
         if (currencyManager == null) {
             logger.warning("货币管理器不可用，无法发放货币奖励: " + reward.rewardId());
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currencyId);
         if (bridge == null || !bridge.available()) {
             logger.warning("货币桥接不可用: " + currencyId + "，奖励 " + reward.rewardId() + " 发放失败");
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
-        AxsScheduler.runTask(plugin, () -> {
+        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
+        Bukkit.getScheduler().runTask(plugin, () -> {
             CurrencyTransactionResult result =
                 bridge.deposit(player, BigDecimal.valueOf(amount));
             if (!result.success()) {
@@ -203,7 +215,9 @@ public final class BattlePassRewardDispatcher {
                     + " currency=" + currencyId + " amount=" + amount
                     + " reason=" + result.message());
             }
+            future.complete(result.success());
         });
+        return future;
     }
 
     /**
@@ -226,27 +240,31 @@ public final class BattlePassRewardDispatcher {
      * @param playerName   玩家名
      * @param reward       奖励定义
      */
-    private void dispatchMail(@Nullable Player onlinePlayer, UUID playerUuid, String playerName, BattlePassReward reward) {
+    private java.util.concurrent.CompletableFuture<Boolean> dispatchMail(@Nullable Player onlinePlayer, UUID playerUuid, String playerName, BattlePassReward reward) {
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
         if (mail == null) {
             // Mail 模块不可用，降级处理
             logger.fine("Mail 模块不可用，降级发放奖励: " + reward.rewardId());
-            fallbackFromMail(onlinePlayer, reward);
-            return;
+            return fallbackFromMail(onlinePlayer, reward);
         }
+        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
         List<String> presetIds = reward.mailPresets();
         if (presetIds != null && !presetIds.isEmpty()) {
             // 预设模式（异步发送，失败时降级为直接发放）
-            AxsScheduler.runAsync(plugin, () -> {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
                     mailProvider, playerName, presetIds, "battlepass", logger);
                 if (!allSuccess) {
                     logger.warning("邮件预设发送存在失败，降级为直接发放: player=" + playerName
                         + " reward=" + reward.rewardId());
-                    AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                    Bukkit.getScheduler().runTask(plugin, () ->
+                        fallbackFromMail(onlinePlayer, reward).whenComplete((ok, err) ->
+                            future.complete(err == null && Boolean.TRUE.equals(ok))));
+                } else {
+                    future.complete(true);
                 }
             });
-            return;
+            return future;
         }
         // 直接模式：发送带物品附件的邮件
         String subject = reward.mailSubject() != null ? reward.mailSubject() : "战令奖励";
@@ -255,19 +273,18 @@ public final class BattlePassRewardDispatcher {
         if (itemDef == null) {
             // 无物品附件，降级为执行命令
             logger.fine("mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
-            fallbackFromMail(onlinePlayer, reward);
-            return;
+            return fallbackFromMail(onlinePlayer, reward);
         }
         if (itemResolver == null) {
             logger.warning("物品解析器不可用，无法生成 mail 类型奖励物品: " + reward.rewardId());
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
         ItemStack item = itemResolver.resolveItemStack(onlinePlayer, itemDef);
         if (item == null) {
             logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId());
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
-        AxsScheduler.runAsync(plugin, () -> {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 MailSendResult result = mail.sendMail(MailSendRequest.builder(playerUuid, subject, body)
                     .attachment(MailAttachmentSpec.item(item))
@@ -277,30 +294,45 @@ public final class BattlePassRewardDispatcher {
                 if (!result.success()) {
                     logger.warning("带附件邮件发送失败: player=" + playerName
                         + "，降级为直接发放物品 — " + result.message());
-                    AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                    Bukkit.getScheduler().runTask(plugin, () ->
+                        fallbackFromMail(onlinePlayer, reward).whenComplete((ok, err) ->
+                            future.complete(err == null && Boolean.TRUE.equals(ok))));
+                } else {
+                    future.complete(true);
                 }
             } catch (Exception e) {
                 logger.warning("带附件邮件发送异常: " + e.getMessage());
+                future.complete(false);
             }
         });
+        return future;
     }
 
     /**
      * Mail 模块不可用时的降级发放逻辑。
+     * <p>
+     * 返回合并结果：物品或命令任一路成功即视为已发放。
      */
-    private void fallbackFromMail(@Nullable Player player, BattlePassReward reward) {
+    private java.util.concurrent.CompletableFuture<Boolean> fallbackFromMail(@Nullable Player player, BattlePassReward reward) {
         if (player == null || !player.isOnline()) {
             // 离线玩家无法降级发放，记录日志
             logger.fine("离线玩家无法降级发放 mail 奖励: " + reward.rewardId());
-            return;
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
+        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
+        boolean itemOk = false;
         // 优先尝试发放物品
         if (reward.item() != null) {
-            dispatchItem(player, reward);
+            itemOk = dispatchItem(player, reward);
         }
         // 再执行命令（如果有）
+        boolean finalItemOk = itemOk;
         if (reward.commands() != null && !reward.commands().isEmpty()) {
-            dispatchCommands(player, reward.commands());
+            dispatchCommands(player, reward.commands()).whenComplete((ok, err) ->
+                future.complete(finalItemOk || (err == null && Boolean.TRUE.equals(ok))));
+        } else {
+            future.complete(itemOk);
         }
+        return future;
     }
 }

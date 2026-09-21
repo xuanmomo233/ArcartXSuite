@@ -47,11 +47,11 @@ public final class FishingListener implements Listener {
         // 在 BITE 状态（鱼咬钩）时启动小游戏，而不是等 CAUGHT_FISH
         // CAUGHT_FISH 需要玩家右键收杆才触发，而我们要在收杆前就启动小游戏
         if (event.getState() == PlayerFishEvent.State.BITE) {
-            // 鱼咬钩时消耗饵料队列头部1个饵料
-            service.consumeBaitOnBite(player);
             // 取消原版钓鱼（阻止后续 CAUGHT_FISH/FAILED_ATTEMPT），启动小游戏
             boolean started = service.startMinigame(player);
             if (started) {
+                // 小游戏启动成功后才消耗饵料——启动失败（packetBridge 不可用/冷却/权限）不吞饵
+                service.consumeBaitOnBite(player);
                 event.setCancelled(true);
             }
         }

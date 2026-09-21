@@ -12,6 +12,7 @@ import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
  * @param notifyMessage    通知消息（含颜色码）
  * @param notifyCooldownMs 通知冷却（毫秒），避免刷屏
  * @param punishCommand    惩罚命令模板
+ * @param punishCooldownMs 惩罚命令冷却（毫秒），避免连续超限反复执行控制台命令
  */
 public record ClientPacketGuardRule(
     boolean enabled,
@@ -20,13 +21,15 @@ public record ClientPacketGuardRule(
     ClientPacketGuardMode mode,
     String notifyMessage,
     long notifyCooldownMs,
-    String punishCommand
+    String punishCommand,
+    long punishCooldownMs
 ) {
 
     public ClientPacketGuardRule {
         windowMs = Math.max(1L, windowMs);
         maxHits = Math.max(1, maxHits);
         notifyCooldownMs = Math.max(0L, notifyCooldownMs);
+        punishCooldownMs = Math.max(0L, punishCooldownMs);
         mode = mode == null ? ClientPacketGuardMode.SILENT : mode;
         notifyMessage = notifyMessage == null ? "" : notifyMessage;
         punishCommand = punishCommand == null ? "" : punishCommand.trim();

@@ -121,6 +121,20 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         amount INTEGER NOT NULL DEFAULT 1,
                         PRIMARY KEY (uuid, slot_index))
                     """);
+
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_task_progress (
+                        uuid TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        task_id TEXT NOT NULL,
+                        target_count INTEGER NOT NULL DEFAULT 1,
+                        current_progress INTEGER NOT NULL DEFAULT 0,
+                        completed INTEGER NOT NULL DEFAULT 0,
+                        reward_claimed INTEGER NOT NULL DEFAULT 0,
+                        assigned_date TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (uuid, category, task_id, assigned_date))
+                    """);
             } else {
                 // ── MySQL 建表 ───────────────────────────────────────
                 stmt.executeUpdate("""
@@ -197,13 +211,27 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
                         amount INT NOT NULL DEFAULT 1,
                         PRIMARY KEY (uuid, slot_index))
                     """);
+
+                stmt.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS axs_fishing_task_progress (
+                        uuid VARCHAR(36) NOT NULL,
+                        category VARCHAR(16) NOT NULL,
+                        task_id VARCHAR(64) NOT NULL,
+                        target_count INT NOT NULL DEFAULT 1,
+                        current_progress INT NOT NULL DEFAULT 0,
+                        completed TINYINT NOT NULL DEFAULT 0,
+                        reward_claimed TINYINT NOT NULL DEFAULT 0,
+                        assigned_date VARCHAR(10) NOT NULL,
+                        updated_at BIGINT NOT NULL,
+                        PRIMARY KEY (uuid, category, task_id, assigned_date))
+                    """);
             }
         }
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_catch_records", "axs_fishing_bait_queue");
+        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_catch_records", "axs_fishing_bait_queue", "axs_fishing_task_progress");
     }
 
     @Override
@@ -213,7 +241,7 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
 
     @Override
     protected List<String> allTables() {
-        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_bait_queue");
+        return List.of("axs_fishing_season", "axs_fishing_permanent", "axs_fishing_collection", "axs_fishing_pending_rewards", "axs_fishing_bait_queue", "axs_fishing_task_progress");
     }
 
     // ─── 赛季数据 ────────────────────────────────────────────────
@@ -718,6 +746,101 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.warning("清空饵料队列失败 uuid=" + uuid + ": " + e.getMessage());
+        }
+    }
+
+    // ─── 任务进度 ────────────────────────────────────────────────
+
+    @Override
+    public @NotNull List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> loadTaskProgress(@NotNull UUID uuid) {
+        String sql = "SELECT category, task_id, target_count, current_progress, completed, reward_claimed, assigned_date"
+            + " FROM axs_fishing_task_progress WHERE uuid=?";
+        List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> list = new ArrayList<>();
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    xuanmo.arcartxsuite.fishing.task.FishingTask.TaskCategory category;
+                    try {
+                        category = xuanmo.arcartxsuite.fishing.task.FishingTask.TaskCategory.valueOf(rs.getString("category"));
+                    } catch (IllegalArgumentException ex) {
+                        continue;
+                    }
+                    java.time.LocalDate assignedDate;
+                    try {
+                        assignedDate = java.time.LocalDate.parse(rs.getString("assigned_date"));
+                    } catch (Exception ex) {
+                        continue;
+                    }
+                    list.add(new xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance(
+                        uuid,
+                        uuid + "|" + category + "|" + rs.getString("task_id") + "|" + assignedDate,
+                        rs.getString("task_id"),
+                        category,
+                        rs.getInt("target_count"),
+                        rs.getInt("current_progress"),
+                        rs.getInt("completed") != 0,
+                        rs.getInt("reward_claimed") != 0,
+                        assignedDate));
+                }
+            }
+        } catch (SQLException e) {
+            logger.warning("加载任务进度失败 uuid=" + uuid + ": " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
+    public void saveTaskProgress(@NotNull xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance instance) {
+        String sql = "INSERT INTO axs_fishing_task_progress"
+            + " (uuid, category, task_id, target_count, current_progress, completed, reward_claimed, assigned_date, updated_at)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            + " ON CONFLICT(uuid, category, task_id, assigned_date) DO UPDATE SET"
+            + " target_count=excluded.target_count, current_progress=excluded.current_progress,"
+            + " completed=excluded.completed, reward_claimed=excluded.reward_claimed, updated_at=excluded.updated_at";
+        if (isMysql()) {
+            sql = "INSERT INTO axs_fishing_task_progress"
+                + " (uuid, category, task_id, target_count, current_progress, completed, reward_claimed, assigned_date, updated_at)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                + " ON DUPLICATE KEY UPDATE target_count=VALUES(target_count), current_progress=VALUES(current_progress),"
+                + " completed=VALUES(completed), reward_claimed=VALUES(reward_claimed), updated_at=VALUES(updated_at)";
+        }
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, instance.playerUuid().toString());
+            ps.setString(2, instance.category().name());
+            ps.setString(3, instance.templateId());
+            ps.setInt(4, instance.targetCount());
+            ps.setInt(5, instance.currentProgress());
+            ps.setInt(6, instance.completed() ? 1 : 0);
+            ps.setInt(7, instance.rewardClaimed() ? 1 : 0);
+            ps.setString(8, instance.assignedDate().toString());
+            ps.setLong(9, System.currentTimeMillis());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("保存任务进度失败 uuid=" + instance.playerUuid() + " task=" + instance.templateId() + ": " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void purgeTaskProgressBefore(@NotNull String category, @NotNull String assignedDateBefore) {
+        String sql = "DELETE FROM axs_fishing_task_progress WHERE category=? AND assigned_date<?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, category);
+            ps.setString(2, assignedDateBefore);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("清理过期任务进度失败 category=" + category + ": " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void purgeTaskProgressByCategory(@NotNull String category) {
+        String sql = "DELETE FROM axs_fishing_task_progress WHERE category=?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, category);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("按分类清理任务进度失败 category=" + category + ": " + e.getMessage());
         }
     }
 }

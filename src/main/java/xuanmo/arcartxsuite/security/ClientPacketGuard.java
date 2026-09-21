@@ -11,7 +11,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.api.util.AxsScheduler;
+
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
@@ -22,10 +22,15 @@ import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
  */
 public final class ClientPacketGuard implements PacketGuardAPI {
 
+    /** 每个 (module, player) 维度允许的 distinct action 键上限——action 由包内容控制，无上限会被随机 action 撑爆内存。 */
+    private static final int MAX_ACTION_KEYS_PER_MODULE_PLAYER = 64;
+
     private final JavaPlugin plugin;
     private final ClientPacketGuardConfiguration configuration;
     private final LongSupplier timeSupplier;
     private final ConcurrentMap<RouteKey, GuardState> states = new ConcurrentHashMap<>();
+    /** (module|playerId) → 已见的 action 键集合，用于上限控制与清理。 */
+    private final ConcurrentMap<String, java.util.Set<String>> actionKeysByModulePlayer = new ConcurrentHashMap<>();
 
     private BukkitTask cleanupTask;
 
@@ -44,7 +49,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         if (plugin == null || !configuration.enabled()) {
             return;
         }
-        cleanupTask = AxsScheduler.runTaskTimer(
+        cleanupTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::cleanup,
             configuration.cleanupIntervalTicks(),
@@ -58,6 +63,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
             cleanupTask = null;
         }
         states.clear();
+        actionKeysByModulePlayer.clear();
     }
 
     @Override
@@ -117,6 +123,23 @@ public final class ClientPacketGuard implements PacketGuardAPI {
             return true;
         }
 
+        // action 键上限：恶意客户端可随机化 action 无限创建 GuardState，超过上限直接拒绝且不建状态
+        String mpKey = normalizedModule + "|" + playerId;
+        java.util.Set<String> actionKeys = actionKeysByModulePlayer.computeIfAbsent(
+            mpKey, ignored -> ConcurrentHashMap.newKeySet());
+        if (!actionKeys.contains(normalizedAction)) {
+            if (actionKeys.size() >= MAX_ACTION_KEYS_PER_MODULE_PLAYER) {
+                if (debugLogging && plugin != null) {
+                    xuanmo.arcartxsuite.module.AxsLog.logger().info(
+                        "ClientPacketGuard 拒绝回包 -> player=" + playerName
+                            + " | route=" + normalizedModule + "." + normalizedAction
+                            + " | 原因=action 键数超上限 " + MAX_ACTION_KEYS_PER_MODULE_PLAYER);
+                }
+                return false;
+            }
+            actionKeys.add(normalizedAction);
+        }
+
         long now = timeSupplier.getAsLong();
         RouteKey routeKey = new RouteKey(normalizedModule, normalizedAction, playerId);
         GuardState state = states.computeIfAbsent(routeKey, ignored -> new GuardState());
@@ -129,8 +152,11 @@ public final class ClientPacketGuard implements PacketGuardAPI {
                     && (state.lastNotifyAt <= 0L || now - state.lastNotifyAt >= rule.notifyCooldownMs())) {
                     feedbackSink.notifyPlayer(rule.notifyMessage());
                     state.lastNotifyAt = now;
-                } else if (rule.mode() == ClientPacketGuardMode.PUNISH) {
+                } else if (rule.mode() == ClientPacketGuardMode.PUNISH
+                    && (state.lastPunishAt <= 0L || now - state.lastPunishAt >= rule.punishCooldownMs())) {
+                    // 惩罚命令按 punish-cooldown-ms 冷却，防止连续超限反复执行控制台命令
                     feedbackSink.punish(rule.punishCommand());
+                    state.lastPunishAt = now;
                 }
                 allowed = false;
             } else {
@@ -167,11 +193,21 @@ public final class ClientPacketGuard implements PacketGuardAPI {
             boolean remove;
             synchronized (state) {
                 state.prune(now, rule.windowMs());
-                long retentionMs = Math.max(rule.windowMs(), rule.notifyCooldownMs());
-                remove = state.hitTimestamps.isEmpty() && now - Math.max(state.lastTouchedAt, state.lastNotifyAt) > retentionMs;
+                long retentionMs = Math.max(Math.max(rule.windowMs(), rule.notifyCooldownMs()), rule.punishCooldownMs());
+                remove = state.hitTimestamps.isEmpty()
+                    && now - Math.max(Math.max(state.lastTouchedAt, state.lastNotifyAt), state.lastPunishAt) > retentionMs;
             }
             if (remove) {
                 states.remove(entry.getKey(), state);
+                RouteKey key = entry.getKey();
+                String mpKey = key.module() + "|" + key.playerId();
+                java.util.Set<String> actionKeys = actionKeysByModulePlayer.get(mpKey);
+                if (actionKeys != null) {
+                    actionKeys.remove(key.action());
+                    if (actionKeys.isEmpty()) {
+                        actionKeysByModulePlayer.remove(mpKey, actionKeys);
+                    }
+                }
             }
         }
     }
@@ -214,6 +250,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
     private static final class GuardState {
         private final ArrayDeque<Long> hitTimestamps = new ArrayDeque<>();
         private long lastNotifyAt;
+        private long lastPunishAt;
         private long lastTouchedAt;
 
         private void prune(long now, long windowMs) {

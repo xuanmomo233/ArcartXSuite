@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  * @param cards                 聊天卡片渲染配置
  * @param functions             聊天功能开关配置
  * @param filter                聊天过滤器配置
+ * @param redPacket             红包功能配置
  * @param channelsDirectory     频道定义文件相对目录
  * @param channels              频道定义映射（key 为频道 ID，不可变）
  */
@@ -48,6 +49,7 @@ public record ChatModuleConfiguration(
     ChatCardConfiguration cards,
     ChatFunctionConfiguration functions,
     ChatFilterConfiguration filter,
+    RedPacketConfiguration redPacket,
     String channelsDirectory,
     Map<String, ChatChannelDefinition> channels
 ) {
@@ -109,6 +111,10 @@ public record ChatModuleConfiguration(
             filterSection == null ? 60 : Math.max(1, filterSection.getInt("cloud.refresh-minutes", 60))
         );
 
+        RedPacketConfiguration redPacket = RedPacketConfiguration.load(
+            configuration.getConfigurationSection("redpacket")
+        );
+
         String relativeChannelsDirectory = string(configuration.getString("channels-directory", "chat/channels"));
 
         Map<String, ChatChannelDefinition> channels = loadChannels(channelsDirectory, logger);
@@ -128,6 +134,7 @@ public record ChatModuleConfiguration(
             cards,
             functions,
             filter,
+            redPacket,
             relativeChannelsDirectory,
             Collections.unmodifiableMap(new LinkedHashMap<>(channels))
         );

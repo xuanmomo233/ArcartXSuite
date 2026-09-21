@@ -45,6 +45,7 @@ ui:
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.currentRegion = packet['currentRegion']
       var.currentWorld = packet['currentWorld']
       var.currentPriority = packet['currentPriority']
@@ -545,7 +546,7 @@ controls:
                       height: 44
                     action:
                       click: |-
-                        Packet.send(var.packetId, 'clear_selection')
+                        Packet.send(var.packetId, 'clear_selection', var.actionToken)
                     children:
                       清除选区背景:
                         type: Texture

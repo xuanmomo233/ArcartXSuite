@@ -166,7 +166,20 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         protectionListener.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         selectionListener = new SelectionListener(regionManager, configuration);
         Bukkit.getPluginManager().registerEvents(protectionListener, plugin);
+        protectionListener.registerPaperChatGuard(plugin);
         Bukkit.getPluginManager().registerEvents(selectionListener, plugin);
+        // 玩家退出时清理 packet handler 的动作令牌与在途标记
+        Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler
+            public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+                if (menuPacketHandler != null) {
+                    menuPacketHandler.clearPlayer(event.getPlayer().getUniqueId());
+                }
+                if (adminPacketHandler != null) {
+                    adminPacketHandler.clearPlayer(event.getPlayer().getUniqueId());
+                }
+            }
+        }, plugin);
 
         // 选区与区域边框粒子可视化
         particleTask = new SelectionParticleTask(plugin, regionManager, configuration);
