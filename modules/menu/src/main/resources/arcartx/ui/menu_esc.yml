@@ -71,18 +71,18 @@ ui:
         key = i.round()
         if(val.button_rows != none) {
           mb = val.button_rows.get(i.round())
-        }
-        if(mb != none && mb['图标'] != none){
-          mb['图标'].seticon()
+          if(mb != none && mb['图标'] != none){
+            mb['图标'].seticon()
+          }
         }
       }
       for(i in range(0, var.maxFooterCount - 1)){
         key = i.round()
         if(val.footer_rows != none) {
           fb = val.footer_rows.get(i.round())
-        }
-        if(fb != none && fb['图标'] != none){
-          fb['图标'].seticon()
+          if(fb != none && fb['图标'] != none){
+            fb['图标'].seticon()
+          }
         }
       }
     # packetHandler: update
@@ -125,18 +125,18 @@ ui:
         key = i.round()
         if(val.button_rows != none) {
           mb = val.button_rows.get(i.round())
-        }
-        if(mb != none && mb['图标'] != none){
-          mb['图标'].seticon()
+          if(mb != none && mb['图标'] != none){
+            mb['图标'].seticon()
+          }
         }
       }
       for(i in range(0, var.maxFooterCount - 1)){
         key = i.round()
         if(val.footer_rows != none) {
           fb = val.footer_rows.get(i.round())
-        }
-        if(fb != none && fb['图标'] != none){
-          fb['图标'].seticon()
+          if(fb != none && fb['图标'] != none){
+            fb['图标'].seticon()
+          }
         }
       }
   action:

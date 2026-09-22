@@ -78,11 +78,11 @@ ui:
       }
       for(i in range(0, var.maxRecycleCount - 1)){
         key = i.round()
-        if(val.回收列表 != none) {
+        if(val.回收列表 != none){
           e = val.回收列表.get(key)
-        }
-        if(e != none && e['物品图标'] != none){
-          e['物品图标'].seticon()
+          if(e != none && e['物品图标'] != none){
+            e['物品图标'].seticon()
+          }
         }
       }
       var.actionBusy = false

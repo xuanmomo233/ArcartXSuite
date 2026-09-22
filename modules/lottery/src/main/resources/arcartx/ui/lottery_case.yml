@@ -100,25 +100,25 @@ ui:
         var.奖励卡片轮次 = (var.奖励卡片轮次 + 1).round()
         if(val.奖励网格 != none) {
           模板 = val.奖励网格.get(0)
-        }
-        var.奖励卡片列表[1.round()] = 模板
-        if(模板 != none){
-          模板.entryKey = 1.round()
-          模板['卡片底'].entryKey = 1.round()
-          模板['稀有度条'].entryKey = 1.round()
-          模板['物品槽'].entryKey = 1.round()
-          模板['物品名'].entryKey = 1.round()
-        }
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            if(模板 != none){
-              e = 模板.copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
-              e.entryKey = (i + 1).round()
-              e['卡片底'].entryKey = (i + 1).round()
-              e['稀有度条'].entryKey = (i + 1).round()
-              e['物品槽'].entryKey = (i + 1).round()
-              e['物品名'].entryKey = (i + 1).round()
-              var.奖励卡片列表[(i + 1).round()] = e
+          var.奖励卡片列表[1.round()] = 模板
+          if(模板 != none){
+            模板.entryKey = 1.round()
+            模板['卡片底'].entryKey = 1.round()
+            模板['稀有度条'].entryKey = 1.round()
+            模板['物品槽'].entryKey = 1.round()
+            模板['物品名'].entryKey = 1.round()
+          }
+          if(目标数 > 1){
+            for(i in range(1, 目标数 - 1)){
+              if(模板 != none){
+                e = 模板.copy('奖励卡片_' + var.奖励卡片轮次 + '_' + i.round())
+                e.entryKey = (i + 1).round()
+                e['卡片底'].entryKey = (i + 1).round()
+                e['稀有度条'].entryKey = (i + 1).round()
+                e['物品槽'].entryKey = (i + 1).round()
+                e['物品名'].entryKey = (i + 1).round()
+                var.奖励卡片列表[(i + 1).round()] = e
+              }
             }
           }
         }
@@ -152,27 +152,27 @@ ui:
         }
         if(val.动画卡片带 != none) {
           动画模板 = val.动画卡片带.get(1)
-        }
-        var.动画卡片列表[0.round()] = 动画模板
-        if(动画模板 != none){
-          随机key = (math.floor(math.random() * 目标数) + 1).round()
-          动画模板.entryKey = 随机key
-          动画模板['卡片底'].entryKey = 随机key
-          动画模板['稀有度条'].entryKey = 随机key
-          动画模板['物品槽'].entryKey = 随机key
-          动画模板['物品名'].entryKey = 随机key
-        }
-        for(i in range(1, 动画带数量 - 1)){
-          iInt = i.round()
-          随机key = (math.floor(math.random() * 目标数) + 1).round()
+          var.动画卡片列表[0.round()] = 动画模板
           if(动画模板 != none){
-            e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
-            e.entryKey = 随机key
-            e['卡片底'].entryKey = 随机key
-            e['稀有度条'].entryKey = 随机key
-            e['物品槽'].entryKey = 随机key
-            e['物品名'].entryKey = 随机key
-            var.动画卡片列表[i.round()] = e
+            随机key = (math.floor(math.random() * 目标数) + 1).round()
+            动画模板.entryKey = 随机key
+            动画模板['卡片底'].entryKey = 随机key
+            动画模板['稀有度条'].entryKey = 随机key
+            动画模板['物品槽'].entryKey = 随机key
+            动画模板['物品名'].entryKey = 随机key
+          }
+          for(i in range(1, 动画带数量 - 1)){
+            iInt = i.round()
+            随机key = (math.floor(math.random() * 目标数) + 1).round()
+            if(动画模板 != none){
+              e = 动画模板.copy('动画卡片_' + var.动画带轮次 + '_' + i.round())
+              e.entryKey = 随机key
+              e['卡片底'].entryKey = 随机key
+              e['稀有度条'].entryKey = 随机key
+              e['物品槽'].entryKey = 随机key
+              e['物品名'].entryKey = 随机key
+              var.动画卡片列表[i.round()] = e
+            }
           }
         }
         var.动画带基数 = 目标数
@@ -187,9 +187,9 @@ ui:
         key = i.round()
         if(val.消耗区 != none) {
           e = val.消耗区.get(key)
-        }
-        if(e != none){
-          e['图标'].seticon()
+          if(e != none){
+            e['图标'].seticon()
+          }
         }
       }
       // 抽奖失败时服务端只回 update: 解除等待态，避免界面永久停在开箱动画
@@ -293,27 +293,27 @@ ui:
         var.十连卡片轮次 = (var.十连卡片轮次 + 1).round()
         if(val.十连网格 != none) {
           十连模板 = val.十连网格.get(0)
-        }
-        var.十连卡片列表[1.round()] = 十连模板
-        if(十连模板 != none){
-          十连模板.entryKey = 1.round()
-          十连模板['卡片底'].entryKey = 1.round()
-          十连模板['稀有度条'].entryKey = 1.round()
-          十连模板['物品槽'].entryKey = 1.round()
-          十连模板['物品名'].entryKey = 1.round()
-          十连模板['稀有度名'].entryKey = 1.round()
-        }
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            if(十连模板 != none){
-              e = 十连模板.copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
-              e.entryKey = (i + 1).round()
-              e['卡片底'].entryKey = (i + 1).round()
-              e['稀有度条'].entryKey = (i + 1).round()
-              e['物品槽'].entryKey = (i + 1).round()
-              e['物品名'].entryKey = (i + 1).round()
-              e['稀有度名'].entryKey = (i + 1).round()
-              var.十连卡片列表[(i + 1).round()] = e
+          var.十连卡片列表[1.round()] = 十连模板
+          if(十连模板 != none){
+            十连模板.entryKey = 1.round()
+            十连模板['卡片底'].entryKey = 1.round()
+            十连模板['稀有度条'].entryKey = 1.round()
+            十连模板['物品槽'].entryKey = 1.round()
+            十连模板['物品名'].entryKey = 1.round()
+            十连模板['稀有度名'].entryKey = 1.round()
+          }
+          if(目标数 > 1){
+            for(i in range(1, 目标数 - 1)){
+              if(十连模板 != none){
+                e = 十连模板.copy('十连卡片_' + var.十连卡片轮次 + '_' + i.round())
+                e.entryKey = (i + 1).round()
+                e['卡片底'].entryKey = (i + 1).round()
+                e['稀有度条'].entryKey = (i + 1).round()
+                e['物品槽'].entryKey = (i + 1).round()
+                e['物品名'].entryKey = (i + 1).round()
+                e['稀有度名'].entryKey = (i + 1).round()
+                var.十连卡片列表[(i + 1).round()] = e
+              }
             }
           }
         }
@@ -373,19 +373,19 @@ ui:
           if(existing == none){
             if(val.历史列表['历史行'] != none) {
               e = val.历史列表['历史行'].copy('历史行' + key)
+              e['时间'].entryKey = key
+              e['物品名'].entryKey = key
+              e['稀有度名'].entryKey = key
+              e['行背景'].entryKey = key
+              e['稀有度条'].entryKey = key
             }
-            e['时间'].entryKey = key
-            e['物品名'].entryKey = key
-            e['稀有度名'].entryKey = key
-            e['行背景'].entryKey = key
-            e['稀有度条'].entryKey = key
           }
         }
         if(val.历史列表 != none) {
           row = val.历史列表.get(key)
-        }
-        if(row != none){
-          row.entryKey = key
+          if(row != none){
+            row.entryKey = key
+          }
         }
       }
       val.历史面板.visible = true
@@ -406,19 +406,19 @@ ui:
           if(existing == none){
             if(val.详情列表['详情行'] != none) {
               e = val.详情列表['详情行'].copy('详情行' + key)
+              e['名称'].entryKey = key
+              e['稀有度'].entryKey = key
+              e['概率'].entryKey = key
+              e['行背景'].entryKey = key
+              e['稀有度条'].entryKey = key
             }
-            e['名称'].entryKey = key
-            e['稀有度'].entryKey = key
-            e['概率'].entryKey = key
-            e['行背景'].entryKey = key
-            e['稀有度条'].entryKey = key
           }
         }
         if(val.详情列表 != none) {
           row = val.详情列表.get(key)
-        }
-        if(row != none){
-          row.entryKey = key
+          if(row != none){
+            row.entryKey = key
+          }
         }
       }
       val.详情面板.visible = true

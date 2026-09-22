@@ -104,20 +104,20 @@ ui:
       }
       for(i in range(0, var.maxShopCount - 1)){
         key = i.round()
-        if(val.商店列表 != none) {
+        if(val.商店列表 != none){
           e = val.商店列表.get(key)
-        }
-        if(e != none && e['商店图标'] != none){
-          e['商店图标'].seticon()
+          if(e != none && e['商店图标'] != none){
+            e['商店图标'].seticon()
+          }
         }
       }
       for(i in range(0, var.maxItemCount - 1)){
         key = i.round()
-        if(val.商品列表 != none) {
+        if(val.商品列表 != none){
           e = val.商品列表.get(key)
-        }
-        if(e != none && e['商品图标'] != none){
-          e['商品图标'].seticon()
+          if(e != none && e['商品图标'] != none){
+            e['商品图标'].seticon()
+          }
         }
       }
       var.actionBusy = false

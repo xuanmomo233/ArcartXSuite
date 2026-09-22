@@ -103,11 +103,11 @@ ui:
           if(existing == none){
             if(val.卡池导航列表['卡池按钮0'] != none) {
               btn = val.卡池导航列表['卡池按钮0'].copy('卡池按钮' + key)
+              btn['卡底'].entryKey = key
+              btn['立绘框'].entryKey = key
+              btn['UP物品槽'].entryKey = key
+              btn['名称'].entryKey = key
             }
-            btn['卡底'].entryKey = key
-            btn['立绘框'].entryKey = key
-            btn['UP物品槽'].entryKey = key
-            btn['名称'].entryKey = key
           }
         }
         e = val.卡池导航列表['卡池按钮' + key]
@@ -246,10 +246,10 @@ ui:
           if(existing == none){
             if(val.历史列表['历史行0'] != none) {
               e = val.历史列表['历史行0'].copy('历史行' + key)
+              e['物品图标'].entryKey = key
+              e['时间'].entryKey = key
+              e['摘要'].entryKey = key
             }
-            e['物品图标'].entryKey = key
-            e['时间'].entryKey = key
-            e['摘要'].entryKey = key
           }
         }
         row = val.历史列表['历史行' + key]
@@ -290,11 +290,11 @@ ui:
           if(existing == none){
             if(val.详情列表['详情行0'] != none) {
               e = val.详情列表['详情行0'].copy('详情行' + key)
+              e['物品图标'].entryKey = key
+              e['名称'].entryKey = key
+              e['稀有度'].entryKey = key
+              e['概率'].entryKey = key
             }
-            e['物品图标'].entryKey = key
-            e['名称'].entryKey = key
-            e['稀有度'].entryKey = key
-            e['概率'].entryKey = key
           }
         }
         row = val.详情列表['详情行' + key]
@@ -348,12 +348,12 @@ ui:
           if(existing == none){
             if(val.兑换列表['兑换行0'] != none) {
               e = val.兑换列表['兑换行0'].copy('兑换行' + key)
+              e['商品图标'].entryKey = key
+              e['商品名称'].entryKey = key
+              e['消耗文本'].entryKey = key
+              e['限购文本'].entryKey = key
+              e['兑换按钮'].entryKey = key
             }
-            e['商品图标'].entryKey = key
-            e['商品名称'].entryKey = key
-            e['消耗文本'].entryKey = key
-            e['限购文本'].entryKey = key
-            e['兑换按钮'].entryKey = key
           }
         }
         row = val.兑换列表['兑换行' + key]

@@ -197,12 +197,13 @@ ui:
         }
       }
       // 对已存在的 Slot 控件重新调用 seticon（数据变了但 seticon 不会自动刷新）
+      // 注意：icon 为裸变量块级作用域，seticon 必须放在赋值所在的 if 块内
       for(i in range(0, var.pageSize - 1)){
-        if(val.仓库网格 != none) {
+        if(val.仓库网格 != none){
           icon = val.仓库网格.get(i.round())
-        }
-        if(icon != none){
-          icon.seticon()
+          if(icon != none){
+            icon.seticon()
+          }
         }
       }
       // update 包到达，重置防抖标志，恢复按钮可点击

@@ -190,44 +190,44 @@ ui:
             row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
             row.entryKey = i.round()
             row.isTemplate = false
-          }
-          entry = var.editCurrencyList[i.round()]
-          if(row['货币输入'] != none) {
-            row['货币输入'].setContent(entry['currency'])
-          }
-          if(row['金额输入'] != none) {
-            row['金额输入'].setContent(entry['amount'].round())
-          }
-          if(row['描述输入'] != none) {
-            row['描述输入'].setContent(entry['description'])
-          }
-          // icon 字段
-          if(row['图标材质输入'] != none) {
-            row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-          }
-          if(row['图标CMD输入'] != none) {
-            row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-          }
-          if(row['图标纹理输入'] != none) {
-            row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-          }
-          if(row['图标URL输入'] != none) {
-            row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-          }
-          if(row['图标名称输入'] != none) {
-            row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
-          }
-          loreText = ''
-          if(entry['iconLore'] != none){
-            for(j in range(0, entry['iconLore'].size() - 1)){
-              if(loreText != ''){
-                loreText = loreText + '\n'
-              }
-              loreText = loreText + entry['iconLore'][j.round()]
+            entry = var.editCurrencyList[i.round()]
+            if(row['货币输入'] != none) {
+              row['货币输入'].setContent(entry['currency'])
             }
-          }
-          if(row['图标描述输入'] != none) {
-            row['图标描述输入'].setContent(loreText)
+            if(row['金额输入'] != none) {
+              row['金额输入'].setContent(entry['amount'].round())
+            }
+            if(row['描述输入'] != none) {
+              row['描述输入'].setContent(entry['description'])
+            }
+            // icon 字段
+            if(row['图标材质输入'] != none) {
+              row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+            }
+            if(row['图标CMD输入'] != none) {
+              row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+            }
+            if(row['图标纹理输入'] != none) {
+              row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+            }
+            if(row['图标URL输入'] != none) {
+              row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+            }
+            if(row['图标名称输入'] != none) {
+              row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+            }
+            loreText = ''
+            if(entry['iconLore'] != none){
+              for(j in range(0, entry['iconLore'].size() - 1)){
+                if(loreText != ''){
+                  loreText = loreText + '\n'
+                }
+                loreText = loreText + entry['iconLore'][j.round()]
+              }
+            }
+            if(row['图标描述输入'] != none) {
+              row['图标描述输入'].setContent(loreText)
+            }
           }
         }
         // 重建 CDK 行：模板作为第 0 行，再复制 size-1 个
@@ -263,24 +263,24 @@ ui:
             row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
             row.entryKey = i.round()
             row.isTemplate = false
-          }
-          entry = var.editCdkList[i.round()]
-          row.cdkEnabled = entry['enabled']
-          if(row['CDK码输入'] != none) {
-            row['CDK码输入'].setContent(entry['code'])
-          }
-          if(row['最大领取输入'] != none) {
-            row['最大领取输入'].setContent(entry['maxClaims'].round())
-          }
-          mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
-          row.expireMode = mode
-          if(mode == 'absolute'){
-            if(row['过期输入'] != none) {
-              row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+            entry = var.editCdkList[i.round()]
+            row.cdkEnabled = entry['enabled']
+            if(row['CDK码输入'] != none) {
+              row['CDK码输入'].setContent(entry['code'])
             }
-          } else {
-            if(row['过期输入'] != none) {
-              row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+            if(row['最大领取输入'] != none) {
+              row['最大领取输入'].setContent(entry['maxClaims'].round())
+            }
+            mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+            row.expireMode = mode
+            if(mode == 'absolute'){
+              if(row['过期输入'] != none) {
+                row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+              }
+            } else {
+              if(row['过期输入'] != none) {
+                row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+              }
             }
           }
         }
@@ -288,9 +288,9 @@ ui:
         for(i in range(0, var.adminAttachmentSlots - 1)){
           if(val.管理附件网格 != none) {
             slot = val.管理附件网格.get(i.round())
-          }
-          if(slot != none){
-            slot.seticon()
+            if(slot != none){
+              slot.seticon()
+            }
           }
         }
       })
@@ -794,43 +794,43 @@ controls:
                       row = val.货币附件滚动区['货币行模板'].copy('货币行' + i.round())
                       row.entryKey = i.round()
                       row.isTemplate = false
-                    }
-                    entry = var.editCurrencyList[i.round()]
-                    if(row['货币输入'] != none) {
-                      row['货币输入'].setContent(entry['currency'])
-                    }
-                    if(row['金额输入'] != none) {
-                      row['金额输入'].setContent(entry['amount'].round())
-                    }
-                    if(row['描述输入'] != none) {
-                      row['描述输入'].setContent(entry['description'])
-                    }
-                    if(row['图标材质输入'] != none) {
-                      row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
-                    }
-                    if(row['图标CMD输入'] != none) {
-                      row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
-                    }
-                    if(row['图标纹理输入'] != none) {
-                      row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
-                    }
-                    if(row['图标URL输入'] != none) {
-                      row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
-                    }
-                    if(row['图标名称输入'] != none) {
-                      row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
-                    }
-                    loreText = ''
-                    if(entry['iconLore'] != none){
-                      for(j in range(0, entry['iconLore'].size() - 1)){
-                        if(loreText != ''){
-                          loreText = loreText + '\n'
-                        }
-                        loreText = loreText + entry['iconLore'][j.round()]
+                      entry = var.editCurrencyList[i.round()]
+                      if(row['货币输入'] != none) {
+                        row['货币输入'].setContent(entry['currency'])
                       }
-                    }
-                    if(row['图标描述输入'] != none) {
-                      row['图标描述输入'].setContent(loreText)
+                      if(row['金额输入'] != none) {
+                        row['金额输入'].setContent(entry['amount'].round())
+                      }
+                      if(row['描述输入'] != none) {
+                        row['描述输入'].setContent(entry['description'])
+                      }
+                      if(row['图标材质输入'] != none) {
+                        row['图标材质输入'].setContent(entry['iconMaterial'] != none ? entry['iconMaterial'] : '')
+                      }
+                      if(row['图标CMD输入'] != none) {
+                        row['图标CMD输入'].setContent(entry['iconCustomModelData'] != none ? entry['iconCustomModelData'].round() : '')
+                      }
+                      if(row['图标纹理输入'] != none) {
+                        row['图标纹理输入'].setContent(entry['iconTexture'] != none ? entry['iconTexture'] : '')
+                      }
+                      if(row['图标URL输入'] != none) {
+                        row['图标URL输入'].setContent(entry['iconTextureUrl'] != none ? entry['iconTextureUrl'] : '')
+                      }
+                      if(row['图标名称输入'] != none) {
+                        row['图标名称输入'].setContent(entry['iconName'] != none ? entry['iconName'] : '')
+                      }
+                      loreText = ''
+                      if(entry['iconLore'] != none){
+                        for(j in range(0, entry['iconLore'].size() - 1)){
+                          if(loreText != ''){
+                            loreText = loreText + '\n'
+                          }
+                          loreText = loreText + entry['iconLore'][j.round()]
+                        }
+                      }
+                      if(row['图标描述输入'] != none) {
+                        row['图标描述输入'].setContent(loreText)
+                      }
                     }
                   }
                 })
@@ -873,9 +873,9 @@ controls:
                   for(i in range(0, var.adminAttachmentSlots - 1)){
                     if(val.管理附件网格 != none) {
                       slot = val.管理附件网格.get(i.round())
-                    }
-                    if(slot != none){
-                      slot.seticon()
+                      if(slot != none){
+                        slot.seticon()
+                      }
                     }
                   }
                 })
@@ -946,24 +946,24 @@ controls:
                       row = val.CDK滚动区['CDK行模板'].copy('CDK行' + i.round())
                       row.entryKey = i.round()
                       row.isTemplate = false
-                    }
-                    entry = var.editCdkList[i.round()]
-                    row.cdkEnabled = entry['enabled']
-                    if(row['CDK码输入'] != none) {
-                      row['CDK码输入'].setContent(entry['code'])
-                    }
-                    if(row['最大领取输入'] != none) {
-                      row['最大领取输入'].setContent(entry['maxClaims'].round())
-                    }
-                    mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
-                    row.expireMode = mode
-                    if(mode == 'absolute'){
-                      if(row['过期输入'] != none) {
-                        row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                      entry = var.editCdkList[i.round()]
+                      row.cdkEnabled = entry['enabled']
+                      if(row['CDK码输入'] != none) {
+                        row['CDK码输入'].setContent(entry['code'])
                       }
-                    } else {
-                      if(row['过期输入'] != none) {
-                        row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                      if(row['最大领取输入'] != none) {
+                        row['最大领取输入'].setContent(entry['maxClaims'].round())
+                      }
+                      mode = entry['expireMode'] != none ? entry['expireMode'] : 'relative'
+                      row.expireMode = mode
+                      if(mode == 'absolute'){
+                        if(row['过期输入'] != none) {
+                          row['过期输入'].setContent(entry['expiresAt'] != none ? entry['expiresAt'] : '')
+                        }
+                      } else {
+                        if(row['过期输入'] != none) {
+                          row['过期输入'].setContent(entry['expiresAfter'] != none ? entry['expiresAfter'] : '')
+                        }
                       }
                     }
                   }

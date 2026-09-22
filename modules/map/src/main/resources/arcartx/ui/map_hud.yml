@@ -1,11 +1,11 @@
 # AXS 资源说明
 # 用途: Map 模块默认小地图 HUD。
-# 前置依赖: ArcartX + Arcart-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
+# 前置依赖: ArcartX + ArcartX-Suite-Map 客户端 mod；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
 # 关联文件: ArcartXMap.yml、ui/map_menu.yml
 # 重载命令: /axs map reload
 #
-# 小地图渲染由 Arcart-Suite-Map 客户端 mod 完全接管：
+# 小地图渲染由 ArcartX-Suite-Map 客户端 mod 完全接管：
 #   - UI 的 tick 触发器每帧通过 axsmap.getMapRenderer().setHudAnchor() 传小地图右上角锚点
 #   - mod 根据锚点和内部 hudSize 状态计算实际渲染区域，绘制圆形/方形小地图
 #   - 圆形遮罩在 mod 的 CPU 端生成视图纹理时应用，含 1px 抗锯齿与圆形描边
@@ -14,6 +14,10 @@
 
 ui:
   isHud: true
+  # 常驻打开：显隐由 packet 的 visible 变量门控控件（服务端 sendHudPacket
+  # 只发数据不发 openUi）——缺省不打开会导致控件不渲染、tick 不跑、
+  # 客户端 mod 永远收不到 setHudAnchor，小地图整体不显示。
+  defaultOpen: true
   background: false
   closeDied: true
   through: true
@@ -45,7 +49,7 @@ ui:
       if(packet['hudSession'] != none) {
         var.hudSession = packet['hudSession']
       }
-      // axsmap 是客户端 mod(Arcart-Suite-Map) 注册的 Aria 全局函数命名空间，
+      // axsmap 是客户端 mod(ArcartX-Suite-Map) 注册的 Aria 全局函数命名空间，
       // getMapRenderer() 返回 JavaObjectMirror 包装的 MapRenderer 实例（Java 互操作）。
       // 懒加载：首次拿到后缓存在 var.mapRenderer，后续包直接复用
       if(var.mapRenderer == none) {
@@ -262,7 +266,7 @@ controls:
               # normal支持任何贴图来装饰地图，使用贴图时请删除下方的effect.stroke的描边效果
               normal: ~map/alpha.png
               shape: ~circle
-              # mapRenderer != none 守卫：没装 Arcart-Suite-Map mod 的玩家（服务端照常发包）
+              # mapRenderer != none 守卫：没装 ArcartX-Suite-Map mod 的玩家（服务端照常发包）
               # 不会画出悬空边框
               visible: var.visible && var.hudShape == 'CIRCLE' && var.mapRenderer != none
               through: true

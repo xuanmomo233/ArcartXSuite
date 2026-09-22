@@ -113,9 +113,9 @@ ui:
       for(i in range(0, 5)){
         if(val.附件网格 != none) {
           slot = val.附件网格.get(i.round())
-        }
-        if(slot != none){
-          slot.seticon()
+          if(slot != none){
+            slot.seticon()
+          }
         }
       }
     # packetHandler: update
@@ -142,9 +142,9 @@ ui:
       for(i in range(0, 5)){
         if(val.附件网格 != none) {
           slot = val.附件网格.get(i.round())
-        }
-        if(slot != none){
-          slot.seticon()
+          if(slot != none){
+            slot.seticon()
+          }
         }
       }
 

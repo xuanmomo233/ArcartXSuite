@@ -67,22 +67,22 @@ ui:
           n = 序号.round()
           if(val.血条容器 != none) {
             卡片 = val.血条容器.get(n)
+            进度 = packet.get('slot' + n + '_progress')
+            卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
+            卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
+            卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
+            卡片['血条层a'].width = 480 * 进度
+            卡片['血条层a'].visible = 进度 > 0
+            卡片['血条层b'].width = 480 * 进度
+            卡片['血条层b'].visible = 进度 > 0.2
+            卡片['血条层c'].width = 480 * 进度
+            卡片['血条层c'].visible = 进度 > 0.4
+            卡片['血条层d'].width = 480 * 进度
+            卡片['血条层d'].visible = 进度 > 0.6
+            卡片['血条层e'].width = 480 * 进度
+            卡片['血条层e'].visible = 进度 > 0.8
+            卡片.visible = true
           }
-          进度 = packet.get('slot' + n + '_progress')
-          卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
-          卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
-          卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
-          卡片['血条层a'].width = 480 * 进度
-          卡片['血条层a'].visible = 进度 > 0
-          卡片['血条层b'].width = 480 * 进度
-          卡片['血条层b'].visible = 进度 > 0.2
-          卡片['血条层c'].width = 480 * 进度
-          卡片['血条层c'].visible = 进度 > 0.4
-          卡片['血条层d'].width = 480 * 进度
-          卡片['血条层d'].visible = 进度 > 0.6
-          卡片['血条层e'].width = 480 * 进度
-          卡片['血条层e'].visible = 进度 > 0.8
-          卡片.visible = true
         }
       }
     # packetHandler: update
@@ -112,22 +112,22 @@ ui:
           n = 序号.round()
           if(val.血条容器 != none) {
             卡片 = val.血条容器.get(n)
+            进度 = packet.get('slot' + n + '_progress')
+            卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
+            卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
+            卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
+            卡片['血条层a'].width = 480 * 进度
+            卡片['血条层a'].visible = 进度 > 0
+            卡片['血条层b'].width = 480 * 进度
+            卡片['血条层b'].visible = 进度 > 0.2
+            卡片['血条层c'].width = 480 * 进度
+            卡片['血条层c'].visible = 进度 > 0.4
+            卡片['血条层d'].width = 480 * 进度
+            卡片['血条层d'].visible = 进度 > 0.6
+            卡片['血条层e'].width = 480 * 进度
+            卡片['血条层e'].visible = 进度 > 0.8
+            卡片.visible = true
           }
-          进度 = packet.get('slot' + n + '_progress')
-          卡片['Boss标题文字'].texts = packet.get('slot' + n + '_title')
-          卡片['数值说明文字'].texts = '&8' + packet.get('slot' + n + '_distanceText') + '  R' + packet.get('slot' + n + '_viewerRankText') + '  ' + packet.get('slot' + n + '_viewerDamageText')
-          卡片['血条文字'].texts = '&f' + packet.get('slot' + n + '_healthText') + '/' + packet.get('slot' + n + '_maxHealthText')
-          卡片['血条层a'].width = 480 * 进度
-          卡片['血条层a'].visible = 进度 > 0
-          卡片['血条层b'].width = 480 * 进度
-          卡片['血条层b'].visible = 进度 > 0.2
-          卡片['血条层c'].width = 480 * 进度
-          卡片['血条层c'].visible = 进度 > 0.4
-          卡片['血条层d'].width = 480 * 进度
-          卡片['血条层d'].visible = 进度 > 0.6
-          卡片['血条层e'].width = 480 * 进度
-          卡片['血条层e'].visible = 进度 > 0.8
-          卡片.visible = true
         }
       }
     # packetHandler: close

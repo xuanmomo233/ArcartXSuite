@@ -84,11 +84,11 @@ ui:
       }
       for(i in range(0, var.maxListingCount - 1)){
         key = i.round()
-        if(val.物品列表 != none) {
+        if(val.物品列表 != none){
           e = val.物品列表.get(key)
-        }
-        if(e != none && e['物品图标'] != none){
-          e['物品图标'].seticon()
+          if(e != none && e['物品图标'] != none){
+            e['物品图标'].seticon()
+          }
         }
       }
       var.actionBusy = false

@@ -70,11 +70,11 @@ ui:
       }
       for(i in range(0, var.maxRecordCount - 1)){
         key = i.round()
-        if(val.记录列表 != none) {
+        if(val.记录列表 != none){
           e = val.记录列表.get(key)
-        }
-        if(e != none && e['物品图标'] != none){
-          e['物品图标'].seticon()
+          if(e != none && e['物品图标'] != none){
+            e['物品图标'].seticon()
+          }
         }
       }
   action:
