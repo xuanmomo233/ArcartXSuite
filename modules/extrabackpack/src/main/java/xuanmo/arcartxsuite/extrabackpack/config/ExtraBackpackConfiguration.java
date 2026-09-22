@@ -19,12 +19,14 @@ import org.bukkit.configuration.file.FileConfiguration;
  * 供 {@link xuanmo.arcartxsuite.extrabackpack.ExtraBackpackModule} 在启动时读取。
  *
  * @param debug       是否开启调试日志
+ * @param flushIntervalTicks 槽位数据异步落盘间隔（ticks，20=1 秒，最小 20）
  * @param ui          UI 相关配置（是否注册 UI、是否覆盖 UI 文件）
  * @param storage     存储相关配置（方言、连接信息、连接池大小等）
  * @param extraBackpack 扩展背包功能配置（是否启用、分类列表）
  */
 public record ExtraBackpackConfiguration(
     boolean debug,
+    long flushIntervalTicks,
     UiConfiguration ui,
     StorageConfiguration storage,
     ExtraBackpackConfig extraBackpack
@@ -39,6 +41,7 @@ public record ExtraBackpackConfiguration(
      */
     public static ExtraBackpackConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
+        long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
         ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
         UiConfiguration ui = new UiConfiguration(
             uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
@@ -47,7 +50,7 @@ public record ExtraBackpackConfiguration(
         StorageConfiguration storage = StorageConfiguration.load(configuration.getConfigurationSection("storage"));
         ExtraBackpackConfig extraBackpack =
             loadExtraBackpack(configuration.getConfigurationSection("extra-backpack"), logger);
-        return new ExtraBackpackConfiguration(debug, ui, storage, extraBackpack);
+        return new ExtraBackpackConfiguration(debug, flushIntervalTicks, ui, storage, extraBackpack);
     }
 
     private static ExtraBackpackConfig loadExtraBackpack(ConfigurationSection section, Logger logger) {

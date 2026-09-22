@@ -87,7 +87,8 @@ public record WarehouseModuleConfiguration(
             pickupSection == null || pickupSection.getBoolean("auto-store-on-pickup", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-mythic-loot", true),
             pickupSection == null || pickupSection.getBoolean("mythic-loot-enabled", true),
-            pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true)
+            pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true),
+            pickupSection == null || pickupSection.getBoolean("extra-backpack-fallback", true)
         );
 
         SearchConfiguration search = new SearchConfiguration(
@@ -591,8 +592,9 @@ public record WarehouseModuleConfiguration(
      * @param autoStoreMythicLoot 自动存入 MythicMobs 自定义掉落物（玩家个人设置默认值）
      * @param mythicLootEnabled  服务器开关：是否允许 MythicMobs 自定义掉落物自动入库
      * @param notifyOnAutoStore  自动存入时通知玩家（玩家个人设置默认值）
+     * @param extraBackpackFallback 仓库放不下时，剩余物品尝试存入 ExtraBackpack 扩展背包
      */
-    public record PickupConfiguration(boolean enabled, boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean mythicLootEnabled, boolean notifyOnAutoStore) {
+    public record PickupConfiguration(boolean enabled, boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean mythicLootEnabled, boolean notifyOnAutoStore, boolean extraBackpackFallback) {
     }
 
     /** 搜索与排序默认配置。 */

@@ -208,8 +208,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     /** 为已有的拍卖表添加 message 列（旧版本建表时无此列）。 */
     private void migrateListingMessage(Connection conn) throws SQLException {
+        // MySQL 的 TEXT 列不允许 DEFAULT；SQLite 的 ALTER ADD COLUMN NOT NULL 又必须带默认值——按方言分开
+        String columnDef = isMysql() ? "TEXT NOT NULL" : "TEXT NOT NULL DEFAULT ''";
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("ALTER TABLE " + tListings + " ADD COLUMN message TEXT NOT NULL DEFAULT ''");
+            stmt.executeUpdate("ALTER TABLE " + tListings + " ADD COLUMN message " + columnDef);
             logger.info("[Market] 拍卖表已迁移：添加 message 列");
         } catch (SQLException e) {
             // 列已存在则忽略

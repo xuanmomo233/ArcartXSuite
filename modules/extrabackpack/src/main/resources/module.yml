@@ -6,6 +6,7 @@ api-version: 1.0
 
 depends: []
 softdepends: [warehouse]
-external-depends:
+external-depends: [ArcartX]
 
 external-softdepends:
+

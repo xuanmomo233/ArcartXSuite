@@ -9,11 +9,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
@@ -22,9 +24,12 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.api.config.ModuleConfig;
 import xuanmo.arcartxsuite.api.ModuleUiSpec;
 import xuanmo.arcartxsuite.api.PacketHandlerSpec;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.extrabackpack.command.ExtraBackpackAdminCommand;
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration;
+import xuanmo.arcartxsuite.extrabackpack.placeholder.ExtraBackpackPlaceholderExpansion;
 import xuanmo.arcartxsuite.extrabackpack.service.ExtraBackpackService;
 import xuanmo.arcartxsuite.extrabackpack.storage.JdbcExtraBackpackRepository;
 
@@ -37,17 +42,13 @@ import xuanmo.arcartxsuite.extrabackpack.storage.JdbcExtraBackpackRepository;
  * {@link xuanmo.arcartxsuite.api.capability.DatabaseMigratable} 等能力，
  * 接入宿主的玩家数据清除与跨源数据库迁移命令。
  */
-public final class ExtraBackpackModule extends AbstractAXSModule {
+public final class ExtraBackpackModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private ExtraBackpackConfiguration configuration;
     private JdbcExtraBackpackRepository repository;
     private ExtraBackpackService service;
+    private ExtraBackpackAdminCommand adminCommand;
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * 返回 ExtraBackpack 模块的描述符（id: {@code extrabackpack}，版本 {@code 1.0.0}）。
-     */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("extrabackpack")
@@ -70,6 +71,9 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
                     ValidationRule.of("storage.pool-size", ValueType.INT)
                         .withRange(1, 100),
+                    // 异步落盘间隔必须为正
+                    ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
+                        .withRange(1, null),
                     ValidationRule.of("settings.debug", ValueType.BOOLEAN),
                     ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
                     ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
@@ -93,7 +97,7 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             }
             SecondaryPasswordAccess passwordAccess = null;
             if (data != null && !data.isEmpty() && (
-                "vanilla_destroy".equalsIgnoreCase(data.get(0))
+                "destroy_confirm".equalsIgnoreCase(data.get(0))
                     || "password_set".equalsIgnoreCase(data.get(0))
                     || "password_unlock".equalsIgnoreCase(data.get(0))
                     || "password_clear".equalsIgnoreCase(data.get(0))
@@ -153,16 +157,19 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             plugin,
             logger,
             packetBridge,
-            itemStackBridge,
             packetGuard,
+            propBridge,
             uiExporter,
             configuration,
             repository,
             currencyManager,
             messages(),
-            vanillaItemNameBridge
+            vanillaItemNameBridge,
+            scheduler
         );
+        service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start();
+        adminCommand = new ExtraBackpackAdminCommand(() -> service, messages());
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
         for (String uiId : service.registeredUiIds()) {
             recordExternalUi(uiId, uiId);
@@ -217,11 +224,41 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
         });
     }
 
+    @Override
+    protected @Nullable Object createPlaceholderExpansion() {
+        return new ExtraBackpackPlaceholderExpansion(plugin, () -> service);
+    }
+
+    @Override
+    protected List<String> publishedTopics() {
+        return List.of(
+            ExtraBackpackService.TOPIC_DEPOSITED,
+            ExtraBackpackService.TOPIC_WITHDRAWN,
+            ExtraBackpackService.TOPIC_UPGRADED,
+            ExtraBackpackService.TOPIC_DESTROYED
+        );
+    }
+
+    @Override public String commandId() { return "extrabackpack"; }
+
+    @Override public List<String> actions() {
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
+    }
+
+    @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        return adminCommand != null && adminCommand.onCommand(sender, label, args);
+    }
+
+    @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
+        return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
+    }
+
     /**
      * 停止模块服务，关闭 {@link ExtraBackpackService} 与 {@link JdbcExtraBackpackRepository}，释放资源。
      */
     @Override
     protected void stopService() {
+        adminCommand = null;
         if (service != null) {
             service.shutdown();
             service = null;
@@ -232,5 +269,4 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
         }
         storageManager.closeModuleDataSource("extrabackpack");
     }
-
-    }
+}

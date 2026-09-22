@@ -53,6 +53,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -135,6 +136,8 @@ public final class WarehouseService implements Listener {
     final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private Supplier<PickupInterceptor> pickupInterceptorSupplier = () -> null;
+    /** ExtraBackpack 兜底供应者：仓库放不下时把剩余物品存入扩展背包（可为 null）。 */
+    private Supplier<ExtraBackpackAccess> extraBackpackSupplier = () -> null;
     final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
@@ -258,6 +261,11 @@ public final class WarehouseService implements Listener {
     /** 设置拾取拦截器供应者（由 WarehouseModule 注入，可为 null）。 */
     public void setPickupInterceptorProvider(Supplier<PickupInterceptor> provider) {
         this.pickupInterceptorSupplier = provider == null ? () -> null : provider;
+    }
+
+    /** 设置 ExtraBackpack 兜底供应者（由 WarehouseModule 注入，可为 null；延迟解析 capability）。 */
+    public void setExtraBackpackProvider(Supplier<ExtraBackpackAccess> provider) {
+        this.extraBackpackSupplier = provider == null ? () -> null : provider;
     }
 
     public void start() throws Exception {
@@ -970,13 +978,23 @@ public final class WarehouseService implements Listener {
             if (!result.success()) {
                 return;
             }
-            stack.setAmount(result.remainingAmount());
-            if (result.remainingAmount() <= 0) {
+            int remaining = result.remainingAmount();
+            // 仓库溢出兜底：扩展背包模块可用时，把仓库放不下的部分转存扩展背包。
+            if (remaining > 0 && configuration.pickup().extraBackpackFallback()) {
+                ExtraBackpackAccess extraBackpack = extraBackpackSupplier.get();
+                if (extraBackpack != null && extraBackpack.isAvailable(player)) {
+                    ItemStack remainder = stack.clone();
+                    remainder.setAmount(remaining);
+                    remaining = extraBackpack.deposit(player, remainder).remainingAmount();
+                }
+            }
+            stack.setAmount(remaining);
+            if (remaining <= 0) {
                 event.setCancelled(true);
                 event.getItem().remove();
             } else {
                 // 部分存入：必须同步更新实际掉落物的数量，否则玩家会拾取原始数量进背包，
-                // 导致已存入仓库的部分被复制（仓库一份 + 背包一份）。
+                // 导致已存入仓库/扩展背包的部分被复制（仓库一份 + 背包一份）。
                 event.getItem().setItemStack(stack);
             }
             if (result.storedAmount() > 0) {

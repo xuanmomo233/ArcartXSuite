@@ -354,7 +354,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid VARCHAR(36) NOT NULL,
                         waypoint_id VARCHAR(128) NOT NULL,
                         name VARCHAR(128) NOT NULL,
-                        description TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL,
                         world VARCHAR(64) NOT NULL,
                         x DOUBLE NOT NULL,
                         y DOUBLE NOT NULL,
@@ -369,7 +369,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         uuid VARCHAR(36) NOT NULL,
                         pin_id VARCHAR(128) NOT NULL,
                         name VARCHAR(128) NOT NULL,
-                        description TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL,
                         world VARCHAR(64) NOT NULL,
                         x DOUBLE NOT NULL,
                         z DOUBLE NOT NULL,
@@ -385,7 +385,9 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
             try (java.sql.ResultSet cols = connection.getMetaData()
                     .getColumns(connection.getCatalog(), null, "AXS_map_waypoints", "description")) {
                 if (!cols.next()) {
-                    statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+                    // MySQL 的 TEXT 列不允许 DEFAULT；SQLite 的 ALTER ADD COLUMN NOT NULL 又必须带默认值——按方言分开
+                    String columnDef = isMysql() ? "TEXT NOT NULL" : "TEXT NOT NULL DEFAULT ''";
+                    statement.execute("ALTER TABLE AXS_map_waypoints ADD COLUMN description " + columnDef);
                 }
             }
         }

@@ -193,6 +193,8 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setPickupInterceptorProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.PickupInterceptor.class));
+        // 拾取溢出兜底：仓库放不下时把剩余物品转存 ExtraBackpack（模块缺席时安全降级）
+        service.setExtraBackpackProvider(this::getExtraBackpackAccess);
         service.start();
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
         for (String uiId : service.registeredUiIds()) {

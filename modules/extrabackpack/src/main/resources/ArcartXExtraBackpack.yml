@@ -1,11 +1,15 @@
 # ArcartXSuite ExtraBackpack - 额外背包模块配置
 # 多分类额外背包系统，支持装备/材料/杂物等分类页，每页独立容量与付费扩容。
-# 重载: /axs extrabackpack reload
+# 重载: /axs reload extrabackpack
+# 管理命令: /axs extrabackpack help|status|info|give|reset
 config-version: 2
 
 settings:
   # 是否输出调试日志
   debug: false
+  # 槽位数据异步落盘间隔（ticks，20 = 1 秒，最小 20）。
+  # 槽位改动先记内存态并标脏，周期任务批量写库；玩家退出/关闭背包/模块停用时同步落盘。
+  flush-interval-ticks: 100
 
 ui:
   # 插件启用时是否自动注册背包 UI
