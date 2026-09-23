@@ -46,6 +46,7 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.scheduler.ScheduledTask;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
@@ -124,8 +125,6 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
     private final ConcurrentMap<UUID, Set<String>> boundCategories = new ConcurrentHashMap<>();
     /** 推送槽位期间抑制 {@link PlayerExtraSlotUpdateEvent} 回写（事件同线程同步触发）。 */
     private final Set<UUID> slotSyncSuppressed = ConcurrentHashMap.newKeySet();
-    /** 当前打开着额外背包 UI 的玩家（match 打开不会被 PacketBridgeAPI.isUiOpen 记录）。 */
-    private final Set<UUID> viewingPlayers = ConcurrentHashMap.newKeySet();
     /** 本模块注入 {@code SlotFolder.setting} 的槽位 ID，停用时回收。 */
     private final Set<String> injectedSlotIds = ConcurrentHashMap.newKeySet();
     /** 分类匹配拒绝提示节流（避免拖动刷屏）。 */
@@ -335,6 +334,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
 
     public void start() throws Exception {
         if (!enabled()) {
+            logger.warning("扩展背包功能未启用（extra-backpack.enabled=false 或分类为空），跳过 UI 注册与事件监听。");
             return;
         }
         if (propBridge == null || !propBridge.isAvailable()) {
@@ -373,7 +373,6 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         activeCategory.clear();
         boundCategories.clear();
         slotSyncSuppressed.clear();
-        viewingPlayers.clear();
         denyMessageCooldown.clear();
         passwordPanelModes.clear();
         pendingDestroyCursor.clear();
@@ -400,15 +399,19 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         File uiFile = uiResourceExporter.export(UI_RESOURCE_PATH, UI_FILE_PATH, configuration.ui().overwriteUiFiles());
         if (packetBridge == null || !configuration.ui().registerUiOnEnable()) {
             runtimeUiId = PacketBridgeAPI.normalizeUiId("AXS:extrabackpack", uiFile);
-            return;
+        } else {
+            PacketBridgeAPI.UiRegistrationResult registration = packetBridge.registerOrReloadUi("AXS:extrabackpack", uiFile);
+            if (!registration.success()) {
+                throw new IllegalStateException("注册额外背包 UI 失败: " + registration.message());
+            }
+            registeredUiId = registration.registeredUiId() == null ? "" : registration.registeredUiId();
+            runtimeUiId = registration.runtimeUiId();
         }
-        PacketBridgeAPI.UiRegistrationResult registration = packetBridge.registerOrReloadUi("AXS:extrabackpack", uiFile);
-        if (!registration.success()) {
-            throw new IllegalStateException("注册额外背包 UI 失败: " + registration.message());
+        if (packetBridge != null && !runtimeUiId.isBlank()) {
+            // 即使不经桥接注册也尝试挂关闭回调：ArcartX 已自行注册该 UI 时，
+            // 桥接能取到适配器并补上 OPEN/CLOSE 跟踪，isUiOpen 对 match 打开同样生效。
+            packetBridge.registerUiCloseCallback(runtimeUiId, this::handleUiClosed);
         }
-        registeredUiId = registration.registeredUiId() == null ? "" : registration.registeredUiId();
-        runtimeUiId = registration.runtimeUiId();
-        packetBridge.registerUiCloseCallback(runtimeUiId, this::handleUiClosed);
     }
 
     // ---------------------------------------------------------------------
@@ -559,7 +562,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return;
         }
         Set<String> bound = boundCategories.get(player.getUniqueId());
-        if (bound == null || !bound.contains(categoryId) || !viewingPlayers.contains(player.getUniqueId())) {
+        if (bound == null || !bound.contains(categoryId) || !isViewing(player)) {
             return;
         }
         pushCategorySlots(player, categoryId);
@@ -753,7 +756,6 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             activeCategory.remove(uuid);
             boundCategories.remove(uuid);
             slotSyncSuppressed.remove(uuid);
-            viewingPlayers.remove(uuid);
             denyMessageCooldown.remove(uuid);
             passwordPanelModes.remove(uuid);
             pendingDestroyCursor.remove(uuid);
@@ -934,11 +936,9 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         if (!("AXS_BACKPACK".equalsIgnoreCase(packetId))) {
             return false;
         }
-        // 能收到该 UI 的包说明客户端界面处于打开状态（match 打开不会被 isUiOpen 记录，
-        // 故用自有 viewing 集合判定；客户端每次发包都刷新该标记，关闭回调/退出时清除）。
-        viewingPlayers.add(player.getUniqueId());
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (requiresOpenUi(action) && !viewingPlayers.contains(player.getUniqueId())) {
+        // isUiOpen 由桥接 OPEN/CLOSE 回调跟踪，match 打开同样记录；写操作要求 UI 处于打开状态。
+        if (requiresOpenUi(action) && !isViewing(player)) {
             sendMessage(player, false, message("extra-backpack.ui-required"));
             return true;
         }
@@ -1036,7 +1036,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         synchronized (playerLock(uuid)) {
             Set<String> bound = boundCategories.get(uuid);
             if (!enabled()
-                || !viewingPlayers.contains(uuid)
+                || !isViewing(player)
                 || bound == null
                 || !bound.contains(ref.categoryId())) {
                 event.setCancelled(true);
@@ -1125,7 +1125,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
                     "slot", Integer.toString(ref.index())
                 ));
             }
-            if (viewingPlayers.contains(uuid)) {
+            if (isViewing(player)) {
                 try {
                     refresh(player);
                 } catch (Exception exception) {
@@ -1352,6 +1352,12 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         syncCategorySlotsIfBound(player, category.id());
     }
 
+    /** 玩家当前是否打开着额外背包 UI（桥接 OPEN/CLOSE 回调跟踪，match 打开同样记录）。 */
+    private boolean isViewing(Player player) {
+        return packetBridge != null && !runtimeUiId.isBlank()
+            && packetBridge.isUiOpen(player, runtimeUiId);
+    }
+
     private boolean requiresOpenUi(String action) {
         return "buy_slots".equals(action)
             || "destroy_request".equals(action)
@@ -1378,7 +1384,6 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
 
     private void handleUiClosed(Player player) {
         actionTokens.remove(player.getUniqueId());
-        viewingPlayers.remove(player.getUniqueId());
         pendingDestroyCursor.remove(player.getUniqueId());
         passwordPanelModes.remove(player.getUniqueId());
         try {
@@ -1545,6 +1550,32 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         }
         packet.put("categories", categoryMap);
         packet.put("categoryCount", categoryMap.size());
+
+        // 顶栏货币余额：遍历全部已配置货币，拼成 "名称 余额" 串供 UI 顶栏直接展示
+        StringBuilder currencyText = new StringBuilder();
+        if (currencyBridge != null) {
+            for (CurrencyDefinition def : currencyBridge.definitions()) {
+                CurrencyBridgeAPI.CurrencyBridge bridge = currencyBridge.bridge(def.id());
+                if (bridge == null || !bridge.available()) {
+                    continue;
+                }
+                try {
+                    BigDecimal bal = bridge.balance(player);
+                    if (bal == null) {
+                        continue;
+                    }
+                    if (currencyText.length() > 0) {
+                        currencyText.append("   ");
+                    }
+                    String display = def.displayName();
+                    currencyText.append(display == null || display.isBlank() ? def.id() : display)
+                        .append(' ')
+                        .append(currencyBridge.format(def.id(), bal));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        packet.put("currencyText", currencyText.toString());
 
         ItemStack[] page = category == null ? new ItemStack[0] : pages.getOrDefault(category.id(), new ItemStack[0]);
         int used = (int) usedSlots(page);

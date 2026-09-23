@@ -17,8 +17,8 @@ import java.util.logging.Logger
  * 接收 JSON-RPC 请求文本帧，委托给 [DebugRpcDispatcher] 分发处理后回写响应。
  *
  * 协议示例：
- * - 请求: `{"id":"req_001","method":"ui.reload","params":{"uiId":"market_shop"}}`
- * - 响应: `{"id":"req_001","result":{"success":true,"message":"UI reloaded"}}`
+ * - 请求: `{"id":"req_001","method":"ui.is_open","params":{"player":"Steve","uiId":"AXS:market_shop"}}`
+ * - 响应: `{"id":"req_001","result":{"open":true}}`
  * - 错误: `{"id":"req_001","error":{"code":-32601,"message":"Method not found"}}`
  */
 class DebugWebSocketServer(

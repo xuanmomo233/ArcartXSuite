@@ -97,9 +97,6 @@ class DebugModule : AbstractAXSModule() {
     /** PacketBridgeAPI（可能为 null） */
     internal fun packetBridge() = packetBridge
 
-    /** AriaBridge（永不为 null，但 available() 可能为 false） */
-    internal fun ariaBridge() = ariaBridge
-
     /** 模块日志器 */
     internal fun logger() = logger
 

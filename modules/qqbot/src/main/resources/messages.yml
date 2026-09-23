@@ -18,7 +18,6 @@ common:
 help:
   title: "&6QQBot 管理"
   status: "&7{0} status&f - 查看运行状态"
-  reload: "&7{0} reload&f - 重载配置"
   send: "&7{0} send <all|群号> <消息>&f - 向指定群或所有群发消息"
   lookup: "&7{0} lookup <玩家|QQ>&f - 查询绑定"
   snowluma: "&7{0} snowluma ...&f - SnowLuma 进程管理"
@@ -34,6 +33,8 @@ status:
   storage: "&7  存储模式: &f{0}"
   binding: "&7  绑定功能: {0}"
   whitelist: "&7  白名单: {0}"
+  snowluma: "&7  SnowLuma: &f{0} &7（管理: /axs qqbot snowluma）"
+  snowluma-not-installed: "&c未安装"
   enabled: "&a启用"
   disabled: "&c禁用"
 
@@ -55,13 +56,13 @@ admin:
     title: "&bSnowLuma 管理:"
     start: "&e  /axs qqbot snowluma start&7 - 启动 SnowLuma"
     stop: "&e  /axs qqbot snowluma stop&7 - 停止 SnowLuma"
-    status: "&e  /axs qqbot snowluma status&7 - 查看状态"
-    install: "&e  /axs qqbot snowluma install&7 - 下载安装/部署"
+    status: "&e  /axs qqbot snowluma status&7 - 查看状态（含 WebUI 信息）"
+    install: "&e  /axs qqbot snowluma install&7 - 下载安装/部署（自带 Node 运行时，含进度显示）"
     logs: "&e  /axs qqbot snowluma logs&7 - 查看最近日志（Docker 模式）"
+    password: "&e  /axs qqbot snowluma password&7 - 查看 WebUI 登录密码"
     check-update: "&e  /axs qqbot snowluma check-update&7 - 检查是否有新版本"
-    install-start: "&e正在后台执行，请稍候..."
+    install-start: "&e开始安装 SnowLuma（从 GitHub 下载），进度将实时推送..."
     unknown: "&c未知子命令: {0}"
-    node-missing: "&c启动失败: 未检测到 Node.js 环境。SnowLuma 需要 Node.js 18+ 才能运行。\n&7• Windows: &fhttps://nodejs.org 下载安装\n&7• Linux: &fapt-get install -y nodejs / yum install -y nodejs\n&7• macOS: &fbrew install node\n&7安装完成后请执行 &f/axs qqbot reload&7 重载模块。"
 
 # ── player ────────────────────────────────────────────
 player:

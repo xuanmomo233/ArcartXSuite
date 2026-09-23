@@ -32,17 +32,10 @@ class DebugRpcDispatcher(
      * @throws IllegalArgumentException 参数错误
      */
     fun dispatch(method: String, params: JsonObject): Any = when (method) {
-        // ── UI 操控 ──
+        // ── UI 只读查询 ──
         "ui.list" -> uiList()
         "ui.read" -> uiRead(params)
-        "ui.reload" -> uiReload(params)
-        "ui.open" -> uiOpen(params)
-        "ui.close" -> uiClose(params)
         "ui.is_open" -> uiIsOpen(params)
-        "ui.send_packet" -> uiSendPacket(params)
-        // ── ARIA 脚本 ──
-        "aria.eval" -> ariaEval(params)
-        "aria.available" -> ariaAvailable()
         // ── 模块管理 ──
         "module.list" -> moduleList()
         "module.reload" -> moduleReload(params)
@@ -63,7 +56,7 @@ class DebugRpcDispatcher(
     }
 
     // ════════════════════════════════════════════════════════════
-    //  UI 操控
+    //  UI 只读查询
     // ════════════════════════════════════════════════════════════
 
     /** 列出 ui/ 目录所有 .yml 文件 */
@@ -90,52 +83,6 @@ class DebugRpcDispatcher(
         return ok("uiId" to base, "content" to content)
     }
 
-    /** 热重载指定 UI (params: uiId) → packetBridge.registerOrReloadUi */
-    private fun uiReload(params: JsonObject): Any {
-        val uiId = requireParam(params, "uiId")
-        val base = stripNamespace(uiId)
-        val bridge = module.packetBridge()
-            ?: throw IllegalStateException("PacketBridge 不可用")
-        val file = File(module.pluginDataFolder(), "ui/$base.yml")
-        if (!file.isFile) {
-            throw IllegalArgumentException("UI 文件不存在: ui/$base.yml")
-        }
-        return syncOnMain {
-            val result = bridge.registerOrReloadUi(uiId, file)
-            ok(
-                "success" to result.success(),
-                "runtimeUiId" to result.runtimeUiId(),
-                "registeredUiId" to result.registeredUiId(),
-                "action" to result.action(),
-                "message" to result.message(),
-            )
-        }
-    }
-
-    /** 打开 UI (params: player, uiId) → packetBridge.openUi */
-    private fun uiOpen(params: JsonObject): Any {
-        val player = requirePlayer(params)
-        val uiId = requireParam(params, "uiId")
-        val bridge = module.packetBridge()
-            ?: throw IllegalStateException("PacketBridge 不可用")
-        return syncOnMain {
-            val success = bridge.openUi(player, uiId)
-            ok("success" to success, "message" to if (success) "UI opened" else "Failed to open UI")
-        }
-    }
-
-    /** 关闭 UI (params: player, uiId) */
-    private fun uiClose(params: JsonObject): Any {
-        val player = requirePlayer(params)
-        val uiId = requireParam(params, "uiId")
-        val bridge = module.packetBridge()
-            ?: throw IllegalStateException("PacketBridge 不可用")
-        return syncOnMain {
-            val success = bridge.closeUi(player, uiId)
-            ok("success" to success, "message" to if (success) "UI closed" else "Failed to close UI")
-        }
-    }
-
     /** 查询 UI 是否打开 (params: player, uiId) */
     private fun uiIsOpen(params: JsonObject): Any {
         val player = requirePlayer(params)
@@ -144,51 +91,6 @@ class DebugRpcDispatcher(
             ?: throw IllegalStateException("PacketBridge 不可用")
         return syncOnMain {
             ok("open" to bridge.isUiOpen(player, uiId))
-        }
-    }
-
-    /** 向 UI 发包 (params: player, uiId, handler, payload) */
-    private fun uiSendPacket(params: JsonObject): Any {
-        val player = requirePlayer(params)
-        val uiId = requireParam(params, "uiId")
-        val handler = requireParam(params, "handler")
-        val payload = if (params.has("payload")) params.get("payload") else null
-        val bridge = module.packetBridge()
-            ?: throw IllegalStateException("PacketBridge 不可用")
-        return syncOnMain {
-            val payloadObj: Any? = payload
-            val success = bridge.sendPacket(player, uiId, handler, payloadObj)
-            ok("success" to success, "message" to if (success) "Packet sent" else "Failed to send packet")
-        }
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  ARIA 脚本
-    // ════════════════════════════════════════════════════════════
-
-    /** 检查 ARIA 是否可用 */
-    private fun ariaAvailable(): Any {
-        val bridge = module.ariaBridge()
-        return ok("available" to bridge.available(), "version" to bridge.version())
-    }
-
-    /** 执行 ARIA 脚本 (params: code, bindings?) → ariaBridge.eval */
-    private fun ariaEval(params: JsonObject): Any {
-        val code = requireParam(params, "code")
-        val bridge = module.ariaBridge()
-        if (!bridge.available()) {
-            throw IllegalStateException("ARIA 脚本运行时不可用")
-        }
-        val bindings = mutableMapOf<String, Any>()
-        if (params.has("bindings") && params.get("bindings").isJsonObject) {
-            val bj = params.getAsJsonObject("bindings")
-            for (e in bj.entrySet()) {
-                bindings[e.key] = e.value
-            }
-        }
-        return syncOnMain {
-            val result = bridge.eval(code, bindings)
-            ok("result" to result)
         }
     }
 

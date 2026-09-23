@@ -54,6 +54,8 @@ public final class QQBotService implements Listener {
     // 连续重连失败计数（连接成功后清零）。用于抑制刷屏：首次告警后，
     // 每达到 RECONNECT_FAIL_LOG_INTERVAL 次才打印一次摘要。
     private volatile int reconnectFailCount;
+    /** 断开告警末尾追加的提示（如 SnowLuma 未安装/未运行的指引），由模块注入 */
+    private volatile java.util.function.Supplier<String> disconnectHint;
     /** 首次告警后，每隔多少次重连失败才打印一次摘要（避免每 10 秒刷一条） */
     private static final int RECONNECT_FAIL_LOG_INTERVAL = 6;
     private GroupMessageListener groupMessageListener;
@@ -90,6 +92,13 @@ public final class QQBotService implements Listener {
         this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger, placeholderResolver, mailProvider);
     }
 
+    /**
+     * 设置断开告警附加提示提供者（返回 null 表示无附加提示）。
+     */
+    public void setDisconnectHint(java.util.function.Supplier<String> disconnectHint) {
+        this.disconnectHint = disconnectHint;
+    }
+
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 定时清理过期验证码
@@ -118,12 +127,13 @@ public final class QQBotService implements Listener {
 
     public void onBotDisconnected(String reason) {
         connected = false;
+        String hint = disconnectHint != null ? disconnectHint.get() : null;
         if (!disconnectWarned) {
             String wsUrl = config.onebot().wsUrl();
             int interval = config.onebot().reconnectIntervalSeconds();
             logger.warning(ChatColor.RED + "OneBot 连接断开 — " + reason
-                + "。请检查 OneBot 实现端(NapCat/Lagrange等)是否已启动、wsUrl(" + wsUrl
-                + ")配置是否正确。将在 " + interval + " 秒后自动重连。");
+                + "。请检查 OneBot 实现端（SnowLuma/NapCat/Lagrange 等）是否已启动、wsUrl(" + wsUrl
+                + ")配置是否正确。将在 " + interval + " 秒后自动重连。" + (hint != null ? hint : ""));
             disconnectWarned = true;
             reconnectFailCount = 1;
             return;
@@ -136,7 +146,8 @@ public final class QQBotService implements Listener {
             long elapsed = (long) reconnectFailCount * interval;
             logger.warning(ChatColor.RED + "OneBot 仍未连接 — 已连续重连失败 "
                 + reconnectFailCount + " 次（约 " + elapsed + " 秒），原因: " + reason
-                + "。启动 OneBot 实现端后可执行 /axs qqbot reload 立即重试。");
+                + "。实现端就绪后会自动重连，也可执行 /axs reload qqbot 立即重试。"
+                + (hint != null ? hint : ""));
         }
     }
 

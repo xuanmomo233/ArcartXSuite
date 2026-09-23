@@ -87,17 +87,23 @@ public record QQBotConfiguration(
         String snowlumaMode = "native";
         String snowlumaDir = "snowluma";
         boolean snowlumaAutoStart = false;
+        String snowlumaWebUiPassword = "";
+        boolean snowlumaAcceptAgreements = false;
         String dockerContainerName = "snowluma";
         String dockerImage = "motricseven7/snowluma:latest";
         int dockerWebUiPort = 5099;
         int dockerWsPort = 3001;
         int dockerHttpPort = 3000;
+        int dockerNovncPort = 6081;
+        String dockerVncPassword = "";
         boolean dockerAutoInstall = false;
 
         if (snowlumaSection != null) {
             snowlumaMode = snowlumaSection.getString("mode", "native");
             snowlumaDir = snowlumaSection.getString("dir", "snowluma");
             snowlumaAutoStart = snowlumaSection.getBoolean("auto-start", false);
+            snowlumaWebUiPassword = snowlumaSection.getString("webui-password", "");
+            snowlumaAcceptAgreements = snowlumaSection.getBoolean("accept-agreements", false);
             var dockerSection = snowlumaSection.getConfigurationSection("docker");
             if (dockerSection != null) {
                 dockerContainerName = dockerSection.getString("container-name", "snowluma");
@@ -105,15 +111,18 @@ public record QQBotConfiguration(
                 dockerWebUiPort = dockerSection.getInt("webui-port", 5099);
                 dockerWsPort = dockerSection.getInt("ws-port", 3001);
                 dockerHttpPort = dockerSection.getInt("http-port", 3000);
+                dockerNovncPort = dockerSection.getInt("novnc-port", 6081);
+                dockerVncPassword = dockerSection.getString("vnc-password", "");
                 dockerAutoInstall = dockerSection.getBoolean("auto-install", false);
             }
         }
 
         QQBotSnowLumaConfig snowlumaConfig = new QQBotSnowLumaConfig(
             snowlumaMode, snowlumaDir, snowlumaAutoStart,
+            snowlumaWebUiPassword, snowlumaAcceptAgreements,
             dockerContainerName, dockerImage,
-            dockerWebUiPort, dockerWsPort, dockerHttpPort,
-            dockerAutoInstall
+            dockerWebUiPort, dockerWsPort, dockerHttpPort, dockerNovncPort,
+            dockerVncPassword, dockerAutoInstall
         );
 
         QQBotOneBotConfig onebot = new QQBotOneBotConfig(

@@ -45,6 +45,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
     private final ConcurrentMap<String, CopyOnWriteArrayList<Consumer<Player>>> closeCallbacks = new ConcurrentHashMap<>();
     private final ConcurrentMap<java.util.UUID, Set<String>> openUiIds = new ConcurrentHashMap<>();
     private final Set<String> closeCallbackRegisteredUiIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> openCallbackRegisteredUiIds = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String, List<UICallBack>> callbackKeepAlive = new ConcurrentHashMap<>();
     private int successfulUiRegistrationCount;
     private Listener lifecycleListener;
@@ -65,6 +66,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         closeCallbacks.clear();
         openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
+        openCallbackRegisteredUiIds.clear();
         callbackKeepAlive.clear();
         successfulUiRegistrationCount = 0;
 
@@ -106,6 +108,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         closeCallbacks.clear();
         openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
+        openCallbackRegisteredUiIds.clear();
         callbackKeepAlive.clear();
         if (lifecycleListener != null) {
             xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(lifecycleListener, "ArcartXPacketBridge");
@@ -177,6 +180,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             closeCallbacks.remove(uiId);
             openUiIds.values().forEach(openIds -> openIds.remove(uiId));
             closeCallbackRegisteredUiIds.remove(uiId);
+            openCallbackRegisteredUiIds.remove(uiId);
             callbackKeepAlive.remove(uiId);
             return true;
         } catch (RuntimeException exception) {
@@ -352,6 +356,47 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         return false;
     }
 
+    /**
+     * 确保 UI 已挂 OPEN 回调：客户端打开 UI（含 match 替换原版界面这类不经服务端
+     * {@code openUi} 的打开路径）时同步 {@link #markUiOpen}，并补挂 CLOSE 回调，
+     * 使 {@link #isUiOpen} 对客户端主动打开/关闭同样准确。
+     */
+    private boolean ensureOpenCallback(String uiId, ArcartXUI adapter) {
+        if (!available || uiId == null || uiId.isBlank() || adapter == null) {
+            return false;
+        }
+        if (!openCallbackRegisteredUiIds.add(uiId)) {
+            return true;
+        }
+        UICallBack proxy = (callData) -> {
+            if (callData == null) return;
+            try {
+                Player player = callData.player();
+                if (player == null) return;
+                markUiOpen(player, uiId);
+                ensureCloseCallback(uiId);
+            } catch (RuntimeException exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                    "ArcartX UI 打开回调处理失败(" + uiId + "): " + exception.getMessage()
+                );
+            }
+        };
+        try {
+            adapter.registerCallBack(CallBackType.OPEN, proxy);
+            callbackKeepAlive.computeIfAbsent(
+                uiId,
+                ignored -> Collections.synchronizedList(new java.util.ArrayList<>())
+            ).add(proxy);
+            return true;
+        } catch (RuntimeException exception) {
+            openCallbackRegisteredUiIds.remove(uiId);
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "注册 ArcartX UI OPEN 回调失败(" + uiId + "): " + exception.getMessage()
+            );
+            return false;
+        }
+    }
+
     private boolean ensureCloseCallback(String uiId) {
         if (!available || uiId == null || uiId.isBlank()) {
             return false;
@@ -466,11 +511,13 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         ArcartXUI previousAdapter = uiAdapters.get(uiId);
         try {
             uiRegistry.reload(uiId, uiFile);
-            ArcartXUI currentAdapter = refreshUiAdapter(uiId);
+            ArcartXUI currentAdapter = uiRegistry.get(uiId);
             if (currentAdapter != previousAdapter) {
                 closeCallbackRegisteredUiIds.remove(uiId);
+                openCallbackRegisteredUiIds.remove(uiId);
                 callbackKeepAlive.remove(uiId);
             }
+            refreshUiAdapter(uiId);
             return RegistryCallResult.success("reload", "reload 成功");
         } catch (RuntimeException exception) {
             return RegistryCallResult.failure("reload", exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage(), true);
@@ -485,6 +532,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         try {
             uiRegistry.register(uiId, uiFile);
             closeCallbackRegisteredUiIds.remove(uiId);
+            openCallbackRegisteredUiIds.remove(uiId);
             callbackKeepAlive.remove(uiId);
             refreshUiAdapter(uiId);
             return RegistryCallResult.success("register", "register 成功");
@@ -512,6 +560,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
                 uiAdapters.remove(uiId);
             } else {
                 uiAdapters.put(uiId, adapter);
+                ensureOpenCallback(uiId, adapter);
             }
             return adapter;
         } catch (RuntimeException exception) {

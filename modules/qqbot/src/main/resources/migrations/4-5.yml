@@ -1,0 +1,22 @@
+# QQBot 配置迁移文件（版本 4 → 5）
+# SnowLuma 节新增字段：
+# - onebot.snowluma.webui-password      WebUI 初始密码（可选）
+# - onebot.snowluma.accept-agreements   自动同意 EULA/隐私协议
+# - onebot.snowluma.docker.novnc-port   noVNC 端口映射
+# - onebot.snowluma.docker.vnc-password VNC 访问密码（可选）
+from-version: 4
+to-version: 5
+description: "新增 snowluma.webui-password / accept-agreements / docker.novnc-port / docker.vnc-password"
+operations:
+  - type: set-if-missing
+    path: onebot.snowluma.webui-password
+    value: ""
+  - type: set-if-missing
+    path: onebot.snowluma.accept-agreements
+    value: false
+  - type: set-if-missing
+    path: onebot.snowluma.docker.novnc-port
+    value: 6081
+  - type: set-if-missing
+    path: onebot.snowluma.docker.vnc-password
+    value: ""

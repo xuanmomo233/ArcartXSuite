@@ -46,8 +46,8 @@ storage:
 
 # ─── 额外背包配置 ───
 extra-backpack:
-  # 是否启用额外背包功能
-  enabled: false
+  # 是否启用额外背包功能（false 时模块不注册 UI、不响应任何操作）
+  enabled: true
   # 分类页定义，键名即分类 ID
   categories:
     # 装备分类

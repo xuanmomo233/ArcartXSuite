@@ -49,7 +49,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private xuanmo.arcartxsuite.qqbot.service.QQBotScheduledMessageService scheduledMessageService;
     private QQBotWeeklyRankService weeklyRankService;
     private QQBotAdminCommand adminCommand;
-    private SnowLumaProcessManager snowLumaManager;
+    // 会被异步线程读取（断开提示回调 / 异步启动块），需保证可见性
+    private volatile SnowLumaProcessManager snowLumaManager;
     private QQBotLoginGateListener loginGateListener;
     // 红包过期退款定时任务引用：stopService 时需取消，避免 reload 后定时器仍触发已置 null 的 signInService
     private BukkitTask redPacketRefundTask;
@@ -62,7 +63,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("qqbot")
             .name("QQBot")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .softDepends(List.of("chat"))
             .build();
@@ -80,7 +81,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                     .dynamicSection("scheduled-messages")
                     .dynamicSection("auto-reply.rules")
                 .build())
-            .currentVersion(4)
+            .currentVersion(5)
             .validations(List.of(
                     ValidationRule.required("onebot.ws-url", ValueType.STRING),
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -207,33 +208,42 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             snowLumaWsPort
         );
         // 8. SnowLuma 启动 + 等待 WS 端口 + 连接 OneBot —— 放到异步线程执行。
-        // 这些步骤会阻塞数秒（node/docker 进程启动、端口探测最多 8s），若在主线程
-        // （onEnable）里串行执行会触发 Paper 看门狗「server has not responded for 10 seconds」。
+        // 这些步骤会阻塞数秒（node/docker 进程启动、端口探测最多 8s、docker 自动部署数分钟），
+        // 若在主线程（onEnable）里串行执行会触发 Paper 看门狗「server has not responded for 10 seconds」。
         final xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager slm = snowLumaManager;
         final OneBotClient obc = oneBotClient;
         final String wsUrl = configuration.onebot().wsUrl();
-        final boolean autoStartSnowLuma = configuration.onebot().snowluma().autoStart();
+        final boolean localWs = isLocalWsUrl(wsUrl);
+        // OneBot 断开告警末尾追加 SnowLuma 状态提示（未安装/未运行时指引到具体命令）
+        service.setDisconnectHint(() -> {
+            var m = snowLumaManager;
+            return m == null ? null : m.notReadyHint(localWs);
+        });
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             if (closed) return;                       // 已关闭：不再拉起进程
             slm.init();
-            boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
-            if (running) {
-                waitForPort(wsUrl, 8000);
-            }
             if (closed) {                             // 启动期间模块被关闭：立即回收，避免孤儿进程
                 slm.shutdown();
                 obc.shutdown();
                 return;
             }
+            boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
             if (running) {
+                waitForPort(wsUrl, 8000);
+                if (closed) {                         // 等端口期间被关闭：同样回收
+                    slm.shutdown();
+                    obc.shutdown();
+                    return;
+                }
                 obc.start();
-            } else if (autoStartSnowLuma) {
-                logger.warning("SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
-                    "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
-            } else {
-                // 用户手动管理 SnowLuma，直接尝试连接
-                obc.start();
+                return;
             }
+            // SnowLuma 未运行：本机 ws 且端口无服务监听 → 打印部署引导（告知 install/start/密码查询）；
+            // 端口已有服务（NapCat 等其他实现端在跑）或 ws 指向远程 → 交给客户端自动重连即可。
+            if (localWs && !probePort(wsUrl, 800)) {
+                logOneBotSetupGuide(slm);
+            }
+            obc.start(); // 始终启动客户端：实现端稍后就绪时可自动重连，无需手动 reload
         });
 
         // 9. 注册管理命令
@@ -539,6 +549,72 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
+    }
+
+    /** ws-url 是否指向本机回环地址（仅本机部署时才做 SnowLuma 安装引导） */
+    private boolean isLocalWsUrl(String wsUrl) {
+        try {
+            String host = java.net.URI.create(wsUrl).getHost();
+            if (host == null) return true;
+            host = host.toLowerCase(java.util.Locale.ROOT);
+            return host.equals("localhost") || host.equals("::1") || host.equals("0.0.0.0")
+                || host.startsWith("127.");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 单次 TCP 探测 ws-url 端口是否有服务监听（区别于 waitForPort 的循环等待） */
+    private boolean probePort(String wsUrl, int timeoutMs) {
+        try {
+            java.net.URI uri = java.net.URI.create(wsUrl);
+            String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
+            int port = uri.getPort() > 0 ? uri.getPort() : 80;
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new java.net.InetSocketAddress(host, port), timeoutMs);
+                return true;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 打印 OneBot 实现端部署引导（仅当本机 ws 端口无服务时调用）。
+     * 区分「未安装」与「已安装未运行」两种情形，并附 WebUI/密码查询方式。
+     */
+    private void logOneBotSetupGuide(SnowLumaProcessManager slm) {
+        if (configuration == null) return; // 异步期间模块可能已被卸载
+        String wsUrl = configuration.onebot().wsUrl();
+        boolean docker = configuration.onebot().snowluma().isDocker();
+        StringBuilder sb = new StringBuilder();
+        sb.append("====================== [QQBot] 部署引导 ======================\n");
+        sb.append(" 未检测到 OneBot 实现端（").append(wsUrl).append(" 无服务监听），QQ 机器人暂不可用。\n");
+        if (slm.isInstalled()) {
+            sb.append(" 检测到内置 SnowLuma 已安装但未运行：\n");
+            sb.append("   · /axs qqbot snowluma start     启动 SnowLuma\n");
+            sb.append("   · /axs qqbot snowluma status    查看状态与故障原因\n");
+            sb.append("   · 或将 onebot.snowluma.auto-start 设为 true 让模块自动拉起\n");
+        } else {
+            sb.append(" 使用内置 SnowLuma（推荐，模块可自动管理进程）：\n");
+            if (docker) {
+                sb.append("   · /axs qqbot snowluma install   自动拉取镜像并创建容器\n");
+            } else {
+                sb.append("   · /axs qqbot snowluma install   从 GitHub 下载安装完整版（自带 Node 运行时）\n");
+            }
+            sb.append("   · /axs qqbot snowluma start     启动 SnowLuma\n");
+        }
+        sb.append("   · WebUI 管理面板 ").append(slm.webUiUrl())
+            .append("（账号 admin，临时密码执行 /axs qqbot snowluma password 查看）\n");
+        if (docker) {
+            sb.append("   · Docker 模式下登录 QQ 需打开 noVNC: http://<服务器IP>:")
+                .append(configuration.onebot().snowluma().dockerNovncPort()).append("\n");
+        }
+        sb.append("   · 在 WebUI 中登录 QQ 账号后，模块会自动建立连接\n");
+        sb.append(" 使用其他实现端（NapCat/Lagrange 等）：启动实现端并监听 ")
+            .append(wsUrl).append("，模块会自动重连。\n");
+        sb.append("=============================================================");
+        for (String line : sb.toString().split("\n")) logger.warning(line);
     }
 
     /**

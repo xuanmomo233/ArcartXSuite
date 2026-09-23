@@ -1,9 +1,9 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 4
+config-version: 5
 # AXS QQBot QQ群服互联
 # 作用: 通过 OneBot 11 协议连接 QQ 机器人，实现 QQ 群与服务器消息双向同步、
 #       群指令查询玩家数据、QQ-游戏账号绑定、白名单管理。
-# 重载: /axs qqbot reload
+# 重载: /axs reload qqbot
 # 玩家入口: /qqbot bind <验证码> 绑定账号。
 # PAPI: %axsqqbot_bound_qq%、%axsqqbot_bound_name% 等。
 
@@ -24,6 +24,9 @@ onebot:
   # 心跳间隔（秒）
   heartbeat-interval-seconds: 30
   # SnowLuma 进程/容器管理（推荐的 OneBot 实现端）
+  # 快速上手: /axs qqbot snowluma install 下载安装 → /axs qqbot snowluma start 启动
+  #           → 浏览器打开 WebUI（默认 http://127.0.0.1:5099，账号 admin，
+  #             临时密码见控制台或 /axs qqbot snowluma password）登录 QQ 即可
   snowluma:
     # 运行模式: native（本地子进程）/ docker（Docker 容器，推荐 Linux VPS）
     mode: "native"
@@ -31,6 +34,12 @@ onebot:
     dir: "snowluma"
     # 模块启动时自动启动 SnowLuma（前提：已通过 install 安装）
     auto-start: false
+    # WebUI 初始密码（可选，仅 SnowLuma 首次初始化时生效）
+    # 留空: 首次启动自动生成随机临时密码，见控制台输出或 /axs qqbot snowluma password
+    # 设置: 首次启动即以该值为 admin 密码，且不会强制改密；已初始化过则此配置不生效
+    webui-password: ""
+    # 自动同意 SnowLuma 的 EULA 与隐私协议（设为 true 后首次打开 WebUI 不再显示协议确认页）
+    accept-agreements: false
     # Docker 模式专用配置
     docker:
       # 容器名称
@@ -41,6 +50,10 @@ onebot:
       webui-port: 5099
       ws-port: 3001
       http-port: 3000
+      # noVNC 网页远程桌面端口（Docker 模式下登录 QQ 需在浏览器操作内嵌 QQ 客户端）
+      novnc-port: 6081
+      # VNC/noVNC 访问密码（可选，留空使用镜像默认；6081 端口暴露公网时强烈建议设置）
+      vnc-password: ""
       # 是否自动拉取并运行容器（模块启动时若容器不存在则自动 install）
       auto-install: false
 

@@ -1,5 +1,6 @@
 # AXS Extra Backpack
-# 额外槽位背包界面：左侧装备栏 + 右侧原版背包/扩容背包/快捷栏。
+# 科幻风三栏背包界面：左侧装备面板 + 中央角色展示（相机偏转第三人称）
+# + 右侧背包面板（搜索/原版网格/扩容网格/快捷栏）。
 # 交互方式：纯拖动 —— 原版区为原生槽位（Backpack/Container），扩容区为 ArcartX
 # 真实扩展槽位（~Extra，id=axs_eb_<分类>_<序号>），放取/半组/单放/交换全部由
 # ArcartX 原生处理；服务端负责按分类匹配规则校验放入合法性。
@@ -10,11 +11,40 @@ ui:
   match:
     - 物品栏界面
   hide:
+    # 原版 HUD（背包打开期间全部遮蔽）
+    - hotbar
+    - crosshair
+    - player_state
+    - experience_bar
+    - item_name
+    - jump_bar
+    - mount_health
+    - potion_icons
+    - scoreboard
+    - chat_panel
+    - player_list
+    - subtitles
+    # 自定义 HUD/UI（不存在的 id 会被忽略，覆盖本服已部署项）
     - HUD
     - online
     - 聊天栏
+    - 聊天栏-全局
+    - 聊天栏-过滤
+    - 聊天输入框
+    - 聊天输入框-按钮版
     - 纯色块HUD
     - 纯色块HUD二改
+    - 纯色块计分板
+    - 纯色块TAB配置
+    - 鸽蛋TAB配置
+    - 状态栏hud
+    - 菜单状态栏HUD
+    - 简约状态栏hud
+    - 定制HUD
+    - 定制的hud
+    - 击杀命中特效
+    - Wardrobe:main
+    - Appearance:main
   through: false
   background: false
   escClose: true
@@ -36,6 +66,7 @@ ui:
     #   - used: 已使用槽位数
     #   - capacityText: 容量显示文本 (如 "9/27")
     #   - maxCapacity: 最大容量
+    #   - currencyText: 顶栏货币余额文本 (如 "点券 12,345   金币 678")
     #   - canBuySlots: 是否可以购买更多槽位
     #   - remainingSlots: 剩余可购买槽位数
     #   - buySlotsText: 购买槽位提示文本
@@ -51,6 +82,7 @@ ui:
       var.used = packet['used']
       var.capacityText = packet['capacityText']
       var.maxCapacity = packet['maxCapacity']
+      var.currencyText = packet['currencyText']
       var.canBuySlots = packet['canBuySlots']
       var.remainingSlots = packet['remainingSlots']
       var.buySlotsText = packet['buySlotsText']
@@ -75,6 +107,8 @@ ui:
       }
       // 扩容槽位重建统一推迟到 tick（update/滚轮翻页/resize 共用同一入口）
       var.待重建 = true
+      // 重建后需重新套用搜索过滤
+      var.待过滤 = true
       // update 包到达，重置防抖标志
       var.actionBusy = false
   action:
@@ -88,12 +122,48 @@ ui:
       }else{
         var.actionBusySeconds = 0
       }
-    # 扩容槽位分页重建统一入口：update 包、滚轮翻页、resize 都置 var.待重建 后在此执行
     tick: |-
+      // 相机偏转保持：玩家转向后重设状态相机（与 menu_esc 相同模式）
+      if(server.player_yaw != var.yaw){
+        var.yaw = server.player_yaw
+        Camera.setState(-0.78, -0.45, 1.9, 205, 0.0, 600)
+        Camera.setThirdPerson(true)
+      }
+      // 主武器 Icon 槽随主手物品变化刷新
+      mh = Player.getMainHandItem()
+      mk = mh == none ? '' : mh.getName() + '#' + mh.getCount()
+      if(mk != var.主手缓存){
+        var.主手缓存 = mk
+        val.主武器槽.setItemIcon(mh == none ? '' : mh.toJson())
+      }
+      // 搜索过滤：对原版/扩容/快捷三网格逐槽位比对物品名
+      if(var.待过滤 || (var.searchText != none && var.searchText != '')){
+        var.待过滤 = false
+        q = var.searchText == none ? '' : var.searchText
+        for(i in range(0, val.原版背包网格.childrenCount() - 1)){
+          sl = val.原版背包网格.get(i)
+          st = sl.getSlotItemStack()
+          nm = st == none ? '' : st.getName()
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
+        }
+        for(i in range(0, val.快捷栏网格.childrenCount() - 1)){
+          sl = val.快捷栏网格.get(i)
+          st = sl.getSlotItemStack()
+          nm = st == none ? '' : st.getName()
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
+        }
+        for(i in range(1, val.扩容网格.childrenCount() - 1)){
+          sl = val.扩容网格.get(i)
+          st = sl.getSlotItemStack()
+          nm = st == none ? '' : st.getName()
+          sl.alpha = q == '' || nm.contains(q) ? 1 : 0.3
+        }
+      }
+      // 扩容槽位分页重建统一入口：update 包、滚轮翻页、resize 都置 var.待重建 后在此执行
       if(var.待重建){
         var.待重建 = false
         if(var.每页槽位数 == none){
-          var.每页槽位数 = 36
+          var.每页槽位数 = 54
         }
         if(var.页码增量 != 0){
           var.页码 = var.页码 + var.页码增量
@@ -135,6 +205,7 @@ ui:
           }
           var.已建分类 = var.activeCategory
           var.已建页码 = var.页码
+          var.待过滤 = true
         }
       }
     load: |-
@@ -143,6 +214,7 @@ ui:
       var.buyAmount = 1
       var.capacityText = '0/0'
       var.maxCapacity = 0
+      var.currencyText = ''
       var.slotCount = 0
       var.activeCategory = ''
       var.已建分类 = ''
@@ -152,6 +224,11 @@ ui:
       var.actionBusySeconds = 0
       var.passwordPanel = {'visible': false, 'mode': ''}
       var.destroyPanel = {'visible': false}
+      var.设置面板开 = false
+      var.searchText = ''
+      var.待过滤 = false
+      var.yaw = -9999
+      var.主手缓存 = none
       // Adaptive 以 1920x1080 等比缩放，换算设计坐标系下的可用视口
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -164,9 +241,10 @@ ui:
       var.总页数 = 1
       var.已建页码 = -1
       var.待重建 = false
-      // 每页行数按可视高度自适应：扩容网格顶边 470，购买行顶边约在 viewH-206
+      // 每页行数按可视高度自适应：扩容网格顶边 474，快捷栏顶边约在面板高-140
+      面板高 = var.viewH - 200
       行数 = 1
-      while(470 + (行数 + 1) * 80 <= var.viewH - 206){
+      while(474 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
@@ -177,16 +255,36 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
+      面板高 = var.viewH - 200
       行数 = 1
-      while(470 + (行数 + 1) * 80 <= var.viewH - 206){
+      while(474 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
       var.待重建 = true
     open: |-
       Packet.send(var.packetId, 'refresh')
+      Camera.setState(-0.78, -0.45, 1.9, 205, 0.0, 600)
+      Camera.setThirdPerson(true)
+    close: |-
+      async {
+        Camera.setThirdPerson(false)
+        Camera.clearState()
+      }
+    keyPress: |-
+      if(self.currentKeyPress() == "ESCAPE" || self.currentKeyPress() == "E"){
+        Camera.setThirdPerson(false)
+        Camera.clearState()
+        Screen.close()
+      }
 
 controls:
+  全屏暗角底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~0,0,0,60
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -200,299 +298,467 @@ controls:
           point: ~top_left
           x: "-var.offX"
           width: "var.viewW"
-          height: 100
+          height: 88
         children:
           背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,90
+              normal: ~10,12,18,215
           标题:
             type: Text
             attribute:
               x: 40
-              y: 14
+              y: 8
               texts: ~&f个人背包
-              fontSize: 56
+              fontSize: 48
           副标题:
             type: Text
             attribute:
-              x: 40
-              y: 70
-              texts: ~&7EXTRA BACKPACK
-              fontSize: 28
+              x: 42
+              y: 58
+              texts: ~&7CHARACTER / INVENTORY
+              fontSize: 36
+          容量文本:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -380
+              y: 26
+              texts: "'&7容量 &f' + var.capacityText"
+              fontSize: 36
+          货币文本:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -170
+              y: 26
+              limit: 20
+              texts: "'&e' + var.currencyText"
+              fontSize: 36
+          设置按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -104
+              y: 16
+              width: 56
+              height: 56
+              tip: ~购买槽位与背包设置
+            action:
+              clickLeft: |-
+                if(var.设置面板开){
+                  var.设置面板开 = false
+                }else{
+                  var.设置面板开 = true
+                }
+            children:
+              按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
+              按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f⚙
+                  fontSize: 36
+                  through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 16
+              width: 56
+              height: 56
+              tip: ~关闭
+            action:
+              clickLeft: |-
+                Camera.setThirdPerson(false)
+                Camera.clearState()
+                Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,90,90,240
+                  shape: ~round_rect
+                  radius: 10
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
 
       左侧栏:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "-var.offX"
-          y: 100
-          width: 450
-          height: "var.viewH - 100"
+          x: "40 - var.offX"
+          y: 110
+          width: 420
+          height: "var.viewH - 160"
         children:
           背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~0,0,0,100
+              normal: ~12,14,20,205
+              shape: ~round_rect
+              radius: 16
           装备标题:
             type: Text
             attribute:
               x: 24
-              y: 18
+              y: 14
               texts: ~&f装备
-              fontSize: 52
+              fontSize: 54
+          部位数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 28
+              texts: ~&76 部位
+              fontSize: 36
+          武器标签:
+            type: Text
+            attribute:
+              x: 24
+              y: 82
+              texts: ~&7武器
+              fontSize: 36
+          主武器行:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 122
+              width: 372
+              height: 96
+            children:
+              行背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,12
+                  shape: ~round_rect
+                  radius: 10
+              主武器槽:
+                type: Slot
+                val: 主武器槽
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 76
+                  height: 76
+                  slotType: ~Icon
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 10
+                  itemScale: 0.76
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
+              类型:
+                type: Text
+                attribute:
+                  x: 104
+                  y: 12
+                  texts: ~&7主武器
+                  fontSize: 36
+              装备名:
+                type: Text
+                attribute:
+                  x: 104
+                  y: 52
+                  limit: 14
+                  texts: "Player.getMainHandItem() != none && Player.getMainHandItem().getCount() > 0 ? '&f' + Player.getMainHandItem().getName() : '&7未持有'"
+                  fontSize: 36
+          副武器行:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 226
+              width: 372
+              height: 96
+            children:
+              行背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,12
+                  shape: ~round_rect
+                  radius: 10
+              槽位:
+                type: Slot
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 76
+                  height: 76
+                  slotType: ~Container
+                  id: 45
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 10
+                  itemScale: 0.76
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
+              类型:
+                type: Text
+                attribute:
+                  x: 104
+                  y: 12
+                  texts: ~&7副武器
+                  fontSize: 36
+              装备名:
+                type: Text
+                attribute:
+                  x: 104
+                  y: 52
+                  limit: 14
+                  texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
+                  fontSize: 36
+          防具标签:
+            type: Text
+            attribute:
+              x: 24
+              y: 332
+              texts: ~&7防具
+              fontSize: 36
           装备列表:
             type: VStack
             attribute:
-              x: 30
-              y: 84
-              width: 390
+              x: 24
+              y: 376
+              width: 372
               spaceBetween: 10
             children:
               头盔行:
                 type: Canvas
                 attribute:
-                  width: 390
-                  height: 100
+                  width: 372
+                  height: 96
                 children:
-                  高亮条:
+                  行背景:
                     type: Texture
                     attribute:
-                      point: ~vertical_stretch_left
-                      width: 7
+                      point: ~stretch_all
                       through: true
-                      normal: "self.parent['槽位'].getSlotItemStack().getName() != none ? '255,188,0,255' : '90,90,90,255'"
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
                     attribute:
-                      x: 17
+                      x: 10
                       y: 10
-                      width: 80
-                      height: 80
+                      width: 76
+                      height: 76
                       slotType: ~Container
                       id: 5
-                      normal: ~29,33,43,100
+                      normal: ~38,42,52,255
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                       itemScale: 0.76
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
                   类型:
                     type: Text
                     attribute:
-                      x: 112
+                      x: 104
                       y: 12
-                      texts: ~&f头盔
-                      fontSize: 40
+                      texts: ~&7头盔
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 112
-                      y: 56
-                      texts: "self.parent['槽位'].getSlotItemStack().getName() != none ? self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
-                      fontSize: 26
+                      x: 104
+                      y: 52
+                      limit: 14
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
+                      fontSize: 36
               胸甲行:
                 type: Canvas
                 attribute:
-                  width: 390
-                  height: 100
+                  width: 372
+                  height: 96
                 children:
-                  高亮条:
+                  行背景:
                     type: Texture
                     attribute:
-                      point: ~vertical_stretch_left
-                      width: 7
+                      point: ~stretch_all
                       through: true
-                      normal: "self.parent['槽位'].getSlotItemStack().getName() != none ? '255,188,0,255' : '90,90,90,255'"
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
                     attribute:
-                      x: 17
+                      x: 10
                       y: 10
-                      width: 80
-                      height: 80
+                      width: 76
+                      height: 76
                       slotType: ~Container
                       id: 6
-                      normal: ~29,33,43,100
+                      normal: ~38,42,52,255
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                       itemScale: 0.76
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
                   类型:
                     type: Text
                     attribute:
-                      x: 112
+                      x: 104
                       y: 12
-                      texts: ~&f胸甲
-                      fontSize: 40
+                      texts: ~&7上衣
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 112
-                      y: 56
-                      texts: "self.parent['槽位'].getSlotItemStack().getName() != none ? self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
-                      fontSize: 26
+                      x: 104
+                      y: 52
+                      limit: 14
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
+                      fontSize: 36
               护腿行:
                 type: Canvas
                 attribute:
-                  width: 390
-                  height: 100
+                  width: 372
+                  height: 96
                 children:
-                  高亮条:
+                  行背景:
                     type: Texture
                     attribute:
-                      point: ~vertical_stretch_left
-                      width: 7
+                      point: ~stretch_all
                       through: true
-                      normal: "self.parent['槽位'].getSlotItemStack().getName() != none ? '255,188,0,255' : '90,90,90,255'"
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
                     attribute:
-                      x: 17
+                      x: 10
                       y: 10
-                      width: 80
-                      height: 80
+                      width: 76
+                      height: 76
                       slotType: ~Container
                       id: 7
-                      normal: ~29,33,43,100
+                      normal: ~38,42,52,255
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                       itemScale: 0.76
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
                   类型:
                     type: Text
                     attribute:
-                      x: 112
+                      x: 104
                       y: 12
-                      texts: ~&f护腿
-                      fontSize: 40
+                      texts: ~&7下装
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 112
-                      y: 56
-                      texts: "self.parent['槽位'].getSlotItemStack().getName() != none ? self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
-                      fontSize: 26
+                      x: 104
+                      y: 52
+                      limit: 14
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
+                      fontSize: 36
               鞋子行:
                 type: Canvas
                 attribute:
-                  width: 390
-                  height: 100
+                  width: 372
+                  height: 96
                 children:
-                  高亮条:
+                  行背景:
                     type: Texture
                     attribute:
-                      point: ~vertical_stretch_left
-                      width: 7
+                      point: ~stretch_all
                       through: true
-                      normal: "self.parent['槽位'].getSlotItemStack().getName() != none ? '255,188,0,255' : '90,90,90,255'"
+                      normal: ~255,255,255,12
+                      shape: ~round_rect
+                      radius: 10
                   槽位:
                     type: Slot
                     attribute:
-                      x: 17
+                      x: 10
                       y: 10
-                      width: 80
-                      height: 80
+                      width: 76
+                      height: 76
                       slotType: ~Container
                       id: 8
-                      normal: ~29,33,43,100
+                      normal: ~38,42,52,255
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                       itemScale: 0.76
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
                   类型:
                     type: Text
                     attribute:
-                      x: 112
+                      x: 104
                       y: 12
-                      texts: ~&f鞋子
-                      fontSize: 40
+                      texts: ~&7鞋子
+                      fontSize: 36
                   装备名:
                     type: Text
                     attribute:
-                      x: 112
-                      y: 56
-                      texts: "self.parent['槽位'].getSlotItemStack().getName() != none ? self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
-                      fontSize: 26
-              副手行:
-                type: Canvas
-                attribute:
-                  width: 390
-                  height: 100
-                children:
-                  高亮条:
-                    type: Texture
-                    attribute:
-                      point: ~vertical_stretch_left
-                      width: 7
-                      through: true
-                      normal: "self.parent['槽位'].getSlotItemStack().getName() != none ? '255,188,0,255' : '90,90,90,255'"
-                  槽位:
-                    type: Slot
-                    attribute:
-                      x: 17
-                      y: 10
-                      width: 80
-                      height: 80
-                      slotType: ~Container
-                      id: 45
-                      normal: ~29,33,43,100
-                      hover: ~Frosted:0;255,255,255,255
-                      shape: ~round_rect
-                      radius: 12
-                      itemScale: 0.76
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  类型:
-                    type: Text
-                    attribute:
-                      x: 112
-                      y: 12
-                      texts: ~&f副手
-                      fontSize: 40
-                  装备名:
-                    type: Text
-                    attribute:
-                      x: 112
-                      y: 56
-                      texts: "self.parent['槽位'].getSlotItemStack().getName() != none ? self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
-                      fontSize: 26
+                      x: 104
+                      y: 52
+                      limit: 14
+                      texts: "self.parent['槽位'].getSlotItemStack() != none && self.parent['槽位'].getSlotItemStack().getCount() > 0 ? '&f' + self.parent['槽位'].getSlotItemStack().getName() : '&7未装备'"
+                      fontSize: 36
           操作提示:
             type: Text
             attribute:
-              x: 30
-              y: 640
+              point: ~bottom_left
+              x: 24
+              y: -150
+              visible: "var.viewH > 960"
               texts:
-                - ~&7拖动物品到扩容槽位存放/取回（物品需匹配分类）
-                - ~&7鼠标滚轮可翻页查看更多槽位
-              fontSize: 24
+                - ~&7拖动物品到扩容槽位存放/取回
+                - ~&7滚轮翻页查看更多槽位
+              fontSize: 36
           销毁卡片:
             type: Canvas
             attribute:
               point: ~bottom_left
-              x: 30
-              y: -20
-              width: 390
-              height: 96
+              x: 24
+              y: -24
+              width: 372
+              height: 110
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'destroy_request')
@@ -502,65 +768,110 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~60,20,20,180
+                  normal: ~120,30,30,160
                   hover: ~Frosted:0;255,120,120,230
                   shape: ~round_rect
-                  radius: 14
+                  radius: 12
                 effect:
                   stroke:
-                    width: 2
+                    width: 1
                     color: ~255,100,100,200
               销毁标题:
                 type: Text
                 attribute:
                   x: 24
-                  y: 14
+                  y: 12
                   texts: ~&f物品销毁
-                  fontSize: 32
+                  fontSize: 36
                   through: true
               销毁说明:
                 type: Text
                 attribute:
                   x: 24
-                  y: 56
-                  texts: ~&7将光标上的物品点击此处销毁（需二级密码）
-                  fontSize: 22
+                  y: 58
+                  texts: ~&7点击销毁光标上的物品
+                  fontSize: 36
                   through: true
 
       右侧栏:
         type: Canvas
         attribute:
           point: ~top_right
-          x: "var.offX"
-          y: 100
-          width: 720
-          height: "var.viewH - 100"
+          x: "var.offX - 40"
+          y: 110
+          width: 768
+          height: "var.viewH - 160"
         children:
           背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~9,9,11,100
+              normal: ~12,14,20,205
+              shape: ~round_rect
+              radius: 16
           背包标题:
             type: Text
             attribute:
-              x: 16
+              x: 24
               y: 14
               texts: ~&f背包
-              fontSize: 52
+              fontSize: 54
+          搜索容器:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -20
+              y: 16
+              width: 280
+              height: 52
+            children:
+              搜索底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
+              搜索输入:
+                type: TextBox
+                attribute:
+                  x: 14
+                  y: 8
+                  width: 252
+                  height: 36
+                  length: 12
+                  emptyText: ~&7搜索物品
+                  fontSize: 36
+                action:
+                  textChange: |-
+                    var.searchText = self.getContent()
+                    var.待过滤 = true
           原版背包标题:
             type: Text
             attribute:
-              x: 16
-              y: 88
+              x: 24
+              y: 86
               texts: ~&7原版背包
-              fontSize: 32
+              fontSize: 36
+          原版格数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 90
+              texts: ~&727 格
+              fontSize: 36
           原版背包网格:
             type: HGrid
+            val: 原版背包网格
             attribute:
-              x: 8
-              y: 124
-              width: 710
+              x: 24
+              y: 128
+              width: 720
               height: 230
               column: 9
               spaceBetweenX: 10
@@ -579,36 +890,38 @@ controls:
                   height: 70
                   slotType: ~Backpack
                   id: 9
-                  normal: ~29,33,43,255
+                  normal: ~38,42,52,255
                   hover: ~Frosted:0;255,255,255,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 8
                   itemScale: 0.76
                 effect:
                   stroke:
-                    width: 2
+                    width: 1
                     color: ~0,0,0,255
           扩容背包标题:
             type: Text
             attribute:
-              x: 16
-              y: 376
-              texts: ~&f扩容背包
-              fontSize: 32
+              x: 24
+              y: 382
+              texts: ~&7扩容背包
+              fontSize: 36
           容量状态:
             type: Text
             attribute:
-              x: 240
-              y: 384
-              texts: "'&7容量 ' + var.capacityText + ' / 上限 ' + var.maxCapacity"
-              fontSize: 24
+              point: ~top_right
+              x: -24
+              y: 386
+              limit: 18
+              texts: "'&7' + var.capacityText + ' 格'"
+              fontSize: 36
           分类标签行:
             type: HGrid
             val: 分类标签行
             attribute:
-              x: 16
-              y: 414
-              width: 688
+              x: 24
+              y: 426
+              width: 700
               height: 44
               column: 9
               spaceBetweenX: 10
@@ -620,8 +933,8 @@ controls:
                   entryKey: 0.round()
                   entry: var.categories[self.entryKey]
                   visible: self.entry != none
-                  width: 120
-                  height: 40
+                  width: "var.categoryCount != none && var.categoryCount > 5 ? 700 / var.categoryCount - 10 : 130"
+                  height: 44
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'category', self.entry['id'])
@@ -631,28 +944,28 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "self.parent.entry != none && self.parent.entry['active'] ? '120,190,255,230' : '255,255,255,90'"
+                      normal: "self.parent.entry != none && self.parent.entry['active'] ? '120,190,255,230' : '40,44,54,255'"
                       hover: ~Frosted:0;255,255,255,240
                       shape: ~round_rect
-                      radius: 12
+                      radius: 10
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
                   项文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
-                      fontSize: 26
+                      texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
+                      fontSize: 36
                       through: true
           扩容网格:
             type: HGrid
             val: 扩容网格
             attribute:
-              x: 8
-              y: 470
-              width: 710
+              x: 24
+              y: 484
+              width: 720
               column: 9
               spaceBetweenX: 10
               spaceBetweenY: 10
@@ -673,120 +986,58 @@ controls:
                   itemScale: 0.76
                   width: 70
                   height: 70
-                  normal: ~43,49,63,255
+                  normal: ~38,42,52,255
                   hover: ~Frosted:0;255,255,255,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 8
                 action:
                   wheel: |-
                     var.页码增量 = self.wheelValue > 0 ? -1 : 1
                     var.待重建 = true
                 effect:
                   stroke:
-                    width: 2
+                    width: 1
                     color: ~0,0,0,255
           页码提示:
             type: Text
             attribute:
               point: ~top_right
-              x: -16
-              y: 384
+              x: -24
+              y: 442
               visible: var.总页数 > 1
               texts: "'&7滚轮翻页 ' + (var.页码 + 1) + '/' + var.总页数"
-              fontSize: 24
-          购买行:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 16
-              y: -150
-              width: 688
-              height: 56
-            children:
-              购买提示:
-                type: Text
-                attribute:
-                  x: 4
-                  y: 14
-                  texts: "var.buySlotsText"
-                  fontSize: 26
-                  through: true
-              购买数量输入:
-                type: TextBox
-                attribute:
-                  x: 420
-                  y: 7
-                  width: 110
-                  height: 42
-                  length: 6
-                  emptyText: ~数量=1
-                  fontSize: 30
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                action:
-                  textChange: |-
-                    var.buyAmount = self.getContent()
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              购买按钮:
-                type: Canvas
-                attribute:
-                  x: 544
-                  y: 6
-                  width: 140
-                  height: 44
-                  visible: var.canBuySlots
-                  enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
-                children:
-                  购买背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~120,190,255,200
-                      hover: ~Frosted:0;255,255,255,240
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  购买文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0购买槽位
-                      fontSize: 28
-                      through: true
+              fontSize: 36
           快捷布局:
             type: Canvas
             attribute:
               point: ~bottom_left
-              x: 8
-              y: -16
-              width: 710
+              x: 24
+              y: -20
+              width: 720
               height: 120
             children:
               快捷栏标题:
                 type: Text
                 attribute:
-                  x: 8
+                  x: 0
                   y: 0
                   texts: ~&7快捷栏
-                  fontSize: 32
+                  fontSize: 36
+              快捷栏格数:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: ~&79 格
+                  fontSize: 36
               快捷栏网格:
                 type: HGrid
+                val: 快捷栏网格
                 attribute:
                   x: 0
-                  y: 42
-                  width: 710
+                  y: 46
+                  width: 720
                   height: 70
                   column: 9
                   spaceBetweenX: 10
@@ -805,15 +1056,166 @@ controls:
                       height: 70
                       slotType: ~Backpack
                       id: 36
-                      normal: ~29,33,43,255
+                      normal: ~38,42,52,255
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
-                      radius: 12
+                      radius: 8
                       itemScale: 0.76
                     effect:
                       stroke:
-                        width: 2
+                        width: 1
                         color: ~0,0,0,255
+
+      玩家名签:
+        type: Text
+        attribute:
+          point: ~bottom_center
+          y: -30
+          texts: "'&f' + Player.getName() + '   &7Lv ' + Player.getLevel().round()"
+          fontSize: 36
+          through: true
+
+      设置副面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 520
+          height: 300
+          visible: var.设置面板开 == true
+        children:
+          设置副面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,245
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 1
+                color: ~255,255,255,40
+          设置副面板标题:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -110
+              texts: ~&f背包设置
+              fontSize: 48
+              through: true
+          设置关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 16
+              width: 40
+              height: 40
+              tip: ~关闭
+            action:
+              clickLeft: |-
+                var.设置面板开 = false
+            children:
+              设置关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,44,54,230
+                  hover: ~Frosted:0;255,90,90,240
+                  shape: ~round_rect
+                  radius: 10
+              设置关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
+          设置容量状态:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -52
+              limit: 22
+              texts: "'&7容量 ' + var.capacityText + ' / 上限 ' + var.maxCapacity.round()"
+              fontSize: 36
+              through: true
+          设置购买提示:
+            type: Text
+            attribute:
+              point: ~middle_center
+              y: -2
+              limit: 22
+              texts: "var.buySlotsText"
+              fontSize: 36
+              through: true
+          数量输入容器:
+            type: Canvas
+            attribute:
+              x: 60
+              y: 210
+              width: 180
+              height: 56
+            children:
+              数量输入底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
+              数量输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 10
+                  width: 156
+                  height: 38
+                  length: 6
+                  emptyText: ~数量=1
+                  fontSize: 36
+                action:
+                  textChange: |-
+                    var.buyAmount = self.getContent()
+          购买按钮:
+            type: Canvas
+            attribute:
+              x: 270
+              y: 212
+              width: 190
+              height: 52
+              visible: var.canBuySlots
+              enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
+            action:
+              clickLeft: |-
+                var.actionBusy = true
+                Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
+            children:
+              购买背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,190,255,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
+              购买文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&0购买槽位
+                  fontSize: 36
+                  through: true
 
       销毁确认框:
         type: Canvas
@@ -828,80 +1230,82 @@ controls:
             attribute:
               point: ~stretch_all
               through: true
-              normal: ~30,30,30,250
+              normal: ~14,16,24,245
               shape: ~round_rect
               radius: 18
+            effect:
+              stroke:
+                width: 1
+                color: ~255,100,100,120
           销毁确认框文字:
             type: Text
             attribute:
               point: ~middle_center
-              y: -60
-              texts: ~&f确认销毁光标上的物品？需要二级密码
-              fontSize: 28
+              y: -70
+              texts: ~&f确认销毁光标上的物品？
+              fontSize: 36
               through: true
-          确认按钮:
+          销毁确认:
             type: Canvas
             attribute:
-              x: 90
+              x: 60
               y: 160
-              width: 160
-              height: 50
-              enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
+              width: 200
+              height: 60
             action:
               clickLeft: |-
-                var.actionBusy = true
                 Packet.send(var.packetId, 'destroy_confirm', var.actionToken)
             children:
-              确认背景:
+              销毁确认背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~255,100,100,220
-                  hover: ~Frosted:0;255,255,255,240
+                  normal: ~200,60,60,220
+                  hover: ~Frosted:0;255,120,120,240
                   shape: ~round_rect
-                  radius: 12
-              确认文字:
+                  radius: 10
+              销毁确认文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f确认
-                  fontSize: 28
+                  texts: ~&f销毁
+                  fontSize: 36
                   through: true
-          取消按钮:
+          销毁取消:
             type: Canvas
             attribute:
-              x: 310
+              x: 300
               y: 160
-              width: 160
-              height: 50
+              width: 200
+              height: 60
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'destroy_cancel')
             children:
-              取消背景:
+              销毁取消背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~255,255,255,150
+                  normal: ~40,44,54,255
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
-                  radius: 12
-              取消文字:
+                  radius: 10
+              销毁取消文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0取消
-                  fontSize: 28
+                  texts: ~&f取消
+                  fontSize: 36
                   through: true
 
       二级密码面板:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 600
-          height: 300
+          width: 640
+          height: 400
           visible: var.passwordPanel != none && var.passwordPanel['visible']
         children:
           二级密码面板背景:
@@ -909,57 +1313,95 @@ controls:
             attribute:
               point: ~stretch_all
               through: true
-              normal: ~30,30,30,250
+              normal: ~14,16,24,245
               shape: ~round_rect
               radius: 18
+            effect:
+              stroke:
+                width: 1
+                color: ~255,255,255,40
           二级密码面板文字:
             type: Text
             attribute:
               point: ~middle_center
-              y: -110
-              texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
-              fontSize: 28
+              y: -150
+              texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '&f清除二级密码' : '&f解锁二级密码')"
+              fontSize: 48
               through: true
-          当前密码:
-            type: TextBox
+          当前密码容器:
+            type: Canvas
             attribute:
               x: 40
-              y: 72
-              width: 520
-              height: 42
-              length: 64
-              emptyText: ~当前密码（设置新密码时已有密码必填）
-              fontSize: 22
-              background: ~90,90,90,230
-              shape: ~round_rect
-              radius: 12
-            action:
-              textChange: |-
-                var.passwordCurrent = self.getContent()
-          新密码:
-            type: TextBox
+              y: 90
+              width: 560
+              height: 60
+            children:
+              当前密码底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
+              当前密码:
+                type: TextBox
+                attribute:
+                  x: 14
+                  y: 12
+                  width: 532
+                  height: 38
+                  length: 64
+                  passwordChar: ~'*'
+                  emptyText: ~&7当前密码（设置新密码时已有密码必填）
+                  fontSize: 36
+                action:
+                  textChange: |-
+                    var.passwordCurrent = self.getContent()
+          新密码容器:
+            type: Canvas
             attribute:
               x: 40
-              y: 122
-              width: 520
-              height: 42
-              length: 64
-              visible: var.passwordPanel != none && var.passwordPanel['mode'] == 'set'
-              emptyText: ~新密码
-              fontSize: 22
-              background: ~90,90,90,230
-              shape: ~round_rect
-              radius: 12
-            action:
-              textChange: |-
-                var.passwordNew = self.getContent()
+              y: 165
+              width: 560
+              height: 60
+              visible: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set'"
+            children:
+              新密码底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,42,52,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.isHovered() ? '220,230,240,255' : '255,255,255,60'"
+              新密码:
+                type: TextBox
+                attribute:
+                  x: 14
+                  y: 12
+                  width: 532
+                  height: 38
+                  length: 64
+                  passwordChar: ~'*'
+                  emptyText: ~&7新密码
+                  fontSize: 36
+                action:
+                  textChange: |-
+                    var.passwordNew = self.getContent()
           提交:
             type: Canvas
             attribute:
-              x: 80
-              y: 205
-              width: 180
-              height: 48
+              x: 60
+              y: 260
+              width: 240
+              height: 60
               enable: "!var.actionBusy || var.passwordPanel['mode'] == 'unlock'"
             action:
               clickLeft: |-
@@ -983,21 +1425,21 @@ controls:
                   normal: ~120,190,255,220
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
               提交文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
-                  fontSize: 25
+                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '&0清除' : '&0解锁')"
+                  fontSize: 36
                   through: true
           取消:
             type: Canvas
             attribute:
               x: 340
-              y: 205
-              width: 180
-              height: 48
+              y: 260
+              width: 240
+              height: 60
             action:
               clickLeft: |-
                 var.passwordPanel['visible'] = false
@@ -1008,24 +1450,24 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~255,255,255,150
+                  normal: ~40,44,54,255
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
               取消文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0取消
-                  fontSize: 25
+                  texts: ~&f取消
+                  fontSize: 36
                   through: true
           清除密码:
             type: Canvas
             attribute:
-              x: 210
-              y: 255
+              x: 230
+              y: 336
               width: 180
-              height: 34
+              height: 40
               visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
               enable: "!var.actionBusy && var.actionToken != none && var.actionToken != ''"
             action:
@@ -1038,7 +1480,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~255,170,170,180
+                  normal: ~200,60,60,180
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
                   radius: 10
@@ -1046,7 +1488,6 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0清除密码
-                  fontSize: 20
+                  texts: ~&f清除密码
+                  fontSize: 36
                   through: true
-tasks: {}

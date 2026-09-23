@@ -16,14 +16,14 @@ import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 /**
  * QQBot 模块的管理员命令处理器。
  * <p>
- * 关联模块：{@code qqbot}。处理 {@code /qqbot admin <action>} 下的子命令，
- * 包括状态查看、配置重载、群消息发送、绑定查询、SnowLuma 进程管理及黑名单操作。
+ * 关联模块：{@code qqbot}。处理 {@code /axs qqbot <action>} 下的子命令，
+ * 包括状态查看、群消息发送、绑定查询、SnowLuma 进程管理及黑名单操作。
  * 通过 {@link Supplier} 延时获取 {@link QQBotService} 与 {@link QQBotRepository}，
  * 以适应服务尚未就绪的场景。
  */
 public final class QQBotAdminCommand {
 
-    private static final List<String> SNOWLUMA_ACTIONS = List.of("start", "stop", "status", "install", "logs", "check-update");
+    private static final List<String> SNOWLUMA_ACTIONS = List.of("start", "stop", "status", "install", "logs", "password", "check-update");
 
     private final Supplier<QQBotService> serviceProvider;
     private final Supplier<QQBotRepository> repositoryProvider;
@@ -89,6 +89,17 @@ public final class QQBotAdminCommand {
                 sender.sendMessage(fullMsg("status.storage", service.configuration().storage().mode()));
                 sender.sendMessage(fullMsg("status.binding", service.configuration().binding().enabled() ? fullMsg("status.enabled") : fullMsg("status.disabled")));
                 sender.sendMessage(fullMsg("status.whitelist", service.configuration().whitelist().enabled() ? fullMsg("status.enabled") : fullMsg("status.disabled")));
+                if (snowLuma != null) {
+                    String slState = snowLuma.isInstalled()
+                        ? switch (snowLuma.getStatus()) {
+                            case RUNNING -> "§a运行中";
+                            case STARTING -> "§e启动中";
+                            case INSTALLING -> "§e安装中";
+                            case STOPPED -> "§c已停止";
+                        }
+                        : fullMsg("status.snowluma-not-installed");
+                    sender.sendMessage(fullMsg("status.snowluma", slState));
+                }
             }
             case "send" -> {
                 if (service == null) {
@@ -172,34 +183,41 @@ public final class QQBotAdminCommand {
             sender.sendMessage(fullMsg("admin.snowluma.status"));
             sender.sendMessage(fullMsg("admin.snowluma.install"));
             sender.sendMessage(fullMsg("admin.snowluma.logs"));
+            sender.sendMessage(fullMsg("admin.snowluma.password"));
             sender.sendMessage(fullMsg("admin.snowluma.check-update"));
             return;
         }
         String sub = args[2].toLowerCase();
-        switch (sub) {
-            case "start" -> sender.sendMessage((messages != null ? messages.get("prefix") : "") + snowLuma.start());
-            case "stop" -> sender.sendMessage((messages != null ? messages.get("prefix") : "") + snowLuma.stop());
-            case "status" -> sender.sendMessage(snowLuma.statusReport());
-            case "install" -> {
-                sender.sendMessage(fullMsg("admin.snowluma.install-start"));
-                snowLuma.installAsync().thenAccept(result -> {
-                    sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
-                });
-            }
-            case "logs" -> {
-                String logOutput = snowLuma.logs();
-                for (String line : logOutput.split("\n")) {
-                    sender.sendMessage(line);
+        // start/stop/status/logs/password 都会派生子进程（node --version、docker inspect 等），
+        // 且 start 内含启动等待，必须异步执行避免阻塞主线程。
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            switch (sub) {
+                case "start" -> sender.sendMessage((messages != null ? messages.get("prefix") : "") + snowLuma.start());
+                case "stop" -> sender.sendMessage((messages != null ? messages.get("prefix") : "") + snowLuma.stop());
+                case "status" -> sender.sendMessage(snowLuma.statusReport());
+                case "install" -> {
+                    sender.sendMessage(fullMsg("admin.snowluma.install-start"));
+                    String prefix = messages != null ? messages.get("prefix") : "";
+                    // 下载/拉取进度实时推送给命令发起人（控制台与游戏内均可见）
+                    snowLuma.installAsync(msg -> sender.sendMessage(prefix + "&7" + msg))
+                        .thenAccept(result -> sender.sendMessage(prefix + result));
                 }
+                case "password" -> sender.sendMessage(snowLuma.webUiPasswordReport());
+                case "logs" -> {
+                    String logOutput = snowLuma.logs();
+                    for (String line : logOutput.split("\n")) {
+                        sender.sendMessage(line);
+                    }
+                }
+                case "check-update" -> {
+                    sender.sendMessage(messages != null ? messages.get("admin.snowluma.checking") : "&e正在检查 SnowLuma 版本...");
+                    snowLuma.checkUpdateAsync().thenAccept(result -> {
+                        sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
+                    });
+                }
+                default -> sender.sendMessage(fullMsg("admin.snowluma.unknown", sub));
             }
-            case "check-update" -> {
-                sender.sendMessage(messages != null ? messages.get("admin.snowluma.checking") : "&e正在检查 SnowLuma 版本...");
-                snowLuma.checkUpdateAsync().thenAccept(result -> {
-                    sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
-                });
-            }
-            default -> sender.sendMessage(fullMsg("admin.snowluma.unknown", sub));
-        }
+        });
     }
 
     /**
@@ -316,7 +334,7 @@ public final class QQBotAdminCommand {
     }
 
     private void sendHelp(CommandSender sender, String label) {
-        String cmd = "/" + label + " qqbot admin";
+        String cmd = "/" + label + " qqbot";
         sender.sendMessage(fullMsg("help.title"));
         sender.sendMessage(fullMsg("help.status", cmd));
         sender.sendMessage(fullMsg("help.send", cmd));

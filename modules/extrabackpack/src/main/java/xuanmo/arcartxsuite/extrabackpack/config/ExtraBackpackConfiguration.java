@@ -106,7 +106,7 @@ public record ExtraBackpackConfiguration(
 
     private static BigDecimal parseDecimal(Object rawValue, BigDecimal defaultValue) {
         if (rawValue instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
+            return BigDecimal.valueOf(number.doubleValue()).stripTrailingZeros();
         }
         if (rawValue != null) {
             try {
