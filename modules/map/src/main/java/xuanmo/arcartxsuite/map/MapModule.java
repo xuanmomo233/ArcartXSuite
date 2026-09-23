@@ -180,6 +180,15 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         );
         service.start();
 
+        // HUD defaultOpen 只在玩家进服时触发；reload 路径 shutdown() 已
+        // 对所有在线玩家 closeUi，这里必须补 openUi 否则 HUD 不会回来。
+        // 客户端 open 动作会回发 hud_ready → 服务端回 init 包恢复 visible。
+        if (packetBridge != null) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                packetBridge.openUi(player, hudBinding.runtimeUiId());
+            }
+        }
+
         // reload 续传：恢复第三方来源推送的外部目标与导航回调，并重推视图。
         // 随后发布 axs.map.ready，来源可订阅该事件主动重推最新数据。
         if (carriedExternalRuntime != null) {

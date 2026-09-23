@@ -200,7 +200,8 @@ ui:
         isLeft = var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT'
         isBottom = var.hudPosition == 'BOTTOM_LEFT' || var.hudPosition == 'BOTTOM_RIGHT'
         anchorX = isLeft ? 28 * s + hudSize : Screen.getWidth() - 28 * s
-        anchorY = isBottom ? Screen.getHeight() - 70 * s - hudSize : 24 * s
+        // 顶部锚点 22*s 与边框控件 y:22 对齐（原 24*s 使地形整体偏下 2 设计像素）
+        anchorY = isBottom ? Screen.getHeight() - 70 * s - hudSize : 22 * s
         if(var.api4) {
           var.mapRenderer.setHudAnchor(anchorX, anchorY, s, var.hudSession)
         } else {
