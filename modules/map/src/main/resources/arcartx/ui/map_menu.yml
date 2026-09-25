@@ -1478,6 +1478,43 @@ controls:
                   texts: "var.browsePanelOpen ? '&b☰' : '&f☰'"
                   fontSize: "var.browsePanelOpen ? '56' : '40'"
                   through: true
+          # ─── 左下角：图层切换按钮（地表↔洞穴二态；仅当前维度生效，浏览其他世界时点击无视觉变化）───
+          图层按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f切换图层（地表/洞穴）
+              point: ~top_left
+              x: 204
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleMenuCaveView()
+                }
+            children:
+              图层按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              图层按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.mapRenderer.isMenuCaveView() ? '&b洞穴' : '&f地表'"
+                  fontSize: 30
+                  through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
           标记浏览面板:
             type: Canvas
