@@ -1,4 +1,11 @@
-# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
+# AXS Menu ESC UI — 替换暂停界面，仿原神派蒙菜单布局
+# 布局结构（设计分辨率 1920x1080，面板固定 820 宽，贴屏幕左缘滑入，右侧留给第三人称角色展示）：
+#   ┌ 玩家信息卡（圆形头像 / 昵称 / 等级+经验条 / 生命 / UID）
+#   ├ 分区标题行（菜单标题，多页时显示页码翻页器）
+#   ├ 左侧竖条圆形图标栏 = 页脚按钮（游戏选项 / 退出游戏 / 自定义）
+#   └ 4 列方形图标磁贴网格 = 菜单按钮（图标或标签首字作字形，标签居中显示在磁贴下方）
+# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
+# 客户端回包: Packet.send('AXS_MENU', 'click'/'footer', token, id) / page / esc_open
 ui:
   isHud: false
   match:
@@ -22,369 +29,721 @@ ui:
     # packetHandler: init
     # 包字段:
     #   - packetId: 包标识符（'AXS_MENU'）
+    #   - action_token: 写操作令牌（click / footer 回包必带）
     #   - menuId: 菜单唯一标识
     #   - title: 菜单标题文本
+    #   - pageId: 当前页面 ID
     #   - pageTitle: 当前页面标题
     #   - pageIndex: 当前页索引（从 0 开始）
     #   - pageCount: 总页数
-    #   - buttonRows: 按钮数据行（字典，key 为索引）
+    #   - hasPrev / hasNext: 是否有上一页 / 下一页
+    #   - buttonRows: 按钮数据行（字典，key 为索引；含 id/text/enabled/hasIcon/itemJson）
     #   - buttonCount: 按钮总数
-    #   - footerRows: 页脚按钮数据行
+    #   - footerRows: 页脚按钮数据行（额外含 clientAction）
     #   - footerCount: 页脚按钮总数
-    #   - maxButtonCount: 按钮最大数量（用于动态创建控件）
+    #   - maxButtonCount: 按钮最大数量
     #   - maxFooterCount: 页脚按钮最大数量
     init: |-
-      var.packetId = packet['packetId']
-      var.actionToken = packet['action_token']
-      var.menuId = packet['menuId']
-      var.title = packet['title']
-      var.pageTitle = packet['pageTitle']
-      var.pageIndex = packet['pageIndex']
-      var.pageCount = packet['pageCount']
-      var.buttonRows = packet['buttonRows']
-      var.buttonCount = packet['buttonCount']
-      var.footerRows = packet['footerRows']
-      var.footerCount = packet['footerCount']
-      var.maxButtonCount = packet['maxButtonCount']
-      var.maxFooterCount = packet['maxFooterCount']
-      while(val.button_rows.childrenCount() > 1){
-        val.button_rows.get(1).remove()
-      }
-      while(val.footer_rows.childrenCount() > 1){
-        val.footer_rows.get(1).remove()
-      }
-      for(i in range(1, var.buttonCount - 1)){
-        key = i.round()
-        if(val.button_rows['菜单按钮'] != none) {
-          mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
-          mb.entryKey = key
-        }
-      }
-      for(i in range(1, var.maxFooterCount - 1)){
-        key = i.round()
-        if(val.footer_rows['页脚按钮'] != none) {
-          fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
-          fb.entryKey = key
-        }
-      }
-      for(i in range(0, var.buttonCount - 1)){
-        key = i.round()
-        if(val.button_rows != none) {
-          mb = val.button_rows.get(i.round())
-          if(mb != none && mb['图标'] != none){
-            mb['图标'].seticon()
-          }
-        }
-      }
-      for(i in range(0, var.maxFooterCount - 1)){
-        key = i.round()
-        if(val.footer_rows != none) {
-          fb = val.footer_rows.get(i.round())
-          if(fb != none && fb['图标'] != none){
-            fb['图标'].seticon()
-          }
-        }
-      }
+      var.incoming = packet
+      var.resetMenu = true
+      self.actions['applyPacket']()
     # packetHandler: update
     # 包字段: 与 init 相同（全量刷新菜单数据）
     update: |-
-      var.packetId = packet['packetId']
-      var.actionToken = packet['action_token']
-      var.menuId = packet['menuId']
-      var.title = packet['title']
-      var.pageTitle = packet['pageTitle']
-      var.pageIndex = packet['pageIndex']
-      var.pageCount = packet['pageCount']
-      var.buttonRows = packet['buttonRows']
-      var.buttonCount = packet['buttonCount']
-      var.footerRows = packet['footerRows']
-      var.footerCount = packet['footerCount']
-      var.maxButtonCount = packet['maxButtonCount']
-      var.maxFooterCount = packet['maxFooterCount']
-      while(val.button_rows.childrenCount() > 1){
-        val.button_rows.get(1).remove()
-      }
-      while(val.footer_rows.childrenCount() > 1){
-        val.footer_rows.get(1).remove()
-      }
-      for(i in range(1, var.buttonCount - 1)){
-        key = i.round()
-        if(val.button_rows['菜单按钮'] != none) {
-          mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
-          mb.entryKey = key
-        }
-      }
-      for(i in range(1, var.maxFooterCount - 1)){
-        key = i.round()
-        if(val.footer_rows['页脚按钮'] != none) {
-          fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
-          fb.entryKey = key
-        }
-      }
-      for(i in range(0, var.buttonCount - 1)){
-        key = i.round()
-        if(val.button_rows != none) {
-          mb = val.button_rows.get(i.round())
-          if(mb != none && mb['图标'] != none){
-            mb['图标'].seticon()
-          }
-        }
-      }
-      for(i in range(0, var.maxFooterCount - 1)){
-        key = i.round()
-        if(val.footer_rows != none) {
-          fb = val.footer_rows.get(i.round())
-          if(fb != none && fb['图标'] != none){
-            fb['图标'].seticon()
-          }
-        }
-      }
+      var.incoming = packet
+      var.resetMenu = false
+      self.actions['applyPacket']()
   action:
+    load: |-
+      var.menuUi = self
+      var.packetId = 'AXS_MENU'
+      var.closing = false
+      var.buttonCount = 0
+      var.footerCount = 0
+      var.gridRows = 0
+      var.pageCount = 1
+      var.pageIndex = 0
+      var.glyphs = {}
+      var.footerGlyphs = {}
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.anim = Smooth(1, 0, 320)
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
     open: |-
-      var.animation = TwoLerp(1, 1, 0, 300, 300)
-      Packet.send('AXS_MENU', 'esc_open')
+      var.closing = false
+      var.anim = Smooth(1, 0, 320)
+      self.actions['applyCamera']()
+      Packet.send(var.packetId, 'esc_open')
     tick: |-
-      if(server.player_yaw != var.yaw){
-        var.yaw = server.player_yaw
-        Camera.setState(1.2, -0.5, 2.5, 150, 0.0, 600)
-        Camera.setThirdPerson(true)
+      if(!var.closing && server.player_yaw != var.yaw){
+        self.actions['applyCamera']()
+      }
+    applyCamera: |-
+      var.yaw = server.player_yaw
+      Camera.setState(1.2, -0.5, 2.5, 150, 0.0, 600)
+      Camera.setThirdPerson(true)
+    closeMenu: |-
+      if(!var.closing){
+        var.closing = true
+        var.anim = Smooth(0, 1, 300)
+        Camera.clearState()
+        async {
+          Thread.sleep(320)
+          Camera.setThirdPerson(false)
+          Screen.close()
+        }
+      }
+    keyPress: |-
+      if(self.currentKeyPress() == 'ESCAPE'){
+        self.actions['closeMenu']()
       }
     close: |-
       async {
         Camera.setThirdPerson(false)
         Camera.clearState()
       }
-    keyPress: |-
-      if(self.currentKeyPress() == "ESCAPE"){
-        Camera.clearState()
-        var.animation = Lerp(0, 1, 300)
-        async {
-          Thread.sleep(600)
-          Camera.setThirdPerson(false)
-          Screen.close()
+    applyPacket: |-
+      changedPage = var.resetMenu || var.menuId != var.incoming['menuId'] || var.pageId != var.incoming['pageId']
+      var.packetId = var.incoming['packetId']
+      var.actionToken = var.incoming['action_token']
+      var.menuId = var.incoming['menuId']
+      var.title = var.incoming['title']
+      var.pageId = var.incoming['pageId']
+      var.pageTitle = var.incoming['pageTitle']
+      var.pageIndex = var.incoming['pageIndex']
+      var.pageCount = var.incoming['pageCount']
+      var.hasPrev = var.incoming['hasPrev']
+      var.hasNext = var.incoming['hasNext']
+      var.buttonRows = var.incoming['buttonRows']
+      var.buttonCount = var.incoming['buttonCount']
+      var.footerRows = var.incoming['footerRows']
+      var.footerCount = var.incoming['footerCount']
+      var.maxButtonCount = var.incoming['maxButtonCount']
+      var.maxFooterCount = var.incoming['maxFooterCount']
+      var.gridRows = math.ceil(var.buttonCount / 4)
+      if(changedPage){
+        val.grid_slider.setDragYRatio(0)
+      }
+      while(val.button_rows.childrenCount() > var.buttonCount && val.button_rows.childrenCount() > 1){
+        val.button_rows.get((val.button_rows.childrenCount() - 1).round()).remove()
+      }
+      while(val.footer_rows.childrenCount() > var.footerCount && val.footer_rows.childrenCount() > 1){
+        val.footer_rows.get((val.footer_rows.childrenCount() - 1).round()).remove()
+      }
+      if(var.buttonCount > val.button_rows.childrenCount()){
+        for(i in range(val.button_rows.childrenCount(), var.buttonCount - 1)){
+          mb = val.button_rows['菜单按钮'].copy('菜单按钮' + i.round())
+          mb.entryKey = i.round()
         }
       }
-    load: |-
-          var.animation = 1
-          var.packetId = 'AXS_MENU'
+      if(var.footerCount > val.footer_rows.childrenCount()){
+        for(i in range(val.footer_rows.childrenCount(), var.footerCount - 1)){
+          fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + i.round())
+          fb.entryKey = i.round()
+        }
+      }
+      var.glyphs = {}
+      var.footerGlyphs = {}
+      if(var.buttonCount > 0){
+        for(i in range(0, var.buttonCount - 1)){
+          key = i.round()
+          entry = var.buttonRows[key]
+          mb = val.button_rows.get(key)
+          if(entry['hasIcon']){
+            mb['图标'].seticon()
+          } else {
+            mb['图标'].setItemIcon(var.air)
+          }
+          label = entry['text']
+          while(label.length() >= 2 && (label.charAt(0) == '&' || label.charAt(0) == '§')){
+            label = label.substring(2)
+          }
+          if(label.length() > 0){
+            var.glyphs[key] = label.charAt(0)
+          } else {
+            var.glyphs[key] = '✦'
+          }
+        }
+      }
+      if(var.footerCount > 0){
+        for(i in range(0, var.footerCount - 1)){
+          key = i.round()
+          entry = var.footerRows[key]
+          fb = val.footer_rows.get(key)
+          if(entry['hasIcon']){
+            fb['图标'].seticon()
+          } else {
+            fb['图标'].setItemIcon(var.air)
+          }
+          label = entry['text']
+          while(label.length() >= 2 && (label.charAt(0) == '&' || label.charAt(0) == '§')){
+            label = label.substring(2)
+          }
+          if(label.length() > 0){
+            var.footerGlyphs[key] = label.charAt(0)
+          } else {
+            var.footerGlyphs[key] = '✦'
+          }
+        }
+      }
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
+      point: ~top_center
       width: 1920
-      point: ~stretch_all
       height: 1080
     children:
-      左侧面板:
+      全屏画布:
         type: Canvas
         attribute:
-          width: 620
-          x: "-20 - 600 * var.animation"
-          point: ~vertical_stretch_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
         children:
-          背景:
-            type: Texture
+          菜单面板:
+            type: Canvas
             attribute:
-              normal: ~Frosted:30;255,255,255,100
-              point: ~stretch_all
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-              ripple:
-                duration: 1200
-                color: ~255,255,255,100
-                width: 0.05
-          菜单贴图:
-            type: HGrid
-            attribute:
-              visible: true
-              spaceBetweenX: 5
-              spaceBetweenY: 5
-              column: 3
-              x: 50
-              y: 35
-            action:
-              create: |-
-                for(i in range(2,9)){
-                  A = self['装饰贴图'].copy('装饰贴图' + i)
-                }
+              x: "-820 * var.anim.get()"
+              width: 820
+              height: "var.viewH"
+              alpha: "1 - var.anim.get()"
             children:
-              装饰贴图:
+              面板磨砂底:
                 type: Texture
                 attribute:
-                  normal: ~255,255,255,255
-                  shape: ~round_rect
-                  radius: 2
-                  width: 10
-                  height: 10
-          标题:
-            type: Text
-            attribute:
-              texts:
-                - "var.title"
-              alpha: 1
-              x: 120
-              y: 40
-              fontSize: 64
-          下划线:
-            type: Texture
-            attribute:
-              normal: ~255,255,255
-              alpha: 1
-              width: 618
-              y: 110
-              point: ~top_left
-              height: 5
-              shape: ~round_rect
-              radius: 2
-          滚动区:
-            type: Scroll
-            attribute:
-              width: 560
-              x: 67
-              y: -15
-              height: 960 - 200
-              point: ~horizontal_stretch_middle
-              moveY: self.parent['纵向滑块'].getDragYRatio()
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              按钮网格:
-                type: HGrid
-                val: button_rows
+                  point: ~stretch_all
+                  normal: ~Frosted:28;16,20,28,205
+              面板右缘:
+                type: Texture
                 attribute:
-                  spaceBetweenX: 50
-                  spaceBetweenY: 50
-                  x: 0
-                  column: 2
-                  y: 0
+                  point: ~vertical_stretch_right
+                  width: 1
+                  normal: ~255,255,255,28
+                  through: true
+              玩家信息卡:
+                type: Canvas
+                attribute:
+                  x: 40
+                  y: 40
+                  width: 740
+                  height: 228
                 children:
-                  菜单按钮:
+                  卡片底:
                     type: Texture
                     attribute:
-                      entryKey: 0.round()
-                      entry: var.buttonRows[self.entryKey]
-                      visible: self.entry != none
-                      width: 218
-                      height: 60
-                      normal: "self.entry != none && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
-                      hover: "self.entry != none && self.entry['enabled'] ? '120,120,120,255' : '55,55,55,200'"
+                      point: ~stretch_all
+                      normal: ~36,40,52,140
                       shape: ~round_rect
-                      radius: 10
+                      radius: 18
+                      through: true
                     effect:
                       stroke:
-                        width: 2
-                        color: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
+                        width: 1
+                        color: ~255,255,255,45
+                  头像光环:
+                    type: Texture
+                    attribute:
+                      x: 22
+                      y: 22
+                      width: 176
+                      height: 176
+                      normal: ~235,225,200,45
+                      shape: ~circle
+                      through: true
+                  头像环:
+                    type: Texture
+                    attribute:
+                      x: 30
+                      y: 30
+                      width: 160
+                      height: 160
+                      normal: ~30,34,44,255
+                      shape: ~circle
+                      through: true
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~240,232,210,220
+                  头像:
+                    type: Texture
+                    attribute:
+                      x: 38
+                      y: 38
+                      width: 144
+                      height: 144
+                      normal: "'PlayerSkin:' + Player.getUUID()"
+                      shape: ~circle
+                      through: true
+                  昵称:
+                    type: Text
+                    attribute:
+                      x: 222
+                      y: 30
+                      texts: "'&f' + Player.getName()"
+                      fontSize: 64
+                      limit: 16
+                      through: true
+                  昵称底线:
+                    type: Texture
+                    attribute:
+                      x: 222
+                      y: 76
+                      width: 488
+                      height: 1
+                      normal: ~255,255,255,40
+                      through: true
+                  等级标签:
+                    type: Text
+                    attribute:
+                      x: 222
+                      y: 90
+                      texts: ~&7等级
+                      fontSize: 36
+                      through: true
+                  经验数值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -116
+                      y: 92
+                      expValue: "server.player_exp * server.player_exp_to_level"
+                      texts: "'&8' + self.expValue.round() + ' &7/ ' + server.player_exp_to_level"
+                      fontSize: 36
+                      through: true
+                  经验条底:
+                    type: Texture
+                    attribute:
+                      x: 316
+                      y: 122
+                      width: 310
+                      height: 12
+                      normal: ~255,255,255,35
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  经验条:
+                    type: Progress
+                    attribute:
+                      x: 316
+                      y: 122
+                      width: 310
+                      height: 12
+                      texture: ~245,222,160,255
+                      progress: "math.min(1, server.player_exp)"
+                      time: 200
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  等级值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -30
+                      y: 84
+                      texts: "'&f' + Player.getLevel().round()"
+                      fontSize: 54
+                      through: true
+                  等级分隔线:
+                    type: Texture
+                    attribute:
+                      x: 222
+                      y: 142
+                      width: 488
+                      height: 1
+                      normal: ~255,255,255,30
+                      through: true
+                  生命标签:
+                    type: Text
+                    attribute:
+                      x: 222
+                      y: 154
+                      texts: ~&7生命
+                      fontSize: 36
+                      through: true
+                  生命值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -30
+                      y: 150
+                      texts: "'&f' + Player.getHealth().round() + ' &7/ ' + Player.getMaxHealth().round()"
+                      fontSize: 48
+                      through: true
+                  生命分隔线:
+                    type: Texture
+                    attribute:
+                      x: 222
+                      y: 188
+                      width: 488
+                      height: 1
+                      normal: ~255,255,255,30
+                      through: true
+                  UID标签:
+                    type: Text
+                    attribute:
+                      x: 222
+                      y: 200
+                      texts: ~&7UID
+                      fontSize: 36
+                      through: true
+                  UID值:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -30
+                      y: 200
+                      texts: "'&f' + Player.getUUID().substring(0, 8)"
+                      fontSize: 36
+                      through: true
+              分区标题:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 284
+                  texts: "var.pageCount > 1 ? (var.title + ' &8/ ' + var.pageTitle) : var.title"
+                  fontSize: 36
+                  limit: 30
+                  through: true
+              分页器:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  x: -40
+                  y: 278
+                  width: 190
+                  height: 36
+                  visible: var.pageCount > 1
+                children:
+                  上一页按钮:
+                    type: Canvas
+                    attribute:
+                      width: 36
+                      height: 36
+                      enable: var.hasPrev
                     action:
                       clickLeft: |-
-                        if(self.entry != none && self.entry['enabled']){
-                          Packet.send(var.packetId, 'click', var.actionToken, self.entry['id'])
-                        }
+                        Packet.send(var.packetId, 'page', 'prev')
                     children:
-                      图标:
-                        type: Slot
+                      上页底:
+                        type: Texture
                         attribute:
-                          slotType: ~Icon
-                          visible: "self.parent.entry != none && self.parent.entry['hasIcon']"
-                          itemScale: 0.72
-                          x: 8
-                          y: 6
-                          width: 48
-                          height: 48
-                          normal: ~45,45,55,180
-                          shape: ~round_rect
-                          radius: 8
+                          point: ~stretch_all
+                          normal: ~255,255,255,22
+                          hover: ~255,255,255,70
+                          shape: ~circle
                           through: true
-                          seticon: "self.parent.entry != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
-                      标签:
+                      上页文字:
                         type: Text
                         attribute:
-                          through: true
-                          x: "self.parent.entry != none && self.parent.entry['hasIcon'] ? 138 : 109"
-                          y: 18
-                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
-                          center: true
+                          point: ~middle_center
+                          texts: ~&f‹
                           fontSize: 48
-          纵向滑块:
-            type: Texture
-            val: drag_bar
-            attribute:
-              point: ~middle_left
-              width: 7
-              height: 50
-              normal: ~0,0,0,100
-              x: 613
-              y: -365
-              maxDragY: 960 - 200 - 50
-          页脚网格:
-            type: HGrid
-            val: footer_rows
-            attribute:
-              spaceBetweenX: 50
-              spaceBetweenY: 50
-              column: 2
-              x: 67
-              y: 460
-              point: ~horizontal_stretch_middle
-            children:
-              页脚按钮:
+                          alpha: "var.hasPrev ? 1 : 0.3"
+                          through: true
+                  页码:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f' + (var.pageIndex + 1).round() + ' &7/ ' + var.pageCount.round()"
+                      fontSize: 36
+                      through: true
+                  下一页按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      width: 36
+                      height: 36
+                      enable: var.hasNext
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'page', 'next')
+                    children:
+                      下页底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~255,255,255,22
+                          hover: ~255,255,255,70
+                          shape: ~circle
+                          through: true
+                      下页文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f›
+                          fontSize: 48
+                          alpha: "var.hasNext ? 1 : 0.3"
+                          through: true
+              侧栏:
+                type: Canvas
+                attribute:
+                  x: 40
+                  y: 330
+                  width: 96
+                  height: "var.viewH - 370"
+                children:
+                  侧栏底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~18,22,30,190
+                      shape: ~round_rect
+                      radius: 24
+                      through: true
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~255,255,255,35
+                  页脚列表:
+                    type: VStack
+                    val: footer_rows
+                    attribute:
+                      x: 0
+                      y: 14
+                      width: 96
+                      spaceBetween: 6
+                      maxSize: "var.footerCount + 1"
+                    children:
+                      页脚按钮:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.footerRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 96
+                          height: 104
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none && self.entry['enabled']){
+                              if(self.entry['clientAction'] == 'options'){
+                                Game.options()
+                              } elif(self.entry['clientAction'] == 'quit'){
+                                Game.quit()
+                              } elif(var.actionToken != none){
+                                Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
+                              }
+                            }
+                        children:
+                          圆底:
+                            type: Texture
+                            attribute:
+                              x: 18
+                              y: 6
+                              width: 60
+                              height: 60
+                              normal: "self.parent.entry['enabled'] ? '255,255,255,30' : '255,255,255,12'"
+                              hover: "self.parent.entry['enabled'] ? '255,255,255,80' : '255,255,255,12'"
+                              shape: ~circle
+                              through: true
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.isHovered() ? '240,230,205,230' : '255,255,255,70'"
+                              ripple:
+                                duration: 600
+                                color: ~255,255,255,80
+                                width: 0.08
+                          图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              x: 28
+                              y: 16
+                              width: 40
+                              height: 40
+                              itemScale: 0.62
+                              normal: ~0,0,0,0
+                              visible: self.parent.entry['hasIcon']
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
+                              through: true
+                              seticon: "self.setItemIcon(self.parent.entry['itemJson'])"
+                          字形:
+                            type: Text
+                            attribute:
+                              x: 48
+                              y: 24
+                              center: true
+                              texts: "'&f' + var.footerGlyphs[self.parent.entryKey]"
+                              visible: "!self.parent.entry['hasIcon']"
+                              fontSize: 48
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
+                              through: true
+                          标签:
+                            type: Text
+                            attribute:
+                              x: 48
+                              y: 74
+                              center: true
+                              texts: self.parent.entry['text']
+                              fontSize: 36
+                              limit: 4
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
+                              through: true
+              网格滚动区:
+                type: Scroll
+                attribute:
+                  x: 160
+                  y: 330
+                  width: 620
+                  height: "var.viewH - 370"
+                  moveY: val.grid_slider.getDragYRatio()
+                action:
+                  wheel: |-
+                    ratio = self.moveY - self.wheelValue * 0.12
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.grid_slider.setDragYRatio(ratio)
+                children:
+                  按钮网格:
+                    type: HGrid
+                    val: button_rows
+                    attribute:
+                      x: 10
+                      y: 4
+                      column: 4
+                      spaceBetweenX: 40
+                      spaceBetweenY: 24
+                    children:
+                      菜单按钮:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.buttonRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 120
+                          height: 164
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none && self.entry['enabled'] && var.actionToken != none){
+                              Packet.send(var.packetId, 'click', var.actionToken, self.entry['id'])
+                            }
+                        children:
+                          图标底:
+                            type: Texture
+                            attribute:
+                              x: 0
+                              y: 0
+                              width: 120
+                              height: 120
+                              normal: "self.parent.entry['enabled'] ? '46,50,60,190' : '30,32,38,120'"
+                              hover: "self.parent.entry['enabled'] ? '74,80,94,230' : '30,32,38,120'"
+                              shape: ~round_rect
+                              radius: 16
+                              through: true
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "self.isHovered() ? '240,230,205,230' : '255,255,255,45'"
+                              ripple:
+                                duration: 600
+                                color: ~255,255,255,70
+                                width: 0.08
+                          图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              x: 22
+                              y: 22
+                              width: 76
+                              height: 76
+                              itemScale: 1.18
+                              normal: ~0,0,0,0
+                              visible: self.parent.entry['hasIcon']
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
+                              through: true
+                              seticon: "self.setItemIcon(self.parent.entry['itemJson'])"
+                          字形:
+                            type: Text
+                            attribute:
+                              x: 60
+                              y: 42
+                              center: true
+                              texts: "'&f' + var.glyphs[self.parent.entryKey]"
+                              visible: "!self.parent.entry['hasIcon']"
+                              fontSize: 72
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
+                              through: true
+                          标签:
+                            type: Text
+                            attribute:
+                              x: 60
+                              y: 132
+                              center: true
+                              texts: self.parent.entry['text']
+                              fontSize: 36
+                              limit: 6
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.5"
+                              through: true
+              网格滑轨:
                 type: Texture
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.footerRows[self.entryKey]
-                  visible: self.entry != none
-                  width: 218
-                  height: 60
-                  normal: "self.entry != none && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
-                  hover: "self.entry != none && self.entry['enabled'] ? '120,120,120,255' : '55,55,55,200'"
+                  x: 794
+                  y: 330
+                  width: 3
+                  height: "var.viewH - 370"
+                  normal: ~255,255,255,20
+                  visible: "var.gridRows * 188 - 20 > var.viewH - 370"
+                  through: true
+              网格滑块:
+                type: Texture
+                val: grid_slider
+                attribute:
+                  x: 791
+                  y: 330
+                  width: 9
+                  height: 72
+                  maxDragY: "var.viewH - 442"
+                  normal: ~200,190,165,190
+                  hover: ~245,225,170,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 4
+                  visible: "var.gridRows * 188 - 20 > var.viewH - 370"
+              空提示:
+                type: Text
+                attribute:
+                  x: 470
+                  y: 450
+                  center: true
+                  texts: ~&7这里暂时没有可用功能
+                  fontSize: 48
+                  visible: var.buttonCount <= 0
+                  through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -40
+              y: 40
+              width: 64
+              height: 64
+              alpha: "1 - var.anim.get()"
+            action:
+              clickLeft: |-
+                var.menuUi.actions['closeMenu']()
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~18,22,30,180
+                  hover: ~64,70,84,235
+                  shape: ~circle
+                  through: true
                 effect:
                   stroke:
                     width: 2
-                    color: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
-                action:
-                  clickLeft: |-
-                    if(self.entry != none && self.entry['enabled']){
-                      if(self.entry['clientAction'] == 'options'){
-                        Game.options()
-                      }elif(self.entry['clientAction'] == 'quit'){
-                        Game.quit()
-                      } else {
-                        Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
-                      }
-                    }
-                children:
-                  图标:
-                    type: Slot
-                    attribute:
-                      slotType: ~Icon
-                      visible: "self.parent.entry != none && self.parent.entry['hasIcon']"
-                      itemScale: 0.72
-                      x: 8
-                      y: 6
-                      width: 48
-                      height: 48
-                      normal: ~45,45,55,180
-                      shape: ~round_rect
-                      radius: 8
-                      through: true
-                      seticon: "self.parent.entry != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
-                  页脚文字:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: "self.parent.entry != none && self.parent.entry['hasIcon'] ? 138 : 109"
-                      y: 18
-                      texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
-                      center: true
-                      fontSize: 48
+                    color: ~255,255,255,120
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 48
+                  through: true

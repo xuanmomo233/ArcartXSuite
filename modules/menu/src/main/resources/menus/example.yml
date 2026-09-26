@@ -145,6 +145,18 @@ pages:
       warehouse:
         # 按钮显示文字
         text: "&f仓库系统"
+        details:
+          summary: "为每一次冒险，留出新的空间"
+          category: "物资管理 / STORAGE"
+          accent: "#D6BE8F"
+          artwork: ""
+          description:
+            - "把旅途中的收获妥善收藏，让背包轻装上阵。"
+            - "在仓库中浏览、整理和存取你的物品。"
+          requirements:
+            - "可用仓库与容量以仓库界面为准。"
+          action-hint: "点击左侧功能，打开仓库"
+          disabled-reason: ""
         # 排列顺序（从 0 开始，数字越小越靠前/靠左上）
         order: 0
         # 按钮级权限（可选），无权限的玩家看不到此按钮
@@ -247,6 +259,14 @@ pages:
       # ─── 邮件系统（演示：基础图标） ───
       mail:
         text: "&f邮件系统"
+        details:
+          summary: "那些等待查收的消息与心意"
+          category: "玩家往来 / MAIL"
+          accent: "#9BBFC2"
+          description:
+            - "查看收到的邮件，在这里连接你与其他玩家。"
+            - "附件与领取状态以邮件界面为准。"
+          action-hint: "点击左侧功能，查看邮件"
         order: 1
         icon:
           material: PAPER
@@ -259,6 +279,16 @@ pages:
       # ─── 在线奖励（演示：条件判断 + 拒绝消息） ───
       rewards:
         text: "&f在线奖励"
+        details:
+          summary: "让相伴的时光，成为新的收获"
+          category: "成长馈赠 / REWARDS"
+          accent: "#B8A2D0"
+          description:
+            - "查看在线奖励与领取进度。"
+            - "具体奖励和领取资格，以奖励界面为准。"
+          requirements:
+            - "角色等级达到 5 级后，可使用此入口。"
+          action-hint: "点击左侧功能，查看在线奖励"
         order: 2
         # 按钮显示条件（可选）
         # 条件满足时按钮正常显示，不满足时：
@@ -282,6 +312,14 @@ pages:
       # ─── 任务导航（演示：基础按钮） ───
       quest:
         text: "&f任务导航"
+        details:
+          summary: "把下一步，交给清晰的方向"
+          category: "探索旅程 / QUESTS"
+          accent: "#A6BEA0"
+          description:
+            - "查看任务目标，寻找值得继续探索的方向。"
+            - "任务进度与导航信息以任务界面为准。"
+          action-hint: "点击左侧功能，打开任务导航"
         order: 3
         actions:
           - "close"
@@ -291,6 +329,14 @@ pages:
       # ─── 世界地图（演示：requirements 前置条件） ───
       map:
         text: "&f世界地图"
+        details:
+          summary: "在更大的世界里，发现你的坐标"
+          category: "世界探索 / ATLAS"
+          accent: "#9BBFC2"
+          description:
+            - "打开地图，查看世界与周围的地理信息。"
+            - "从熟悉的地方出发，寻找新的目的地。"
+          action-hint: "点击左侧功能，展开世界地图"
         order: 4
         # requirements 与 condition 的区别：
         #   requirements — 不满足时按钮完全不显示（硬性隐藏）
@@ -305,6 +351,14 @@ pages:
       # ─── 传送菜单（演示：打开子菜单） ───
       teleport:
         text: "&f传送菜单"
+        details:
+          summary: "让远方，成为触手可及的下一站"
+          category: "便捷出行 / TRAVEL"
+          accent: "#B8A2D0"
+          description:
+            - "进入传送菜单，选择你的目的地。"
+            - "点击此入口只打开菜单，不会立即传送。"
+          action-hint: "点击左侧功能，选择目的地"
         order: 5
         # "open: <菜单id>" — 打开同文件或其他文件中定义的菜单
         # 目标菜单可在同一 .yml 文件中（用 --- 分隔），也可在其他 .yml 文件中

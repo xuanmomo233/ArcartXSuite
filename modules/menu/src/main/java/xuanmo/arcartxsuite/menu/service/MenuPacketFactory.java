@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
@@ -94,6 +95,7 @@ public final class MenuPacketFactory {
             String footerItemJson = iconResolver == null ? "" : iconResolver.resolveItemJson(player, footer.icon());
             row.put("itemJson", footerItemJson);
             row.put("hasIcon", footerItemJson != null && !footerItemJson.isBlank());
+            addDetails(player, footer, row, enabled);
             footerRows.put(rowKey(footerIndex++), row);
         }
         payload.put("footerRows", footerRows);
@@ -139,7 +141,61 @@ public final class MenuPacketFactory {
         String itemJson = iconResolver == null ? "" : iconResolver.resolveItemJson(player, button.icon());
         row.put("itemJson", itemJson);
         row.put("hasIcon", itemJson != null && !itemJson.isBlank());
+        addDetails(player, button, row, Boolean.TRUE.equals(row.get("enabled")));
         return row;
+    }
+
+    private static void addDetails(Player player, MenuButtonDefinition button, Map<String, Object> row, boolean enabled) {
+        MenuButtonDefinition.Details details = button.details();
+        row.put("summary", MenuConditionEvaluator.applyPlaceholders(player, details.summary()));
+        row.put("category", MenuConditionEvaluator.applyPlaceholders(player, details.category()));
+        row.put("accent", details.accent());
+        row.put("artwork", details.artwork());
+        row.put("hasArtwork", !details.artwork().isBlank());
+        row.put("statusText", enabled ? "可使用" : "暂不可用");
+        row.put("actionHint", enabled
+            ? MenuConditionEvaluator.applyPlaceholders(player, details.actionHint()) : "查看上方使用说明");
+        LinkedHashMap<String, Object> lines = new LinkedHashMap<>();
+        appendLines(player, lines, details.description(), "&7");
+        if (!details.requirements().isEmpty()) {
+            appendLines(player, lines, List.of("", "使用说明"), "&f");
+            appendLines(player, lines, details.requirements(), "&7");
+        }
+        if (!enabled) {
+            String reason = details.disabledReason().isBlank() ? button.denyMessage() : details.disabledReason();
+            appendLines(player, lines, List.of("", reason.isBlank() ? "当前未满足使用条件" : reason), "&c");
+        }
+        row.put("detailRows", lines);
+        row.put("detailCount", lines.size());
+    }
+
+    private static void appendLines(Player player, Map<String, Object> rows, List<String> paragraphs, String color) {
+        for (String paragraph : paragraphs) {
+            String resolved = MenuConditionEvaluator.applyPlaceholders(player, paragraph);
+            for (String line : resolved.split("\\R", -1)) {
+                String text = ChatColor.translateAlternateColorCodes('&', color + line);
+                StringBuilder wrapped = new StringBuilder();
+                int width = 0;
+                for (int offset = 0; offset < text.length();) {
+                    int cp = text.codePointAt(offset);
+                    offset += Character.charCount(cp);
+                    if (cp == ChatColor.COLOR_CHAR && offset < text.length()) {
+                        wrapped.appendCodePoint(cp).append(text.charAt(offset++));
+                        continue;
+                    }
+                    int units = cp > 255 ? 2 : 1;
+                    if (width + units > 44) {
+                        String completed = wrapped.toString();
+                        rows.put(rowKey(rows.size()), Map.of("text", completed));
+                        wrapped = new StringBuilder(ChatColor.getLastColors(completed));
+                        width = 0;
+                    }
+                    wrapped.appendCodePoint(cp);
+                    width += units;
+                }
+                rows.put(rowKey(rows.size()), Map.of("text", wrapped.toString()));
+            }
+        }
     }
 
     /**

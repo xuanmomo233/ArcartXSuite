@@ -1109,12 +1109,46 @@ controls:
                       texts: "~&f锁定"
                       fontSize: 36
                       through: true
-              数量输入:
+              扩充:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 476
                   y: 476
+                  width: 160
+                  height: 48
+                  visible: "var.ownerType == 'shared'"
+                  enable: "!var.actionBusy && var.actionToken != '' && var.canUpgrade"
+                action:
+                  clickLeft: |-
+                    var.actionBusy = true
+                    Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
+                children:
+                  扩充底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~44,50,58,245
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  扩充字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.canUpgrade ? '&f升级仓库' : '&7不可扩充'"
+                      fontSize: 36
+                      through: true
+              数量输入:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 536
                   width: 96
                   height: 48
                   visible: "var.ownerType == 'personal'"
@@ -1144,25 +1178,22 @@ controls:
                     action:
                       textChange: |-
                         var.buyAmount = self.getContent()
-              扩充:
+              购买:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: "var.ownerType == 'personal' ? 580 : 476"
-                  y: 476
-                  width: "var.ownerType == 'personal' ? 120 : 160"
+                  x: 128
+                  y: 536
+                  width: 120
                   height: 48
+                  visible: "var.ownerType == 'personal'"
                   enable: "!var.actionBusy && var.actionToken != '' && var.canUpgrade"
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    if(var.ownerType == 'personal'){
-                      Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
-                    }else{
-                      Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
-                    }
+                    Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
                 children:
-                  扩充底:
+                  购买底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -1174,36 +1205,36 @@ controls:
                       stroke:
                         width: 3
                         color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
-                  扩充字:
+                  购买字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&f购买' : '&7槽位已满') : (var.canUpgrade ? '&f升级仓库' : '&7不可扩充')"
+                      texts: "var.canUpgrade ? '&f购买' : '&7槽位已满'"
                       fontSize: 36
                       through: true
+              价格明细:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 264
+                  y: 546
+                  texts: "var.ownerType == 'personal' && var.canUpgrade ? '&7单价 &e' + var.slotPriceText + ' &7× &f' + var.buyAmount + ' &7格 = &a' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '' ? '0' : var.buyAmount)).toInt() + ' ' + var.slotCurrencyName : ''"
+                  fontSize: 30
               分隔三:
                 type: Texture
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 540
+                  y: 600
                   width: "var.halfW - 60"
                   height: 2
                   normal: ~100,110,120,220
-              价格明细:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 552
-                  texts: "var.ownerType == 'personal' && var.canUpgrade ? '&7单价 &e' + var.slotPriceText + ' &7× &f' + var.buyAmount + ' &7格 = &a' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '' ? '0' : var.buyAmount)).toInt() + ' ' + var.slotCurrencyName : ''"
-                  fontSize: 30
               删除标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 552
+                  y: 612
                   texts: "~&f删除共享仓库"
                   fontSize: 36
               删除提示:
@@ -1211,7 +1242,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 588
+                  y: 648
                   texts: "var.ownerType == 'shared' ? (var.deleteConfirm ? '&c输入二级密码后点击确认删除' : '&e点击删除后需要二级密码确认') : '&e请先在左侧选择一个共享仓库'"
                   fontSize: 36
               删除密码:
@@ -1219,7 +1250,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 624
+                  y: 684
                   width: 300
                   height: 48
                 children:
@@ -1252,7 +1283,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 328
-                  y: 624
+                  y: 684
                   width: 200
                   height: 48
                   visible: "var.ownerType == 'shared'"
