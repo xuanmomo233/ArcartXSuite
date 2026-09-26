@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -65,8 +64,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
 
     private WarehouseModuleConfiguration configuration;
-    /** [LEGACY_LEVEL_MIGRATION] 模块配置文件句柄，迁移标记回写用；随自动迁移一并移除。 */
-    private File moduleConfigFile;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
     private WarehouseService service;
     private JdbcWarehouseRepository repository;
@@ -96,6 +93,10 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     .obsoletePath("pickup.extra-backpack-fallback")
                     // 已废弃：二级密码策略全部统一到宿主 config.yml 的 security.secondary-password 节
                     .obsoletePath("security")
+                    // 已废弃：等级制容量体系与一次性迁移标记，逐格解锁已全面取代
+                    .obsoletePath("migration")
+                    .obsoletePath("warehouses.personal.default-level")
+                    .obsoletePath("warehouses.personal.levels")
                 .build())
             .currentVersion(4)
             .validations(List.of(
@@ -144,7 +145,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         if (configFile == null) {
             throw new IllegalStateException("ArcartXWarehouse.yml 配置文件缺失");
         }
-        moduleConfigFile = configFile;
         FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
         configuration = WarehouseModuleConfiguration.load(yaml, logger, currencyManager);
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
@@ -202,9 +202,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setPickupInterceptorProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.PickupInterceptor.class));
         service.start();
-        // ══ [LEGACY_LEVEL_MIGRATION] 下版本移除 ══
-        // 等级制→逐格解锁自动迁移：启动时检查标记，未迁移则异步全量执行并回写标记。
-        scheduleLegacyLevelMigration();
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）
         for (String uiId : service.registeredUiIds()) {
             recordExternalUi(uiId, uiId);
@@ -248,39 +245,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                 + " | 存储=" + configuration.storage().mode()
                 + " | 跨服编辑锁=" + (service.crossServerActive() ? "ON" : "OFF")
         );
-    }
-
-    /**
-     * ══ [LEGACY_LEVEL_MIGRATION] 下版本移除 ══
-     * 等级制容量 → 逐格解锁自动迁移：启动时读配置标记，未迁移则异步全量扫描
-     * {@code warehouse_personal} 折算 extra_slots（总量守恒、幂等），成功后回写
-     * {@code migration.legacy-level-done: true} 使后续启动零开销跳过。
-     * 移除范围：本方法、{@code service.migrateLegacyCapacities()}、
-     * {@code service.migrateLegacyLevel()}、{@link #moduleConfigFile}、配置节 {@code migration}。
-     */
-    private void scheduleLegacyLevelMigration() {
-        if (moduleConfigFile == null || service == null) {
-            return;
-        }
-        FileConfiguration yaml = YamlConfiguration.loadConfiguration(moduleConfigFile);
-        if (yaml.getBoolean("migration.legacy-level-done", false)) {
-            return;
-        }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                WarehouseService.SlotMigrationResult result = service.migrateLegacyCapacities();
-                if (result.recordsMigrated() > 0) {
-                    logger.info("[LEGACY_LEVEL_MIGRATION] 等级制→逐格解锁迁移完成：扫描 "
-                        + result.recordsScanned() + " 条，迁移 " + result.recordsMigrated()
-                        + " 条，累计折算 " + result.slotsGranted() + " 格。");
-                }
-                FileConfiguration live = YamlConfiguration.loadConfiguration(moduleConfigFile);
-                live.set("migration.legacy-level-done", true);
-                live.save(moduleConfigFile);
-            } catch (Exception exception) {
-                logger.warning("[LEGACY_LEVEL_MIGRATION] 等级制→逐格解锁迁移失败: " + exception.getMessage());
-            }
-        });
     }
 
     /**

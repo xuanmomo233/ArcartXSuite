@@ -62,13 +62,6 @@ pickup:
   mythic-loot-enabled: true  # 服务器开关：是否允许 MythicMobs 自定义掉落物自动入库（关闭后管理界面隐藏对应开关）
   notify-on-auto-store: true  # 自动存入时是否通知玩家（玩家个人设置的默认值）
 
-# ─── 迁移标记 ───
-migration:
-  # [LEGACY_LEVEL_MIGRATION] 等级制→逐格解锁自动迁移完成标记。
-  # 模块启动时检测：false 则自动全量迁移并回写 true，true 则跳过。
-  # 下版本随迁移逻辑一并移除，请勿手动修改。
-  legacy-level-done: false
-
 search:
   page-size: 18  # 搜索结果每页显示数量
   default-sort: "time"  # 默认排序方式（time / name / amount）
@@ -77,29 +70,14 @@ warehouses:
   personal:
     display-name: "&6个人仓库"  # 个人仓库显示名称
     default-owned: true  # 玩家首次使用时是否自动创建
-    # 逐格解锁模型：初始 base-slots 格，玩家按 slot-price 逐格购买至 max-slots。
+    # 逐格解锁模型：已解锁格数 = base-slots + 已购格数(extra_slots)，上限为 max-slots。
+    # 注意：max-slots 是槽位【总数】上限（含初始格），不是"可再购买的格数"。
     # 扩展背包（extrabackpack）与本仓库共用同一存储，两个入口看到同样的格子。
-    base-slots: 32  # 初始解锁槽位数
-    max-slots: 999  # 可购买的槽位上限
+    base-slots: 72  # 初始解锁槽位数
+    max-slots: 720  # 槽位总数上限（含初始格）
     slot-price:
-      currency: "points"  # 每格所需货币 ID
-      amount: 100  # 每格价格
-    # 旧版等级制容量（已弃用）：仅用于一次性迁移，level>default 的老玩家
-    # 按该等级容量折算为 extra_slots；新玩家不再读取本表。
-    default-level: 1
-    levels:
-      "1":
-        capacity: 1000
-        upgrade:
-          currency: "points"
-          amount: 500
-      "2":
-        capacity: 2500
-        upgrade:
-          currency: "points"
-          amount: 1200
-      "3":
-        capacity: 6000
+      currency: "money"  # 每格所需货币 ID
+      amount: 1000  # 每格价格
 
 # 物品分类定义（按 NBT 路径匹配物品归属分类）
 categories:
@@ -131,7 +109,6 @@ bank:
   # 未在全局池定义的 ID 会在加载时告警并跳过。
   currencies:
     - money
-    - points
   deposit-products:
     money_stable_1d:
       enabled: true  # 是否启用此产品
@@ -173,25 +150,6 @@ bank:
           min: 50000
           max: 0
           rate: 0.06
-    points_3d:
-      enabled: true
-      display-name: "点券 3 日"
-      description: "点券定期产品。"
-      currency: "points"
-      duration-seconds: 259200  # 3 天
-      min-amount: 50
-      max-amount: 0
-      permission: ""
-      interest-tiers:
-        tier_1:
-          min: 50
-          max: 999
-          rate: 0.02
-        tier_2:
-          min: 1000
-          max: 0
-          rate: 0.03
-
 # 共享仓库配置
 shared:
   enabled: true  # 是否启用共享仓库功能
@@ -201,17 +159,17 @@ shared:
   default-level: 1  # 默认共享仓库等级
   levels:
     "1":
-      capacity: 2000  # 等级 1 容量
+      capacity: 144  # 等级 1 容量
       upgrade:
         currency: "points"
-        amount: 800
+        amount: 1000
     "2":
-      capacity: 5000
+      capacity: 360
       upgrade:
         currency: "points"
         amount: 1800
     "3":
-      capacity: 10000  # 等级 3 容量（最高级）
+      capacity: 720  # 等级 3 容量（最高级）
   role-names:
     owner: "所有者"  # 所有者角色显示名
     member: "成员"  # 成员角色显示名

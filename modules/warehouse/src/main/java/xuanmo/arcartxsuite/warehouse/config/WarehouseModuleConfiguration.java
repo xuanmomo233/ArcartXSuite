@@ -163,7 +163,7 @@ public record WarehouseModuleConfiguration(
     private static Map<String, WarehouseDefinition> loadWarehouses(ConfigurationSection section, Logger logger) {
         LinkedHashMap<String, WarehouseDefinition> values = new LinkedHashMap<>();
         if (section == null) {
-            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 1, Map.of(1, new WarehouseLevelDefinition(1, 1000L, null)), 32L, 999L, null));
+            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 32L, 999L, null));
             return values;
         }
         for (String rawId : section.getKeys(false)) {
@@ -172,15 +172,6 @@ public record WarehouseModuleConfiguration(
                 continue;
             }
             String id = normalizeId(rawId);
-            Map<Integer, WarehouseLevelDefinition> levels = loadWarehouseLevels(child.getConfigurationSection("levels"));
-            if (levels.isEmpty()) {
-                levels = new LinkedHashMap<>();
-                levels.put(1, new WarehouseLevelDefinition(1, 1000L, null));
-            }
-            int defaultLevel = Math.max(1, child.getInt("default-level", 1));
-            if (!levels.containsKey(defaultLevel)) {
-                defaultLevel = levels.keySet().stream().min(Integer::compareTo).orElse(1);
-            }
             long baseSlots = Math.max(1L, child.getLong("base-slots", 32L));
             long maxSlots = Math.max(baseSlots, child.getLong("max-slots", 999L));
             UpgradeCost slotPrice = loadUpgradeCost(child, "slot-price");
@@ -191,8 +182,6 @@ public record WarehouseModuleConfiguration(
                     readString(child, "display-name", rawId),
                     child.getBoolean("default-owned", false),
                     readString(child, "permission", ""),
-                    defaultLevel,
-                    immutableCopy(levels),
                     baseSlots,
                     maxSlots,
                     slotPrice
@@ -588,24 +577,19 @@ public record WarehouseModuleConfiguration(
     public record SearchConfiguration(int pageSize, String defaultSortId) {
     }
 
-    /** 个人仓库定义：显示名、默认拥有、权限、多等级容量（legacy）、逐格解锁参数。 */
+    /** 个人仓库定义：显示名、默认拥有、权限、逐格解锁参数。 */
     public record WarehouseDefinition(
         String id,
         String displayName,
         boolean defaultOwned,
         String permission,
-        int defaultLevel,
-        Map<Integer, WarehouseLevelDefinition> levels,
         long baseSlots,
         long maxSlots,
         UpgradeCost slotPrice
     ) {
-        public WarehouseLevelDefinition level(int level) {
-            return levels.getOrDefault(level, levels.get(defaultLevel));
-        }
     }
 
-    /** 仓库单级定义：等级、容量、升级消耗。 */
+    /** 共享仓库单级定义：等级、容量、升级消耗。 */
     public record WarehouseLevelDefinition(int level, long capacity, UpgradeCost upgradeCost) {
     }
 

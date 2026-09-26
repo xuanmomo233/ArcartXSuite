@@ -105,6 +105,8 @@ ui:
       var.level = packet['level']
       var.canUpgrade = packet['canUpgrade']
       var.slotPriceText = packet['slotPriceText']
+      var.slotPriceAmount = packet['slotPriceAmount']
+      var.slotCurrencyName = packet['slotCurrencyName']
       var.nextUpgradeText = packet['nextUpgradeText']
       var.autoPickup = packet['autoPickup']
       var.autoPickupMythic = packet['autoPickupMythic']
@@ -196,6 +198,9 @@ ui:
       var.hasPassword = false
       var.level = 1
       var.slotPriceText = ''
+      var.slotPriceAmount = 0
+      var.slotCurrencyName = ''
+      var.buyAmount = '1'
       var.manageWarehouseSelected = {}
       var.packetId = 'AXS_WAREHOUSE'
       var.readOnly = false
@@ -1104,19 +1109,58 @@ controls:
                       texts: "~&f锁定"
                       fontSize: 36
                       through: true
-              扩充:
+              数量输入:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 476
                   y: 476
-                  width: 160
+                  width: 96
+                  height: 48
+                  visible: "var.ownerType == 'personal'"
+                children:
+                  数量底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,42,50,225
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                  数量框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 6
+                      width: 80
+                      height: 36
+                      length: 4
+                      emptyText: ~&7数量
+                      inputPattern: "^[0-9]*$"
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.buyAmount = self.getContent()
+              扩充:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.ownerType == 'personal' ? 580 : 476"
+                  y: 476
+                  width: "var.ownerType == 'personal' ? 120 : 160"
                   height: 48
                   enable: "!var.actionBusy && var.actionToken != '' && var.canUpgrade"
                 action:
                   clickLeft: |-
                     var.actionBusy = true
-                    Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
+                    if(var.ownerType == 'personal'){
+                      Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
+                    }else{
+                      Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
+                    }
                 children:
                   扩充底:
                     type: Texture
@@ -1134,7 +1178,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&f+1格 &e' + var.slotPriceText : '&7槽位已满') : (var.canUpgrade ? '&f升级仓库' : '&7不可扩充')"
+                      texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&f购买' : '&7槽位已满') : (var.canUpgrade ? '&f升级仓库' : '&7不可扩充')"
                       fontSize: 36
                       through: true
               分隔三:
@@ -1146,6 +1190,14 @@ controls:
                   width: "var.halfW - 60"
                   height: 2
                   normal: ~100,110,120,220
+              价格明细:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 552
+                  texts: "var.ownerType == 'personal' && var.canUpgrade ? '&7单价 &e' + var.slotPriceText + ' &7× &f' + var.buyAmount + ' &7格 = &a' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '' ? '0' : var.buyAmount)).toInt() + ' ' + var.slotCurrencyName : ''"
+                  fontSize: 30
               删除标题:
                 type: Text
                 attribute:

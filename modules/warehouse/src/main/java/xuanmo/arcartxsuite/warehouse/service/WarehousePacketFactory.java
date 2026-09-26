@@ -608,6 +608,8 @@ final class WarehousePacketFactory {
         packet.put("level", 1);
         packet.put("canUpgrade", false);
         packet.put("slotPriceText", "");
+        packet.put("slotPriceAmount", 0.0);
+        packet.put("slotCurrencyName", "");
         packet.put("nextUpgradeText", service.message("ui.upgrade-unavailable"));
         if (WarehouseService.OWNER_SHARED.equals(state.ownerType())) {
             Optional<SharedWarehouseRecord> shared = currentSharedRecord(player, state);
@@ -659,6 +661,8 @@ final class WarehousePacketFactory {
         }
         packet.put("canUpgrade", true);
         packet.put("slotPriceText", service.formatCurrencyWithName(cost.currencyId(), cost.amount()));
+        packet.put("slotPriceAmount", cost.amount().doubleValue());
+        packet.put("slotCurrencyName", service.currencyDisplayName(cost.currencyId()));
         packet.put("nextUpgradeText",
             service.message("ui.buy-slots-hint",
                 service.formatCurrencyWithName(cost.currencyId(), cost.amount()),

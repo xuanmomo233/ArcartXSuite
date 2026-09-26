@@ -15,9 +15,6 @@ public interface WarehouseRepository {
 
     void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException;
 
-    /** 加载全服所有玩家的个人仓库记录（一次性迁移脚本用，记录量大时慎用）。 */
-    List<WarehouseRecord> loadAllPersonalWarehouses() throws SQLException;
-
     /** 个人仓库额外购买槽位数原子递增（可为负值，结果不小于 0）。 */
     void addPersonalExtraSlots(UUID playerUuid, String warehouseId, long delta, long updatedAt) throws SQLException;
 

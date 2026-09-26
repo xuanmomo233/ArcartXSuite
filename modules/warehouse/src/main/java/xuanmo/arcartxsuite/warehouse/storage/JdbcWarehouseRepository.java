@@ -117,25 +117,6 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
-    public List<WarehouseRecord> loadAllPersonalWarehouses() throws SQLException {
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "SELECT player_uuid, warehouse_id, level, custom_name, showcase_enabled, extra_slots, updated_at FROM warehouse_personal ORDER BY player_uuid ASC"
-             );
-             ResultSet resultSet = statement.executeQuery()) {
-            List<WarehouseRecord> result = new ArrayList<>();
-            while (resultSet.next()) {
-                result.add(new WarehouseRecord(
-                    UUID.fromString(resultSet.getString("player_uuid")),
-                    resultSet.getString("warehouse_id"), resultSet.getInt("level"),
-                    resultSet.getString("custom_name"), resultSet.getBoolean("showcase_enabled"),
-                    resultSet.getLong("updated_at"), resultSet.getLong("extra_slots")));
-            }
-            return result;
-        }
-    }
-
-    @Override
     public void addPersonalExtraSlots(UUID playerUuid, String warehouseId, long delta, long updatedAt) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(

@@ -160,11 +160,19 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     private void handleView(CommandSender sender, String[] args) {
         WarehouseService svc = serviceProvider.get();
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
-        if (args.length < 4) { sender.sendMessage(fullMsg("admin.view.usage")); return; }
+        if (args.length < 3) { sender.sendMessage(fullMsg("admin.view.usage")); return; }
         org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
         if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        String warehouseId = args.length >= 4 ? args[3] : svc.firstPersonalWarehouseId();
         String prefix = messages != null ? messages.get("prefix") : "";
-        svc.describePersonalWarehouse(target.getUniqueId(), target.getName() == null ? args[2] : target.getName(), args[3],
+        // 玩家执行：直接以只读 UI 形式打开目标仓库（数据走数据库，目标离线也可查看）
+        if (sender instanceof Player viewer) {
+            WarehouseService.ActionResult result = svc.openPreview(viewer, target.getUniqueId(), warehouseId);
+            sender.sendMessage(prefix + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+            return;
+        }
+        // 控制台执行：退化为文本概览
+        svc.describePersonalWarehouse(target.getUniqueId(), target.getName() == null ? args[2] : target.getName(), warehouseId,
             lines -> lines.forEach(line -> sender.sendMessage(prefix + line)),
             error -> sender.sendMessage(prefix + ChatColor.RED + error));
     }
