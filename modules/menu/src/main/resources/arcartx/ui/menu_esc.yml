@@ -65,6 +65,8 @@ ui:
       var.pageIndex = 0
       var.glyphs = {}
       var.footerGlyphs = {}
+      var.按钮轮次 = 0
+      var.页脚轮次 = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
       var.anim = Smooth(1, 0, 320)
       self.actions['resize']()
@@ -130,35 +132,78 @@ ui:
       if(changedPage){
         val.grid_slider.setDragYRatio(0)
       }
-      while(val.button_rows.childrenCount() > var.buttonCount && val.button_rows.childrenCount() > 1){
-        val.button_rows.get((val.button_rows.childrenCount() - 1).round()).remove()
-      }
-      while(val.footer_rows.childrenCount() > var.footerCount && val.footer_rows.childrenCount() > 1){
-        val.footer_rows.get((val.footer_rows.childrenCount() - 1).round()).remove()
-      }
-      if(var.buttonCount > val.button_rows.childrenCount()){
-        for(i in range(val.button_rows.childrenCount(), var.buttonCount - 1)){
-          mb = val.button_rows['菜单按钮'].copy('菜单按钮' + i.round())
-          mb.entryKey = i.round()
+      // get(index)/['name'] 对 packetHandler 中动态创建的子控件不可靠：
+      // 模板用 get(0) 定位，copy 返回值存入引用字典，remove/seticon 全部走引用
+      目标按钮数 = var.buttonCount.round()
+      if(val.button_rows.childrenCount() - 1 != 目标按钮数 - 1){
+        if(var.按钮引用 != none){
+          for(key in var.按钮引用.keys()){
+            old = var.按钮引用[key]
+            if(old != none){
+              old.remove()
+            }
+          }
+        }
+        var.按钮引用 = {}
+        var.按钮轮次 = (var.按钮轮次 + 1).round()
+        if(val.button_rows != none){
+          模板 = val.button_rows.get(0)
+          if(模板 != none){
+            模板.entryKey = 0.round()
+          }
+          if(目标按钮数 > 1){
+            for(i in range(1, 目标按钮数 - 1)){
+              if(模板 != none){
+                mb = 模板.copy('菜单按钮_' + var.按钮轮次 + '_' + i.round())
+                mb.entryKey = i.round()
+                var.按钮引用[i.round()] = mb
+              }
+            }
+          }
         }
       }
-      if(var.footerCount > val.footer_rows.childrenCount()){
-        for(i in range(val.footer_rows.childrenCount(), var.footerCount - 1)){
-          fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + i.round())
-          fb.entryKey = i.round()
+      目标页脚数 = var.footerCount.round()
+      if(val.footer_rows.childrenCount() - 1 != 目标页脚数 - 1){
+        if(var.页脚引用 != none){
+          for(key in var.页脚引用.keys()){
+            old = var.页脚引用[key]
+            if(old != none){
+              old.remove()
+            }
+          }
+        }
+        var.页脚引用 = {}
+        var.页脚轮次 = (var.页脚轮次 + 1).round()
+        if(val.footer_rows != none){
+          模板 = val.footer_rows.get(0)
+          if(模板 != none){
+            模板.entryKey = 0.round()
+          }
+          if(目标页脚数 > 1){
+            for(i in range(1, 目标页脚数 - 1)){
+              if(模板 != none){
+                fb = 模板.copy('页脚按钮_' + var.页脚轮次 + '_' + i.round())
+                fb.entryKey = i.round()
+                var.页脚引用[i.round()] = fb
+              }
+            }
+          }
         }
       }
       var.glyphs = {}
       var.footerGlyphs = {}
-      if(var.buttonCount > 0){
-        for(i in range(0, var.buttonCount - 1)){
+      // 图标走 itemJson 分离字典：self.parent.entry 在 copy 刚建完时可能尚未解析，
+      // seticon 只能依赖 entryKey + var 字典，否则全部清成 air
+      var.iconJsons = {}
+      var.footerIconJsons = {}
+      if(目标按钮数 > 0){
+        for(i in range(0, 目标按钮数 - 1)){
           key = i.round()
           entry = var.buttonRows[key]
-          mb = val.button_rows.get(key)
           if(entry['hasIcon']){
-            mb['图标'].seticon()
+            var.iconJsons[key] = entry['itemJson']
           } else {
-            mb['图标'].setItemIcon(var.air)
+            var.iconJsons[key] = var.air
           }
           label = entry['text']
           while(label.length() >= 2 && (label.charAt(0) == '&' || label.charAt(0) == '§')){
@@ -171,15 +216,14 @@ ui:
           }
         }
       }
-      if(var.footerCount > 0){
-        for(i in range(0, var.footerCount - 1)){
+      if(目标页脚数 > 0){
+        for(i in range(0, 目标页脚数 - 1)){
           key = i.round()
           entry = var.footerRows[key]
-          fb = val.footer_rows.get(key)
           if(entry['hasIcon']){
-            fb['图标'].seticon()
+            var.footerIconJsons[key] = entry['itemJson']
           } else {
-            fb['图标'].setItemIcon(var.air)
+            var.footerIconJsons[key] = var.air
           }
           label = entry['text']
           while(label.length() >= 2 && (label.charAt(0) == '&' || label.charAt(0) == '§')){
@@ -189,6 +233,38 @@ ui:
             var.footerGlyphs[key] = label.charAt(0)
           } else {
             var.footerGlyphs[key] = '✦'
+          }
+        }
+      }
+      if(目标按钮数 > 0){
+        if(val.button_rows != none){
+          mb = val.button_rows.get(0)
+          if(mb != none){
+            mb['图标'].seticon()
+          }
+        }
+        if(var.按钮引用 != none){
+          for(i in range(1, 目标按钮数 - 1)){
+            mb = var.按钮引用[i.round()]
+            if(mb != none){
+              mb['图标'].seticon()
+            }
+          }
+        }
+      }
+      if(目标页脚数 > 0){
+        if(val.footer_rows != none){
+          fb = val.footer_rows.get(0)
+          if(fb != none){
+            fb['图标'].seticon()
+          }
+        }
+        if(var.页脚引用 != none){
+          for(i in range(1, 目标页脚数 - 1)){
+            fb = var.页脚引用[i.round()]
+            if(fb != none){
+              fb['图标'].seticon()
+            }
           }
         }
       }
@@ -563,7 +639,7 @@ controls:
                               visible: self.parent.entry['hasIcon']
                               alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
                               through: true
-                              seticon: "self.setItemIcon(self.parent.entry['itemJson'])"
+                              seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
                           字形:
                             type: Text
                             attribute:
@@ -658,7 +734,7 @@ controls:
                               visible: self.parent.entry['hasIcon']
                               alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
                               through: true
-                              seticon: "self.setItemIcon(self.parent.entry['itemJson'])"
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
                           字形:
                             type: Text
                             attribute:

@@ -73,11 +73,20 @@ class MenuPanelResourceTest {
         }
         String apply = yaml.getString("ui.action.applyPacket");
         assertTrue(apply.contains("var.selectedId == entry['id']"));
-        assertTrue(apply.contains("if(var.buttonCount > 0)"));
-        assertTrue(apply.contains("if(var.footerCount > 0)"));
-        assertTrue(apply.contains("var.buttonCount > val.button_rows.childrenCount()"));
-        assertTrue(apply.contains("setItemIcon(var.air)"));
+        assertTrue(apply.contains("if(目标按钮数 > 0)"));
+        assertTrue(apply.contains("if(目标页脚数 > 0)"));
+        assertTrue(apply.contains("val.button_rows.get(0)"));
+        assertTrue(apply.contains("var.按钮引用[i.round()] = mb"));
+        assertTrue(apply.contains("var.页脚引用[i.round()] = fb"));
+        assertTrue(apply.contains("mb['图标'].seticon()"));
+        assertTrue(apply.contains("var.iconJsons[key] = entry['itemJson']"));
+        assertTrue(apply.contains("var.footerIconJsons[key] = entry['itemJson']"));
+        assertFalse(apply.contains("['菜单按钮'].copy"));
+        assertFalse(apply.contains("setItemIcon"));
         assertFalse(apply.contains(".clear()"));
+        String refresh = yaml.getString("ui.action.refreshDetails");
+        assertTrue(refresh.contains("setItemIcon(var.air)"));
+        assertTrue(refresh.contains("var.说明引用[i.round()] = row"));
         assertFalse(yaml.getString("ui.action.tick").contains(".copy("));
     }
 

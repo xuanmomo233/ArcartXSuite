@@ -39,6 +39,13 @@
     public <init>();
 }
 
+# ─── Aria 脚本玩家门面（JavaObjectMirror 按方法名反射调用） ──────
+# global.player.* 脚本 API（getLevel/hasPermission/papi/command 等）由 ArcartX
+# Aria 的 JavaObjectMirror 通过反射按方法名解析；方法名被混淆后脚本调用一律
+# 返回 none，形如 "none >= 30" 的条件直接报「none 类型不支持比较运算」。
+-keep class xuanmo.arcartxsuite.condition.AriaPlayer { *; }
+-keep class xuanmo.arcartxsuite.condition.AriaPlayer$* { *; }
+
 # ─── bridge 包：不再保留任何实现类名 ─────────────────────────────
 # 所有核心 bridge 均通过 xuanmo.arcartxsuite.api.bridge.* 接口暴露，并由宿主实现。
 # 模块不直接引用 xuanmo.arcartxsuite.bridge.* 下的任何实现类，核心 bridge 可完全混淆。

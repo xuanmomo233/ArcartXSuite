@@ -94,7 +94,7 @@ class MenuEscResourceTest {
             assertNull(button.get("attribute.enable"));
             ConfigurationSection icon = button.getConfigurationSection("children.图标");
             assertEquals("Slot", icon.getString("type"));
-            assertTrue(icon.getString("attribute.seticon").contains("self.parent.entry['itemJson']"));
+            assertTrue(icon.getString("attribute.seticon").contains("self.parent.entryKey"));
             assertTrue(button.getString("children.字形.attribute.visible").contains("!self.parent.entry['hasIcon']"));
         }
         String footerClick = refs.get("footer_rows").getString("children.页脚按钮.action.clickLeft");
@@ -111,11 +111,16 @@ class MenuEscResourceTest {
             assertTrue(yaml.getString("ui.packetHandler." + handler).contains("self.actions['applyPacket']()"));
         }
         String apply = yaml.getString("ui.action.applyPacket");
-        assertTrue(apply.contains("if(var.buttonCount > 0)"));
-        assertTrue(apply.contains("if(var.footerCount > 0)"));
-        assertTrue(apply.contains("var.buttonCount > val.button_rows.childrenCount()"));
-        assertTrue(apply.contains("var.footerCount > val.footer_rows.childrenCount()"));
-        assertTrue(apply.contains("setItemIcon(var.air)"));
+        assertTrue(apply.contains("if(目标按钮数 > 0)"));
+        assertTrue(apply.contains("if(目标页脚数 > 0)"));
+        assertTrue(apply.contains("val.button_rows.get(0)"));
+        assertTrue(apply.contains("var.按钮引用[i.round()] = mb"));
+        assertTrue(apply.contains("var.页脚引用[i.round()] = fb"));
+        assertTrue(apply.contains("mb['图标'].seticon()"));
+        assertTrue(apply.contains("var.iconJsons[key] = entry['itemJson']"));
+        assertTrue(apply.contains("var.footerIconJsons[key] = entry['itemJson']"));
+        assertFalse(apply.contains("['菜单按钮'].copy"));
+        assertFalse(apply.contains("setItemIcon"));
         assertTrue(apply.contains("var.glyphs[key]"));
         assertTrue(apply.contains("var.footerGlyphs[key]"));
         assertFalse(apply.contains(".clear()"));
