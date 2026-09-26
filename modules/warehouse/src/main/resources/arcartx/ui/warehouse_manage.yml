@@ -58,9 +58,10 @@ ui:
     #   - readOnly: 是否只读模式
     #   - lockOwner: 编辑锁持有者
     #   - capacityText: 容量显示文本
-    #   - level: 仓库等级
-    #   - canUpgrade: 是否可升级
-    #   - nextUpgradeText: 下一级升级信息文本
+    #   - level: 仓库等级（仅共享仓库有意义；个人仓库逐格解锁恒为 1）
+    #   - canUpgrade: 是否可扩容（个人=还能再买一格，共享=可升下一级）
+    #   - slotPriceText: 个人仓库单格价格文本
+    #   - nextUpgradeText: 扩容提示文本（个人=槽位价格提示，共享=下一级信息）
     #   - autoPickup: 是否启用自动拾取
     #   - autoPickupMythic: 是否自动拾取 MythicMobs 掉落
     #   - autoPickupNotify: 是否通知自动拾取
@@ -103,6 +104,7 @@ ui:
       var.capacityText = packet['capacityText']
       var.level = packet['level']
       var.canUpgrade = packet['canUpgrade']
+      var.slotPriceText = packet['slotPriceText']
       var.nextUpgradeText = packet['nextUpgradeText']
       var.autoPickup = packet['autoPickup']
       var.autoPickupMythic = packet['autoPickupMythic']
@@ -193,6 +195,7 @@ ui:
       var.capacityText = '0/0'
       var.hasPassword = false
       var.level = 1
+      var.slotPriceText = ''
       var.manageWarehouseSelected = {}
       var.packetId = 'AXS_WAREHOUSE'
       var.readOnly = false
@@ -978,7 +981,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 368
-                  texts: "'&f当前 Lv.' + var.level.round() + '   &e容量 ' + var.capacityText"
+                  texts: "var.ownerType == 'shared' ? ('&f当前 Lv.' + var.level.round() + '   &e容量 ' + var.capacityText) : ('&e已解锁 ' + var.capacityText + ' 格')"
                   fontSize: 36
               扩充提示:
                 type: Text
@@ -1131,7 +1134,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.canUpgrade ? '&f升级仓库' : '&7不可扩充'"
+                      texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&f+1格 &e' + var.slotPriceText : '&7槽位已满') : (var.canUpgrade ? '&f升级仓库' : '&7不可扩充')"
                       fontSize: 36
                       through: true
               分隔三:

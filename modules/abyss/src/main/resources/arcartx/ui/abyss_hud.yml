@@ -1,0 +1,155 @@
+# AXS 资源说明
+# 用途: Abyss 副本内 HUD —— 波次/存活/时间/任务追踪
+# 由服务端在进本时打开、出本关闭；每秒 update 包刷新。
+ui:
+  isHud: true
+  defaultOpen: false
+  through: true
+  show: true
+  packetHandler:
+    # packetHandler: update
+    # 包字段: dungeonName/status/groupTotal/groupDone/activeGroup/aliveMobs
+    #         alivePlayers/totalPlayers/timeText/timeRatio/questRows{idx:{name,status}}
+    update: |-
+      var.dungeonName = packet['dungeonName']
+      var.status = packet['status']
+      var.groupTotal = packet['groupTotal']
+      var.groupDone = packet['groupDone']
+      var.activeGroup = packet['activeGroup']
+      var.aliveMobs = packet['aliveMobs']
+      var.alivePlayers = packet['alivePlayers']
+      var.totalPlayers = packet['totalPlayers']
+      var.timeText = packet['timeText']
+      var.timeRatio = packet['timeRatio']
+      var.questRows = packet['questRows']
+      var.quest0 = var.questRows != none ? var.questRows['0'] : none
+      var.quest1 = var.questRows != none ? var.questRows['1'] : none
+      var.quest2 = var.questRows != none ? var.questRows['2'] : none
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      副本面板:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: -24
+          y: 96
+          width: 300
+          height: 220
+          through: true
+        children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,24,34,160
+              shape: ~round_rect
+              radius: 12
+              through: true
+          副本名:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 10
+              texts: "'&b&l' + var.dungeonName"
+              fontSize: 40
+              through: true
+          波次:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 62
+              texts: "'&7进度: &f' + var.groupDone.round() + '/' + var.groupTotal.round() + (var.activeGroup != '' && var.activeGroup != none ? '  &e' + var.activeGroup : '')"
+              fontSize: 36
+              through: true
+          存活:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 102
+              texts: "'&7怪物: &c' + var.aliveMobs.round() + '  &7队员: &a' + var.alivePlayers.round() + '/' + var.totalPlayers.round()"
+              fontSize: 36
+              through: true
+          时间:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 142
+              texts: "'&7剩余: &f' + var.timeText"
+              fontSize: 36
+              through: true
+          时间条:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              x: 16
+              y: -16
+              width: "268 * var.timeRatio"
+              height: 6
+              normal: "var.timeRatio > 0.3 ? '90,150,250,230' : '220,80,80,230'"
+              shape: ~round_rect
+              radius: 3
+              through: true
+      任务面板:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: -24
+          y: 330
+          width: 300
+          height: 150
+          visible: var.quest0 != none
+          through: true
+        children:
+          任务背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,24,34,140
+              shape: ~round_rect
+              radius: 12
+              through: true
+          任务标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 8
+              texts: ~&e任务
+              fontSize: 36
+              through: true
+          任务0:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 46
+              texts: "var.quest0 != none ? '&7- ' + var.quest0['name'] + (var.quest0['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
+              fontSize: 36
+              through: true
+          任务1:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 82
+              texts: "var.quest1 != none ? '&7- ' + var.quest1['name'] + (var.quest1['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
+              fontSize: 36
+              through: true
+          任务2:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 118
+              texts: "var.quest2 != none ? '&7- ' + var.quest2['name'] + (var.quest2['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
+              fontSize: 36
+              through: true

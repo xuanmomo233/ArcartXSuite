@@ -43,6 +43,22 @@ public interface SecondaryPasswordAccess {
     boolean clear(@NotNull Player player, @NotNull String currentPassword);
 
     /**
+     * Minimum accepted password length, configured centrally by the host
+     * ({@code security.secondary-password.min-length}).
+     */
+    default int minLength() {
+        return 4;
+    }
+
+    /**
+     * Maximum accepted password length, configured centrally by the host
+     * ({@code security.secondary-password.max-length}).
+     */
+    default int maxLength() {
+        return 32;
+    }
+
+    /**
      * Locks the player's current secondary-password session, requiring re-verification.
      */
     default void lock(@NotNull Player player) {

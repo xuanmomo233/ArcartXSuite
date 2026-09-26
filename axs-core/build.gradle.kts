@@ -18,7 +18,7 @@ dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly(files("../libs/Chemdah-1.1.33-FREE.jar"))
     compileOnly(files("../libs/MythicLib-dist-1.7.1-49.jar"))
-    compileOnly(files("../libs/Mythic-Dist-5.6.1-SNAPSHOT.jar"))
+    compileOnly(files("../libs/Mythic-Dist-5.8.0.jar"))
     compileOnly(files("../libs/NeigeItems-1.21.160-api.jar"))
     compileOnly(files("../libs/Overture-1.0.0.jar"))
     compileOnly(files("../libs/MMOItems-6.9.5-SNAPSHOT.jar"))

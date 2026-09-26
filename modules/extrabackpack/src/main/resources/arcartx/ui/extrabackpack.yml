@@ -82,7 +82,6 @@ ui:
       var.used = packet['used']
       var.capacityText = packet['capacityText']
       var.maxCapacity = packet['maxCapacity']
-      var.currencyText = packet['currencyText']
       var.canBuySlots = packet['canBuySlots']
       var.remainingSlots = packet['remainingSlots']
       var.buySlotsText = packet['buySlotsText']
@@ -126,7 +125,15 @@ ui:
       // 相机偏转保持：玩家转向后重设状态相机（与 menu_esc 相同模式）
       if(server.player_yaw != var.yaw){
         var.yaw = server.player_yaw
-        Camera.setState(-0.78, -0.45, 1.9, 205, 0.0, 600)
+        Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
+        Camera.setThirdPerson(true)
+        var.相机计数 = 0
+      }
+      // 周期重断言：其他 UI/系统可能清掉相机状态，每 10 tick 瞬移重设兜底
+      var.相机计数 = var.相机计数 + 1
+      if(var.相机计数 >= 10){
+        var.相机计数 = 0
+        Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 0)
         Camera.setThirdPerson(true)
       }
       // 主武器 Icon 槽随主手物品变化刷新
@@ -229,6 +236,9 @@ ui:
       var.待过滤 = false
       var.yaw = -9999
       var.主手缓存 = none
+      var.入场 = none
+      var.相机计数 = 0
+      var.图标已设 = false
       // Adaptive 以 1920x1080 等比缩放，换算设计坐标系下的可用视口
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -241,10 +251,10 @@ ui:
       var.总页数 = 1
       var.已建页码 = -1
       var.待重建 = false
-      // 每页行数按可视高度自适应：扩容网格顶边 474，快捷栏顶边约在面板高-140
+      // 每页行数按可视高度自适应：扩容网格顶边 434，快捷栏顶边约在面板高-140
       面板高 = var.viewH - 200
       行数 = 1
-      while(474 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
+      while(434 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
@@ -257,15 +267,19 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       面板高 = var.viewH - 200
       行数 = 1
-      while(474 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
+      while(434 + (行数 + 1) * 80 - 10 <= 面板高 - 140){
         行数 = 行数 + 1
       }
       var.每页槽位数 = 行数 * 9
       var.待重建 = true
     open: |-
       Packet.send(var.packetId, 'refresh')
-      Camera.setState(-0.78, -0.45, 1.9, 205, 0.0, 600)
+      var.入场 = Lerp(0, 1, 450)
+      Camera.setState(-0.7, -0.5, 2.1, 210, 0.0, 600)
       Camera.setThirdPerson(true)
+      // 顶栏货币图标（原版物品 NBT，按服务器喜好更换）
+      val.金币图标.setItemIcon('{"id":"minecraft:gold_ingot","Count":1b}')
+      val.点券图标.setItemIcon('{"id":"minecraft:emerald","Count":1b}')
     close: |-
       async {
         Camera.setThirdPerson(false)
@@ -279,12 +293,6 @@ ui:
       }
 
 controls:
-  全屏暗角底:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      through: true
-      normal: ~0,0,0,60
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -297,6 +305,7 @@ controls:
         attribute:
           point: ~top_left
           x: "-var.offX"
+          y: "-90 + (var.入场 == none ? 1 : var.入场.get()) * 90"
           width: "var.viewW"
           height: 88
         children:
@@ -305,37 +314,123 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~10,12,18,215
+          标题图标:
+            type: Texture
+            attribute:
+              x: 34
+              y: 20
+              width: 44
+              height: 46
+              normal: ~/纯色块背包/背包图案.png
+              through: true
           标题:
             type: Text
             attribute:
-              x: 40
-              y: 8
+              x: 92
+              y: 18
               texts: ~&f个人背包
               fontSize: 48
           副标题:
             type: Text
             attribute:
-              x: 42
-              y: 58
+              x: 94
+              y: 48
               texts: ~&7CHARACTER / INVENTORY
               fontSize: 36
-          容量文本:
-            type: Text
+          # 顶栏右侧状态区：Icon 槽位渲染物品图标 + 数字（变量/物品按自己服务器改）
+          货币栏:
+            type: HStack
             attribute:
               point: ~top_right
-              x: -380
-              y: 26
-              texts: "'&7容量 &f' + var.capacityText"
-              fontSize: 36
-          货币文本:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -170
-              y: 26
-              limit: 20
-              texts: "'&e' + var.currencyText"
-              fontSize: 36
+              x: -190
+              y: 20
+              spaceBetween: 30
+            children:
+              容量组:
+                type: Canvas
+                attribute:
+                  width: 180
+                  height: 48
+                  through: true
+                children:
+                  容量图标:
+                    type: Texture
+                    attribute:
+                      x: 24
+                      y: 15
+                      width: 22
+                      height: 23
+                      normal: ~/纯色块背包/背包图案.png
+                      through: true
+                  容量项:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&f容量 ' + var.capacityText"
+                      shadow: true
+                      fontSize: 36
+                      through: true
+              金币组:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 48
+                  through: true
+                children:
+                  金币图标:
+                    type: Slot
+                    val: 金币图标
+                    attribute:
+                      slotType: ~Icon
+                      x: 0
+                      y: 2
+                      width: 44
+                      height: 44
+                      normal: ~34,38,48,180
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.75
+                      through: true
+                  金币项:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&e金币 ' + server.rondo_balance_gold"
+                      shadow: true
+                      fontSize: 36
+                      through: true
+              点券组:
+                type: Canvas
+                attribute:
+                  width: 180
+                  height: 48
+                  through: true
+                children:
+                  点券图标:
+                    type: Slot
+                    val: 点券图标
+                    attribute:
+                      slotType: ~Icon
+                      x: 0
+                      y: 2
+                      width: 44
+                      height: 44
+                      normal: ~34,38,48,180
+                      shape: ~round_rect
+                      radius: 10
+                      itemScale: 0.75
+                      through: true
+                  点券项:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: 16
+                      texts: "'&e点券 ' + server.rondo_balance_points"
+                      shadow: true
+                      fontSize: 36
+                      through: true
           设置按钮:
             type: Canvas
             attribute:
@@ -405,7 +500,7 @@ controls:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "40 - var.offX"
+          x: "40 - var.offX - (1 - (var.入场 == none ? 1 : var.入场.get())) * 500"
           y: 110
           width: 420
           height: "var.viewH - 160"
@@ -797,10 +892,10 @@ controls:
         type: Canvas
         attribute:
           point: ~top_right
-          x: "var.offX - 40"
+          x: "var.offX - 40 + (1 - (var.入场 == none ? 1 : var.入场.get())) * 750"
           y: 110
-          width: 768
-          height: "var.viewH - 160"
+          width: 690
+          height: "var.viewH - 180"
         children:
           背景:
             type: Texture
@@ -809,21 +904,13 @@ controls:
               normal: ~12,14,20,205
               shape: ~round_rect
               radius: 16
-          背包标题:
-            type: Text
-            attribute:
-              x: 24
-              y: 14
-              texts: ~&f背包
-              fontSize: 54
           搜索容器:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -20
-              y: 16
-              width: 280
-              height: 52
+              x: 24
+              y: 20
+              width: 220
+              height: 44
             children:
               搜索底:
                 type: Texture
@@ -841,87 +928,22 @@ controls:
                 attribute:
                   x: 14
                   y: 8
-                  width: 252
+                  width: 192
                   height: 36
                   length: 12
                   emptyText: ~&7搜索物品
-                  fontSize: 36
+                  fontSize: 49
                 action:
                   textChange: |-
                     var.searchText = self.getContent()
                     var.待过滤 = true
-          原版背包标题:
-            type: Text
-            attribute:
-              x: 24
-              y: 86
-              texts: ~&7原版背包
-              fontSize: 36
-          原版格数:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -24
-              y: 90
-              texts: ~&727 格
-              fontSize: 36
-          原版背包网格:
-            type: HGrid
-            val: 原版背包网格
-            attribute:
-              x: 24
-              y: 128
-              width: 720
-              height: 230
-              column: 9
-              spaceBetweenX: 10
-              spaceBetweenY: 10
-            action:
-              create: |-
-                for(i in range(1, 26)){
-                  slot = self['槽位'].copy('槽位' + i.round())
-                  slot.id = (9 + i).round()
-                }
-            children:
-              槽位:
-                type: Slot
-                attribute:
-                  width: 70
-                  height: 70
-                  slotType: ~Backpack
-                  id: 9
-                  normal: ~38,42,52,255
-                  hover: ~Frosted:0;255,255,255,255
-                  shape: ~round_rect
-                  radius: 8
-                  itemScale: 0.76
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~0,0,0,255
-          扩容背包标题:
-            type: Text
-            attribute:
-              x: 24
-              y: 382
-              texts: ~&7扩容背包
-              fontSize: 36
-          容量状态:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -24
-              y: 386
-              limit: 18
-              texts: "'&7' + var.capacityText + ' 格'"
-              fontSize: 36
           分类标签行:
             type: HGrid
             val: 分类标签行
             attribute:
-              x: 24
-              y: 426
-              width: 700
+              x: 254
+              y: 20
+              width: 412
               height: 44
               column: 9
               spaceBetweenX: 10
@@ -933,7 +955,7 @@ controls:
                   entryKey: 0.round()
                   entry: var.categories[self.entryKey]
                   visible: self.entry != none
-                  width: "var.categoryCount != none && var.categoryCount > 5 ? 700 / var.categoryCount - 10 : 130"
+                  width: "var.categoryCount != none && var.categoryCount > 4 ? 412 / var.categoryCount - 10 : 110"
                   height: 44
                 action:
                   clickLeft: |-
@@ -959,13 +981,78 @@ controls:
                       texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                       fontSize: 36
                       through: true
+          原版背包标题:
+            type: Text
+            attribute:
+              x: 24
+              y: 86
+              texts: ~&7原版背包
+              fontSize: 36
+          原版格数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 90
+              texts: ~&727 格
+              fontSize: 36
+          原版背包网格:
+            type: HGrid
+            val: 原版背包网格
+            attribute:
+              x: 24
+              y: 128
+              width: 622
+              height: 230
+              column: 9
+              spaceBetweenX: 10
+              spaceBetweenY: 10
+            action:
+              create: |-
+                for(i in range(1, 26)){
+                  slot = self['槽位'].copy('槽位' + i.round())
+                  slot.id = (9 + i).round()
+                }
+            children:
+              槽位:
+                type: Slot
+                attribute:
+                  width: 62
+                  height: 62
+                  slotType: ~Backpack
+                  id: 9
+                  normal: ~38,42,52,255
+                  hover: ~Frosted:0;255,255,255,255
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.76
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,255
+          扩容背包标题:
+            type: Text
+            attribute:
+              x: 24
+              y: 382
+              texts: ~&7扩容背包
+              fontSize: 36
+          容量状态:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 386
+              limit: 26
+              texts: "'&7' + var.capacityText + ' 格' + (var.总页数 > 1 ? ' · 第' + (var.页码 + 1) + '/' + var.总页数 + '页' : '')"
+              fontSize: 36
           扩容网格:
             type: HGrid
             val: 扩容网格
             attribute:
               x: 24
-              y: 484
-              width: 720
+              y: 434
+              width: 622
               column: 9
               spaceBetweenX: 10
               spaceBetweenY: 10
@@ -984,8 +1071,8 @@ controls:
                   id: ~axs_eb_none_0
                   lock: false
                   itemScale: 0.76
-                  width: 70
-                  height: 70
+                  width: 62
+                  height: 62
                   normal: ~38,42,52,255
                   hover: ~Frosted:0;255,255,255,255
                   shape: ~round_rect
@@ -998,22 +1085,13 @@ controls:
                   stroke:
                     width: 1
                     color: ~0,0,0,255
-          页码提示:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -24
-              y: 442
-              visible: var.总页数 > 1
-              texts: "'&7滚轮翻页 ' + (var.页码 + 1) + '/' + var.总页数"
-              fontSize: 36
           快捷布局:
             type: Canvas
             attribute:
               point: ~bottom_left
               x: 24
               y: -20
-              width: 720
+              width: 622
               height: 120
             children:
               快捷栏标题:
@@ -1037,8 +1115,8 @@ controls:
                 attribute:
                   x: 0
                   y: 46
-                  width: 720
-                  height: 70
+                  width: 622
+                  height: 62
                   column: 9
                   spaceBetweenX: 10
                   spaceBetweenY: 10
@@ -1052,8 +1130,8 @@ controls:
                   槽位:
                     type: Slot
                     attribute:
-                      width: 70
-                      height: 70
+                      width: 62
+                      height: 62
                       slotType: ~Backpack
                       id: 36
                       normal: ~38,42,52,255
@@ -1067,13 +1145,32 @@ controls:
                         color: ~0,0,0,255
 
       玩家名签:
-        type: Text
+        type: Canvas
         attribute:
           point: ~bottom_center
-          y: -30
-          texts: "'&f' + Player.getName() + '   &7Lv ' + Player.getLevel().round()"
-          fontSize: 36
+          x: -140
+          y: -50
+          width: 320
+          height: 54
+          alpha: "var.入场 == none ? 1 : var.入场.get()"
           through: true
+        children:
+          名签底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~14,16,24,170
+              shape: ~round_rect
+              radius: 27
+          名签文字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "'&f' + Player.getName() + '   &7Lv ' + Player.getLevel().round()"
+              fontSize: 36
+              shadow: true
+              through: true
 
       设置副面板:
         type: Canvas

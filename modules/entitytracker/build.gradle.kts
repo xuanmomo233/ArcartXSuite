@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("java")
 }
 
@@ -8,7 +8,7 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("me.clip:placeholderapi:2.11.7")
-    compileOnly(files("../../libs/Mythic-Dist-5.6.1-SNAPSHOT.jar"))
+    compileOnly(files("../../libs/Mythic-Dist-5.8.0.jar"))
     compileOnly("org.xerial:sqlite-jdbc:3.45.1.0")
 }
 

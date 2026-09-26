@@ -1,0 +1,11 @@
+# 障碍物示例：边界墙（防止玩家掉出平台）
+# auto_create: 副本开始时自动放置方块；on_delete 脚本在障碍移除时跑
+
+edge_wall:
+  blocks:
+    - "-7,79,-7,BEDROCK"
+    - "-7,79,7,BEDROCK"
+    - "7,79,-7,BEDROCK"
+    - "7,79,7,BEDROCK"
+  auto_create: true
+  trigger_mode: NONE

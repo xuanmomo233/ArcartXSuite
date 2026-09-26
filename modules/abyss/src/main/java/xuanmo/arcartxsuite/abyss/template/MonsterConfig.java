@@ -1,0 +1,110 @@
+package xuanmo.arcartxsuite.abyss.template;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.bukkit.configuration.ConfigurationSection;
+
+/**
+ * monsters.yml 解析：怪物组定义。
+ *
+ * <pre>
+ * wave_1:
+ *   auto_start: true
+ *   spawn_timing: AUTO_START | DELAYED | TRIGGERED | MANUAL | SCRIPTED
+ *   delay_seconds: 10              # DELAYED 用
+ *   trigger_after: ["wave_1"]      # TRIGGERED 用：指定组完成后触发
+ *   monsters:
+ *     - mob_id: SkeletonKnight
+ *       location: "0,64,0"
+ *       amount: 5
+ *       level: 1
+ *   complete_when_alive_below: 0   # 存活数 <= 该值时组完成
+ *   on_start: ["message @all &e第一波来袭！"]
+ *   on_end: ["spawn_group wave_2"]
+ * </pre>
+ */
+public record MonsterConfig(
+    Map<String, MonsterGroup> groups
+) {
+
+    public enum SpawnTiming { AUTO_START, DELAYED, TRIGGERED, MANUAL, SCRIPTED }
+
+    public record MonsterSpawn(
+        String mobId,
+        String location,
+        int amount,
+        double level
+    ) {
+        static MonsterSpawn load(ConfigurationSection s) {
+            return new MonsterSpawn(
+                s.getString("mob_id", s.getString("mob-id", s.getString("id", ""))),
+                s.getString("location", "0,64,0"),
+                s.getInt("amount", 1),
+                s.getDouble("level", 1.0)
+            );
+        }
+    }
+
+    public record MonsterGroup(
+        String name,
+        boolean autoStart,
+        SpawnTiming spawnTiming,
+        int delaySeconds,
+        List<String> triggerAfter,
+        List<MonsterSpawn> monsters,
+        int completeWhenAliveBelow,
+        List<String> onStart,
+        List<String> onEnd
+    ) {
+        static MonsterGroup load(String name, ConfigurationSection s) {
+            SpawnTiming timing;
+            try {
+                timing = SpawnTiming.valueOf(
+                    s.getString("spawn_timing", s.getString("spawn-timing",
+                        s.getBoolean("auto_start", s.getBoolean("auto-start", false))
+                            ? "AUTO_START" : "MANUAL")).toUpperCase());
+            } catch (IllegalArgumentException e) {
+                timing = SpawnTiming.MANUAL;
+            }
+            List<MonsterSpawn> spawns = new ArrayList<>();
+            for (Map<?, ?> m : s.getMapList("monsters")) {
+                org.bukkit.configuration.MemoryConfiguration mem =
+                    new org.bukkit.configuration.MemoryConfiguration();
+                for (Map.Entry<?, ?> e : m.entrySet()) {
+                    if (e.getKey() != null) mem.set(String.valueOf(e.getKey()), e.getValue());
+                }
+                spawns.add(MonsterSpawn.load(mem));
+            }
+            return new MonsterGroup(
+                name,
+                s.getBoolean("auto_start", s.getBoolean("auto-start", timing == SpawnTiming.AUTO_START)),
+                timing,
+                s.getInt("delay_seconds", s.getInt("delay-seconds", 0)),
+                s.getStringList("trigger_after").isEmpty()
+                    ? s.getStringList("trigger-after") : s.getStringList("trigger_after"),
+                spawns,
+                s.getInt("complete_when_alive_below",
+                    s.getInt("complete-when-alive-below", 0)),
+                s.getStringList("on_start").isEmpty()
+                    ? s.getStringList("on-start") : s.getStringList("on_start"),
+                s.getStringList("on_end").isEmpty()
+                    ? s.getStringList("on-end") : s.getStringList("on_end")
+            );
+        }
+    }
+
+    public static MonsterConfig load(ConfigurationSection root) {
+        Map<String, MonsterGroup> groups = new LinkedHashMap<>();
+        if (root != null) {
+            for (String key : root.getKeys(false)) {
+                ConfigurationSection s = root.getConfigurationSection(key);
+                if (s != null) {
+                    groups.put(key, MonsterGroup.load(key, s));
+                }
+            }
+        }
+        return new MonsterConfig(groups);
+    }
+}

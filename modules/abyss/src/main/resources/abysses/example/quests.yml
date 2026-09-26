@@ -1,0 +1,14 @@
+# 副本任务：NPC 接取/条件提交
+
+slay_guard:
+  name: "讨伐虚空怪物"
+  description: "击杀 5 只副本怪物后回来找向导领取报酬"
+  accept_text: "&e[艾琳] &f拜托了！击杀 &c5 &f只怪物后回来找我。"
+  accept_script:
+    - "message @trigger &a已接取任务: 讨伐虚空怪物（0/5）"
+  submit_text: "&e[艾琳] &f太感谢了！这是说好的报酬。"
+  submit_conditions:
+    - "%axsabyss_dungeon_kills% >= 5"
+  submit_script:
+    - "grant_reward @trigger quest_pack"
+    - "message @trigger &a任务完成: 讨伐虚空怪物"

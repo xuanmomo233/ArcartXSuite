@@ -51,10 +51,13 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
+
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
+import xuanmo.arcartxsuite.api.capability.WarehouseAccess;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
@@ -94,7 +97,7 @@ import java.util.logging.Logger;
  * 通过 {@link PacketBridgeAPI} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
  * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁；启用 cross-server 时经 SDK 同步至其他子服。
  */
-public final class WarehouseService implements Listener {
+public final class WarehouseService implements Listener, WarehouseAccess {
 
     private record TokenLease(UUID playerUuid, String uiId) {
     }
@@ -136,8 +139,7 @@ public final class WarehouseService implements Listener {
     final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private Supplier<PickupInterceptor> pickupInterceptorSupplier = () -> null;
-    /** ExtraBackpack 兜底供应者：仓库放不下时把剩余物品存入扩展背包（可为 null）。 */
-    private Supplier<ExtraBackpackAccess> extraBackpackSupplier = () -> null;
+
     final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
@@ -263,10 +265,7 @@ public final class WarehouseService implements Listener {
         this.pickupInterceptorSupplier = provider == null ? () -> null : provider;
     }
 
-    /** 设置 ExtraBackpack 兜底供应者（由 WarehouseModule 注入，可为 null；延迟解析 capability）。 */
-    public void setExtraBackpackProvider(Supplier<ExtraBackpackAccess> provider) {
-        this.extraBackpackSupplier = provider == null ? () -> null : provider;
-    }
+
 
     public void start() throws Exception {
         repository.initialize();
@@ -979,15 +978,6 @@ public final class WarehouseService implements Listener {
                 return;
             }
             int remaining = result.remainingAmount();
-            // 仓库溢出兜底：扩展背包模块可用时，把仓库放不下的部分转存扩展背包。
-            if (remaining > 0 && configuration.pickup().extraBackpackFallback()) {
-                ExtraBackpackAccess extraBackpack = extraBackpackSupplier.get();
-                if (extraBackpack != null && extraBackpack.isAvailable(player)) {
-                    ItemStack remainder = stack.clone();
-                    remainder.setAmount(remaining);
-                    remaining = extraBackpack.deposit(player, remainder).remainingAmount();
-                }
-            }
             stack.setAmount(remaining);
             if (remaining <= 0) {
                 event.setCancelled(true);
@@ -2441,8 +2431,8 @@ public final class WarehouseService implements Listener {
             return;
         }
         String trimmed = WarehouseTexts.safe(newPassword);
-        int minLen = configuration.security().minLength();
-        int maxLen = configuration.security().maxLength();
+        int minLen = passwordAccess.minLength();
+        int maxLen = passwordAccess.maxLength();
         if (trimmed.length() < minLen || trimmed.length() > maxLen) {
             sendMessage(player, false, message("player.password-length", minLen, maxLen));
             refreshBoth(player);
@@ -2530,9 +2520,77 @@ public final class WarehouseService implements Listener {
     Map<String, WarehouseRecord> personalWarehouseMap(UUID playerUuid) throws Exception {
         Map<String, WarehouseRecord> records = new LinkedHashMap<>();
         for (WarehouseRecord record : repository.loadPersonalWarehouses(playerUuid)) {
-            records.put(record.warehouseId(), record);
+            records.put(record.warehouseId(), migrateLegacyLevel(playerUuid, record));
         }
         return records;
+    }
+
+    /**
+     * ══ [LEGACY_LEVEL_MIGRATION] 下版本移除 ══
+     * 旧版等级制容量的一次性迁移：level>默认等级的记录按旧等级容量折算为逐格购买的
+     * extra_slots（保留玩家已购空间），随后把 level 压回默认值使迁移幂等。
+     * 懒迁移兜底——全量自动迁移见 {@link #migrateLegacyCapacities()}。
+     */
+    private WarehouseRecord migrateLegacyLevel(UUID playerUuid, WarehouseRecord record) throws Exception {
+        WarehouseDefinition definition = configuration.warehouse(record.warehouseId());
+        if (definition == null || record.level() <= definition.defaultLevel()) {
+            return record;
+        }
+        WarehouseLevelDefinition legacy = definition.levels().get(record.level());
+        long legacyCapacity = legacy == null ? definition.baseSlots() : legacy.capacity();
+        long converted = Math.max(0L, legacyCapacity - definition.baseSlots());
+        long extra = record.extraSlots() + converted;
+        long now = System.currentTimeMillis();
+        repository.setPersonalExtraSlots(playerUuid, record.warehouseId(), extra, now);
+        repository.upsertPersonalWarehouse(playerUuid, record.warehouseId(), definition.defaultLevel(), record.customName(), now);
+        return new WarehouseRecord(
+            playerUuid, record.warehouseId(), definition.defaultLevel(),
+            record.customName(), record.showcaseEnabled(), now, extra);
+    }
+
+    /**
+     * ══ [LEGACY_LEVEL_MIGRATION] 下版本移除 ══
+     * 旧等级制 → 逐格解锁：扫描全服所有个人仓库记录，
+     * 把 level>默认等级的记录折算为 extra_slots（扩容数量 = 原等级容量 - base-slots，
+     * 总量守恒），随后 level 回落默认值使迁移幂等。
+     * 由 {@code WarehouseModule#scheduleLegacyLevelMigration()} 启动时自动调用。
+     * 等级制下线后可连同本方法与 {@link #migrateLegacyLevel} 一并移除。
+     */
+    public record SlotMigrationResult(int recordsScanned, int recordsMigrated, long slotsGranted) {
+    }
+
+    public SlotMigrationResult migrateLegacyCapacities() throws Exception {
+        int scanned = 0;
+        int migrated = 0;
+        long granted = 0L;
+        for (WarehouseRecord record : repository.loadAllPersonalWarehouses()) {
+            scanned++;
+            WarehouseDefinition definition = configuration.warehouse(record.warehouseId());
+            if (definition == null || record.level() <= definition.defaultLevel()) {
+                continue;
+            }
+            WarehouseLevelDefinition legacy = definition.levels().get(record.level());
+            long legacyCapacity = legacy == null ? definition.baseSlots() : legacy.capacity();
+            long converted = Math.max(0L, legacyCapacity - definition.baseSlots());
+            long now = System.currentTimeMillis();
+            repository.setPersonalExtraSlots(
+                record.playerUuid(), record.warehouseId(), record.extraSlots() + converted, now);
+            repository.upsertPersonalWarehouse(
+                record.playerUuid(), record.warehouseId(), definition.defaultLevel(), record.customName(), now);
+            migrated++;
+            granted += converted;
+        }
+        return new SlotMigrationResult(scanned, migrated, granted);
+    }
+
+    /** 个人仓库已解锁槽位数 = base-slots + extra_slots。 */
+    long personalUnlockedSlots(UUID playerUuid, String warehouseId) throws Exception {
+        WarehouseDefinition definition = configuration.warehouse(warehouseId);
+        WarehouseRecord record = personalWarehouseMap(playerUuid).get(warehouseId);
+        if (definition == null || record == null) {
+            return definition == null ? 0L : definition.baseSlots();
+        }
+        return definition.baseSlots() + Math.max(0L, record.extraSlots());
     }
 
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) {
@@ -2591,7 +2649,7 @@ public final class WarehouseService implements Listener {
 
     boolean currentShowcaseEnabled(Player player, ViewState state) throws Exception {
         if (!OWNER_SHARED.equals(state.ownerType())) {
-            return personalWarehouseMap(player.getUniqueId()).getOrDefault(state.warehouseId(), new WarehouseRecord(player.getUniqueId(), state.warehouseId(), 1, "", true, 0L)).showcaseEnabled();
+            return personalWarehouseMap(player.getUniqueId()).getOrDefault(state.warehouseId(), new WarehouseRecord(player.getUniqueId(), state.warehouseId(), 1, "", true, 0L, 0L)).showcaseEnabled();
         }
         return repository.loadSharedWarehouse(player.getUniqueId(), state.ownerId())
             .map(SharedWarehouseRecord::showcaseEnabled)
@@ -2755,33 +2813,48 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
-        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(state.warehouseId());
+        PurchaseOutcome outcome = purchasePersonalSlot(player, state.warehouseId());
+        if (!outcome.success()) {
+            sendMessage(player, false, outcome.message());
+            refreshBoth(player);
+            return;
+        }
+        sendMessage(player, true, message("player.buy-slots-success", 1, outcome.newUnlocked()));
+        markActionCommitted(player);
+        refreshBoth(player);
+    }
+
+    /** 逐格购买个人仓库槽位：扣款后 extra_slots+1，返回新的已解锁格数。 */
+    private record PurchaseOutcome(boolean success, long newUnlocked, String message) {
+        static PurchaseOutcome failure(String message) {
+            return new PurchaseOutcome(false, 0L, message);
+        }
+    }
+
+    private PurchaseOutcome purchasePersonalSlot(Player player, String warehouseId) throws Exception {
+        WarehouseDefinition definition = configuration.warehouse(warehouseId);
+        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(warehouseId);
         if (definition == null || record == null) {
-            sendMessage(player, false, message("player.upgrade-unavailable"));
-            refreshBoth(player);
-            return;
+            return PurchaseOutcome.failure(message("player.upgrade-unavailable"));
         }
-        WarehouseLevelDefinition next = definition.levels().get(record.level() + 1);
-        if (next == null) {
-            sendMessage(player, false, message("player.upgrade-maxed"));
-            refreshBoth(player);
-            return;
+        long unlocked = definition.baseSlots() + Math.max(0L, record.extraSlots());
+        if (unlocked >= definition.maxSlots()) {
+            return PurchaseOutcome.failure(message("player.buy-slots-maxed"));
         }
-        WarehouseModuleConfiguration.UpgradeCost cost = packetFactory.upgradeCost(definition.levels(), record.level());
-        if (!withdrawCost(player, cost, message("player.unknown-upgrade-currency"))) {
-            refreshBoth(player);
-            return;
+        WarehouseModuleConfiguration.UpgradeCost cost = definition.slotPrice();
+        if (cost == null) {
+            return PurchaseOutcome.failure(message("player.buy-slots-not-configured"));
+        }
+        if (!withdrawCost(player, cost, message("player.unknown-buy-slots-currency"))) {
+            return PurchaseOutcome.failure("");
         }
         try {
-            repository.upsertPersonalWarehouse(player.getUniqueId(), state.warehouseId(), next.level(), record.customName(), System.currentTimeMillis());
+            repository.addPersonalExtraSlots(player.getUniqueId(), warehouseId, 1L, System.currentTimeMillis());
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
         }
-        sendMessage(player, true, message("player.upgrade-success", next.level(), next.capacity()));
-        markActionCommitted(player);
-        refreshBoth(player);
+        return new PurchaseOutcome(true, unlocked + 1, "");
     }
 
     private void upgradeCurrentSharedWarehouse(Player player, ViewState state) throws Exception {
@@ -3147,5 +3220,209 @@ public final class WarehouseService implements Listener {
         void setSelectedSlot(int selectedSlot) { this.selectedSlot = selectedSlot; }
         void setSharedEditMode(boolean sharedEditMode) { this.sharedEditMode = sharedEditMode; }
         void setSelectedCurrency(String selectedCurrency) { this.selectedCurrency = selectedCurrency; }
+    }
+
+    // ---------------------------------------------------------------------
+    // WarehouseAccess capability：扩展背包等模块直连玩家个人仓库
+    // ---------------------------------------------------------------------
+
+    @Override
+    public boolean isAvailable(@NotNull Player player) {
+        return player != null && player.isOnline() && !configuration.warehouses().isEmpty();
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.Snapshot snapshot(@NotNull Player player) {
+        try {
+            UUID uuid = player.getUniqueId();
+            String warehouseId = packetFactory.firstPersonalWarehouseId();
+            WarehouseDefinition definition = configuration.warehouse(warehouseId);
+            if (definition == null) {
+                return new WarehouseAccess.Snapshot(false, 0L, 0L, 0L, false, new WarehouseAccess.SlotPrice("", BigDecimal.ZERO));
+            }
+            long unlocked = personalUnlockedSlots(uuid, warehouseId);
+            long used = loadSlots(OWNER_PERSONAL, uuid.toString(), warehouseId).size();
+            WarehouseModuleConfiguration.UpgradeCost price = definition.slotPrice();
+            WarehouseAccess.SlotPrice slotPrice = price == null
+                ? new WarehouseAccess.SlotPrice("", BigDecimal.ZERO)
+                : new WarehouseAccess.SlotPrice(price.currencyId(), price.amount());
+            return new WarehouseAccess.Snapshot(
+                true, unlocked, used, definition.maxSlots(),
+                price != null && unlocked < definition.maxSlots(), slotPrice);
+        } catch (Exception exception) {
+            if (configuration.debug()) {
+                this.logger.warning("读取仓库快照失败(" + player.getName() + "): " + exception.getMessage());
+            }
+            return new WarehouseAccess.Snapshot(false, 0L, 0L, 0L, false, new WarehouseAccess.SlotPrice("", BigDecimal.ZERO));
+        }
+    }
+
+    @Override
+    public @NotNull List<WarehouseAccess.SlotItem> slots(@NotNull Player player) {
+        try {
+            String warehouseId = packetFactory.firstPersonalWarehouseId();
+            List<WarehouseAccess.SlotItem> items = new ArrayList<>();
+            for (SlotItemRecord record : loadSlots(OWNER_PERSONAL, player.getUniqueId().toString(), warehouseId)) {
+                ItemStack item;
+                try {
+                    item = ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
+                } catch (RuntimeException exception) {
+                    continue;
+                }
+                if (item == null || item.getType().isAir()) {
+                    continue;
+                }
+                item.setAmount((int) Math.min(Integer.MAX_VALUE, record.amount()));
+                items.add(new WarehouseAccess.SlotItem(record.slot(), item, record.displayName(), record.categoryId()));
+            }
+            return items;
+        } catch (Exception exception) {
+            if (configuration.debug()) {
+                this.logger.warning("读取仓库槽位列表失败(" + player.getName() + "): " + exception.getMessage());
+            }
+            return List.of();
+        }
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.DepositResult deposit(@NotNull Player player, @NotNull ItemStack itemStack) {
+        try {
+            DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), packetFactory.firstPersonalWarehouseId(), itemStack);
+            return new WarehouseAccess.DepositResult(result.success(), result.storedAmount(), result.remainingAmount(), result.message());
+        } catch (Exception exception) {
+            return new WarehouseAccess.DepositResult(false, 0L, itemStack == null ? 0 : itemStack.getAmount(), "存入失败");
+        }
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.SlotWriteResult setSlot(@NotNull Player player, int slotIndex, @Nullable ItemStack itemStack) {
+        try {
+            UUID uuid = player.getUniqueId();
+            String ownerId = uuid.toString();
+            String warehouseId = packetFactory.firstPersonalWarehouseId();
+            long unlocked = personalUnlockedSlots(uuid, warehouseId);
+            if (slotIndex < 0 || slotIndex >= unlocked) {
+                return new WarehouseAccess.SlotWriteResult(false, message("player.invalid-slot", slotIndex));
+            }
+            Object warehouseLock = warehouseLocks.computeIfAbsent(
+                OWNER_PERSONAL + ':' + ownerId + ':' + warehouseId, ignored -> new Object());
+            synchronized (warehouseLock) {
+                if (itemStack == null || itemStack.getType().isAir() || itemStack.getAmount() <= 0) {
+                    repository.deleteSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
+                    return new WarehouseAccess.SlotWriteResult(true, "");
+                }
+                ItemStack prototype = itemStack.clone();
+                prototype.setAmount(1);
+                byte[] bytes = ItemSerializer.serialize(prototype);
+                String itemData = Base64.getEncoder().encodeToString(bytes);
+                String itemHash = WarehouseTexts.sha256Hex(bytes);
+                String displayName = resolveDisplayName(prototype);
+                String categoryId = resolveCategory(prototype);
+                SearchTokens searchTokens = WarehouseTexts.toSearchTokens(displayName);
+                String displayJson = itemJson(prototype, 1L);
+                long now = System.currentTimeMillis();
+                long createdAt = repository.loadSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex)
+                    .map(SlotItemRecord::createdAt).orElse(now);
+                repository.upsertSlot(new SlotItemRecord(
+                    OWNER_PERSONAL, ownerId, warehouseId, slotIndex, itemHash, categoryId,
+                    displayName, prototype.getType().name(), searchTokens.searchText(),
+                    searchTokens.pinyin(), searchTokens.initials(), itemData, displayJson,
+                    itemStack.getAmount(), createdAt, now));
+                return new WarehouseAccess.SlotWriteResult(true, "");
+            }
+        } catch (Exception exception) {
+            this.logger.warning("写入仓库槽位失败(" + player.getName() + ", " + slotIndex + "): " + exception.getMessage());
+            return new WarehouseAccess.SlotWriteResult(false, "写入失败");
+        }
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.WithdrawResult withdraw(@NotNull Player player, int slotIndex, int amount) {
+        try {
+            UUID uuid = player.getUniqueId();
+            String ownerId = uuid.toString();
+            String warehouseId = packetFactory.firstPersonalWarehouseId();
+            Object warehouseLock = warehouseLocks.computeIfAbsent(
+                OWNER_PERSONAL + ':' + ownerId + ':' + warehouseId, ignored -> new Object());
+            synchronized (warehouseLock) {
+                Optional<SlotItemRecord> slotOpt = repository.loadSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
+                if (slotOpt.isEmpty() || amount <= 0) {
+                    return new WarehouseAccess.WithdrawResult(false, 0, null, "槽位为空");
+                }
+                SlotItemRecord record = slotOpt.get();
+                int taken = (int) Math.min(amount, record.amount());
+                ItemStack item = ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
+                if (item == null) {
+                    return new WarehouseAccess.WithdrawResult(false, 0, null, "物品损坏");
+                }
+                item.setAmount(taken);
+                if (taken >= record.amount()) {
+                    repository.deleteSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
+                } else {
+                    repository.upsertSlot(copySlot(record, record.amount() - taken, System.currentTimeMillis()));
+                }
+                return new WarehouseAccess.WithdrawResult(true, taken, item, "");
+            }
+        } catch (Exception exception) {
+            this.logger.warning("取出仓库槽位失败(" + player.getName() + ", " + slotIndex + "): " + exception.getMessage());
+            return new WarehouseAccess.WithdrawResult(false, 0, null, "取出失败");
+        }
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.PurchaseResult purchaseSlot(@NotNull Player player) {
+        try {
+            PurchaseOutcome outcome = purchasePersonalSlot(player, packetFactory.firstPersonalWarehouseId());
+            return new WarehouseAccess.PurchaseResult(outcome.success(), outcome.newUnlocked(), outcome.message());
+        } catch (Exception exception) {
+            this.logger.warning("购买仓库槽位失败(" + player.getName() + "): " + exception.getMessage());
+            return new WarehouseAccess.PurchaseResult(false, 0L, "购买失败");
+        }
+    }
+
+    @Override
+    public @NotNull WarehouseAccess.SlotPrice slotPrice(@NotNull Player player, int amount) {
+        try {
+            WarehouseDefinition definition = configuration.warehouse(packetFactory.firstPersonalWarehouseId());
+            WarehouseModuleConfiguration.UpgradeCost price = definition == null ? null : definition.slotPrice();
+            if (price == null) {
+                return new WarehouseAccess.SlotPrice("", BigDecimal.ZERO);
+            }
+            return new WarehouseAccess.SlotPrice(
+                price.currencyId(), price.amount().multiply(BigDecimal.valueOf(Math.max(0, amount))));
+        } catch (Exception exception) {
+            return new WarehouseAccess.SlotPrice("", BigDecimal.ZERO);
+        }
+    }
+
+    @Override
+    public long grantSlots(@NotNull OfflinePlayer target, int amount) {
+        try {
+            String warehouseId = packetFactory.firstPersonalWarehouseId();
+            WarehouseDefinition definition = configuration.warehouse(warehouseId);
+            WarehouseRecord record = personalWarehouseMap(target.getUniqueId()).get(warehouseId);
+            if (definition == null || record == null || amount <= 0) {
+                return -1L;
+            }
+            long unlocked = definition.baseSlots() + Math.max(0L, record.extraSlots());
+            long granted = Math.min(amount, Math.max(0L, definition.maxSlots() - unlocked));
+            if (granted <= 0) {
+                return 0L;
+            }
+            repository.addPersonalExtraSlots(target.getUniqueId(), warehouseId, granted, System.currentTimeMillis());
+            return granted;
+        } catch (Exception exception) {
+            return -1L;
+        }
+    }
+
+    @Override
+    public boolean resetSlots(@NotNull OfflinePlayer target) {
+        try {
+            repository.setPersonalExtraSlots(target.getUniqueId(), packetFactory.firstPersonalWarehouseId(), 0L, System.currentTimeMillis());
+            return true;
+        } catch (Exception exception) {
+            return false;
+        }
     }
 }

@@ -53,8 +53,10 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("extrabackpack")
             .name("ExtraBackpack")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
+            // 共通存储：扩展背包直接读写玩家个人仓库，warehouse 缺席则无存储后端
+            .depends(java.util.List.of("warehouse"))
             .build();
     }
 
@@ -65,16 +67,18 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
             .messagesFileName("messages.yml")
             .syncPolicy(SyncPolicy.builder()
                     .dynamicSection("extra-backpack")
+                    // 共通存储重构后废弃：独立落盘/调试开关/分类独立容量与价格全部移除
+                    .obsoletePath("settings")
+                    .obsoletePath("extra-backpack.categories.*.slots.initial")
+                    .obsoletePath("extra-backpack.categories.*.initial-slots")
+                    .obsoletePath("extra-backpack.categories.*.max-slots")
+                    .obsoletePath("extra-backpack.categories.*.price")
                 .build())
             .currentVersion(2)
             .validations(List.of(
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
                     ValidationRule.of("storage.pool-size", ValueType.INT)
                         .withRange(1, 100),
-                    // 异步落盘间隔必须为正
-                    ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
-                        .withRange(1, null),
-                    ValidationRule.of("settings.debug", ValueType.BOOLEAN),
                     ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
                     ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
                     ValidationRule.of("extra-backpack.enabled", ValueType.BOOLEAN)
@@ -157,17 +161,15 @@ public final class ExtraBackpackModule extends AbstractAXSModule implements Modu
             plugin,
             logger,
             packetBridge,
-            packetGuard,
             propBridge,
             uiExporter,
             configuration,
-            repository,
-            currencyManager,
             messages(),
-            vanillaItemNameBridge,
-            scheduler
+            vanillaItemNameBridge
         );
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
+        // 共通存储：扩展背包直接读写玩家个人仓库（同一存储，两个入口）
+        service.setWarehouseProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.WarehouseAccess.class));
         service.start();
         adminCommand = new ExtraBackpackAdminCommand(() -> service, messages());
         // 将 Service 手动注册的 UI 纳入基类生命周期管理（onDisable 时兜底注销）

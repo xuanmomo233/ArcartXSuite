@@ -1,0 +1,128 @@
+# ArcartXSuite Abyss — 地牢副本模块
+# 地牢定义目录：plugins/ArcartX-Suite/data/abyss/abysses/<地牢ID>/
+# 每个地牢目录包含: config.yml / monsters.yml / obstacles.yml / interacts.yml
+#                   tasks.yml / rewards.yml / scripts.yml / npcs.yml / functions.* / world/(或 schematic)
+
+abyss:
+  # 世界实例名前缀（创建的地牢世界以此开头，便于清理识别）
+  world-prefix: "axs_abyss_"
+  # 实例清理超时（秒）：结束/无人实例超过该时间强制回收
+  instance-cleanup-timeout: 7200
+  # 实例检查周期（秒）：超时/无人在线检查间隔
+  instance-check-interval: 30
+  # 世界加载超时（毫秒）：复制+加载世界超时
+  world-load-timeout: 120000
+  # 单实例实体上限（防止副本内实体爆炸）
+  max-entities-per-instance: 100
+  # 是否启用 NMS 快速世界加载通道（失败自动回退 Bukkit API）
+  nms-fast-load: true
+  # 世界复制是否异步执行（大目录复制建议开启）
+  async-world-copy: true
+
+death:
+  # 致命伤害检测：拦截致死伤害并判为副本死亡（保持玩家不死）
+  fatal-damage-check: true
+  # 不死图腾：玩家手持图腾时是否允许图腾救活（true=图腾生效不算死亡）
+  allow-totem: true
+  # 全队死亡判定模式: STRICT=全员死亡立即失败 / DELAYED=延迟判定(配合复活)
+  team-wipe-mode: "STRICT"
+  # 延迟判定模式下的判定延迟(tick)
+  team-wipe-delay-ticks: 60
+
+escape:
+  # 防逃逸模式: BLOCK=拦截传送 / TELEPORT_BACK=拉回副本 / FAIL=逃逸判负
+  mode: "BLOCK"
+  # 是否拦截末影珍珠/紫颂果
+  block-ender-pearl: true
+  block-chorus-fruit: true
+  # 是否拦截传送门
+  block-portal: true
+  # 是否拦截旁观传送（旁观死亡玩家点击实体跟随）
+  block-spectate-teleport: true
+
+restrictions:
+  # 副本内禁用的命令（按主命令匹配）
+  blocked-commands:
+    - "spawn"
+    - "tpa"
+    - "home"
+    - "back"
+    - "warp"
+    - "tp"
+  # 副本内禁用的消耗/使用物品（Material 名）
+  blocked-items:
+    - "CHORUS_FRUIT"
+  # 是否禁止破坏/放置方块（false=允许，交给交互点判定）
+  block-break: false
+  block-place: false
+
+party:
+  # 队伍最大人数
+  max-members: 4
+  # 邀请超时（秒）
+  invite-timeout: 60
+  # 队伍仓库页数（每页45格）
+  storage-pages: 1
+  # 是否允许自定义队伍名/颜色
+  allow-custom-name: true
+  # 经验共享模式: NONE / EQUAL / DISTANCE
+  exp-share-mode: "EQUAL"
+  # 掉落分配模式: FREE / ROUND_ROBIN / LEADER
+  loot-mode: "FREE"
+
+stamina:
+  # 体力系统开关
+  enabled: true
+  # 最大体力值
+  max: 100
+  # 回复速率：每 interval-seconds 秒回复 amount 点
+  regen-amount: 1
+  regen-interval-seconds: 300
+
+leaderboard:
+  enabled: true
+  # 榜单类型与缓存行数
+  size: 20
+  # 通关后是否自动展示结算
+  auto-show-complete: true
+
+statistics:
+  enabled: true
+  # 记录伤害/承伤/治疗
+  track-damage: true
+  track-damage-taken: true
+  track-healing: true
+  # 副本结束后自动展示统计
+  auto-show: true
+
+storage:
+  # sqlite（默认，共享宿主数据源）/ mysql（模块自建连接池）
+  mode: "sqlite"
+  sqlite-file-name: "abyss.db"
+  host: "127.0.0.1"
+  port: 3306
+  database: "arcartxsuite"
+  username: "root"
+  password: ""
+  table-prefix: "axs_abyss_"
+  pool-size: 8
+
+ui:
+  # 是否在启用时注册 UI（ArcartX 客户端）
+  register-on-enable: true
+  # 更新是否覆盖 ui/ 目录下已存在的同名文件
+  overwrite-ui-files: false
+  # 地牢浏览器 UI
+  browser-id: "abyss_browser"
+  # 进本确认 UI
+  confirm-id: "abyss_confirm"
+  # 队伍 UI
+  party-id: "abyss_party"
+  # 宝箱奖励 UI
+  chest-id: "abyss_chest"
+  # 战斗统计 UI
+  stats-id: "abyss_stats"
+  # 排行榜 UI
+  leaderboard-id: "abyss_leaderboard"
+
+debug: false

@@ -1,0 +1,34 @@
+# 示例地牢：虚空竞技场（world.template: void 直接生成虚空世界，无需模板文件）
+# 更常用方式：把世界存档文件夹放到本目录 world/（需含 level.dat），
+# 或 world.template: <maps/下的模板名或schematic文件名>
+
+name: "&6虚空试炼场"
+icon: "END_STONE"
+difficulty: "简单"
+description:
+  - "&7在虚空平台上击退两波怪物"
+  - "&7与向导对话接取任务获取额外奖励"
+
+world:
+  template: "void"          # void=虚空世界 / <maps目录名> / 本目录world/文件夹
+  spawn: "0,80,0,90,0"      # x,y,z,yaw,pitch
+
+time_limit: 600             # 10分钟
+timeout_action: "FAIL"      # FAIL=超时判负 / KICK=踢出
+max_instances: 0            # 0=不限
+
+requirements:
+  min_players: 1
+  max_players: 4
+  party_required: false
+  min_level: 0
+  max_level: 0
+  cooldown: 300             # 通关冷却 5 分钟
+  money_cost: 0
+  currency_id: "money"
+  stamina_cost: 10
+  required_items: []
+  required_permissions: []
+  conditions: []
+  disabled_commands: [spawn, tpa, home]
+  disabled_items: [CHORUS_FRUIT]

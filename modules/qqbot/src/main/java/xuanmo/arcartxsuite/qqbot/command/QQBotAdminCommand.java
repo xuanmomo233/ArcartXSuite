@@ -202,7 +202,14 @@ public final class QQBotAdminCommand {
                     snowLuma.installAsync(msg -> sender.sendMessage(prefix + "&7" + msg))
                         .thenAccept(result -> sender.sendMessage(prefix + result));
                 }
-                case "password" -> sender.sendMessage(snowLuma.webUiPasswordReport());
+                case "password" -> {
+                    // password reset：删除 webui.json 并重启 SnowLuma，重新生成临时密码
+                    if (args.length >= 4 && "reset".equalsIgnoreCase(args[3])) {
+                        sender.sendMessage((messages != null ? messages.get("prefix") : "") + snowLuma.resetWebUiPassword());
+                    } else {
+                        sender.sendMessage(snowLuma.webUiPasswordReport());
+                    }
+                }
                 case "logs" -> {
                     String logOutput = snowLuma.logs();
                     for (String line : logOutput.split("\n")) {
@@ -260,6 +267,9 @@ public final class QQBotAdminCommand {
                 if (action.startsWith(prefix)) completions.add(action);
             }
             return completions;
+        }
+        if (args.length == 4 && "snowluma".equalsIgnoreCase(args[1]) && "password".equalsIgnoreCase(args[2])) {
+            return "reset".startsWith(args[3].toLowerCase()) ? List.of("reset") : List.of();
         }
         if (args.length == 3 && "blacklist".equalsIgnoreCase(args[1])) {
             List<String> completions = new ArrayList<>();

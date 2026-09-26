@@ -257,6 +257,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         try {
             long timeoutSeconds = getConfig().getLong(
                 "security.secondary-password.unlock-timeout-seconds", 1800L);
+            int passwordMinLength = getConfig().getInt(
+                "security.secondary-password.min-length", 4);
+            int passwordMaxLength = getConfig().getInt(
+                "security.secondary-password.max-length", 32);
             String storageBase = "security.secondary-password.storage";
             xuanmo.arcartxsuite.api.storage.StorageDescriptor descriptor =
                 "mysql".equalsIgnoreCase(getConfig().getString(storageBase + ".mode", "sqlite"))
@@ -270,7 +274,7 @@ public final class SuiteCoreImpl implements SuiteCore {
                         "")
                     : xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite("secondary-password.db");
             secondaryPasswordService = new SecondaryPasswordService(
-                getDataFolder(), timeoutSeconds,
+                getDataFolder(), timeoutSeconds, passwordMinLength, passwordMaxLength,
                 storageManager.resolveModuleDataSource("secondary-password", null, getDataFolder(), descriptor),
                 descriptor, getLogger());
             moduleRegistry.registerCoreCapability(

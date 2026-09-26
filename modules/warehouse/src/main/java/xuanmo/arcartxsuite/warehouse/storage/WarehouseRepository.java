@@ -15,6 +15,15 @@ public interface WarehouseRepository {
 
     void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException;
 
+    /** 加载全服所有玩家的个人仓库记录（一次性迁移脚本用，记录量大时慎用）。 */
+    List<WarehouseRecord> loadAllPersonalWarehouses() throws SQLException;
+
+    /** 个人仓库额外购买槽位数原子递增（可为负值，结果不小于 0）。 */
+    void addPersonalExtraSlots(UUID playerUuid, String warehouseId, long delta, long updatedAt) throws SQLException;
+
+    /** 直接设置个人仓库额外购买槽位数。 */
+    void setPersonalExtraSlots(UUID playerUuid, String warehouseId, long extraSlots, long updatedAt) throws SQLException;
+
     void updatePersonalWarehouseName(UUID playerUuid, String warehouseId, String customName, long updatedAt) throws SQLException;
 
     void updatePersonalWarehouseShowcase(UUID playerUuid, String warehouseId, boolean showcaseEnabled, long updatedAt) throws SQLException;
@@ -110,7 +119,7 @@ public interface WarehouseRepository {
 
     void close();
 
-    record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt) {
+    record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt, long extraSlots) {
     }
 
     record SlotItemRecord(

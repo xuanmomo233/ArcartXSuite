@@ -13,7 +13,7 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("com.zaxxer:HikariCP:5.1.0")
-    compileOnly(files("../libs/Mythic-Dist-5.6.1-SNAPSHOT.jar"))
+    compileOnly(files("../libs/Mythic-Dist-5.8.0.jar"))
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     compileOnly("org.black_ixx:playerpoints:3.3.5")
     compileOnly(files("../libs/XConomy-Paper-2.26.3.jar"))

@@ -1,0 +1,16 @@
+id: abyss
+name: Abyss
+version: 1.0.0
+main: xuanmo.arcartxsuite.abyss.AbyssModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+  - PlaceholderAPI
+external-softdepends:
+  - MythicMobs
+  - MythicBukkit
+  - FastAsyncWorldEdit
+  - WorldEdit
+  - Adyeshach

@@ -1,0 +1,37 @@
+# 命名奖励集（grant_reward <集名> 调用）
+rewards:
+  clear_pack:
+    items:
+      - "material:DIAMOND:3"
+      - "material:GOLDEN_APPLE:2"
+    money: 100
+    currency: "money"
+    exp: 50
+    commands: []
+
+  quest_pack:
+    items:
+      - "material:EMERALD:5"
+    money: 50
+
+  random_pack:
+    type: random
+    picks: 1
+    pool:
+      - reward: clear_pack
+        weight: 80
+      - reward: quest_pack
+        weight: 20
+
+# 宝箱奖励（open_chest <名> 调用，ArcartX UI 阶段后走客户端 UI，当前直接发放）
+chest_rewards:
+  trial_chest:
+    title: "试炼宝箱"
+    rows: 3
+    options:
+      - item: "material:IRON_INGOT:5"
+        weight: 50
+      - item: "material:DIAMOND:2"
+        weight: 20
+      - item: "material:NETHERITE_SCRAP:1"
+        weight: 5

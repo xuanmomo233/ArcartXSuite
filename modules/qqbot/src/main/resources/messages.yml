@@ -59,7 +59,7 @@ admin:
     status: "&e  /axs qqbot snowluma status&7 - 查看状态（含 WebUI 信息）"
     install: "&e  /axs qqbot snowluma install&7 - 下载安装/部署（自带 Node 运行时，含进度显示）"
     logs: "&e  /axs qqbot snowluma logs&7 - 查看最近日志（Docker 模式）"
-    password: "&e  /axs qqbot snowluma password&7 - 查看 WebUI 登录密码"
+    password: "&e  /axs qqbot snowluma password [reset]&7 - 查看 WebUI 登录密码（reset 重置生成新临时密码）"
     check-update: "&e  /axs qqbot snowluma check-update&7 - 检查是否有新版本"
     install-start: "&e开始安装 SnowLuma（从 GitHub 下载），进度将实时推送..."
     unknown: "&c未知子命令: {0}"

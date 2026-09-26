@@ -32,16 +32,31 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
 
     private final Repository repository;
     private final long unlockTimeoutMillis;
+    private final int minLength;
+    private final int maxLength;
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
     /** 按 UUID 加锁的锁对象注册表，替代实例级 synchronized 细化并发粒度。 */
     private final ConcurrentMap<UUID, Object> playerLocks = new ConcurrentHashMap<>();
 
     public SecondaryPasswordService(java.io.File dataFolder, long unlockTimeoutSeconds,
+                                    int minLength, int maxLength,
                                     DataSource dataSource, StorageDescriptor descriptor,
                                     Logger logger) throws SQLException {
         this.unlockTimeoutMillis = Math.max(1L, unlockTimeoutSeconds) * 1000L;
+        this.minLength = Math.max(1, minLength);
+        this.maxLength = Math.max(this.minLength, maxLength);
         this.repository = new Repository(dataSource, descriptor, dataFolder, logger);
         repository.initialize();
+    }
+
+    @Override
+    public int minLength() {
+        return minLength;
+    }
+
+    @Override
+    public int maxLength() {
+        return maxLength;
     }
 
     private Connection connection() throws SQLException {
@@ -113,7 +128,8 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
 
     @Override
     public boolean set(@NotNull Player player, @NotNull String oldPassword, @NotNull String newPassword) {
-        if (newPassword.isBlank()) {
+        String trimmed = newPassword == null ? "" : newPassword.trim();
+        if (trimmed.length() < minLength || trimmed.length() > maxLength) {
             return false;
         }
         UUID uuid = player.getUniqueId();
@@ -125,7 +141,7 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
                 }
                 byte[] salt = new byte[SALT_BYTES];
                 RANDOM.nextBytes(salt);
-                byte[] hash = derive(newPassword, salt);
+                byte[] hash = derive(trimmed, salt);
                 String upsert = repository.isMysqlDialect()
                     ? "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
                         + "ON DUPLICATE KEY UPDATE salt=VALUES(salt),hash=VALUES(hash),updated_at=VALUES(updated_at)"

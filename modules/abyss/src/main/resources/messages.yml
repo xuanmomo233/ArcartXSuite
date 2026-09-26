@@ -1,0 +1,48 @@
+# Abyss 消息文件 — 支持 & 颜色代码与 {key} 占位
+
+prefix: "&8[&5深渊&8] "
+
+error:
+  no-permission: "{prefix}&c你没有权限执行此操作"
+  player-only: "{prefix}&c该命令仅玩家可执行"
+  dungeon-not-found: "{prefix}&c地牢 &f{dungeon} &c不存在"
+  already-in-dungeon: "{prefix}&c你已经在副本中"
+  not-in-dungeon: "{prefix}&c你不在副本中"
+  not-in-party: "{prefix}&c你不在队伍中"
+  not-party-leader: "{prefix}&c只有队长可以执行此操作"
+  party-full: "{prefix}&c队伍已满"
+  already-in-party: "{prefix}&c对方已在队伍中"
+  invite-expired: "{prefix}&c邀请已过期"
+  player-not-found: "{prefix}&c玩家 &f{player} &c不在线"
+  requirements-failed: "{prefix}&c不满足进入条件: &f{reason}"
+  world-load-failed: "{prefix}&c副本世界加载失败，请稍后再试"
+  enter-failed: "{prefix}&c进入副本失败: &f{reason}"
+
+party:
+  created: "{prefix}&a队伍已创建"
+  invited: "{prefix}&a已邀请 &f{player} &a加入队伍（{timeout}秒内有效）"
+  invite-received: "{prefix}&e{leader} &a邀请你加入队伍，输入 &f/party accept &a接受"
+  joined: "{prefix}&f{player} &a加入了队伍"
+  left: "{prefix}&f{player} &c离开了队伍"
+  kicked: "{prefix}&f{player} &c被移出队伍"
+  disbanded: "{prefix}&c队伍已解散"
+  leader-changed: "{prefix}&f{player} &a成为新队长"
+
+dungeon:
+  preparing: "{prefix}&e副本准备中，请稍候..."
+  world-ready: "{prefix}&a副本世界就绪，传送进入..."
+  started: "{prefix}&6副本开始！&e{dungeon}"
+  completed: "{prefix}&a恭喜通关 &e{dungeon}&a！用时 &f{time}"
+  failed: "{prefix}&c副本失败: &f{reason}"
+  cancelled: "{prefix}&c副本已取消"
+  exited: "{prefix}&e已离开副本"
+  time-warning: "{prefix}&e副本剩余时间: &f{time}"
+  death: "{prefix}&c你阵亡了，等待复活...（第 {deaths} 次）"
+  revived: "{prefix}&a已复活"
+  team-wipe: "{prefix}&c全队阵亡，副本失败"
+  escape-blocked: "{prefix}&c禁止离开副本区域"
+  command-blocked: "{prefix}&c副本内无法使用该命令"
+  item-blocked: "{prefix}&c副本内无法使用该物品"
+  mob-group-next: "{prefix}&e{group} &a即将出现..."
+  cooldown: "{prefix}&c冷却中，还需 &f{time}"
+  no-stamina: "{prefix}&c体力不足（需要 {cost}，当前 {current}）"

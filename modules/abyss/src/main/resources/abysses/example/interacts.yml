@@ -1,0 +1,11 @@
+# 交互点示例：平台上的金块右键开宝箱（一次性）
+
+trial_chest:
+  type: RIGHT_CLICK_BLOCK
+  location: "5,80,5"
+  required_block: "GOLD_BLOCK"
+  once: true
+  script:
+    - "message @trigger &e你发现了试炼宝箱！"
+    - "open_chest_ui @trigger trial_chest"
+    - "setblock 5,80,5 AIR"

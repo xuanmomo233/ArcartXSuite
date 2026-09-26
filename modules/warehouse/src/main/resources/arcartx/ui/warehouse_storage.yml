@@ -62,11 +62,10 @@ ui:
     #   - capacityText: 容量显示文本
     #   - used: 已使用容量
     #   - capacity: 总容量
-    #   - level: 仓库等级
-    #   - canUpgrade: 是否可升级
-    #   - nextUpgradeText: 下一级升级信息文本
-    #   - nextLevel: 下一级等级
-    #   - nextCapacity: 下一级容量
+    #   - level: 仓库等级（共享仓库等级；个人仓库恒为 1，逐格解锁不显示等级）
+    #   - canUpgrade: 是否可扩容（个人=还能再买一格，共享=可升下一级）
+    #   - slotPriceText: 个人仓库单格价格文本
+    #   - nextUpgradeText: 扩容提示文本（个人=槽位价格提示，共享=下一级信息）
     #   - usedSlots: 已使用的槽位集合
     #   - matchedSlots: 搜索匹配的槽位集合
     #   - slotCount: 槽位总数
@@ -115,9 +114,8 @@ ui:
       var.capacity = packet['capacity']
       var.level = packet['level']
       var.canUpgrade = packet['canUpgrade']
+      var.slotPriceText = packet['slotPriceText']
       var.nextUpgradeText = packet['nextUpgradeText']
-      var.nextLevel = packet['nextLevel']
-      var.nextCapacity = packet['nextCapacity']
       var.usedSlots = packet['usedSlots']
       var.matchedSlots = packet['matchedSlots']
       var.slotCount = packet['slotCount']
@@ -222,6 +220,8 @@ ui:
     load: |-
       var.actionToken = ''
       var.capacityText = '0/0'
+      var.slotPriceText = ''
+      var.canUpgrade = false
       var.categoryTexts = {}
       var.hasPassword = false
       var.lastBackpackClickTime = 0
@@ -1492,6 +1492,13 @@ controls:
               y: 120
               width: 272
               height: 48
+              enable: "var.ownerType == 'personal' && var.canUpgrade && !var.actionBusy"
+            action:
+              clickLeft: |-
+                if(var.ownerType == 'personal' && var.canUpgrade && var.actionToken != ''){
+                  var.actionBusy = true
+                  Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
+                }
             children:
               等级底:
                 type: Texture
@@ -1500,10 +1507,11 @@ controls:
                   normal: ~44,50,58,245
                   shape: ~round_rect
                   radius: 10
+                  through: true
                 effect:
                   stroke:
                     width: 3
-                    color: ~100,110,120,220
+                    color: "self.isHovered() && var.canUpgrade && var.ownerType == 'personal' ? '140,220,140,255' : '100,110,120,220'"
               等级圆点:
                 type: Texture
                 attribute:
@@ -1511,15 +1519,17 @@ controls:
                   x: 14
                   width: 10
                   height: 10
-                  normal: ~160,170,180,255
+                  normal: "var.canUpgrade ? '120,200,120,255' : '160,170,180,255'"
                   shape: ~circle
+                  through: true
               等级文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 32
-                  texts: "'&fLv.&e' + var.level.round()"
+                  texts: "var.ownerType == 'personal' ? (var.canUpgrade ? '&e+1格 ' + var.slotPriceText : '&f槽位已满') : ('&fLv.&e' + var.level.round())"
                   fontSize: 36
+                  through: true
               等级状态:
                 type: Text
                 attribute:
@@ -1527,6 +1537,7 @@ controls:
                   x: -16
                   texts: "'&f' + var.capacityText + ' 格'"
                   fontSize: 36
+                  through: true
           解锁行:
             type: Canvas
             attribute:

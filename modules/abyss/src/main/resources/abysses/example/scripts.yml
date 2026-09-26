@@ -1,0 +1,39 @@
+# 生命周期脚本：模块动作行 + aria:/js: 行内脚本 + wait 挂起
+# 选择器: @all @trigger @random @dead 或玩家名
+
+init:
+  # 虚空世界先搭一个 13x13 平台（y=79），玩家落点 y=80
+  - "fillblocks -6,79,-6 6,79,6 END_STONE"
+  - "fillblocks -6,80,-6 6,83,6 AIR"
+  - "message @all &7正在构建竞技场..."
+  - "wait 1"
+
+start:
+  - "message @all &6═══ 虚空试炼场 ═══"
+  - "title @all 10 40 10 &6虚空试炼场|&e消灭全部怪物"
+  - "sound @all ENTITY_ENDER_DRAGON_GROWL 1 1"
+  - "bossbar @all 600 RED SOLID &c虚空试炼场"
+
+complete:
+  - "message @all &a&l通关！干得漂亮！"
+  - "title @all 10 60 10 &a&l通关|&e奖励已发放"
+  - "grant_reward @all clear_pack"
+  - "firework @all BURST GOLD"
+  - "wait 3"
+  - "exit_dungeon @all"
+
+fail:
+  - "message @all &c试炼失败，下次再来！"
+  - "wait 2"
+  - "exit_dungeon @all"
+
+player_death:
+  - "message @all &c{player} 阵亡了！"
+  - "wait 5"
+  - "revive_player @trigger"
+
+all_death:
+  - "fail_dungeon"
+
+exit:
+  - "message @trigger &7已离开虚空试炼场"

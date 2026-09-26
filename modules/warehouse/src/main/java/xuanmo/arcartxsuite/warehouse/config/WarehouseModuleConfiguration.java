@@ -28,7 +28,6 @@ public record WarehouseModuleConfiguration(
     long transferConfirmExpireHours,
     UiConfiguration ui,
     StorageConfiguration storage,
-    SecurityConfiguration security,
     PickupConfiguration pickup,
     SearchConfiguration search,
     Map<String, WarehouseDefinition> warehouses,
@@ -72,23 +71,13 @@ public record WarehouseModuleConfiguration(
             configuration.getConfigurationSection("storage")
         );
 
-        ConfigurationSection securitySection = configuration.getConfigurationSection("security");
-        SecurityConfiguration security = new SecurityConfiguration(
-            securitySection == null ? 4 : Math.max(3, securitySection.getInt("min-length", 4)),
-            securitySection == null ? 32 : Math.max(4, securitySection.getInt("max-length", 32)),
-            securitySection == null ? 600000L : Math.max(10000L, securitySection.getLong("unlock-session-ms", 600000L)),
-            securitySection != null && securitySection.getBoolean("allow-admin-password-reveal", false),
-            securitySection == null ? "" : readString(securitySection, "admin-reveal-secret", "")
-        );
-
         ConfigurationSection pickupSection = configuration.getConfigurationSection("pickup");
         PickupConfiguration pickup = new PickupConfiguration(
             pickupSection == null || pickupSection.getBoolean("enabled", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-on-pickup", true),
             pickupSection == null || pickupSection.getBoolean("auto-store-mythic-loot", true),
             pickupSection == null || pickupSection.getBoolean("mythic-loot-enabled", true),
-            pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true),
-            pickupSection == null || pickupSection.getBoolean("extra-backpack-fallback", true)
+            pickupSection == null || pickupSection.getBoolean("notify-on-auto-store", true)
         );
 
         SearchConfiguration search = new SearchConfiguration(
@@ -123,7 +112,6 @@ public record WarehouseModuleConfiguration(
             transferConfirmExpireHours,
             ui,
             storage,
-            security,
             pickup,
             search,
             immutableCopy(warehouses),
@@ -175,7 +163,7 @@ public record WarehouseModuleConfiguration(
     private static Map<String, WarehouseDefinition> loadWarehouses(ConfigurationSection section, Logger logger) {
         LinkedHashMap<String, WarehouseDefinition> values = new LinkedHashMap<>();
         if (section == null) {
-            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 1, Map.of(1, new WarehouseLevelDefinition(1, 1000L, null))));
+            values.put("personal", new WarehouseDefinition("personal", "&6个人仓库", true, "", 1, Map.of(1, new WarehouseLevelDefinition(1, 1000L, null)), 32L, 999L, null));
             return values;
         }
         for (String rawId : section.getKeys(false)) {
@@ -193,6 +181,9 @@ public record WarehouseModuleConfiguration(
             if (!levels.containsKey(defaultLevel)) {
                 defaultLevel = levels.keySet().stream().min(Integer::compareTo).orElse(1);
             }
+            long baseSlots = Math.max(1L, child.getLong("base-slots", 32L));
+            long maxSlots = Math.max(baseSlots, child.getLong("max-slots", 999L));
+            UpgradeCost slotPrice = loadUpgradeCost(child, "slot-price");
             values.put(
                 id,
                 new WarehouseDefinition(
@@ -201,7 +192,10 @@ public record WarehouseModuleConfiguration(
                     child.getBoolean("default-owned", false),
                     readString(child, "permission", ""),
                     defaultLevel,
-                    immutableCopy(levels)
+                    immutableCopy(levels),
+                    baseSlots,
+                    maxSlots,
+                    slotPrice
                 )
             );
         }
@@ -574,16 +568,10 @@ public record WarehouseModuleConfiguration(
         }
     }
 
-    /** 二级密码安全策略：长度限制、会话有效期、管理员解密开关。 */
-    public record SecurityConfiguration(
-        int minLength,
-        int maxLength,
-        long unlockSessionMs,
-        boolean allowAdminPasswordReveal,
-        String adminRevealSecret
-    ) {
-    }
-
+    /**
+     * 二级密码安全策略已由宿主统一管控（security.secondary-password.min-length/max-length），
+     * 本模块不再持有密码策略配置。
+     */
     /**
      * 自动拾取配置。
      *
@@ -592,23 +580,25 @@ public record WarehouseModuleConfiguration(
      * @param autoStoreMythicLoot 自动存入 MythicMobs 自定义掉落物（玩家个人设置默认值）
      * @param mythicLootEnabled  服务器开关：是否允许 MythicMobs 自定义掉落物自动入库
      * @param notifyOnAutoStore  自动存入时通知玩家（玩家个人设置默认值）
-     * @param extraBackpackFallback 仓库放不下时，剩余物品尝试存入 ExtraBackpack 扩展背包
      */
-    public record PickupConfiguration(boolean enabled, boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean mythicLootEnabled, boolean notifyOnAutoStore, boolean extraBackpackFallback) {
+    public record PickupConfiguration(boolean enabled, boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean mythicLootEnabled, boolean notifyOnAutoStore) {
     }
 
     /** 搜索与排序默认配置。 */
     public record SearchConfiguration(int pageSize, String defaultSortId) {
     }
 
-    /** 个人仓库定义：显示名、默认拥有、权限、多等级容量。 */
+    /** 个人仓库定义：显示名、默认拥有、权限、多等级容量（legacy）、逐格解锁参数。 */
     public record WarehouseDefinition(
         String id,
         String displayName,
         boolean defaultOwned,
         String permission,
         int defaultLevel,
-        Map<Integer, WarehouseLevelDefinition> levels
+        Map<Integer, WarehouseLevelDefinition> levels,
+        long baseSlots,
+        long maxSlots,
+        UpgradeCost slotPrice
     ) {
         public WarehouseLevelDefinition level(int level) {
             return levels.getOrDefault(level, levels.get(defaultLevel));

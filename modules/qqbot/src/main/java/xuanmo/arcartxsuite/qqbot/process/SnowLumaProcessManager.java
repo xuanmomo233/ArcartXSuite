@@ -238,13 +238,61 @@ public final class SnowLumaProcessManager {
             sb.append("§7  （仅 SnowLuma 首次初始化时生效；若已初始化过，请使用你自己修改后的密码）");
             return sb.toString();
         }
-        sb.append("§7  未捕获到临时密码，可能原因:\n");
-        sb.append("§7  • SnowLuma 尚未首次启动 —— 执行 /axs qqbot snowluma start 后密码会打印在控制台\n");
-        sb.append("§7  • 已在 WebUI 修改过密码 —— 请使用修改后的密码登录\n");
-        sb.append("§7  • 忘记密码：停止 SnowLuma，删除 ")
-            .append(installDir.resolve("config").resolve("webui.json"))
-            .append(" 后重新启动将生成新临时密码");
+        sb.append("§7  未捕获到临时密码。").append(switch (webUiAuthState()) {
+            case AUTH_NOT_INITIALIZED ->
+                "SnowLuma 尚未初始化 —— 执行 /axs qqbot snowluma start 后临时密码会打印在控制台并被自动捕获";
+            case AUTH_MUST_CHANGE ->
+                "临时密码此前已生成但未被捕获（可能上次并非由本模块启动）。执行 /axs qqbot snowluma password reset 可直接重置并重新生成";
+            case AUTH_CUSTOM ->
+                "检测到 WebUI 密码已被修改过（不再是临时密码，无法从输出找回）。忘记密码可执行 /axs qqbot snowluma password reset 重置";
+            default ->
+                "无法确认认证状态。忘记密码可执行 /axs qqbot snowluma password reset 重置并生成新临时密码";
+        });
         return sb.toString();
+    }
+
+    // webui.json 认证状态：未初始化 / 临时密码待改密 / 已设自定义密码 / 读取失败
+    private static final int AUTH_UNKNOWN = -1, AUTH_NOT_INITIALIZED = 0, AUTH_MUST_CHANGE = 1, AUTH_CUSTOM = 2;
+    private static final Pattern MUST_CHANGE_RE = Pattern.compile("\"mustChangePassword\"\\s*:\\s*(true|false)");
+
+    private int webUiAuthState() {
+        Path f = installDir.resolve("config").resolve("webui.json");
+        if (!Files.exists(f)) return AUTH_NOT_INITIALIZED;
+        try {
+            Matcher m = MUST_CHANGE_RE.matcher(Files.readString(f, StandardCharsets.UTF_8));
+            if (!m.find()) return AUTH_UNKNOWN;
+            return Boolean.parseBoolean(m.group(1)) ? AUTH_MUST_CHANGE : AUTH_CUSTOM;
+        } catch (Exception e) {
+            return AUTH_UNKNOWN;
+        }
+    }
+
+    /**
+     * 重置 WebUI 密码：删除 webui.json（认证状态文件）后重启 SnowLuma，
+     * 下次启动会重新生成随机临时密码并打印（随之被捕获）。
+     */
+    public String resetWebUiPassword() {
+        if (config.isDocker()) return dockerResetWebUiPassword();
+        if (status.get() == Status.INSTALLING) return "正在安装中，请稍后再试";
+        if (!isInstalled()) return "SnowLuma 未安装，请先执行 /axs qqbot snowluma install";
+        boolean wasRunning = status.get() == Status.RUNNING && process != null && process.isAlive();
+        if (wasRunning) logger.info("[SnowLuma] " + stopNative());
+        try {
+            Files.deleteIfExists(installDir.resolve("config").resolve("webui.json"));
+            Files.deleteIfExists(installDir.resolve(PASSWORD_FILE));
+        } catch (Exception e) {
+            return "重置失败: 无法删除 " + installDir.resolve("config").resolve("webui.json") + "（" + e.getMessage() + "）";
+        }
+        webUiPassword = null;
+        String startResult = startNative();
+        if (startResult.startsWith("启动失败") || startResult.contains("未安装")) return "重置后启动失败: " + startResult;
+        // startNative 内部已等待 3 秒；新临时密码此时通常已打印并被捕获
+        String captured = webUiPassword != null ? webUiPassword : readSavedPassword();
+        return "WebUI 密码已重置，SnowLuma 已重启。\n"
+            + (captured != null
+                ? "新临时密码: " + captured + "（WebUI: " + webUiUrl() + "，账号 admin，请尽快登录改密）"
+                : "新临时密码即将打印到控制台，数秒后执行 /axs qqbot snowluma password 查看")
+            + (wasRunning ? "" : "\n（原进程未在运行，已顺带启动 SnowLuma）");
     }
 
     /**
@@ -335,7 +383,9 @@ public final class SnowLumaProcessManager {
             "-p", config.dockerHttpPort() + ":3000",
             "-p", config.dockerWsPort() + ":3001",
             "-p", config.dockerNovncPort() + ":6081",
-            "-v", config.dockerContainerName() + "-data:/app/data",
+            // 注意：镜像的数据目录是 /app/snowluma-data（WORKDIR + VOLUME 声明），
+            // 挂错路径会导致数据落到匿名卷、webui.json 等配置不持久化。
+            "-v", config.dockerContainerName() + "-data:/app/snowluma-data",
             "-v", config.dockerContainerName() + "-qq-config:/app/.config",
             "-v", config.dockerContainerName() + "-qq-data:/app/.local/share"
         ));
@@ -402,10 +452,65 @@ public final class SnowLumaProcessManager {
         } else if (config.webUiPassword() != null && !config.webUiPassword().isBlank()) {
             sb.append("§7  密码: §f已在配置 onebot.snowluma.webui-password 中指定（仅首次初始化生效）");
         } else {
-            sb.append("§7  容器日志中未找到临时密码。若已在 WebUI 修改过密码，请使用修改后的密码；\n");
-            sb.append("§7  忘记密码可删除容器后重新 install（数据卷会重建，将生成新临时密码）。");
+            sb.append("§7  容器日志中未找到临时密码。").append(switch (dockerWebUiAuthState()) {
+                case AUTH_NOT_INITIALIZED ->
+                    "容器尚未完成初始化，稍后执行 /axs qqbot snowluma password 重试";
+                case AUTH_MUST_CHANGE ->
+                    "临时密码已生成但日志中未找到。执行 /axs qqbot snowluma password reset 可直接重置并重新生成";
+                case AUTH_CUSTOM ->
+                    "检测到 WebUI 密码已被修改过（不再是临时密码）。忘记密码可执行 /axs qqbot snowluma password reset 重置";
+                default ->
+                    "无法确认认证状态。忘记密码可执行 /axs qqbot snowluma password reset 重置并生成新临时密码";
+            });
         }
         return sb.toString();
+    }
+
+    /** docker 侧读取容器内 webui.json 的认证状态（容器需在运行中才能 exec） */
+    private int dockerWebUiAuthState() {
+        if (!dockerContainerRunning()) return AUTH_UNKNOWN; // 容器未运行无法 exec，不能断定未初始化
+        try {
+            ProcessBuilder pb = new ProcessBuilder("docker", "exec", config.dockerContainerName(),
+                "cat", "/app/snowluma-data/config/webui.json");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            if (!p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) return AUTH_UNKNOWN;
+            if (p.exitValue() != 0) return AUTH_NOT_INITIALIZED; // 文件不存在 = 尚未初始化
+            Matcher m = MUST_CHANGE_RE.matcher(readAll(p.getInputStream()));
+            if (!m.find()) return AUTH_UNKNOWN;
+            return Boolean.parseBoolean(m.group(1)) ? AUTH_MUST_CHANGE : AUTH_CUSTOM;
+        } catch (Exception e) {
+            return AUTH_UNKNOWN;
+        }
+    }
+
+    /** docker 侧重置：容器内删除 webui.json 后重启容器，重新生成临时密码 */
+    private String dockerResetWebUiPassword() {
+        if (!dockerContainerExists()) return "Docker 容器不存在，请先执行 /axs qqbot snowluma install";
+        try {
+            if (!dockerContainerRunning()) {
+                ProcessBuilder st = new ProcessBuilder("docker", "start", config.dockerContainerName());
+                st.redirectErrorStream(true);
+                Process sp = st.start();
+                if (!sp.waitFor(15, java.util.concurrent.TimeUnit.SECONDS) || sp.exitValue() != 0)
+                    return "重置失败: 容器无法启动: " + readAll(sp.getInputStream());
+            }
+            ProcessBuilder rm = new ProcessBuilder("docker", "exec", config.dockerContainerName(),
+                "rm", "-f", "/app/snowluma-data/config/webui.json");
+            rm.redirectErrorStream(true);
+            Process rp = rm.start();
+            if (!rp.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) || rp.exitValue() != 0)
+                return "重置失败: 无法删除容器内 webui.json: " + readAll(rp.getInputStream());
+            ProcessBuilder rs = new ProcessBuilder("docker", "restart", config.dockerContainerName());
+            rs.redirectErrorStream(true);
+            Process rsp = rs.start();
+            if (!rsp.waitFor(30, java.util.concurrent.TimeUnit.SECONDS) || rsp.exitValue() != 0)
+                return "webui.json 已删除但容器重启失败: " + readAll(rsp.getInputStream()) + "，请手动执行 /axs qqbot snowluma start";
+            return "WebUI 密码已重置，容器已重启。新的临时密码将打印到容器日志，"
+                + "约 10 秒后执行 /axs qqbot snowluma password 查看。";
+        } catch (Exception e) {
+            return "重置失败: " + e.getMessage();
+        }
     }
 
     private String statusReportDocker() {

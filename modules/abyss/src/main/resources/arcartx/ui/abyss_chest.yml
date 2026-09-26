@@ -1,0 +1,214 @@
+# AXS 资源说明
+# 用途: Abyss 副本宝箱 —— roll 好的奖励物品展示 + 领取
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+ui:
+  isHud: false
+  background: true
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    # packetHandler: init
+    # 包字段: packetId/action_token/chestTitle/itemCount/itemJson0..itemJson8
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.chestTitle = packet['chestTitle']
+      var.itemCount = packet['itemCount']
+      var.itemJson0 = packet['itemJson0']
+      var.itemJson1 = packet['itemJson1']
+      var.itemJson2 = packet['itemJson2']
+      var.itemJson3 = packet['itemJson3']
+      var.itemJson4 = packet['itemJson4']
+      var.itemJson5 = packet['itemJson5']
+      var.itemJson6 = packet['itemJson6']
+      var.itemJson7 = packet['itemJson7']
+      var.itemJson8 = packet['itemJson8']
+      if(var.itemJson0 != none && var.itemJson0 != ''){ val.槽位0.setItemIcon(var.itemJson0) }
+      if(var.itemJson1 != none && var.itemJson1 != ''){ val.槽位1.setItemIcon(var.itemJson1) }
+      if(var.itemJson2 != none && var.itemJson2 != ''){ val.槽位2.setItemIcon(var.itemJson2) }
+      if(var.itemJson3 != none && var.itemJson3 != ''){ val.槽位3.setItemIcon(var.itemJson3) }
+      if(var.itemJson4 != none && var.itemJson4 != ''){ val.槽位4.setItemIcon(var.itemJson4) }
+      if(var.itemJson5 != none && var.itemJson5 != ''){ val.槽位5.setItemIcon(var.itemJson5) }
+      if(var.itemJson6 != none && var.itemJson6 != ''){ val.槽位6.setItemIcon(var.itemJson6) }
+      if(var.itemJson7 != none && var.itemJson7 != ''){ val.槽位7.setItemIcon(var.itemJson7) }
+      if(var.itemJson8 != none && var.itemJson8 != ''){ val.槽位8.setItemIcon(var.itemJson8) }
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      宝箱面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 500
+          height: 300
+        children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:24;24,28,38,200
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 2
+                color: ~226,196,132,180
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 16
+              texts: "'&e&l' + var.chestTitle"
+              fontSize: 48
+          物品网格:
+            type: HGrid
+            attribute:
+              point: ~top_center
+              y: 74
+              width: 440
+              spaceBetween: 10
+              column: 9
+            children:
+              槽位0:
+                val: 槽位0
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson0 != none && var.itemJson0 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '0', var.actionToken)"
+              槽位1:
+                val: 槽位1
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson1 != none && var.itemJson1 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '1', var.actionToken)"
+              槽位2:
+                val: 槽位2
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson2 != none && var.itemJson2 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '2', var.actionToken)"
+              槽位3:
+                val: 槽位3
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson3 != none && var.itemJson3 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '3', var.actionToken)"
+              槽位4:
+                val: 槽位4
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson4 != none && var.itemJson4 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '4', var.actionToken)"
+              槽位5:
+                val: 槽位5
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson5 != none && var.itemJson5 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '5', var.actionToken)"
+              槽位6:
+                val: 槽位6
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson6 != none && var.itemJson6 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '6', var.actionToken)"
+              槽位7:
+                val: 槽位7
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson7 != none && var.itemJson7 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '7', var.actionToken)"
+              槽位8:
+                val: 槽位8
+                type: Slot
+                attribute:
+                  width: 44
+                  height: 44
+                  slotType: ~Icon
+                  normal: ~0,0,0,0
+                  hover: ~0,0,0,0
+                  visible: "var.itemJson8 != none && var.itemJson8 != ''"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '8', var.actionToken)"
+          领取按钮:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              y: -24
+              width: 160
+              height: 46
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'chest_claim', var.actionToken)
+            children:
+              领取底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~150,110,40,240
+                  hover: ~185,140,55,250
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              领取字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f全部领取
+                  fontSize: 36
+                  through: true

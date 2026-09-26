@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("java")
 }
 
@@ -9,7 +9,7 @@ dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("com.zaxxer:HikariCP:5.1.0")
     compileOnly("me.clip:placeholderapi:2.11.5")
-    compileOnly(files("../../libs/Multiverse-Core-5.3.3.jar"))
+    compileOnly(files("../../libs/Multiverse-Core-5.8.1.jar"))
 }
 
 tasks.compileJava {

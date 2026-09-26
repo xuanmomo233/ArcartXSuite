@@ -1,0 +1,22 @@
+# 副本内定时任务
+
+tips:
+  type: TIMED
+  times: [60, 300, 540]
+  timed_scripts:
+    60: ["message @all &7提示：已进行 1 分钟"]
+    300: ["message @all &e时间过半，抓紧清怪！"]
+    540: ["message @all &c最后 1 分钟！"]
+
+supply:
+  type: INTERVAL
+  interval: 120
+  script:
+    - "message @all &7空投补给已投放"
+    - "setblock 0,80,0 CHEST"
+
+on_kill:
+  type: EVENT
+  event: monster_kill
+  script:
+    - "setvar last_killer {killer}"

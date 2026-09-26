@@ -80,13 +80,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     public List<WarehouseRecord> loadPersonalWarehouses(UUID playerUuid) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                 "SELECT warehouse_id, level, custom_name, showcase_enabled, updated_at FROM warehouse_personal WHERE player_uuid = ? ORDER BY warehouse_id ASC"
+                 "SELECT warehouse_id, level, custom_name, showcase_enabled, extra_slots, updated_at FROM warehouse_personal WHERE player_uuid = ? ORDER BY warehouse_id ASC"
              )) {
             statement.setString(1, playerUuid.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<WarehouseRecord> result = new ArrayList<>();
                 while (resultSet.next()) {
-                    result.add(new WarehouseRecord(playerUuid, resultSet.getString("warehouse_id"), resultSet.getInt("level"), resultSet.getString("custom_name"), resultSet.getBoolean("showcase_enabled"), resultSet.getLong("updated_at")));
+                    result.add(new WarehouseRecord(playerUuid, resultSet.getString("warehouse_id"), resultSet.getInt("level"), resultSet.getString("custom_name"), resultSet.getBoolean("showcase_enabled"), resultSet.getLong("updated_at"), resultSet.getLong("extra_slots")));
                 }
                 return result;
             }
@@ -112,6 +112,54 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setInt(3, level);
             statement.setString(4, customName == null ? "" : customName);
             statement.setLong(5, updatedAt);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public List<WarehouseRecord> loadAllPersonalWarehouses() throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT player_uuid, warehouse_id, level, custom_name, showcase_enabled, extra_slots, updated_at FROM warehouse_personal ORDER BY player_uuid ASC"
+             );
+             ResultSet resultSet = statement.executeQuery()) {
+            List<WarehouseRecord> result = new ArrayList<>();
+            while (resultSet.next()) {
+                result.add(new WarehouseRecord(
+                    UUID.fromString(resultSet.getString("player_uuid")),
+                    resultSet.getString("warehouse_id"), resultSet.getInt("level"),
+                    resultSet.getString("custom_name"), resultSet.getBoolean("showcase_enabled"),
+                    resultSet.getLong("updated_at"), resultSet.getLong("extra_slots")));
+            }
+            return result;
+        }
+    }
+
+    @Override
+    public void addPersonalExtraSlots(UUID playerUuid, String warehouseId, long delta, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE warehouse_personal SET extra_slots = CASE WHEN extra_slots + ? < 0 THEN 0 ELSE extra_slots + ? END, updated_at = ? WHERE player_uuid = ? AND warehouse_id = ?"
+             )) {
+            statement.setLong(1, delta);
+            statement.setLong(2, delta);
+            statement.setLong(3, updatedAt);
+            statement.setString(4, playerUuid.toString());
+            statement.setString(5, warehouseId);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void setPersonalExtraSlots(UUID playerUuid, String warehouseId, long extraSlots, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE warehouse_personal SET extra_slots = ?, updated_at = ? WHERE player_uuid = ? AND warehouse_id = ?"
+             )) {
+            statement.setLong(1, Math.max(0L, extraSlots));
+            statement.setLong(2, updatedAt);
+            statement.setString(3, playerUuid.toString());
+            statement.setString(4, warehouseId);
             statement.executeUpdate();
         }
     }
@@ -1341,6 +1389,11 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         } catch (SQLException ignored) {
             // Column already exists or dialect does not support ADD COLUMN syntax.
         }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE warehouse_personal ADD COLUMN extra_slots BIGINT NOT NULL DEFAULT 0");
+        } catch (SQLException ignored) {
+            // Column already exists.
+        }
     }
 
     private void createTables(Connection connection) throws SQLException {
@@ -1352,6 +1405,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     level INTEGER NOT NULL,
                     custom_name VARCHAR(64) NOT NULL,
                     showcase_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    extra_slots BIGINT NOT NULL DEFAULT 0,
                     updated_at BIGINT NOT NULL,
                     PRIMARY KEY (player_uuid, warehouse_id)
                 )

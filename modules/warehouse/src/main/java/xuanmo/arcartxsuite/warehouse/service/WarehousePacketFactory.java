@@ -270,12 +270,10 @@ final class WarehousePacketFactory {
                 continue;
             }
             WarehouseRecord record = records.get(definition.id());
-            WarehouseLevelDefinition level = definition.level(record.level());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", definition.id());
             row.put("name", ChatColor.translateAlternateColorCodes('&', definition.displayName()));
             row.put("text", service.message("ui.warehouse-name", ChatColor.translateAlternateColorCodes('&', definition.displayName())));
-            row.put("level", record.level());
             row.put("capacity", resolveCapacity(WarehouseService.OWNER_PERSONAL, player.getUniqueId().toString(), definition.id()));
             result.put(Integer.toString(idx), row);
             idx++;
@@ -295,7 +293,6 @@ final class WarehousePacketFactory {
             if (!record.showcaseEnabled()) {
                 continue;
             }
-            WarehouseLevelDefinition level = definition.level(record.level());
             String name = record.customName() == null || record.customName().isBlank()
                 ? ChatColor.translateAlternateColorCodes('&', definition.displayName())
                 : record.customName();
@@ -303,7 +300,6 @@ final class WarehousePacketFactory {
             row.put("id", definition.id());
             row.put("name", name);
             row.put("text", service.message("ui.warehouse-name", name));
-            row.put("level", record.level());
             row.put("capacity", resolveCapacity(WarehouseService.OWNER_PERSONAL, targetUuid.toString(), definition.id()));
             result.put(Integer.toString(idx), row);
             idx++;
@@ -323,7 +319,6 @@ final class WarehousePacketFactory {
             rowMap.put("name", shared.name());
             rowMap.put("role", shared.viewerRole());
             rowMap.put("roleName", service.sharedRoleName(shared.viewerRole()));
-            rowMap.put("level", shared.level());
             rowMap.put("storageText", service.message("ui.shared-name", shared.name()));
             rowMap.put("manageText", service.message("ui.shared-entry", shared.name(), service.sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
             rowMap.put("capacity", shared.capacity());
@@ -347,7 +342,7 @@ final class WarehousePacketFactory {
             rowMap.put("target", target);
             rowMap.put("selected", WarehouseService.OWNER_PERSONAL.equals(state.ownerType()) && target.equals(state.warehouseId()));
             rowMap.put("name", WarehouseTexts.safe(String.valueOf(row.get("name"))));
-            rowMap.put("text", service.message("ui.personal-entry", WarehouseTexts.safe(String.valueOf(row.get("name"))), row.get("level"), row.get("capacity")));
+            rowMap.put("text", service.message("ui.personal-entry", WarehouseTexts.safe(String.valueOf(row.get("name"))), row.get("capacity")));
             result.put(Integer.toString(idx), rowMap);
             idx++;
         }
@@ -377,7 +372,6 @@ final class WarehousePacketFactory {
             rowMap.put("name", shared.name());
             rowMap.put("role", shared.viewerRole());
             rowMap.put("roleName", service.sharedRoleName(shared.viewerRole()));
-            rowMap.put("level", shared.level());
             rowMap.put("storageText", service.message("ui.shared-name", shared.name()));
             rowMap.put("manageText", service.message("ui.shared-entry", shared.name(), service.sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
             rowMap.put("capacity", shared.capacity());
@@ -613,6 +607,7 @@ final class WarehousePacketFactory {
         packet.put("pageSize", pageSize());
         packet.put("level", 1);
         packet.put("canUpgrade", false);
+        packet.put("slotPriceText", "");
         packet.put("nextUpgradeText", service.message("ui.upgrade-unavailable"));
         if (WarehouseService.OWNER_SHARED.equals(state.ownerType())) {
             Optional<SharedWarehouseRecord> shared = currentSharedRecord(player, state);
@@ -638,8 +633,6 @@ final class WarehousePacketFactory {
             }
             WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(levels, record.level());
             packet.put("canUpgrade", true);
-            packet.put("nextLevel", next.level());
-            packet.put("nextCapacity", next.capacity());
             packet.put("nextUpgradeText", cost == null
                 ? service.message("ui.upgrade-to", next.level(), next.capacity())
                 : service.message("ui.upgrade-to-cost", next.level(), next.capacity(), service.formatCurrencyWithName(cost.currencyId(), cost.amount())));
@@ -653,19 +646,23 @@ final class WarehousePacketFactory {
         if (definition == null || record == null) {
             return;
         }
-        packet.put("level", record.level());
-        WarehouseLevelDefinition next = definition.levels().get(record.level() + 1);
-        if (next == null) {
-            packet.put("nextUpgradeText", service.message("ui.max-level"));
+        // 逐格解锁模型：canUpgrade → 是否还能再买一格；nextUpgradeText → 槽位价格提示。
+        long unlocked = definition.baseSlots() + Math.max(0L, record.extraSlots());
+        if (unlocked >= definition.maxSlots()) {
+            packet.put("nextUpgradeText", service.message("ui.buy-slots-maxed"));
             return;
         }
-        WarehouseModuleConfiguration.UpgradeCost cost = upgradeCost(definition.levels(), record.level());
+        WarehouseModuleConfiguration.UpgradeCost cost = definition.slotPrice();
+        if (cost == null) {
+            packet.put("nextUpgradeText", service.message("ui.buy-slots-not-configured"));
+            return;
+        }
         packet.put("canUpgrade", true);
-        packet.put("nextLevel", next.level());
-        packet.put("nextCapacity", next.capacity());
-        packet.put("nextUpgradeText", cost == null
-            ? service.message("ui.upgrade-to", next.level(), next.capacity())
-            : service.message("ui.upgrade-to-cost", next.level(), next.capacity(), service.formatCurrencyWithName(cost.currencyId(), cost.amount())));
+        packet.put("slotPriceText", service.formatCurrencyWithName(cost.currencyId(), cost.amount()));
+        packet.put("nextUpgradeText",
+            service.message("ui.buy-slots-hint",
+                service.formatCurrencyWithName(cost.currencyId(), cost.amount()),
+                definition.maxSlots() - unlocked));
     }
 
     String displayItemJson(SlotItemRecord item) {
@@ -772,18 +769,13 @@ final class WarehousePacketFactory {
         return Math.max(1, service.configuration.ui().pageSize());
     }
 
-    /** 解析仓库当前容量：优先读取已购买容量，缺省回退配置初始容量，并夹在 [初始, 上限] 之间。 */
+    /** 解析仓库当前容量：个人仓库 = base-slots + 已购买 extra_slots（逐格解锁模型）。 */
     long resolveCapacity(String ownerType, String ownerId, String warehouseId) throws Exception {
         if (!WarehouseService.OWNER_PERSONAL.equals(ownerType)) {
             return WarehouseService.SLOT_COUNT;
         }
-        WarehouseDefinition definition = service.configuration.warehouse(warehouseId);
-        WarehouseRecord record = service.personalWarehouseMap(UUID.fromString(ownerId)).get(warehouseId);
-        if (definition == null || record == null) {
-            return WarehouseService.SLOT_COUNT;
-        }
-        WarehouseLevelDefinition level = definition.level(record.level());
-        return level == null ? WarehouseService.SLOT_COUNT : Math.max(WarehouseService.SLOT_COUNT, level.capacity());
+        long unlocked = service.personalUnlockedSlots(UUID.fromString(ownerId), warehouseId);
+        return unlocked <= 0 ? WarehouseService.SLOT_COUNT : unlocked;
     }
 
     long currentWarehouseCapacity(Player player, String ownerType, String ownerId, String warehouseId) throws Exception {

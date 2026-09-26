@@ -1,7 +1,5 @@
 package xuanmo.arcartxsuite.extrabackpack.config;
 
-import java.io.File;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,15 +16,11 @@ import org.bukkit.configuration.file.FileConfiguration;
  * 通过 {@link #load(FileConfiguration, Logger)} 从 Bukkit {@link FileConfiguration} 解析构建，
  * 供 {@link xuanmo.arcartxsuite.extrabackpack.ExtraBackpackModule} 在启动时读取。
  *
- * @param debug       是否开启调试日志
- * @param flushIntervalTicks 槽位数据异步落盘间隔（ticks，20=1 秒，最小 20）
  * @param ui          UI 相关配置（是否注册 UI、是否覆盖 UI 文件）
- * @param storage     存储相关配置（方言、连接信息、连接池大小等）
+ * @param storage     存储相关配置（方言、连接信息、连接池大小等，仅服务于旧表数据清除/迁移能力）
  * @param extraBackpack 扩展背包功能配置（是否启用、分类列表）
  */
 public record ExtraBackpackConfiguration(
-    boolean debug,
-    long flushIntervalTicks,
     UiConfiguration ui,
     StorageConfiguration storage,
     ExtraBackpackConfig extraBackpack
@@ -40,8 +34,6 @@ public record ExtraBackpackConfiguration(
      * @return 解析后的配置实例
      */
     public static ExtraBackpackConfiguration load(FileConfiguration configuration, Logger logger) {
-        boolean debug = configuration.getBoolean("settings.debug", false);
-        long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
         ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
         UiConfiguration ui = new UiConfiguration(
             uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
@@ -50,7 +42,7 @@ public record ExtraBackpackConfiguration(
         StorageConfiguration storage = StorageConfiguration.load(configuration.getConfigurationSection("storage"));
         ExtraBackpackConfig extraBackpack =
             loadExtraBackpack(configuration.getConfigurationSection("extra-backpack"), logger);
-        return new ExtraBackpackConfiguration(debug, flushIntervalTicks, ui, storage, extraBackpack);
+        return new ExtraBackpackConfiguration(ui, storage, extraBackpack);
     }
 
     private static ExtraBackpackConfig loadExtraBackpack(ConfigurationSection section, Logger logger) {
@@ -67,13 +59,8 @@ public record ExtraBackpackConfiguration(
                     continue;
                 }
                 String id = normalizeId(rawId);
-                int initial = Math.max(0, child.getInt("slots.initial", child.getInt("initial-slots", 9)));
-                int max = Math.max(initial, child.getInt("slots.max", child.getInt("max-slots", initial)));
-                String currencyId = normalizeId(child.getString("price.currency", ""));
-                BigDecimal perSlot = parseDecimal(child.get("price.per-slot"), BigDecimal.ZERO);
-                UpgradeCost price = currencyId.isBlank() || perSlot.compareTo(BigDecimal.ZERO) <= 0
-                    ? null
-                    : new UpgradeCost(currencyId, perSlot);
+                // 该页网格显示上限：共通存储下页签只是过滤器，建议 >= 仓库 max-slots
+                int max = Math.max(1, child.getInt("slots.max", 999));
                 String path = readString(child, "match.nbt.path", readString(child, "nbt.path", ""));
                 List<String> values = normalizeStringList(child.getStringList("match.nbt.values"));
                 if (values.isEmpty()) {
@@ -84,9 +71,7 @@ public record ExtraBackpackConfiguration(
                     id,
                     readString(child, "display-name", rawId),
                     child.getInt("priority", categories.size()),
-                    initial,
                     max,
-                    price,
                     path,
                     values,
                     fallback
@@ -102,20 +87,6 @@ public record ExtraBackpackConfiguration(
     private static String readString(ConfigurationSection section, String path, String defaultValue) {
         String value = section.getString(path, defaultValue);
         return value == null ? defaultValue : value.trim();
-    }
-
-    private static BigDecimal parseDecimal(Object rawValue, BigDecimal defaultValue) {
-        if (rawValue instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue()).stripTrailingZeros();
-        }
-        if (rawValue != null) {
-            try {
-                return new BigDecimal(String.valueOf(rawValue).trim());
-            } catch (NumberFormatException ignored) {
-                return defaultValue;
-            }
-        }
-        return defaultValue;
     }
 
     private static List<String> normalizeStringList(List<String> values) {
@@ -248,15 +219,6 @@ public record ExtraBackpackConfiguration(
     }
 
     /**
-     * 扩展背包槽位升级费用 record。
-     *
-     * @param currencyId 货币标识
-     * @param amount     单个槽位的升级金额
-     */
-    public record UpgradeCost(String currencyId, BigDecimal amount) {
-    }
-
-    /**
      * 扩展背包功能配置 record，包含是否启用以及分类映射。
      * <p>
      * {@link #DISABLED} 为禁用时的单例默认值。
@@ -276,14 +238,12 @@ public record ExtraBackpackConfiguration(
     }
 
     /**
-     * 扩展背包分类配置 record，描述单个分类的显示、槽位、升级费用与 NBT 匹配规则。
+     * 扩展背包分类页配置 record——共通存储下页签是仓库内容的过滤器而非独立分区。
      *
      * @param id           分类标识（小写归一化）
      * @param displayName  显示名称
      * @param priority     优先级，数值越大越优先匹配
-     * @param initialSlots 初始槽位数量
-     * @param maxSlots     最大槽位数量
-     * @param pricePerSlot 每个槽位的升级费用；为 {@code null} 表示不可升级
+     * @param maxSlots     该页网格显示上限（应 >= 仓库 max-slots）
      * @param nbtPath      NBT 匹配路径
      * @param values       NBT 匹配值列表
      * @param fallback     是否作为兜底分类（无匹配项时使用）
@@ -292,9 +252,7 @@ public record ExtraBackpackConfiguration(
         String id,
         String displayName,
         int priority,
-        int initialSlots,
         int maxSlots,
-        UpgradeCost pricePerSlot,
         String nbtPath,
         List<String> values,
         boolean fallback

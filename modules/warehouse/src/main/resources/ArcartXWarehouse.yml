@@ -52,12 +52,8 @@ storage:
   #   password: ""
   #   table-prefix: "axs_warehouse_"
 
-security:
-  min-length: 4  # 二级密码最小长度
-  max-length: 32  # 二级密码最大长度
-  unlock-session-ms: 600000  # 解锁后会话有效时长（毫秒，600000 = 10 分钟）
-  allow-admin-password-reveal: false  # 是否允许管理员查看玩家二级密码
-  admin-reveal-secret: ""  # 管理员查看密码所需的密钥
+# 二级密码完全由宿主 config.yml 的 security.secondary-password 节统一管控
+# （解锁有效期 unlock-timeout-seconds、长度策略 min-length/max-length），本模块不再持有密码配置。
 
 pickup:
   enabled: true  # 服务器总开关：关闭后全服自动入库功能失效，玩家个人开关不生效，管理界面隐藏相关开关
@@ -65,7 +61,13 @@ pickup:
   auto-store-mythic-loot: false  # 是否自动存入 MythicMobs 自定义掉落物（玩家个人设置的默认值）
   mythic-loot-enabled: true  # 服务器开关：是否允许 MythicMobs 自定义掉落物自动入库（关闭后管理界面隐藏对应开关）
   notify-on-auto-store: true  # 自动存入时是否通知玩家（玩家个人设置的默认值）
-  extra-backpack-fallback: true  # 仓库放不下时，剩余物品尝试存入 ExtraBackpack 扩展背包（需启用 extrabackpack 模块）
+
+# ─── 迁移标记 ───
+migration:
+  # [LEGACY_LEVEL_MIGRATION] 等级制→逐格解锁自动迁移完成标记。
+  # 模块启动时检测：false 则自动全量迁移并回写 true，true 则跳过。
+  # 下版本随迁移逻辑一并移除，请勿手动修改。
+  legacy-level-done: false
 
 search:
   page-size: 18  # 搜索结果每页显示数量
@@ -75,20 +77,29 @@ warehouses:
   personal:
     display-name: "&6个人仓库"  # 个人仓库显示名称
     default-owned: true  # 玩家首次使用时是否自动创建
-    default-level: 1  # 默认仓库等级
+    # 逐格解锁模型：初始 base-slots 格，玩家按 slot-price 逐格购买至 max-slots。
+    # 扩展背包（extrabackpack）与本仓库共用同一存储，两个入口看到同样的格子。
+    base-slots: 32  # 初始解锁槽位数
+    max-slots: 999  # 可购买的槽位上限
+    slot-price:
+      currency: "points"  # 每格所需货币 ID
+      amount: 100  # 每格价格
+    # 旧版等级制容量（已弃用）：仅用于一次性迁移，level>default 的老玩家
+    # 按该等级容量折算为 extra_slots；新玩家不再读取本表。
+    default-level: 1
     levels:
       "1":
-        capacity: 1000  # 等级 1 容量
+        capacity: 1000
         upgrade:
-          currency: "points"  # 升级所需货币 ID
-          amount: 500  # 升级所需金额
+          currency: "points"
+          amount: 500
       "2":
-        capacity: 2500  # 等级 2 容量
+        capacity: 2500
         upgrade:
           currency: "points"
           amount: 1200
       "3":
-        capacity: 6000  # 等级 3 容量（最高级，无升级）
+        capacity: 6000
 
 # 物品分类定义（按 NBT 路径匹配物品归属分类）
 categories:

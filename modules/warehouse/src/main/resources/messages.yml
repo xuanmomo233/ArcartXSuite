@@ -236,7 +236,7 @@ ui:
   warehouse-name: "{0}"
   shared-name: "共享 {0}"
   shared-entry: "{0} [{1}]\nLv.{2}  {3} 格"
-  personal-entry: "个人 {0}\nLv.{1}  {2} 格"
+  personal-entry: "个人 {0}\n已解锁 {1} 格"
   shared-create-free: "创建共享仓库免费"
   shared-create-cost: "创建共享仓库消耗 {0}"
 

@@ -1,0 +1,176 @@
+# AXS 资源说明
+# 用途: Abyss 地牢排行榜 —— 最佳通关时间榜
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+ui:
+  isHud: false
+  background: true
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    # packetHandler: init
+    # 包字段: packetId/action_token/dungeonName/boardRows{idx:{rank,name,time,completions}}
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.dungeonName = packet['dungeonName']
+      var.boardRows = packet['boardRows']
+      var.b0 = var.boardRows != none ? var.boardRows['0'] : none
+      var.b1 = var.boardRows != none ? var.boardRows['1'] : none
+      var.b2 = var.boardRows != none ? var.boardRows['2'] : none
+      var.b3 = var.boardRows != none ? var.boardRows['3'] : none
+      var.b4 = var.boardRows != none ? var.boardRows['4'] : none
+      var.b5 = var.boardRows != none ? var.boardRows['5'] : none
+      var.b6 = var.boardRows != none ? var.boardRows['6'] : none
+      var.b7 = var.boardRows != none ? var.boardRows['7'] : none
+      var.b8 = var.boardRows != none ? var.boardRows['8'] : none
+      var.b9 = var.boardRows != none ? var.boardRows['9'] : none
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      排行面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 560
+          height: 640
+        children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:24;24,28,38,190
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~226,196,132,160
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 18
+              texts: "'&e&l排行榜 &7- &f' + var.dungeonName"
+              fontSize: 48
+          表头:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 84
+              texts: ~&8名次      玩家                最佳时间        通关次数
+              fontSize: 36
+          行0:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 128
+              texts: "var.b0 != none ? '&6#' + var.b0['rank'].round() + '    &f' + var.b0['name'] + '    &e' + var.b0['time'] + '    &7' + var.b0['completions'].round() + '次' : ''"
+              fontSize: 36
+          行1:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 174
+              texts: "var.b1 != none ? '&7#' + var.b1['rank'].round() + '    &f' + var.b1['name'] + '    &e' + var.b1['time'] + '    &7' + var.b1['completions'].round() + '次' : ''"
+              fontSize: 36
+          行2:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 220
+              texts: "var.b2 != none ? '&8#' + var.b2['rank'].round() + '    &f' + var.b2['name'] + '    &e' + var.b2['time'] + '    &7' + var.b2['completions'].round() + '次' : ''"
+              fontSize: 36
+          行3:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 266
+              texts: "var.b3 != none ? '&f#' + var.b3['rank'].round() + '    &f' + var.b3['name'] + '    &e' + var.b3['time'] + '    &7' + var.b3['completions'].round() + '次' : ''"
+              fontSize: 36
+          行4:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 312
+              texts: "var.b4 != none ? '&f#' + var.b4['rank'].round() + '    &f' + var.b4['name'] + '    &e' + var.b4['time'] + '    &7' + var.b4['completions'].round() + '次' : ''"
+              fontSize: 36
+          行5:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 358
+              texts: "var.b5 != none ? '&f#' + var.b5['rank'].round() + '    &f' + var.b5['name'] + '    &e' + var.b5['time'] + '    &7' + var.b5['completions'].round() + '次' : ''"
+              fontSize: 36
+          行6:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 404
+              texts: "var.b6 != none ? '&f#' + var.b6['rank'].round() + '    &f' + var.b6['name'] + '    &e' + var.b6['time'] + '    &7' + var.b6['completions'].round() + '次' : ''"
+              fontSize: 36
+          行7:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 450
+              texts: "var.b7 != none ? '&f#' + var.b7['rank'].round() + '    &f' + var.b7['name'] + '    &e' + var.b7['time'] + '    &7' + var.b7['completions'].round() + '次' : ''"
+              fontSize: 36
+          行8:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 496
+              texts: "var.b8 != none ? '&f#' + var.b8['rank'].round() + '    &f' + var.b8['name'] + '    &e' + var.b8['time'] + '    &7' + var.b8['completions'].round() + '次' : ''"
+              fontSize: 36
+          行9:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 30
+              y: 542
+              texts: "var.b9 != none ? '&f#' + var.b9['rank'].round() + '    &f' + var.b9['name'] + '    &e' + var.b9['time'] + '    &7' + var.b9['completions'].round() + '次' : ''"
+              fontSize: 36
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~bottom_center
+              y: -16
+              width: 110
+              height: 40
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~90,90,100,240
+                  hover: ~115,115,128,250
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f关闭
+                  fontSize: 36
+                  through: true

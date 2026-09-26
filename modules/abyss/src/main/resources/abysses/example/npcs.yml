@@ -1,0 +1,15 @@
+# 副本 NPC：平台中央的向导
+
+guide:
+  name: "&e向导·艾琳"
+  type: VILLAGER
+  location: "0,80,-5,0,0"
+  look_at_player: true
+  dialogs:
+    - "&e欢迎来到虚空试炼场！"
+    - "&7消灭两波怪物即可通关。"
+    - "&a右键我接取讨伐任务，有额外奖励！"
+  dialog_interval: 40
+  click_script:
+    - "quest_step slay_guard"
+  once: false
