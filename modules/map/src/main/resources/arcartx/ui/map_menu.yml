@@ -1515,6 +1515,80 @@ controls:
                   texts: "var.mapRenderer.isMenuCaveView() ? '&b洞穴' : '&f地表'"
                   fontSize: 30
                   through: true
+          # ─── 左下角：实体雷达开关（客户端本地选项，断线/重启保留；也可按 V）───
+          雷达按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f实体雷达（按 V 切换）
+              point: ~top_left
+              x: 288
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleRadar()
+                }
+            children:
+              雷达按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              雷达按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.mapRenderer.isRadarEnabled() ? '&b雷达' : '&7雷达'"
+                  fontSize: 30
+                  through: true
+          # ─── 左下角：洞穴切片深度循环（16/30/48/64，Xaero CAVE_MODE_DEPTH；也可按 N）───
+          洞深按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f洞穴层深度（按 N 切换）
+              point: ~top_left
+              x: 372
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.cycleCaveDepth()
+                }
+            children:
+              洞深按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              洞深按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&f深' + var.mapRenderer.getCaveDepthText()"
+                  fontSize: 30
+                  through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
           标记浏览面板:
             type: Canvas
