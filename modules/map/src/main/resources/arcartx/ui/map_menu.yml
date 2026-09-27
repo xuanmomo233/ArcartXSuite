@@ -1519,7 +1519,7 @@ controls:
           雷达按钮:
             type: Canvas
             attribute:
-              tip: ~&f实体雷达（按 V 切换）
+              tip: ~&f实体雷达（左键切点，右键切名称；按 V 切点）
               point: ~top_left
               x: 288
               y: "var.viewH - 96"
@@ -1530,6 +1530,10 @@ controls:
               clickLeft: |-
                 if(var.mapRenderer != none) {
                   var.mapRenderer.toggleRadar()
+                }
+              clickRight: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleRadarNames()
                 }
             children:
               雷达按钮底:
