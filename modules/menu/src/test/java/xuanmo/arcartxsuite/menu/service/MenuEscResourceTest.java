@@ -44,7 +44,7 @@ class MenuEscResourceTest {
     }
 
     @Test
-    void followsGenshinLayoutOrder() throws Exception {
+    void alignsProfileAndGridBesideFullHeightRail() throws Exception {
         YamlConfiguration yaml = load();
         ConfigurationSection panel = yaml.getConfigurationSection(PANEL + ".children");
         ConfigurationSection card = panel.getConfigurationSection("玩家信息卡");
@@ -54,8 +54,11 @@ class MenuEscResourceTest {
         assertNotNull(strip);
         assertNotNull(grid);
         int cardBottom = card.getInt("attribute.y") + card.getInt("attribute.height");
-        assertTrue(cardBottom < strip.getInt("attribute.y"), "信息卡必须位于图标栏与网格上方");
-        assertEquals(strip.getInt("attribute.y"), grid.getInt("attribute.y"), "图标栏与网格顶部对齐");
+        assertTrue(cardBottom < grid.getInt("attribute.y"), "资料头部必须位于网格上方");
+        assertEquals(0, strip.getInt("attribute.y"), "工具栏从屏幕顶部开始");
+        assertEquals("var.viewH", strip.getString("attribute.height"));
+        assertTrue(strip.getInt("attribute.x") + strip.getInt("attribute.width") <= card.getInt("attribute.x"),
+            "工具栏必须位于资料头部左侧");
         assertTrue(strip.getInt("attribute.x") + strip.getInt("attribute.width") <= grid.getInt("attribute.x"),
             "图标栏必须位于网格左侧");
         assertEquals("Scroll", grid.getString("type"));
@@ -95,7 +98,12 @@ class MenuEscResourceTest {
             ConfigurationSection icon = button.getConfigurationSection("children.图标");
             assertEquals("Slot", icon.getString("type"));
             assertTrue(icon.getString("attribute.seticon").contains("self.parent.entryKey"));
-            assertTrue(button.getString("children.字形.attribute.visible").contains("!self.parent.entry['hasIcon']"));
+            assertNull(button.get("children.字形"), "入口不得退化为名称首字");
+            assertNull(button.get("children.线绘图标"), "ESC 菜单应完全由 icon 驱动");
+            assertTrue(button.getString("action.clickLeft").contains("!var.closing"));
+            assertFalse(button.getString("action.enter").contains("Packet.send"));
+            assertFalse(button.getString("action.leave").contains("Packet.send"));
+            assertTrue(button.getString("action.enter").contains("preview"));
         }
         String footerClick = refs.get("footer_rows").getString("children.页脚按钮.action.clickLeft");
         assertTrue(footerClick.contains("Game.options()"));
@@ -121,8 +129,10 @@ class MenuEscResourceTest {
         assertTrue(apply.contains("var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertFalse(apply.contains("['菜单按钮'].copy"));
         assertFalse(apply.contains("setItemIcon"));
-        assertTrue(apply.contains("var.glyphs[key]"));
-        assertTrue(apply.contains("var.footerGlyphs[key]"));
+        assertTrue(apply.contains("var.labels[key]"));
+        assertTrue(apply.contains("var.footerLabels[key]"));
+        assertFalse(apply.contains("label.charAt(0) :"));
+        assertTrue(yaml.getString("ui.action.tick").contains("server.player_yaw"));
         assertFalse(apply.contains(".clear()"));
         assertFalse(yaml.getString("ui.action.tick").contains(".copy("));
         assertTrue(yaml.getString("ui.action.open").contains("Packet.send(var.packetId, 'esc_open')"));
@@ -135,21 +145,60 @@ class MenuEscResourceTest {
         String close = yaml.getString("ui.action.close");
         assertTrue(close.contains("Camera.setThirdPerson(false)"));
         assertTrue(close.contains("Camera.clearState()"));
-        assertTrue(yaml.getString(ROOT + ".children.全屏画布.children.关闭按钮.action.clickLeft")
+        assertTrue(yaml.getString(PANEL + ".children.侧栏.children.关闭按钮.action.clickLeft")
             .contains("var.menuUi.actions['closeMenu']()"));
     }
 
     @Test
-    void viewportGeometryKeepsGridAndSliderInsideScreen() {
+    void usesOpaquePaperAndIconOnlyEntries() throws Exception {
+        YamlConfiguration yaml = load();
+        assertEquals("~237,232,220,255", yaml.getString(PANEL + ".children.面板底.attribute.normal"));
+        assertTrue(yaml.getStringList("ui.hide").containsAll(Set.of("纯色块HUD", "hotbar", "experience_bar", "scoreboard")));
+        assertFalse(yaml.getString("ui.action.load").contains("iconShapes"));
+        assertNull(yaml.getConfigurationSection("template"));
+        Map<String, ConfigurationSection> refs = new HashMap<>();
+        visit(yaml.getConfigurationSection("controls"), "UI", refs);
+        ConfigurationSection button = refs.get("button_rows").getConfigurationSection("children.菜单按钮");
+        assertEquals("~rect", button.getString("children.图标底.attribute.shape"));
+        assertTrue(button.getString("children.图标底.effect.stroke.width").contains("self.parent.isHovered()"));
+        assertTrue(button.getString("attribute.middleScale").contains("pressAnim"));
+        assertTrue(yaml.getString(PANEL + ".children.操作说明.children.说明内容.attribute.texts").contains("var.preview"));
+    }
+
+    @Test
+    void viewportGeometryKeepsGridAndSliderInsideScreen() throws Exception {
+        YamlConfiguration yaml = load();
+        ConfigurationSection panel = yaml.getConfigurationSection(PANEL + ".children");
+        ConfigurationSection scroll = panel.getConfigurationSection("网格滚动区.attribute");
+        ConfigurationSection grid = panel.getConfigurationSection("网格滚动区.children.按钮网格");
+        ConfigurationSection cell = grid.getConfigurationSection("children.菜单按钮.attribute");
+        ConfigurationSection slider = panel.getConfigurationSection("网格滑块.attribute");
+        ConfigurationSection notes = panel.getConfigurationSection("操作说明.attribute");
+        int columns = grid.getInt("attribute.column");
+        int gridWidth = grid.getInt("attribute.x") + columns * cell.getInt("width")
+            + (columns - 1) * grid.getInt("attribute.spaceBetweenX");
+        int threeRows = grid.getInt("attribute.y") + 3 * cell.getInt("height")
+            + 2 * grid.getInt("attribute.spaceBetweenY");
+        assertTrue(gridWidth <= scroll.getInt("width"), "四列格子不得裁切");
         for (double[] size : new double[][] {{1920, 1080}, {1280, 720}, {1024, 768}, {3440, 1440}, {960, 1080}}) {
             double scale = Math.min(size[0] / 1920, size[1] / 1080);
             double viewW = size[0] / scale;
             double viewH = size[1] / scale;
+            double viewportHeight = viewHMinus(scroll.getString("height"), viewH);
+            double notesY = viewHMinus(notes.getString("y"), viewH);
             assertEquals(size[1], viewH * scale, 0.001);
-            assertTrue(viewW >= 820, "面板宽度不能超出可视宽度");
-            assertTrue(viewH - 370 >= 188, "网格区至少容纳一行磁贴");
-            assertTrue(viewH - 442 > 0, "滑块拖动范围必须为正");
+            assertTrue(viewW >= yaml.getInt(PANEL + ".attribute.width"));
+            assertTrue(viewportHeight >= threeRows, "默认九个入口必须完整显示，不裁掉第三行");
+            assertTrue(scroll.getInt("y") + viewportHeight < notesY, "说明区不能遮挡网格");
+            assertTrue(notesY + notes.getInt("height") <= viewH);
+            assertEquals(viewportHeight - slider.getInt("height"), viewHMinus(slider.getString("maxDragY"), viewH));
+            assertTrue(slider.getInt("x") + slider.getInt("width") < yaml.getInt(PANEL + ".attribute.width"));
         }
+    }
+
+    private double viewHMinus(String expression, double viewH) {
+        assertTrue(expression.startsWith("var.viewH - "));
+        return viewH - Double.parseDouble(expression.substring("var.viewH - ".length()));
     }
 
     private void visit(ConfigurationSection children, String parentType, Map<String, ConfigurationSection> refs) {
@@ -182,7 +231,15 @@ class MenuEscResourceTest {
                 String only = nested.getKeys(false).iterator().next();
                 assertTrue(Set.of("Canvas", "HStack", "VStack", "HGrid").contains(nested.getString(only + ".type")));
             }
-            if (nested != null) visit(nested, type, refs);
+            if (nested != null) {
+                if (node.contains("action.clickLeft")) {
+                    for (String child : nested.getKeys(false)) {
+                        assertTrue(nested.getBoolean(child + ".attribute.through"),
+                            nested.getCurrentPath() + "." + child + " 不得拦截父按钮点击");
+                    }
+                }
+                visit(nested, type, refs);
+            }
         }
     }
 }
