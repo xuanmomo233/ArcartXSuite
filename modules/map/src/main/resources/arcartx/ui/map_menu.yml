@@ -1593,6 +1593,115 @@ controls:
                   texts: "'&f深' + var.mapRenderer.getCaveDepthText()"
                   fontSize: 30
                   through: true
+          # ─── 左下角：雷达逐类显隐（玩家/怪/动物三路独立开关，亮=显示）───
+          雷达玩家按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f显示玩家/NPC点
+              point: ~top_left
+              x: 456
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleRadarPlayers()
+                }
+            children:
+              雷达玩家按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              雷达玩家按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.mapRenderer.isRadarPlayers() ? '&f人' : '&7人'"
+                  fontSize: 34
+                  through: true
+          雷达怪物按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f显示怪物点
+              point: ~top_left
+              x: 540
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleRadarHostile()
+                }
+            children:
+              雷达怪物按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              雷达怪物按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.mapRenderer.isRadarHostile() ? '&c怪' : '&7怪'"
+                  fontSize: 34
+                  through: true
+          雷达动物按钮:
+            type: Canvas
+            attribute:
+              tip: ~&f显示动物点
+              point: ~top_left
+              x: 624
+              y: "var.viewH - 96"
+              width: 72
+              height: 72
+              enable: "var.mapRenderer != none"
+            action:
+              clickLeft: |-
+                if(var.mapRenderer != none) {
+                  var.mapRenderer.toggleRadarPassive()
+                }
+            children:
+              雷达动物按钮底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "~Frosted:30;200,200,200,255"
+                  hover: "~Frosted:30;255,255,255,255"
+                  shape: ~round_rect
+                  radius: 18
+                effect:
+                  stroke:
+                    width: "self.isHovered() ? '4' : '3'"
+                    color: ~255,255,255,255
+              雷达动物按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.mapRenderer.isRadarPassive() ? '&e动' : '&7动'"
+                  fontSize: 34
+                  through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
           标记浏览面板:
             type: Canvas
