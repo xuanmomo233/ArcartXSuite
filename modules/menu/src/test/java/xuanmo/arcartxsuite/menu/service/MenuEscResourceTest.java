@@ -117,8 +117,8 @@ class MenuEscResourceTest {
         assertTrue(apply.contains("var.按钮引用[i.round()] = mb"));
         assertTrue(apply.contains("var.页脚引用[i.round()] = fb"));
         assertTrue(apply.contains("mb['图标'].seticon()"));
-        assertTrue(apply.contains("var.iconJsons[key] = entry['itemJson']"));
-        assertTrue(apply.contains("var.footerIconJsons[key] = entry['itemJson']"));
+        assertTrue(apply.contains("var.iconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
+        assertTrue(apply.contains("var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air"));
         assertFalse(apply.contains("['菜单按钮'].copy"));
         assertFalse(apply.contains("setItemIcon"));
         assertTrue(apply.contains("var.glyphs[key]"));

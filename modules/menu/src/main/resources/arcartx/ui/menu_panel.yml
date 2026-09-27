@@ -55,6 +55,10 @@ ui:
       var.页脚轮次 = 0
       var.说明轮次 = 0
       var.air = '{"id":"minecraft:air","Count":1b}'
+      var.actionBusySeconds = 0
+      var.按钮引用 = {}
+      var.页脚引用 = {}
+      var.说明引用 = {}
       var.openAnim = Smooth(0, 1, 280)
       var.detailAnim = Smooth(0, 1, 180)
       self.actions['resize']()
@@ -69,9 +73,21 @@ ui:
       var.rightW = var.viewW - var.leftW
     open: |-
       var.openAnim.reset()
+      var.actionBusy = false
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
     tick: |-
       if(var.pendingEntry != none && Time.currentTime() - var.pendingAt >= 110){
         self.actions['selectPreview']()
+      }
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
       }
     selectPreview: |-
       if(var.pendingEntry != none){
@@ -93,6 +109,7 @@ ui:
       var.selected = none
       var.packetId = var.incoming['packetId']
       var.actionToken = var.incoming['action_token']
+      var.actionBusy = false
       var.menuId = var.incoming['menuId']
       var.layout = var.incoming['layout']
       var.title = var.incoming['title']
@@ -114,134 +131,68 @@ ui:
         val.button_slider.setDragYRatio(0)
         val.footer_slider.setDragXRatio(0)
       }
-      // get(index)/['name'] 对 packetHandler 中动态创建的子控件不可靠：
-      // 模板用 get(0) 定位，copy 返回值存入引用字典，remove/seticon 全部走引用
+      // 动态行模板用 get(0)，copy/remove/seticon 全部走引用字典
       目标按钮数 = var.buttonCount.round()
       if(val.button_rows.childrenCount() - 1 != 目标按钮数 - 1){
-        if(var.按钮引用 != none){
-          for(key in var.按钮引用.keys()){
-            old = var.按钮引用[key]
-            if(old != none){
-              old.remove()
-            }
-          }
+        for(key in var.按钮引用.keys()){
+          var.按钮引用[key].remove()
         }
         var.按钮引用 = {}
         var.按钮轮次 = (var.按钮轮次 + 1).round()
-        if(val.button_rows != none){
-          模板 = val.button_rows.get(0)
-          if(模板 != none){
-            模板.entryKey = 0.round()
-          }
-          if(目标按钮数 > 1){
-            for(i in range(1, 目标按钮数 - 1)){
-              if(模板 != none){
-                mb = 模板.copy('菜单按钮_' + var.按钮轮次 + '_' + i.round())
-                mb.entryKey = i.round()
-                var.按钮引用[i.round()] = mb
-              }
-            }
-          }
+        模板 = val.button_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标按钮数 - 1)){
+          mb = 模板.copy('菜单按钮_' + var.按钮轮次 + '_' + i.round())
+          mb.entryKey = i.round()
+          var.按钮引用[i.round()] = mb
         }
       }
       目标页脚数 = var.footerCount.round()
       if(val.footer_rows.childrenCount() - 1 != 目标页脚数 - 1){
-        if(var.页脚引用 != none){
-          for(key in var.页脚引用.keys()){
-            old = var.页脚引用[key]
-            if(old != none){
-              old.remove()
-            }
-          }
+        for(key in var.页脚引用.keys()){
+          var.页脚引用[key].remove()
         }
         var.页脚引用 = {}
         var.页脚轮次 = (var.页脚轮次 + 1).round()
-        if(val.footer_rows != none){
-          模板 = val.footer_rows.get(0)
-          if(模板 != none){
-            模板.entryKey = 0.round()
-          }
-          if(目标页脚数 > 1){
-            for(i in range(1, 目标页脚数 - 1)){
-              if(模板 != none){
-                fb = 模板.copy('页脚按钮_' + var.页脚轮次 + '_' + i.round())
-                fb.entryKey = i.round()
-                var.页脚引用[i.round()] = fb
-              }
-            }
-          }
+        模板 = val.footer_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标页脚数 - 1)){
+          fb = 模板.copy('页脚按钮_' + var.页脚轮次 + '_' + i.round())
+          fb.entryKey = i.round()
+          var.页脚引用[i.round()] = fb
         }
       }
-      // 图标走 itemJson 分离字典：self.parent.entry 在 copy 刚建完时可能尚未解析，
-      // seticon 只能依赖 entryKey + var 字典，否则全部清成 air
+      // 图标分离字典与选中还原，一次遍历完成
       var.iconJsons = {}
-      if(var.buttonRows != none){
-        for(key in var.buttonRows.keys()){
-          entry = var.buttonRows[key]
-          if(entry['hasIcon']){
-            var.iconJsons[key] = entry['itemJson']
-          } else {
-            var.iconJsons[key] = var.air
-          }
+      for(key in var.buttonRows.keys()){
+        entry = var.buttonRows[key]
+        var.iconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air
+        if(!var.selectedFooter && var.selectedId == entry['id']){
+          var.selected = entry
         }
       }
       var.footerIconJsons = {}
-      if(var.footerRows != none){
-        for(key in var.footerRows.keys()){
-          entry = var.footerRows[key]
-          if(entry['hasIcon']){
-            var.footerIconJsons[key] = entry['itemJson']
-          } else {
-            var.footerIconJsons[key] = var.air
-          }
+      for(key in var.footerRows.keys()){
+        entry = var.footerRows[key]
+        var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air
+        if(var.selectedFooter && var.selectedId == entry['id']){
+          var.selected = entry
         }
       }
       if(目标按钮数 > 0){
-        if(val.button_rows != none){
-          mb = val.button_rows.get(0)
-          if(mb != none){
-            mb['图标'].seticon()
-          }
-        }
-        if(var.按钮引用 != none){
-          for(i in range(1, 目标按钮数 - 1)){
-            mb = var.按钮引用[i.round()]
-            if(mb != none){
-              mb['图标'].seticon()
-            }
-          }
+        mb = val.button_rows.get(0)
+        mb['图标'].seticon()
+        for(i in range(1, 目标按钮数 - 1)){
+          mb = var.按钮引用[i.round()]
+          mb['图标'].seticon()
         }
       }
       if(目标页脚数 > 0){
-        if(val.footer_rows != none){
-          fb = val.footer_rows.get(0)
-          if(fb != none){
-            fb['图标'].seticon()
-          }
-        }
-        if(var.页脚引用 != none){
-          for(i in range(1, 目标页脚数 - 1)){
-            fb = var.页脚引用[i.round()]
-            if(fb != none){
-              fb['图标'].seticon()
-            }
-          }
-        }
-      }
-      if(var.buttonRows != none){
-        for(key in var.buttonRows.keys()){
-          entry = var.buttonRows[key]
-          if(!var.selectedFooter && var.selectedId == entry['id']){
-            var.selected = entry
-          }
-        }
-      }
-      if(var.footerRows != none){
-        for(key in var.footerRows.keys()){
-          entry = var.footerRows[key]
-          if(var.selectedFooter && var.selectedId == entry['id']){
-            var.selected = entry
-          }
+        fb = val.footer_rows.get(0)
+        fb['图标'].seticon()
+        for(i in range(1, 目标页脚数 - 1)){
+          fb = var.页脚引用[i.round()]
+          fb['图标'].seticon()
         }
       }
       if(var.selected == none){
@@ -268,37 +219,21 @@ ui:
       }
       目标行数 = var.detailCount.round()
       if(val.detail_rows.childrenCount() - 1 != 目标行数 - 1){
-        if(var.说明引用 != none){
-          for(key in var.说明引用.keys()){
-            old = var.说明引用[key]
-            if(old != none){
-              old.remove()
-            }
-          }
+        for(key in var.说明引用.keys()){
+          var.说明引用[key].remove()
         }
         var.说明引用 = {}
         var.说明轮次 = (var.说明轮次 + 1).round()
-        if(val.detail_rows != none){
-          模板 = val.detail_rows.get(0)
-          if(模板 != none){
-            模板.entryKey = 0.round()
-          }
-          if(目标行数 > 1){
-            for(i in range(1, 目标行数 - 1)){
-              if(模板 != none){
-                row = 模板.copy('说明行_' + var.说明轮次 + '_' + i.round())
-                row.entryKey = i.round()
-                var.说明引用[i.round()] = row
-              }
-            }
-          }
+        模板 = val.detail_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标行数 - 1)){
+          row = 模板.copy('说明行_' + var.说明轮次 + '_' + i.round())
+          row.entryKey = i.round()
+          var.说明引用[i.round()] = row
         }
       }
-      if(var.selected != none && var.selected['hasIcon']){
-        val.detail_icon.setItemIcon(var.selected['itemJson'])
-      } else {
-        val.detail_icon.setItemIcon(var.air)
-      }
+      iconJson = var.selected['hasIcon'] ? var.selected['itemJson'] : var.air
+      val.detail_icon.setItemIcon(iconJson)
 controls:
   自适应全局布局:
     type: Adaptive
@@ -465,7 +400,6 @@ controls:
                     attribute:
                       width: "var.leftW - 152"
                       spaceBetween: 12
-                      maxSize: "var.buttonCount + 1"
                     children:
                       菜单按钮:
                         type: Canvas
@@ -482,6 +416,7 @@ controls:
                             var.pendingEntry = self.entry
                             var.pendingFooter = false
                             var.pendingAt = Time.currentTime()
+                            Sound.self('minecraft:ui.button.click', 1.9, 6)
                           leave: |-
                             if(!var.pendingFooter && var.pendingEntry['id'] == self.entry['id']){
                               var.pendingEntry = none
@@ -490,7 +425,9 @@ controls:
                             var.pendingEntry = self.entry
                             var.pendingFooter = false
                             var.menuUi.actions['selectPreview']()
-                            if(self.entry != none && self.entry['enabled'] && var.actionToken != none){
+                            if(self.entry != none && self.entry['enabled'] && var.actionToken != none && !var.actionBusy){
+                              var.actionBusy = true
+                              Sound.self('minecraft:ui.button.click', 1.0, 20)
                               Packet.send(var.packetId, 'click', var.actionToken, self.entry['id'])
                             }
                         children:
@@ -509,7 +446,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.active ? self.parent.entry['accent'] : '70,96,122,190'"
+                                color: "self.parent.active ? self.parent.entry['accent'] : (self.parent.isHovered() ? '128,160,188,235' : '70,96,122,190')"
                           选中染色:
                             type: Texture
                             attribute:
@@ -528,13 +465,20 @@ controls:
                             attribute:
                               x: 3
                               y: 24
-                              width: "self.parent.active ? 5 : 3"
+                              width: "self.parent.active ? 5 : (self.parent.isHovered() ? 4 : 3)"
                               height: 64
-                              alpha: "self.parent.active ? 1 : 0.42"
+                              alpha: "self.parent.active ? 1 : (self.parent.isHovered() ? 0.72 : 0.42)"
                               normal: self.parent.entry['accent']
                               shape: ~round_rect
                               radius: 2
                               through: true
+                            effect:
+                              neon:
+                                color: self.parent.entry['accent']
+                                size: 9
+                                intensity: 0.55
+                                animated: false
+                                visible: self.parent.active
                           图标底座:
                             type: Texture
                             attribute:
@@ -543,21 +487,9 @@ controls:
                               width: 68
                               height: 68
                               normal: self.parent.entry['accent']
-                              alpha: "self.parent.active ? 1 : 0.74"
+                              alpha: "(self.parent.active || self.parent.isHovered()) ? 1 : 0.74"
                               shape: ~round_rect
                               radius: 14
-                              through: true
-                          禁用遮色:
-                            type: Texture
-                            attribute:
-                              x: 3
-                              y: 3
-                              width: "self.parent.width - 6"
-                              height: "self.parent.height - 6"
-                              normal: ~13,22,35,130
-                              visible: "!self.parent.entry['enabled']"
-                              shape: ~round_rect
-                              radius: 11
                               through: true
                           图标:
                             type: Slot
@@ -570,7 +502,6 @@ controls:
                               itemScale: 0.82
                               normal: ~0,0,0,0
                               visible: self.parent.entry['hasIcon']
-                              alpha: "self.parent.entry['enabled'] ? 1 : 0.45"
                               through: true
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
                           无图标序号:
@@ -601,7 +532,7 @@ controls:
                               texts: "'&f' + self.parent.entry['summary']"
                               fontSize: 36
                               limit: 34
-                              alpha: "self.parent.active ? 0.94 : 0.76"
+                              alpha: "self.parent.active ? 0.94 : (self.parent.isHovered() ? 0.88 : 0.76)"
                               through: true
                           入口底座:
                             type: Texture
@@ -622,11 +553,11 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_right
-                              x: -37
+                              x: "self.parent.isHovered() ? -31 : -37"
                               texts: "self.parent.active ? '&0›' : '&f›'"
                               visible: self.parent.entry['enabled']
                               fontSize: 54
-                              alpha: "self.parent.active ? 1 : 0.78"
+                              alpha: "(self.parent.active || self.parent.isHovered()) ? 1 : 0.78"
                               through: true
                           禁用标记:
                             type: Text
@@ -636,6 +567,18 @@ controls:
                               texts: ~&7—
                               visible: "!self.parent.entry['enabled']"
                               fontSize: 36
+                              through: true
+                          禁用遮色:
+                            type: Texture
+                            attribute:
+                              x: 3
+                              y: 3
+                              width: "self.parent.width - 6"
+                              height: "self.parent.height - 6"
+                              normal: ~13,22,35,130
+                              visible: "!self.parent.entry['enabled']"
+                              shape: ~round_rect
+                              radius: 11
                               through: true
               按钮滑轨:
                 type: Texture
@@ -694,6 +637,7 @@ controls:
                       enable: var.hasPrev
                     action:
                       clickLeft: |-
+                        Sound.self('minecraft:item.book.page_turn', 1.1, 18)
                         Packet.send(var.packetId, 'page', 'prev')
                     children:
                       上页底色:
@@ -708,7 +652,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: "var.hasPrev ? '104,139,172,255' : '49,66,85,255'"
+                            color: "var.hasPrev ? (self.parent.isHovered() ? '150,185,214,255' : '104,139,172,255') : '49,66,85,255'"
                       上页文字:
                         type: Text
                         attribute:
@@ -733,6 +677,7 @@ controls:
                       enable: var.hasNext
                     action:
                       clickLeft: |-
+                        Sound.self('minecraft:item.book.page_turn', 1.1, 18)
                         Packet.send(var.packetId, 'page', 'next')
                     children:
                       下页底色:
@@ -747,7 +692,7 @@ controls:
                         effect:
                           stroke:
                             width: 3
-                            color: "var.hasNext ? '104,139,172,255' : '49,66,85,255'"
+                            color: "var.hasNext ? (self.parent.isHovered() ? '150,185,214,255' : '104,139,172,255') : '49,66,85,255'"
                       下页文字:
                         type: Text
                         attribute:
@@ -787,7 +732,6 @@ controls:
                     attribute:
                       height: 52
                       spaceBetween: 12
-                      maxSize: "var.footerCount + 1"
                     children:
                       页脚按钮:
                         type: Canvas
@@ -802,6 +746,7 @@ controls:
                             var.pendingEntry = self.entry
                             var.pendingFooter = true
                             var.pendingAt = Time.currentTime()
+                            Sound.self('minecraft:ui.button.click', 1.9, 6)
                           leave: |-
                             if(var.pendingFooter && var.pendingEntry['id'] == self.entry['id']){
                               var.pendingEntry = none
@@ -811,11 +756,13 @@ controls:
                             var.pendingFooter = true
                             var.menuUi.actions['selectPreview']()
                             if(self.entry != none && self.entry['enabled']){
+                              Sound.self('minecraft:ui.button.click', 1.1, 18)
                               if(self.entry['clientAction'] == 'options'){
                                 Game.options()
                               } elif(self.entry['clientAction'] == 'quit'){
                                 Game.quit()
-                              } elif(var.actionToken != none){
+                              } elif(var.actionToken != none && !var.actionBusy){
+                                var.actionBusy = true
                                 Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
                               }
                             }
@@ -835,7 +782,7 @@ controls:
                             effect:
                               stroke:
                                 width: 3
-                                color: "var.selectedFooter && var.selectedId == self.parent.entry['id'] ? self.parent.entry['accent'] : '70,96,122,190'"
+                                color: "var.selectedFooter && var.selectedId == self.parent.entry['id'] ? self.parent.entry['accent'] : (self.parent.isHovered() ? '128,160,188,235' : '70,96,122,190')"
                           图标:
                             type: Slot
                             attribute:
@@ -849,6 +796,18 @@ controls:
                               visible: self.parent.entry['hasIcon']
                               through: true
                               seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                          禁用遮色:
+                            type: Texture
+                            attribute:
+                              x: 8
+                              y: 6
+                              width: 40
+                              height: 40
+                              normal: ~13,22,35,140
+                              visible: "!self.parent.entry['enabled']"
+                              shape: ~round_rect
+                              radius: 8
+                              through: true
                           页脚文字:
                             type: Text
                             attribute:
@@ -893,6 +852,7 @@ controls:
                   height: 52
                 action:
                   clickLeft: |-
+                    Sound.self('minecraft:ui.button.click', 0.9, 20)
                     Packet.send(var.packetId, 'close')
                     var.menuUi.close()
                 children:
@@ -905,6 +865,10 @@ controls:
                       shape: ~round_rect
                       radius: 8
                       through: true
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.parent.isHovered() ? '255,240,214,255' : '176,146,96,140'"
                   返回文字:
                     type: Text
                     attribute:
@@ -944,6 +908,21 @@ controls:
                   height: 3
                   normal: var.accent
                   through: true
+              详情霞光:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 3
+                  width: "var.rightW"
+                  height: 210
+                  normal: ~255,255,255,10
+                  through: true
+                effect:
+                  gradient:
+                    color1: ~255,255,255,24
+                    color2: ~255,255,255,0
+                    type: 0
+                    angleDeg: 90
               详情内容:
                 type: Canvas
                 attribute:
@@ -1132,7 +1111,6 @@ controls:
                         attribute:
                           width: "var.rightW - 112"
                           spaceBetween: 0
-                          maxSize: "var.detailCount + 1"
                         children:
                           说明行:
                             type: Canvas
