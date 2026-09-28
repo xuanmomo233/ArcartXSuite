@@ -59,6 +59,7 @@ import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.talent.TalentBonuses;
 import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
+import xuanmo.arcartxsuite.fishing.talent.TalentNode;
 import xuanmo.arcartxsuite.fishing.fatigue.FatigueEngine;
 import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
 import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
@@ -2445,10 +2446,12 @@ public final class FishingService {
             case "level_up_talent" -> {
                 if (data.size() > 2) {
                     String nodeId = data.get(2);
+                    TalentNode node = talentEngine.getNode(nodeId);
+                    String nodeName = node != null ? node.displayName() : nodeId;
                     if (levelUpTalent(player.getUniqueId(), nodeId)) {
-                        player.sendMessage("§a天赋升级成功: " + nodeId);
+                        player.sendMessage("§a天赋升级成功: " + nodeName);
                     } else {
-                        player.sendMessage("§c无法升级天赋: " + nodeId);
+                        player.sendMessage("§c无法升级天赋: " + nodeName);
                     }
                 }
             }

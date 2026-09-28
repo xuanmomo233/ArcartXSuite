@@ -257,34 +257,30 @@ ui:
         var.lastMouseY = my
         dx = (mx - var.dragStartMX) / var.s
         dy = (my - var.dragStartMY) / var.s
-        if(!var.dragMoved){
-          if(dx * dx + dy * dy > 25){
-            var.dragMoved = true
-          }
+        if(!var.dragMoved && dx * dx + dy * dy > 25){
+          var.dragMoved = true
         }
-        if(var.dragMoved){
-          scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
-          scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 176)
-          if(scrollRangeX > 0){
-            newSX = var.dragStartSX - dx / scrollRangeX
-            if(newSX < 0) {
-              newSX = 0
-            }
-            if(newSX > 1) {
-              newSX = 1
-            }
-            val.横向滑块.setDragXRatio(newSX)
+        scrollRangeX = var.canvasW * var.zoomScale - (var.contentW - 48)
+        scrollRangeY = var.canvasH * var.zoomScale - (var.viewH - 176)
+        if(scrollRangeX > 0){
+          newSX = var.dragStartSX - dx / scrollRangeX
+          if(newSX < 0) {
+            newSX = 0
           }
-          if(scrollRangeY > 0){
-            newSY = var.dragStartSY - dy / scrollRangeY
-            if(newSY < 0) {
-              newSY = 0
-            }
-            if(newSY > 1) {
-              newSY = 1
-            }
-            val.竖向滑块.setDragYRatio(newSY)
+          if(newSX > 1) {
+            newSX = 1
           }
+          val.横向滑块.setDragXRatio(newSX)
+        }
+        if(scrollRangeY > 0){
+          newSY = var.dragStartSY - dy / scrollRangeY
+          if(newSY < 0) {
+            newSY = 0
+          }
+          if(newSY > 1) {
+            newSY = 1
+          }
+          val.竖向滑块.setDragYRatio(newSY)
         }
       }
       if(var.needRebuild){
