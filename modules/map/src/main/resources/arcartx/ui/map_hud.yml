@@ -77,6 +77,14 @@ ui:
         if(packet['preloadVersion'] != none && packet['preloadChunks'] != none) {
           var.mapRenderer.setWorldPreload('' + var.worldId, packet['preloadVersion'], '' + packet['preloadChunks'])
         }
+        // 玩家设置留存：服务端随 init 下发 settings 字典，逐项套回 mod
+        // （applySetting 只写本地不上报——值本来就来自服务端，回传即死环）
+        if(packet['settings'] != none) {
+          var.settings = packet['settings']
+          for(k in var.settings.keys()) {
+            var.mapRenderer.applySetting(k, '' + var.settings[k])
+          }
+        }
         // HUD 标记（玩家当前世界的锚点/路径点/外部目标/pin，与菜单选中世界无关）
         var.mapRenderer.clearHudMarkers()
         if(var.markerRows != none) {

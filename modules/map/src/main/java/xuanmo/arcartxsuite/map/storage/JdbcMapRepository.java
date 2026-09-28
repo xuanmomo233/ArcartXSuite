@@ -38,12 +38,12 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins");
+        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins", "AXS_map_settings");
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins");
+        return List.of("AXS_map_unlocks", "AXS_map_waypoints", "AXS_map_pins", "AXS_map_settings");
     }
 
     @Override
@@ -290,6 +290,11 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                 // pin 也是玩家数据，clearPlayer 语义要求一并清掉
                 deletePins.setString(1, playerUuid.toString());
                 deletePins.executeUpdate();
+                try (PreparedStatement deleteSettings = connection.prepareStatement(
+                        "DELETE FROM AXS_map_settings WHERE uuid = ?")) {
+                    deleteSettings.setString(1, playerUuid.toString());
+                    deleteSettings.executeUpdate();
+                }
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -340,6 +345,14 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         PRIMARY KEY (uuid, pin_id)
                     );
                     """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS AXS_map_settings (
+                        uuid TEXT NOT NULL,
+                        skey TEXT NOT NULL,
+                        svalue TEXT NOT NULL,
+                        PRIMARY KEY (uuid, skey)
+                    );
+                    """);
             } else {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS AXS_map_unlocks (
@@ -376,6 +389,14 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                         created_at BIGINT NOT NULL,
                         updated_at BIGINT NOT NULL,
                         PRIMARY KEY (uuid, pin_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS AXS_map_settings (
+                        uuid VARCHAR(36) NOT NULL,
+                        skey VARCHAR(64) NOT NULL,
+                        svalue VARCHAR(256) NOT NULL,
+                        PRIMARY KEY (uuid, skey)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
             }
@@ -420,6 +441,54 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
                 z = VALUES(z),
                 updated_at = VALUES(updated_at)
             """;
+    }
+
+    /**
+     * 加载玩家地图设置（key→value 全部行）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 设置映射（无记录为空 Map）
+     * @throws SQLException 数据库查询失败时抛出
+     */
+    @Override
+    public java.util.Map<String, String> loadPlayerSettings(UUID playerUuid) throws SQLException {
+        java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT skey, svalue FROM AXS_map_settings WHERE uuid = ?"
+             )) {
+            statement.setString(1, playerUuid.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    result.put(resultSet.getString("skey"), resultSet.getString("svalue"));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 覆盖写入玩家单个设置项（upsert 语义）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param key        设置键
+     * @param value      设置值
+     * @throws SQLException 数据库写入失败时抛出
+     */
+    @Override
+    public void savePlayerSetting(UUID playerUuid, String key, String value) throws SQLException {
+        String sql = !isMysql()
+            ? "INSERT INTO AXS_map_settings (uuid, skey, svalue) VALUES (?, ?, ?) "
+                + "ON CONFLICT(uuid, skey) DO UPDATE SET svalue = excluded.svalue"
+            : "INSERT INTO AXS_map_settings (uuid, skey, svalue) VALUES (?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE svalue = VALUES(svalue)";
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, key);
+            statement.setString(3, value);
+            statement.executeUpdate();
+        }
     }
 
     private String pinUpsertSql() {

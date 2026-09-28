@@ -98,6 +98,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private static final int MAX_DESC_LENGTH = 256;
     /** axsmap:request 同玩家最小请求间隔（防伪造客户端刷推送队列）。 */
     private static final long TERRAIN_REQUEST_INTERVAL_NANOS = 3_000_000_000L;
+    /** 玩家设置回传通道（客户端→服务端，UTF key + UTF value）。 */
+    public static final String CHANNEL_SETTING = "axsmap:setting";
 
     final JavaPlugin plugin;
     final Logger logger;
@@ -154,6 +156,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     /** 玩家 → 上次 axsmap:request 受理时间（节流，超出间隔的请求直接丢弃）。 */
     private final ConcurrentMap<UUID, Long> terrainRequestAt = new ConcurrentHashMap<>();
+    /** 玩家 → 地图界面设置（key=value，服务端留存）。进服异步加载后常驻内存。 */
+    private final ConcurrentMap<UUID, Map<String, String>> playerSettings = new ConcurrentHashMap<>();
+    /** 正在异步加载设置的玩家（防 join 风暴重复查库）。 */
+    private final Set<UUID> playerSettingsLoading = ConcurrentHashMap.newKeySet();
+    /** 允许客户端回传的设置键白名单——非白名单键直接丢弃，防伪造客户端塞脏数据。 */
+    private static final Set<String> PLAYER_SETTING_KEYS = Set.of(
+        "radar", "radarNames", "radarPlayers", "radarHostile", "radarPassive",
+        "radarNameScale", "hudZoom", "caveDepth",
+        "hudShape", "hudPosition", "hudSize");
 
     /** 分享码 → 点位快照（内存缓存，过期/重启/重载后失效）。 */
 
@@ -1654,6 +1665,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         actionTokens.remove(uuid);
         actionTokensInFlight.remove(uuid);
         terrainRequestAt.remove(uuid);
+        playerSettings.remove(uuid);
+        playerSettingsLoading.remove(uuid);
         if (crossServer != null) {
             crossServer.onPlayerQuit(uuid);
         }
@@ -1667,9 +1680,81 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
      */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (crossServer != null && event.getPlayer() != null) {
-            crossServer.onPlayerJoin(event.getPlayer());
+        Player player = event.getPlayer();
+        if (crossServer != null && player != null) {
+            crossServer.onPlayerJoin(player);
         }
+        if (player != null) {
+            // 预热玩家设置缓存——HUD init 包需要带上 settings 字典，异步加载避免阻塞登录
+            ensurePlayerSettings(player.getUniqueId());
+        }
+    }
+
+    /**
+     * 玩家地图设置缓存（uuid → key→value）。未加载时触发异步查库，立即返回空 Map。
+     * 首次下发可能为空——加载完成后下一次 HUD init（重载/重进）即补全。
+     */
+    Map<String, String> playerSettings(UUID uuid) {
+        Map<String, String> cached = playerSettings.get(uuid);
+        if (cached != null) {
+            return cached;
+        }
+        ensurePlayerSettings(uuid);
+        return Map.of();
+    }
+
+    private void ensurePlayerSettings(UUID uuid) {
+        if (uuid == null || playerSettings.containsKey(uuid) || !playerSettingsLoading.add(uuid)) {
+            return;
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                playerSettings.put(uuid, new java.util.concurrent.ConcurrentHashMap<>(
+                    repository.loadPlayerSettings(uuid)));
+            } catch (Exception e) {
+                logger.fine("[Map] 加载玩家设置失败 uuid=" + uuid + ": " + e.getMessage());
+            } finally {
+                playerSettingsLoading.remove(uuid);
+            }
+        });
+    }
+
+    /**
+     * 客户端 {@code axsmap:setting} 包处理（载荷 = UTF key + UTF value）。
+     * 只更新本玩家设置：写内存缓存 + 异步落库；键走白名单、值限长，防伪造客户端刷脏数据。
+     */
+    public void handleSettingPacket(Player player, byte[] message) {
+        if (player == null || !player.isOnline() || message == null) {
+            return;
+        }
+        if (!player.hasPermission(PERMISSION_USE)) {
+            return;
+        }
+        String key;
+        String value;
+        try (java.io.DataInputStream in = new java.io.DataInputStream(
+                new java.io.ByteArrayInputStream(message))) {
+            key = in.readUTF();
+            value = in.readUTF();
+        } catch (Exception e) {
+            return;
+        }
+        if (!PLAYER_SETTING_KEYS.contains(key) || value.length() > 64) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        Map<String, String> settings = playerSettings.computeIfAbsent(
+            uuid, k -> new java.util.concurrent.ConcurrentHashMap<>());
+        if (value.equals(settings.put(key, value))) {
+            return; // 值没变——不落库
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                repository.savePlayerSetting(uuid, key, value);
+            } catch (Exception e) {
+                logger.fine("[Map] 保存玩家设置失败 uuid=" + uuid + " key=" + key + ": " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -2443,6 +2528,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         Map<String, Object> payload = buildHudPayload(hud);
         payload.put("hudSession", hudSessions.getOrDefault(player.getUniqueId(), -1));
         payload.put("serverId", serverId());
+        // 玩家设置字典随 init 下发（客户端 mod applySetting 逐项套回，不回环）
+        if ("init".equals(handler)) {
+            payload.put("settings", playerSettings(player.getUniqueId()));
+        }
         bridge.sendPacket(player, hudUiId, handler, payload);
     }
 

@@ -308,6 +308,14 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                     service.handleTerrainRequest(player, message);
                 }
             });
+        // 玩家设置回传通道：客户端 axsmap:setting（UTF key + UTF value）→ 玩家级留存
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(
+            plugin, MapService.CHANNEL_SETTING,
+            (channel, player, message) -> {
+                if (service != null) {
+                    service.handleSettingPacket(player, message);
+                }
+            });
 
         // 注册 MapAnchorUnlockable capability（公开）：供任务系统/外部插件/命令
         // 以代码路径解锁锚点。unlock=免费强解（跳付费跳距离门）；tryUnlock=完整玩家流程
@@ -375,6 +383,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     protected void stopService() {
         plugin.getServer().getMessenger().unregisterIncomingPluginChannel(
             plugin, MapTerrainPushService.CHANNEL_REQUEST);
+        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(
+            plugin, MapService.CHANNEL_SETTING);
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(
             plugin, MapTerrainPushService.CHANNEL_TERRAIN);
         if (service != null) {

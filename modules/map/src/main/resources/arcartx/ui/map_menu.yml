@@ -566,11 +566,11 @@ controls:
                   x: -260
                   texts: "'&b' + var.trackingText"
                   fontSize: 36
-              # ─── 小地图设置入口（展开悬浮设置面板） ───
-              小地图按钮:
+              # ─── 设置入口（展开居中模态副面板：小地图外观 + 实体显示） ───
+              设置按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f小地图设置
+                  tip: ~&f地图设置
                   point: ~top_right
                   x: -340
                   y: 26
@@ -581,7 +581,7 @@ controls:
                   clickLeft: |-
                     var.showHudSettings = !var.showHudSettings
                 children:
-                  小地图按钮底:
+                  设置按钮底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -594,11 +594,11 @@ controls:
                       stroke:
                         width: "self.isHovered() ? '4' : '3'"
                         color: ~255,255,255,255
-                  小地图按钮文字:
+                  设置按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.showHudSettings ? '&f小地图 &8▴' : '&f小地图 &8▾'"
+                      texts: ~&f设置
                       fontSize: 36
                       through: true
               关闭按钮:
@@ -1515,54 +1515,13 @@ controls:
                   texts: "var.mapRenderer.isMenuCaveView() ? '&b洞穴' : '&f地表'"
                   fontSize: 30
                   through: true
-          # ─── 左下角：实体雷达开关（客户端本地选项，断线/重启保留；也可按 V）───
-          雷达按钮:
-            type: Canvas
-            attribute:
-              tip: ~&f实体雷达（左键切点，右键切名称；按 V 切点）
-              point: ~top_left
-              x: 288
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
-              enable: "var.mapRenderer != none"
-            action:
-              clickLeft: |-
-                if(var.mapRenderer != none) {
-                  var.mapRenderer.toggleRadar()
-                }
-              clickRight: |-
-                if(var.mapRenderer != none) {
-                  var.mapRenderer.toggleRadarNames()
-                }
-            children:
-              雷达按钮底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
-                  shape: ~round_rect
-                  radius: 18
-                effect:
-                  stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
-              雷达按钮文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "var.mapRenderer.isRadarEnabled() ? '&b雷达' : '&7雷达'"
-                  fontSize: 30
-                  through: true
           # ─── 左下角：洞穴切片深度循环（16/30/48/64，Xaero CAVE_MODE_DEPTH；也可按 N）───
           洞深按钮:
             type: Canvas
             attribute:
               tip: ~&f洞穴层深度（按 N 切换）
               point: ~top_left
-              x: 372
+              x: 288
               y: "var.viewH - 96"
               width: 72
               height: 72
@@ -1592,115 +1551,6 @@ controls:
                   point: ~middle_center
                   texts: "'&f深' + var.mapRenderer.getCaveDepthText()"
                   fontSize: 30
-                  through: true
-          # ─── 左下角：雷达逐类显隐（玩家/怪/动物三路独立开关，亮=显示）───
-          雷达玩家按钮:
-            type: Canvas
-            attribute:
-              tip: ~&f显示玩家/NPC点
-              point: ~top_left
-              x: 456
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
-              enable: "var.mapRenderer != none"
-            action:
-              clickLeft: |-
-                if(var.mapRenderer != none) {
-                  var.mapRenderer.toggleRadarPlayers()
-                }
-            children:
-              雷达玩家按钮底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
-                  shape: ~round_rect
-                  radius: 18
-                effect:
-                  stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
-              雷达玩家按钮文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "var.mapRenderer.isRadarPlayers() ? '&f人' : '&7人'"
-                  fontSize: 34
-                  through: true
-          雷达怪物按钮:
-            type: Canvas
-            attribute:
-              tip: ~&f显示怪物点
-              point: ~top_left
-              x: 540
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
-              enable: "var.mapRenderer != none"
-            action:
-              clickLeft: |-
-                if(var.mapRenderer != none) {
-                  var.mapRenderer.toggleRadarHostile()
-                }
-            children:
-              雷达怪物按钮底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
-                  shape: ~round_rect
-                  radius: 18
-                effect:
-                  stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
-              雷达怪物按钮文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "var.mapRenderer.isRadarHostile() ? '&c怪' : '&7怪'"
-                  fontSize: 34
-                  through: true
-          雷达动物按钮:
-            type: Canvas
-            attribute:
-              tip: ~&f显示动物点
-              point: ~top_left
-              x: 624
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
-              enable: "var.mapRenderer != none"
-            action:
-              clickLeft: |-
-                if(var.mapRenderer != none) {
-                  var.mapRenderer.toggleRadarPassive()
-                }
-            children:
-              雷达动物按钮底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
-                  shape: ~round_rect
-                  radius: 18
-                effect:
-                  stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
-              雷达动物按钮文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "var.mapRenderer.isRadarPassive() ? '&e动' : '&7动'"
-                  fontSize: 34
                   through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
           标记浏览面板:
@@ -2469,488 +2319,747 @@ controls:
                   texts: ~&f取消导航
                   fontSize: 36
                   through: true
-          # ─── 小地图设置浮层（顶栏"小地图"按钮展开） ───
-          小地图设置面板:
+          # ─── 设置副面板（居中模态：左栏小地图外观，右栏实体显示；改动即写服务端留存）───
+          设置面板层:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -496
-              y: 96
-              width: 460
-              height: 368
+              point: ~stretch_all
               visible: var.showHudSettings
               mapCapture: true
             children:
-              设置面板底:
+              设置遮罩:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
-                  shape: ~round_rect
-                  radius: 14
-                effect:
-                  stroke:
-                    width: 4
-                    color: ~255,255,255,255
-              设置面板标题:
-                type: Text
-                attribute:
-                  point: ~top_center
-                  y: 14
-                  texts: ~&f小地图设置
-                  fontSize: 36
-              设置面板关闭:
+                  normal: ~0,0,0,160
+              设置对话框:
                 type: Canvas
                 attribute:
-                  tip: ~&f关闭设置
-                  point: ~top_right
-                  x: -44
-                  y: 10
-                  width: 36
-                  height: 36
-                action:
-                  clickLeft: |-
-                    var.showHudSettings = false
+                  point: ~middle_center
+                  width: 960
+                  height: 440
                 children:
-                  设置面板关闭底:
+                  设置对话框底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~60,60,66,255
-                      hover: ~220,80,80,255
+                      normal: ~Frosted:30;100,100,100,255
                       shape: ~round_rect
-                      radius: 10
-                  设置面板关闭字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f✕
-                      fontSize: 36
-                      through: true
-              # 形状：圆形/方形二选
-              形状标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 36
-                  y: 70
-                  texts: ~&f形状
-                  fontSize: 48
-              圆形按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f圆形小地图
-                  point: ~top_left
-                  x: 130
-                  y: 64
-                  width: 140
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudShape('circle')
-                    }
-                children:
-                  圆形按钮底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 12
+                      radius: 16
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
+                        width: 4
                         color: ~255,255,255,255
-                  圆形按钮字:
+                  设置标题:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f圆形
-                      fontSize: 36
+                      point: ~top_center
+                      y: 22
+                      texts: ~&f地图设置
+                      fontSize: 48
                       through: true
-              方形按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f方形小地图
-                  point: ~top_left
-                  x: 286
-                  y: 64
-                  width: 140
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudShape('square')
-                    }
-                children:
-                  方形按钮底:
+                  设置关闭按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f关闭设置
+                      point: ~top_right
+                      x: -20
+                      y: 20
+                      width: 40
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        var.showHudSettings = false
+                    children:
+                      设置关闭底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~60,60,66,255
+                          hover: ~220,80,80,255
+                          shape: ~round_rect
+                          radius: 10
+                      设置关闭字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f✕
+                          fontSize: 36
+                          through: true
+                  设置顶部分隔线:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
+                      point: ~top_left
+                      x: 40
+                      y: 78
+                      width: 880
+                      height: 2
+                      normal: ~255,255,255,40
                       through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  方形按钮字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f方形
-                      fontSize: 36
-                      through: true
-              位置标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 36
-                  y: 130
-                  texts: ~&f位置
-                  fontSize: 48
-              左上按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f小地图置于左上角
-                  point: ~top_left
-                  x: 130
-                  y: 124
-                  width: 72
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudPosition('top_left')
-                    }
-                children:
-                  左上按钮底:
+                  设置竖分隔线:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
+                      point: ~top_left
+                      x: 476
+                      y: 96
+                      width: 2
+                      height: 300
+                      normal: ~255,255,255,40
                       through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  左上按钮字:
+                  # ─── 左栏：小地图 ───
+                  小地图分区标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f左上
+                      point: ~top_left
+                      x: 44
+                      y: 98
+                      texts: ~&e小地图
                       fontSize: 36
                       through: true
-              右上按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f小地图置于右上角
-                  point: ~top_left
-                  x: 206
-                  y: 124
-                  width: 72
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudPosition('top_right')
-                    }
-                children:
-                  右上按钮底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  右上按钮字:
+                  形状标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f右上
+                      point: ~top_left
+                      x: 44
+                      y: 142
+                      texts: ~&f形状
                       fontSize: 36
                       through: true
-              左下按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f小地图置于左下角
-                  point: ~top_left
-                  x: 282
-                  y: 124
-                  width: 72
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudPosition('bottom_left')
-                    }
-                children:
-                  左下按钮底:
-                    type: Texture
+                  圆形按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  左下按钮字:
+                      tip: ~&f圆形小地图
+                      point: ~top_left
+                      x: 140
+                      y: 132
+                      width: 140
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudShape('circle')
+                        }
+                    children:
+                      圆形按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      圆形按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f圆形
+                          fontSize: 36
+                          through: true
+                  方形按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f方形小地图
+                      point: ~top_left
+                      x: 292
+                      y: 132
+                      width: 140
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudShape('square')
+                        }
+                    children:
+                      方形按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      方形按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f方形
+                          fontSize: 36
+                          through: true
+                  位置标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f左下
+                      point: ~top_left
+                      x: 44
+                      y: 202
+                      texts: ~&f位置
                       fontSize: 36
                       through: true
-              右下按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f小地图置于右下角
-                  point: ~top_left
-                  x: 358
-                  y: 124
-                  width: 72
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.setHudPosition('bottom_right')
-                    }
-                children:
-                  右下按钮底:
-                    type: Texture
+                  左上按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  右下按钮字:
+                      tip: ~&f小地图置于左上角
+                      point: ~top_left
+                      x: 140
+                      y: 192
+                      width: 74
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudPosition('top_left')
+                        }
+                    children:
+                      左上按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      左上按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f左上
+                          fontSize: 36
+                          through: true
+                  右上按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f小地图置于右上角
+                      point: ~top_left
+                      x: 220
+                      y: 192
+                      width: 74
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudPosition('top_right')
+                        }
+                    children:
+                      右上按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      右上按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f右上
+                          fontSize: 36
+                          through: true
+                  左下按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f小地图置于左下角
+                      point: ~top_left
+                      x: 300
+                      y: 192
+                      width: 74
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudPosition('bottom_left')
+                        }
+                    children:
+                      左下按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      左下按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f左下
+                          fontSize: 36
+                          through: true
+                  右下按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f小地图置于右下角
+                      point: ~top_left
+                      x: 380
+                      y: 192
+                      width: 74
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.setHudPosition('bottom_right')
+                        }
+                    children:
+                      右下按钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      右下按钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f右下
+                          fontSize: 36
+                          through: true
+                  尺寸标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f右下
+                      point: ~top_left
+                      x: 44
+                      y: 262
+                      texts: ~&f尺寸
                       fontSize: 36
                       through: true
-              # 尺寸：- 值 +
-              尺寸标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 36
-                  y: 195
-                  texts: ~&f尺寸
-                  fontSize: 48
-              尺寸减按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f减小小地图尺寸
-                  point: ~top_left
-                  x: 130
-                  y: 188
-                  width: 44
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.adjustHudSize(-25)
-                    }
-                children:
-                  尺寸减底:
-                    type: Texture
+                  尺寸减按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~52,56,64,255
-                      hover: ~72,76,84,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  尺寸减字:
+                      tip: ~&f减小小地图尺寸
+                      point: ~top_left
+                      x: 140
+                      y: 252
+                      width: 48
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.adjustHudSize(-25)
+                        }
+                    children:
+                      尺寸减底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      尺寸减字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f-
+                          fontSize: 36
+                          through: true
+                  尺寸值文字:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f-
+                      point: ~top_left
+                      x: 288
+                      y: 262
+                      center: true
+                      texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &fpx' : '&f-'"
                       fontSize: 36
                       through: true
-              尺寸值文字:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 278
-                  y: 198
-                  center: true
-                  texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &fpx' : '&f-'"
-                  fontSize: 36
-                  through: true
-              尺寸加按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f增大小地图尺寸
-                  point: ~top_left
-                  x: 382
-                  y: 188
-                  width: 44
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.adjustHudSize(25)
-                    }
-                children:
-                  尺寸加底:
-                    type: Texture
+                  尺寸加按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~52,56,64,255
-                      hover: ~72,76,84,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  尺寸加字:
+                      tip: ~&f增大小地图尺寸
+                      point: ~top_left
+                      x: 388
+                      y: 252
+                      width: 48
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.adjustHudSize(25)
+                        }
+                    children:
+                      尺寸加底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      尺寸加字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f+
+                          fontSize: 36
+                          through: true
+                  缩放标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f+
+                      point: ~top_left
+                      x: 44
+                      y: 322
+                      texts: ~&f缩放
                       fontSize: 36
                       through: true
-              # 缩放：- 值 +
-              缩放标签:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 36
-                  y: 252
-                  texts: ~&f缩放
-                  fontSize: 48
-              缩放减按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f缩小地图缩放
-                  point: ~top_left
-                  x: 130
-                  y: 246
-                  width: 44
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.adjustHudZoom(0.8)
-                    }
-                children:
-                  缩放减底:
-                    type: Texture
+                  缩放减按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~52,56,64,255
-                      hover: ~72,76,84,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  缩放减字:
+                      tip: ~&f缩小地图缩放
+                      point: ~top_left
+                      x: 140
+                      y: 312
+                      width: 48
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.adjustHudZoom(0.8)
+                        }
+                    children:
+                      缩放减底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      缩放减字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f-
+                          fontSize: 36
+                          through: true
+                  缩放值文字:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f-
+                      point: ~top_left
+                      x: 288
+                      y: 322
+                      center: true
+                      texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&f%' : '&f-'"
                       fontSize: 36
                       through: true
-              缩放值文字:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 278
-                  y: 256
-                  center: true
-                  texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&f%' : '&f-'"
-                  fontSize: 36
-                  through: true
-              缩放加按钮:
-                type: Canvas
-                attribute:
-                  tip: ~&f放大地图缩放
-                  point: ~top_left
-                  x: 382
-                  y: 246
-                  width: 44
-                  height: 44
-                  enable: "var.mapRenderer != none"
-                action:
-                  clickLeft: |-
-                    if (var.mapRenderer != none) {
-                      var.mapRenderer.adjustHudZoom(1.25)
-                    }
-                children:
-                  缩放加底:
-                    type: Texture
+                  缩放加按钮:
+                    type: Canvas
                     attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~52,56,64,255
-                      hover: ~72,76,84,255
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
-                  缩放加字:
+                      tip: ~&f放大地图缩放
+                      point: ~top_left
+                      x: 388
+                      y: 312
+                      width: 48
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.adjustHudZoom(1.25)
+                        }
+                    children:
+                      缩放加底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~52,56,64,255
+                          hover: ~72,76,84,255
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      缩放加字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f+
+                          fontSize: 36
+                          through: true
+                  # ─── 右栏：实体显示 ───
+                  实体分区标签:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: ~&f+
+                      point: ~top_left
+                      x: 504
+                      y: 98
+                      texts: ~&e实体显示
                       fontSize: 36
                       through: true
-              设置提示:
-                type: Text
-                attribute:
-                  point: ~top_center
-                  y: 320
-                  texts: ~&f选择位置后将同步移动地图、边框与文字
-                  fontSize: 36
+                  雷达标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 504
+                      y: 142
+                      texts: ~&f实体雷达
+                      fontSize: 36
+                      through: true
+                  雷达开关:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f实体雷达点开关（按 V 也可切换）
+                      point: ~top_left
+                      x: 812
+                      y: 132
+                      width: 104
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.toggleRadar()
+                        }
+                    children:
+                      雷达开关底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '82,140,26,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '102,160,46,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      雷达开关字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '&f开' : '&7关'"
+                          fontSize: 36
+                          through: true
+                  名称标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 504
+                      y: 202
+                      texts: ~&f名称标签
+                      fontSize: 36
+                      through: true
+                  名称开关:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f实体名称标签开关
+                      point: ~top_left
+                      x: 812
+                      y: 192
+                      width: 104
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.toggleRadarNames()
+                        }
+                    children:
+                      名称开关底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '82,140,26,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '102,160,46,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      名称开关字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '&f开' : '&7关'"
+                          fontSize: 36
+                          through: true
+                  类别标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 504
+                      y: 262
+                      texts: ~&f类别
+                      fontSize: 36
+                      through: true
+                  玩家类别按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f显示玩家/NPC点
+                      point: ~top_left
+                      x: 596
+                      y: 252
+                      width: 96
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.toggleRadarPlayers()
+                        }
+                    children:
+                      玩家类别底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '74,144,226,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '94,164,246,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      玩家类别字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '&f玩家' : '&7玩家'"
+                          fontSize: 36
+                          through: true
+                  怪物类别按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f显示怪物点
+                      point: ~top_left
+                      x: 702
+                      y: 252
+                      width: 96
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.toggleRadarHostile()
+                        }
+                    children:
+                      怪物类别底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '200,84,84,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '220,104,104,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      怪物类别字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '&f怪物' : '&7怪物'"
+                          fontSize: 36
+                          through: true
+                  动物类别按钮:
+                    type: Canvas
+                    attribute:
+                      tip: ~&f显示动物点
+                      point: ~top_left
+                      x: 808
+                      y: 252
+                      width: 96
+                      height: 48
+                      enable: "var.mapRenderer != none"
+                    action:
+                      clickLeft: |-
+                        if (var.mapRenderer != none) {
+                          var.mapRenderer.toggleRadarPassive()
+                        }
+                    children:
+                      动物类别底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '212,180,60,255' : '52,56,64,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '232,200,80,255' : '72,76,84,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: "self.isHovered() ? '4' : '3'"
+                            color: ~255,255,255,255
+                      动物类别字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '&f动物' : '&7动物'"
+                          fontSize: 36
+                          through: true
+                  设置底部提示:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 392
+                      texts: ~&7快捷键：V 切雷达 · 右键按钮切名称 · N 切洞穴深度 · [ 切形状
+                      fontSize: 32
+                      through: true
           # ─── 路径点/标记点编辑面板（模态遮罩，居中弹窗）───
           编辑面板层:
             type: Canvas

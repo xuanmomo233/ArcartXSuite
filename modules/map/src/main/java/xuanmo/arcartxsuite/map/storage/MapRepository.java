@@ -47,6 +47,24 @@ public interface MapRepository {
     void clearPlayer(UUID playerUuid) throws SQLException;
 
     /**
+     * 加载玩家地图界面设置（雷达/HUD 外观等本地偏好的服务端留存），
+     * 键值与客户端 {@code options.properties} 一致。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 键→值映射；无记录返回空 Map
+     */
+    java.util.Map<String, String> loadPlayerSettings(UUID playerUuid) throws SQLException;
+
+    /**
+     * 覆盖写入玩家单个设置项（upsert 语义）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param key        设置键（白名单之外的键由业务层拦截）
+     * @param value      设置值（字符串形态，客户端自行解析）
+     */
+    void savePlayerSetting(UUID playerUuid, String key, String value) throws SQLException;
+
+    /**
      * 关闭仓库，释放连接池资源。
      */
     void shutdown();
