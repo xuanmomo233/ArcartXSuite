@@ -3057,7 +3057,7 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 392
-                      texts: ~&7快捷键：V 切雷达 · 右键按钮切名称 · N 切洞穴深度 · [ 切形状
+                      texts: ~&7快捷键：V 雷达 · B 字号 · Z 缩放 · N 洞深 · [ 形状 · +- 大小
                       fontSize: 32
                       through: true
           # ─── 路径点/标记点编辑面板（模态遮罩，居中弹窗）───
