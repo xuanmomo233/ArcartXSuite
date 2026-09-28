@@ -587,6 +587,7 @@ controls:
                   clickLeft: |-
                     var.currentTab = 'all'
                     var.needRebuild = true
+                    val.图鉴滑块.setDragYRatio(0)
               标签_普通:
                 type: Texture
                 attribute:
@@ -602,6 +603,7 @@ controls:
                   clickLeft: |-
                     var.currentTab = 'common'
                     var.needRebuild = true
+                    val.图鉴滑块.setDragYRatio(0)
               标签_罕见:
                 type: Texture
                 attribute:
@@ -617,6 +619,7 @@ controls:
                   clickLeft: |-
                     var.currentTab = 'uncommon'
                     var.needRebuild = true
+                    val.图鉴滑块.setDragYRatio(0)
               标签_稀有:
                 type: Texture
                 attribute:
@@ -632,6 +635,7 @@ controls:
                   clickLeft: |-
                     var.currentTab = 'rare'
                     var.needRebuild = true
+                    val.图鉴滑块.setDragYRatio(0)
               标签_传说:
                 type: Texture
                 attribute:
@@ -647,6 +651,7 @@ controls:
                   clickLeft: |-
                     var.currentTab = 'legendary'
                     var.needRebuild = true
+                    val.图鉴滑块.setDragYRatio(0)
 
           # 图鉴滑轨：右侧滚动条轨道
           图鉴滑轨:

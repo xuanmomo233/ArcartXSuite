@@ -38,6 +38,7 @@ ui:
       var.iconJsons = {}
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
+      var.actionBusy = false
       var.level = packet['level']
       var.claimedRewards = packet['claimedRewards']
       var.rewards = packet['rewards']
@@ -67,7 +68,7 @@ ui:
       while(val.奖励列表.childrenCount() > 1){
         val.奖励列表.get(1).remove()
       }
-      for(i in range(1, var.rewardCount)){
+      for(i in range(1, var.rewardCount - 1)){
         key = i.round()
         if(val.奖励列表['奖励条目'] != none) {
           e = val.奖励列表['奖励条目'].copy('奖励条目' + key)
@@ -78,7 +79,7 @@ ui:
       if(val.奖励列表['奖励条目'] != none && val.奖励列表['奖励条目']['图标'] != none){
         val.奖励列表['奖励条目']['图标'].seticon()
       }
-      for(i in range(1, var.rewardCount)){
+      for(i in range(1, var.rewardCount - 1)){
         key = i.round()
         e = val.奖励列表['奖励条目' + key]
         if(e != none && e['图标'] != none){
@@ -89,6 +90,8 @@ ui:
     # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
       var.level = 1
+      var.actionBusy = false
+      var.busySeconds = 0
       var.packetId = 'AXS_FISHING_REWARDS'
       var.rewardCount = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -103,6 +106,14 @@ ui:
     # open: 界面打开后主动请求服务端推送数据
     open: |-
       Packet.send(var.packetId, 'refresh_rewards')
+    seconds: |-
+      if(var.actionBusy){
+        var.busySeconds = var.busySeconds + 1
+        if(var.busySeconds >= 3){
+          var.actionBusy = false
+          Packet.send(var.packetId, 'refresh_rewards')
+        }
+      }
     # resize: 窗口尺寸变化后重算可用高宽
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -675,7 +686,11 @@ controls:
                           visible: "self.parent.entry != none && self.parent.entry['claimable'] == true"
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'claim_reward', var.actionToken, self.parent.entry['id'])
+                            if(!var.actionBusy && var.actionToken != none){
+                              var.actionBusy = true
+                              var.busySeconds = 0
+                              Packet.send(var.packetId, 'claim_reward', var.actionToken, self.parent.entry['id'])
+                            }
                         children:
                           领取背景:
                             type: Texture

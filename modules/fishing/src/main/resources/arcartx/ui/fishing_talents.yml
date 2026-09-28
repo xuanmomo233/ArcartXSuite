@@ -50,7 +50,34 @@ ui:
         var.linkCount = 0
       }
       var.activeBonuses = packet['activeBonuses']
-      var.needRebuild = true
+      var.actionBusy = false
+      var.resetArmed = false
+      var.allNodes = []
+      var.allNodeById = {}
+      layoutKey = ''
+      for(treeKey in var.treeIds){
+        treeData = var.trees[treeKey]
+        if(treeData != none){
+          nodes = treeData['nodes']
+          for(key in nodes.keys()){
+            node = nodes[key]
+            var.allNodes.add(node)
+            var.allNodeById[node['id']] = node
+            layoutKey = layoutKey + '|' + node['id'] + ':' + node['tier'] + ':' + node['branch'] + ':' + node['treeId'] + ':' + node['prerequisites']
+          }
+        }
+      }
+      if(var.linkCount > 0){
+        for(i in range(0, var.linkCount - 1)){
+          node = var.links[i.round()]
+          var.allNodes.add(node)
+          var.allNodeById[node['id']] = node
+          layoutKey = layoutKey + '|' + node['id'] + ':' + node['prerequisites']
+        }
+      }
+      var.needRebuild = var.layoutKey != layoutKey
+      var.layoutKey = layoutKey
+      var.iconDelay = 2
   action:
     # load: 初始化变量 + 视口换算 + 中心发散布局参数
     load: |-
@@ -66,6 +93,17 @@ ui:
       var.unspentTalentPoints = 0
       var.zoomScale = 1.0
       var.needRebuild = false
+      var.nodeRefs = {}
+      var.lineRefs = []
+      var.iconJsonCache = {}
+      var.generation = 0
+      var.actionBusy = false
+      var.busySeconds = 0
+      var.resetArmed = false
+      var.resetSeconds = 0
+      var.lastMouseX = 0
+      var.lastMouseY = 0
+      var.viewReady = false
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       // 中心发散布局参数
       var.nodeSize = 48
@@ -118,7 +156,7 @@ ui:
       var.treeColors['focus'] = ['144,54,180,255', '212,86,248,255']
       var.treeColors['lucky'] = ['180,138,30,255', '252,198,42,255']
       var.treeColors['endure'] = ['180,110,20,255', '255,165,0,255']
-      var.treeColors['meta'] = ['120,120,120,255', '180,180,180,255']
+      var.treeColors['meta'] = ['190,76,30,255', '255,128,42,255']
       // 角度参数（弧度）
       var.angleT4 = math.PI() / 12
       var.angleT5 = math.PI() / 12
@@ -154,34 +192,71 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.s = s
-      var.needRebuild = true
+      var.isDragging = false
+    resetView: |-
+      var.zoomScale = 1.0
+      val.横向滑块.setDragXRatio(0.5)
+      val.竖向滑块.setDragYRatio(0.5)
+      var.isDragging = false
     keyPress: |-
       // R 键重置缩放和滚动位置
       if(self.currentKeyPress == 'R' || self.currentKeyPress == 'r'){
-        var.zoomScale = 1.0
-        val.横向滑块.setDragXRatio(0)
-        val.竖向滑块.setDragYRatio(0)
-        var.needRebuild = true
+        self.actions['resetView']()
       }
     releaseLeft: |-
       // 兜底：确保拖拽状态在鼠标移出滚动区后释放时也能重置
+      dx = (Mouse.x() - var.dragStartMX) / var.s
+      dy = (Mouse.y() - var.dragStartMY) / var.s
+      if(var.isDragging && !var.dragMoved && dx * dx + dy * dy <= 25 && val.天赋视口.isHovered()){
+        node = var.allNodeById[var.pressedNode]
+        if(node != none && node['canLevelUp'] == true && !var.actionBusy && var.actionToken != none){
+          var.actionBusy = true
+          var.busySeconds = 0
+          Packet.send(var.packetId, 'level_up_talent', var.actionToken, var.pressedNode)
+        }
+      }
+      var.pressedNode = none
       var.isDragging = false
-    click: |-
+    clickLeft: |-
       // UI 级点击：记录拖拽起点（不依赖 Scroll 子控件事件）
-      var.isDragging = true
-      var.dragStartMX = Mouse.x()
-      var.dragStartMY = Mouse.y()
-      var.dragStartSX = val.横向滑块.getDragXRatio()
-      var.dragStartSY = val.竖向滑块.getDragYRatio()
-      var.dragMoved = false
-    release: |-
-      var.isDragging = false
+      var.isDragging = val.天赋视口.isHovered()
+      if(var.isDragging){
+        var.dragStartMX = Mouse.x()
+        var.dragStartMY = Mouse.y()
+        var.lastMouseX = var.dragStartMX
+        var.lastMouseY = var.dragStartMY
+        var.dragStartSX = val.横向滑块.getDragXRatio()
+        var.dragStartSY = val.竖向滑块.getDragYRatio()
+        var.dragMoved = false
+      }
+    seconds: |-
+      if(var.actionBusy){
+        var.busySeconds = var.busySeconds + 1
+        if(var.busySeconds >= 3){
+          var.actionBusy = false
+          Packet.send(var.packetId, 'refresh_talents')
+        }
+      }
+      if(var.resetArmed){
+        var.resetSeconds = var.resetSeconds + 1
+        if(var.resetSeconds >= 4){
+          var.resetArmed = false
+        }
+      }
     # tick: 数据变化时重建中心发散天赋网络
     tick: |-
       // 拖拽中：位移超过阈值才滚动
-      if(var.isDragging){
-        dx = (Mouse.x() - var.dragStartMX) / var.s
-        dy = (Mouse.y() - var.dragStartMY) / var.s
+      if(!var.viewReady && val.横向滑块 != none && val.竖向滑块 != none){
+        var.viewReady = true
+        self.actions['resetView']()
+      }
+      mx = Mouse.x()
+      my = Mouse.y()
+      if(var.isDragging && (mx != var.lastMouseX || my != var.lastMouseY)){
+        var.lastMouseX = mx
+        var.lastMouseY = my
+        dx = (mx - var.dragStartMX) / var.s
+        dy = (my - var.dragStartMY) / var.s
         if(!var.dragMoved){
           if(dx * dx + dy * dy > 25){
             var.dragMoved = true
@@ -215,46 +290,21 @@ ui:
       if(var.needRebuild){
         var.needRebuild = false
         var.iconDelay = 2
-        z = var.zoomScale
         // 清理动态控件
-        while(val.树画布.childrenCount() > 3){
-          val.树画布.get(3).remove()
+        for(id in var.nodeRefs.keys()){
+          var.nodeRefs[id].remove()
         }
+        for(line in var.lineRefs){
+          line.remove()
+        }
+        var.nodeRefs = {}
+        var.lineRefs = []
+        var.iconJsonCache = {}
+        var.generation = (var.generation + 1).round()
         // 辅助：根据 tree 和 branch 计算节点角度
         var.nodePositions = {}
         // 收集所有节点
-        var.allNodes = []
-        var.allNodeById = {}
-        for(ti in range(0, var.treeIds.size() - 1)){
-          treeKey = var.treeIds[ti]
-          treeData = var.trees[treeKey]
-          if(treeData != none){
-            nodes = treeData['nodes']
-            count = treeData['nodeCount']
-            if(count == none) {
-              count = 0
-            }
-            if(count > 0){
-              for(i in range(0, count - 1)){
-                node = nodes[i.round()]
-                if(node != none){
-                  var.allNodes.add(node)
-                  var.allNodeById[node['id']] = node
-                }
-              }
-            }
-          }
-        }
         // 联动节点也加入
-        if(var.linkCount > 0){
-          for(i in range(0, var.linkCount - 1)){
-            link = var.links[i.round()]
-            if(link != none){
-              var.allNodes.add(link)
-              var.allNodeById[link['id']] = link
-            }
-          }
-        }
         // 第一遍：计算所有节点位置
         for(node in var.allNodes){
           id = node['id']
@@ -415,14 +465,16 @@ ui:
             if(treeId == 'meta'){
               lineColor = childUnlocked ? '220,220,230,255' : '160,160,170,200'
             }
-            line = val.联动连线段.copy('线_' + childId + '_' + prereq)
-            line.x = ((midX - len / 2) * z).round()
-            line.y = ((midY - var.lineW / 2) * z).round()
-            line.width = (len * z).round()
-            line.height = (var.lineW * z).round()
+            line = val.联动连线段.copy('线_' + var.generation + '_' + childId + '_' + prereq)
+            line.worldX = midX - len / 2
+            line.worldY = midY - var.lineW / 2
+            line.worldLength = len
+            line.childId = childId
+            line.brightColor = (treeId == 'meta' ? '220,220,230,255' : brightColor)
+            line.dimColor = '160,160,170,200'
             line.rotate = angDeg
-            line.normal = lineColor
             line.visible = true
+            var.lineRefs.add(line)
           }
         }
         // 第三遍：创建所有节点 —— 后创建，渲染在连线之上
@@ -436,26 +488,30 @@ ui:
           if(treeId == '') {
             treeId = 'meta'
           }
-          n = val.天赋节点模板.copy('节点_' + id)
+          n = val.天赋节点模板.copy('节点_' + var.generation + '_' + id)
           n.entryId = id
           n.treeId = treeId
           n.isLink = (node['tier'] == 0)
-          n.x = ((pos[0] - var.nodeSize / 2) * z).round()
-          n.y = ((pos[1] - var.nodeSize / 2) * z).round()
-          n.width = (var.nodeSize * z).round()
-          n.height = (var.nodeSize * z).round()
+          n.worldX = pos[0] - var.nodeSize / 2
+          n.worldY = pos[1] - var.nodeSize / 2
+          n.brightColor = var.treeColors[treeId][1]
+          n.dimColor = var.treeColors[treeId][0]
+          var.nodeRefs[id] = n
         }
       }
       if(var.iconDelay > 0){
         var.iconDelay = var.iconDelay - 1
         if(var.iconDelay == 0){
-          for(ci in range(3, val.树画布.childrenCount() - 1)){
-            ctrl = val.树画布.get(ci.round())
-            if(ctrl != none && ctrl.entryId != none && ctrl.entryId != '' && ctrl['节点图标'] != none){
-              node = var.allNodeById[ctrl.entryId]
-              if(node != none){
-                ctrl['节点图标'].setItemIcon(node['iconJson'])
-              }
+          for(id in var.nodeRefs.keys()){
+            ctrl = var.nodeRefs[id]
+            node = var.allNodeById[id]
+            json = node['iconJson']
+            if(json == none || json == ''){
+              json = var.emptyItemJson
+            }
+            if(var.iconJsonCache[id] != json && ctrl['节点图标'] != none){
+              ctrl['节点图标'].setItemIcon(json)
+              var.iconJsonCache[id] = json
             }
           }
         }
@@ -820,6 +876,10 @@ controls:
               width: 272
               height: "var.viewH - 524 - 120"
               moveY: "self.parent['加成滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                ratio = math.max(0, math.min(1, self.moveY - self.wheelValue * 0.1))
+                val.加成滑块.setDragYRatio(ratio)
             children:
               加成列表容器:
                 type: VStack
@@ -856,7 +916,17 @@ controls:
               height: 52
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'reset_talents', var.actionToken)
+                if(!var.actionBusy && var.actionToken != none){
+                  if(var.resetArmed){
+                    var.actionBusy = true
+                    var.busySeconds = 0
+                    var.resetArmed = false
+                    Packet.send(var.packetId, 'reset_talents', var.actionToken)
+                  } else {
+                    var.resetArmed = true
+                    var.resetSeconds = 0
+                  }
+                }
             children:
               重置底:
                 type: Texture
@@ -876,7 +946,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 272
-                  texts: "~&f↻ 重置天赋树"
+                  texts: "var.resetArmed ? '&c再次点击确认重置' : '&f↻ 重置天赋树'"
                   fontSize: 36
                   through: true
 
@@ -905,6 +975,7 @@ controls:
           # 滚动区：五系与联动节点常驻显示（拖拽滚动 + 滚轮缩放）
           滚动区:
             type: Scroll
+            val: 天赋视口
             attribute:
               point: ~top_left
               x: 24
@@ -935,8 +1006,10 @@ controls:
                   newRangeY = var.canvasH * newZoom - viewH
                   oldSX = val.横向滑块.getDragXRatio()
                   oldSY = val.竖向滑块.getDragYRatio()
+                  newSX = 0
+                  newSY = 0
                   if(newRangeX > 0){
-                    newSX = oldRangeX > 0 ? oldSX * oldRangeX / newRangeX : 0
+                    newSX = ((math.max(0, oldRangeX) * oldSX + viewW / 2) * newZoom / oldZoom - viewW / 2) / newRangeX
                     if(newSX < 0) {
                       newSX = 0
                     }
@@ -947,7 +1020,7 @@ controls:
                     newSX = 0
                   }
                   if(newRangeY > 0){
-                    newSY = oldRangeY > 0 ? oldSY * oldRangeY / newRangeY : 0
+                    newSY = ((math.max(0, oldRangeY) * oldSY + viewH / 2) * newZoom / oldZoom - viewH / 2) / newRangeY
                     if(newSY < 0) {
                       newSY = 0
                     }
@@ -958,7 +1031,7 @@ controls:
                     newSY = 0
                   }
                   var.zoomScale = newZoom
-                  var.needRebuild = true
+                  var.isDragging = false
                   // 重建后设置滑块位置
                   val.横向滑块.setDragXRatio(newSX)
                   val.竖向滑块.setDragYRatio(newSY)
@@ -997,23 +1070,19 @@ controls:
                     attribute:
                       point: ~top_left
                       entryId: ''
+                      worldX: 0
+                      worldY: 0
+                      x: self.worldX * var.zoomScale
+                      y: self.worldY * var.zoomScale
                       treeId: 'steady'
                       isLink: false
                       entry: "var.allNodeById[self.entryId]"
                       visible: "self.entry != none"
                       width: "var.nodeSize * var.zoomScale"
                       height: "var.nodeSize * var.zoomScale"
-                      brightColor: "self.treeId == 'steady' ? '72,238,112,255' : (self.treeId == 'swift' ? '48,208,248,255' : (self.treeId == 'pressure' ? '248,70,70,255' : (self.treeId == 'focus' ? '212,86,248,255' : (self.treeId == 'lucky' ? '252,198,42,255' : (self.treeId == 'endure' ? '255,165,0,255' : '255,128,42,255')))))"
-                      dimColor: "self.treeId == 'steady' ? '48,156,82,255' : (self.treeId == 'swift' ? '34,138,170,255' : (self.treeId == 'pressure' ? '172,48,48,255' : (self.treeId == 'focus' ? '144,54,180,255' : (self.treeId == 'lucky' ? '180,138,30,255' : (self.treeId == 'endure' ? '180,110,20,255' : '190,76,30,255')))))"
+                      brightColor: ~139,192,169,255
+                      dimColor: ~66,77,88,255
                       lineColor: "self.entry != none && self.entry['unlocked'] == true ? self.brightColor : self.dimColor"
-                      linkTree1: 'steady'
-                      linkTree2: 'steady'
-                      linkBright1: "self.linkTree1 == 'steady' ? '82,255,128,255' : (self.linkTree1 == 'swift' ? '60,220,255,255' : (self.linkTree1 == 'pressure' ? '255,78,78,255' : (self.linkTree1 == 'focus' ? '218,95,255,255' : (self.linkTree1 == 'lucky' ? '255,210,55,255' : '255,180,60,255'))))"
-                      linkBright2: "self.linkTree2 == 'steady' ? '82,255,128,255' : (self.linkTree2 == 'swift' ? '60,220,255,255' : (self.linkTree2 == 'pressure' ? '255,78,78,255' : (self.linkTree2 == 'focus' ? '218,95,255,255' : (self.linkTree2 == 'lucky' ? '255,210,55,255' : '255,180,60,255'))))"
-                      linkDim1: "self.linkTree1 == 'steady' ? '48,165,82,255' : (self.linkTree1 == 'swift' ? '38,145,178,255' : (self.linkTree1 == 'pressure' ? '178,48,48,255' : (self.linkTree1 == 'focus' ? '142,58,178,255' : (self.linkTree1 == 'lucky' ? '184,142,34,255' : '180,120,30,255'))))"
-                      linkDim2: "self.linkTree2 == 'steady' ? '48,165,82,255' : (self.linkTree2 == 'swift' ? '38,145,178,255' : (self.linkTree2 == 'pressure' ? '178,48,48,255' : (self.linkTree2 == 'focus' ? '142,58,178,255' : (self.linkTree2 == 'lucky' ? '184,142,34,255' : '180,120,30,255'))))"
-                      linkColor1: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][0] == true ? self.linkBright1 : self.linkDim1"
-                      linkColor2: "self.entry != none && self.entry['prerequisiteStates'] != none && self.entry['prerequisiteStates'][1] == true ? self.linkBright2 : self.linkDim2"
                       # 节点等级状态：0=未点亮, 1~maxLevel-1=部分升级, maxLevel=满级
                       nodeLevel: "self.entry != none && self.entry['level'] != none ? type.toNumber(self.entry['level']).round() : 0"
                       nodeMaxLevel: "self.entry != none && self.entry['maxLevel'] != none ? type.toNumber(self.entry['maxLevel']).round() : 1"
@@ -1042,11 +1111,7 @@ controls:
                             animated: false
                         action:
                           clickLeft: |-
-                            if(self.parent.entry != none){
-                              if(self.parent.entry['canLevelUp'] == true){
-                                Packet.send(var.packetId, 'level_up_talent', var.actionToken, self.parent.entry['id'])
-                              }
-                            }
+                            var.pressedNode = self.parent.entryId
                       # 等级标签（右下角显示 当前等级/最大等级）
                       等级标签:
                         type: Canvas
@@ -1081,11 +1146,17 @@ controls:
                     val: 联动连线段
                     attribute:
                       point: ~top_left
-                      x: 0
-                      y: 0
-                      width: 1
-                      height: 1
-                      normal: ~120,120,120,255
+                      worldX: 0
+                      worldY: 0
+                      worldLength: 1
+                      childId: ~
+                      brightColor: ~139,192,169,255
+                      dimColor: ~160,160,170,200
+                      x: self.worldX * var.zoomScale
+                      y: self.worldY * var.zoomScale
+                      width: self.worldLength * var.zoomScale
+                      height: var.lineW * var.zoomScale
+                      normal: "var.allNodeById[self.childId] != none && var.allNodeById[self.childId]['unlocked'] == true ? self.brightColor : self.dimColor"
                       visible: false
                       through: true
           # 操作提示（拖拽滚动 + 滚轮缩放）
@@ -1095,7 +1166,7 @@ controls:
               point: ~bottom_left
               x: 16
               y: -16
-              texts: "'&f拖拽滚动 | 滚轮缩放 | R重置缩放'"
+              texts: "var.actionBusy ? '&e正在保存天赋...' : '&f拖拽滚动 | 滚轮缩放 | R重置缩放'"
               fontSize: 36
           # 隐藏滑块：驱动 Scroll 的 moveX/moveY（不可见但保留拖拽功能）
           竖向滑块:
@@ -1108,7 +1179,7 @@ controls:
               width: 8
               height: 80
               normal: ~50,170,200,0
-              maxDragY: "var.canvasH * var.zoomScale - (var.viewH - 176)"
+              maxDragY: "math.max(0, var.canvasH * var.zoomScale - (var.viewH - 176))"
           横向滑块:
             type: Texture
             val: 横向滑块
@@ -1119,4 +1190,4 @@ controls:
               width: 80
               height: 8
               normal: ~50,170,200,0
-              maxDragX: "var.canvasW * var.zoomScale - (var.contentW - 48)"
+              maxDragX: "math.max(0, var.canvasW * var.zoomScale - (var.contentW - 48))"

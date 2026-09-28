@@ -104,7 +104,7 @@ navigation:
     # 动画类型
     animation: "rotate"
     # Y 轴偏移（方块）
-    y-offset: 2.0
+    y-offset: 0.0
     # 路径标记间距（方块）
     path-interval: 3.0
     # 路径最大标记数

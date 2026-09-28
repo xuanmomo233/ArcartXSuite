@@ -469,6 +469,7 @@ controls:
             action:
               clickLeft: |-
                 var.currentCategory = 'daily'
+                val.任务滑块.setDragYRatio(0)
             children:
               每日底:
                 type: Texture
@@ -523,6 +524,7 @@ controls:
             action:
               clickLeft: |-
                 var.currentCategory = 'weekly'
+                val.任务滑块.setDragYRatio(0)
             children:
               每周底:
                 type: Texture
@@ -577,6 +579,7 @@ controls:
             action:
               clickLeft: |-
                 var.currentCategory = 'season'
+                val.任务滑块.setDragYRatio(0)
             children:
               赛季底:
                 type: Texture
