@@ -2968,13 +2968,23 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     String resolveCategory(ItemStack itemStack) {
         List<CategoryDefinition> definitions = new ArrayList<>(configuration.categories().values());
         definitions.sort(Comparator.comparingInt(CategoryDefinition::priority));
+        // 物品注册键（minecraft:diamond / tacz:modern_kinetic_gun），mod 物品按此分类
+        String materialKey = itemStack.getType().getKey().toString().toLowerCase(Locale.ROOT);
         for (CategoryDefinition definition : definitions) {
-            if (definition.fallback() || definition.nbtPath().isBlank() || definition.values().isEmpty()) {
+            if (definition.fallback()) {
                 continue;
             }
-            String value = WarehouseTexts.normalizeId(resolvePath(itemStack, definition.nbtPath()));
-            if (!value.isBlank() && definition.values().contains(value)) {
+            // 注册键匹配：material-ids 精确命中或 material-prefixes 前缀命中（如 tacz:）
+            if (definition.materialIds().contains(materialKey)
+                || definition.materialPrefixes().stream().anyMatch(materialKey::startsWith)) {
                 return definition.id();
+            }
+            // NBT 路径匹配：path 解析出的值命中 values 列表
+            if (!definition.nbtPath().isBlank() && !definition.values().isEmpty()) {
+                String value = WarehouseTexts.normalizeId(resolvePath(itemStack, definition.nbtPath()));
+                if (!value.isBlank() && definition.values().contains(value)) {
+                    return definition.id();
+                }
             }
         }
         return configuration.otherCategory().id();

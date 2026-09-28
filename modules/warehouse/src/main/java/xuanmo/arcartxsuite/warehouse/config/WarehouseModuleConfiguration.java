@@ -157,7 +157,7 @@ public record WarehouseModuleConfiguration(
     }
 
     public CategoryDefinition otherCategory() {
-        return categories.getOrDefault("other", new CategoryDefinition("other", "其它", 9999, "", List.of(), true));
+        return categories.getOrDefault("other", new CategoryDefinition("other", "其它", 9999, "", List.of(), List.of(), List.of(), true));
     }
 
     private static Map<String, WarehouseDefinition> loadWarehouses(ConfigurationSection section, Logger logger) {
@@ -240,6 +240,8 @@ public record WarehouseModuleConfiguration(
                 if (valuesList.isEmpty()) {
                     valuesList = normalizeStringList(child.getStringList("match.nbt.values"));
                 }
+                List<String> materialIds = normalizeMaterialKeyList(child.getStringList("material-ids"));
+                List<String> materialPrefixes = normalizeMaterialKeyList(child.getStringList("material-prefixes"));
                 values.put(
                     id,
                     new CategoryDefinition(
@@ -248,13 +250,30 @@ public record WarehouseModuleConfiguration(
                         child.getInt("priority", values.size()),
                         path,
                         valuesList,
+                        materialIds,
+                        materialPrefixes,
                         child.getBoolean("default", "other".equals(id))
                     )
                 );
             }
         }
-        values.putIfAbsent("other", new CategoryDefinition("other", "其它", 9999, "", List.of(), true));
+        values.putIfAbsent("other", new CategoryDefinition("other", "其它", 9999, "", List.of(), List.of(), List.of(), true));
         return values;
+    }
+
+    /** 材质键列表归一化：小写、去空白、去重（注册键形如 minecraft:diamond / tacz:modern_kinetic_gun）。 */
+    private static List<String> normalizeMaterialKeyList(List<String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> values = new java.util.LinkedHashSet<>();
+        for (String entry : raw) {
+            String normalized = normalizeId(entry);
+            if (!normalized.isBlank()) {
+                values.add(normalized);
+            }
+        }
+        return List.copyOf(values);
     }
 
     private static List<String> loadBankCurrencies(
@@ -598,13 +617,18 @@ public record WarehouseModuleConfiguration(
     public record UpgradeCost(String currencyId, BigDecimal amount) {
     }
 
-    /** 物品分类定义：按 NBT 路径与匹配值归类，fallback 为兜底分类。 */
+    /**
+     * 物品分类定义：按物品注册键（material-ids 精确 / material-prefixes 前缀）
+     * 或 NBT 路径与匹配值归类，三组规则为"或"关系，fallback 为兜底分类。
+     */
     public record CategoryDefinition(
         String id,
         String displayName,
         int priority,
         String nbtPath,
         List<String> values,
+        List<String> materialIds,
+        List<String> materialPrefixes,
         boolean fallback
     ) {
     }

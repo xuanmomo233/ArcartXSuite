@@ -79,7 +79,11 @@ warehouses:
       currency: "money"  # 每格所需货币 ID
       amount: 1000  # 每格价格
 
-# 物品分类定义（按 NBT 路径匹配物品归属分类）
+# 物品分类定义：按"物品注册键"或"NBT 路径"匹配物品归属分类，三种规则为"或"关系。
+#   material-ids      注册键精确匹配（minecraft:diamond_sword、tacz:modern_kinetic_gun）
+#   material-prefixes 注册键前缀匹配（tacz: 命中全部 TaCZ 物品，apotheosis: 命中全部 Apotheosis 物品）
+#   nbt.path+values   NBT/PDC 路径值匹配（path 可用 material / name / custom-model-data / pdc:<key>）
+# priority 数字越小越靠前；先命中者优先，全部未命中归入 default: true 的兜底分类。
 categories:
   equipment:
     display-name: "装备"  # 分类显示名称
@@ -99,6 +103,11 @@ categories:
     nbt:
       path: "pdc:arcartx:item_category"
       values: ["consumable", "food", "potion"]
+  # 示例：按 mod 命名空间分类（把整页改成你的 mod 前缀即可）
+  # mod_items:
+  #   display-name: "Mod物品"
+  #   priority: 5
+  #   material-prefixes: ["tacz:", "apotheosis:"]
   other:
     display-name: "其它"
     priority: 9999  # 兜底分类，优先级最低

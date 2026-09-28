@@ -57,6 +57,9 @@ extra-backpack:
         # 该页网格显示上限（应 >= 仓库 max-slots，否则多余格子在此页不显示）
         max: 99999
       # 物品自动归类匹配规则（过滤 + 严格放入校验共用）
+      # 除 match.nbt 外还支持按物品注册键分类（与 match.nbt 为"或"关系）：
+      #   material-ids: 注册键精确匹配，如 ["tacz:modern_kinetic_gun"]
+      #   material-prefixes: 注册键前缀匹配，如 ["tacz:"] 命中全部 TaCZ 物品
       match:
         nbt:
           # NBT 路径，用于读取物品分类标签

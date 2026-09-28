@@ -66,6 +66,8 @@ public record ExtraBackpackConfiguration(
                 if (values.isEmpty()) {
                     values = normalizeStringList(child.getStringList("nbt.values"));
                 }
+                List<String> materialIds = normalizeStringList(child.getStringList("material-ids"));
+                List<String> materialPrefixes = normalizeStringList(child.getStringList("material-prefixes"));
                 boolean fallback = child.getBoolean("default", false);
                 categories.put(id, new ExtraBackpackCategory(
                     id,
@@ -74,6 +76,8 @@ public record ExtraBackpackConfiguration(
                     max,
                     path,
                     values,
+                    materialIds,
+                    materialPrefixes,
                     fallback
                 ));
             }
@@ -240,13 +244,15 @@ public record ExtraBackpackConfiguration(
     /**
      * 扩展背包分类页配置 record——共通存储下页签是仓库内容的过滤器而非独立分区。
      *
-     * @param id           分类标识（小写归一化）
-     * @param displayName  显示名称
-     * @param priority     优先级，数值越大越优先匹配
-     * @param maxSlots     该页网格显示上限（应 >= 仓库 max-slots）
-     * @param nbtPath      NBT 匹配路径
-     * @param values       NBT 匹配值列表
-     * @param fallback     是否作为兜底分类（无匹配项时使用）
+     * @param id               分类标识（小写归一化）
+     * @param displayName      显示名称
+     * @param priority         优先级，数值越大越优先匹配
+     * @param maxSlots         该页网格显示上限（应 >= 仓库 max-slots）
+     * @param nbtPath          NBT 匹配路径
+     * @param values           NBT 匹配值列表
+     * @param materialIds      物品注册键精确匹配（minecraft:diamond / tacz:modern_kinetic_gun）
+     * @param materialPrefixes 物品注册键前缀匹配（tacz: 命中全部 TaCZ 物品）
+     * @param fallback         是否作为兜底分类（无匹配项时使用）
      */
     public record ExtraBackpackCategory(
         String id,
@@ -255,6 +261,8 @@ public record ExtraBackpackConfiguration(
         int maxSlots,
         String nbtPath,
         List<String> values,
+        List<String> materialIds,
+        List<String> materialPrefixes,
         boolean fallback
     ) {
     }

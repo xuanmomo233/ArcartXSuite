@@ -1044,7 +1044,7 @@ controls:
               x: -24
               y: 386
               limit: 26
-              texts: "'&7' + var.capacityText + ' 格' + (var.总页数 > 1 ? ' · 第' + (var.页码 + 1) + '/' + var.总页数 + '页' : '')"
+              texts: "'&7' + var.capacityText + ' 格' + (var.总页数 > 1 ? ' · 第' + (var.页码.round() + 1) + '/' + var.总页数.round() + '页' : '')"
               fontSize: 36
           扩容网格:
             type: HGrid

@@ -599,6 +599,15 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
     }
 
     private boolean matches(ItemStack stack, ExtraBackpackCategory category) {
+        // 物品注册键匹配：material-ids 精确或 material-prefixes 前缀（如 tacz:、apotheosis:）
+        String materialKey = stack.getType().getKey().toString().toLowerCase(Locale.ROOT);
+        if (category.materialIds().contains(materialKey)
+            || category.materialPrefixes().stream().anyMatch(materialKey::startsWith)) {
+            return true;
+        }
+        if (category.nbtPath().isBlank() || category.values().isEmpty()) {
+            return false;
+        }
         String path = category.nbtPath().toLowerCase(Locale.ROOT);
         if ("lore".equals(path)) {
             for (String line : loreLines(stack)) {
@@ -634,7 +643,8 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
 
     private String matchCategory(ItemStack stack) {
         for (ExtraBackpackCategory category : categories()) {
-            if (category.fallback() || category.nbtPath().isBlank() || category.values().isEmpty()) {
+            if (category.fallback()
+                || (category.nbtPath().isBlank() && category.materialIds().isEmpty() && category.materialPrefixes().isEmpty())) {
                 continue;
             }
             if (matches(stack, category)) {
