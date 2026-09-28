@@ -154,6 +154,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     /** 仓库级互斥锁：ownerType:ownerId:warehouseId → lock object，防止 deposit/withdraw 竞态。 */
     private final ConcurrentMap<String, Object> warehouseLocks = new ConcurrentHashMap<>();
+    /** 仓库键 → 上次重归类时使用的分类规则指纹（用于存量物品懒重算）。 */
+    private final ConcurrentMap<String, String> recategorizedRules = new ConcurrentHashMap<>();
     final ConcurrentMap<UUID, String> storageActionTokens = new ConcurrentHashMap<>();
     final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
     final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
@@ -2544,13 +2546,93 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) {
         try {
-            return repository.loadSlots(ownerType, ownerId, warehouseId);
+            List<SlotItemRecord> records = repository.loadSlots(ownerType, ownerId, warehouseId);
+            return recategorizeIfStale(ownerType, ownerId, warehouseId, records);
         } catch (Exception exception) {
             if (configuration.debug()) {
                 this.logger.warning("读取仓库槽位失败: " + exception.getMessage());
             }
             return List.of();
         }
+    }
+
+    /**
+     * 分类规则变更后的存量物品重归类：按仓库懒执行。
+     * <p>
+     * 每个仓库记录上次重算时使用的分类规则指纹；指纹与当前配置一致直接返回。
+     * 不一致时反序列化所有槽位物品按当前规则重算 categoryId，差异写回数据库
+     * 并同步替换内存中的记录——下次读取走指纹短路，零开销。
+     */
+    private List<SlotItemRecord> recategorizeIfStale(String ownerType, String ownerId, String warehouseId, List<SlotItemRecord> records) {
+        if (records.isEmpty()) {
+            return records;
+        }
+        String key = ownerType + '|' + ownerId + '|' + warehouseId;
+        String fingerprint = categoriesFingerprint();
+        if (fingerprint.equals(recategorizedRules.get(key))) {
+            return records;
+        }
+        recategorizedRules.put(key, fingerprint);
+        List<SlotItemRecord> result = new ArrayList<>(records.size());
+        int changed = 0;
+        for (SlotItemRecord record : records) {
+            ItemStack stack = deserializeSlotItem(record);
+            if (stack == null) {
+                result.add(record);
+                continue;
+            }
+            String categoryId = resolveCategory(stack);
+            if (record.categoryId().equals(categoryId)) {
+                result.add(record);
+                continue;
+            }
+            SlotItemRecord updated = new SlotItemRecord(
+                record.ownerType(), record.ownerId(), record.warehouseId(), record.slot(),
+                record.itemHash(), categoryId, record.displayName(), record.materialId(),
+                record.searchText(), record.pinyin(), record.initials(),
+                record.itemData(), record.itemJson(), record.amount(),
+                record.createdAt(), System.currentTimeMillis()
+            );
+            try {
+                repository.upsertSlot(updated);
+                result.add(updated);
+                changed++;
+            } catch (Exception exception) {
+                this.logger.warning("槽位重分类写回失败 " + ownerId + "/" + warehouseId + "#" + record.slot() + ": " + exception.getMessage());
+                result.add(record);
+            }
+        }
+        if (changed > 0) {
+            this.logger.info("仓库 " + ownerId + "/" + warehouseId + " 存量物品重分类完成: " + changed + " 个槽位已更新");
+        }
+        return result;
+    }
+
+    private ItemStack deserializeSlotItem(SlotItemRecord record) {
+        try {
+            if (record.itemData() == null || record.itemData().isBlank()) {
+                return null;
+            }
+            return ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** 当前分类规则的指纹：任一字段变化即触发全部仓库的懒重算。 */
+    private String categoriesFingerprint() {
+        StringBuilder builder = new StringBuilder();
+        List<CategoryDefinition> definitions = new ArrayList<>(configuration.categories().values());
+        definitions.sort(Comparator.comparing(CategoryDefinition::id));
+        for (CategoryDefinition definition : definitions) {
+            builder.append(definition.id()).append('=').append(definition.priority())
+                .append('|').append(definition.nbtPath())
+                .append('|').append(definition.values())
+                .append('|').append(definition.materialIds())
+                .append('|').append(definition.materialPrefixes())
+                .append('|').append(definition.fallback()).append(';');
+        }
+        return Integer.toHexString(builder.toString().hashCode());
     }
 
     private int firstEmptySlot(List<SlotItemRecord> currentSlots, long capacity) {
