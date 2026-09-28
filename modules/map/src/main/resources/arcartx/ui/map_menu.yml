@@ -2435,7 +2435,7 @@ controls:
                       point: ~top_left
                       x: 140
                       y: 132
-                      width: 140
+                      width: 148
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2469,9 +2469,9 @@ controls:
                     attribute:
                       tip: ~&f方形小地图
                       point: ~top_left
-                      x: 292
+                      x: 296
                       y: 132
-                      width: 140
+                      width: 148
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2516,7 +2516,7 @@ controls:
                       point: ~top_left
                       x: 140
                       y: 192
-                      width: 74
+                      width: 70
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2550,9 +2550,9 @@ controls:
                     attribute:
                       tip: ~&f小地图置于右上角
                       point: ~top_left
-                      x: 220
+                      x: 218
                       y: 192
-                      width: 74
+                      width: 70
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2586,9 +2586,9 @@ controls:
                     attribute:
                       tip: ~&f小地图置于左下角
                       point: ~top_left
-                      x: 300
+                      x: 296
                       y: 192
-                      width: 74
+                      width: 70
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2622,9 +2622,9 @@ controls:
                     attribute:
                       tip: ~&f小地图置于右下角
                       point: ~top_left
-                      x: 380
+                      x: 374
                       y: 192
-                      width: 74
+                      width: 70
                       height: 48
                       enable: "var.mapRenderer != none"
                     action:
@@ -2702,7 +2702,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 288
+                      x: 292
                       y: 262
                       center: true
                       texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &fpx' : '&f-'"
@@ -2713,7 +2713,7 @@ controls:
                     attribute:
                       tip: ~&f增大小地图尺寸
                       point: ~top_left
-                      x: 388
+                      x: 396
                       y: 252
                       width: 48
                       height: 48
@@ -2793,7 +2793,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 288
+                      x: 292
                       y: 322
                       center: true
                       texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&f%' : '&f-'"
@@ -2804,7 +2804,7 @@ controls:
                     attribute:
                       tip: ~&f放大地图缩放
                       point: ~top_left
-                      x: 388
+                      x: 396
                       y: 312
                       width: 48
                       height: 48
@@ -2985,7 +2985,7 @@ controls:
                     attribute:
                       tip: ~&f显示怪物点
                       point: ~top_left
-                      x: 702
+                      x: 708
                       y: 252
                       width: 96
                       height: 48
@@ -3021,7 +3021,7 @@ controls:
                     attribute:
                       tip: ~&f显示动物点
                       point: ~top_left
-                      x: 808
+                      x: 820
                       y: 252
                       width: 96
                       height: 48
