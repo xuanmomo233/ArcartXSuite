@@ -179,7 +179,7 @@ jobs:
         run: |
           # focal 已 EOL，archive 源可能已迁 old-releases，失败时自动切换兜底
           apt-get update || (sed -i 's|archive.ubuntu.com|old-releases.ubuntu.com|g; s|security.ubuntu.com|old-releases.ubuntu.com|g' /etc/apt/sources.list && apt-get update)
-          apt-get install -y --no-install-recommends ca-certificates git tar curl g++ make libssl-dev zlib1g-dev default-jdk-headless python3
+          apt-get install -y --no-install-recommends ca-certificates git tar curl g++ make libssl-dev zlib1g-dev default-jdk python3
           # focal apt 的 cmake 仅 3.16 < 3.20，使用 Kitware 官方二进制包
           # （setup-python 安装的版本依赖新 glibc，在此容器内无法运行，故不用）
           curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.30.5/cmake-3.30.5-linux-x86_64.tar.gz | tar -xz -C /opt
