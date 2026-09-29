@@ -103,6 +103,105 @@ categories:
     nbt:
       path: "pdc:arcartx:item_category"
       values: ["consumable", "food", "potion"]
+  # 原版物品按注册键分类（PDC 标签优先，未打标签的原版物品落这里）
+  weapon:
+    display-name: "武器"
+    priority: 40
+    material-ids:
+      - "minecraft:wooden_sword"
+      - "minecraft:stone_sword"
+      - "minecraft:iron_sword"
+      - "minecraft:golden_sword"
+      - "minecraft:diamond_sword"
+      - "minecraft:netherite_sword"
+      - "minecraft:bow"
+      - "minecraft:crossbow"
+      - "minecraft:trident"
+      - "minecraft:mace"
+  tool:
+    display-name: "工具"
+    priority: 41
+    material-ids:
+      # 各材质工具（镐/斧/锹/锄）
+      - "minecraft:wooden_pickaxe"
+      - "minecraft:wooden_axe"
+      - "minecraft:wooden_shovel"
+      - "minecraft:wooden_hoe"
+      - "minecraft:stone_pickaxe"
+      - "minecraft:stone_axe"
+      - "minecraft:stone_shovel"
+      - "minecraft:stone_hoe"
+      - "minecraft:iron_pickaxe"
+      - "minecraft:iron_axe"
+      - "minecraft:iron_shovel"
+      - "minecraft:iron_hoe"
+      - "minecraft:golden_pickaxe"
+      - "minecraft:golden_axe"
+      - "minecraft:golden_shovel"
+      - "minecraft:golden_hoe"
+      - "minecraft:diamond_pickaxe"
+      - "minecraft:diamond_axe"
+      - "minecraft:diamond_shovel"
+      - "minecraft:diamond_hoe"
+      - "minecraft:netherite_pickaxe"
+      - "minecraft:netherite_axe"
+      - "minecraft:netherite_shovel"
+      - "minecraft:netherite_hoe"
+      # 杂项工具
+      - "minecraft:shears"
+      - "minecraft:flint_and_steel"
+      - "minecraft:fishing_rod"
+      - "minecraft:carrot_on_a_stick"
+      - "minecraft:warped_fungus_on_a_stick"
+      - "minecraft:brush"
+      - "minecraft:spyglass"
+      - "minecraft:lead"
+  armor:
+    display-name: "护甲"
+    priority: 42
+    material-ids:
+      # 头盔
+      - "minecraft:leather_helmet"
+      - "minecraft:chainmail_helmet"
+      - "minecraft:iron_helmet"
+      - "minecraft:golden_helmet"
+      - "minecraft:diamond_helmet"
+      - "minecraft:netherite_helmet"
+      - "minecraft:turtle_helmet"
+      # 胸甲
+      - "minecraft:leather_chestplate"
+      - "minecraft:chainmail_chestplate"
+      - "minecraft:iron_chestplate"
+      - "minecraft:golden_chestplate"
+      - "minecraft:diamond_chestplate"
+      - "minecraft:netherite_chestplate"
+      # 护腿
+      - "minecraft:leather_leggings"
+      - "minecraft:chainmail_leggings"
+      - "minecraft:iron_leggings"
+      - "minecraft:golden_leggings"
+      - "minecraft:diamond_leggings"
+      - "minecraft:netherite_leggings"
+      # 靴子
+      - "minecraft:leather_boots"
+      - "minecraft:chainmail_boots"
+      - "minecraft:iron_boots"
+      - "minecraft:golden_boots"
+      - "minecraft:diamond_boots"
+      - "minecraft:netherite_boots"
+      # 特殊装备
+      - "minecraft:elytra"
+      - "minecraft:shield"
+      - "minecraft:leather_horse_armor"
+      - "minecraft:iron_horse_armor"
+      - "minecraft:golden_horse_armor"
+      - "minecraft:diamond_horse_armor"
+      - "minecraft:wolf_armor"
+  enchant_book:
+    display-name: "附魔书"
+    priority: 43
+    material-ids:
+      - "minecraft:enchanted_book"
   # 示例：按 mod 命名空间分类（把整页改成你的 mod 前缀即可）
   # mod_items:
   #   display-name: "Mod物品"
