@@ -1,9 +1,10 @@
-# AXS 资源说明
+﻿# AXS 资源说明
 # 用途: Abyss 副本战斗统计 —— 击杀/伤害/承伤/治疗
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
   isHud: false
-  background: true
+  defaultOpen: false
+  background: false
   closeDied: true
   escClose: true
   through: false
@@ -17,13 +18,35 @@ ui:
       var.actionToken = packet['action_token']
       var.dungeonName = packet['dungeonName']
       var.statRows = packet['statRows']
-      var.stat0 = var.statRows != none ? var.statRows['0'] : none
-      var.stat1 = var.statRows != none ? var.statRows['1'] : none
-      var.stat2 = var.statRows != none ? var.statRows['2'] : none
-      var.stat3 = var.statRows != none ? var.statRows['3'] : none
-      var.stat4 = var.statRows != none ? var.statRows['4'] : none
-      var.stat5 = var.statRows != none ? var.statRows['5'] : none
+      var.stat0 = var.statRows != none ? var.statRows[0.round()] : none
+      var.stat1 = var.statRows != none ? var.statRows[1.round()] : none
+      var.stat2 = var.statRows != none ? var.statRows[2.round()] : none
+      var.stat3 = var.statRows != none ? var.statRows[3.round()] : none
+      var.stat4 = var.statRows != none ? var.statRows[4.round()] : none
+      var.stat5 = var.statRows != none ? var.statRows[5.round()] : none
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.dungeonName = ''
+      var.statRows = {}
+      var.stat0 = none
+      var.stat1 = none
+      var.stat2 = none
+      var.stat3 = none
+      var.stat4 = none
+      var.stat5 = none
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+    open: |-
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;16,12,30,210
+      through: true
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -35,90 +58,184 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 620
-          height: 460
+          width: 680
+          height: 480
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:24;24,28,38,190
+              normal: ~Frosted:30;24,19,40,240
               shape: ~round_rect
-              radius: 18
+              radius: 16
             effect:
               stroke:
                 width: 2
-                color: ~110,148,204,140
+                color: var.accentDim
+          标题标线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 28
+              width: 26
+              height: 3
+              normal: var.accent
+              through: true
           标题:
             type: Text
             attribute:
               point: ~top_center
-              y: 18
-              texts: "'&b&l战斗统计 &7- &f' + var.dungeonName"
-              fontSize: 48
+              y: 44
+              texts: "'&f战斗统计  &7-  &f' + var.dungeonName"
+              fontSize: 54
+              through: true
+          表头底:
+            type: Texture
+            attribute:
+              x: 30
+              y: 118
+              width: 620
+              height: 44
+              normal: ~68,52,96,220
+              shape: ~round_rect
+              radius: 8
+              through: true
           表头:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 84
-              texts: ~&8玩家                    击杀    伤害        承伤        治疗
+              x: 48
+              y: 126
+              texts: ~&f玩家                    击杀      伤害        承伤        治疗
               fontSize: 36
+              through: true
+          行底0:
+            type: Texture
+            attribute:
+              x: 30
+              y: 170
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat0 != none
+              through: true
           行0:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 126
+              x: 48
+              y: 178
               texts: "var.stat0 != none ? '&f' + var.stat0['name'] + '    &c' + var.stat0['kills'].round() + '    &e' + var.stat0['damage'].round() + '    &7' + var.stat0['taken'].round() + '    &a' + var.stat0['heal'].round() : ''"
               fontSize: 36
+              through: true
+          行底1:
+            type: Texture
+            attribute:
+              x: 30
+              y: 216
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat1 != none
+              through: true
           行1:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 170
+              x: 48
+              y: 224
               texts: "var.stat1 != none ? '&f' + var.stat1['name'] + '    &c' + var.stat1['kills'].round() + '    &e' + var.stat1['damage'].round() + '    &7' + var.stat1['taken'].round() + '    &a' + var.stat1['heal'].round() : ''"
               fontSize: 36
+              through: true
+          行底2:
+            type: Texture
+            attribute:
+              x: 30
+              y: 262
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat2 != none
+              through: true
           行2:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 214
+              x: 48
+              y: 270
               texts: "var.stat2 != none ? '&f' + var.stat2['name'] + '    &c' + var.stat2['kills'].round() + '    &e' + var.stat2['damage'].round() + '    &7' + var.stat2['taken'].round() + '    &a' + var.stat2['heal'].round() : ''"
               fontSize: 36
+              through: true
+          行底3:
+            type: Texture
+            attribute:
+              x: 30
+              y: 308
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat3 != none
+              through: true
           行3:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 258
+              x: 48
+              y: 316
               texts: "var.stat3 != none ? '&f' + var.stat3['name'] + '    &c' + var.stat3['kills'].round() + '    &e' + var.stat3['damage'].round() + '    &7' + var.stat3['taken'].round() + '    &a' + var.stat3['heal'].round() : ''"
               fontSize: 36
+              through: true
+          行底4:
+            type: Texture
+            attribute:
+              x: 30
+              y: 354
+              width: 620
+              height: 44
+              normal: ~38,30,58,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat4 != none
+              through: true
           行4:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 302
+              x: 48
+              y: 362
               texts: "var.stat4 != none ? '&f' + var.stat4['name'] + '    &c' + var.stat4['kills'].round() + '    &e' + var.stat4['damage'].round() + '    &7' + var.stat4['taken'].round() + '    &a' + var.stat4['heal'].round() : ''"
               fontSize: 36
+              through: true
+          行底5:
+            type: Texture
+            attribute:
+              x: 30
+              y: 400
+              width: 620
+              height: 44
+              normal: ~30,24,48,160
+              shape: ~round_rect
+              radius: 6
+              visible: var.stat5 != none
+              through: true
           行5:
             type: Text
             attribute:
-              point: ~top_left
-              x: 30
-              y: 346
+              x: 48
+              y: 408
               texts: "var.stat5 != none ? '&f' + var.stat5['name'] + '    &c' + var.stat5['kills'].round() + '    &e' + var.stat5['damage'].round() + '    &7' + var.stat5['taken'].round() + '    &a' + var.stat5['heal'].round() : ''"
               fontSize: 36
+              through: true
           关闭按钮:
             type: Canvas
             attribute:
-              point: ~bottom_center
-              y: -20
-              width: 110
-              height: 42
+              point: ~top_right
+              x: -18
+              y: 18
+              width: 36
+              height: 36
             action:
               clickLeft: "Screen.close()"
             children:
@@ -126,15 +243,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~90,90,100,240
-                  hover: ~115,115,128,250
-                  shape: ~round_rect
-                  radius: 10
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
                   through: true
               关闭字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f关闭
-                  fontSize: 36
+                  texts: ~&f✕
+                  fontSize: 32
                   through: true

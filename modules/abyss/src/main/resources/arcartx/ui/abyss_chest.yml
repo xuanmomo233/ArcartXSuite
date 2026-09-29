@@ -1,9 +1,10 @@
 ﻿# AXS 资源说明
-# 用途: Abyss 副本宝箱 —— roll 好的奖励物品展示 + 领取
+# 用途: Abyss 副本宝箱 —— roll 好的奖励物品展示 + 单个/全部领取
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
   isHud: false
-  background: true
+  defaultOpen: false
+  background: false
   closeDied: true
   escClose: true
   through: false
@@ -17,7 +18,6 @@ ui:
       var.actionToken = packet['action_token']
       var.chestTitle = packet['chestTitle']
       var.itemCount = packet['itemCount']
-      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.itemJson0 = packet['itemJson0']
       var.itemJson1 = packet['itemJson1']
       var.itemJson2 = packet['itemJson2']
@@ -27,7 +27,7 @@ ui:
       var.itemJson6 = packet['itemJson6']
       var.itemJson7 = packet['itemJson7']
       var.itemJson8 = packet['itemJson8']
-      // 数据就绪后显式触发各槽位 seticon 属性（属性不会随 var 变化自动重算）
+      // 数据就绪后显式触发各槽位 seticon（属性不随 var 自动重算）
       val.槽位0.seticon()
       val.槽位1.seticon()
       val.槽位2.seticon()
@@ -37,7 +37,33 @@ ui:
       val.槽位6.seticon()
       val.槽位7.seticon()
       val.槽位8.seticon()
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.chestTitle = '宝箱'
+      var.itemCount = 0
+      var.itemJson0 = ''
+      var.itemJson1 = ''
+      var.itemJson2 = ''
+      var.itemJson3 = ''
+      var.itemJson4 = ''
+      var.itemJson5 = ''
+      var.itemJson6 = ''
+      var.itemJson7 = ''
+      var.itemJson8 = ''
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.accent = '226,196,132,255'
+      var.accentDim = '150,128,90,180'
+    open: |-
+      Sound.self('minecraft:block.chest.open', 0.9, 10)
 controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;16,12,30,210
+      through: true
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -49,45 +75,59 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 500
-          height: 300
+          width: 560
+          height: 340
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:24;24,28,38,200
+              normal: ~Frosted:30;28,22,16,240
               shape: ~round_rect
               radius: 16
             effect:
               stroke:
                 width: 2
-                color: ~226,196,132,180
+                color: var.accentDim
+          标题标线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 26
+              width: 24
+              height: 3
+              normal: var.accent
+              through: true
           标题:
             type: Text
             attribute:
               point: ~top_center
-              y: 16
-              texts: "'&e&l' + var.chestTitle"
+              y: 42
+              texts: "'&f' + var.chestTitle"
               fontSize: 48
+              limit: 12
+              through: true
           物品网格:
             type: HGrid
             attribute:
               point: ~top_center
-              y: 74
-              width: 440
-              spaceBetween: 10
+              y: 120
+              width: 512
+              spaceBetween: 12
               column: 9
             children:
               槽位0:
                 val: 槽位0
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson0 != none && var.itemJson0 != '' ? var.itemJson0 : var.emptyItemJson)"
                   visible: "var.itemJson0 != none && var.itemJson0 != ''"
                 action:
@@ -96,11 +136,14 @@ controls:
                 val: 槽位1
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson1 != none && var.itemJson1 != '' ? var.itemJson1 : var.emptyItemJson)"
                   visible: "var.itemJson1 != none && var.itemJson1 != ''"
                 action:
@@ -109,11 +152,14 @@ controls:
                 val: 槽位2
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson2 != none && var.itemJson2 != '' ? var.itemJson2 : var.emptyItemJson)"
                   visible: "var.itemJson2 != none && var.itemJson2 != ''"
                 action:
@@ -122,11 +168,14 @@ controls:
                 val: 槽位3
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson3 != none && var.itemJson3 != '' ? var.itemJson3 : var.emptyItemJson)"
                   visible: "var.itemJson3 != none && var.itemJson3 != ''"
                 action:
@@ -135,11 +184,14 @@ controls:
                 val: 槽位4
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson4 != none && var.itemJson4 != '' ? var.itemJson4 : var.emptyItemJson)"
                   visible: "var.itemJson4 != none && var.itemJson4 != ''"
                 action:
@@ -148,11 +200,14 @@ controls:
                 val: 槽位5
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson5 != none && var.itemJson5 != '' ? var.itemJson5 : var.emptyItemJson)"
                   visible: "var.itemJson5 != none && var.itemJson5 != ''"
                 action:
@@ -161,11 +216,14 @@ controls:
                 val: 槽位6
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson6 != none && var.itemJson6 != '' ? var.itemJson6 : var.emptyItemJson)"
                   visible: "var.itemJson6 != none && var.itemJson6 != ''"
                 action:
@@ -174,11 +232,14 @@ controls:
                 val: 槽位7
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson7 != none && var.itemJson7 != '' ? var.itemJson7 : var.emptyItemJson)"
                   visible: "var.itemJson7 != none && var.itemJson7 != ''"
                 action:
@@ -187,11 +248,14 @@ controls:
                 val: 槽位8
                 type: Slot
                 attribute:
-                  width: 44
-                  height: 44
+                  width: 48
+                  height: 48
                   slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
+                  normal: ~62,52,36,235
+                  hover: ~82,70,48,245
+                  shape: ~round_rect
+                  radius: 8
+                  itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson8 != none && var.itemJson8 != '' ? var.itemJson8 : var.emptyItemJson)"
                   visible: "var.itemJson8 != none && var.itemJson8 != ''"
                 action:
@@ -200,9 +264,9 @@ controls:
             type: Canvas
             attribute:
               point: ~bottom_center
-              y: -24
-              width: 160
-              height: 46
+              y: -28
+              width: 180
+              height: 52
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'chest_claim', var.actionToken)
@@ -211,8 +275,8 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~150,110,40,240
-                  hover: ~185,140,55,250
+                  normal: ~200,160,80,240
+                  hover: ~230,190,110,250
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -220,6 +284,32 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f全部领取
+                  texts: ~&0全部领取
                   fontSize: 36
+                  through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -18
+              y: 18
+              width: 36
+              height: 36
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
+                  through: true
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 32
                   through: true

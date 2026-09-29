@@ -1,11 +1,12 @@
 ﻿# AXS 资源说明
-# 用途: Abyss 地牢浏览器 —— 副本列表 + 详情 + 进本入口
-# 布局: 毛玻璃面板 = 标题栏 + 地牢卡片网格(4x2) + 详情区 + 操作按钮
+# 用途: Abyss 地牢浏览器 —— 左侧地牢卡片列表 + 右侧详情面板 + 进入/队伍/刷新
+# 布局: 全屏磨砂底 + 渐变底幕 + 页眉 + 左列滚动列表 + 右列详情
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 # 重载命令: /axs abyss reload
 ui:
   isHud: false
-  background: true
+  defaultOpen: false
+  background: false
   closeDied: true
   escClose: true
   through: false
@@ -28,341 +29,173 @@ ui:
       var.dungeonCount = packet['dungeonCount']
       var.hasParty = packet['hasParty']
       var.partyText = packet['partyText']
-      var.page = 0
-      var.selected = -1
+      var.selEntry = none
       var.selectedId = ''
+      // 重建卡片列表（模板在索引0，按轮次命名防冲突）
+      目标数 = var.dungeonCount.round()
+      if(val.dungeon_rows.childrenCount() - 1 != 目标数 - 1){
+        for(key in var.卡片引用.keys()){
+          var.卡片引用[key].remove()
+        }
+        var.卡片引用 = {}
+        var.卡片轮次 = (var.卡片轮次 + 1).round()
+        模板 = val.dungeon_rows.get(0)
+        模板.entryKey = 0.round()
+        if(目标数 > 1){
+          for(i in range(1, 目标数 - 1)){
+            c = 模板.copy('地牢卡片_' + var.卡片轮次 + '_' + i.round())
+            c.entryKey = i.round()
+            var.卡片引用[i.round()] = c
+          }
+        }
+      }
+      // 数据就绪后触发每张卡片图标 seticon（属性不随 var 自动重算）
+      if(目标数 > 0){
+        val.dungeon_rows.get(0)['图标'].seticon()
+        for(i in range(1, 目标数 - 1)){
+          var.卡片引用[i.round()]['图标'].seticon()
+        }
+      }
+      // 默认选中第一张卡片
+      if(目标数 > 0){
+        var.selEntry = var.dungeonRows[0.round()]
+        var.selKey = 0.round()
+        var.selectedId = var.selEntry['id']
+      }
+      val.list_slider.setDragYRatio(0)
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.title = '深渊回廊'
+      var.dungeonRows = {}
+      var.dungeonCount = 0
+      var.hasParty = false
+      var.partyText = '未组队'
+      var.selEntry = none
+      var.selKey = -1
+      var.selectedId = ''
+      var.卡片轮次 = 0
+      var.卡片引用 = {}
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+      var.accentHover = '220,180,255,235'
+      var.cardBg = '38,30,58,255'
+      var.cardBgActive = '68,52,96,255'
+      var.cardBgHover = '52,40,76,255'
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.leftW = var.viewW * 0.6
+      var.rightW = var.viewW - var.leftW
+    open: |-
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~middle_center
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      主面板:
+      全屏画布:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1120
-          height: 680
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
         children:
-          面板背景:
+          场景磨砂:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:24;24,28,38,190
-              shape: ~round_rect
-              radius: 18
+              normal: ~Frosted:30;20,16,38,245
+          暮色底幕:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~16,12,30,255
             effect:
-              stroke:
-                width: 2
-                color: ~110,148,204,140
+              gradient:
+                color1: ~30,22,52,255
+                color2: ~12,9,24,255
+                type: 0
+                angleDeg: 65
+          # ── 页眉 ──
+          页眉标线:
+            type: Texture
+            attribute:
+              x: 76
+              y: 56
+              width: 28
+              height: 3
+              normal: var.accent
+              through: true
+          品牌标记:
+            type: Text
+            attribute:
+              x: 120
+              y: 46
+              texts: ~&fA B Y S S  /  深渊回廊
+              fontSize: 36
+              alpha: 0.78
+              through: true
           标题:
             type: Text
             attribute:
-              point: ~top_left
-              x: 32
-              y: 20
-              texts: "'&b&l' + var.title"
-              fontSize: 48
+              x: 72
+              y: 104
+              texts: var.title
+              fontSize: 88
+              limit: 20
+              through: true
+          引导语:
+            type: Text
+            attribute:
+              x: 76
+              y: 176
+              texts: ~&7选择一处深渊裂隙，踏入其中。
+              fontSize: 36
+              through: true
+          队伍状态底色:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -150
+              y: 62
+              width: 240
+              height: 48
+              normal: ~38,30,58,255
+              shape: ~round_rect
+              radius: 8
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
           队伍状态:
             type: Text
             attribute:
-              point: ~top_center
-              y: 26
+              point: ~top_right
+              x: -166
+              y: 72
               texts: "'&7' + var.partyText"
               fontSize: 36
-          地牢网格:
-            val: 地牢网格
-            type: HGrid
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 88
-              width: 700
-              spaceBetween: 14
-              column: 4
-              horizontalAlign: ~center
-            action:
-              create: |-
-                for(i in range(1, 7)){
-                  card = self.get(0).copy('卡片' + i.round())
-                  card.entryKey = i.round()
-                }
-            children:
-              卡片0:
-                type: Canvas
-                attribute:
-                  entryKey: 0.round()
-                  entry: "var.dungeonRows[(var.page * 8 + self.entryKey).round()]"
-                  width: 160
-                  height: 200
-                  visible: "self.entry != none"
-                action:
-                  clickLeft: |-
-                    var.selected = (var.page * 8 + self.entryKey).round()
-                    var.selectedId = self.entry['id']
-                children:
-                  卡片背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? '62,90,140,235' : '44,50,66,225'"
-                      shape: ~round_rect
-                      radius: 12
-                      through: true
-                    effect:
-                      stroke:
-                        width: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? 3 : 1"
-                        color: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? '120,190,255,255' : '255,255,255,120'"
-                  图标:
-                    type: Slot
-                    attribute:
-                      point: ~top_center
-                      y: 18
-                      width: 56
-                      height: 56
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 1.4
-                      seticon: "self.setItemIcon(self.parent.entry['iconJson'])"
-                      through: true
-                  名称:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 86
-                      texts: "self.parent.entry['name']"
-                      fontSize: 36
-                      through: true
-                  难度:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 124
-                      texts: "'&7难度: &f' + self.parent.entry['difficulty']"
-                      fontSize: 36
-                      through: true
-                  人数:
-                    type: Text
-                    attribute:
-                      point: ~bottom_center
-                      y: -14
-                      texts: "'&8' + self.parent.entry['minPlayers'].round() + '-' + self.parent.entry['maxPlayers'].round() + '人'"
-                      fontSize: 36
-                      through: true
-          详情面板:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -32
-              y: 88
-              width: 340
-              height: 460
-            children:
-              详情背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~30,34,46,235
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~255,255,255,100
-              详情标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 18
-                  y: 14
-                  texts: "var.dungeonRows[var.selected] != none ? '&e' + var.dungeonRows[var.selected]['name'] : '&7选择左侧地牢'"
-                  fontSize: 48
-              详情条件行:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 18
-                  y: 70
-                  texts:
-                    - "var.dungeonRows[var.selected] != none ? '&7难度: &f' + var.dungeonRows[var.selected]['difficulty'] + '   &7人数: &f' + var.dungeonRows[var.selected]['minPlayers'].round() + '-' + var.dungeonRows[var.selected]['maxPlayers'].round() : ''"
-                    - "var.dungeonRows[var.selected] != none ? '&7体力: &b' + var.dungeonRows[var.selected]['staminaCost'].round() + '   &7门票: &e' + var.dungeonRows[var.selected]['moneyCost'].round() + '   &7冷却: &f' + var.dungeonRows[var.selected]['cooldown'].round() + 's' : ''"
-                    - "var.dungeonRows[var.selected] != none ? '&7运行中实例: &f' + var.dungeonRows[var.selected]['running'].round() + (var.dungeonRows[var.selected]['partyRequired'] ? '   &c需要组队' : '') : ''"
-                    - "var.dungeonRows[var.selected] != none && var.dungeonRows[var.selected]['cooldownLeft'] > 0 ? '&c冷却剩余: ' + var.dungeonRows[var.selected]['cooldownLeft'].round() + 's' : ''"
-                  fontSize: 36
-              详情描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 18
-                  y: 240
-                  texts:
-                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc0'] : ''"
-                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc1'] : ''"
-                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc2'] : ''"
-                  fontSize: 36
-          翻页上一页:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 32
-              y: -80
-              width: 110
-              height: 44
-            action:
-              clickLeft: |-
-                var.page = var.page - 1
-                if(var.page < 0){ var.page = 0 }
-            children:
-              上一页底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~50,58,76,235
-                  hover: ~70,82,105,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              上一页字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f上一页
-                  fontSize: 36
-                  through: true
-          翻页下一页:
-            type: Canvas
-            attribute:
-              point: ~bottom_left
-              x: 152
-              y: -80
-              width: 110
-              height: 44
-            action:
-              clickLeft: |-
-                if((var.page + 1) * 8 < var.dungeonCount){ var.page = var.page + 1 }
-            children:
-              下一页底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~50,58,76,235
-                  hover: ~70,82,105,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              下一页字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f下一页
-                  fontSize: 36
-                  through: true
-          页码:
-            type: Text
-            attribute:
-              point: ~bottom_left
-              x: 280
-              y: -76
-              texts: "'&8第 ' + (var.page + 1).round() + ' 页'"
-              fontSize: 36
-          进入按钮:
-            type: Canvas
-            attribute:
-              point: ~bottom_right
-              x: -152
-              y: -80
-              width: 120
-              height: 48
-            action:
-              clickLeft: |-
-                if(var.selectedId != '' && var.selectedId != none){
-                  Packet.send(var.packetId, 'enter', var.selectedId, var.actionToken)
-                  Screen.close()
-                }
-            children:
-              进入底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selectedId != '' && var.selectedId != none ? '60,140,80,240' : '60,62,68,235'"
-                  hover: ~80,170,100,250
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              进入字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f进入
-                  fontSize: 36
-                  through: true
-          队伍按钮:
-            type: Canvas
-            attribute:
-              point: ~bottom_right
-              x: -32
-              y: -80
-              width: 110
-              height: 48
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-            children:
-              队伍底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~90,70,140,240
-                  hover: ~115,90,170,250
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              队伍字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f队伍
-                  fontSize: 36
-                  through: true
-          刷新按钮:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -140
-              y: 20
-              width: 100
-              height: 40
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'refresh_browser', var.actionToken)
-            children:
-              刷新底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~50,58,76,235
-                  hover: ~70,82,105,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              刷新字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f刷新
-                  fontSize: 36
-                  through: true
+              through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -32
-              y: 20
-              width: 40
-              height: 40
+              x: -76
+              y: 52
+              width: 48
+              height: 48
             action:
               clickLeft: "Screen.close()"
             children:
@@ -381,3 +214,363 @@ controls:
                   texts: ~&f✕
                   fontSize: 36
                   through: true
+          分隔线:
+            type: Texture
+            attribute:
+              x: 76
+              y: 232
+              width: "var.leftW - 152"
+              height: 1
+              normal: ~96,80,140,160
+              through: true
+          # ── 左列：地牢卡片滚动列表 ──
+          左侧区域:
+            type: Canvas
+            attribute:
+              width: "var.leftW"
+              height: "var.viewH"
+            children:
+              空提示:
+                type: Canvas
+                attribute:
+                  x: 76
+                  y: 380
+                  width: "var.leftW - 152"
+                  height: 160
+                  visible: var.dungeonCount <= 0
+                children:
+                  空标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      texts: ~&f暂无开放的地牢
+                      fontSize: 54
+                      through: true
+                  空说明:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 56
+                      texts: ~&7请稍后再来，或联系管理员配置地牢模板。
+                      fontSize: 36
+                      through: true
+              卡片滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -52
+                  y: 252
+                  width: 10
+                  height: "var.viewH - 380"
+                  normal: ~40,32,62,220
+                  shape: ~round_rect
+                  radius: 5
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: var.accentDim
+              卡片滑块:
+                type: Texture
+                val: list_slider
+                attribute:
+                  point: ~top_right
+                  x: -52
+                  y: 252
+                  width: 10
+                  height: 120
+                  normal: var.accent
+                  maxDragY: "var.viewH - 380 - 120"
+                  shape: ~round_rect
+                  radius: 5
+              卡片滚动区:
+                type: Scroll
+                attribute:
+                  x: 76
+                  y: 252
+                  width: "var.leftW - 152"
+                  height: "var.viewH - 380"
+                  moveY: val.list_slider.getDragYRatio()
+                action:
+                  wheel: |-
+                    ratio = self.moveY - self.wheelValue * 0.12
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.list_slider.setDragYRatio(ratio)
+                children:
+                  卡片列表:
+                    type: VStack
+                    val: dungeon_rows
+                    attribute:
+                      width: "var.leftW - 168"
+                      spaceBetween: 12
+                    children:
+                      地牢卡片:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.dungeonRows[self.entryKey]
+                          active: "self.entry != none && var.selectedId == self.entry['id']"
+                          visible: self.entry != none
+                          width: "var.leftW - 168"
+                          height: 116
+                        action:
+                          clickLeft: |-
+                            if(self.entry != none){
+                              var.selEntry = self.entry
+                              var.selKey = self.entryKey
+                              var.selectedId = self.entry['id']
+                              Sound.self('minecraft:ui.button.click', 1.4, 10)
+                            }
+                        children:
+                          卡片底色:
+                            type: Texture
+                            attribute:
+                              x: 2
+                              y: 2
+                              width: "self.parent.width - 4"
+                              height: "self.parent.height - 4"
+                              normal: "self.parent.active ? var.cardBgActive : var.cardBg"
+                              hover: var.cardBgHover
+                              shape: ~round_rect
+                              radius: 12
+                              through: true
+                            effect:
+                              stroke:
+                                width: "self.parent.active ? 4 : 3"
+                                color: "self.parent.active ? var.accent : (self.parent.isHovered() ? var.accentHover : var.accentDim)"
+                          选中侧线:
+                            type: Texture
+                            attribute:
+                              x: 3
+                              y: 26
+                              width: "self.parent.active ? 5 : (self.parent.isHovered() ? 4 : 3)"
+                              height: 64
+                              alpha: "self.parent.active ? 1 : (self.parent.isHovered() ? 0.72 : 0.42)"
+                              normal: var.accent
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
+                          图标底座:
+                            type: Texture
+                            attribute:
+                              x: 24
+                              y: 24
+                              width: 68
+                              height: 68
+                              normal: var.accent
+                              alpha: "(self.parent.active || self.parent.isHovered()) ? 1 : 0.74"
+                              shape: ~round_rect
+                              radius: 14
+                              through: true
+                          图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              x: 32
+                              y: 32
+                              width: 52
+                              height: 52
+                              itemScale: 0.82
+                              normal: ~0,0,0,0
+                              through: true
+                              seticon: "self.setItemIcon(self.parent.entry['iconJson'] != none ? self.parent.entry['iconJson'] : var.air)"
+                          名称:
+                            type: Text
+                            attribute:
+                              x: 112
+                              y: 22
+                              texts: "'&f' + self.parent.entry['name']"
+                              fontSize: 48
+                              limit: 14
+                              through: true
+                          难度人数:
+                            type: Text
+                            attribute:
+                              x: 112
+                              y: 68
+                              texts: "'&7' + self.parent.entry['difficulty'] + '   &8' + self.parent.entry['minPlayers'].round() + '-' + self.parent.entry['maxPlayers'].round() + '人' + (self.parent.entry['partyRequired'] ? '   &c需组队' : '')"
+                              fontSize: 36
+                              through: true
+                          冷却标记:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -24
+                              texts: "self.parent.entry['cooldownLeft'] > 0 ? '&c冷却 ' + self.parent.entry['cooldownLeft'].round() + 's' : (self.parent.entry['running'] > 0 ? '&a运行中' : '')"
+                              fontSize: 36
+                              through: true
+          # ── 右列：详情面板 ──
+          详情底:
+            type: Texture
+            attribute:
+              x: "var.leftW + 24"
+              y: 96
+              width: "var.rightW - 120"
+              height: "var.viewH - 192"
+              normal: ~24,19,40,235
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          详情标题标线:
+            type: Texture
+            attribute:
+              x: "var.leftW + 76"
+              y: 152
+              width: 22
+              height: 3
+              normal: var.accent
+              visible: var.selEntry != none
+              through: true
+          详情标题:
+            type: Text
+            attribute:
+              x: "var.leftW + 76"
+              y: 166
+              texts: "var.selEntry != none ? '&f' + var.selEntry['name'] : '&7未选择地牢'"
+              fontSize: 64
+              limit: 12
+              through: true
+          详情难度:
+            type: Text
+            attribute:
+              x: "var.leftW + 78"
+              y: 250
+              texts: "var.selEntry != none ? '&7难度  &f' + var.selEntry['difficulty'] : ''"
+              fontSize: 36
+              through: true
+          详情条件行:
+            type: Text
+            attribute:
+              x: "var.leftW + 78"
+              y: 306
+              fontSize: 36
+              through: true
+              texts:
+                - "var.selEntry != none ? '&8人数  &f' + var.selEntry['minPlayers'].round() + '-' + var.selEntry['maxPlayers'].round() + '人   &8体力  &b' + var.selEntry['staminaCost'].round() : ''"
+                - "var.selEntry != none ? '&8门票  &e' + var.selEntry['moneyCost'].round() + '   &8冷却  &f' + var.selEntry['cooldown'].round() + 's   &8运行中  &f' + var.selEntry['running'].round() : ''"
+                - "var.selEntry != none && var.selEntry['partyRequired'] ? '&c该地牢需要组队进入' : ''"
+                - "var.selEntry != none && var.selEntry['cooldownLeft'] > 0 ? '&c冷却剩余: ' + var.selEntry['cooldownLeft'].round() + 's' : ''"
+          详情描述标线:
+            type: Texture
+            attribute:
+              x: "var.leftW + 78"
+              y: 470
+              width: "var.rightW - 196"
+              height: 1
+              normal: ~96,80,140,120
+              visible: var.selEntry != none
+              through: true
+          详情描述:
+            type: Text
+            attribute:
+              x: "var.leftW + 78"
+              y: 492
+              fontSize: 36
+              through: true
+              texts:
+                - "var.selEntry != none ? '&7' + var.selEntry['desc0'] : ''"
+                - "var.selEntry != none ? '&7' + var.selEntry['desc1'] : ''"
+                - "var.selEntry != none ? '&7' + var.selEntry['desc2'] : ''"
+          操作区:
+            type: HStack
+            attribute:
+              x: "var.leftW + 78"
+              y: "var.viewH - 156"
+              spaceBetween: 16
+            children:
+              进入按钮:
+                type: Canvas
+                attribute:
+                  width: 180
+                  height: 54
+                  visible: var.selEntry != none
+                action:
+                  clickLeft: |-
+                    if(var.selectedId != '' && var.selectedId != none){
+                      Packet.send(var.packetId, 'enter', var.selectedId, var.actionToken)
+                      Screen.close()
+                    }
+                children:
+                  进入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,230
+                      hover: ~200,150,240,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  进入字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0进 入
+                      fontSize: 36
+                      through: true
+              队伍按钮:
+                type: Canvas
+                attribute:
+                  width: 140
+                  height: 54
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_party_ui', var.actionToken)
+                children:
+                  队伍底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~80,160,240,230
+                      hover: ~110,185,255,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  队伍字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0队 伍
+                      fontSize: 36
+                      through: true
+              刷新按钮:
+                type: Canvas
+                attribute:
+                  width: 140
+                  height: 54
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'refresh_browser', var.actionToken)
+                children:
+                  刷新底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,230
+                      hover: ~82,90,105,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  刷新字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f刷 新
+                      fontSize: 36
+                      through: true
+          底部提示:
+            type: Text
+            attribute:
+              x: 76
+              y: "var.viewH - 60"
+              texts: ~&8单击左侧卡片查看详情，点击「进入」开始挑战
+              fontSize: 36
+              alpha: 0.6
+              through: true

@@ -3,7 +3,8 @@
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
   isHud: false
-  background: true
+  defaultOpen: false
+  background: false
   closeDied: true
   escClose: true
   through: false
@@ -11,7 +12,7 @@ ui:
   show: true
   packetHandler:
     # packetHandler: init
-    # 包字段: packetId/action_token/dungeonId/dungeonName/difficulty/desc
+    # 包字段: packetId/action_token/dungeonId/dungeonName/difficulty/desc0..2
     #         minPlayers/maxPlayers/staminaCost/moneyCost/cooldown/timeLimit
     init: |-
       var.packetId = packet['packetId']
@@ -28,7 +29,32 @@ ui:
       var.moneyCost = packet['moneyCost']
       var.cooldown = packet['cooldown']
       var.timeLimit = packet['timeLimit']
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.dungeonId = ''
+      var.dungeonName = ''
+      var.difficulty = ''
+      var.desc0 = ''
+      var.desc1 = ''
+      var.desc2 = ''
+      var.minPlayers = 0
+      var.maxPlayers = 0
+      var.staminaCost = 0
+      var.moneyCost = 0
+      var.cooldown = 0
+      var.timeLimit = 0
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+    open: |-
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;16,12,30,220
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -40,104 +66,134 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 520
-          height: 400
+          width: 560
+          height: 520
         children:
           面板背景:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:24;24,28,38,200
+              normal: ~Frosted:30;24,19,40,240
               shape: ~round_rect
               radius: 16
             effect:
               stroke:
                 width: 2
-                color: ~110,148,204,160
+                color: var.accentDim
+          标题标线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 34
+              width: 26
+              height: 3
+              normal: var.accent
+              through: true
           标题:
             type: Text
             attribute:
               point: ~top_center
-              y: 22
-              texts: "'&b&l' + var.dungeonName"
-              fontSize: 54
+              y: 52
+              texts: "'&f' + var.dungeonName"
+              fontSize: 64
+              limit: 12
+              through: true
           难度:
             type: Text
             attribute:
               point: ~top_center
-              y: 82
-              texts: "'&7难度: &f' + var.difficulty"
+              y: 138
+              texts: "'&7难度  &f' + var.difficulty"
               fontSize: 36
-          条件:
+              through: true
+          条件行:
             type: Text
             attribute:
               point: ~top_center
-              y: 128
-              texts: "'&8人数 ' + var.minPlayers.round() + '-' + var.maxPlayers.round() + '  体力 ' + var.staminaCost.round() + '  门票 ' + var.moneyCost.round() + '  限时 ' + var.timeLimit.round() + 's  冷却 ' + var.cooldown.round() + 's'"
+              y: 196
               fontSize: 36
+              through: true
+              texts:
+                - "'&8人数  &f' + var.minPlayers.round() + '-' + var.maxPlayers.round() + '人   &8体力  &b' + var.staminaCost.round()"
+                - "'&8门票  &e' + var.moneyCost.round() + '   &8限时  &f' + var.timeLimit.round() + 's   &8冷却  &f' + var.cooldown.round() + 's'"
+          分隔线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 296
+              width: 440
+              height: 1
+              normal: ~96,80,140,120
+              through: true
           描述:
             type: Text
             attribute:
               point: ~top_center
-              y: 178
+              y: 316
+              fontSize: 36
+              through: true
               texts:
                 - "'&7' + var.desc0"
                 - "'&7' + var.desc1"
                 - "'&7' + var.desc2"
-              fontSize: 36
-          进入按钮:
-            type: Canvas
+          操作区:
+            type: HStack
             attribute:
               point: ~bottom_center
-              x: -130
-              y: -28
-              width: 120
-              height: 48
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'enter', var.dungeonId, var.actionToken)
-                Screen.close()
+              y: -36
+              spaceBetween: 24
             children:
-              进入底:
-                type: Texture
+              进入按钮:
+                type: Canvas
                 attribute:
-                  point: ~stretch_all
-                  normal: ~60,140,80,240
-                  hover: ~80,170,100,250
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              进入字:
-                type: Text
+                  width: 170
+                  height: 54
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'enter', var.dungeonId, var.actionToken)
+                    Screen.close()
+                children:
+                  进入底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,230
+                      hover: ~200,150,240,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  进入字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0进 入
+                      fontSize: 36
+                      through: true
+              取消按钮:
+                type: Canvas
                 attribute:
-                  point: ~middle_center
-                  texts: ~&f进入
-                  fontSize: 36
-                  through: true
-          取消按钮:
-            type: Canvas
-            attribute:
-              point: ~bottom_center
-              x: 130
-              y: -28
-              width: 120
-              height: 48
-            action:
-              clickLeft: "Screen.close()"
-            children:
-              取消底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~90,90,100,240
-                  hover: ~115,115,128,250
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              取消字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&f取消
-                  fontSize: 36
-                  through: true
+                  width: 170
+                  height: 54
+                action:
+                  clickLeft: "Screen.close()"
+                children:
+                  取消底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,230
+                      hover: ~82,90,105,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  取消字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f取 消
+                      fontSize: 36
+                      through: true
