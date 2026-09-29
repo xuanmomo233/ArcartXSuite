@@ -17,7 +17,8 @@ find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
 # ─── OpenSSL（AES-GCM / ChaCha20 / SHA-256 / HMAC / Ed25519） ──
-if(MINGW)
+# MinGW 与 Linux GCC 均静态链接 libcrypto，消除 libssl1.1/openssl3 的运行时版本差异
+if(MINGW OR (UNIX AND NOT APPLE))
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 find_package(OpenSSL REQUIRED)
@@ -74,6 +75,12 @@ if(MINGW)
     target_link_libraries(axs-native PRIVATE
         "${MINGW_LIBGCC}" "${MINGW_LIBSTDCPP}" "${MINGW_LIBWINPTHREAD}"
     )
+endif()
+
+# Linux GCC：静态链接 libgcc/libstdc++，使 .so 的 GNU 运行时依赖仅剩 glibc
+if(UNIX AND NOT APPLE AND NOT MINGW)
+    target_compile_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
+    target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
 option(AXS_PRODUCTION "Enable fail-closed native production checks" OFF)

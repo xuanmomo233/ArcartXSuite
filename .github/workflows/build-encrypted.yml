@@ -168,11 +168,26 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, gen-keys]
     if: needs.detect-changes.outputs.core_changed == 'true'
+    # 在 Ubuntu 20.04 容器内编译，glibc 基线降到 2.31，
+    # 避免 ubuntu-latest（glibc 2.39）产物在低版本 glibc 服务器上 UnsatisfiedLinkError
+    container:
+      image: ubuntu:20.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
     steps:
+      - name: Install toolchain (glibc 2.31 baseline)
+        run: |
+          # focal 已 EOL，archive 源可能已迁 old-releases，失败时自动切换兜底
+          apt-get update || (sed -i 's|archive.ubuntu.com|old-releases.ubuntu.com|g; s|security.ubuntu.com|old-releases.ubuntu.com|g' /etc/apt/sources.list && apt-get update)
+          apt-get install -y --no-install-recommends ca-certificates git tar g++ make libssl-dev zlib1g-dev default-jdk-headless
+
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install cmake >= 3.20 (focal apt 仅 3.16)
+        run: pip install "cmake>=3.20,<4"
 
       - uses: actions/download-artifact@v5
         with:
@@ -184,16 +199,24 @@ jobs:
           cp protect-material/native-src/class_decrypt.cpp native/src/class_decrypt.cpp
           cp protect-material/native-src/integrity_check.cpp native/src/integrity_check.cpp
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake g++ libssl-dev zlib1g-dev
-
       - name: Build native library
         run: |
           cd native
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}"
           cmake --build build --config Release
+
+      - name: Verify runtime baseline
+        run: |
+          SO=src/main/resources/native/libaxs-native.so
+          echo "=== 动态依赖 ==="
+          ldd "$SO" || true
+          MAX_GLIBC=$(objdump -T "$SO" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -Vu | tail -1)
+          echo "最高 GLIBC 符号版本: $MAX_GLIBC"
+          if ldd "$SO" 2>/dev/null | grep -E 'libcrypto|libssl|libstdc\+\+|libgcc'; then
+            echo "ERROR: .so 仍存在 OpenSSL/C++ 运行时动态依赖（应已静态链接）"
+            exit 1
+          fi
+
       - name: Inject native self-hash
         run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
 
