@@ -7,6 +7,8 @@ Defines the self hash as SHA-256 of the entire on-disk native artifact with the
 the unique 16-byte magic marker in integrity_check.cpp.
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import sys
