@@ -82,14 +82,27 @@ public final class InteractManager {
         }
     }
 
-    /** 踩踏/进区域（由周期检测调用）。 */
+    /** 踩踏/进区域（由周期检测调用）。ENTER_REGION 为边沿触发（进区一次），STEP_ON 为持续触发（防抖节流）。 */
     public void onRegionTrigger(AbyssInstance instance, Player player, InteractType type) {
         Map<String, Interact> map = active.get(instance.getInstanceId());
         if (map == null) return;
         for (Interact i : map.values()) {
             if (i.type() != type) continue;
-            if (!matchRegion(instance, i, player.getLocation())) continue;
-            tryFire(instance, i, player);
+            boolean inside = matchRegion(instance, i, player.getLocation());
+            if (type == InteractType.ENTER_REGION) {
+                // 边沿触发：只有"上次不在、这次在"才触发；离开区后允许再次进入触发
+                String insideKey = instance.getInstanceId() + ":"
+                    + i.name() + ":" + player.getUniqueId();
+                if (inside) {
+                    if (insideRegions.add(insideKey)) {
+                        tryFire(instance, i, player);
+                    }
+                } else {
+                    insideRegions.remove(insideKey);
+                }
+            } else if (inside) {
+                tryFire(instance, i, player);
+            }
         }
     }
 
@@ -179,11 +192,18 @@ public final class InteractManager {
             long last = lastFire(player, i);
             if (System.currentTimeMillis() - last < 500) return;
         }
-        // 条件评估
+        // 条件评估（失败前先记防抖，否则 failMessage 会每 500ms 刷屏）
         if (!i.conditions().isEmpty()
             && evaluator.firstFailed(player, i.conditions()) != null) {
+            lastFires.put(playerKey, System.currentTimeMillis());
             if (i.failMessage() != null) {
-                player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', i.failMessage()));
+                // failMessage 独立节流：5 秒内不重复提示
+                Long lastMsg = lastFailMsgs.get(playerKey);
+                if (lastMsg == null
+                    || System.currentTimeMillis() - lastMsg >= 5000) {
+                    lastFailMsgs.put(playerKey, System.currentTimeMillis());
+                    player.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', i.failMessage()));
+                }
             }
             return;
         }
@@ -197,11 +217,23 @@ public final class InteractManager {
     }
 
     private final Map<String, Long> lastFires = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastFailMsgs = new ConcurrentHashMap<>();
+    /** ENTER_REGION 边沿触发用的"当前在区域内"集合：key = 实例id:交互名:玩家uuid。 */
+    private final java.util.Set<String> insideRegions = ConcurrentHashMap.newKeySet();
     private long lastFire(Player p, Interact i) {
-        return lastFires.getOrDefault(p.getUniqueId() + ":" + i.name(), 0L);
+        return lastFires.getOrDefault("interact:" + i.name() + ":" + p.getUniqueId(), 0L);
     }
 
     public void cleanup(AbyssInstance instance) {
-        active.remove(instance.getInstanceId());
+        Map<String, Interact> map = active.remove(instance.getInstanceId());
+        if (map != null) {
+            // 清掉本实例交互点的防抖/提示记录，避免残留影响同名模板的下个实例
+            for (String name : map.keySet()) {
+                String prefix = "interact:" + name + ":";
+                lastFires.keySet().removeIf(k -> k.startsWith(prefix));
+                lastFailMsgs.keySet().removeIf(k -> k.startsWith(prefix));
+            }
+            insideRegions.removeIf(k -> k.startsWith(instance.getInstanceId() + ":"));
+        }
     }
 }

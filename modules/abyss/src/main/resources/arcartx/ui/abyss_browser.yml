@@ -68,9 +68,8 @@ controls:
           队伍状态:
             type: Text
             attribute:
-              point: ~top_right
-              x: -32
-              y: 24
+              point: ~top_center
+              y: 26
               texts: "'&7' + var.partyText"
               fontSize: 36
           地牢网格:
@@ -87,7 +86,7 @@ controls:
             action:
               create: |-
                 for(i in range(1, 7)){
-                  card = self['卡片0'].copy('卡片' + i.round())
+                  card = self.get(0).copy('卡片' + i.round())
                   card.entryKey = i.round()
                 }
             children:
@@ -101,21 +100,21 @@ controls:
                   visible: "self.entry != none"
                 action:
                   clickLeft: |-
-                    var.selected = var.page * 8 + self.entryKey
+                    var.selected = (var.page * 8 + self.entryKey).round()
                     var.selectedId = self.entry['id']
                 children:
                   卡片背景:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: "(var.page * 8 + self.parent.entryKey) == var.selected ? '62,90,140,235' : '44,50,66,225'"
+                      normal: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? '62,90,140,235' : '44,50,66,225'"
                       shape: ~round_rect
                       radius: 12
                       through: true
                     effect:
                       stroke:
-                        width: "(var.page * 8 + self.parent.entryKey) == var.selected ? 3 : 1"
-                        color: "(var.page * 8 + self.parent.entryKey) == var.selected ? '120,190,255,255' : '255,255,255,120'"
+                        width: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? 3 : 1"
+                        color: "(var.page * 8 + self.parent.entryKey).round() == var.selected ? '120,190,255,255' : '255,255,255,120'"
                   图标:
                     type: Slot
                     attribute:
@@ -181,21 +180,28 @@ controls:
                   y: 14
                   texts: "var.dungeonRows[var.selected] != none ? '&e' + var.dungeonRows[var.selected]['name'] : '&7选择左侧地牢'"
                   fontSize: 48
-              详情内容:
+              详情条件行:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 18
                   y: 70
-                  texts: "var.dungeonRows[var.selected] != none ? '&7难度: &f' + var.dungeonRows[var.selected]['difficulty'] + '  &7人数: &f' + var.dungeonRows[var.selected]['minPlayers'].round() + '-' + var.dungeonRows[var.selected]['maxPlayers'].round() + '|&7体力: &b' + var.dungeonRows[var.selected]['staminaCost'].round() + '  &7门票: &e' + var.dungeonRows[var.selected]['moneyCost'].round() + '  &7冷却: &f' + var.dungeonRows[var.selected]['cooldown'].round() + 's|&7运行中实例: &f' + var.dungeonRows[var.selected]['running'].round() + (var.dungeonRows[var.selected]['partyRequired'] ? '  |&c需要组队' : '') + (var.dungeonRows[var.selected]['cooldownLeft'] > 0 ? '  |&c冷却剩余: ' + var.dungeonRows[var.selected]['cooldownLeft'].round() + 's' : '') : ''"
+                  texts:
+                    - "var.dungeonRows[var.selected] != none ? '&7难度: &f' + var.dungeonRows[var.selected]['difficulty'] + '   &7人数: &f' + var.dungeonRows[var.selected]['minPlayers'].round() + '-' + var.dungeonRows[var.selected]['maxPlayers'].round() : ''"
+                    - "var.dungeonRows[var.selected] != none ? '&7体力: &b' + var.dungeonRows[var.selected]['staminaCost'].round() + '   &7门票: &e' + var.dungeonRows[var.selected]['moneyCost'].round() + '   &7冷却: &f' + var.dungeonRows[var.selected]['cooldown'].round() + 's' : ''"
+                    - "var.dungeonRows[var.selected] != none ? '&7运行中实例: &f' + var.dungeonRows[var.selected]['running'].round() + (var.dungeonRows[var.selected]['partyRequired'] ? '   &c需要组队' : '') : ''"
+                    - "var.dungeonRows[var.selected] != none && var.dungeonRows[var.selected]['cooldownLeft'] > 0 ? '&c冷却剩余: ' + var.dungeonRows[var.selected]['cooldownLeft'].round() + 's' : ''"
                   fontSize: 36
               详情描述:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 18
-                  y: 230
-                  texts: "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc'] : ''"
+                  y: 240
+                  texts:
+                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc0'] : ''"
+                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc1'] : ''"
+                    - "var.dungeonRows[var.selected] != none ? '&8' + var.dungeonRows[var.selected]['desc2'] : ''"
                   fontSize: 36
           翻页上一页:
             type: Canvas

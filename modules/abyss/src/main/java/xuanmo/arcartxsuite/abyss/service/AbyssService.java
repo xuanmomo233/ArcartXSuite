@@ -672,6 +672,11 @@ public final class AbyssService {
 
     /** 玩家断线（监听器调用）：存待恢复位置+从实例移除。 */
     public void handleQuit(Player player) {
+        // 无论是否在副本内，先清理 UI 会话态（token/HUD 标记）
+        if (uiFacade instanceof AbyssUiService ui0) {
+            ui0.closeHud(player);
+            ui0.onPlayerGone(player);
+        }
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
         Location back = instance.getOriginalLocation(player.getUniqueId());
@@ -679,10 +684,6 @@ public final class AbyssService {
             playerData.savePendingLocation(player.getUniqueId(), back);
         }
         instance.removePlayer(player.getUniqueId());
-        if (uiFacade instanceof AbyssUiService ui) {
-            ui.closeHud(player);
-            ui.flushPendingChest(player);
-        }
         // 不触发退出消息；30s 无人清理由 watchdog/playerExit 路径处理
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
             scheduleOnce(instance, () -> {

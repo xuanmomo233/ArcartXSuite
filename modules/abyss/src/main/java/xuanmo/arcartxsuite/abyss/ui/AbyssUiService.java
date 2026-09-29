@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -104,7 +105,11 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             row.put("iconJson", iconMat != null && itemBridge != null
                 ? itemBridge.itemToJson(new org.bukkit.inventory.ItemStack(iconMat)).orElse("")
                 : "");
-            row.put("desc", String.join("\n", t.description()));
+            // 描述按行下发（ARIA texts 多行需逐行表达式，\n 不会渲染换行）
+            List<String> dl = t.description();
+            row.put("desc0", dl.size() > 0 ? dl.get(0) : "");
+            row.put("desc1", dl.size() > 1 ? dl.get(1) : "");
+            row.put("desc2", dl.size() > 2 ? dl.get(2) : "");
             var req = t.requirements();
             row.put("minPlayers", req.minPlayers());
             row.put("maxPlayers", req.maxPlayers());
@@ -140,7 +145,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("dungeonId", template.id());
         payload.put("dungeonName", template.name());
         payload.put("difficulty", template.difficulty());
-        payload.put("desc", String.join("\n", template.description()));
+        List<String> dl = template.description();
+        payload.put("desc0", dl.size() > 0 ? dl.get(0) : "");
+        payload.put("desc1", dl.size() > 1 ? dl.get(1) : "");
+        payload.put("desc2", dl.size() > 2 ? dl.get(2) : "");
         payload.put("minPlayers", req.minPlayers());
         payload.put("maxPlayers", req.maxPlayers());
         payload.put("staminaCost", req.staminaCost());
@@ -172,6 +180,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 Map<String, Object> m = new LinkedHashMap<>();
                 org.bukkit.entity.Player mp = org.bukkit.Bukkit.getPlayer(uid);
                 m.put("name", mp != null ? mp.getName() : uid.toString().substring(0, 8));
+                m.put("uuid", uid.toString());
                 m.put("online", mp != null);
                 m.put("leader", party.isLeader(uid));
                 members.put(Integer.toString(i++), m);
@@ -286,21 +295,27 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     // ═══ HUD ═══
 
+    /** HUD 已确认打开的玩家（仅这些玩家会收到周期推送，避免给未渲染客户端刷屏包）。 */
+    private final Set<UUID> hudOpen = ConcurrentHashMap.newKeySet();
+
     /** 进入副本：开 HUD + 首帧数据。 */
     public void openHud(Player player, AbyssInstance instance) {
         if (!available()) return;
-        pushHudUpdate(player, instance);
-        packetBridge.openUiUnsafe(player, hudUi());
+        if (packetBridge.openUiUnsafe(player, hudUi())) {
+            hudOpen.add(player.getUniqueId());
+            pushHudUpdate(player, instance);
+        }
     }
 
     /** 离开副本：关 HUD。 */
     public void closeHud(Player player) {
+        hudOpen.remove(player.getUniqueId());
         if (available()) packetBridge.closeUiUnsafe(player, hudUi());
     }
 
-    /** HUD 周期数据推送（service proximityTick 调用）。 */
+    /** HUD 周期数据推送（service proximityTick 调用）。仅在 HUD 已打开时推送。 */
     public void pushHudUpdate(Player player, AbyssInstance instance) {
-        if (!available()) return;
+        if (!available() || !hudOpen.contains(player.getUniqueId())) return;
         var mgr = service.mobGroups();
         int[] gp = mgr.groupProgress(instance);
         long limit = instance.getTemplate().timeLimitSeconds();
@@ -393,17 +408,27 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             }
             case "party_kick" -> {
                 if (checkToken(player, data, 2)) {
-                    Player target = data.size() > 1
-                        ? org.bukkit.Bukkit.getPlayerExact(data.get(1)) : null;
-                    if (target != null) service.party().kick(player, target);
+                    UUID targetUuid = parseUuid(data.size() > 1 ? data.get(1) : null);
+                    if (targetUuid != null) {
+                        service.party().kick(player, targetUuid);
+                    } else {
+                        Player target = data.size() > 1
+                            ? org.bukkit.Bukkit.getPlayerExact(data.get(1)) : null;
+                        if (target != null) service.party().kick(player, target);
+                    }
                 }
                 return true;
             }
             case "party_transfer" -> {
                 if (checkToken(player, data, 2)) {
-                    Player target = data.size() > 1
-                        ? org.bukkit.Bukkit.getPlayerExact(data.get(1)) : null;
-                    if (target != null) service.party().transferLeader(player, target);
+                    UUID targetUuid = parseUuid(data.size() > 1 ? data.get(1) : null);
+                    if (targetUuid != null) {
+                        service.party().transferLeader(player, targetUuid);
+                    } else {
+                        Player target = data.size() > 1
+                            ? org.bukkit.Bukkit.getPlayerExact(data.get(1)) : null;
+                        if (target != null) service.party().transferLeader(player, target);
+                    }
                 }
                 return true;
             }
@@ -468,7 +493,20 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
     }
 
+    /** 玩家完全离开服务时清理会话态（token/HUD 标记/待领宝箱已先发放）。 */
+    public void onPlayerGone(Player player) {
+        UUID uid = player.getUniqueId();
+        tokens.remove(uid);
+        hudOpen.remove(uid);
+        flushPendingChest(player);
+    }
+
     private static int parseInt(String s, int def) {
         try { return Integer.parseInt(s); } catch (Exception e) { return def; }
+    }
+
+    private static @Nullable UUID parseUuid(@Nullable String s) {
+        if (s == null) return null;
+        try { return UUID.fromString(s); } catch (Exception e) { return null; }
     }
 }

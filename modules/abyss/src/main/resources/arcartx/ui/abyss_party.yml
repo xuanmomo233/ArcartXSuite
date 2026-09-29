@@ -122,7 +122,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
               成员行1:
                 type: Canvas
@@ -167,7 +167,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
               成员行2:
                 type: Canvas
@@ -212,7 +212,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
               成员行3:
                 type: Canvas
@@ -257,7 +257,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
               成员行4:
                 type: Canvas
@@ -302,7 +302,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
               成员行5:
                 type: Canvas
@@ -347,7 +347,7 @@ controls:
                       visible: var.isLeader && !self.parent.entry['leader']
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'party_kick', self.parent.entry['name'], var.actionToken)
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
                         Packet.send(var.packetId, 'open_party_ui', var.actionToken)
           空队提示:
             type: Text

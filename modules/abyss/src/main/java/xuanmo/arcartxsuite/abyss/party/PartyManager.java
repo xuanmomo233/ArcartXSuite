@@ -96,18 +96,29 @@ public final class PartyManager {
     }
 
     public void kick(Player leader, Player target) {
+        kick(leader, target.getUniqueId());
+    }
+
+    /** 按 UUID 踢人（支持离线成员）。 */
+    public void kick(Player leader, java.util.UUID targetUuid) {
         Party p = partyOf(leader);
         if (p == null || !p.isLeader(leader.getUniqueId())) return;
-        if (target.getUniqueId().equals(leader.getUniqueId())) return;
-        if (p.removeMember(target.getUniqueId())) {
-            playerParty.remove(target.getUniqueId());
+        if (targetUuid.equals(leader.getUniqueId())) return;
+        if (p.removeMember(targetUuid)) {
+            playerParty.remove(targetUuid);
         }
     }
 
     public void transferLeader(Player leader, Player target) {
+        transferLeader(leader, target.getUniqueId());
+    }
+
+    /** 按 UUID 转让队长（支持离线成员）。 */
+    public void transferLeader(Player leader, java.util.UUID targetUuid) {
         Party p = partyOf(leader);
         if (p == null || !p.isLeader(leader.getUniqueId())) return;
-        p.setLeader(target.getUniqueId());
+        if (!p.isMember(targetUuid)) return;
+        p.setLeader(targetUuid);
     }
 
     public void disband(Party party) {

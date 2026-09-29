@@ -1,4 +1,4 @@
-# AXS 资源说明
+﻿# AXS 资源说明
 # 用途: Abyss 副本宝箱 —— roll 好的奖励物品展示 + 领取
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
@@ -17,6 +17,7 @@ ui:
       var.actionToken = packet['action_token']
       var.chestTitle = packet['chestTitle']
       var.itemCount = packet['itemCount']
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.itemJson0 = packet['itemJson0']
       var.itemJson1 = packet['itemJson1']
       var.itemJson2 = packet['itemJson2']
@@ -26,15 +27,16 @@ ui:
       var.itemJson6 = packet['itemJson6']
       var.itemJson7 = packet['itemJson7']
       var.itemJson8 = packet['itemJson8']
-      if(var.itemJson0 != none && var.itemJson0 != ''){ val.槽位0.setItemIcon(var.itemJson0) }
-      if(var.itemJson1 != none && var.itemJson1 != ''){ val.槽位1.setItemIcon(var.itemJson1) }
-      if(var.itemJson2 != none && var.itemJson2 != ''){ val.槽位2.setItemIcon(var.itemJson2) }
-      if(var.itemJson3 != none && var.itemJson3 != ''){ val.槽位3.setItemIcon(var.itemJson3) }
-      if(var.itemJson4 != none && var.itemJson4 != ''){ val.槽位4.setItemIcon(var.itemJson4) }
-      if(var.itemJson5 != none && var.itemJson5 != ''){ val.槽位5.setItemIcon(var.itemJson5) }
-      if(var.itemJson6 != none && var.itemJson6 != ''){ val.槽位6.setItemIcon(var.itemJson6) }
-      if(var.itemJson7 != none && var.itemJson7 != ''){ val.槽位7.setItemIcon(var.itemJson7) }
-      if(var.itemJson8 != none && var.itemJson8 != ''){ val.槽位8.setItemIcon(var.itemJson8) }
+      // 数据就绪后显式触发各槽位 seticon 属性（属性不会随 var 变化自动重算）
+      val.槽位0.seticon()
+      val.槽位1.seticon()
+      val.槽位2.seticon()
+      val.槽位3.seticon()
+      val.槽位4.seticon()
+      val.槽位5.seticon()
+      val.槽位6.seticon()
+      val.槽位7.seticon()
+      val.槽位8.seticon()
 controls:
   自适应全局布局:
     type: Adaptive
@@ -86,6 +88,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson0 != none && var.itemJson0 != '' ? var.itemJson0 : var.emptyItemJson)"
                   visible: "var.itemJson0 != none && var.itemJson0 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '0', var.actionToken)"
@@ -98,6 +101,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson1 != none && var.itemJson1 != '' ? var.itemJson1 : var.emptyItemJson)"
                   visible: "var.itemJson1 != none && var.itemJson1 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '1', var.actionToken)"
@@ -110,6 +114,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson2 != none && var.itemJson2 != '' ? var.itemJson2 : var.emptyItemJson)"
                   visible: "var.itemJson2 != none && var.itemJson2 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '2', var.actionToken)"
@@ -122,6 +127,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson3 != none && var.itemJson3 != '' ? var.itemJson3 : var.emptyItemJson)"
                   visible: "var.itemJson3 != none && var.itemJson3 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '3', var.actionToken)"
@@ -134,6 +140,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson4 != none && var.itemJson4 != '' ? var.itemJson4 : var.emptyItemJson)"
                   visible: "var.itemJson4 != none && var.itemJson4 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '4', var.actionToken)"
@@ -146,6 +153,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson5 != none && var.itemJson5 != '' ? var.itemJson5 : var.emptyItemJson)"
                   visible: "var.itemJson5 != none && var.itemJson5 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '5', var.actionToken)"
@@ -158,6 +166,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson6 != none && var.itemJson6 != '' ? var.itemJson6 : var.emptyItemJson)"
                   visible: "var.itemJson6 != none && var.itemJson6 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '6', var.actionToken)"
@@ -170,6 +179,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson7 != none && var.itemJson7 != '' ? var.itemJson7 : var.emptyItemJson)"
                   visible: "var.itemJson7 != none && var.itemJson7 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '7', var.actionToken)"
@@ -182,6 +192,7 @@ controls:
                   slotType: ~Icon
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
+                  seticon: "self.setItemIcon(var.itemJson8 != none && var.itemJson8 != '' ? var.itemJson8 : var.emptyItemJson)"
                   visible: "var.itemJson8 != none && var.itemJson8 != ''"
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '8', var.actionToken)"

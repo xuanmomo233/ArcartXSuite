@@ -323,6 +323,16 @@ commands:
     usage: /<command> [open|tasks|help]
     aliases: [battlepass, axsbp]
     permission: arcartxsuite.battlepass.use
+  abyss:
+    description: 深渊地牢命令
+    usage: /<command> [enter <地牢>|leave|list|info|stamina|rank [地牢]|party|ui]
+    aliases: [axsabyss]
+    permission: arcartxsuite.abyss.use
+  party:
+    description: 地牢队伍命令
+    usage: /<command> [create|invite <玩家>|accept|leave|kick <玩家>|leader <玩家>|chat <消息>|list|disband]
+    aliases: [axsparty]
+    permission: arcartxsuite.abyss.party
 permissions:
   arcartxsuite.admin:
     default: op
@@ -494,4 +504,9 @@ permissions:
     default: true
   # ─── BattlePass ───
   arcartxsuite.battlepass.use:
+    default: true
+  # ─── Abyss ───
+  arcartxsuite.abyss.use:
+    default: true
+  arcartxsuite.abyss.party:
     default: true

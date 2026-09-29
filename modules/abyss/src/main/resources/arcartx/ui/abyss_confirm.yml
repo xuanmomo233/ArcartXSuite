@@ -19,7 +19,9 @@ ui:
       var.dungeonId = packet['dungeonId']
       var.dungeonName = packet['dungeonName']
       var.difficulty = packet['difficulty']
-      var.desc = packet['desc']
+      var.desc0 = packet['desc0']
+      var.desc1 = packet['desc1']
+      var.desc2 = packet['desc2']
       var.minPlayers = packet['minPlayers']
       var.maxPlayers = packet['maxPlayers']
       var.staminaCost = packet['staminaCost']
@@ -78,7 +80,10 @@ controls:
             attribute:
               point: ~top_center
               y: 178
-              texts: "'&7' + var.desc"
+              texts:
+                - "'&7' + var.desc0"
+                - "'&7' + var.desc1"
+                - "'&7' + var.desc2"
               fontSize: 36
           进入按钮:
             type: Canvas

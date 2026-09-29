@@ -39,7 +39,9 @@ public final class SchematicWorldService {
     public World createVoidWorld(String name, AbyssModuleConfiguration.AbyssSection cfg,
                                  @Nullable NmsWorldLoader nmsLoader) {
         WorldCreator creator = new WorldCreator(name);
-        creator.type(WorldType.FLAT);
+        // 用 NORMAL + 自定义虚空生成器，避免 FLAT 类型在 Mohist/部分服务端上
+        // 序列化空的平坦层配置导致 "No key layers in MapLike[{}]" 报错
+        creator.type(WorldType.NORMAL);
         creator.generateStructures(false);
         creator.generator(new VoidGenerator());
 
