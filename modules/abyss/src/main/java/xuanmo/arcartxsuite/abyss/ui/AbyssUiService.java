@@ -55,14 +55,17 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         return packetBridge != null && packetBridge.isAvailable();
     }
 
-    // ── 配置化 UI id（AXS:<fileId>）──
-    private String browserUi() { return "AXS:" + service.config().ui().browserId(); }
-    private String confirmUi() { return "AXS:" + service.config().ui().confirmId(); }
-    private String partyUi() { return "AXS:" + service.config().ui().partyId(); }
-    private String chestUi() { return "AXS:" + service.config().ui().chestId(); }
-    private String statsUi() { return "AXS:" + service.config().ui().statsId(); }
-    private String leaderboardUi() { return "AXS:" + service.config().ui().leaderboardId(); }
-    private String hudUi() { return "AXS:" + service.config().ui().hudId(); }
+    // ── 配置化 UI id（AXS:<id>，已带前缀则不重复添加）──
+    private static String axsUiId(String id) {
+        return id != null && id.startsWith("AXS:") ? id : "AXS:" + id;
+    }
+    private String browserUi() { return axsUiId(service.config().ui().browserId()); }
+    private String confirmUi() { return axsUiId(service.config().ui().confirmId()); }
+    private String partyUi() { return axsUiId(service.config().ui().partyId()); }
+    private String chestUi() { return axsUiId(service.config().ui().chestId()); }
+    private String statsUi() { return axsUiId(service.config().ui().statsId()); }
+    private String leaderboardUi() { return axsUiId(service.config().ui().leaderboardId()); }
+    private String hudUi() { return axsUiId(service.config().ui().hudId()); }
 
     private String token(Player p) {
         String t = Long.toHexString(random.nextLong());

@@ -73,6 +73,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start(dataFolder);
         playerCommand = new AbyssPlayerCommand(service);
+        registerAbyssUis();
 
         // 公开能力
         registerCapability(AbyssQueryable.class, new AbyssQueryableImpl(service));
@@ -106,6 +107,29 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
                 return repository().getDescriptor();
             }
         });
+    }
+
+    /**
+     * 将 uiSpec() 中声明的 7 个 UI 文件注册到 ArcartX 引擎。
+     * 配置 id 统一规范化为 AXS: 前缀（与 UiService 的 runtimeId 一致）。
+     */
+    private void registerAbyssUis() {
+        AbyssModuleConfiguration.UiSection ui = configuration.ui();
+        if (ui == null) return;
+        registerModuleUi("ui/abyss_browser.yml", axsUiId(ui.browserId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_confirm.yml", axsUiId(ui.confirmId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_party.yml", axsUiId(ui.partyId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_chest.yml", axsUiId(ui.chestId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_stats.yml", axsUiId(ui.statsId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_leaderboard.yml", axsUiId(ui.leaderboardId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_hud.yml", axsUiId(ui.hudId()), ui.registerOnEnable());
+    }
+
+    /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */
+    private static String axsUiId(String id) {
+        if (id == null || id.isBlank()) return null;
+        String v = id.trim();
+        return v.startsWith("AXS:") ? v : "AXS:" + v;
     }
 
     private xuanmo.arcartxsuite.abyss.data.JdbcAbyssRepository repository() {
