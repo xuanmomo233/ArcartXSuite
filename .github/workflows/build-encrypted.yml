@@ -187,7 +187,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install cmake >= 3.20 (focal apt 仅 3.16)
-        run: pip install "cmake>=3.20,<4"
+        run: python -m pip install "cmake>=3.20,<4"
 
       - uses: actions/download-artifact@v5
         with:
@@ -447,7 +447,10 @@ jobs:
 
       - name: Build obfuscated JAR
         run: |
-          gradle clean build --no-build-cache
+          # 只构建 :axs-core 任务链（shadowJar→proguard→strEnc→integrity→publishCoreJar），
+          # 不再跑根 build——后者会连带构建全部 30 个模块+proxy，而本作业产物只需要本体 jar。
+          # fresh runner 无历史产物，clean 为纯开销，省略；--parallel 并行编译 axs-api 等依赖。
+          gradle :axs-core:build --no-build-cache --parallel
 
       - name: Ensure real-seed native libs intact in obfuscated JAR
         run: |
@@ -622,11 +625,11 @@ jobs:
           echo "DONE: 本体 jar 上传完成 (primary=$PRIMARY_OK flare=$FLARE_OK)"
 
       - name: Build proxy JARs (Bungee + Velocity)
-        if: success()
-        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache
+        if: success() && needs.detect-changes.outputs.proxy_changed == 'true'
+        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
-        if: success()
+        if: success() && needs.detect-changes.outputs.proxy_changed == 'true'
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
@@ -724,7 +727,7 @@ jobs:
           cache-read-only: true
 
       - name: Build proxy JARs
-        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache
+        run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
         env:
@@ -853,7 +856,7 @@ jobs:
           # -Paxs.protectModules：逐类 AES-GCM/ChaCha20 加密（与本体同一 canonical root_seed）
           #   encryptModuleClasses 内部以 --no-native 调 encrypt-jar.py，复用 keys/ 里的 root_seed，
           #   不需要本体 native 库；任务链 jar→obfuscate→stringEncrypt→encryptClasses→axb 可独立运行。
-          gradle clean $TASKS -Paxs.protectModules -PskipNativeCheck=true --no-build-cache
+          gradle $TASKS -Paxs.protectModules -PskipNativeCheck=true --no-build-cache --parallel
           echo "=== 生成的 .axb ==="
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
