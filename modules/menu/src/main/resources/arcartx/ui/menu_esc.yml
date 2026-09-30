@@ -557,7 +557,7 @@ controls:
                   width: 254
                   height: 1
                   normal: ~190,180,159,255
-                  visible: var.displayTitle.length() <= 6
+                  visible: "var.displayTitle.length() <= 6"
                   through: true
               分区饰点:
                 type: Texture
@@ -568,7 +568,7 @@ controls:
                   height: 9
                   rotate: 45
                   normal: ~171,154,119,255
-                  visible: var.displayTitle.length() <= 6
+                  visible: "var.displayTitle.length() <= 6"
                   through: true
               分页器:
                 type: Canvas
