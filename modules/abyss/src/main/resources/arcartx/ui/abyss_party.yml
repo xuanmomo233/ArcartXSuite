@@ -1,5 +1,5 @@
 ﻿# AXS 资源说明
-# 用途: Abyss 队伍面板 —— 左列成员列表/管理 + 右列邀请/队聊
+# 用途: Abyss 副本房间 —— 成员模型舞台 / 目标副本 / 消息流 / 邀请与副本选择副面板
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 ui:
   isHud: false
@@ -12,40 +12,27 @@ ui:
   show: true
   packetHandler:
     # packetHandler: init
-    # 包字段: packetId/action_token/hasParty/isLeader/partyName/lootMode/expShare
-    #         memberRows{idx:{name,uuid,online,leader}}/memberCount
-    #         inviteRows{idx:{from}}/maxMembers
+    # 包字段: packetId/action_token/hasParty/isLeader/partyName/myUuid/maxMembers
+    #         memberRows{idx:{uuid,name,online,leader,ready}}/memberCount
+    #         hasDungeon/dungeon{id,name,difficulty,iconJson,desc0,minPlayers,maxPlayers,timeLimit,staminaCost}
+    #         feedRows{idx:{sender,text}}/feedCount
+    #         applicantRows{idx:{uuid,name}}/applicantCount
+    #         listed/joinMode/allReady
+    #         allDungeonRows{idx:{id,name,difficulty}}/allDungeonCount
     init: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
-      var.hasParty = packet['hasParty']
-      var.isLeader = packet['isLeader']
-      var.partyName = packet['partyName']
-      var.lootMode = packet['lootMode']
-      var.expShare = packet['expShare']
-      var.memberRows = packet['memberRows']
-      var.memberCount = packet['memberCount']
-      var.inviteRows = packet['inviteRows']
-      var.maxMembers = packet['maxMembers']
-      // 重建成员列表（模板在索引0）
-      目标数 = var.hasParty ? var.memberCount.round() : 0
-      if(val.member_rows.childrenCount() - 1 != 目标数 - 1){
-        for(key in var.成员引用.keys()){
-          var.成员引用[key].remove()
-        }
-        var.成员引用 = {}
-        var.成员轮次 = (var.成员轮次 + 1).round()
-        模板 = val.member_rows.get(0)
-        模板.entryKey = 0.round()
-        if(目标数 > 1){
-          for(i in range(1, 目标数 - 1)){
-            r = 模板.copy('成员行_' + var.成员轮次 + '_' + i.round())
-            r.entryKey = i.round()
-            var.成员引用[i.round()] = r
-          }
-        }
-      }
-      val.member_slider.setDragYRatio(0)
+      self.actions['apply'](packet)
+      self.actions['refresh']()
+    # packetHandler: update —— 队伍数据变更全量推送（无 action_token）
+    update: |-
+      self.actions['apply'](packet)
+      self.actions['refresh']()
+    # packetHandler: online_list —— 邀请副面板的在线玩家列表
+    online_list: |-
+      var.onlineRows = packet['onlineRows']
+      var.onlineCount = packet['onlineCount']
+      self.actions['refreshOnline']()
   action:
     load: |-
       var.packetId = 'abyss'
@@ -53,21 +40,44 @@ ui:
       var.hasParty = false
       var.isLeader = false
       var.partyName = ''
-      var.lootMode = ''
-      var.expShare = ''
+      var.myUuid = ''
+      var.maxMembers = 4
       var.memberRows = {}
       var.memberCount = 0
-      var.inviteRows = {}
-      var.maxMembers = 0
+      var.hasDungeon = false
+      var.dungeon = {}
+      var.feedRows = {}
+      var.feedCount = 0
+      var.applicantRows = {}
+      var.applicantCount = 0
+      var.listed = false
+      var.joinMode = 'APPLY'
+      var.allReady = false
+      var.myReady = false
+      var.allDungeonRows = {}
+      var.allDungeonCount = 0
+      var.onlineRows = {}
+      var.onlineCount = 0
+      var.invitePanel = false
+      var.dungeonPanel = false
       var.inviteName = ''
       var.chatMsg = ''
       var.成员轮次 = 0
       var.成员引用 = {}
+      var.消息轮次 = 0
+      var.消息引用 = {}
+      var.申请轮次 = 0
+      var.申请引用 = {}
+      var.在线轮次 = 0
+      var.在线引用 = {}
+      var.副本轮次 = 0
+      var.副本引用 = {}
       var.accent = '186,140,232,255'
       var.accentDim = '96,80,140,190'
       var.accentHover = '220,180,255,235'
       var.cardBg = '38,30,58,255'
       var.cardBgHover = '52,40,76,255'
+      var.green = '120,200,140,255'
       self.actions['resize']()
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -76,10 +86,122 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      var.leftW = var.viewW * 0.58
-      var.rightW = var.viewW - var.leftW
+      var.leftW = var.viewW * 0.66
+      var.rightX = var.leftW + 24
+      var.rightW = var.viewW - var.rightX - 72
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
+    # 统一读取房间数据（init/update 共用）
+    apply: |-
+      var.hasParty = packet['hasParty']
+      var.isLeader = packet['isLeader']
+      var.partyName = packet['partyName']
+      var.myUuid = packet['myUuid']
+      var.maxMembers = packet['maxMembers']
+      var.memberRows = packet['memberRows']
+      var.memberCount = packet['memberCount']
+      var.hasDungeon = packet['hasDungeon']
+      var.dungeon = packet['dungeon']
+      var.feedRows = packet['feedRows']
+      var.feedCount = packet['feedCount']
+      var.applicantRows = packet['applicantRows']
+      var.applicantCount = packet['applicantCount']
+      var.listed = packet['listed']
+      var.joinMode = packet['joinMode']
+      var.allReady = packet['allReady']
+      var.myReady = packet['myReady']
+      var.allDungeonRows = packet['allDungeonRows']
+      var.allDungeonCount = packet['allDungeonCount']
+    # 重建成员卡片 + 消息流 + 申请列表
+    refresh: |-
+      目标数 = var.hasParty ? var.memberCount.round() : 0
+      if(val.member_row.childrenCount() - 1 != 目标数 - 1){
+        for(key in var.成员引用.keys()){
+          var.成员引用[key].remove()
+        }
+        var.成员引用 = {}
+        var.成员轮次 = (var.成员轮次 + 1).round()
+        模板 = val.member_row.get(0)
+        模板.entryKey = 0.round()
+        if(目标数 > 1){
+          for(i in range(1, 目标数 - 1)){
+            r = 模板.copy('成员卡_' + var.成员轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.成员引用[i.round()] = r
+          }
+        }
+      }
+      消息数 = var.hasParty ? var.feedCount.round() : 0
+      if(val.feed_rows.childrenCount() - 1 != 消息数 - 1){
+        for(key in var.消息引用.keys()){
+          var.消息引用[key].remove()
+        }
+        var.消息引用 = {}
+        var.消息轮次 = (var.消息轮次 + 1).round()
+        模板2 = val.feed_rows.get(0)
+        模板2.entryKey = 0.round()
+        if(消息数 > 1){
+          for(i in range(1, 消息数 - 1)){
+            r = 模板2.copy('消息行_' + var.消息轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.消息引用[i.round()] = r
+          }
+        }
+      }
+      val.feed_slider.setDragYRatio(1)
+      申请数 = var.hasParty && var.isLeader ? var.applicantCount.round() : 0
+      if(val.apply_rows.childrenCount() - 1 != 申请数 - 1){
+        for(key in var.申请引用.keys()){
+          var.申请引用[key].remove()
+        }
+        var.申请引用 = {}
+        var.申请轮次 = (var.申请轮次 + 1).round()
+        模板3 = val.apply_rows.get(0)
+        模板3.entryKey = 0.round()
+        if(申请数 > 1){
+          for(i in range(1, 申请数 - 1)){
+            r = 模板3.copy('申请行_' + var.申请轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.申请引用[i.round()] = r
+          }
+        }
+      }
+      副本数 = var.allDungeonCount.round()
+      if(val.dungeon_rows.childrenCount() - 1 != 副本数 - 1){
+        for(key in var.副本引用.keys()){
+          var.副本引用[key].remove()
+        }
+        var.副本引用 = {}
+        var.副本轮次 = (var.副本轮次 + 1).round()
+        模板4 = val.dungeon_rows.get(0)
+        模板4.entryKey = 0.round()
+        if(副本数 > 1){
+          for(i in range(1, 副本数 - 1)){
+            r = 模板4.copy('副本行_' + var.副本轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.副本引用[i.round()] = r
+          }
+        }
+      }
+    # 在线玩家列表重建（邀请副面板）
+    refreshOnline: |-
+      在线数 = var.onlineCount.round()
+      if(val.online_rows.childrenCount() - 1 != 在线数 - 1){
+        for(key in var.在线引用.keys()){
+          var.在线引用[key].remove()
+        }
+        var.在线引用 = {}
+        var.在线轮次 = (var.在线轮次 + 1).round()
+        模板 = val.online_rows.get(0)
+        模板.entryKey = 0.round()
+        if(在线数 > 1){
+          for(i in range(1, 在线数 - 1)){
+            r = 模板.copy('在线行_' + var.在线轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.在线引用[i.round()] = r
+          }
+        }
+      }
 controls:
   自适应全局布局:
     type: Adaptive
@@ -135,16 +257,15 @@ controls:
             attribute:
               x: 72
               y: 104
-              texts: "var.hasParty ? '&f' + var.partyName : '&f队伍'"
+              texts: ~&f副本房间
               fontSize: 88
-              limit: 16
               through: true
-          引导语:
+          副标题:
             type: Text
             attribute:
               x: 76
               y: 176
-              texts: "var.hasParty ? '&7与队友并肩踏入深渊。' : '&7邀请玩家组队，或接受下方的邀请。'"
+              texts: "'&7' + var.partyName + '  ·  ' + var.memberCount.round() + '/' + var.maxMembers.round() + ' 人' + (var.allReady ? '  ·  &a全员就绪' : '')"
               fontSize: 36
               through: true
           关闭按钮:
@@ -173,522 +294,401 @@ controls:
                   texts: ~&f✕
                   fontSize: 36
                   through: true
-          分隔线:
+          # ── 左中：成员模型舞台 ──
+          舞台底:
             type: Texture
             attribute:
-              x: 76
-              y: 232
-              width: "var.leftW - 152"
-              height: 1
-              normal: ~96,80,140,160
+              x: 56
+              y: 230
+              width: "var.leftW - 96"
+              height: "var.viewH - 400"
+              normal: ~14,11,26,240
+              shape: ~round_rect
+              radius: 18
               through: true
-          # ── 左列：成员列表 ──
-          左侧区域:
-            type: Canvas
+            effect:
+              gradient:
+                color1: ~38,28,64,230
+                color2: ~14,11,26,240
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: var.accentDim
+          舞台标线:
+            type: Texture
             attribute:
-              width: "var.leftW"
-              height: "var.viewH"
+              x: 88
+              y: 262
+              width: 22
+              height: 3
+              normal: var.accent
+              through: true
+          舞台标题:
+            type: Text
+            attribute:
+              x: 88
+              y: 274
+              texts: ~&7房间成员
+              fontSize: 36
+              through: true
+          成员模型行:
+            type: HStack
+            val: member_row
+            attribute:
+              point: ~middle_center
+              x: 0
+              y: 20
+              spaceBetween: 40
             children:
-              队伍信息:
-                type: Text
+              成员卡:
+                type: Canvas
                 attribute:
-                  x: 76
-                  y: 252
-                  visible: var.hasParty
-                  fontSize: 36
-                  through: true
-                  texts: "'&7成员  &f' + var.memberCount.round() + '/' + var.maxMembers.round() + '   &7掉落  &f' + var.lootMode + '   &7经验  &f' + var.expShare"
-              无队提示标题:
-                type: Text
-                attribute:
-                  x: 76
-                  y: 380
-                  visible: "!var.hasParty"
-                  texts: ~&f你还没有加入队伍
-                  fontSize: 54
-                  through: true
-              无队提示说明:
-                type: Text
-                attribute:
-                  x: 76
-                  y: 436
-                  visible: "!var.hasParty"
-                  fontSize: 36
-                  through: true
-                  texts:
-                    - ~&7在右侧输入玩家名发送邀请即可创建队伍
-                    - ~&7接受邀请后会自动加入对方队伍
-              成员滑轨:
+                  entryKey: 0.round()
+                  entry: var.memberRows[self.entryKey]
+                  visible: self.entry != none
+                  width: 210
+                  height: 560
+                children:
+                  卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,50,200
+                      shape: ~round_rect
+                      radius: 14
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.parent.entry['leader'] ? var.accent : ~70,60,100,160"
+                  成员模型:
+                    type: Entity
+                    attribute:
+                      point: ~top_center
+                      x: 0
+                      y: 60
+                      scale: 5
+                      uuid: self.parent.entry['uuid']
+                      hideTag: true
+                      followMouse: true
+                  离线遮罩:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~10,8,18,140
+                      shape: ~round_rect
+                      radius: 14
+                      visible: "!self.parent.entry['online']"
+                      through: true
+                  队长冠标:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 14
+                      texts: ~&e♛
+                      fontSize: 48
+                      visible: self.parent.entry['leader']
+                      through: true
+                  成员名:
+                    type: Text
+                    attribute:
+                      point: ~bottom_center
+                      y: -64
+                      texts: "'&f' + self.parent.entry['name']"
+                      fontSize: 36
+                      limit: 10
+                      through: true
+                  准备状态:
+                    type: Text
+                    attribute:
+                      point: ~bottom_center
+                      y: -22
+                      texts: "self.parent.entry['leader'] ? '&e队长' : (self.parent.entry['ready'] ? '&a已准备' : '&8未准备')"
+                      fontSize: 32
+                      through: true
+                  踢出按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      x: -10
+                      y: 10
+                      width: 52
+                      height: 34
+                      visible: "var.isLeader && !self.parent.entry['leader']"
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
+                    children:
+                      踢底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~235,100,100,225
+                          hover: ~255,130,130,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      踢字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f踢
+                          fontSize: 32
+                          through: true
+          舞台提示:
+            type: Text
+            attribute:
+              point: ~bottom_center
+              x: 0
+              y: "0 - (var.viewH - 400) / 2 + 40"
+              texts: ~&8等待队友加入… 点击底部「邀请玩家」召集小队
+              fontSize: 32
+              visible: "var.memberCount.round() <= 1"
+              through: true
+          # ── 右栏 ──
+          副本卡底:
+            type: Texture
+            attribute:
+              x: "var.rightX"
+              y: 230
+              width: "var.rightW"
+              height: 300
+              normal: ~24,19,40,235
+              shape: ~round_rect
+              radius: 16
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          副本卡标线:
+            type: Texture
+            attribute:
+              x: "var.rightX + 26"
+              y: 258
+              width: 22
+              height: 3
+              normal: var.accent
+              through: true
+          副本卡标题:
+            type: Text
+            attribute:
+              x: "var.rightX + 26"
+              y: 270
+              texts: ~&f目标副本
+              fontSize: 36
+              through: true
+          副本图标:
+            type: Slot
+            attribute:
+              x: "var.rightX + 26"
+              y: 322
+              width: 72
+              height: 72
+              iconSize: 56
+              normal: var.cardBg
+              seticon: var.dungeon['iconJson']
+              seticonscale: 1.0
+              visible: var.hasDungeon
+            children:
+              图标底座:
                 type: Texture
                 attribute:
-                  point: ~top_right
-                  x: -52
-                  y: 306
-                  width: 10
-                  height: "var.viewH - 480"
-                  normal: ~40,32,62,220
+                  point: ~stretch_all
+                  normal: var.cardBg
                   shape: ~round_rect
-                  radius: 5
-                  visible: var.hasParty
+                  radius: 10
+                  through: true
+          副本名:
+            type: Text
+            attribute:
+              x: "var.rightX + 116"
+              y: 326
+              texts: "var.hasDungeon ? '&f' + var.dungeon['name'] : '&8尚未选择'"
+              fontSize: 48
+              limit: 12
+              through: true
+          副本信息行:
+            type: Text
+            attribute:
+              x: "var.rightX + 116"
+              y: 384
+              texts: "var.hasDungeon ? '&7难度 &e' + var.dungeon['difficulty'] + '  &7人数 &f' + var.dungeon['minPlayers'].round() + '-' + var.dungeon['maxPlayers'].round() + '  &7体力 &f' + var.dungeon['staminaCost'].round() : '&7队长点击右下角「更换副本」'"
+              fontSize: 32
+              visible: "var.hasDungeon || var.isLeader"
+              through: true
+          副本信息行2:
+            type: Text
+            attribute:
+              x: "var.rightX + 116"
+              y: 426
+              texts: "var.hasDungeon ? '&7时限 &f' + var.dungeon['timeLimit'].round() + 's  &7' + var.dungeon['desc0'] : '&7等待队长选择目标副本'"
+              fontSize: 32
+              visible: "var.hasDungeon || !var.isLeader"
+              through: true
+          更换副本按钮:
+            type: Canvas
+            attribute:
+              x: "var.rightX + 26"
+              y: 464
+              width: 150
+              height: 46
+              visible: var.isLeader
+            action:
+              clickLeft: |-
+                var.dungeonPanel = true
+                var.invitePanel = false
+            children:
+              更换底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: var.cardBg
+                  hover: var.cardBgHover
+                  shape: ~round_rect
+                  radius: 10
                   through: true
                 effect:
                   stroke:
                     width: 2
                     color: var.accentDim
-              成员滑块:
-                type: Texture
-                val: member_slider
+              更换字:
+                type: Text
                 attribute:
-                  point: ~top_right
-                  x: -52
-                  y: 306
-                  width: 10
-                  height: 120
-                  normal: var.accent
-                  maxDragY: "var.viewH - 480 - 120"
-                  shape: ~round_rect
-                  radius: 5
-                  visible: var.hasParty
-              成员滚动区:
-                type: Scroll
-                attribute:
-                  x: 76
-                  y: 306
-                  width: "var.leftW - 152"
-                  height: "var.viewH - 480"
-                  visible: var.hasParty
-                  moveY: val.member_slider.getDragYRatio()
-                action:
-                  wheel: |-
-                    ratio = self.moveY - self.wheelValue * 0.12
-                    if(ratio < 0){ ratio = 0 }
-                    if(ratio > 1){ ratio = 1 }
-                    val.member_slider.setDragYRatio(ratio)
-                children:
-                  成员列表:
-                    type: VStack
-                    val: member_rows
-                    attribute:
-                      width: "var.leftW - 168"
-                      spaceBetween: 10
-                    children:
-                      成员行:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.memberRows[self.entryKey]
-                          visible: self.entry != none
-                          width: "var.leftW - 168"
-                          height: 64
-                        children:
-                          行底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              normal: "self.parent.entry['leader'] ? '68,52,96,255' : var.cardBg"
-                              hover: var.cardBgHover
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                            effect:
-                              stroke:
-                                width: 2
-                                color: "self.parent.entry['leader'] ? var.accent : var.accentDim"
-                          成员名:
-                            type: Text
-                            attribute:
-                              point: ~middle_left
-                              x: 18
-                              texts: "self.parent.entry['leader'] ? '&e♛ &f' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
-                              fontSize: 36
-                              limit: 12
-                              through: true
-                          在线状态:
-                            type: Text
-                            attribute:
-                              point: ~middle_right
-                              x: -180
-                              texts: "self.parent.entry['online'] ? '&a●' : '&8●'"
-                              fontSize: 36
-                              through: true
-                          转让按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_right
-                              x: -96
-                              width: 76
-                              height: 36
-                              visible: "var.isLeader && !self.parent.entry['leader']"
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'party_transfer', self.parent.entry['uuid'], var.actionToken)
-                                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-                            children:
-                              转让底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  normal: ~80,160,240,230
-                                  hover: ~110,185,255,245
-                                  shape: ~round_rect
-                                  radius: 8
-                                  through: true
-                              转让字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: ~&0转让
-                                  fontSize: 32
-                                  through: true
-                          踢出按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_right
-                              x: -18
-                              width: 60
-                              height: 36
-                              visible: "var.isLeader && !self.parent.entry['leader']"
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'party_kick', self.parent.entry['uuid'], var.actionToken)
-                                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-                            children:
-                              踢出底:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  normal: ~235,100,100,230
-                                  hover: ~255,130,130,245
-                                  shape: ~round_rect
-                                  radius: 8
-                                  through: true
-                              踢出字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  texts: ~&f踢出
-                                  fontSize: 32
-                                  through: true
-              操作区:
-                type: HStack
-                attribute:
-                  x: 76
-                  y: "var.viewH - 130"
-                  spaceBetween: 16
-                  visible: var.hasParty
-                children:
-                  离开按钮:
-                    type: Canvas
-                    attribute:
-                      width: 160
-                      height: 52
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'party_leave', var.actionToken)
-                        Screen.close()
-                    children:
-                      离开底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~62,66,74,230
-                          hover: ~82,90,105,245
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: var.accentDim
-                      离开字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: ~&f离开队伍
-                          fontSize: 36
-                          through: true
-                  解散按钮:
-                    type: Canvas
-                    attribute:
-                      width: 160
-                      height: 52
-                      visible: var.isLeader
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'party_disband', var.actionToken)
-                        Screen.close()
-                    children:
-                      解散底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          normal: ~235,100,100,230
-                          hover: ~255,130,130,245
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                      解散字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          texts: ~&f解散队伍
-                          fontSize: 36
-                          through: true
-          # ── 右列：邀请 + 队聊 ──
-          右栏底:
+                  point: ~middle_center
+                  texts: ~&f更换副本
+                  fontSize: 32
+                  through: true
+          # ── 右下：消息流 + 队聊 ──
+          消息底:
             type: Texture
             attribute:
-              x: "var.leftW + 24"
-              y: 96
-              width: "var.rightW - 120"
-              height: "var.viewH - 192"
+              x: "var.rightX"
+              y: 546
+              width: "var.rightW"
+              height: "var.viewH - 642"
               normal: ~24,19,40,235
               shape: ~round_rect
               radius: 16
+              through: true
             effect:
               stroke:
                 width: 2
                 color: var.accentDim
-          邀请标题标线:
+          消息标线:
             type: Texture
             attribute:
-              x: "var.leftW + 76"
-              y: 152
+              x: "var.rightX + 26"
+              y: 574
               width: 22
               height: 3
               normal: var.accent
               through: true
-          邀请标题:
+          消息标题:
             type: Text
             attribute:
-              x: "var.leftW + 76"
-              y: 166
-              texts: ~&f邀请玩家
-              fontSize: 48
+              x: "var.rightX + 26"
+              y: 586
+              texts: ~&f队伍频道
+              fontSize: 36
               through: true
-          邀请输入框底:
+          消息滑轨:
             type: Texture
             attribute:
-              x: "var.leftW + 76"
-              y: 240
-              width: "var.rightW - 300"
-              height: 56
-              normal: ~38,30,58,255
+              x: "var.rightX + var.rightW - 20"
+              y: 636
+              width: 8
+              height: "var.viewH - 790"
+              normal: ~40,32,62,220
               shape: ~round_rect
-              radius: 10
+              radius: 4
+              through: true
+          消息滑块:
+            type: Texture
+            val: feed_slider
+            attribute:
+              x: "var.rightX + var.rightW - 20"
+              y: 636
+              width: 8
+              height: 80
+              normal: var.accent
+              maxDragY: "var.viewH - 790 - 80"
+              shape: ~round_rect
+              radius: 4
+          消息滚动区:
+            type: Scroll
+            attribute:
+              x: "var.rightX + 22"
+              y: 636
+              width: "var.rightW - 60"
+              height: "var.viewH - 790"
+              moveY: val.feed_slider.getDragYRatio()
+            action:
+              wheel: |-
+                ratio = self.moveY - self.wheelValue * 0.15
+                if(ratio < 0){ ratio = 0 }
+                if(ratio > 1){ ratio = 1 }
+                val.feed_slider.setDragYRatio(ratio)
+            children:
+              消息列表:
+                type: VStack
+                val: feed_rows
+                attribute:
+                  width: "var.rightW - 72"
+                  spaceBetween: 6
+                children:
+                  消息行:
+                    type: Text
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.feedRows[self.entryKey]
+                      visible: self.entry != none
+                      width: "var.rightW - 72"
+                      height: 40
+                      texts: "self.entry['sender'] == '' ? '&8· ' + self.entry['text'] : '&d' + self.entry['sender'] + ' &7: &f' + self.entry['text']"
+                      fontSize: 32
+                      limit: 34
+                      through: true
+          队聊框底:
+            type: Texture
+            attribute:
+              x: "var.rightX + 22"
+              y: "var.viewH - 136"
+              width: "var.rightW - 152"
+              height: 46
+              normal: var.cardBg
+              shape: ~round_rect
+              radius: 8
             effect:
               stroke:
                 width: 2
                 color: var.accentDim
-          邀请输入框:
+          队聊输入:
             type: TextBox
             attribute:
-              x: "var.leftW + 92"
-              y: 248
-              width: "var.rightW - 332"
-              height: 40
-              length: 16
-              emptyText: ~&7输入玩家名
-              fontSize: 36
-            action:
-              textChange: |-
-                var.inviteName = self.getContent()
-          邀请按钮:
-            type: Canvas
-            attribute:
-              point: ~top_right
-              x: -100
-              y: 240
-              width: 120
-              height: 56
-            action:
-              clickLeft: |-
-                if(var.inviteName != none && var.inviteName != ''){
-                  Packet.send(var.packetId, 'party_invite', var.inviteName, var.actionToken)
-                  Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-                }
-            children:
-              邀请底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~170,120,220,230
-                  hover: ~200,150,240,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-              邀请字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: ~&0邀 请
-                  fontSize: 36
-                  through: true
-          邀请列表标题:
-            type: Text
-            attribute:
-              x: "var.leftW + 76"
-              y: 330
-              texts: ~&7收到的邀请
-              fontSize: 36
-              through: true
-          邀请行0:
-            type: Canvas
-            attribute:
-              x: "var.leftW + 76"
-              y: 380
-              entryKey: 0.round()
-              entry: var.inviteRows[self.entryKey]
-              width: "var.rightW - 196"
-              height: 56
-              visible: self.entry != none
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'party_accept', var.actionToken)
-                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-            children:
-              邀请行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~46,72,52,235
-                  hover: ~58,92,64,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~124,196,142,180
-              邀请行字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "'&a接受 &f' + self.parent.entry['from'] + ' &a的邀请'"
-                  fontSize: 36
-                  through: true
-          邀请行1:
-            type: Canvas
-            attribute:
-              x: "var.leftW + 76"
-              y: 448
-              entryKey: 1.round()
-              entry: var.inviteRows[self.entryKey]
-              width: "var.rightW - 196"
-              height: 56
-              visible: self.entry != none
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'party_accept', var.actionToken)
-                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-            children:
-              邀请行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~46,72,52,235
-                  hover: ~58,92,64,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~124,196,142,180
-              邀请行字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "'&a接受 &f' + self.parent.entry['from'] + ' &a的邀请'"
-                  fontSize: 36
-                  through: true
-          邀请行2:
-            type: Canvas
-            attribute:
-              x: "var.leftW + 76"
-              y: 516
-              entryKey: 2.round()
-              entry: var.inviteRows[self.entryKey]
-              width: "var.rightW - 196"
-              height: 56
-              visible: self.entry != none
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'party_accept', var.actionToken)
-                Packet.send(var.packetId, 'open_party_ui', var.actionToken)
-            children:
-              邀请行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~46,72,52,235
-                  hover: ~58,92,64,245
-                  shape: ~round_rect
-                  radius: 10
-                  through: true
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~124,196,142,180
-              邀请行字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "'&a接受 &f' + self.parent.entry['from'] + ' &a的邀请'"
-                  fontSize: 36
-                  through: true
-          队聊分隔线:
-            type: Texture
-            attribute:
-              x: "var.leftW + 76"
-              y: "var.viewH - 250"
-              width: "var.rightW - 196"
-              height: 1
-              normal: ~96,80,140,120
-              visible: var.hasParty
-              through: true
-          队聊输入框底:
-            type: Texture
-            attribute:
-              x: "var.leftW + 76"
-              y: "var.viewH - 224"
-              width: "var.rightW - 300"
-              height: 56
-              normal: ~38,30,58,255
-              shape: ~round_rect
-              radius: 10
-              visible: var.hasParty
-            effect:
-              stroke:
-                width: 2
-                color: var.accentDim
-          队聊输入框:
-            type: TextBox
-            attribute:
-              x: "var.leftW + 92"
-              y: "var.viewH - 216"
-              width: "var.rightW - 332"
-              height: 40
+              x: "var.rightX + 34"
+              y: "var.viewH - 130"
+              width: "var.rightW - 176"
+              height: 34
               length: 48
-              emptyText: ~&7队伍聊天...
-              fontSize: 36
-              visible: var.hasParty
+              emptyText: ~&7说点什么…
+              fontSize: 32
             action:
               textChange: |-
                 var.chatMsg = self.getContent()
           队聊发送:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -100
-              y: "var.viewH - 224"
-              width: 120
-              height: 56
-              visible: var.hasParty
+              x: "var.rightX + var.rightW - 116"
+              y: "var.viewH - 136"
+              width: 96
+              height: 46
             action:
               clickLeft: |-
                 if(var.chatMsg != none && var.chatMsg != ''){
                   Packet.send(var.packetId, 'party_chat', var.chatMsg, var.actionToken)
+                  var.chatMsg = ''
                 }
             children:
               发送底:
@@ -698,12 +698,674 @@ controls:
                   normal: ~80,160,240,230
                   hover: ~110,185,255,245
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                   through: true
               发送字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&0发 送
-                  fontSize: 36
+                  texts: ~&0发送
+                  fontSize: 32
                   through: true
+          # ── 加入申请（仅队长可见，浮于消息区上方）──
+          申请列表:
+            type: VStack
+            val: apply_rows
+            attribute:
+              x: "var.rightX + 22"
+              y: "var.viewH - 642 - 120"
+              spaceBetween: 8
+              visible: "var.isLeader && var.applicantCount.round() > 0"
+            children:
+              申请行:
+                type: Canvas
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.applicantRows[self.entryKey]
+                  visible: self.entry != none
+                  width: "var.rightW - 44"
+                  height: 56
+                children:
+                  申请行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~64,52,30,235
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~200,170,90,170
+                  申请文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&e' + self.parent.entry['name'] + ' &7申请加入'"
+                      fontSize: 32
+                      limit: 16
+                      through: true
+                  拒按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -10
+                      width: 66
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'party_apply_no', self.parent.entry['uuid'], var.actionToken)
+                    children:
+                      拒底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,58,58,230
+                          hover: ~190,75,75,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      拒字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f拒
+                          fontSize: 32
+                          through: true
+                  准按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -84
+                      width: 66
+                      height: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'party_apply_ok', self.parent.entry['uuid'], var.actionToken)
+                    children:
+                      准底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~70,150,95,230
+                          hover: ~90,180,115,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      准字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f准
+                          fontSize: 32
+                          through: true
+          # ── 底部操作栏 ──
+          底栏:
+            type: HStack
+            attribute:
+              point: ~bottom_left
+              x: 76
+              y: -140
+              spaceBetween: 14
+            children:
+              邀请按钮:
+                type: Canvas
+                attribute:
+                  width: 170
+                  height: 56
+                action:
+                  clickLeft: |-
+                    var.invitePanel = true
+                    var.dungeonPanel = false
+                    Packet.send(var.packetId, 'party_online', var.actionToken)
+                children:
+                  邀请底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~80,160,240,230
+                      hover: ~110,185,255,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  邀请字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0邀请玩家
+                      fontSize: 36
+                      through: true
+              准备按钮:
+                type: Canvas
+                attribute:
+                  width: 170
+                  height: 56
+                  visible: "!var.isLeader"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_ready', var.actionToken)
+                children:
+                  准备底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~70,150,95,235
+                      hover: ~90,180,115,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  准备字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.myReady ? '&f取消准备' : '&f准 备'"
+                      fontSize: 36
+                      through: true
+              开始按钮:
+                type: Canvas
+                attribute:
+                  width: 210
+                  height: 56
+                  visible: var.isLeader
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_start', var.actionToken)
+                children:
+                  开始底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.allReady ? ~170,120,220,235 : ~90,80,110,235"
+                      hover: ~200,150,240,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  开始字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f开始游戏
+                      fontSize: 36
+                      through: true
+              公开开关:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 56
+                  visible: var.isLeader
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_set_listed', var.listed ? '0' : '1', var.actionToken)
+                children:
+                  公开底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: var.cardBg
+                      hover: var.cardBgHover
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  公开字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.listed ? '&a已公开' : '&f公开到大厅'"
+                      fontSize: 32
+                      through: true
+              审批开关:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 56
+                  visible: var.isLeader
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_set_joinmode', var.joinMode == 'OPEN' ? 'apply' : 'open', var.actionToken)
+                children:
+                  审批底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: var.cardBg
+                      hover: var.cardBgHover
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  审批字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.joinMode == 'OPEN' ? '&f直接加入' : '&f需要审批'"
+                      fontSize: 32
+                      through: true
+              离开按钮:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 56
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_leave', var.actionToken)
+                    Screen.close()
+                children:
+                  离开底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,230
+                      hover: ~82,90,105,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  离开字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f离开队伍
+                      fontSize: 32
+                      through: true
+              解散按钮:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 56
+                  visible: var.isLeader
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_disband', var.actionToken)
+                    Screen.close()
+                children:
+                  解散底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~235,100,100,230
+                      hover: ~255,130,130,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  解散字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f解散队伍
+                      fontSize: 32
+                      through: true
+          # ═══════ 邀请副面板（居中模态）═══════
+          邀请遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~8,6,16,190
+              visible: var.invitePanel
+          邀请面板:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              width: 620
+              height: 700
+              visible: var.invitePanel
+            children:
+              面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~26,21,44,255
+                  shape: ~round_rect
+                  radius: 18
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: var.accent
+              面板标线:
+                type: Texture
+                attribute:
+                  x: 30
+                  y: 30
+                  width: 22
+                  height: 3
+                  normal: var.accent
+                  through: true
+              面板标题:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 44
+                  texts: ~&f邀请玩家
+                  fontSize: 54
+                  through: true
+              面板提示:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 104
+                  texts: ~&7同一玩家 60 秒内只能邀请一次；已关闭邀请的玩家不会出现在列表中
+                  fontSize: 32
+                  limit: 30
+                  through: true
+              关闭按钮:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  x: -18
+                  y: 18
+                  width: 44
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.invitePanel = false
+                children:
+                  关闭底2:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~150,58,58,235
+                      hover: ~190,75,75,245
+                      shape: ~circle
+                      through: true
+                  关闭字2:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f✕
+                      fontSize: 32
+                      through: true
+              在线列表区:
+                type: Scroll
+                attribute:
+                  x: 30
+                  y: 150
+                  width: 560
+                  height: 380
+                children:
+                  在线列表:
+                    type: VStack
+                    val: online_rows
+                    attribute:
+                      width: 548
+                      spaceBetween: 8
+                    children:
+                      在线行:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.onlineRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 548
+                          height: 56
+                        children:
+                          在线行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: var.cardBg
+                              hover: var.cardBgHover
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          在线名:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "'&f' + self.parent.entry['name']"
+                              fontSize: 32
+                              through: true
+                          邀请小按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~middle_right
+                              x: -12
+                              width: 84
+                              height: 40
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'party_invite_uuid', self.parent.entry['uuid'], var.actionToken)
+                            children:
+                              邀底:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  normal: ~170,120,220,235
+                                  hover: ~200,150,240,245
+                                  shape: ~round_rect
+                                  radius: 8
+                                  through: true
+                              邀字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: ~&0邀请
+                                  fontSize: 32
+                                  through: true
+              无在线提示:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 300
+                  texts: ~&8暂无可邀请的在线玩家
+                  fontSize: 32
+                  visible: "var.onlineCount.round() == 0"
+                  through: true
+              邀请输入底:
+                type: Texture
+                attribute:
+                  x: 30
+                  y: 556
+                  width: 420
+                  height: 52
+                  normal: var.cardBg
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: var.accentDim
+              邀请输入:
+                type: TextBox
+                attribute:
+                  x: 44
+                  y: 564
+                  width: 396
+                  height: 36
+                  length: 16
+                  emptyText: ~&7输入玩家名邀请…
+                  fontSize: 32
+                action:
+                  textChange: |-
+                    var.inviteName = self.getContent()
+              名字邀请按钮:
+                type: Canvas
+                attribute:
+                  x: 462
+                  y: 556
+                  width: 128
+                  height: 52
+                action:
+                  clickLeft: |-
+                    if(var.inviteName != none && var.inviteName != ''){
+                      Packet.send(var.packetId, 'party_invite', var.inviteName, var.actionToken)
+                    }
+                children:
+                  名邀底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,235
+                      hover: ~200,150,240,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  名邀字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0邀 请
+                      fontSize: 32
+                      through: true
+              刷新列表按钮:
+                type: Canvas
+                attribute:
+                  x: 30
+                  y: 628
+                  width: 130
+                  height: 46
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'party_online', var.actionToken)
+                children:
+                  刷底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: var.cardBg
+                      hover: var.cardBgHover
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  刷字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f刷新列表
+                      fontSize: 32
+                      through: true
+          # ═══════ 副本选择副面板（居中模态）═══════
+          副本遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~8,6,16,190
+              visible: var.dungeonPanel
+          副本面板:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              width: 620
+              height: 640
+              visible: var.dungeonPanel
+            children:
+              副本面板底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~26,21,44,255
+                  shape: ~round_rect
+                  radius: 18
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: var.accent
+              副本面板标题:
+                type: Text
+                attribute:
+                  x: 30
+                  y: 30
+                  texts: ~&f选择目标副本
+                  fontSize: 54
+                  through: true
+              副本关闭:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  x: -18
+                  y: 18
+                  width: 44
+                  height: 44
+                action:
+                  clickLeft: |-
+                    var.dungeonPanel = false
+                children:
+                  副关底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~150,58,58,235
+                      hover: ~190,75,75,245
+                      shape: ~circle
+                      through: true
+                  副关字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f✕
+                      fontSize: 32
+                      through: true
+              副本列表区:
+                type: Scroll
+                attribute:
+                  x: 30
+                  y: 110
+                  width: 560
+                  height: 500
+                children:
+                  副本列表:
+                    type: VStack
+                    val: dungeon_rows
+                    attribute:
+                      width: 548
+                      spaceBetween: 8
+                    children:
+                      副本行:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.allDungeonRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 548
+                          height: 72
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'party_set_dungeon', self.entry['id'], var.actionToken)
+                            var.dungeonPanel = false
+                        children:
+                          副本行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: "var.hasDungeon && var.dungeon['id'] == self.parent.entry['id'] ? ~68,52,96,255 : var.cardBg"
+                              hover: var.cardBgHover
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                            effect:
+                              stroke:
+                                width: 2
+                                color: "var.hasDungeon && var.dungeon['id'] == self.parent.entry['id'] ? var.accent : var.accentDim"
+                          副本行名:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 16
+                              texts: "'&f' + self.parent.entry['name'] + '  &8' + self.parent.entry['id']"
+                              fontSize: 32
+                              through: true
+                          副本难度:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -16
+                              texts: "'&e难度' + self.parent.entry['difficulty'].round()"
+                              fontSize: 32
+                              through: true

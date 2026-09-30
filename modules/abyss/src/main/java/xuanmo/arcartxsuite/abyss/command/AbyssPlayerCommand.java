@@ -159,25 +159,30 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.player-not-found", "player", args[1]));
                     return true;
                 }
-                if (target.getUniqueId().equals(player.getUniqueId())) {
+                var result = pm.invite(player, target);
+                if (result instanceof PartyManager.InviteResult.Ok ok) {
+                    player.sendMessage(service.msg("party.invited",
+                        "player", target.getName(), "timeout", String.valueOf(pm.inviteTimeout())));
+                    target.sendMessage(service.msg("party.invite-received", "leader", player.getName()));
+                    pushUpdate(ok.party());
+                } else if (result instanceof PartyManager.InviteResult.Cooldown cd) {
+                    player.sendMessage(service.msg("party.invite-cooldown",
+                        "seconds", String.valueOf(cd.remainingSeconds())));
+                } else if (result instanceof PartyManager.InviteResult.OptOut) {
+                    player.sendMessage(service.msg("party.invite-opted-out",
+                        "player", target.getName()));
+                } else if (result instanceof PartyManager.InviteResult.SelfInvite) {
                     player.sendMessage(service.msg("error.self-invite"));
-                    return true;
-                }
-                if (pm.inParty(target.getUniqueId())) {
+                } else {
                     player.sendMessage(service.msg("error.already-in-party"));
-                    return true;
                 }
-                Party p = pm.invite(player, target);
-                player.sendMessage(service.msg("party.invited",
-                    "player", target.getName(), "timeout", String.valueOf(pm.inviteTimeout())));
-                target.sendMessage(service.msg("party.invite-received", "leader", player.getName()));
-                p.broadcast(service.msg("party.invite-broadcast",
-                    "player", player.getName(), "target", target.getName()));
             }
             case "accept" -> {
                 var result = pm.accept(player);
                 if (result instanceof PartyManager.JoinResult.Ok ok) {
+                    ok.party().appendFeed(null, player.getName() + " 加入了队伍");
                     ok.party().broadcast(service.msg("party.joined", "player", player.getName()));
+                    pushUpdate(ok.party());
                 } else if (result instanceof PartyManager.JoinResult.Full) {
                     player.sendMessage(service.msg("error.party-full"));
                 } else {
@@ -189,9 +194,11 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.not-in-party"));
                     return true;
                 }
+                party.appendFeed(null, player.getName() + " 离开了队伍");
                 pm.leave(player);
                 player.sendMessage(service.msg("party.left", "player", player.getName()));
                 party.broadcast(service.msg("party.left", "player", player.getName()));
+                pushUpdate(party);
             }
             case "kick" -> {
                 if (party == null || !party.isLeader(player.getUniqueId())) {
@@ -208,8 +215,10 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     return true;
                 }
                 pm.kick(player, target);
+                party.appendFeed(null, target.getName() + " 被移出队伍");
                 party.broadcast(service.msg("party.kicked", "player", target.getName()));
                 target.sendMessage(service.msg("party.kicked", "player", target.getName()));
+                pushUpdate(party);
             }
             case "leader", "transfer" -> {
                 if (party == null || !party.isLeader(player.getUniqueId())) {
@@ -226,7 +235,9 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     return true;
                 }
                 pm.transferLeader(player, target);
+                party.appendFeed(null, target.getName() + " 成为新队长");
                 party.broadcast(service.msg("party.leader-changed", "player", target.getName()));
+                pushUpdate(party);
             }
             case "chat" -> {
                 if (party == null) {
@@ -264,6 +275,157 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 party.broadcast(service.msg("party.disbanded"));
                 pm.disband(party);
             }
+            case "ready" -> {
+                if (party == null) {
+                    player.sendMessage(service.msg("error.not-in-party"));
+                    return true;
+                }
+                boolean ready = pm.toggleReady(player);
+                player.sendMessage(service.msg(ready ? "party.ready-on" : "party.ready-off"));
+                pushUpdate(party);
+            }
+            case "public", "open" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                party.listed(true);
+                player.sendMessage(service.msg("party.listed-on"));
+                pushUpdate(party);
+            }
+            case "private" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                party.listed(false);
+                player.sendMessage(service.msg("party.listed-off"));
+                pushUpdate(party);
+            }
+            case "joinmode" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage(service.msg("usage.joinmode", "label", label));
+                    return true;
+                }
+                party.joinMode("open".equalsIgnoreCase(args[1])
+                    ? Party.JoinMode.OPEN : Party.JoinMode.APPLY);
+                player.sendMessage(service.msg("party.joinmode-set",
+                    "mode", party.joinMode() == Party.JoinMode.OPEN ? "直接加入" : "需要审批"));
+                pushUpdate(party);
+            }
+            case "dungeon" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage(service.msg("usage.dungeon", "label", label));
+                    return true;
+                }
+                AbyssTemplate t = service.instances().getTemplate(args[1]);
+                if (t == null) {
+                    player.sendMessage(service.msg("error.dungeon-not-found",
+                        "dungeon", args[1]));
+                    return true;
+                }
+                party.dungeonId(t.id());
+                party.appendFeed(null, "目标副本已设置为 " + t.name());
+                player.sendMessage(service.msg("party.dungeon-set", "name", t.name()));
+                pushUpdate(party);
+            }
+            case "apply" -> {
+                if (args.length < 2) {
+                    player.sendMessage(service.msg("usage.apply", "label", label));
+                    return true;
+                }
+                java.util.UUID pid;
+                try {
+                    pid = java.util.UUID.fromString(args[1]);
+                } catch (IllegalArgumentException e) {
+                    player.sendMessage(service.msg("error.party-not-found"));
+                    return true;
+                }
+                var r = pm.joinViaLobby(player, pid);
+                if (r instanceof PartyManager.JoinLobbyResult.Ok ok) {
+                    player.sendMessage(service.msg("party.joined", "player", player.getName()));
+                    ok.party().appendFeed(null, player.getName() + " 加入了队伍");
+                    pushUpdate(ok.party());
+                } else if (r instanceof PartyManager.JoinLobbyResult.Applied) {
+                    player.sendMessage(service.msg("party.apply-sent"));
+                } else if (r instanceof PartyManager.JoinLobbyResult.Full) {
+                    player.sendMessage(service.msg("error.party-full"));
+                } else if (r instanceof PartyManager.JoinLobbyResult.AlreadyMember) {
+                    player.sendMessage(service.msg("error.already-member"));
+                } else {
+                    player.sendMessage(service.msg("error.party-not-found"));
+                }
+            }
+            case "approve" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage(service.msg("usage.approve", "label", label));
+                    return true;
+                }
+                Player ap = Bukkit.getPlayer(args[1]);
+                if (ap == null) {
+                    player.sendMessage(service.msg("error.player-not-found", "player", args[1]));
+                    return true;
+                }
+                var r = pm.approveApplication(player, ap.getUniqueId());
+                if (r instanceof PartyManager.JoinResult.Ok ok) {
+                    ok.party().appendFeed(null, ap.getName() + " 加入了队伍");
+                    ok.party().broadcast(service.msg("party.joined", "player", ap.getName()));
+                    pushUpdate(ok.party());
+                } else {
+                    player.sendMessage(service.msg("error.no-application", "player", args[1]));
+                }
+            }
+            case "deny" -> {
+                if (party == null || !party.isLeader(player.getUniqueId())) {
+                    player.sendMessage(service.msg("error.not-party-leader"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    player.sendMessage(service.msg("usage.deny", "label", label));
+                    return true;
+                }
+                Player ap = Bukkit.getPlayer(args[1]);
+                if (ap == null || !pm.denyApplication(player, ap.getUniqueId())) {
+                    player.sendMessage(service.msg("error.no-application", "player", args[1]));
+                    return true;
+                }
+                player.sendMessage(service.msg("party.application-denied", "player", ap.getName()));
+                pushUpdate(party);
+            }
+            case "allowinvite" -> {
+                boolean allow = !pm.inviteAllowed(player.getUniqueId());
+                pm.setInviteAllowed(player.getUniqueId(), allow);
+                player.sendMessage(service.msg(allow
+                    ? "party.invite-allowed-on" : "party.invite-allowed-off"));
+            }
+            case "lobby" -> {
+                if (service.uiFacade() != null) {
+                    service.uiFacade().openLobby(player);
+                } else {
+                    // 无 UI 时列出公开队伍
+                    player.sendMessage(service.msg("party.lobby-title"));
+                    for (var e : pm.listPublic(null, null)) {
+                        player.sendMessage(service.msg("party.lobby-row",
+                            "name", e.name(), "leader", e.leaderName(),
+                            "size", String.valueOf(e.size()),
+                            "max", String.valueOf(e.max()),
+                            "dungeon", e.dungeonId(),
+                            "mode", e.joinMode() == Party.JoinMode.OPEN ? "直接加入" : "需审批"));
+                    }
+                }
+            }
             default -> sendPartyHelp(player, label);
         }
         return true;
@@ -271,9 +433,17 @@ public final class AbyssPlayerCommand implements TabExecutor {
 
     private void sendPartyHelp(Player p, String label) {
         p.sendMessage(service.msg("party-help.title"));
-        for (String k : List.of("create", "invite", "accept", "leave", "chat",
-                "list", "kick", "leader", "disband")) {
+        for (String k : List.of("create", "invite", "accept", "leave", "ready",
+                "chat", "list", "public", "joinmode", "dungeon", "apply",
+                "approve", "deny", "allowinvite", "kick", "leader", "disband")) {
             p.sendMessage(service.msg("party-help." + k, "label", label));
+        }
+    }
+
+    /** 队伍变更后向房间 UI 推送更新（无 UI 桥接时静默跳过）。 */
+    private void pushUpdate(Party party) {
+        if (party != null && service.uiFacade() != null) {
+            service.uiFacade().pushPartyUpdate(party);
         }
     }
 
@@ -281,28 +451,83 @@ public final class AbyssPlayerCommand implements TabExecutor {
         return java.util.Arrays.copyOfRange(args, 1, args.length);
     }
 
+    /** /party 命令的子命令列表（供 abyss/party 两个入口的 tab 补全共用）。 */
+    public static List<String> partySubCommands() {
+        return List.of("create", "invite", "accept", "apply", "approve", "deny",
+            "leave", "ready", "chat", "list", "public", "private", "joinmode",
+            "dungeon", "allowinvite", "lobby", "kick", "leader", "disband");
+    }
+
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender,
                                                 @NotNull Command command,
                                                 @NotNull String label,
                                                 @NotNull String[] args) {
+        boolean partyCmd = "party".equalsIgnoreCase(command.getName())
+            || "axsparty".equalsIgnoreCase(command.getName());
+        if (partyCmd) {
+            return partyTabComplete(sender, args);
+        }
+        // /abyss ...
         if (args.length == 1) {
             return filter(List.of("enter", "leave", "list", "info", "stamina",
                 "rank", "party", "ui"), args[0]);
         }
-        if (args.length == 2 && "enter".equalsIgnoreCase(args[0])) {
+        if (args.length == 2 && ("enter".equalsIgnoreCase(args[0])
+            || "rank".equalsIgnoreCase(args[0]) || "top".equalsIgnoreCase(args[0]))) {
             return filter(service.instances().getAllTemplates().stream()
                 .map(AbyssTemplate::id).toList(), args[1]);
         }
-        if (args.length == 2 && "rank".equalsIgnoreCase(args[0])) {
-            return filter(service.instances().getAllTemplates().stream()
-                .map(AbyssTemplate::id).toList(), args[1]);
-        }
-        if (args.length == 2 && "party".equalsIgnoreCase(args[0])) {
-            return filter(List.of("create", "invite", "accept", "leave", "chat",
-                "list", "kick", "leader", "disband"), args[1]);
+        if (args.length >= 2 && "party".equalsIgnoreCase(args[0])) {
+            return partyTabComplete(sender,
+                java.util.Arrays.copyOfRange(args, 1, args.length));
         }
         return List.of();
+    }
+
+    /** /party 系列补全：子命令 → 玩家名/副本 id/模式。 */
+    public List<String> partyTabComplete(@NotNull CommandSender sender, String[] args) {
+        if (args.length <= 1) {
+            return filter(partySubCommands(), args.length == 0 ? "" : args[0]);
+        }
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        if (args.length == 2) {
+            return switch (sub) {
+                case "invite", "approve", "deny" ->
+                    filter(onlinePlayerNames(), args[1]);
+                case "kick", "leader", "transfer" ->
+                    filter(memberNames(sender), args[1]);
+                case "joinmode" -> filter(List.of("open", "apply"), args[1]);
+                case "dungeon" -> filter(service.instances().getAllTemplates().stream()
+                    .map(AbyssTemplate::id).toList(), args[1]);
+                case "apply" -> filter(service.party().listPublic(null, null).stream()
+                    .map(e -> e.partyId().toString()).toList(), args[1]);
+                default -> List.of();
+            };
+        }
+        return List.of();
+    }
+
+    private static List<String> onlinePlayerNames() {
+        List<String> out = new ArrayList<>();
+        for (Player p : Bukkit.getOnlinePlayers()) out.add(p.getName());
+        return out;
+    }
+
+    /** 队伍成员名（供 kick/leader 补全）；发送者不在队伍时退回在线玩家名。 */
+    private List<String> memberNames(CommandSender sender) {
+        if (sender instanceof Player p) {
+            Party party = service.party().partyOf(p);
+            if (party != null) {
+                List<String> out = new ArrayList<>();
+                for (java.util.UUID u : party.members()) {
+                    Player m = Bukkit.getPlayer(u);
+                    out.add(m != null ? m.getName() : u.toString().substring(0, 8));
+                }
+                return out;
+            }
+        }
+        return onlinePlayerNames();
     }
 
     private static List<String> filter(List<String> candidates, String input) {

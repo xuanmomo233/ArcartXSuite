@@ -116,7 +116,9 @@ ui:
   browser-id: "abyss_browser"
   # 进本确认 UI
   confirm-id: "abyss_confirm"
-  # 队伍 UI
+  # 组队大厅 UI（无队伍时 /party 的入口）
+  lobby-id: "abyss_lobby"
+  # 队伍房间 UI
   party-id: "abyss_party"
   # 宝箱奖励 UI
   chest-id: "abyss_chest"
@@ -124,5 +126,7 @@ ui:
   stats-id: "abyss_stats"
   # 排行榜 UI
   leaderboard-id: "abyss_leaderboard"
+  # 副本内 HUD
+  hud-id: "abyss_hud"
 
 debug: false

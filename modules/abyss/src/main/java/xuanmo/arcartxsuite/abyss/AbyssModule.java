@@ -118,6 +118,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         if (ui == null) return;
         registerModuleUi("ui/abyss_browser.yml", axsUiId(ui.browserId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_confirm.yml", axsUiId(ui.confirmId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_lobby.yml", axsUiId(ui.lobbyId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_party.yml", axsUiId(ui.partyId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_chest.yml", axsUiId(ui.chestId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_stats.yml", axsUiId(ui.statsId()), ui.registerOnEnable());
@@ -203,7 +204,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             public @Nullable List<String> onTabComplete(@NotNull CommandSender sender,
                                                         @NotNull org.bukkit.command.Command command,
                                                         @NotNull String label, @NotNull String[] args) {
-                return null;
+                return playerCommand != null
+                    ? playerCommand.partyTabComplete(sender, args) : List.of();
             }
         };
         return Map.of("abyss", abyss, "party", party);
@@ -240,6 +242,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         Map<String, String> mappings = new java.util.LinkedHashMap<>();
         mappings.put("arcartx/ui/abyss_browser.yml", "ui/abyss_browser.yml");
         mappings.put("arcartx/ui/abyss_confirm.yml", "ui/abyss_confirm.yml");
+        mappings.put("arcartx/ui/abyss_lobby.yml", "ui/abyss_lobby.yml");
         mappings.put("arcartx/ui/abyss_party.yml", "ui/abyss_party.yml");
         mappings.put("arcartx/ui/abyss_chest.yml", "ui/abyss_chest.yml");
         mappings.put("arcartx/ui/abyss_stats.yml", "ui/abyss_stats.yml");

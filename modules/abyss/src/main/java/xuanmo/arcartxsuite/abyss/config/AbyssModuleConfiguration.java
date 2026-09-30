@@ -274,6 +274,7 @@ public record AbyssModuleConfiguration(
         boolean overwriteUiFiles,
         String browserId,
         String confirmId,
+        String lobbyId,
         String partyId,
         String chestId,
         String statsId,
@@ -283,15 +284,16 @@ public record AbyssModuleConfiguration(
         static UiSection load(ConfigurationSection s) {
             if (s == null) {
                 return new UiSection(true, false,
-                    "abyss_browser", "abyss_confirm", "abyss_party",
-                    "abyss_chest", "abyss_stats", "abyss_leaderboard",
-                    "abyss_hud");
+                    "abyss_browser", "abyss_confirm", "abyss_lobby",
+                    "abyss_party", "abyss_chest", "abyss_stats",
+                    "abyss_leaderboard", "abyss_hud");
             }
             return new UiSection(
                 s.getBoolean("register-on-enable", true),
                 s.getBoolean("overwrite-ui-files", false),
                 s.getString("browser-id", "abyss_browser"),
                 s.getString("confirm-id", "abyss_confirm"),
+                s.getString("lobby-id", "abyss_lobby"),
                 s.getString("party-id", "abyss_party"),
                 s.getString("chest-id", "abyss_chest"),
                 s.getString("stats-id", "abyss_stats"),

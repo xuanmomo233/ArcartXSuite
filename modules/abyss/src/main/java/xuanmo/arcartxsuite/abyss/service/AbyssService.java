@@ -930,6 +930,10 @@ public final class AbyssService {
         void openBrowser(Player player);
         void openEntryConfirm(Player player, AbyssTemplate template);
         void openParty(Player player);
+        /** 组队大厅（无队伍时 /party 的入口）。 */
+        void openLobby(Player player);
+        /** 队伍数据变更后向全队推送房间 UI 更新（成员/消息流/副本/设置）。 */
+        void pushPartyUpdate(Party party);
         void openStats(Player player, AbyssInstance instance);
         void openLeaderboard(Player player, String dungeonId);
         /** UI 包处理；返回 true 表示已消费。 */

@@ -1,0 +1,747 @@
+# AXS 资源说明
+# 用途: Abyss 组队大厅 —— 公开队伍列表/搜索/副本筛选/创建队伍/邀请接收/免打扰开关
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    # packetHandler: init
+    # 包字段: packetId/action_token/title/hasParty/allowInvite
+    #         partyRows{idx:{partyId,name,leader,size,max,dungeonId,dungeonName,joinMode,full}}/partyCount
+    #         dungeonRows{idx:{id,name}}/dungeonCount
+    #         inviteRows{idx:{partyId,partyName,from}}/inviteCount
+    #         keyword/dungeonFilter
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.hasParty = packet['hasParty']
+      var.allowInvite = packet['allowInvite']
+      var.partyRows = packet['partyRows']
+      var.partyCount = packet['partyCount']
+      var.dungeonRows = packet['dungeonRows']
+      var.dungeonCount = packet['dungeonCount']
+      var.inviteRows = packet['inviteRows']
+      var.inviteCount = packet['inviteCount']
+      var.keyword = packet['keyword']
+      var.dungeonFilter = packet['dungeonFilter']
+      self.actions['refresh']()
+    # packetHandler: lobby_list —— 搜索/筛选/刷新后的列表推送（无 action_token）
+    lobby_list: |-
+      var.partyRows = packet['partyRows']
+      var.partyCount = packet['partyCount']
+      var.dungeonRows = packet['dungeonRows']
+      var.dungeonCount = packet['dungeonCount']
+      var.inviteRows = packet['inviteRows']
+      var.inviteCount = packet['inviteCount']
+      var.keyword = packet['keyword']
+      var.dungeonFilter = packet['dungeonFilter']
+      self.actions['refresh']()
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.hasParty = false
+      var.allowInvite = true
+      var.partyRows = {}
+      var.partyCount = 0
+      var.dungeonRows = {}
+      var.dungeonCount = 0
+      var.inviteRows = {}
+      var.inviteCount = 0
+      var.keyword = ''
+      var.dungeonFilter = ''
+      var.searchText = ''
+      var.队伍轮次 = 0
+      var.队伍引用 = {}
+      var.邀请轮次 = 0
+      var.邀请引用 = {}
+      var.筛选轮次 = 0
+      var.筛选引用 = {}
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+      var.accentHover = '220,180,255,235'
+      var.cardBg = '38,30,58,255'
+      var.cardBgHover = '52,40,76,255'
+      var.green = '120,200,140,255'
+      var.blue = '110,170,240,255'
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.leftW = var.viewW * 0.62
+      var.rightX = var.leftW + 28
+      var.rightW = var.viewW - var.rightX - 72
+    open: |-
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
+    # 重建动态列表（队伍卡片 + 邀请行 + 筛选行）
+    refresh: |-
+      目标数 = var.partyCount.round()
+      if(val.party_rows.childrenCount() - 1 != 目标数 - 1){
+        for(key in var.队伍引用.keys()){
+          var.队伍引用[key].remove()
+        }
+        var.队伍引用 = {}
+        var.队伍轮次 = (var.队伍轮次 + 1).round()
+        模板 = val.party_rows.get(0)
+        模板.entryKey = 0.round()
+        if(目标数 > 1){
+          for(i in range(1, 目标数 - 1)){
+            r = 模板.copy('队伍卡_' + var.队伍轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.队伍引用[i.round()] = r
+          }
+        }
+      }
+      邀请数 = var.inviteCount.round()
+      if(val.invite_rows.childrenCount() - 1 != 邀请数 - 1){
+        for(key in var.邀请引用.keys()){
+          var.邀请引用[key].remove()
+        }
+        var.邀请引用 = {}
+        var.邀请轮次 = (var.邀请轮次 + 1).round()
+        模板2 = val.invite_rows.get(0)
+        模板2.entryKey = 0.round()
+        if(邀请数 > 1){
+          for(i in range(1, 邀请数 - 1)){
+            r = 模板2.copy('邀请行_' + var.邀请轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.邀请引用[i.round()] = r
+          }
+        }
+      }
+      筛选数 = var.dungeonCount.round()
+      if(val.filter_rows.childrenCount() - 1 != 筛选数 - 1){
+        for(key in var.筛选引用.keys()){
+          var.筛选引用[key].remove()
+        }
+        var.筛选引用 = {}
+        var.筛选轮次 = (var.筛选轮次 + 1).round()
+        模板3 = val.filter_rows.get(0)
+        模板3.entryKey = 0.round()
+        if(筛选数 > 1){
+          for(i in range(1, 筛选数 - 1)){
+            r = 模板3.copy('筛选行_' + var.筛选轮次 + '_' + i.round())
+            r.entryKey = i.round()
+            var.筛选引用[i.round()] = r
+          }
+        }
+      }
+      val.party_slider.setDragYRatio(0)
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      全屏画布:
+        type: Canvas
+        attribute:
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
+        children:
+          场景磨砂:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;20,16,38,245
+          暮色底幕:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~16,12,30,255
+            effect:
+              gradient:
+                color1: ~30,22,52,255
+                color2: ~12,9,24,255
+                type: 0
+                angleDeg: 65
+          # ── 页眉 ──
+          页眉标线:
+            type: Texture
+            attribute:
+              x: 76
+              y: 56
+              width: 28
+              height: 3
+              normal: var.accent
+              through: true
+          品牌标记:
+            type: Text
+            attribute:
+              x: 120
+              y: 46
+              texts: ~&fA B Y S S  /  深渊回廊
+              fontSize: 36
+              alpha: 0.78
+              through: true
+          标题:
+            type: Text
+            attribute:
+              x: 72
+              y: 104
+              texts: ~&f组队大厅
+              fontSize: 88
+              through: true
+          引导语:
+            type: Text
+            attribute:
+              x: 76
+              y: 176
+              texts: ~&7寻找一支小队，或让深渊找到你。
+              fontSize: 36
+              through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -76
+              y: 52
+              width: 48
+              height: 48
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
+                  through: true
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
+          # ── 左列：公开队伍列表 ──
+          列表标题:
+            type: Text
+            attribute:
+              x: 76
+              y: 240
+              texts: "'&7公开小队  &f' + var.partyCount.round() + ' 支'"
+              fontSize: 36
+              through: true
+          列表分隔线:
+            type: Texture
+            attribute:
+              x: 76
+              y: 292
+              width: "var.leftW - 152"
+              height: 1
+              normal: ~96,80,140,160
+              through: true
+          队伍滑轨:
+            type: Texture
+            attribute:
+              x: "var.leftW - 66"
+              y: 306
+              width: 10
+              height: "var.viewH - 400"
+              normal: ~40,32,62,220
+              shape: ~round_rect
+              radius: 5
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          队伍滑块:
+            type: Texture
+            val: party_slider
+            attribute:
+              x: "var.leftW - 66"
+              y: 306
+              width: 10
+              height: 120
+              normal: var.accent
+              maxDragY: "var.viewH - 400 - 120"
+              shape: ~round_rect
+              radius: 5
+          队伍滚动区:
+            type: Scroll
+            attribute:
+              x: 76
+              y: 306
+              width: "var.leftW - 152"
+              height: "var.viewH - 400"
+              moveY: val.party_slider.getDragYRatio()
+            action:
+              wheel: |-
+                ratio = self.moveY - self.wheelValue * 0.12
+                if(ratio < 0){ ratio = 0 }
+                if(ratio > 1){ ratio = 1 }
+                val.party_slider.setDragYRatio(ratio)
+            children:
+              队伍列表:
+                type: VStack
+                val: party_rows
+                attribute:
+                  width: "var.leftW - 168"
+                  spaceBetween: 12
+                children:
+                  队伍卡片:
+                    type: Canvas
+                    attribute:
+                      entryKey: 0.round()
+                      entry: var.partyRows[self.entryKey]
+                      visible: self.entry != none
+                      width: "var.leftW - 168"
+                      height: 100
+                    children:
+                      卡片底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: var.cardBg
+                          hover: var.cardBgHover
+                          shape: ~round_rect
+                          radius: 12
+                          through: true
+                        effect:
+                          stroke:
+                            width: 2
+                            color: var.accentDim
+                      卡片侧线:
+                        type: Texture
+                        attribute:
+                          point: ~middle_left
+                          x: 0
+                          width: 4
+                          height: 64
+                          normal: "self.parent.entry['joinMode'] == 'OPEN' ? var.green : var.accent"
+                          through: true
+                      队伍名:
+                        type: Text
+                        attribute:
+                          x: 22
+                          y: 14
+                          texts: "'&f' + self.parent.entry['name']"
+                          fontSize: 36
+                          limit: 18
+                          through: true
+                      队伍信息:
+                        type: Text
+                        attribute:
+                          x: 22
+                          y: 58
+                          texts: "'&7队长 &f' + self.parent.entry['leader'] + '  &7人数 &f' + self.parent.entry['size'].round() + '/' + self.parent.entry['max'].round() + '  &7目标 &e' + self.parent.entry['dungeonName'] + '  &7' + (self.parent.entry['joinMode'] == 'OPEN' ? '&a直接加入' : '&e需要审批')"
+                          fontSize: 32
+                          through: true
+                      加入按钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -20
+                          width: 110
+                          height: 52
+                          visible: "!self.parent.entry['full']"
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'lobby_join', self.parent.entry['partyId'], var.actionToken)
+                        children:
+                          加入底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: "self.parent.entry['joinMode'] == 'OPEN' ? ~70,150,95,235 : ~170,120,220,235"
+                              hover: "self.parent.entry['joinMode'] == 'OPEN' ? ~90,180,115,245 : ~200,150,240,245"
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          加入字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: "self.parent.entry['joinMode'] == 'OPEN' ? '&f加入' : '&f申请'"
+                              fontSize: 36
+                              through: true
+                      已满标签:
+                        type: Text
+                        attribute:
+                          point: ~middle_right
+                          x: -40
+                          texts: ~&8已满
+                          fontSize: 36
+                          visible: self.parent.entry['full']
+                          through: true
+          空列表提示:
+            type: Text
+            attribute:
+              x: 76
+              y: 420
+              texts: ~&8暂时没有公开的小队 —— 在右侧创建一支，让队友来找你。
+              fontSize: 36
+              visible: "var.partyCount.round() == 0"
+              through: true
+          # ── 右栏 ──
+          右栏底:
+            type: Texture
+            attribute:
+              x: "var.rightX"
+              y: 240
+              width: "var.rightW"
+              height: "var.viewH - 336"
+              normal: ~24,19,40,235
+              shape: ~round_rect
+              radius: 16
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          # 搜索区
+          搜索标线:
+            type: Texture
+            attribute:
+              x: "var.rightX + 28"
+              y: 268
+              width: 22
+              height: 3
+              normal: var.accent
+              through: true
+          搜索标题:
+            type: Text
+            attribute:
+              x: "var.rightX + 28"
+              y: 280
+              texts: ~&f搜索小队
+              fontSize: 36
+              through: true
+          搜索框底:
+            type: Texture
+            attribute:
+              x: "var.rightX + 28"
+              y: 330
+              width: "var.rightW - 176"
+              height: 52
+              normal: var.cardBg
+              shape: ~round_rect
+              radius: 10
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          搜索框:
+            type: TextBox
+            attribute:
+              x: "var.rightX + 42"
+              y: 338
+              width: "var.rightW - 204"
+              height: 36
+              length: 20
+              emptyText: ~&7队伍名 / 队长名
+              fontSize: 32
+            action:
+              textChange: |-
+                var.searchText = self.getContent()
+          搜索按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -100
+              y: 330
+              width: 120
+              height: 52
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'lobby_search', var.searchText, var.dungeonFilter, var.actionToken)
+            children:
+              搜索底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~80,160,240,230
+                  hover: ~110,185,255,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              搜索字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&0搜 索
+                  fontSize: 32
+                  through: true
+          # 副本筛选
+          筛选标题:
+            type: Text
+            attribute:
+              x: "var.rightX + 28"
+              y: 404
+              texts: ~&7按目标副本筛选
+              fontSize: 32
+              through: true
+          全部标签:
+            type: Canvas
+            attribute:
+              x: "var.rightX + 28"
+              y: 446
+              width: 100
+              height: 40
+            action:
+              clickLeft: |-
+                var.dungeonFilter = ''
+                Packet.send(var.packetId, 'lobby_search', var.searchText, '', var.actionToken)
+            children:
+              全部底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.dungeonFilter == '' ? var.accent : var.cardBg"
+                  hover: var.cardBgHover
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              全部字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.dungeonFilter == '' ? '&0全部' : '&f全部'"
+                  fontSize: 32
+                  through: true
+          筛选列表:
+            type: HStack
+            val: filter_rows
+            attribute:
+              x: "var.rightX + 140"
+              y: 446
+              spaceBetween: 10
+            children:
+              筛选项:
+                type: Canvas
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.dungeonRows[self.entryKey]
+                  visible: self.entry != none
+                  width: 140
+                  height: 40
+                action:
+                  clickLeft: |-
+                    var.dungeonFilter = self.entry['id']
+                    Packet.send(var.packetId, 'lobby_search', var.searchText, self.entry['id'], var.actionToken)
+                children:
+                  筛选底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.dungeonFilter == self.parent.entry['id'] ? var.accent : var.cardBg"
+                      hover: var.cardBgHover
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                  筛选字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.dungeonFilter == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
+                      fontSize: 32
+                      limit: 5
+                      through: true
+          # 收到的邀请
+          邀请标线:
+            type: Texture
+            attribute:
+              x: "var.rightX + 28"
+              y: 516
+              width: 22
+              height: 3
+              normal: var.accent
+              through: true
+          邀请标题:
+            type: Text
+            attribute:
+              x: "var.rightX + 28"
+              y: 528
+              texts: "'&f收到的邀请  &7' + var.inviteCount.round()"
+              fontSize: 36
+              through: true
+          邀请列表:
+            type: VStack
+            val: invite_rows
+            attribute:
+              x: "var.rightX + 28"
+              y: 584
+              width: "var.rightW - 56"
+              spaceBetween: 10
+            children:
+              邀请行:
+                type: Canvas
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.inviteRows[self.entryKey]
+                  visible: self.entry != none
+                  width: "var.rightW - 56"
+                  height: 64
+                children:
+                  邀请行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~46,72,52,235
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~124,196,142,180
+                  邀请文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 16
+                      texts: "'&f' + self.parent.entry['from'] + ' &7邀请你加入 &f' + self.parent.entry['partyName']"
+                      fontSize: 32
+                      limit: 22
+                      through: true
+                  拒绝按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -12
+                      width: 72
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'lobby_invite_decline', self.parent.entry['partyId'], var.actionToken)
+                    children:
+                      拒绝底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,58,58,230
+                          hover: ~190,75,75,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      拒绝字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f拒绝
+                          fontSize: 32
+                          through: true
+                  接受按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -92
+                      width: 72
+                      height: 40
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'lobby_invite_accept', self.parent.entry['partyId'], var.actionToken)
+                    children:
+                      接受底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~70,150,95,230
+                          hover: ~90,180,115,245
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      接受字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f接受
+                          fontSize: 32
+                          through: true
+          # 我的操作区
+          操作分隔线:
+            type: Texture
+            attribute:
+              x: "var.rightX + 28"
+              y: "var.viewH - 208"
+              width: "var.rightW - 56"
+              height: 1
+              normal: ~96,80,140,120
+              through: true
+          免打扰开关:
+            type: Canvas
+            attribute:
+              x: "var.rightX + 28"
+              y: "var.viewH - 184"
+              width: "var.rightW - 56"
+              height: 52
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'lobby_toggle_invites', var.allowInvite ? '0' : '1', var.actionToken)
+                var.allowInvite = !var.allowInvite
+            children:
+              开关底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: var.cardBg
+                  hover: var.cardBgHover
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: var.accentDim
+              开关文本:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 18
+                  texts: "var.allowInvite ? '&f接收组队邀请  &a已开启' : '&f接收组队邀请  &8已关闭'"
+                  fontSize: 32
+                  through: true
+              开关圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_right
+                  x: -18
+                  width: 14
+                  height: 14
+                  normal: "var.allowInvite ? var.green : ~120,120,130,255"
+                  shape: ~circle
+                  through: true
+          创建按钮:
+            type: Canvas
+            attribute:
+              x: "var.rightX + 28"
+              y: "var.viewH - 120"
+              width: "var.rightW - 56"
+              height: 60
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'lobby_create', var.actionToken)
+            children:
+              创建底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~170,120,220,235
+                  hover: ~200,150,240,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              创建字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.hasParty ? '&0进入我的队伍房间' : '&0创建我的队伍'"
+                  fontSize: 36
+                  through: true
