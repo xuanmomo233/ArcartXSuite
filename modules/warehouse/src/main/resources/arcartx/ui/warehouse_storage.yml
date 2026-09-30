@@ -817,7 +817,7 @@ controls:
                   clickLeft: |-
                     now = Time.currentTime()
                     if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
-                      Packet.send(var.packetId, 'withdraw', self.entryKey, 64)
+                      Packet.send(var.packetId, 'withdraw_quick', self.entryKey, 64)
                       var.lastSlotClickSlot = none
                     }else{
                       Packet.send(var.packetId, 'select', self.entryKey)

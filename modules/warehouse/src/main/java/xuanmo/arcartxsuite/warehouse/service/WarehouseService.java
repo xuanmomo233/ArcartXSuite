@@ -685,8 +685,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 case "select" -> selectSlot(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")));
                 case "deposit_slot" -> depositSlot(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L));
                 case "deposit_all_backpack" -> depositAllBackpack(player);
-                case "withdraw" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L), false);
-                case "withdraw_all" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), Long.MAX_VALUE, true);
+                case "withdraw" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L), false, false);
+                case "withdraw_quick" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "64"), 64L), false, true);
+                case "withdraw_all" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), Long.MAX_VALUE, true, false);
                 case "bank_deposit" -> bankDeposit(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseDecimal(WarehouseTexts.value(data, 2, "0")));
                 case "bank_withdraw" -> bankWithdraw(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseDecimal(WarehouseTexts.value(data, 2, "0")));
                 case "select_currency" -> selectCurrency(player, WarehouseTexts.value(data, 1, ""));
@@ -1174,6 +1175,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     private boolean isUiOpenForAction(Player player, String action) {
         if ("withdraw".equals(action)
+            || "withdraw_quick".equals(action)
             || "withdraw_all".equals(action)
             || "deposit_slot".equals(action)
             || "deposit_all_backpack".equals(action)
@@ -1820,7 +1822,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
      * 从当前仓库取出物品到玩家背包。
      * 需要二级密码已解锁，且当前仓库可写。按堆叠上限分批给予，背包满时停止。
      */
-    private void withdraw(Player player, int slot, long requestedAmount, boolean all) throws Exception {
+    private void withdraw(Player player, int slot, long requestedAmount, boolean all, boolean quickStack) throws Exception {
         if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-withdraw"));
             refreshBoth(player);
@@ -1856,7 +1858,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 refreshBoth(player);
                 return;
             }
-            long remaining = all ? item.amount() : Math.max(1L, Math.min(requestedAmount, item.amount()));
+            // 快捷取出（双击）按「一组」结算：上限收紧为物品自身堆叠数——不可堆叠取 1，16 堆叠取 16，64 堆叠取 64。
+            long requested = quickStack ? Math.min(requestedAmount, Math.max(1L, base.getMaxStackSize())) : requestedAmount;
+            long remaining = all ? item.amount() : Math.max(1L, Math.min(requested, item.amount()));
             delivered = 0L;
             while (remaining > 0L) {
                 int give = (int) Math.min(remaining, Math.max(1, base.getMaxStackSize()));
