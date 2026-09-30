@@ -414,6 +414,11 @@ ui:
         }
         var.mapRenderer.setUiCapturing(var.uiCapture)
         var.mapRenderer.setWorldId(var.selectedWorldId)
+        // 玩家当前世界 id 同步给 mod：未配置世界无 worldId→dimKey 映射时
+        // getSelectedDimKey 用它判定"选中世界==本地世界"→ 回退本地维度桶
+        if(var.playerWorldId != none) {
+          var.mapRenderer.setPlayerWorldId(var.playerWorldId)
+        }
         // 地图标记点击命中（"type:id"）→ 发包选中目标，服务端回详情面板数据
         hit = var.mapRenderer.getHitMarker()
         if(hit != none && hit != '') {

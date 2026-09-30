@@ -1241,6 +1241,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         String resolvedWorldId = normalizeId(worldId);
+        // 玩家当前所在的未配置世界（世界列表里的"当前世界"条目）允许选中——
+        // 无服务端数据，客户端按本地维度渲染临时世界地形
+        if (resolvedWorldId.equals(normalizeId(player.getWorld().getName()))) {
+            state(player).selectWorld(resolvedWorldId);
+            sync(player, false);
+            return;
+        }
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
             // 复合 id（nodeId/worldId）：远程世界同样允许打开浏览
             MapCrossServerService.RemoteWorldView remote =
@@ -1788,14 +1795,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         String newWorldId = normalizeId(player.getWorld().getName());
-        if (!configuration.worlds().containsKey(newWorldId)) {
-            return;
-        }
         MapPlayerViewState viewState = state(player);
-        if (newWorldId.equals(viewState.selectedWorldId())) {
-            return;
+        // 未配置世界不写 selectedWorldId（保持粘性选中），但 HUD 仍要同步——
+        // 换到未配置/临时世界时下发 worldId="" + visible，客户端切本地维度渲染
+        if (configuration.worlds().containsKey(newWorldId)
+            && !newWorldId.equals(viewState.selectedWorldId())) {
+            viewState.selectWorld(newWorldId);
         }
-        viewState.selectWorld(newWorldId);
         if (viewState.hudVisible()) {
             syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
         }
@@ -1809,7 +1815,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (resolvedWorldId.isBlank()) {
             return MapOperationResult.failure(message("player.map-unavailable"));
         }
-        if (!configuration.worlds().containsKey(resolvedWorldId)) {
+        // 未配置世界仅放行"玩家当前所在世界"（本地渲染回退）；
+        // 伪造/浏览其它未配置世界的请求照常拒绝
+        if (!configuration.worlds().containsKey(resolvedWorldId)
+            && !resolvedWorldId.equals(normalizeId(player.getWorld().getName()))) {
             return MapOperationResult.failure(message("player.world-not-configured", worldId));
         }
         if (bridge == null) {
@@ -3157,10 +3166,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return configuration.worlds().containsKey(requested) ? requested : "";
         }
         // 玩家当前世界优先：打开大地图默认显示当前世界，而不是上次关闭前
-        // 残留的 selectedWorldId（粘性状态只在玩家当前世界未配置地图时回退）
+        // 残留的 selectedWorldId。未配置世界也返回——客户端 mod 无服务端映射时
+        // 回退本地维度渲染本地扫描地形（临时/副本世界可看地图导航）。
         if (player != null && player.getWorld() != null) {
             String currentWorldId = normalizeId(player.getWorld().getName());
-            if (configuration.worlds().containsKey(currentWorldId)) {
+            if (!currentWorldId.isBlank()) {
                 return currentWorldId;
             }
         }

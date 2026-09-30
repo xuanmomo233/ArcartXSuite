@@ -36,9 +36,22 @@ public final class MapSnapshotBuilder {
 
         String selectedWorldId = chooseWorldId(input);
         WorldView selectedWorld = findWorld(input.worlds(), selectedWorldId);
-        String selectedWorldName = selectedWorld == null ? "" : selectedWorld.displayName();
+        // 未配置世界没有 WorldView：选中的是玩家当前世界时显示"当前世界"
+        // （worldRows 里会同步置顶同名条目），其余未配置 id 兜底回退原始 id
+        String selectedWorldName = selectedWorld == null
+            ? (selectedWorldId.equalsIgnoreCase(input.playerWorldId()) ? "当前世界" : selectedWorldId)
+            : selectedWorld.displayName();
 
         List<WorldRow> worldRows = new ArrayList<>();
+        // 玩家身处未配置/临时世界时，世界列表置顶一个"当前世界"条目：
+        // id = 玩家当前世界 id，只在本人处身其中时出现（离开/他人菜单里查不到）；
+        // dimension 空串 → 客户端无映射，mod 按"选中世界==playerWorldId"回退本地维度渲染
+        if (input.playerWorldId() != null && !input.playerWorldId().isBlank()
+            && findWorld(input.worlds(), input.playerWorldId()) == null) {
+            worldRows.add(new WorldRow(input.playerWorldId(), "当前世界", "",
+                selectedWorldId.equalsIgnoreCase(input.playerWorldId()),
+                0, "", 0, 0, false, "", false));
+        }
         for (WorldView world : input.worlds()) {
             worldRows.add(new WorldRow(world.id(), world.displayName(), world.dimension(),
                 world.id().equalsIgnoreCase(selectedWorldId),
@@ -463,8 +476,16 @@ public final class MapSnapshotBuilder {
     private HudSnapshot buildHudSnapshot(BuildInput input, WorldView hudWorld, String hudWorldId,
                                          List<AnchorView> hudAnchors,
                                          boolean litEnabled, List<List<List<Integer>>> litRegions) {
-        if (!input.viewState().hudVisible() || hudWorld == null || input.playerPosition() == null) {
+        if (!input.viewState().hudVisible() || input.playerPosition() == null) {
             return new HudSnapshot(input.packetId(), false, hudWorldId, "", "", 0F, "",
+                false, List.of(), 0, "", List.of());
+        }
+        if (hudWorld == null) {
+            // 未配置/临时世界：客户端 mod 按本地维度渲染自身扫描的地形，
+            // 服务端无配置数据可发——worldId 空串、标记/迷雾/预加载全空，
+            // 世界名固定显示"临时世界"
+            return new HudSnapshot(input.packetId(), true, "", "临时世界", "",
+                input.playerPosition().yaw(), trackingText(input.navigationStates()),
                 false, List.of(), 0, "", List.of());
         }
         return new HudSnapshot(
@@ -546,10 +567,13 @@ public final class MapSnapshotBuilder {
 
     private static String chooseWorldId(BuildInput input) {
         String selectedWorldId = input.viewState().selectedWorldId();
-        if (!selectedWorldId.isBlank() && findWorld(input.worlds(), selectedWorldId) != null) {
+        // 选中世界有效，或选中的是玩家当前所在的未配置世界（本地维度渲地形）
+        if (!selectedWorldId.isBlank() && (findWorld(input.worlds(), selectedWorldId) != null
+            || selectedWorldId.equalsIgnoreCase(input.playerWorldId()))) {
             return selectedWorldId;
         }
-        if (input.playerWorldId() != null && findWorld(input.worlds(), input.playerWorldId()) != null) {
+        // 玩家当前世界优先——未配置世界也选上（mod 端按本地维度回退渲染）
+        if (input.playerWorldId() != null && !input.playerWorldId().isBlank()) {
             return input.playerWorldId();
         }
         return input.worlds().isEmpty() ? "" : input.worlds().get(0).id();
