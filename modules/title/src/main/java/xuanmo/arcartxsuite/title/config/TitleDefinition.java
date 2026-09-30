@@ -26,6 +26,7 @@ import java.util.Map;
  * @param source                  称号来源说明
  * @param displayAttributes       装备时生效的展示属性映射
  * @param collectionAttributes    拥有即生效的收集属性映射
+ * @param displayEffects          装备时生效的持续药水效果（类型 → 等级，1 起）
  * @param displayAttributeLines   展示属性原始文本行
  * @param collectionAttributeLines 收集属性原始文本行
  * @param sortOrder               排序权重
@@ -52,6 +53,7 @@ public record TitleDefinition(
     String source,
     Map<String, Double> displayAttributes,
     Map<String, Double> collectionAttributes,
+    Map<org.bukkit.potion.PotionEffectType, Integer> displayEffects,
     List<String> displayAttributeLines,
     List<String> collectionAttributeLines,
     int sortOrder,
@@ -66,6 +68,7 @@ public record TitleDefinition(
     public TitleDefinition {
         displayAttributes = immutableCopy(displayAttributes);
         collectionAttributes = immutableCopy(collectionAttributes);
+        displayEffects = immutableEffectCopy(displayEffects);
         displayAttributeLines = immutableListCopy(displayAttributeLines);
         collectionAttributeLines = immutableListCopy(collectionAttributeLines);
     }
@@ -92,6 +95,15 @@ public record TitleDefinition(
     }
 
     private static Map<String, Double> immutableCopy(Map<String, Double> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private static Map<org.bukkit.potion.PotionEffectType, Integer> immutableEffectCopy(
+        Map<org.bukkit.potion.PotionEffectType, Integer> values
+    ) {
         if (values == null || values.isEmpty()) {
             return Map.of();
         }

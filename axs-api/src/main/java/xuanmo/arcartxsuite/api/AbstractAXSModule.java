@@ -87,6 +87,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected File pluginDataFolder;
     protected @NotNull StorageManager storageManager;
     protected @NotNull xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
+    protected @NotNull xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura;
 
 
     private boolean ready;
@@ -273,6 +274,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.propBridge = context.propBridge();
         this.storageManager = context.storageManager();
         this.scheduler = context.scheduler();
+        this.potionAura = context.potionAura();
 
         Logger logger = context.logger();
 

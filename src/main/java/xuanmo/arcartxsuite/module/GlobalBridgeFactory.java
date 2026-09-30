@@ -21,6 +21,7 @@ import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultPendingRewardService;
+import xuanmo.arcartxsuite.bridge.DefaultPotionAuraService;
 import xuanmo.arcartxsuite.bridge.DefaultRondoBridge;
 import xuanmo.arcartxsuite.bridge.DefaultVanillaItemNameBridge;
 import xuanmo.arcartxsuite.bridge.ContentModeratorImpl;
@@ -141,6 +142,17 @@ final class GlobalBridgeFactory {
         boolean symEnabled = attrBridges == null || attrBridges.getBoolean("symphony", true);
         attributeBridgeRegistry.setSourceEnabled(apEnabled, caEnabled, mlEnabled, symEnabled);
         attributeBridgeRegistry.initialize();
+
+        // 持续药水效果（光环）服务：实例由 ModuleRegistry 持有，此处仅按最新配置刷新参数与任务
+        ConfigurationSection auraSection = rootConfig.getConfigurationSection("potion-aura");
+        boolean auraEnabled = auraSection == null || auraSection.getBoolean("enabled", true);
+        int auraInterval = auraSection == null ? 60 : auraSection.getInt("refresh-interval-ticks", 60);
+        int auraDuration = auraSection == null ? 200 : auraSection.getInt("effect-duration-ticks", 200);
+        boolean auraParticles = auraSection != null && auraSection.getBoolean("particles", false);
+        boolean auraIcon = auraSection == null || auraSection.getBoolean("icon", true);
+        DefaultPotionAuraService potionAuraService = registry.potionAura();
+        potionAuraService.configure(auraEnabled, auraInterval, auraDuration, auraParticles, auraIcon);
+        potionAuraService.initialize();
 
         if (rondoBridge == null) {
             rondoBridge = new DefaultRondoBridge();

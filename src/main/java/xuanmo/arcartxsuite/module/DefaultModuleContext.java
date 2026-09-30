@@ -333,6 +333,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public @NotNull xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura() {
+        return registry.potionAura();
+    }
+
+    @Override
     public xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge() {
         return worldTextureBridge;
     }

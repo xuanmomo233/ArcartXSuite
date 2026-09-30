@@ -82,7 +82,7 @@ conditions: []
 # health|10                     -> 恢复生命值
 # exp|10                        -> 增加经验
 # healthPercent|10              -> 按百分比恢复生命值
-# potion|SPEED:1                -> 附加药水效果
+# potion|SPEED:1                -> 附加药水效果（等级 1 起；支持新旧枚举名与中文别名，如 potion|速度:1）
 # ap|物理伤害:10                 -> 附加 AttributePlus 词条
 # ml|ATTACK_DAMAGE:5            -> 附加 MythicLib 临时属性
 # mythiclib|critical_damage:8   -> 同上，支持完整前缀写法

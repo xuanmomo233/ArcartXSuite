@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.title;
 
 import java.io.File;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.command.CommandSender;
@@ -47,7 +48,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("title")
             .name("Title")
-            .version("1.4.4")
+            .version("1.5.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -158,8 +159,10 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             packetBridge, packetGuard,
             () -> getCapability(TabRefreshable.class),
             uiExporter,
+            Clock.systemUTC(),
             attributeBridge,
             worldTextureBridge,
+            potionAura,
             messages()
         );
         service.start();

@@ -30,6 +30,9 @@ adventurer:
   # key 为属性名，value 为数值；最终由 attribute-bridges 映射到对应属性插件。
   display-attributes:
     attack: 1
+  # 佩戴期间持续生效的药水效果（装备才生效），格式为「效果名: 等级（1 起）」。
+  # display-effects:
+  #   speed: 1
   # 展示属性在菜单中的显示行列表。
   display-attribute-lines:
     - "&4暴击率: 5(%)"

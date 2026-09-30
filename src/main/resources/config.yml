@@ -198,6 +198,24 @@ attribute-bridges:
   mythiclib: true
   symphony: true
 
+# ========== 持续药水效果（光环）==========
+# 本体统一维护的「按来源登记、周期刷新」药水效果服务。
+# 模块（如 title 称号的 display-effects）登记来源与效果表后，
+# 本体每隔 refresh-interval-ticks 为在线玩家重复施加短时长效果，
+# 来源移除/卸下后剩余效果在数秒内自然消失。
+potion-aura:
+  # 是否启用该服务；false 时所有模块的登记调用为空操作。
+  enabled: true
+  # 效果刷新周期（ticks，20 ticks = 1 秒）。最小 20，越短越平滑。
+  refresh-interval-ticks: 60
+  # 每次刷新施加的效果时长（ticks），必须大于刷新周期（引擎会自动兜底），
+  # 同时也是卸下后效果残留的最长时间。
+  effect-duration-ticks: 200
+  # 施加的效果是否显示粒子；false 为无粒子的静默 buff。
+  particles: false
+  # 施加的效果是否在物品栏显示图标。
+  icon: true
+
 # ========== 全局内容审核（敏感词过滤）==========
 # 统一管理本地词库、云端词库、标点穿透防护、白名单等过滤规则，
 # 供 chat / market / mail 等模块统一调用。

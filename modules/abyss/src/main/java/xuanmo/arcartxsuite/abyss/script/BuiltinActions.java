@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.abyss.instance.FailReason;
 import xuanmo.arcartxsuite.abyss.instance.LeaveReason;
 import xuanmo.arcartxsuite.abyss.service.AbyssService;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.potion.PotionEffectTypeResolver;
 
 /**
  * 内置动作集（对齐 QueDP ActionBridge 语义，走宿主基础设施）。
@@ -149,13 +150,14 @@ final class BuiltinActions {
             forEach(ctx, parts[0], p -> { p.setAllowFlight(on); p.setFlying(on); });
         });
         reg.register("apply_potion", (ctx, args, s) -> {
-            // apply_potion <sel> <类型> <秒> [等级]
+            // apply_potion <sel> <类型> <秒> [等级（1 起，与 prop/title 一致）]
             String[] parts = splitFirst(args, 3);
             if (parts.length < 3) return;
-            PotionEffectType type = PotionEffectType.getByName(ctx.replace(parts[1]).toUpperCase());
+            PotionEffectType type = PotionEffectTypeResolver.resolve(ctx.replace(parts[1]));
             if (type == null) return;
             int ticks = (int) (parseDouble(parts[2], 5) * 20);
-            int amp = parts.length > 3 ? Integer.parseInt(rest(parts, 3)) : 0;
+            int level = parts.length > 3 ? (int) parseDouble(rest(parts, 3), 1) : 1;
+            int amp = Math.max(0, level - 1);
             forEach(ctx, parts[0], p ->
                 p.addPotionEffect(new PotionEffect(type, ticks, amp, false, true, true)));
         });
@@ -166,7 +168,7 @@ final class BuiltinActions {
                 if (t.isBlank()) {
                     p.getActivePotionEffects().forEach(e -> p.removePotionEffect(e.getType()));
                 } else {
-                    PotionEffectType type = PotionEffectType.getByName(t.toUpperCase());
+                    PotionEffectType type = PotionEffectTypeResolver.resolve(t);
                     if (type != null) p.removePotionEffect(type);
                 }
             });

@@ -74,6 +74,7 @@ public class TitleService {
     private final TitleMythicLibService mythicLibService;
     private final TitleCraneAttributeService craneAttributeService;
     private final TitleSymphonyService symphonyService;
+    private final TitlePotionEffectService potionEffectService;
     private final TitleOverheadService overheadService;
     private final MessageProvider messages;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(new TitleThreadFactory());
@@ -99,7 +100,7 @@ public class TitleService {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         WorldTextureBridgeAPI worldTextureBridge
     ) {
-        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, null);
+        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, null, null);
     }
 
     public TitleService(
@@ -115,7 +116,7 @@ public class TitleService {
         WorldTextureBridgeAPI worldTextureBridge,
         MessageProvider messages
     ) {
-        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, messages);
+        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, null, messages);
     }
 
     public TitleService(
@@ -130,6 +131,7 @@ public class TitleService {
         Clock clock,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         WorldTextureBridgeAPI worldTextureBridge,
+        xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura,
         MessageProvider messages
     ) {
         this.plugin = plugin;
@@ -146,6 +148,7 @@ public class TitleService {
         this.mythicLibService = new TitleMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
         this.symphonyService = new TitleSymphonyService(plugin, configuration.symphony(), attributeBridge.symphony());
+        this.potionEffectService = new TitlePotionEffectService(potionAura);
         this.overheadService = new TitleOverheadService(worldTextureBridge, logger);
     }
 
@@ -210,9 +213,11 @@ public class TitleService {
             mythicLibService.clear(player);
             craneAttributeService.clear(player);
             symphonyService.clear(player);
+            potionEffectService.clear(player);
             overheadService.clear(player);
         }
         mythicLibService.shutdown();
+        potionEffectService.shutdown();
         overheadService.shutdown();
 
         databaseExecutor.shutdown();
@@ -262,6 +267,7 @@ public class TitleService {
         mythicLibService.clear(player);
         craneAttributeService.clear(player);
         symphonyService.clear(player);
+        potionEffectService.clear(player);
         UUID playerUuid = player.getUniqueId();
         states.remove(playerUuid);
         loadingStates.remove(playerUuid);
@@ -901,6 +907,7 @@ public class TitleService {
         mythicLibService.sync(player, resolvedState);
         craneAttributeService.sync(player, resolvedState);
         symphonyService.sync(player, resolvedState);
+        potionEffectService.sync(player, resolvedState);
         overheadService.sync(player, resolvedState);
     }
 

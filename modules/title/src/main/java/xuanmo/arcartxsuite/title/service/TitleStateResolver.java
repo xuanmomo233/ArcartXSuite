@@ -43,7 +43,7 @@ public final class TitleStateResolver {
     ) {
         PlayerTitleState sanitized = state == null ? null : state.sanitize(now);
         if (sanitized == null) {
-            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
+            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
         }
 
         TitleDefinition totalDisplayTitle = resolveTotalDisplayTitle(sanitized, configuration, accessibleGroupIds);
@@ -62,6 +62,7 @@ public final class TitleStateResolver {
         LinkedHashMap<String, String> equippedTitleIdsByGroup = new LinkedHashMap<>();
         LinkedHashMap<String, TitleDefinition> equippedTitlesByGroup = new LinkedHashMap<>();
         LinkedHashMap<String, Double> displayAttributes = new LinkedHashMap<>();
+        LinkedHashMap<org.bukkit.potion.PotionEffectType, Integer> displayEffects = new LinkedHashMap<>();
         List<String> displayAttributeLines = new ArrayList<>();
         for (Map.Entry<String, String> entry : sanitized.equippedTitleIdsByGroup().entrySet()) {
             TitleDefinition equippedTitle = configuration.title(entry.getValue());
@@ -73,6 +74,7 @@ public final class TitleStateResolver {
             equippedTitleIdsByGroup.put(entry.getKey(), equippedTitle.id());
             equippedTitlesByGroup.put(entry.getKey(), equippedTitle);
             mergeAttributes(displayAttributes, equippedTitle.displayAttributes());
+            mergeEffects(displayEffects, equippedTitle.displayEffects());
             mergeAttributeLines(displayAttributeLines, equippedTitle.displayAttributeLines());
         }
 
@@ -112,6 +114,7 @@ public final class TitleStateResolver {
             equippedTitlesByGroup,
             displayAttributes,
             collectionAttributes,
+            displayEffects,
             totalAttributes,
             TitleTextFormats.toSourceLines(displayAttributes, displayAttributeLines),
             TitleTextFormats.toSourceLines(collectionAttributes, collectionAttributeLines),
@@ -204,6 +207,21 @@ public final class TitleStateResolver {
         }
         for (Map.Entry<String, Double> entry : source.entrySet()) {
             target.merge(entry.getKey(), entry.getValue(), Double::sum);
+        }
+    }
+
+    /**
+     * 合并药水效果：同类型效果取多个装备称号中的最大等级。
+     */
+    private static void mergeEffects(
+        Map<org.bukkit.potion.PotionEffectType, Integer> target,
+        Map<org.bukkit.potion.PotionEffectType, Integer> source
+    ) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<org.bukkit.potion.PotionEffectType, Integer> entry : source.entrySet()) {
+            target.merge(entry.getKey(), entry.getValue(), Math::max);
         }
     }
 

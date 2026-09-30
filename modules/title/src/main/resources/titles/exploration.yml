@@ -30,6 +30,11 @@ starwalker:
   # key 为属性名，value 为数值；最终由 attribute-bridges 映射到对应属性插件。
   display-attributes:
     luck: 3
+  # 佩戴期间持续生效的药水效果（装备才生效），格式为「效果名: 等级（1 起）」。
+  # 支持英文枚举名、旧版枚举名与中文别名（急迫/速度/力量/抗性提升/生命恢复 等）。
+  # display-effects:
+  #   speed: 1
+  #   急迫: 1
   # 展示属性在菜单中的显示行列表。
   display-attribute-lines:
     - "幸运值:3"

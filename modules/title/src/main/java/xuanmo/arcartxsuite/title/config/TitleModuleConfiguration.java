@@ -391,6 +391,7 @@ public record TitleModuleConfiguration(
                 nullToEmpty(child.getString("source")).trim(),
                 readAttributeMap(child.getConfigurationSection("display-attributes"), logger, id, "display-attributes"),
                 readAttributeMap(child.getConfigurationSection("collection-attributes"), logger, id, "collection-attributes"),
+                readEffectMap(child.getConfigurationSection("display-effects"), logger, id),
                 readStringList(child, logger, id, "display-attribute-lines"),
                 readStringList(child, logger, id, "collection-attribute-lines"),
                 child.getInt("sort-order", index),
@@ -436,6 +437,49 @@ public record TitleModuleConfiguration(
                 }
             }
             values.put(normalizedKey, numericValue);
+        }
+        return values;
+    }
+
+    /**
+     * 解析 {@code display-effects} 节：效果名（英文枚举名/中文别名）→ 等级（1 起）。
+     * 无法识别的效果名与非正数等级会被跳过并记录警告。
+     */
+    private static Map<org.bukkit.potion.PotionEffectType, Integer> readEffectMap(
+        ConfigurationSection section,
+        Logger logger,
+        String titleId
+    ) {
+        if (section == null) {
+            return Map.of();
+        }
+
+        LinkedHashMap<org.bukkit.potion.PotionEffectType, Integer> values = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            org.bukkit.potion.PotionEffectType type =
+                xuanmo.arcartxsuite.api.potion.PotionEffectTypeResolver.resolve(key);
+            if (type == null) {
+                logger.warning("称号 '" + titleId + "' 的 display-effects." + key + " 无法识别为药水效果，已跳过。");
+                continue;
+            }
+
+            Object rawValue = section.get(key);
+            int level;
+            if (rawValue instanceof Number number) {
+                level = number.intValue();
+            } else {
+                try {
+                    level = Integer.parseInt(String.valueOf(rawValue).trim());
+                } catch (NumberFormatException exception) {
+                    logger.warning("称号 '" + titleId + "' 的 display-effects." + key + " 不是整数等级，已跳过。");
+                    continue;
+                }
+            }
+            if (level <= 0) {
+                logger.warning("称号 '" + titleId + "' 的 display-effects." + key + " 等级必须 >= 1，已跳过。");
+                continue;
+            }
+            values.merge(type, level, Math::max);
         }
         return values;
     }

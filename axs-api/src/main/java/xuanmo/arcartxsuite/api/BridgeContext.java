@@ -102,4 +102,15 @@ public interface BridgeContext {
      */
     @ApiStability.Stable
     @NotNull SchedulerAPI scheduler();
+
+    /**
+     * 持续药水效果（光环）服务。
+     * <p>
+     * 按「玩家 → 来源 → 药水效果表」登记，由本体统一定期刷新施加；
+     * 供称号等模块实现「佩戴期间持续生效的药水 buff」。
+     *
+     * @since 1.7.0
+     */
+    @ApiStability.Stable
+    @NotNull xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura();
 }
