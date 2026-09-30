@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.abyss.service;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -606,7 +607,7 @@ public final class AbyssService {
         if (!instance.transitionTo(cur, AbyssStatus.FAILED)) return;
         AbyssTemplate t = instance.getTemplate();
         runLifecycleScript(instance, "fail", null);
-        broadcast(instance, msg("dungeon.failed", "reason", reason.name()));
+        broadcast(instance, msg("dungeon.failed", "reason", failReasonText(reason)));
         publishEvent("axs.abyss.fail", null, Map.of(
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
             "reason", reason.name()));
@@ -1034,10 +1035,19 @@ public final class AbyssService {
     /** 消息格式化（messages.yml 键 + {key} 占位）。 */
     public String msg(String key, String... kv) {
         String s = messages != null ? messages.get(key) : key;
+        if (messages != null) {
+            s = s.replace("{prefix}", messages.get("prefix"));
+        }
         for (int i = 0; i + 1 < kv.length; i += 2) {
             s = s.replace("{" + kv[i] + "}", kv[i + 1]);
         }
         return s;
+    }
+
+    /** 失败原因本地化文案（对应 messages.yml 的 fail-reason.* 键）。 */
+    public String failReasonText(FailReason reason) {
+        String k = "fail-reason." + reason.name().toLowerCase(Locale.ROOT);
+        return messages != null && messages.has(k) ? messages.get(k) : reason.name();
     }
 
     public static String formatTime(long seconds) {

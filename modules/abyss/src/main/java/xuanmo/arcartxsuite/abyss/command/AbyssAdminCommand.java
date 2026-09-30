@@ -50,8 +50,8 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "status" -> sendStatus(sender);
                 case "reload" -> {
                     service.reloadTemplates();
-                    sender.sendMessage("§a[abyss] 模板已重载: "
-                        + service.instances().getAllTemplates().size() + " 个地牢");
+                    sender.sendMessage(service.msg("admin-action.reload-done",
+                        "count", String.valueOf(service.instances().getAllTemplates().size())));
                 }
                 case "list" -> sendList(sender);
                 case "info" -> sendInfo(sender, args);
@@ -63,10 +63,11 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "stamina" -> cmdStamina(sender, args);
                 case "cooldown" -> cmdCooldown(sender, args);
                 case "tp" -> cmdTp(sender, args);
-                default -> sender.sendMessage("§c未知子命令，输入 /" + label + " abyss help");
+                default -> sender.sendMessage(service.msg("usage.admin-unknown", "label", label));
             }
         } catch (Exception e) {
-            sender.sendMessage("§c[abyss] 执行出错: " + e.getMessage());
+            sender.sendMessage(service.msg("usage.admin-error",
+                "error", String.valueOf(e.getMessage())));
             logger.warning("[abyss] 命令异常: " + e);
         }
         return true;
@@ -102,69 +103,74 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     }
 
     private void sendHelp(CommandSender sender, String label) {
-        String c = "/" + label + " abyss";
-        sender.sendMessage("§6═══ Abyss 地牢管理 ═══");
-        sender.sendMessage("§e" + c + " status §7- 模块状态");
-        sender.sendMessage("§e" + c + " list §7- 地牢模板/实例列表");
-        sender.sendMessage("§e" + c + " info <地牢> §7- 模板详情");
-        sender.sendMessage("§e" + c + " enter <地牢> [玩家] §7- 强制进本");
-        sender.sendMessage("§e" + c + " leave §7- 离开当前副本");
-        sender.sendMessage("§e" + c + " force_complete|force_fail [玩家] §7- 强制结算");
-        sender.sendMessage("§e" + c + " cancel <地牢> §7- 取消该地牢全部实例");
-        sender.sendMessage("§e" + c + " stamina <玩家> give|set <值> §7- 体力管理");
-        sender.sendMessage("§e" + c + " cooldown <玩家> clear|check [地牢] §7- 冷却管理");
-        sender.sendMessage("§e" + c + " reload §7- 重载地牢模板");
+        sender.sendMessage(service.msg("admin-help.title"));
+        for (String k : List.of("status", "list", "info", "enter", "leave", "force",
+                "cancel", "stamina", "cooldown", "tp", "reload")) {
+            sender.sendMessage(service.msg("admin-help." + k, "label", label));
+        }
     }
 
     private void sendStatus(CommandSender sender) {
-        sender.sendMessage("§6═══ Abyss 状态 ═══");
-        sender.sendMessage("§e地牢模板: §f" + service.instances().getAllTemplates().size());
-        sender.sendMessage("§e运行实例: §f" + service.instances().getAllInstances().size());
+        sender.sendMessage(service.msg("admin-status.title"));
+        sender.sendMessage(service.msg("admin-status.templates",
+            "count", String.valueOf(service.instances().getAllTemplates().size())));
+        sender.sendMessage(service.msg("admin-status.instances",
+            "count", String.valueOf(service.instances().getAllInstances().size())));
         for (AbyssInstance i : service.instances().getAllInstances()) {
-            sender.sendMessage("§7- " + i.getTemplate().id() + " §8" + i.getInstanceId()
-                .toString().substring(0, 8) + " §7状态=" + i.getStatus()
-                + " 玩家=" + i.getPlayerUUIDs().size()
-                + " 存活怪=" + "?" + " 用时=" + i.getRunningTime() + "s");
+            sender.sendMessage(service.msg("admin-status.instance-row",
+                "id", i.getTemplate().id(),
+                "instance", i.getInstanceId().toString().substring(0, 8),
+                "status", String.valueOf(i.getStatus()),
+                "players", String.valueOf(i.getPlayerUUIDs().size()),
+                "time", String.valueOf(i.getRunningTime())));
         }
     }
 
     private void sendList(CommandSender sender) {
-        sender.sendMessage("§6═══ 地牢模板 ═══");
+        sender.sendMessage(service.msg("admin-list.title"));
         for (var t : service.instances().getAllTemplates()) {
             int running = service.instances().getInstances(t.id()).size();
-            sender.sendMessage("§e" + t.id() + " §7" + t.name()
-                + " §8人数" + t.requirements().minPlayers() + "-" + t.requirements().maxPlayers()
-                + " 实例上限" + t.maxInstances() + " 当前" + running);
+            sender.sendMessage(service.msg("admin-list.row",
+                "id", t.id(), "name", t.name(),
+                "min", String.valueOf(t.requirements().minPlayers()),
+                "max", String.valueOf(t.requirements().maxPlayers()),
+                "max_inst", String.valueOf(t.maxInstances()),
+                "running", String.valueOf(running)));
         }
     }
 
     private void sendInfo(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage("§c用法: /axs abyss info <地牢>");
+            sender.sendMessage(service.msg("usage.admin-info"));
             return;
         }
         var t = service.instances().getTemplate(args[2]);
         if (t == null) {
-            sender.sendMessage("§c地牢不存在: " + args[2]);
+            sender.sendMessage(service.msg("admin-action.dungeon-not-found", "dungeon", args[2]));
             return;
         }
-        sender.sendMessage("§6═══ " + t.id() + " ═══");
-        sender.sendMessage("§e名称: §f" + t.name());
-        sender.sendMessage("§e世界来源: §f" + t.worldSource().kind()
-            + " §7" + t.worldSource().file().getName());
-        sender.sendMessage("§e人数: §f" + t.requirements().minPlayers()
-            + "-" + t.requirements().maxPlayers());
-        sender.sendMessage("§e时限: §f" + t.timeLimitSeconds() + "s §7实例上限=" + t.maxInstances());
-        sender.sendMessage("§e怪物组: §f" + t.monsters().groups().size()
-            + " §7障碍=" + t.obstacles().obstacles().size()
-            + " 交互=" + t.interacts().interacts().size()
-            + " NPC=" + t.npcs().npcs().size()
-            + " 奖励=" + t.rewards().rewards().size());
+        sender.sendMessage(service.msg("admin-info.title", "id", t.id()));
+        sender.sendMessage(service.msg("admin-info.name", "name", t.name()));
+        sender.sendMessage(service.msg("admin-info.world",
+            "kind", String.valueOf(t.worldSource().kind()),
+            "file", t.worldSource().file().getName()));
+        sender.sendMessage(service.msg("admin-info.players",
+            "min", String.valueOf(t.requirements().minPlayers()),
+            "max", String.valueOf(t.requirements().maxPlayers())));
+        sender.sendMessage(service.msg("admin-info.time",
+            "seconds", String.valueOf(t.timeLimitSeconds()),
+            "max_inst", String.valueOf(t.maxInstances())));
+        sender.sendMessage(service.msg("admin-info.groups",
+            "groups", String.valueOf(t.monsters().groups().size()),
+            "obstacles", String.valueOf(t.obstacles().obstacles().size()),
+            "interacts", String.valueOf(t.interacts().interacts().size()),
+            "npcs", String.valueOf(t.npcs().npcs().size()),
+            "rewards", String.valueOf(t.rewards().rewards().size())));
     }
 
     private void cmdEnter(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage("§c用法: /axs abyss enter <地牢> [玩家]");
+            sender.sendMessage(service.msg("usage.admin-enter"));
             return;
         }
         Player target;
@@ -173,25 +179,26 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         } else if (sender instanceof Player p) {
             target = p;
         } else {
-            sender.sendMessage("§c控制台需指定玩家");
+            sender.sendMessage(service.msg("error.console-need-player"));
             return;
         }
         if (target == null) {
-            sender.sendMessage("§c玩家不在线");
+            sender.sendMessage(service.msg("error.player-not-online"));
             return;
         }
         var r = service.enterDungeon(target, args[2]);
-        sender.sendMessage(r.ok() ? "§a已进入副本流程" : "§c进入失败: " + r.reason());
+        sender.sendMessage(r.ok() ? service.msg("admin-action.entered")
+            : service.msg("admin-action.enter-failed", "reason", r.reason()));
     }
 
     private void cmdLeave(CommandSender sender) {
         if (!(sender instanceof Player p)) {
-            sender.sendMessage("§c仅玩家可执行");
+            sender.sendMessage(service.msg("admin-action.only-player"));
             return;
         }
         AbyssInstance i = service.instances().getInstance(p);
         if (i == null) {
-            sender.sendMessage("§c你不在副本中");
+            sender.sendMessage(service.msg("admin-action.player-not-in-dungeon"));
             return;
         }
         service.playerExit(i, p, xuanmo.arcartxsuite.abyss.instance.LeaveReason.ADMIN);
@@ -201,26 +208,28 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         Player target = args.length >= 3 ? Bukkit.getPlayer(args[2])
             : sender instanceof Player p ? p : null;
         if (target == null) {
-            sender.sendMessage("§c需指定在线玩家");
+            sender.sendMessage(service.msg("error.need-online-player"));
             return;
         }
         AbyssInstance i = service.instances().getInstance(target);
         if (i == null) {
-            sender.sendMessage("§c该玩家不在副本中");
+            sender.sendMessage(service.msg("error.target-not-in-dungeon"));
             return;
         }
         if (complete) {
             service.completeDungeon(i);
-            sender.sendMessage("§a已强制通关实例 " + i.getInstanceId());
+            sender.sendMessage(service.msg("admin-action.force-complete",
+                "instance", String.valueOf(i.getInstanceId())));
         } else {
             service.failDungeon(i, FailReason.ADMIN);
-            sender.sendMessage("§a已强制失败实例 " + i.getInstanceId());
+            sender.sendMessage(service.msg("admin-action.force-fail",
+                "instance", String.valueOf(i.getInstanceId())));
         }
     }
 
     private void cmdCancel(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage("§c用法: /axs abyss cancel <地牢>");
+            sender.sendMessage(service.msg("usage.admin-cancel"));
             return;
         }
         int n = 0;
@@ -228,74 +237,77 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
             service.cancelDungeon(i);
             n++;
         }
-        sender.sendMessage("§a已取消 " + n + " 个实例");
+        sender.sendMessage(service.msg("admin-action.cancelled", "count", String.valueOf(n)));
     }
 
     private void cmdStamina(CommandSender sender, String[] args) {
         if (args.length < 5) {
-            sender.sendMessage("§c用法: /axs abyss stamina <玩家> give|set <值>");
+            sender.sendMessage(service.msg("usage.admin-stamina"));
             return;
         }
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            sender.sendMessage("§c玩家不在线");
+            sender.sendMessage(service.msg("error.player-not-online"));
             return;
         }
         int v;
         try { v = Integer.parseInt(args[4]); } catch (NumberFormatException e) {
-            sender.sendMessage("§c数值无效");
+            sender.sendMessage(service.msg("error.invalid-number"));
             return;
         }
         switch (args[3].toLowerCase(Locale.ROOT)) {
             case "give" -> service.stamina().add(target.getUniqueId(), v);
             case "set" -> service.stamina().set(target.getUniqueId(), v);
             default -> {
-                sender.sendMessage("§c用法: give|set");
+                sender.sendMessage(service.msg("usage.admin-stamina-op"));
                 return;
             }
         }
-        sender.sendMessage("§a已更新 " + target.getName() + " 体力: "
-            + service.stamina().getStamina(target.getUniqueId()));
+        sender.sendMessage(service.msg("admin-action.stamina-done",
+            "player", target.getName(),
+            "value", String.valueOf(service.stamina().getStamina(target.getUniqueId()))));
     }
 
     private void cmdCooldown(CommandSender sender, String[] args) {
         if (args.length < 4) {
-            sender.sendMessage("§c用法: /axs abyss cooldown <玩家> clear|check [地牢]");
+            sender.sendMessage(service.msg("usage.admin-cooldown"));
             return;
         }
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            sender.sendMessage("§c玩家不在线");
+            sender.sendMessage(service.msg("error.player-not-online"));
             return;
         }
         String dungeon = args.length >= 5 ? args[4] : "";
         if ("clear".equalsIgnoreCase(args[3])) {
             service.cooldowns().clear(target.getUniqueId(), dungeon);
-            sender.sendMessage("§a已清除冷却");
+            sender.sendMessage(service.msg("admin-action.cooldown-cleared"));
         } else {
             long left = service.cooldowns().remaining(target.getUniqueId(), dungeon);
-            sender.sendMessage("§e冷却剩余: " + left + "s");
+            sender.sendMessage(service.msg("admin-action.cooldown-left",
+                "seconds", String.valueOf(left)));
         }
     }
 
     private void cmdTp(CommandSender sender, String[] args) {
         if (!(sender instanceof Player p)) {
-            sender.sendMessage("§c仅玩家可执行");
+            sender.sendMessage(service.msg("admin-action.only-player"));
             return;
         }
         if (args.length < 3) {
-            sender.sendMessage("§c用法: /axs abyss tp <地牢>（传送到该地牢运行中实例）");
+            sender.sendMessage(service.msg("usage.admin-tp"));
             return;
         }
         for (AbyssInstance i : service.instances().getInstances(args[2])) {
             var loc = service.spawnLocation(i);
             if (loc != null) {
                 p.teleport(loc);
-                sender.sendMessage("§a已传送到实例 " + i.getInstanceId());
+                sender.sendMessage(service.msg("admin-action.teleported",
+                    "instance", String.valueOf(i.getInstanceId())));
                 return;
             }
         }
-        sender.sendMessage("§c无运行中实例");
+        sender.sendMessage(service.msg("admin-action.no-instance"));
     }
 
     private static List<String> filter(List<String> candidates, String input) {

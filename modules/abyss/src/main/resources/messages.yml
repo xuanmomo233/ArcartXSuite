@@ -1,6 +1,11 @@
-# Abyss 消息文件 — 支持 & 颜色代码与 {key} 占位
+# ============================================================
+#  Abyss 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {key} 占位符。
+#  {prefix} 会被替换为下方 prefix 值；修改后执行 /axs reload abyss 生效。
+# ============================================================
 
-prefix: "&8[&5深渊&8] "
+prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 error:
   no-permission: "{prefix}&c你没有权限执行此操作"
@@ -12,21 +17,51 @@ error:
   not-party-leader: "{prefix}&c只有队长可以执行此操作"
   party-full: "{prefix}&c队伍已满"
   already-in-party: "{prefix}&c对方已在队伍中"
+  already-member: "{prefix}&c你已在队伍中"
+  self-invite: "{prefix}&c不能邀请自己"
+  target-not-in-party: "{prefix}&c对方不在队伍中"
   invite-expired: "{prefix}&c邀请已过期"
   player-not-found: "{prefix}&c玩家 &f{player} &c不在线"
+  player-not-online: "{prefix}&c玩家不在线"
+  need-online-player: "{prefix}&c需指定在线玩家"
+  target-not-in-dungeon: "{prefix}&c该玩家不在副本中"
+  console-need-player: "{prefix}&c控制台需指定玩家"
+  invalid-number: "{prefix}&c数值无效"
   requirements-failed: "{prefix}&c不满足进入条件: &f{reason}"
   world-load-failed: "{prefix}&c副本世界加载失败，请稍后再试"
   enter-failed: "{prefix}&c进入副本失败: &f{reason}"
+  ui-disabled: "{prefix}&cUI 未启用"
+
+usage:
+  enter: "{prefix}&e用法: /{label} enter <地牢>"
+  rank: "{prefix}&c排行 UI 未启用，用法: /{label} rank <地牢>"
+  invite: "{prefix}&e用法: /{label} invite <玩家>"
+  kick: "{prefix}&e用法: /{label} kick <玩家>"
+  leader: "{prefix}&e用法: /{label} leader <玩家>"
+  admin-info: "{prefix}&e用法: /axs abyss info <地牢>"
+  admin-enter: "{prefix}&e用法: /axs abyss enter <地牢> [玩家]"
+  admin-cancel: "{prefix}&e用法: /axs abyss cancel <地牢>"
+  admin-stamina: "{prefix}&e用法: /axs abyss stamina <玩家> give|set <值>"
+  admin-stamina-op: "{prefix}&e用法: give|set"
+  admin-cooldown: "{prefix}&e用法: /axs abyss cooldown <玩家> clear|check [地牢]"
+  admin-tp: "{prefix}&e用法: /axs abyss tp <地牢>（传送到该地牢运行中实例）"
+  admin-unknown: "{prefix}&e未知子命令，输入 /{label} abyss help"
+  admin-error: "{prefix}&c[abyss] 执行出错: {error}"
 
 party:
   created: "{prefix}&a队伍已创建"
   invited: "{prefix}&a已邀请 &f{player} &a加入队伍（{timeout}秒内有效）"
   invite-received: "{prefix}&e{leader} &a邀请你加入队伍，输入 &f/party accept &a接受"
+  invite-broadcast: "{prefix}&7{player} 邀请了 {target}"
   joined: "{prefix}&f{player} &a加入了队伍"
   left: "{prefix}&f{player} &c离开了队伍"
   kicked: "{prefix}&f{player} &c被移出队伍"
   disbanded: "{prefix}&c队伍已解散"
   leader-changed: "{prefix}&f{player} &a成为新队长"
+  chat-on: "{prefix}&a已开启队伍聊天模式"
+  chat-off: "{prefix}&c已关闭队伍聊天模式"
+  list-title: "{prefix}&6队伍 {name}"
+  list-row: "{prefix}{mark} {name}{offline}"
 
 dungeon:
   preparing: "{prefix}&e副本准备中，请稍候..."
@@ -46,3 +81,95 @@ dungeon:
   mob-group-next: "{prefix}&e{group} &a即将出现..."
   cooldown: "{prefix}&c冷却中，还需 &f{time}"
   no-stamina: "{prefix}&c体力不足（需要 {cost}，当前 {current}）"
+
+list:
+  title: "{prefix}&6可进入的地牢"
+  row: "{prefix}&e{id}&f - {name} &8({min}-{max}人)"
+
+info:
+  title: "{prefix}&6当前副本"
+  dungeon: "{prefix}&e地牢&f - {name}"
+  status: "{prefix}&e状态&f - {status} &7用时 {time}"
+  players: "{prefix}&e玩家&f - {count} &7死亡 {deaths}"
+
+stamina:
+  view: "{prefix}&e体力&f - {current}/{max}"
+
+fail-reason:
+  team_wipe: "全队阵亡"
+  timeout: "超出时限"
+  escape: "离开副本区域"
+  scripted: "挑战失败"
+  error: "发生错误"
+  admin: "管理员终止"
+
+help:
+  title: "{prefix}&6Abyss 地牢 命令"
+  open: "{prefix}&7/{label}&f - 打开地牢浏览"
+  enter: "{prefix}&7/{label} enter <地牢>&f - 进入地牢"
+  leave: "{prefix}&7/{label} leave&f - 离开副本"
+  list: "{prefix}&7/{label} list&f - 地牢列表"
+  info: "{prefix}&7/{label} info&f - 当前副本信息"
+  stamina: "{prefix}&7/{label} stamina&f - 查看体力"
+  party: "{prefix}&7/{label} party&f - 队伍命令"
+  rank: "{prefix}&7/{label} rank <地牢>&f - 排行榜"
+
+party-help:
+  title: "{prefix}&6Abyss 队伍 命令"
+  create: "{prefix}&7/{label} create&f - 创建队伍"
+  invite: "{prefix}&7/{label} invite <玩家>&f - 邀请玩家"
+  accept: "{prefix}&7/{label} accept&f - 接受邀请"
+  leave: "{prefix}&7/{label} leave&f - 离开队伍"
+  chat: "{prefix}&7/{label} chat [消息]&f - 队伍聊天"
+  list: "{prefix}&7/{label} list&f - 成员列表"
+  kick: "{prefix}&7/{label} kick <玩家>&f - 踢出成员"
+  leader: "{prefix}&7/{label} leader <玩家>&f - 转让队长"
+  disband: "{prefix}&7/{label} disband&f - 解散队伍"
+
+admin-help:
+  title: "{prefix}&6Abyss 管理命令"
+  status: "{prefix}&7/{label} abyss status&f - 模块状态"
+  list: "{prefix}&7/{label} abyss list&f - 地牢模板/实例列表"
+  info: "{prefix}&7/{label} abyss info <地牢>&f - 模板详情"
+  enter: "{prefix}&7/{label} abyss enter <地牢> [玩家]&f - 强制进本"
+  leave: "{prefix}&7/{label} abyss leave&f - 离开当前副本"
+  force: "{prefix}&7/{label} abyss force_complete|force_fail [玩家]&f - 强制结算"
+  cancel: "{prefix}&7/{label} abyss cancel <地牢>&f - 取消该地牢全部实例"
+  stamina: "{prefix}&7/{label} abyss stamina <玩家> give|set <值>&f - 体力管理"
+  cooldown: "{prefix}&7/{label} abyss cooldown <玩家> clear|check [地牢]&f - 冷却管理"
+  tp: "{prefix}&7/{label} abyss tp <地牢>&f - 传送到运行中实例"
+  reload: "{prefix}&7/{label} abyss reload&f - 重载地牢模板"
+
+admin-status:
+  title: "{prefix}&6Abyss 状态"
+  templates: "{prefix}&e地牢模板&f - {count}"
+  instances: "{prefix}&e运行实例&f - {count}"
+  instance-row: "{prefix}&7- {id} &8{instance} &7状态={status} 玩家={players} 用时={time}s"
+
+admin-list:
+  title: "{prefix}&6地牢模板"
+  row: "{prefix}&e{id} &7{name} &8人数{min}-{max} 实例上限{max_inst} 当前{running}"
+
+admin-info:
+  title: "{prefix}&6{id}"
+  name: "{prefix}&e名称&f - {name}"
+  world: "{prefix}&e世界来源&f - {kind} &7{file}"
+  players: "{prefix}&e人数&f - {min}-{max}"
+  time: "{prefix}&e时限&f - {seconds}s &7实例上限={max_inst}"
+  groups: "{prefix}&e怪物组&f - {groups} &7障碍={obstacles} 交互={interacts} NPC={npcs} 奖励={rewards}"
+
+admin-action:
+  reload-done: "{prefix}&a[abyss] 模板已重载: {count} 个地牢"
+  dungeon-not-found: "{prefix}&c地牢不存在: {dungeon}"
+  entered: "{prefix}&a已进入副本流程"
+  enter-failed: "{prefix}&c进入失败: {reason}"
+  force-complete: "{prefix}&a已强制通关实例 {instance}"
+  force-fail: "{prefix}&a已强制失败实例 {instance}"
+  cancelled: "{prefix}&a已取消 {count} 个实例"
+  stamina-done: "{prefix}&a已更新 {player} 体力: {value}"
+  cooldown-cleared: "{prefix}&a已清除冷却"
+  cooldown-left: "{prefix}&e冷却剩余: {seconds}s"
+  teleported: "{prefix}&a已传送到实例 {instance}"
+  no-instance: "{prefix}&c无运行中实例"
+  only-player: "{prefix}&c仅玩家可执行"
+  player-not-in-dungeon: "{prefix}&c你不在副本中"

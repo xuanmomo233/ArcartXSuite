@@ -36,7 +36,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("该命令仅玩家可执行");
+            sender.sendMessage(service.msg("error.player-only"));
             return true;
         }
         if (args.length == 0) {
@@ -51,7 +51,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "enter", "join" -> {
                 if (args.length < 2) {
-                    player.sendMessage("§c用法: /" + label + " enter <地牢>");
+                    player.sendMessage(service.msg("usage.enter", "label", label));
                     return true;
                 }
                 // 多人队伍进本：若玩家在队伍中且为队长 → 带全队
@@ -63,7 +63,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     members = List.of(player);
                 }
                 var r = service.enterDungeon(members, args[1]);
-                if (!r.ok()) player.sendMessage("§c" + r.reason());
+                if (!r.ok()) player.sendMessage(service.msg("error.enter-failed", "reason", r.reason()));
             }
             case "leave", "quit" -> {
                 AbyssInstance i = service.instances().getInstance(player);
@@ -74,11 +74,12 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 service.playerExit(i, player, LeaveReason.QUIT);
             }
             case "list" -> {
-                player.sendMessage("§6═══ 可进入的地牢 ═══");
+                player.sendMessage(service.msg("list.title"));
                 for (AbyssTemplate t : service.instances().getAllTemplates()) {
-                    player.sendMessage("§e" + t.id() + " §7- §f" + t.name()
-                        + " §8(" + t.requirements().minPlayers() + "-"
-                        + t.requirements().maxPlayers() + "人)");
+                    player.sendMessage(service.msg("list.row",
+                        "id", t.id(), "name", t.name(),
+                        "min", String.valueOf(t.requirements().minPlayers()),
+                        "max", String.valueOf(t.requirements().maxPlayers())));
                 }
             }
             case "info" -> {
@@ -87,21 +88,23 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.not-in-dungeon"));
                     return true;
                 }
-                player.sendMessage("§6═══ 当前副本 ═══");
-                player.sendMessage("§e地牢: §f" + i.getTemplate().name());
-                player.sendMessage("§e状态: §f" + i.getStatus()
-                    + " §7用时: " + AbyssService.formatTime(i.getRunningTime()));
-                player.sendMessage("§e玩家: §f" + i.getPlayerUUIDs().size()
-                    + " §7死亡: " + i.getDeaths(player.getUniqueId()));
+                player.sendMessage(service.msg("info.title"));
+                player.sendMessage(service.msg("info.dungeon", "name", i.getTemplate().name()));
+                player.sendMessage(service.msg("info.status",
+                    "status", String.valueOf(i.getStatus()),
+                    "time", AbyssService.formatTime(i.getRunningTime())));
+                player.sendMessage(service.msg("info.players",
+                    "count", String.valueOf(i.getPlayerUUIDs().size()),
+                    "deaths", String.valueOf(i.getDeaths(player.getUniqueId()))));
             }
-            case "stamina" -> player.sendMessage("§e体力: §f"
-                + service.stamina().getStamina(player.getUniqueId())
-                + "/" + service.stamina().max());
+            case "stamina" -> player.sendMessage(service.msg("stamina.view",
+                "current", String.valueOf(service.stamina().getStamina(player.getUniqueId())),
+                "max", String.valueOf(service.stamina().max())));
             case "rank", "top" -> {
                 if (service.uiFacade() != null && args.length >= 2) {
                     service.uiFacade().openLeaderboard(player, args[1]);
                 } else {
-                    player.sendMessage("§c排行 UI 未启用，用法: /" + label + " rank <地牢>");
+                    player.sendMessage(service.msg("usage.rank", "label", label));
                 }
             }
             case "party" -> onPartyCommand(player, dropFirst(args), "party");
@@ -109,7 +112,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 if (service.uiFacade() != null) {
                     service.uiFacade().openBrowser(player);
                 } else {
-                    player.sendMessage("§cUI 未启用");
+                    player.sendMessage(service.msg("error.ui-disabled"));
                 }
             }
             default -> sendHelp(player, label);
@@ -118,15 +121,10 @@ public final class AbyssPlayerCommand implements TabExecutor {
     }
 
     private void sendHelp(Player p, String label) {
-        p.sendMessage("§6═══ Abyss 地牢 ═══");
-        p.sendMessage("§e/" + label + " §7- 打开地牢浏览");
-        p.sendMessage("§e/" + label + " enter <地牢> §7- 进入地牢");
-        p.sendMessage("§e/" + label + " leave §7- 离开副本");
-        p.sendMessage("§e/" + label + " list §7- 地牢列表");
-        p.sendMessage("§e/" + label + " info §7- 当前副本信息");
-        p.sendMessage("§e/" + label + " stamina §7- 查看体力");
-        p.sendMessage("§e/" + label + " party §7- 队伍命令");
-        p.sendMessage("§e/" + label + " rank <地牢> §7- 排行榜");
+        p.sendMessage(service.msg("help.title"));
+        for (String k : List.of("open", "enter", "leave", "list", "info", "stamina", "party", "rank")) {
+            p.sendMessage(service.msg("help." + k, "label", label));
+        }
     }
 
     // ═══ /party ═══
@@ -145,7 +143,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "create" -> {
                 if (party != null) {
-                    player.sendMessage("§c你已在队伍中");
+                    player.sendMessage(service.msg("error.already-member"));
                     return true;
                 }
                 pm.create(player);
@@ -153,7 +151,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
             }
             case "invite" -> {
                 if (args.length < 2) {
-                    player.sendMessage("§c用法: /" + label + " invite <玩家>");
+                    player.sendMessage(service.msg("usage.invite", "label", label));
                     return true;
                 }
                 Player target = Bukkit.getPlayer(args[1]);
@@ -162,7 +160,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     return true;
                 }
                 if (target.getUniqueId().equals(player.getUniqueId())) {
-                    player.sendMessage("§c不能邀请自己");
+                    player.sendMessage(service.msg("error.self-invite"));
                     return true;
                 }
                 if (pm.inParty(target.getUniqueId())) {
@@ -173,7 +171,8 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 player.sendMessage(service.msg("party.invited",
                     "player", target.getName(), "timeout", String.valueOf(pm.inviteTimeout())));
                 target.sendMessage(service.msg("party.invite-received", "leader", player.getName()));
-                p.broadcast("§7" + player.getName() + " 邀请了 " + target.getName());
+                p.broadcast(service.msg("party.invite-broadcast",
+                    "player", player.getName(), "target", target.getName()));
             }
             case "accept" -> {
                 var result = pm.accept(player);
@@ -200,7 +199,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage("§c用法: /" + label + " kick <玩家>");
+                    player.sendMessage(service.msg("usage.kick", "label", label));
                     return true;
                 }
                 Player target = Bukkit.getPlayer(args[1]);
@@ -218,12 +217,12 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage("§c用法: /" + label + " leader <玩家>");
+                    player.sendMessage(service.msg("usage.leader", "label", label));
                     return true;
                 }
                 Player target = Bukkit.getPlayer(args[1]);
                 if (target == null || !party.isMember(target.getUniqueId())) {
-                    player.sendMessage("§c对方不在队伍中");
+                    player.sendMessage(service.msg("error.target-not-in-party"));
                     return true;
                 }
                 pm.transferLeader(player, target);
@@ -240,7 +239,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
                         java.util.Arrays.copyOfRange(args, 1, args.length)));
                 } else {
                     boolean on = party.toggleChat(player.getUniqueId());
-                    player.sendMessage(on ? "§a已开启队伍聊天模式" : "§c已关闭队伍聊天模式");
+                    player.sendMessage(service.msg(on ? "party.chat-on" : "party.chat-off"));
                 }
             }
             case "list", "members" -> {
@@ -248,12 +247,13 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.not-in-party"));
                     return true;
                 }
-                player.sendMessage("§6═══ 队伍 " + party.name() + " ═══");
+                player.sendMessage(service.msg("party.list-title", "name", party.name()));
                 for (java.util.UUID u : party.members()) {
                     Player m = Bukkit.getPlayer(u);
-                    player.sendMessage((party.isLeader(u) ? "§6★ " : "§7- ")
-                        + (m != null ? m.getName() : u.toString().substring(0, 8))
-                        + (m == null ? " §8(离线)" : ""));
+                    player.sendMessage(service.msg("party.list-row",
+                        "mark", party.isLeader(u) ? "&6★" : "&7-",
+                        "name", m != null ? m.getName() : u.toString().substring(0, 8),
+                        "offline", m == null ? " &8(离线)" : ""));
                 }
             }
             case "disband" -> {
@@ -270,14 +270,11 @@ public final class AbyssPlayerCommand implements TabExecutor {
     }
 
     private void sendPartyHelp(Player p, String label) {
-        p.sendMessage("§6═══ 队伍 ═══");
-        p.sendMessage("§e/" + label + " create §7- 创建队伍");
-        p.sendMessage("§e/" + label + " invite <玩家> §7- 邀请");
-        p.sendMessage("§e/" + label + " accept §7- 接受邀请");
-        p.sendMessage("§e/" + label + " leave §7- 离开队伍");
-        p.sendMessage("§e/" + label + " chat [消息] §7- 队伍聊天");
-        p.sendMessage("§e/" + label + " list §7- 成员列表");
-        p.sendMessage("§e/" + label + " kick|leader|disband §7- 队长操作");
+        p.sendMessage(service.msg("party-help.title"));
+        for (String k : List.of("create", "invite", "accept", "leave", "chat",
+                "list", "kick", "leader", "disband")) {
+            p.sendMessage(service.msg("party-help." + k, "label", label));
+        }
     }
 
     private static String[] dropFirst(String[] args) {
