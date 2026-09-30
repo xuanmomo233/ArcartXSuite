@@ -53,6 +53,16 @@ public final class ProtectedClassLoader extends ClassLoader {
     private volatile boolean protectionActive = true;
 
     /**
+     * 本加载器所定义类的 ProtectionDomain。
+     * <p>裸 {@code ClassLoader#defineClass(String,byte[],int,int)} 使用 JDK 的
+     * {@code defaultDomain}——其 CodeSource 非 null 但 {@code getLocation()==null}，
+     * 导致加密类内任何 {@code CodeSource.getLocation().toURI()} 直接 NPE
+     * （Mohist/Forge 混合端下以该方式加载的类即踩中此坑）。
+     * 因此所有由本加载器定义的类统一挂到指向插件 JAR 的 CodeSource 上。
+     */
+    private final java.security.ProtectionDomain pluginDomain;
+
+    /**
      * 宿主 PluginClassLoader 的反向引用，用于在 originalParent（AppClassLoader 系）
      * 找不到某类时回退到 PluginClassLoader，利用其跨插件类查找能力加载其他插件
      * 提供的类（如 ArcartX 插件的 {@code KeyCallBack}）。
@@ -70,7 +80,8 @@ public final class ProtectedClassLoader extends ClassLoader {
     private final ThreadLocal<Boolean> delegatingToPlugin = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProtectedClassLoader(ClassLoader originalParent, JarFile protectedJar,
-                                Map<String, Class<?>> capturedClasses, ClassLoader pluginClassLoader) {
+                                Map<String, Class<?>> capturedClasses, ClassLoader pluginClassLoader,
+                                java.security.ProtectionDomain pluginDomain) {
         super(originalParent);
         this.protectedJar = protectedJar;
         this.capturedClasses = capturedClasses != null
@@ -83,6 +94,32 @@ public final class ProtectedClassLoader extends ClassLoader {
             prefix = null;
         }
         this.jarUrlPrefix = prefix;
+
+        // 传入的 PD（通常即插件主类的 ProtectionDomain）必须带有可定位到 JAR 的
+        // CodeSource；否则自行以插件 JAR URL 构造一个，保证本加载器定义的类
+        // getProtectionDomain().getCodeSource().getLocation() 始终非 null。
+        if (pluginDomain == null || pluginDomain.getCodeSource() == null
+                || pluginDomain.getCodeSource().getLocation() == null) {
+            pluginDomain = buildDomainFromJar(protectedJar);
+        }
+        this.pluginDomain = pluginDomain;
+    }
+
+    /**
+     * 以插件 JAR 文件本身为 CodeSource 构造 ProtectionDomain（权限对齐普通插件类）。
+     * 构造失败返回 null——调用方按无 PD 的默认路径兜底，行为与旧版一致。
+     */
+    private static java.security.ProtectionDomain buildDomainFromJar(JarFile jar) {
+        try {
+            URL jarUrl = new java.io.File(jar.getName()).toURI().toURL();
+            java.security.CodeSource cs =
+                    new java.security.CodeSource(jarUrl, (java.security.CodeSigner[]) null);
+            java.security.Permissions perms = new java.security.Permissions();
+            perms.add(new java.security.AllPermission());
+            return new java.security.ProtectionDomain(cs, perms);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static String encEntryPath(String name) {
@@ -173,7 +210,9 @@ public final class ProtectedClassLoader extends ClassLoader {
                 throw new ClassNotFoundException("Decryption failed: " + name);
             }
             definePackageIfNeeded(name);
-            Class<?> clazz = defineClass(name, plain, 0, plain.length);
+            Class<?> clazz = pluginDomain != null
+                    ? defineClass(name, plain, 0, plain.length, pluginDomain)
+                    : defineClass(name, plain, 0, plain.length);
             loadedClasses.put(name, clazz);
             if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("[Protection] decrypt-define " + name);
             return clazz;
@@ -190,7 +229,9 @@ public final class ProtectedClassLoader extends ClassLoader {
         try {
             byte[] data = readEntry(entry);
             definePackageIfNeeded(name);
-            Class<?> clazz = defineClass(name, data, 0, data.length);
+            Class<?> clazz = pluginDomain != null
+                    ? defineClass(name, data, 0, data.length, pluginDomain)
+                    : defineClass(name, data, 0, data.length);
             loadedClasses.put(name, clazz);
             return clazz;
         } catch (IOException e) {

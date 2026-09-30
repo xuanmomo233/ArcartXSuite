@@ -397,16 +397,46 @@ public final class AuthlibInjectorManager {
 
     /**
      * 解析 AXS 自身 jar 的相对路径（用于独立进程代理的 classpath）。
+     * <p>
+     * 本类在混淆/加密构建后可能由 ProtectedClassLoader 或混合端重映射链定义，
+     * {@code CodeSource.getLocation()} 可能为 null，因此按「保护层缓存 →
+     * 自身 CodeSource（判空）→ plugins 目录扫描」逐级回退。
      */
     private String resolveAxsJarPath() {
+        // 1) 保护层初始化时已解析的宿主 JAR —— 与加载器路径无关，最可靠
         try {
-            File jar = new File(getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
-            if (jar.isFile()) {
+            File jar = xuanmo.arcartxsuite.security.protection.ProtectionInit.getPluginJarFile();
+            if (jar != null && jar.isFile()) {
                 return getRelativePath(jar);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 2) 自身 CodeSource（逐层判空 + 仅接受 file: 协议）
+        try {
+            java.security.CodeSource cs = getClass().getProtectionDomain().getCodeSource();
+            URL loc = (cs != null) ? cs.getLocation() : null;
+            if (loc != null && "file".equals(loc.getProtocol())) {
+                File jar = new File(loc.toURI());
+                if (jar.isFile()) {
+                    return getRelativePath(jar);
+                }
             }
         } catch (Exception ignored) {
         }
-        return "plugins/ArcartXSuite.jar";
+
+        // 3) plugins 目录按文件名扫描（数据目录固定位于 plugins/<name>/）
+        File pluginsDir = (dataFolder != null) ? dataFolder.getParentFile() : null;
+        if (pluginsDir != null && pluginsDir.isDirectory()) {
+            File[] jars = pluginsDir.listFiles((d, n) -> {
+                String l = n.toLowerCase();
+                return l.endsWith(".jar") && l.contains("arcartx") && l.contains("suite");
+            });
+            if (jars != null && jars.length > 0) {
+                return getRelativePath(jars[0]);
+            }
+        }
+        return "plugins/ArcartX-Suite.jar";
     }
 
     private String detectServerJar() {

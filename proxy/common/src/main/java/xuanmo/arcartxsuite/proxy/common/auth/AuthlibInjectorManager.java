@@ -458,19 +458,70 @@ public final class AuthlibInjectorManager {
 
     /**
      * 解析 proxy 插件自身 jar 的相对路径（用于独立进程代理的 classpath）。
+     * <p>
+     * {@code CodeSource.getLocation()} 在自定义/内嵌类加载器下可能为 null 或指向
+     * 非 file: 协议 URL，按「CodeSource（判空）→ 插件描述资源 URL 反推 →
+     * plugins 目录扫描 → 固定文件名兜底」逐级回退。
      */
     private String resolveProxyJarPath() {
+        // 1) 自身 CodeSource（逐层判空 + 仅接受 file: 协议）
         try {
-            File jar = new File(getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
-            if (jar.isFile()) {
-                return getRelativePath(jar);
+            java.security.CodeSource cs = getClass().getProtectionDomain().getCodeSource();
+            URL loc = (cs != null) ? cs.getLocation() : null;
+            if (loc != null && "file".equals(loc.getProtocol())) {
+                File jar = new File(loc.toURI());
+                if (jar.isFile()) {
+                    return getRelativePath(jar);
+                }
             }
         } catch (Exception ignored) {
         }
+
+        // 2) 插件描述资源 URL 反推（jar:file:/x.jar!/desc → !/ 前的 file: 部分）
+        try {
+            ClassLoader cl = getClass().getClassLoader();
+            String[] descriptors = {"bungee.yml", "velocity-plugin.json", "proxy-config.yml", "plugin.yml"};
+            for (String desc : descriptors) {
+                URL res = (cl != null) ? cl.getResource(desc) : ClassLoader.getSystemResource(desc);
+                File jar = jarFileFromResourceUrl(res);
+                if (jar != null && jar.isFile()) {
+                    return getRelativePath(jar);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 3) plugins 目录按文件名扫描（数据目录固定位于 plugins/<name>/）
+        File pluginsDir = (dataFolder != null) ? dataFolder.getParentFile() : null;
+        if (pluginsDir != null && pluginsDir.isDirectory()) {
+            File[] jars = pluginsDir.listFiles((d, n) -> {
+                String l = n.toLowerCase();
+                return l.endsWith(".jar") && l.contains("arcartx") && l.contains("proxy");
+            });
+            if (jars != null && jars.length > 0) {
+                return getRelativePath(jars[0]);
+            }
+        }
+
         // fallback：根据平台猜测
         return platform == Platform.VELOCITY
             ? "plugins/ArcartXSuite-Proxy-Velocity.jar"
             : "plugins/ArcartXSuite-Proxy-Bungee.jar";
+    }
+
+    /** 从 jar: 协议资源 URL 解析出所在的本地 JAR 文件；解析失败返回 null。 */
+    private static File jarFileFromResourceUrl(URL res) {
+        if (res == null || !"jar".equals(res.getProtocol())) return null;
+        try {
+            String spec = res.toExternalForm();
+            int sep = spec.lastIndexOf("!/");
+            if (sep <= 4) return null;
+            URL jarUrl = new URL(spec.substring(4, sep));
+            if (!"file".equals(jarUrl.getProtocol())) return null;
+            return new File(jarUrl.toURI());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

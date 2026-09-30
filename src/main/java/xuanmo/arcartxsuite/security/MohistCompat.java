@@ -172,24 +172,32 @@ public final class MohistCompat {
             }
         }
 
-        // 策略 3：尝试从插件 JAR URL 直接读取
+        // 策略 3：尝试从插件 JAR URL 直接读取。
+        // 优先保护层初始化时已解析的宿主 JAR（与加载器路径无关），
+        // CodeSource 仅作次级兜底——其 location 在自定义加载链下可能为 null。
         try {
-            URL jarUrl = plugin.getClass().getProtectionDomain().getCodeSource().getLocation();
-            if (jarUrl != null) {
-                String jarPath = jarUrl.toExternalForm();
-                if (jarPath.endsWith(".jar") || jarPath.endsWith(".jar!/")) {
-                    String entryUrl = "jar:" + jarPath + "!/" + resourcePath;
-                    URL resourceUrl = new URL(entryUrl);
-                    URLConnection connection = resourceUrl.openConnection();
-                    connection.setUseCaches(false);
-                    try (InputStream jarInput = connection.getInputStream()) {
-                        File parent = target.getParentFile();
-                        if (parent != null && !parent.exists()) {
-                            parent.mkdirs();
-                        }
-                        Files.copy(jarInput, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        return true;
+            File jarFile = xuanmo.arcartxsuite.security.protection.ProtectionInit.getPluginJarFile();
+            if (jarFile == null || !jarFile.isFile()) {
+                jarFile = null;
+                java.security.CodeSource cs = plugin.getClass().getProtectionDomain().getCodeSource();
+                URL loc = (cs != null) ? cs.getLocation() : null;
+                if (loc != null && "file".equals(loc.getProtocol())) {
+                    jarFile = new File(loc.toURI());
+                }
+            }
+            if (jarFile != null && jarFile.isFile()) {
+                String jarPath = jarFile.toURI().toURL().toExternalForm();
+                String entryUrl = "jar:" + jarPath + "!/" + resourcePath;
+                URL resourceUrl = new URL(entryUrl);
+                URLConnection connection = resourceUrl.openConnection();
+                connection.setUseCaches(false);
+                try (InputStream jarInput = connection.getInputStream()) {
+                    File parent = target.getParentFile();
+                    if (parent != null && !parent.exists()) {
+                        parent.mkdirs();
                     }
+                    Files.copy(jarInput, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    return true;
                 }
             }
         } catch (Exception exception) {

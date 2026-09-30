@@ -25,6 +25,9 @@ public final class ProtectionInit {
     private static volatile boolean initialized = false;
     private static volatile boolean active = false;
     private static volatile ProtectedClassLoader protectedLoader = null;
+    /** 保护层初始化时解析到的宿主插件 JAR（可能为 null——所有策略均失败时）。 */
+    private static volatile java.io.File pluginJarFile = null;
+    private static volatile java.net.URL pluginJarUrl = null;
     private static final Logger LOGGER = Logger.getLogger("AXS-Protection");
 
     // 检测间隔（秒），加随机偏移防止时序分析
@@ -46,7 +49,12 @@ public final class ProtectionInit {
         initialized = true; // 防重入：即使后续失败也不再重试，避免半安装状态
 
         ClassLoader pluginCL = pluginMainClass.getClassLoader();
-        String jarPath = resolveJarPath(pluginMainClass);
+        java.io.File jarFile = resolvePluginJar(pluginMainClass);
+        pluginJarFile = jarFile;
+        if (jarFile != null) {
+            try { pluginJarUrl = jarFile.toURI().toURL(); } catch (Throwable ignored) {}
+        }
+        String jarPath = jarFile != null ? jarFile.getAbsolutePath() : null;
         boolean nativeOk = NativeBridge.isAvailable();
 
         boolean encrypted = false;
@@ -96,13 +104,18 @@ public final class ProtectionInit {
         // 必须在启动反调试监控之前完成：监控会触发 JvmAntiDebug 等类加载，
         // 这些类需经由已注入的 ProtectedClassLoader 统一加载，避免与 PluginClassLoader 双重定义。
         try {
-            JarFile jar = new JarFile(jarPath);
+            JarFile jar = new JarFile(jarFile);
             Map<String, Class<?>> captured = captureBootstrapClasses(pluginMainClass, pluginCL, jar);
             ClassLoader originalParent = pluginCL.getParent();
             // 传入 pluginCL 作为反向引用：ProtectedClassLoader 在 originalParent 找不到类时
             // 回退到 PluginClassLoader，利用其跨插件类查找能力加载其他插件提供的类
             // （如 ArcartX 插件的 KeyCallBack）。否则注入为 parent 后会切断跨插件可见性。
-            ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured, pluginCL);
+            // 传入主类的 ProtectionDomain：其 CodeSource 指向插件 JAR，使保护层定义的
+            // 加密类继承同一 CodeSource；若其 location 缺失（Mohist 自定义加载链），
+            // ProtectedClassLoader 内部会以 JAR 路径自行构造兜底。
+            java.security.ProtectionDomain pd = null;
+            try { pd = pluginMainClass.getProtectionDomain(); } catch (Throwable ignored) {}
+            ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured, pluginCL, pd);
 
             if (!installAsParent(pluginCL, pcl)) {
                 LOGGER.severe("[Protection] 无法将 ProtectedClassLoader 注入 PluginClassLoader（parent 替换失败），"
@@ -125,15 +138,121 @@ public final class ProtectionInit {
         return true;
     }
 
-    /** 从主类的 CodeSource 推导插件 JAR 的绝对路径。 */
-    private static String resolveJarPath(Class<?> c) {
+    /**
+     * 解析宿主插件 JAR 文件（多策略，永不抛异常）。
+     *
+     * <p>{@code CodeSource.getLocation()} 是否非空完全取决于定义该类的 ClassLoader：
+     * Mohist/Forge 的重映射链、自定义加载器、运行时再生成类、以及本插件自身的
+     * ProtectedClassLoader（裸 defineClass → JDK defaultDomain → location=null）
+     * 都可能让 location 缺失或落在非 file: 协议上。因此必须逐级回退。
+     */
+    private static java.io.File resolvePluginJar(Class<?> anchor) {
+        // 1) 锚点类（插件主类）的 CodeSource —— 标准 PluginClassLoader 路径
+        java.io.File jar = fileFromCodeSource(anchor.getProtectionDomain());
+        if (jar != null) return jar;
+
+        // 2) ProtectionInit 自身的 CodeSource（同一 JAR；锚点类被运行时再生成/重映射时兜底）
+        jar = fileFromCodeSource(ProtectionInit.class.getProtectionDomain());
+        if (jar != null) return jar;
+
+        // 3) 插件描述资源 URL 反推：plugin.yml 必在 JAR 根，形如 jar:file:/x.jar!/plugin.yml
+        ClassLoader cl = anchor.getClassLoader();
+        for (String desc : new String[]{"plugin.yml", "bungee.yml", "paper-plugin.yml"}) {
+            jar = fileFromResourceUrl(cl, desc);
+            if (jar != null) return jar;
+        }
+
+        // 4) 兜底：扫描 plugins/ 目录，找包含主类条目的 jar
+        jar = scanPluginsDirForSelfJar();
+        if (jar != null) {
+            LOGGER.warning("[Protection] JAR 路径经 plugins 目录扫描回退解析: " + jar);
+            return jar;
+        }
+
+        LOGGER.severe("[Protection] 无法定位宿主 JAR（CodeSource/资源URL/目录扫描均失败）");
+        return null;
+    }
+
+    private static java.io.File fileFromCodeSource(java.security.ProtectionDomain pd) {
         try {
-            java.security.CodeSource src = c.getProtectionDomain().getCodeSource();
-            if (src == null || src.getLocation() == null) return null;
-            return new java.io.File(src.getLocation().toURI()).getAbsolutePath();
-        } catch (Exception e) {
+            java.security.CodeSource cs = (pd != null) ? pd.getCodeSource() : null;
+            java.io.File f = urlToFile((cs != null) ? cs.getLocation() : null);
+            return (f != null && f.isFile()) ? f : null;
+        } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** 把 file: / jar: 协议的 URL 解析为本地文件；其余协议返回 null。 */
+    private static java.io.File urlToFile(java.net.URL url) {
+        if (url == null) return null;
+        try {
+            String proto = url.getProtocol();
+            if ("file".equals(proto)) {
+                return new java.io.File(url.toURI());
+            }
+            if ("jar".equals(proto)) {
+                // jar:file:/x.jar!/entry → 取 !/ 前的部分递归解析
+                String spec = url.toExternalForm();
+                int sep = spec.lastIndexOf("!/");
+                if (sep > 4) {
+                    return urlToFile(new java.net.URL(spec.substring(4, sep)));
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    /**
+     * 通过插件描述资源反推所在 JAR。
+     * 校验返回的 JAR 确实包含主类条目，防止拿到别的插件/服务端 JAR。
+     */
+    private static java.io.File fileFromResourceUrl(ClassLoader cl, String entryName) {
+        try {
+            java.net.URL res = (cl != null)
+                    ? cl.getResource(entryName) : ClassLoader.getSystemResource(entryName);
+            java.io.File f = urlToFile(res);
+            return (f != null && f.isFile() && jarContainsSelfMarker(f)) ? f : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static boolean jarContainsSelfMarker(java.io.File jar) {
+        try (JarFile jf = new JarFile(jar)) {
+            return jf.getJarEntry("xuanmo/arcartxsuite/ArcartXSuitePlugin.class") != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 兜底：扫描 <server>/plugins 下所有 jar，找含宿主主类条目的那个。 */
+    private static java.io.File scanPluginsDirForSelfJar() {
+        try {
+            java.io.File pluginsDir = new java.io.File("plugins").getAbsoluteFile();
+            if (!pluginsDir.isDirectory()) return null;
+            java.io.File[] jars = pluginsDir.listFiles(
+                    (d, n) -> n.toLowerCase(java.util.Locale.ROOT).endsWith(".jar"));
+            if (jars == null) return null;
+            // 名字像本插件的优先，减少 IO 次数
+            java.util.Arrays.sort(jars, java.util.Comparator.comparing(
+                    (java.io.File f) -> !f.getName().toLowerCase(java.util.Locale.ROOT)
+                            .contains("arcartx")));
+            for (java.io.File j : jars) {
+                if (jarContainsSelfMarker(j)) return j;
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    /** @return 保护层初始化时解析到的宿主插件 JAR；解析失败或未初始化为 null。 */
+    public static java.io.File getPluginJarFile() {
+        return pluginJarFile;
+    }
+
+    /** @return 宿主插件 JAR 的 file: URL；不可用时为 null。 */
+    public static java.net.URL getPluginJarUrl() {
+        return pluginJarUrl;
     }
 
     private static boolean jarHasEncryptedClasses(String jarPath) throws Exception {
