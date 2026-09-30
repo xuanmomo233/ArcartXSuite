@@ -641,13 +641,15 @@ public final class AbyssService {
         instance.removePlayer(player.getUniqueId());
         instances.playerLeaveInstance(player);
 
+        // 先传送后恢复模式：旁观者若已坠入虚空，先回安全点再切回生存，
+        // 避免恢复 SURVIVAL 的瞬间在虚空世界吃到真实致死伤害。
+        if (back != null && player.isOnline()) {
+            try { player.teleport(back); } catch (Throwable ignored) { }
+        }
         if (saved != null && player.getGameMode() != saved) {
             player.setGameMode(saved);
         } else {
             instance.restorePlayerGameMode(player);
-        }
-        if (back != null && player.isOnline()) {
-            try { player.teleport(back); } catch (Throwable ignored) { }
         }
         clearBossBars(player);
         if (uiFacade instanceof AbyssUiService ui) {

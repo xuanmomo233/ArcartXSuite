@@ -94,6 +94,7 @@ public final class MonsterGroupManager {
 
     /** 生成怪物组（MANUAL/TRIGGERED/脚本均可调）。 */
     public boolean spawnGroup(AbyssInstance instance, String groupName, @Nullable Player trigger) {
+        if (instance.isFinished()) return false;
         Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
         if (groups == null) return false;
         GroupRuntime rt = groups.get(groupName);
@@ -164,6 +165,10 @@ public final class MonsterGroupManager {
 
     private void checkGroupComplete(AbyssInstance instance, GroupRuntime rt) {
         if (rt.state != GroupState.ACTIVE) return;
+        if (instance.isFinished()) {
+            rt.state = GroupState.COMPLETED;
+            return;
+        }
         if (rt.alive.size() <= rt.group.completeWhenAliveBelow()) {
             rt.state = GroupState.COMPLETED;
             if (callback != null) {
