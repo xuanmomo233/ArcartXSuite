@@ -239,13 +239,6 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 party.broadcast(service.msg("party.leader-changed", "player", target.getName()));
                 pushUpdate(party);
             }
-            case "storage", "仓库" -> {
-                if (party == null) {
-                    player.sendMessage(service.msg("error.not-in-party"));
-                    return true;
-                }
-                xuanmo.arcartxsuite.abyss.party.PartyStorageGui.open(service, player, party, 0);
-            }
             case "chat" -> {
                 if (party == null) {
                     player.sendMessage(service.msg("error.not-in-party"));
@@ -442,7 +435,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
         p.sendMessage(service.msg("party-help.title"));
         for (String k : List.of("create", "invite", "accept", "leave", "ready",
                 "chat", "list", "public", "joinmode", "dungeon", "apply",
-                "approve", "deny", "allowinvite", "kick", "leader", "storage", "disband")) {
+                "approve", "deny", "allowinvite", "kick", "leader", "disband")) {
             p.sendMessage(service.msg("party-help." + k, "label", label));
         }
     }
@@ -462,7 +455,7 @@ public final class AbyssPlayerCommand implements TabExecutor {
     public static List<String> partySubCommands() {
         return List.of("create", "invite", "accept", "apply", "approve", "deny",
             "leave", "ready", "chat", "list", "public", "private", "joinmode",
-            "dungeon", "allowinvite", "lobby", "kick", "leader", "storage", "disband");
+            "dungeon", "allowinvite", "lobby", "kick", "leader", "disband");
     }
 
     @Override

@@ -48,7 +48,6 @@ import xuanmo.arcartxsuite.abyss.npc.DungeonNpcManager;
 import xuanmo.arcartxsuite.abyss.obstacle.ObstacleManager;
 import xuanmo.arcartxsuite.abyss.party.Party;
 import xuanmo.arcartxsuite.abyss.party.PartyManager;
-import xuanmo.arcartxsuite.abyss.party.PartyStorageGui;
 import xuanmo.arcartxsuite.abyss.recovery.RecoveryManager;
 import xuanmo.arcartxsuite.abyss.quest.QuestManager;
 import xuanmo.arcartxsuite.abyss.reward.RewardResolver;
@@ -259,7 +258,7 @@ public final class AbyssService {
             currencyManager, stamina, cooldown, rewards);
 
         // 8) 队伍
-        partyManager = new PartyManager(config.party(), s -> { }, logger);
+        partyManager = new PartyManager(config.party(), s -> { });
 
         // 8.5) ArcartX UI 服务（浏览器/队伍/宝箱/HUD/排行统计 + 客户端包路由）
         AbyssUiService ui = new AbyssUiService(this, packetBridge, itemStackBridge, logger);
@@ -384,7 +383,6 @@ public final class AbyssService {
         list.add(new AbyssPlayerListener(this, logger));
         list.add(new AbyssInteractListener(this, logger));
         list.add(new AbyssSpawnListener(this, logger));
-        list.add(new PartyStorageGui.Events(this, logger));
         // MM 死亡中继：独立类，仅 MM 启用时注册（可选依赖隔离）
         if (mobProvider instanceof CompositeMobProvider cp && cp.hasMythic()) {
             try {

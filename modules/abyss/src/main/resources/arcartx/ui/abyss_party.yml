@@ -949,35 +949,6 @@ controls:
                       texts: "var.joinMode == 'OPEN' ? '&f直接加入' : '&f需要审批'"
                       fontSize: 32
                       through: true
-              仓库按钮:
-                type: Canvas
-                attribute:
-                  width: 150
-                  height: 56
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'party_storage', var.actionToken)
-                children:
-                  仓库底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~190,150,70,235
-                      hover: ~215,175,95,245
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~230,190,110,140
-                  仓库字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f队伍仓库
-                      fontSize: 32
-                      through: true
               离开按钮:
                 type: Canvas
                 attribute:

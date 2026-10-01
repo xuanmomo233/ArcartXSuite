@@ -10,12 +10,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.abyss.config.AbyssModuleConfiguration.LootMode;
 
 /**
- * 队伍实体：成员（有序=轮换掉落顺序）、队长、邀请、聊天开关、仓库、设置、
+ * 队伍实体：成员、队长、邀请、聊天开关、设置、
  * 组队大厅（公开可见/申请审批/目标副本）与房间消息流。
  */
 public final class Party {
@@ -25,11 +23,8 @@ public final class Party {
     private final List<UUID> members = new ArrayList<>();
     private final Map<UUID, Long> invites = new ConcurrentHashMap<>(); // invitedUuid -> expireMillis
     private final Set<UUID> chatEnabled = ConcurrentHashMap.newKeySet();
-    private final Map<Integer, ItemStack> storage = new ConcurrentHashMap<>(); // slot -> item（简化为线性槽位）
     private volatile String name;
     private volatile String color = "&f";
-    private volatile LootMode lootMode;
-    private volatile int lootCursor;
     private final long createTime = System.currentTimeMillis();
 
     // ── 组队大厅 ──
@@ -46,9 +41,8 @@ public final class Party {
     /** 房间消息流条目（sender 为 null 表示系统事件）。 */
     public record FeedEntry(long time, @Nullable String sender, String text) { }
 
-    public Party(UUID leader, int maxMembers, LootMode lootMode) {
+    public Party(UUID leader, int maxMembers) {
         this.leader = leader;
-        this.lootMode = lootMode;
         members.add(leader);
     }
 
@@ -110,36 +104,11 @@ public final class Party {
     }
     public boolean isChatEnabled(UUID u) { return chatEnabled.contains(u); }
 
-    // ── 仓库 ──
-    public @Nullable ItemStack getStorageItem(int slot) { return storage.get(slot); }
-    public void setStorageItem(int slot, @Nullable ItemStack item) {
-        if (item == null || item.getType().isAir()) storage.remove(slot);
-        else storage.put(slot, item.clone());
-    }
-    public Map<Integer, ItemStack> storageItems() { return Map.copyOf(storage); }
-
-    /** 清空并返回仓库全部物品（解散时兜底发还）。 */
-    public synchronized java.util.List<ItemStack> drainStorage() {
-        java.util.List<ItemStack> out = new java.util.ArrayList<>(storage.values());
-        storage.clear();
-        return out;
-    }
-
     // ── 设置 ──
     public String name() { return name != null ? name : "队伍-" + id.toString().substring(0, 4); }
     public void name(String n) { this.name = n; }
     public String color() { return color; }
     public void color(String c) { this.color = c; }
-    public LootMode lootMode() { return lootMode; }
-    public void lootMode(LootMode m) { this.lootMode = m; lootCursor = 0; }
-
-    /** 轮换掉落下一位成员。 */
-    public synchronized @Nullable UUID nextLootOwner() {
-        if (members.isEmpty()) return null;
-        UUID u = members.get(lootCursor % members.size());
-        lootCursor++;
-        return u;
-    }
 
     // ── 广播 ──
     public void broadcast(String message) {

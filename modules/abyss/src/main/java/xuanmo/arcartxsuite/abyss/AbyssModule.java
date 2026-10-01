@@ -49,6 +49,12 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         return xuanmo.arcartxsuite.api.config.ModuleConfig.builder()
             .configFileName("ArcartXAbyss.yml")
             .messagesFileName("messages.yml")
+            // 已移除的队伍掉落/仓库字段：显式声明废弃路径，同步时自动清理
+            .syncPolicy(xuanmo.arcartxsuite.api.config.SyncPolicy.builder()
+                .obsoletePath("party.storage-pages")
+                .obsoletePath("party.exp-share-mode")
+                .obsoletePath("party.loot-mode")
+                .build())
             .build();
     }
 

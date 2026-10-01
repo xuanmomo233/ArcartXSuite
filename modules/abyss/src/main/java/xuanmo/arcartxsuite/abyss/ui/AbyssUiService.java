@@ -827,16 +827,6 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 }
                 return true;
             }
-            case "party_storage" -> {
-                if (checkToken(player, data, 1)) {
-                    Party party = service.party().partyOf(player);
-                    if (party != null) {
-                        xuanmo.arcartxsuite.abyss.party.PartyStorageGui.open(
-                            service, player, party, 0);
-                    }
-                }
-                return true;
-            }
             case "chest_claim" -> {
                 if (checkToken(player, data, 1)) claimChest(player, -1);
                 return true;

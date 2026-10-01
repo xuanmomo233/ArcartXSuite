@@ -74,14 +74,10 @@ party:
   max-members: 4
   # 邀请超时（秒）
   invite-timeout: 60
-  # 队伍仓库页数（每页45格）
-  storage-pages: 1
   # 是否允许自定义队伍名/颜色
   allow-custom-name: true
-  # 经验共享模式: NONE / EQUAL(全队平分) / DISTANCE(32格内成员平分)
-  exp-share-mode: "EQUAL"
-  # 掉落分配模式: FREE(自由拾取) / ROUND_ROBIN(轮流) / LEADER(队长) / AUTO_STORE(进队伍仓库)
-  loot-mode: "FREE"
+  # 注意：副本奖励统一走 rewards.yml + ItemRewardDispatcher
+  # （背包→仓库→邮件→离线暂存→掉落链），掉落物按原版归属击杀者拾取
 
 stamina:
   # 体力系统开关

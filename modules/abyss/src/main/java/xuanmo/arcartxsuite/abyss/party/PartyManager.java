@@ -23,17 +23,14 @@ public final class PartyManager {
     private final Set<UUID> inviteOptOut = ConcurrentHashMap.newKeySet();
     private final AbyssModuleConfiguration.PartySection cfg;
     private final Consumer<String> messageFormatter; // 前缀格式化（messages().get）
-    private final java.util.logging.Logger logger;
 
     /** 邀请冷却时长（毫秒）。 */
     public static final long INVITE_COOLDOWN_MS = 60_000L;
 
     public PartyManager(AbyssModuleConfiguration.PartySection cfg,
-                        Consumer<String> messageFormatter,
-                        java.util.logging.Logger logger) {
+                        Consumer<String> messageFormatter) {
         this.cfg = cfg;
         this.messageFormatter = messageFormatter;
-        this.logger = logger;
     }
 
     public @Nullable Party partyOf(UUID player) { return playerParty.get(player); }
@@ -43,7 +40,7 @@ public final class PartyManager {
     public Party create(Player leader) {
         Party existing = playerParty.get(leader.getUniqueId());
         if (existing != null) return existing;
-        Party party = new Party(leader.getUniqueId(), cfg.maxMembers(), cfg.lootMode());
+        Party party = new Party(leader.getUniqueId(), cfg.maxMembers());
         parties.put(party.id(), party);
         playerParty.put(leader.getUniqueId(), party);
         return party;
@@ -84,7 +81,7 @@ public final class PartyManager {
         }
         Party party = playerParty.computeIfAbsent(inviter.getUniqueId(),
             k -> {
-                Party p = new Party(k, cfg.maxMembers(), cfg.lootMode());
+                Party p = new Party(k, cfg.maxMembers());
                 parties.put(p.id(), p);
                 return p;
             });
@@ -287,7 +284,6 @@ public final class PartyManager {
         p.removeMember(player.getUniqueId());
         if (p.size() == 0) {
             parties.remove(p.id());
-            flushStorage(p);
         }
     }
 
@@ -320,44 +316,6 @@ public final class PartyManager {
     public void disband(Party party) {
         for (UUID u : party.members()) playerParty.remove(u);
         parties.remove(party.id());
-        flushStorage(party);
-    }
-
-    /**
-     * 解散时把队伍仓库物品发还：优先队长，其次任一在线成员；
-     * 全员离线无法投递时丢弃并记日志（AUTO_STORE 掉落不静默蒸发）。
-     * <p>
-     * 注意顺序：先关掉成员的仓库 GUI（触发 writeBack 把视口写回存储），
-     * 再 drain——否则 GUI 与存储共享 ItemStack 实例会重复发放。
-     */
-    private void flushStorage(Party party) {
-        for (UUID u : party.members()) {
-            Player m = org.bukkit.Bukkit.getPlayer(u);
-            if (m == null) continue;
-            var holder = m.getOpenInventory().getTopInventory().getHolder();
-            if (holder instanceof PartyStorageGui gui && gui.isFor(party)) {
-                m.closeInventory(); // 触发 writeBack 同步视口
-            }
-        }
-        var items = party.drainStorage();
-        if (items.isEmpty()) return;
-        Player target = org.bukkit.Bukkit.getPlayer(party.leader());
-        if (target == null) {
-            for (UUID u : party.members()) {
-                target = org.bukkit.Bukkit.getPlayer(u);
-                if (target != null) break;
-            }
-        }
-        if (target == null) {
-            logger.warning("[abyss] 队伍解散时仓库物品无人可收，丢弃 "
-                + items.size() + " 种物品");
-            return;
-        }
-        var overflow = target.getInventory()
-            .addItem(items.toArray(new org.bukkit.inventory.ItemStack[0]));
-        for (var left : overflow.values()) {
-            target.getWorld().dropItemNaturally(target.getLocation(), left);
-        }
     }
 
     /** 队伍聊天消息分发（监听器转发聊天事件），同时记入房间消息流。 */
@@ -371,28 +329,16 @@ public final class PartyManager {
         p.appendFeed(sender.getName(), message);
     }
 
-    /** 玩家断线清理（不移出队伍——允许重连回队；按配置也可在此移出）。 */
+    /** 玩家断线清理（不移出队伍——允许重连回队；单人队自动解散）。 */
     public void onQuit(Player player) {
-        // QueDP：断线保留队伍关系，队伍为空自动解散
         Party p = partyOf(player);
         if (p != null && p.onlineMembers().size() <= 1 && p.size() == 1) {
             leave(player);
         }
     }
 
-    /** 掉落归属者（AUTO_STORE 没有单一归属者，返回击杀者占位）。 */
-    public @Nullable UUID lootOwner(Party party, @Nullable UUID killer) {
-        return switch (party.lootMode()) {
-            case ROUND_ROBIN -> party.nextLootOwner();
-            case LEADER -> party.leader();
-            default -> killer;
-        };
-    }
-
     public int maxMembers() { return cfg.maxMembers(); }
     public int inviteTimeout() { return cfg.inviteTimeout(); }
-    public int storagePages() { return cfg.storagePages(); }
-    public AbyssModuleConfiguration.ExpShareMode expShareMode() { return cfg.expShareMode(); }
     public boolean allowCustomName() { return cfg.allowCustomName(); }
 
     public void shutdown() {

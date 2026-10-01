@@ -203,28 +203,19 @@ public record AbyssModuleConfiguration(
 
     // ── 队伍 ────────────────────────────────────────────
 
-    public enum ExpShareMode { NONE, EQUAL, DISTANCE }
-    public enum LootMode { FREE, ROUND_ROBIN, LEADER, AUTO_STORE }
-
     public record PartySection(
         int maxMembers,
         int inviteTimeout,
-        int storagePages,
-        boolean allowCustomName,
-        ExpShareMode expShareMode,
-        LootMode lootMode
+        boolean allowCustomName
     ) {
         static PartySection load(ConfigurationSection s) {
             if (s == null) {
-                return new PartySection(4, 60, 1, true, ExpShareMode.EQUAL, LootMode.FREE);
+                return new PartySection(4, 60, true);
             }
             return new PartySection(
                 s.getInt("max-members", 4),
                 s.getInt("invite-timeout", 60),
-                s.getInt("storage-pages", 1),
-                s.getBoolean("allow-custom-name", true),
-                ExpShareMode.valueOf(s.getString("exp-share-mode", "EQUAL").toUpperCase()),
-                LootMode.valueOf(s.getString("loot-mode", "FREE").toUpperCase())
+                s.getBoolean("allow-custom-name", true)
             );
         }
     }
