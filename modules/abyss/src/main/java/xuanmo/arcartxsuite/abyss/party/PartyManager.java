@@ -326,8 +326,19 @@ public final class PartyManager {
     /**
      * 解散时把队伍仓库物品发还：优先队长，其次任一在线成员；
      * 全员离线无法投递时丢弃并记日志（AUTO_STORE 掉落不静默蒸发）。
+     * <p>
+     * 注意顺序：先关掉成员的仓库 GUI（触发 writeBack 把视口写回存储），
+     * 再 drain——否则 GUI 与存储共享 ItemStack 实例会重复发放。
      */
     private void flushStorage(Party party) {
+        for (UUID u : party.members()) {
+            Player m = org.bukkit.Bukkit.getPlayer(u);
+            if (m == null) continue;
+            var holder = m.getOpenInventory().getTopInventory().getHolder();
+            if (holder instanceof PartyStorageGui gui && gui.isFor(party)) {
+                m.closeInventory(); // 触发 writeBack 同步视口
+            }
+        }
         var items = party.drainStorage();
         if (items.isEmpty()) return;
         Player target = org.bukkit.Bukkit.getPlayer(party.leader());

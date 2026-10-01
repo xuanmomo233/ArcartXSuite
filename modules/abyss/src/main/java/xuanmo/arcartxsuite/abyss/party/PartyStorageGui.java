@@ -90,6 +90,9 @@ public final class PartyStorageGui implements InventoryHolder {
         return it;
     }
 
+    /** 该 GUI 是否属于指定队伍（解散前置关窗判定用）。 */
+    public boolean isFor(Party p) { return party == p; }
+
     /** 关闭时把当前页视口写回队伍仓库。 */
     private void writeBack() {
         for (int i = 0; i < PAGE_SLOTS; i++) {
