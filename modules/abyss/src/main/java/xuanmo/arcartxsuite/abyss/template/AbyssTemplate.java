@@ -40,6 +40,7 @@ public record AbyssTemplate(
     TimeoutAction timeoutAction,
     int maxInstances,
     EntryRequirements requirements,
+    WorldRules worldRules,
     MonsterConfig monsters,
     ObstacleConfig obstacles,
     InteractConfig interacts,

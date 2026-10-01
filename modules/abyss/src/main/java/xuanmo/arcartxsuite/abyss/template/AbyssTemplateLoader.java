@@ -114,6 +114,7 @@ public final class AbyssTemplateLoader {
             timeoutAction,
             cfg.getInt("max_instances", cfg.getInt("max-instances", 0)),
             requirements,
+            WorldRules.load(cfg.getConfigurationSection("world")),
             monsters, obstacles, interacts, tasks, rewards, scripts, npcs,
             quests, functions, dir
         );

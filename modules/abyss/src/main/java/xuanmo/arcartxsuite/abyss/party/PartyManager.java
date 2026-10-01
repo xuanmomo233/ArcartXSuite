@@ -23,14 +23,17 @@ public final class PartyManager {
     private final Set<UUID> inviteOptOut = ConcurrentHashMap.newKeySet();
     private final AbyssModuleConfiguration.PartySection cfg;
     private final Consumer<String> messageFormatter; // 前缀格式化（messages().get）
+    private final java.util.logging.Logger logger;
 
     /** 邀请冷却时长（毫秒）。 */
     public static final long INVITE_COOLDOWN_MS = 60_000L;
 
     public PartyManager(AbyssModuleConfiguration.PartySection cfg,
-                        Consumer<String> messageFormatter) {
+                        Consumer<String> messageFormatter,
+                        java.util.logging.Logger logger) {
         this.cfg = cfg;
         this.messageFormatter = messageFormatter;
+        this.logger = logger;
     }
 
     public @Nullable Party partyOf(UUID player) { return playerParty.get(player); }
@@ -284,6 +287,7 @@ public final class PartyManager {
         p.removeMember(player.getUniqueId());
         if (p.size() == 0) {
             parties.remove(p.id());
+            flushStorage(p);
         }
     }
 
@@ -316,6 +320,33 @@ public final class PartyManager {
     public void disband(Party party) {
         for (UUID u : party.members()) playerParty.remove(u);
         parties.remove(party.id());
+        flushStorage(party);
+    }
+
+    /**
+     * 解散时把队伍仓库物品发还：优先队长，其次任一在线成员；
+     * 全员离线无法投递时丢弃并记日志（AUTO_STORE 掉落不静默蒸发）。
+     */
+    private void flushStorage(Party party) {
+        var items = party.drainStorage();
+        if (items.isEmpty()) return;
+        Player target = org.bukkit.Bukkit.getPlayer(party.leader());
+        if (target == null) {
+            for (UUID u : party.members()) {
+                target = org.bukkit.Bukkit.getPlayer(u);
+                if (target != null) break;
+            }
+        }
+        if (target == null) {
+            logger.warning("[abyss] 队伍解散时仓库物品无人可收，丢弃 "
+                + items.size() + " 种物品");
+            return;
+        }
+        var overflow = target.getInventory()
+            .addItem(items.toArray(new org.bukkit.inventory.ItemStack[0]));
+        for (var left : overflow.values()) {
+            target.getWorld().dropItemNaturally(target.getLocation(), left);
+        }
     }
 
     /** 队伍聊天消息分发（监听器转发聊天事件），同时记入房间消息流。 */
@@ -338,12 +369,12 @@ public final class PartyManager {
         }
     }
 
-    /** 掉落分配：按 lootMode 决定归属者。 */
+    /** 掉落归属者（AUTO_STORE 没有单一归属者，返回击杀者占位）。 */
     public @Nullable UUID lootOwner(Party party, @Nullable UUID killer) {
         return switch (party.lootMode()) {
-            case FREE -> killer;
             case ROUND_ROBIN -> party.nextLootOwner();
             case LEADER -> party.leader();
+            default -> killer;
         };
     }
 

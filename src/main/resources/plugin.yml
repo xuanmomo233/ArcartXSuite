@@ -510,3 +510,6 @@ permissions:
     default: true
   arcartxsuite.abyss.party:
     default: true
+  # 副本内命令限制的绕过权限（给管理/测试用）
+  arcartxsuite.abyss.bypass:
+    default: op

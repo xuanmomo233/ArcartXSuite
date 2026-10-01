@@ -18,6 +18,17 @@ abyss:
   nms-fast-load: true
   # 世界复制是否异步执行（大目录复制建议开启）
   async-world-copy: true
+  # 副本无人后清理延迟（秒）：最后一名玩家退出/掉线后多久回收副本
+  empty-cleanup-delay-seconds: 30
+  # 副本预热池：启动后预先建好世界，进入时秒开（BTDungeons 同款）
+  preload:
+    enabled: false
+    # 严格模式：预热池空时禁止进入（false=回退即时创建）
+    strict: false
+    # 各地牢预热数量
+    dungeons: {}
+    # dungeons:
+    #   skeleton_throne: 2
 
 death:
   # 致命伤害检测：拦截致死伤害并判为副本死亡（保持玩家不死）
@@ -41,7 +52,9 @@ escape:
   block-spectate-teleport: true
 
 restrictions:
-  # 副本内禁用的命令（按主命令匹配）
+  # 命令控制模式: NONE=不限制 / BLACKLIST=列表内禁用 / WHITELIST=仅列表内可用
+  command-mode: "BLACKLIST"
+  # 副本内禁用的命令（按主命令匹配；whitelist 模式下=允许的命令）
   blocked-commands:
     - "spawn"
     - "tpa"
@@ -65,9 +78,9 @@ party:
   storage-pages: 1
   # 是否允许自定义队伍名/颜色
   allow-custom-name: true
-  # 经验共享模式: NONE / EQUAL / DISTANCE
+  # 经验共享模式: NONE / EQUAL(全队平分) / DISTANCE(32格内成员平分)
   exp-share-mode: "EQUAL"
-  # 掉落分配模式: FREE / ROUND_ROBIN / LEADER
+  # 掉落分配模式: FREE(自由拾取) / ROUND_ROBIN(轮流) / LEADER(队长) / AUTO_STORE(进队伍仓库)
   loot-mode: "FREE"
 
 stamina:
@@ -128,5 +141,14 @@ ui:
   leaderboard-id: "abyss_leaderboard"
   # 副本内 HUD
   hud-id: "abyss_hud"
+
+recovery:
+  # 玩家非正常离开副本（掉线/崩服）后，下次进服执行恢复动作
+  enabled: true
+  # 动作前缀: [tell]消息 [title]标题;副标题 [console]控制台命令 [command]玩家命令
+  #          [teleport]世界;x;y;z;yaw;pitch [clear]清空背包
+  # {player} = 玩家名占位符
+  actions:
+    - "[tell] &c你上次没有正常退出副本"
 
 debug: false

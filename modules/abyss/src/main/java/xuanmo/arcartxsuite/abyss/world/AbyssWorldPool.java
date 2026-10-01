@@ -39,8 +39,17 @@ public final class AbyssWorldPool {
 
     /** 实例id → 世界目录（回收时删目录用）。 */
     private final Map<UUID, File> instanceWorldDirs = new ConcurrentHashMap<>();
+    /** 实例id → 世界名（预热世界名与实例 id 不相关，需显式记录）。 */
+    private final Map<UUID, String> instanceWorldNames = new ConcurrentHashMap<>();
     /** 实例id → schematic 会话（回收用）。 */
     private final Map<UUID, SchematicWorldService.Session> schematicSessions = new ConcurrentHashMap<>();
+    /** 预热池：地牢id → 已建好待接管的世界。 */
+    private final Map<String, java.util.Deque<Prepared>> preloadPool = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger preloadSeq = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** 预热完成的世界（世界已加载+配置，等待实例接管）。 */
+    public record Prepared(String worldName, File dir, World world,
+                           @Nullable SchematicWorldService.Session schematicSession) { }
 
     public AbyssWorldPool(Plugin plugin, AbyssModuleConfiguration.AbyssSection cfg, Logger logger) {
         this.plugin = plugin;
@@ -68,23 +77,55 @@ public final class AbyssWorldPool {
     }
 
     /**
-     * 申请世界：异步复制 → 主线程加载 + 配置。
+     * 申请世界：优先取预热池，否则异步复制 → 主线程加载 + 配置。
      *
      * @return CompletableFuture&lt;World&gt;（主线程回调后获得），失败 exceptional
      */
     public CompletableFuture<World> acquireWorld(AbyssTemplate template, UUID instanceId) {
-        CompletableFuture<World> future = new CompletableFuture<>();
-        String name = worldName(instanceId);
+        // 预热接管：世界已建好，跳过整个创建路径
+        Prepared pre = takePrepared(template.id());
+        if (pre != null) {
+            CompletableFuture<World> future = new CompletableFuture<>();
+            runSync(() -> {
+                bind(instanceId, pre);
+                future.complete(pre.world());
+            });
+            refillPreload(template);
+            return future;
+        }
+        return materialize(template).thenApply(mat -> {
+            bind(instanceId, mat);
+            return mat.world();
+        });
+    }
+
+    /** 把已建好的世界绑定到实例（回收时按此卸载/删目录/关会话）。 */
+    private void bind(UUID instanceId, Prepared p) {
+        instanceWorldDirs.put(instanceId, p.dir());
+        instanceWorldNames.put(instanceId, p.worldName());
+        if (p.schematicSession() != null) {
+            schematicSessions.put(instanceId, p.schematicSession());
+        }
+    }
+
+    /**
+     * 现场创建世界（复制 → 加载 → 配置），返回 Prepared 供绑定或入池。
+     */
+    private CompletableFuture<Prepared> materialize(AbyssTemplate template) {
+        return materialize(template, worldName(UUID.randomUUID()));
+    }
+
+    private CompletableFuture<Prepared> materialize(AbyssTemplate template, String name) {
+        CompletableFuture<Prepared> future = new CompletableFuture<>();
         File dir = worldDir(name);
 
         AbyssTemplate.WorldSource src = template.worldSource();
         if (src.kind() == AbyssTemplate.WorldSource.Kind.VOID) {
-            // 虚空世界：无需模板/粘贴
             runSync(() -> {
                 try {
                     World w = schematicService.createVoidWorld(name, cfg, nmsLoader);
-                    instanceWorldDirs.put(instanceId, dir);
-                    future.complete(w);
+                    configureWorld(w, template);
+                    future.complete(new Prepared(name, dir, w, null));
                 } catch (Throwable t) {
                     future.completeExceptionally(t);
                 }
@@ -92,14 +133,12 @@ public final class AbyssWorldPool {
             return future;
         }
         if (src.kind() == AbyssTemplate.WorldSource.Kind.SCHEMATIC) {
-            // schematic：建虚空世界 → WE 粘贴
             runSync(() -> {
                 try {
                     World w = schematicService.createVoidWorld(name, cfg, nmsLoader);
-                    schematicSessions.put(instanceId,
-                        schematicService.createSession(src.file(), w));
-                    instanceWorldDirs.put(instanceId, dir);
-                    future.complete(w);
+                    configureWorld(w, template);
+                    var session = schematicService.createSession(src.file(), w);
+                    future.complete(new Prepared(name, dir, w, session));
                 } catch (Throwable t) {
                     future.completeExceptionally(t);
                 }
@@ -119,9 +158,8 @@ public final class AbyssWorldPool {
                 WorldCopyUtil.copyWorldFolder(src.file(), dir);
                 runSync(() -> {
                     try {
-                        World w = loadAndConfigure(name);
-                        instanceWorldDirs.put(instanceId, dir);
-                        future.complete(w);
+                        World w = loadAndConfigure(name, template);
+                        future.complete(new Prepared(name, dir, w, null));
                     } catch (Throwable t) {
                         future.completeExceptionally(t);
                     }
@@ -139,8 +177,88 @@ public final class AbyssWorldPool {
         return future;
     }
 
+    // ═══ 预热池 ═══
+
+    /** 取出预热世界（无则 null）。 */
+    public @Nullable Prepared takePrepared(String dungeonId) {
+        var q = preloadPool.get(dungeonId);
+        if (q == null) return null;
+        synchronized (q) {
+            return q.pollFirst();
+        }
+    }
+
+    /** 池内剩余数量。 */
+    public int preparedCount(String dungeonId) {
+        var q = preloadPool.get(dungeonId);
+        return q == null ? 0 : q.size();
+    }
+
+    /** 启动/重载预热：按配置数量补齐池子。 */
+    public void initPreload(Map<String, AbyssTemplate> templates,
+                            AbyssModuleConfiguration.PreloadSection preload) {
+        if (!preload.enabled()) return;
+        for (var e : preload.dungeons().entrySet()) {
+            AbyssTemplate t = templates.get(e.getKey());
+            if (t == null) {
+                logger.warning("[abyss] 预热配置的地牢不存在: " + e.getKey());
+                continue;
+            }
+            preloadPool.computeIfAbsent(e.getKey(), k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
+            for (int i = e.getValue(); i > 0; i--) {
+                warmOne(t);
+            }
+        }
+    }
+
+    /** 预热池消耗后补位。 */
+    private void refillPreload(AbyssTemplate template) {
+        var q = preloadPool.get(template.id());
+        if (q == null) return; // 未配置预热
+        // 目标数量 = 配置值；不足则补一个
+        warmOne(template);
+    }
+
+    /** 预热一个实例世界（预热名 axs_abyss_pre_<地牢>_<seq>，worldPrefix 前缀命中残留清理）。 */
+    private void warmOne(AbyssTemplate template) {
+        String name = cfg.worldPrefix() + "pre_" + template.id() + "_" + preloadSeq.incrementAndGet();
+        materialize(template, name).whenComplete((pre, err) -> {
+            if (err != null) {
+                logger.warning("[abyss] 预热失败 " + template.id() + ": " + err.getMessage());
+                return;
+            }
+            var q = preloadPool.computeIfAbsent(template.id(),
+                k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
+            synchronized (q) {
+                q.addLast(pre);
+            }
+            logger.info("[abyss] 预热就绪: " + name);
+        });
+    }
+
+    /** 关闭时卸载全部预热世界。 */
+    public void releasePreload() {
+        for (var q : preloadPool.values()) {
+            Prepared p;
+            while ((p = q.pollFirst()) != null) {
+                Prepared fp = p;
+                runSync(() -> {
+                    World w = Bukkit.getWorld(fp.worldName());
+                    if (w != null) {
+                        w.getEntities().forEach(e -> {
+                            if (!(e instanceof org.bukkit.entity.Player)) e.remove();
+                        });
+                        try { Bukkit.unloadWorld(w, false); } catch (Throwable ignored) { }
+                    }
+                });
+                ioExecutor.submit(() -> WorldCopyUtil.deleteRecursively(fp.dir()));
+            }
+        }
+        preloadPool.clear();
+    }
+
     /** 主线程内加载并配置世界。 */
-    private World loadAndConfigure(String worldName) {
+    private World loadAndConfigure(String worldName, AbyssTemplate template) {
         WorldCreator creator = new WorldCreator(worldName);
         creator.type(WorldType.NORMAL);
         creator.generateStructures(false);
@@ -151,12 +269,12 @@ public final class AbyssWorldPool {
         if (world == null) {
             throw new IllegalStateException("世界加载返回 null: " + worldName);
         }
-        configureWorld(world);
+        configureWorld(world, template);
         return world;
     }
 
-    /** 副本世界统一配置（QueDP 同款游戏规则）。 */
-    public void configureWorld(World world) {
+    /** 副本世界统一配置（基础规则 + 模板 gamerules 覆盖）。 */
+    public void configureWorld(World world, @Nullable AbyssTemplate template) {
         world.setAutoSave(false);
         setRule(world, GameRule.DO_DAYLIGHT_CYCLE, false);
         setRule(world, GameRule.DO_WEATHER_CYCLE, false);
@@ -172,6 +290,32 @@ public final class AbyssWorldPool {
         try {
             world.setSpawnFlags(false, false); // 不生成生物/动物
         } catch (Throwable ignored) { }
+        // 模板 gamerules 覆盖（支持布尔/整数规则，未知规则名跳过）
+        if (template != null) {
+            applyTemplateGamerules(world, template.worldRules().gamerules());
+        }
+    }
+
+    /** 应用模板 gamerules 覆盖：值先按布尔解析，失败按整数解析。 */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void applyTemplateGamerules(World world, Map<String, String> rules) {
+        for (var e : rules.entrySet()) {
+            GameRule<?> rule = GameRule.getByName(e.getKey());
+            if (rule == null || e.getValue() == null) {
+                logger.fine("[abyss] 未知 gamerule: " + e.getKey());
+                continue;
+            }
+            try {
+                String v = e.getValue().trim();
+                if (rule.getType() == Boolean.class) {
+                    setRule(world, (GameRule<Boolean>) rule, Boolean.parseBoolean(v));
+                } else if (rule.getType() == Integer.class) {
+                    world.setGameRule((GameRule) rule, Integer.parseInt(v));
+                }
+            } catch (Throwable t) {
+                logger.fine("[abyss] gamerule 设置失败 " + e.getKey() + "=" + e.getValue());
+            }
+        }
     }
 
     private static void setRule(World w, GameRule<Boolean> rule, boolean v) {
@@ -182,7 +326,8 @@ public final class AbyssWorldPool {
      * 回收世界：卸载 + 删目录 + 清 schematic 会话。必须在主线程调用。
      */
     public void releaseWorld(UUID instanceId) {
-        String name = worldName(instanceId);
+        String name = instanceWorldNames.remove(instanceId);
+        if (name == null) name = worldName(instanceId);
         World world = Bukkit.getWorld(name);
         if (world != null) {
             try {

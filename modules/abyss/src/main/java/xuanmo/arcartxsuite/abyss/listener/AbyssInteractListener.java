@@ -96,7 +96,10 @@ public final class AbyssInteractListener implements Listener {
         if (instance == null || instance.isFinished()) return;
         ItemStack item = event.getItem();
         if (item == null) return;
-        for (String b : service.config().restrictions().blockedItems()) {
+        java.util.List<String> banned = new java.util.ArrayList<>(
+            service.config().restrictions().blockedItems());
+        banned.addAll(instance.getTemplate().requirements().disabledItems());
+        for (String b : banned) {
             Material m = Material.matchMaterial(b.toUpperCase());
             if (m != null && item.getType() == m) {
                 event.setCancelled(true);

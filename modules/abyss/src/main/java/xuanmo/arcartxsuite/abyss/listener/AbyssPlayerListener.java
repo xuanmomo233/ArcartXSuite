@@ -1,6 +1,9 @@
 package xuanmo.arcartxsuite.abyss.listener;
 
+import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -15,6 +18,9 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.inventory.ItemStack;
+import xuanmo.arcartxsuite.abyss.config.AbyssModuleConfiguration;
 import xuanmo.arcartxsuite.abyss.instance.AbyssInstance;
 import xuanmo.arcartxsuite.abyss.instance.AbyssStatus;
 import xuanmo.arcartxsuite.abyss.service.AbyssService;
@@ -94,6 +100,106 @@ public final class AbyssPlayerListener implements Listener {
         if (instance == null) return;
         Player killer = event.getEntity().getKiller();
         service.mobGroups().onEntityDeath(entity.getUniqueId(), instance, killer);
+        routeLootAndExp(event, instance, killer);
+    }
+
+    /**
+     * 队伍掉落/经验路由（QueDP 同款）：
+     * 掉落按队伍 lootMode 分给击杀者/轮流者/队长/队伍仓库；
+     * 经验按 expShareMode 平分给副本内队友。
+     */
+    private void routeLootAndExp(EntityDeathEvent event, AbyssInstance instance,
+                                 @org.jetbrains.annotations.Nullable Player killer) {
+        if (killer == null) return;
+        var party = service.party().partyOf(killer);
+        if (party == null || party.size() < 2) return;
+
+        // ── 掉落分配 ──
+        var drops = event.getDrops();
+        if (!drops.isEmpty() && party.lootMode() != AbyssModuleConfiguration.LootMode.FREE) {
+            switch (party.lootMode()) {
+                case AUTO_STORE -> {
+                    int stored = 0;
+                    for (var it = drops.iterator(); it.hasNext(); ) {
+                        ItemStack item = it.next();
+                        int amt = item.getAmount(); // storeToPartyStorage 会扣减 item
+                        if (storeToPartyStorage(party, item)) {
+                            it.remove();
+                            stored += amt;
+                        }
+                    }
+                    if (stored > 0) {
+                        party.appendFeed(null, service.msg("party.loot-stored",
+                            "count", String.valueOf(stored)));
+                    }
+                }
+                case ROUND_ROBIN, LEADER -> {
+                    UUID target = party.lootMode() == AbyssModuleConfiguration.LootMode.LEADER
+                        ? party.leader() : party.nextLootOwner();
+                    Player tp = target != null ? Bukkit.getPlayer(target) : null;
+                    if (tp != null && tp.isOnline()
+                        && instance.hasPlayer(target)) {
+                        giveOrDrop(tp, List.copyOf(drops));
+                        drops.clear();
+                    }
+                }
+                default -> { }
+            }
+        }
+
+        // ── 经验共享 ──
+        int exp = event.getDroppedExp();
+        if (exp <= 0) return;
+        var mode = service.config().party().expShareMode();
+        if (mode == AbyssModuleConfiguration.ExpShareMode.NONE) return;
+        List<Player> share = party.onlineMembers().stream()
+            .filter(p -> instance.hasPlayer(p.getUniqueId()))
+            .filter(p -> mode == AbyssModuleConfiguration.ExpShareMode.EQUAL
+                || p.getWorld().equals(entityWorld(event))
+                && p.getLocation().distanceSquared(entityLoc(event)) <= 32 * 32)
+            .toList();
+        if (share.isEmpty()) return;
+        event.setDroppedExp(0);
+        int each = Math.max(1, exp / share.size());
+        for (Player p : share) {
+            p.giveExp(each);
+        }
+    }
+
+    private org.bukkit.World entityWorld(EntityDeathEvent e) {
+        return e.getEntity().getWorld();
+    }
+
+    private org.bukkit.Location entityLoc(EntityDeathEvent e) {
+        return e.getEntity().getLocation();
+    }
+
+    /** 物品塞进队伍仓库的空槽（无空槽返回 false）。 */
+    private boolean storeToPartyStorage(xuanmo.arcartxsuite.abyss.party.Party party, ItemStack item) {
+        int cap = service.config().party().storagePages() * 45;
+        for (int slot = 0; slot < cap; slot++) {
+            ItemStack cur = party.getStorageItem(slot);
+            if (cur == null || cur.getType().isAir()) {
+                party.setStorageItem(slot, item);
+                return true;
+            }
+            if (cur.isSimilar(item) && cur.getAmount() < cur.getMaxStackSize()) {
+                int can = Math.min(item.getAmount(), cur.getMaxStackSize() - cur.getAmount());
+                cur.setAmount(cur.getAmount() + can);
+                party.setStorageItem(slot, cur);
+                item.setAmount(item.getAmount() - can);
+                if (item.getAmount() <= 0) return true;
+            }
+        }
+        return false;
+    }
+
+    /** 给玩家物品，装不下的丢脚下。 */
+    private static void giveOrDrop(Player p, List<ItemStack> items) {
+        var overflow = p.getInventory().addItem(items.toArray(new ItemStack[0]));
+        for (ItemStack left : overflow.values()) {
+            p.getWorld().dropItemNaturally(p.getLocation(), left);
+        }
     }
 
     // ═══ 防逃逸 ═══
@@ -145,16 +251,48 @@ public final class AbyssPlayerListener implements Listener {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.isFinished()) return;
-        if (player.hasPermission("abyss.bypass.commands")) return;
+        if (player.hasPermission("arcartxsuite.abyss.bypass")) return;
         String raw = event.getMessage().substring(1); // 去 '/'
         String cmd = raw.split(" ")[0].toLowerCase();
-        var blocked = service.config().restrictions().blockedCommands();
-        for (String b : blocked) {
-            if (cmd.equalsIgnoreCase(b) || raw.toLowerCase().startsWith(b.toLowerCase() + " ")) {
+        String rawLower = raw.toLowerCase();
+
+        // 副本级禁用（disabled_commands）优先：与黑名单同语义
+        for (String b : instance.getTemplate().requirements().disabledCommands()) {
+            if (cmd.equalsIgnoreCase(b) || rawLower.startsWith(b.toLowerCase() + " ")) {
                 event.setCancelled(true);
                 player.sendMessage(service.msg("dungeon.command-blocked"));
                 return;
             }
+        }
+
+        // 命令控制：副本级 command_control 优先，INHERIT 时沿用全局 restrictions
+        var cc = instance.getTemplate().worldRules().commandControl();
+        AbyssModuleConfiguration.CommandMode mode;
+        java.util.List<String> list;
+        if (cc.mode() == xuanmo.arcartxsuite.abyss.template.WorldRules.CommandControl.ControlMode.INHERIT) {
+            mode = service.config().restrictions().commandMode();
+            list = service.config().restrictions().blockedCommands();
+        } else {
+            mode = cc.mode() == xuanmo.arcartxsuite.abyss.template.WorldRules.CommandControl.ControlMode.BLACKLIST
+                ? AbyssModuleConfiguration.CommandMode.BLACKLIST
+                : AbyssModuleConfiguration.CommandMode.WHITELIST;
+            list = cc.commands();
+        }
+        boolean hit = false;
+        for (String b : list) {
+            if (cmd.equalsIgnoreCase(b) || rawLower.startsWith(b.toLowerCase() + " ")) {
+                hit = true;
+                break;
+            }
+        }
+        boolean block = switch (mode) {
+            case NONE -> false;
+            case BLACKLIST -> hit;
+            case WHITELIST -> !hit;
+        };
+        if (block) {
+            event.setCancelled(true);
+            player.sendMessage(service.msg("dungeon.command-blocked"));
         }
     }
 
@@ -199,6 +337,22 @@ public final class AbyssPlayerListener implements Listener {
             if (i != null && service.stats() != null) {
                 service.stats().recordDamageTaken(i, p.getUniqueId(), event.getFinalDamage());
             }
+        }
+    }
+
+    /** 副本内回血统计（自然恢复/药水/图腾全算）。 */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onRegainHealth(EntityRegainHealthEvent event) {
+        if (!(event.getEntity() instanceof Player p)) return;
+        AbyssInstance i = service.instances().getInstance(p);
+        if (i == null || service.stats() == null) return;
+        // 实际恢复量 = min(请求量, 生命缺口)，避免满血边缘虚增统计
+        double maxHealth = p.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH) != null
+            ? p.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue()
+            : 20.0;
+        double effective = Math.min(event.getAmount(), Math.max(0, maxHealth - p.getHealth()));
+        if (effective > 0) {
+            service.stats().recordHealing(i, p.getUniqueId(), effective);
         }
     }
 }

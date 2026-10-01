@@ -16,6 +16,7 @@ public record AbyssModuleConfiguration(
     LeaderboardSection leaderboard,
     StatisticsSection statistics,
     StorageSection storage,
+    RecoverySection recovery,
     UiSection ui,
     boolean debug
 ) {
@@ -31,6 +32,7 @@ public record AbyssModuleConfiguration(
             LeaderboardSection.load(yaml.getConfigurationSection("leaderboard")),
             StatisticsSection.load(yaml.getConfigurationSection("statistics")),
             StorageSection.load(yaml.getConfigurationSection("storage")),
+            RecoverySection.load(yaml.getConfigurationSection("recovery")),
             UiSection.load(yaml.getConfigurationSection("ui")),
             yaml.getBoolean("debug", false)
         );
@@ -45,11 +47,14 @@ public record AbyssModuleConfiguration(
         long worldLoadTimeout,
         int maxEntitiesPerInstance,
         boolean nmsFastLoad,
-        boolean asyncWorldCopy
+        boolean asyncWorldCopy,
+        int emptyCleanupDelaySeconds,
+        PreloadSection preload
     ) {
         static AbyssSection load(ConfigurationSection s) {
             if (s == null) {
-                return new AbyssSection("axs_abyss_", 7200, 30, 120000L, 100, true, true);
+                return new AbyssSection("axs_abyss_", 7200, 30, 120000L, 100, true, true,
+                    30, PreloadSection.defaults());
             }
             return new AbyssSection(
                 s.getString("world-prefix", "axs_abyss_"),
@@ -58,7 +63,39 @@ public record AbyssModuleConfiguration(
                 s.getLong("world-load-timeout", 120000L),
                 s.getInt("max-entities-per-instance", 100),
                 s.getBoolean("nms-fast-load", true),
-                s.getBoolean("async-world-copy", true)
+                s.getBoolean("async-world-copy", true),
+                s.getInt("empty-cleanup-delay-seconds", 30),
+                PreloadSection.load(s.getConfigurationSection("preload"))
+            );
+        }
+    }
+
+    // ── 副本预热 ────────────────────────────────────────
+
+    /** 预热池：启动后按副本预建世界，进入时直接接管（秒开）。 */
+    public record PreloadSection(
+        boolean enabled,
+        boolean strict,
+        java.util.Map<String, Integer> dungeons
+    ) {
+        static PreloadSection defaults() {
+            return new PreloadSection(false, false, java.util.Map.of());
+        }
+
+        static PreloadSection load(ConfigurationSection s) {
+            if (s == null) return defaults();
+            java.util.Map<String, Integer> map = new java.util.LinkedHashMap<>();
+            var ds = s.getConfigurationSection("dungeons");
+            if (ds != null) {
+                for (String k : ds.getKeys(false)) {
+                    int n = ds.getInt(k, 0);
+                    if (n > 0) map.put(k, n);
+                }
+            }
+            return new PreloadSection(
+                s.getBoolean("enabled", false),
+                s.getBoolean("strict", false),
+                map
             );
         }
     }
@@ -113,7 +150,10 @@ public record AbyssModuleConfiguration(
 
     // ── 副本内行为限制 ──────────────────────────────────
 
+    public enum CommandMode { NONE, BLACKLIST, WHITELIST }
+
     public record RestrictionsSection(
+        CommandMode commandMode,
         java.util.List<String> blockedCommands,
         java.util.List<String> blockedItems,
         boolean blockBreak,
@@ -121,11 +161,19 @@ public record AbyssModuleConfiguration(
     ) {
         static RestrictionsSection load(ConfigurationSection s) {
             if (s == null) {
-                return new RestrictionsSection(
+                return new RestrictionsSection(CommandMode.BLACKLIST,
                     java.util.List.of("spawn", "tpa", "home", "back", "warp", "tp"),
                     java.util.List.of("CHORUS_FRUIT"), false, false);
             }
+            CommandMode mode;
+            try {
+                mode = CommandMode.valueOf(
+                    s.getString("command-mode", "BLACKLIST").toUpperCase());
+            } catch (IllegalArgumentException e) {
+                mode = CommandMode.BLACKLIST;
+            }
             return new RestrictionsSection(
+                mode,
                 s.getStringList("blocked-commands"),
                 s.getStringList("blocked-items"),
                 s.getBoolean("block-break", false),
@@ -134,10 +182,29 @@ public record AbyssModuleConfiguration(
         }
     }
 
+    // ── 异常退出恢复 ────────────────────────────────────
+
+    /** 玩家非正常离开副本（掉线/崩服）后，下次进服执行的恢复动作。 */
+    public record RecoverySection(
+        boolean enabled,
+        java.util.List<String> actions
+    ) {
+        static RecoverySection load(ConfigurationSection s) {
+            if (s == null) {
+                return new RecoverySection(true, java.util.List.of(
+                    "[tell] &c你上次没有正常退出副本"));
+            }
+            return new RecoverySection(
+                s.getBoolean("enabled", true),
+                s.getStringList("actions")
+            );
+        }
+    }
+
     // ── 队伍 ────────────────────────────────────────────
 
     public enum ExpShareMode { NONE, EQUAL, DISTANCE }
-    public enum LootMode { FREE, ROUND_ROBIN, LEADER }
+    public enum LootMode { FREE, ROUND_ROBIN, LEADER, AUTO_STORE }
 
     public record PartySection(
         int maxMembers,

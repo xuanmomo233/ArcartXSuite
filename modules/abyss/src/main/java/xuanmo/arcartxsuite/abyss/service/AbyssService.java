@@ -37,6 +37,7 @@ import xuanmo.arcartxsuite.abyss.interact.InteractManager;
 import xuanmo.arcartxsuite.abyss.leaderboard.LeaderboardService;
 import xuanmo.arcartxsuite.abyss.listener.AbyssInteractListener;
 import xuanmo.arcartxsuite.abyss.listener.AbyssPlayerListener;
+import xuanmo.arcartxsuite.abyss.listener.AbyssSpawnListener;
 import xuanmo.arcartxsuite.abyss.mob.CompositeMobProvider;
 import xuanmo.arcartxsuite.abyss.mob.MobProvider;
 import xuanmo.arcartxsuite.abyss.mob.MonsterGroupManager;
@@ -47,6 +48,8 @@ import xuanmo.arcartxsuite.abyss.npc.DungeonNpcManager;
 import xuanmo.arcartxsuite.abyss.obstacle.ObstacleManager;
 import xuanmo.arcartxsuite.abyss.party.Party;
 import xuanmo.arcartxsuite.abyss.party.PartyManager;
+import xuanmo.arcartxsuite.abyss.party.PartyStorageGui;
+import xuanmo.arcartxsuite.abyss.recovery.RecoveryManager;
 import xuanmo.arcartxsuite.abyss.quest.QuestManager;
 import xuanmo.arcartxsuite.abyss.reward.RewardResolver;
 import xuanmo.arcartxsuite.abyss.script.ScriptContext;
@@ -131,6 +134,7 @@ public final class AbyssService {
     private CooldownManager cooldown;
     private RequirementChecker requirementChecker;
     private PartyManager partyManager;
+    private RecoveryManager recoveryManager;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
     private AbyssAdminCommand adminCommand;
@@ -207,12 +211,13 @@ public final class AbyssService {
         instances = new AbyssInstanceManager();
         reloadTemplates();
 
-        // 3) 世界池 + 残留世界清理
+        // 3) 世界池 + 残留世界清理 + 预热池
         worldPool = new AbyssWorldPool(plugin, config.abyss(), logger);
         int orphans = worldPool.cleanupOrphanWorlds();
         if (orphans > 0) {
             logger.info("[abyss] 清理残留副本世界 x" + orphans);
         }
+        recoveryManager = new RecoveryManager(dataFolder, config.recovery(), logger);
 
         // 4) 脚本系统
         scriptRunner = new ScriptRunner(plugin, scheduler, () -> this, logger);
@@ -254,7 +259,7 @@ public final class AbyssService {
             currencyManager, stamina, cooldown, rewards);
 
         // 8) 队伍
-        partyManager = new PartyManager(config.party(), s -> { });
+        partyManager = new PartyManager(config.party(), s -> { }, logger);
 
         // 8.5) ArcartX UI 服务（浏览器/队伍/宝箱/HUD/排行统计 + 客户端包路由）
         AbyssUiService ui = new AbyssUiService(this, packetBridge, itemStackBridge, logger);
@@ -274,6 +279,13 @@ public final class AbyssService {
             config.abyss().instanceCheckInterval(), 10 /* 短周期轮询含触发器 */);
         // 触发器需更细粒度：10s 太粗——另起 1s 轮询做 proximity/region
         proximityTask = scheduler.scheduleEverySeconds(plugin, this::proximityTick, 1, 1);
+
+        // 11) 副本预热池（预热世界就绪后进入秒开）
+        Map<String, AbyssTemplate> tplMap = new java.util.LinkedHashMap<>();
+        for (AbyssTemplate t : instances.getAllTemplates()) {
+            tplMap.put(t.id(), t);
+        }
+        worldPool.initPreload(tplMap, config.abyss().preload());
 
         started = true;
         logger.info("[abyss] 已启动，地牢模板: " + instances.getAllTemplates().size());
@@ -298,7 +310,10 @@ public final class AbyssService {
         if (mobGroups != null) mobGroups.shutdown();
         if (npcs != null) npcs.shutdown();
         if (partyManager != null) partyManager.shutdown();
-        if (worldPool != null) worldPool.shutdown();
+        if (worldPool != null) {
+            worldPool.releasePreload();
+            worldPool.shutdown();
+        }
         if (playerData != null) playerData.shutdown();
         if (repository != null) repository.shutdown();
         try {
@@ -331,6 +346,15 @@ public final class AbyssService {
         instances.clearTemplates();
         var loaded = templateLoader.loadAll();
         loaded.values().forEach(instances::registerTemplate);
+        // 模板来源可能变化：重建预热池（运行中实例不受影响，世界已绑定实例id）
+        if (worldPool != null) {
+            worldPool.releasePreload();
+            Map<String, AbyssTemplate> tplMap = new java.util.LinkedHashMap<>();
+            for (AbyssTemplate t : instances.getAllTemplates()) {
+                tplMap.put(t.id(), t);
+            }
+            worldPool.initPreload(tplMap, config.abyss().preload());
+        }
     }
 
     private MobProvider createMobProvider() {
@@ -359,6 +383,8 @@ public final class AbyssService {
         List<Listener> list = new ArrayList<>();
         list.add(new AbyssPlayerListener(this, logger));
         list.add(new AbyssInteractListener(this, logger));
+        list.add(new AbyssSpawnListener(this, logger));
+        list.add(new PartyStorageGui.Events(this, logger));
         // MM 死亡中继：独立类，仅 MM 启用时注册（可选依赖隔离）
         if (mobProvider instanceof CompositeMobProvider cp && cp.hasMythic()) {
             try {
@@ -441,6 +467,13 @@ public final class AbyssService {
         }
         if (!instances.hasAvailableSlot(template)) {
             return EnterResult.fail("副本实例已达上限");
+        }
+        // 预热严格模式：配置了预热的地牢池空则拒绝进入
+        var preloadCfg = config.abyss().preload();
+        if (preloadCfg.enabled() && preloadCfg.strict()
+            && preloadCfg.dungeons().containsKey(template.id())
+            && worldPool.preparedCount(template.id()) == 0) {
+            return EnterResult.fail(msg("error.preload-empty"));
         }
         // 队伍：多人进本时取首玩家队伍（队伍检查在 requirements 内）
         Party party = players.size() > 1 ? partyManager.partyOf(players.get(0)) : null;
@@ -663,13 +696,14 @@ public final class AbyssService {
             "dungeon", instance.getTemplate().id(),
             "instance", instance.getInstanceId().toString(),
             "reason", reason.name()));
-        // 退出后实例无人 → 倒计时清理（30s 宽限等人重连）
+        // 退出后实例无人 → 倒计时清理（宽限等人重连）
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
+            long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
             scheduleOnce(instance, () -> {
                 if (instance.getOnlinePlayerCount() == 0) {
                     cancelDungeon(instance);
                 }
-            }, 600L);
+            }, delay);
         }
     }
 
@@ -682,21 +716,26 @@ public final class AbyssService {
         }
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
+        // 非正常退出标记（下次进服执行恢复动作）
+        if (recoveryManager != null) {
+            recoveryManager.mark(player.getUniqueId(), instance.getTemplate().id());
+        }
         Location back = instance.getOriginalLocation(player.getUniqueId());
         if (back != null) {
             playerData.savePendingLocation(player.getUniqueId(), back);
         }
         instance.removePlayer(player.getUniqueId());
-        // 不触发退出消息；30s 无人清理由 watchdog/playerExit 路径处理
+        // 不触发退出消息；无人清理由 watchdog/playerExit 路径处理
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
+            long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
             scheduleOnce(instance, () -> {
                 if (instance.getOnlinePlayerCount() == 0) cancelDungeon(instance);
-            }, 600L);
+            }, delay);
         }
         partyManager.onQuit(player);
     }
 
-    /** 玩家进服（监听器调用）：恢复位置 + 预载数据。 */
+    /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
     public void handleJoin(Player player) {
         playerData.preloadCooldowns(player.getUniqueId());
         ScheduledTask[] holder = new ScheduledTask[1];
@@ -709,6 +748,18 @@ public final class AbyssService {
                 runOnMain(() -> player.teleport(loc));
             }
         }, 0L, Long.MAX_VALUE / 20);
+        // 异常退出恢复（在传送恢复后一拍执行）
+        if (recoveryManager != null) {
+            ScheduledTask[] rh = new ScheduledTask[1];
+            rh[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+                if (rh[0] != null) {
+                    try { rh[0].cancel(); } catch (Throwable ignored) { }
+                }
+                if (player.isOnline()) {
+                    runOnMain(() -> recoveryManager.runIfMarked(player));
+                }
+            }, 1L, Long.MAX_VALUE / 20);
+        }
     }
 
     // ═══ 死亡处理 ═══

@@ -118,6 +118,13 @@ public final class Party {
     }
     public Map<Integer, ItemStack> storageItems() { return Map.copyOf(storage); }
 
+    /** 清空并返回仓库全部物品（解散时兜底发还）。 */
+    public synchronized java.util.List<ItemStack> drainStorage() {
+        java.util.List<ItemStack> out = new java.util.ArrayList<>(storage.values());
+        storage.clear();
+        return out;
+    }
+
     // ── 设置 ──
     public String name() { return name != null ? name : "队伍-" + id.toString().substring(0, 4); }
     public void name(String n) { this.name = n; }

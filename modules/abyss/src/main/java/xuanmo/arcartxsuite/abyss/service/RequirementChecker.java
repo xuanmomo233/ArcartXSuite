@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.abyss.service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.party.Party;
@@ -58,10 +59,28 @@ public final class RequirementChecker {
         if (r.partyRequired() && (party == null || party.size() < r.minPlayers())) {
             return CheckResult.fail("该地牢需要组队进入");
         }
-        for (Player p : members) {
+        // 逐人校验；require-all-players=false 时只查队长（队伍为发起者或首个玩家）
+        List<Player> toCheck = members;
+        if (!r.requireAllPlayers()) {
+            toCheck = List.of(members.get(0));
+        }
+        for (Player p : toCheck) {
             CheckResult single = checkSingle(template, p);
             if (!single.ok()) {
                 return CheckResult.fail(p.getName() + ": " + single.reason());
+            }
+        }
+        // 队长专属条件（有队伍取队长，否则取发起者）
+        if (!r.leaderOnlyConditions().isEmpty()) {
+            Player leader = members.get(0);
+            if (party != null) {
+                Player lp = Bukkit.getPlayer(party.leader());
+                if (lp != null) leader = lp;
+            }
+            var failed = evaluator.firstFailed(leader, r.leaderOnlyConditions());
+            if (failed != null) {
+                return CheckResult.fail("队长条件不满足: "
+                    + (failed.raw() != null ? failed.raw() : failed.serialize()));
             }
         }
         return CheckResult.pass();

@@ -20,6 +20,8 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
  * @param requiredItems  所需物品清单（material:数量 或 mythic:物品id:数量）
  * @param requiredPermissions 所需权限
  * @param conditions     条件表达式（PAPI/ARIA/JS/CONTEXT，走宿主统一评估器）
+ * @param requireAllPlayers 是否所有进本玩家都需满足条件（false=仅队长）
+ * @param leaderOnlyConditions 仅队长需要满足的额外条件
  * @param disabledCommands 副本内禁用命令（无前缀匹配）
  * @param disabledItems   副本内禁用物品 material 列表
  */
@@ -36,6 +38,8 @@ public record EntryRequirements(
     List<RequiredItem> requiredItems,
     List<String> requiredPermissions,
     List<ScriptCondition> conditions,
+    boolean requireAllPlayers,
+    List<ScriptCondition> leaderOnlyConditions,
     List<String> disabledCommands,
     List<String> disabledItems
 ) {
@@ -69,7 +73,7 @@ public record EntryRequirements(
 
     public static EntryRequirements defaults() {
         return new EntryRequirements(1, 4, false, 0, 0, 0L, 0.0, "money", 0,
-            List.of(), List.of(), List.of(), List.of(), List.of());
+            List.of(), List.of(), List.of(), true, List.of(), List.of(), List.of());
     }
 
     public static EntryRequirements load(ConfigurationSection s) {
@@ -88,6 +92,8 @@ public record EntryRequirements(
                 .map(RequiredItem::parse).filter(i -> i != null).toList(),
             s.getStringList("required_permissions"),
             ScriptConditionsLoader.load(s, "conditions", "placeholder_conditions"),
+            s.getBoolean("require_all_players", s.getBoolean("require-all-players", true)),
+            ScriptConditionsLoader.load(s, "leader_conditions", "leader-only-conditions"),
             s.getStringList("disabled_commands"),
             s.getStringList("disabled_items")
         );

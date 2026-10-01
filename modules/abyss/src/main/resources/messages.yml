@@ -33,6 +33,7 @@ error:
   world-load-failed: "{prefix}&c副本世界加载失败，请稍后再试"
   enter-failed: "{prefix}&c进入副本失败: &f{reason}"
   ui-disabled: "{prefix}&cUI 未启用"
+  preload-empty: "{prefix}&c副本正在预热中，请稍后再试"
 
 usage:
   enter: "{prefix}&e用法: /{label} enter <地牢>"
@@ -85,6 +86,12 @@ party:
   dungeon-set: "{prefix}&a目标副本已设为: &f{name}"
   lobby-title: "{prefix}&6公开队伍"
   lobby-row: "{prefix}&e{name} &7队长:{leader} &f{size}/{max}人 &8{mode} &7副本:{dungeon}"
+  loot-stored: "{prefix}&7{count} 件掉落物已存入队伍仓库"
+  storage-title: "&8队伍仓库 · {party} &7({page}/{pages})"
+  storage-prev: "&e上一页"
+  storage-next: "&e下一页"
+  storage-info: "&6队伍仓库 &7(自动存储掉落物)"
+  storage-filler: " "
 
 dungeon:
   preparing: "{prefix}&e副本准备中，请稍候..."
@@ -156,6 +163,7 @@ party-help:
   lobby: "{prefix}&7/{label} lobby&f - 组队大厅"
   kick: "{prefix}&7/{label} kick <玩家>&f - 踢出成员"
   leader: "{prefix}&7/{label} leader <玩家>&f - 转让队长"
+  storage: "{prefix}&7/{label} storage&f - 打开队伍仓库"
   disband: "{prefix}&7/{label} disband&f - 解散队伍"
 
 admin-help:

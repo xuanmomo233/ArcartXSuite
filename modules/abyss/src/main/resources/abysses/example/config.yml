@@ -12,6 +12,19 @@ description:
 world:
   template: "void"          # void=虚空世界 / <maps目录名> / 本目录world/文件夹
   spawn: "0,80,0,90,0"      # x,y,z,yaw,pitch
+  # 副本游戏规则覆盖（键=Bukkit GameRule 名，值=布尔或整数；默认已内置一套副本规则）
+  # gamerules:
+  #   keepInventory: true
+  #   mobGriefing: false
+  #   randomTickSpeed: 0
+  # 禁止环境驱动刷怪（自然/刷怪笼/巡逻队等；副本脚本刷怪走 CUSTOM 不受影响）
+  # disable_natural_spawn: true
+  # 额外禁用的生成来源（CreatureSpawnEvent.SpawnReason 名，可含 CUSTOM）
+  # disabled_spawn_reasons: [SPAWNER_EGG, DISPENSE_EGG]
+  # 副本级命令控制：mode=inherit(默认,沿用全局)/blacklist/whitelist
+  # command_control:
+  #   mode: whitelist
+  #   commands: [party, abyss, teammsg]
 
 time_limit: 600             # 10分钟
 timeout_action: "FAIL"      # FAIL=超时判负 / KICK=踢出
@@ -30,5 +43,7 @@ requirements:
   required_items: []
   required_permissions: []
   conditions: []
+  # require_all_players: true   # false 时 conditions/物品/货币等只需队长满足
+  # leader_conditions: []       # 仅队长需要满足的额外条件
   disabled_commands: [spawn, tpa, home]
   disabled_items: [CHORUS_FRUIT]
