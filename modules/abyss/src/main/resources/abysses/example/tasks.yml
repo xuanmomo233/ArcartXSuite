@@ -3,7 +3,7 @@
 tips:
   type: TIMED
   times: [60, 300, 540]
-  timed_scripts:
+  timed-scripts:
     60: ["message @all &7提示：已进行 1 分钟"]
     300: ["message @all &e时间过半，抓紧清怪！"]
     540: ["message @all &c最后 1 分钟！"]

@@ -5,7 +5,7 @@ import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
- * 副本世界治理规则（BTDungeons 同款思路）：
+ * 副本世界治理规则：
  * 按副本覆盖游戏规则 + 自然刷怪控制 + 副本级命令控制。
  *
  * @param gamerules             副本世界游戏规则覆盖（键=GameRule 名，值=布尔或整数）
@@ -49,6 +49,11 @@ public record WorldRules(
     public static final WorldRules NONE =
         new WorldRules(Map.of(), false, List.of(), CommandControl.INHERIT);
 
+    private static ConfigurationSection firstSection(
+        ConfigurationSection a, ConfigurationSection b) {
+        return a != null ? a : b;
+    }
+
     public static WorldRules load(ConfigurationSection worldSection) {
         if (worldSection == null) return NONE;
         Map<String, String> gamerules = new java.util.LinkedHashMap<>();
@@ -63,10 +68,14 @@ public record WorldRules(
         }
         return new WorldRules(
             gamerules,
-            worldSection.getBoolean("disable_natural_spawn",
-                worldSection.getBoolean("disable-natural-spawn", false)),
-            worldSection.getStringList("disabled_spawn_reasons"),
-            CommandControl.load(worldSection.getConfigurationSection("command_control"))
+            worldSection.getBoolean("disable-natural-spawn",
+                worldSection.getBoolean("disable_natural_spawn", false)),
+            worldSection.getStringList("disabled-spawn-reasons").isEmpty()
+                ? worldSection.getStringList("disabled_spawn_reasons")
+                : worldSection.getStringList("disabled-spawn-reasons"),
+            CommandControl.load(firstSection(
+                worldSection.getConfigurationSection("command-control"),
+                worldSection.getConfigurationSection("command_control")))
         );
     }
 }

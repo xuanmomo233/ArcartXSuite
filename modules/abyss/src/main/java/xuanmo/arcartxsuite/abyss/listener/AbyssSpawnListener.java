@@ -11,7 +11,7 @@ import xuanmo.arcartxsuite.abyss.service.AbyssService;
 import xuanmo.arcartxsuite.abyss.template.WorldRules;
 
 /**
- * 副本世界刷怪控制（BTDungeons 同款）：
+ * 副本世界刷怪控制：
  * <ul>
  *   <li>{@code disabled_spawn_reasons}：按生成来源精确禁用</li>
  *   <li>{@code disable_natural_spawn}：禁环境驱动刷怪（自然/刷怪笼/巡逻队/袭击/刷蛋石等），

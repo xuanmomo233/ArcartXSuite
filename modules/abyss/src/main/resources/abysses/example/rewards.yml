@@ -24,7 +24,7 @@ rewards:
         weight: 20
 
 # 宝箱奖励（open_chest <名> 调用，ArcartX UI 阶段后走客户端 UI，当前直接发放）
-chest_rewards:
+chest-rewards:
   trial_chest:
     title: "试炼宝箱"
     rows: 3

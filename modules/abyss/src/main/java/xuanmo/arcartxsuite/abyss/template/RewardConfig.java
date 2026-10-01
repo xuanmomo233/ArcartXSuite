@@ -14,7 +14,7 @@ import org.bukkit.configuration.MemoryConfiguration;
  * rewards:
  *   basic_pack:
  *     items: ["material:DIAMOND:3"]
- *     mythic_items: ["BossSword:1"]
+ *     mythic-items: ["BossSword:1"]
  *     money: 100            # 走宿主 currency（currency 字段选货币）
  *     currency: "money"
  *     exp: 50
@@ -28,7 +28,7 @@ import org.bukkit.configuration.MemoryConfiguration;
  *       - reward: rare_pack
  *         weight: 30
  *
- * chest_rewards:
+ * chest-rewards:
  *   common_chest:
  *     title: "普通宝箱"
  *     rows: 3
@@ -78,14 +78,14 @@ public record RewardConfig(
                 s.getInt("picks", 1),
                 pool,
                 s.getStringList("items"),
-                s.getStringList("mythic_items").isEmpty()
-                    ? s.getStringList("mythic-items") : s.getStringList("mythic_items"),
-                s.getStringList("neige_items").isEmpty()
-                    ? s.getStringList("neige-items") : s.getStringList("neige_items"),
-                s.getStringList("overture_items").isEmpty()
-                    ? s.getStringList("overture-items") : s.getStringList("overture_items"),
-                s.getStringList("mmo_items").isEmpty()
-                    ? s.getStringList("mmo-items") : s.getStringList("mmo_items"),
+                s.getStringList("mythic-items").isEmpty()
+                    ? s.getStringList("mythic_items") : s.getStringList("mythic-items"),
+                s.getStringList("neige-items").isEmpty()
+                    ? s.getStringList("neige_items") : s.getStringList("neige-items"),
+                s.getStringList("overture-items").isEmpty()
+                    ? s.getStringList("overture_items") : s.getStringList("overture-items"),
+                s.getStringList("mmo-items").isEmpty()
+                    ? s.getStringList("mmo_items") : s.getStringList("mmo-items"),
                 s.getDouble("money", 0.0),
                 s.getString("currency", "money"),
                 s.getInt("exp", 0),
@@ -138,13 +138,13 @@ public record RewardConfig(
         // 兼容：根级直接写奖励名（无 rewards: 包裹）
         if (r == null) {
             for (String key : root.getKeys(false)) {
-                if ("chest_rewards".equals(key) || "chest-rewards".equals(key)) continue;
+                if ("chest-rewards".equals(key) || "chest_rewards".equals(key)) continue;
                 ConfigurationSection s = root.getConfigurationSection(key);
                 if (s != null) rewards.put(key, RewardSet.load(key, s));
             }
         }
-        ConfigurationSection c = root.getConfigurationSection("chest_rewards");
-        if (c == null) c = root.getConfigurationSection("chest-rewards");
+        ConfigurationSection c = root.getConfigurationSection("chest-rewards");
+        if (c == null) c = root.getConfigurationSection("chest_rewards");
         if (c != null) {
             for (String key : c.getKeys(false)) {
                 ConfigurationSection s = c.getConfigurationSection(key);

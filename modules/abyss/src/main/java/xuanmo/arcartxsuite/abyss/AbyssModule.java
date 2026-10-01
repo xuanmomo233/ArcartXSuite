@@ -24,7 +24,7 @@ import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 /**
  * Abyss 地牢副本模块。
  * <p>
- * 复刻 QueDP 的多实例地牢：模板世界复制→独立实例→波次怪物→脚本驱动→奖励/排行，
+ * 多实例地牢：模板世界复制→独立实例→波次怪物→脚本驱动→奖励/排行，
  * 深度接入 ArcartXSuite 宿主（脚本双系统/统一物品源/奖励发放/货币/存储/调度/UI）。
  */
 public final class AbyssModule extends AbstractAXSModule implements ModuleCommandHandler {

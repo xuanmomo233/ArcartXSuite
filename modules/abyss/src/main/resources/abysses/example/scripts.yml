@@ -27,12 +27,12 @@ fail:
   - "wait 2"
   - "exit_dungeon @all"
 
-player_death:
+player-death:
   - "message @all &c{player} 阵亡了！"
   - "wait 5"
   - "revive_player @trigger"
 
-all_death:
+all-death:
   - "fail_dungeon"
 
 exit:

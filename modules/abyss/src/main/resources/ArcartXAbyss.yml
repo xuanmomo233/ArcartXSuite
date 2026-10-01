@@ -141,10 +141,13 @@ ui:
 recovery:
   # 玩家非正常离开副本（掉线/崩服）后，下次进服执行恢复动作
   enabled: true
-  # 动作前缀: [tell]消息 [title]标题;副标题 [console]控制台命令 [command]玩家命令
-  #          [teleport]世界;x;y;z;yaw;pitch [clear]清空背包
-  # {player} = 玩家名占位符
+  # 动作格式与副本脚本 DSL 一致（单目标，无需选择器）:
+  #   message <消息>                 title <in> <stay> <out> <主>|<副>
+  #   console <命令>                 player_command <命令>
+  #   teleport [世界] <x,y,z[,yaw,pitch]>   clear_inventory
+  #   aria: <表达式>  js: <脚本>
+  # {player} = 玩家名占位符, {dungeon} = 副本ID占位符
   actions:
-    - "[tell] &c你上次没有正常退出副本"
+    - "message &c你上次没有正常退出副本"
 
 debug: false

@@ -76,26 +76,36 @@ public record EntryRequirements(
             List.of(), List.of(), List.of(), true, List.of(), List.of(), List.of());
     }
 
+    private static List<String> firstNonEmpty(List<String> a, List<String> b) {
+        return a.isEmpty() ? b : a;
+    }
+
     public static EntryRequirements load(ConfigurationSection s) {
         if (s == null) return defaults();
         return new EntryRequirements(
-            s.getInt("min_players", s.getInt("min-players", 1)),
-            s.getInt("max_players", s.getInt("max-players", 4)),
-            s.getBoolean("party_required", s.getBoolean("party-required", false)),
-            s.getInt("min_level", s.getInt("min-level", 0)),
-            s.getInt("max_level", s.getInt("max-level", 0)),
+            s.getInt("min-players", s.getInt("min_players", 1)),
+            s.getInt("max-players", s.getInt("max_players", 4)),
+            s.getBoolean("party-required", s.getBoolean("party_required", false)),
+            s.getInt("min-level", s.getInt("min_level", 0)),
+            s.getInt("max-level", s.getInt("max_level", 0)),
             s.getLong("cooldown", 0L),
-            s.getDouble("money_cost", s.getDouble("money-cost", 0.0)),
-            s.getString("currency_id", s.getString("currency-id", "money")),
-            s.getInt("stamina_cost", s.getInt("stamina-cost", 0)),
-            s.getStringList("required_items").stream()
+            s.getDouble("money-cost", s.getDouble("money_cost", 0.0)),
+            s.getString("currency-id", s.getString("currency_id", "money")),
+            s.getInt("stamina-cost", s.getInt("stamina_cost", 0)),
+            firstNonEmpty(s.getStringList("required-items"),
+                s.getStringList("required_items")).stream()
                 .map(RequiredItem::parse).filter(i -> i != null).toList(),
-            s.getStringList("required_permissions"),
-            ScriptConditionsLoader.load(s, "conditions", "placeholder_conditions"),
-            s.getBoolean("require_all_players", s.getBoolean("require-all-players", true)),
-            ScriptConditionsLoader.load(s, "leader_conditions", "leader-only-conditions"),
-            s.getStringList("disabled_commands"),
-            s.getStringList("disabled_items")
+            firstNonEmpty(s.getStringList("required-permissions"),
+                s.getStringList("required_permissions")),
+            ScriptConditionsLoader.load(s, "conditions",
+                "placeholder-conditions", "placeholder_conditions"),
+            s.getBoolean("require-all-players", s.getBoolean("require_all_players", true)),
+            ScriptConditionsLoader.load(s, "leader-conditions",
+                "leader_conditions", "leader-only-conditions"),
+            firstNonEmpty(s.getStringList("disabled-commands"),
+                s.getStringList("disabled_commands")),
+            firstNonEmpty(s.getStringList("disabled-items"),
+                s.getStringList("disabled_items"))
         );
     }
 }

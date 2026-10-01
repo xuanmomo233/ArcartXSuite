@@ -42,7 +42,8 @@ public record ScriptConfig(
         Map<String, List<String>> customs = new LinkedHashMap<>();
         for (String key : root.getKeys(false)) {
             String norm = key.toLowerCase();
-            if (!LIFECYCLE.contains(norm)) {
+            // kebab 写法归一化为生命周期规范名再判断，避免误归入自定义段
+            if (!LIFECYCLE.contains(norm.replace('-', '_'))) {
                 customs.put(norm, root.getStringList(key));
             }
         }
@@ -51,8 +52,8 @@ public record ScriptConfig(
             root.getStringList("start"),
             root.getStringList("complete"),
             root.getStringList("fail"),
-            firstNonEmpty(root, "player_death", "player-death"),
-            firstNonEmpty(root, "all_death", "all-death"),
+            firstNonEmpty(root, "player-death", "player_death"),
+            firstNonEmpty(root, "all-death", "all_death"),
             root.getStringList("exit"),
             customs
         );

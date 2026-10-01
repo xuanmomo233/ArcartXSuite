@@ -13,13 +13,13 @@ import org.bukkit.configuration.ConfigurationSection;
  *   blocks:
  *     - "10,64,0,IRON_BLOCK"
  *     - "10,65,0,IRON_BLOCK"
- *   auto_create: true
- *   trigger_mode: NONE | ENTER | LEAVE | PERSIST
- *   trigger_script: ["message @trigger &c大门紧闭！"]
- *   trigger_cooldown: 5
- *   trigger_once: false
- *   on_create: [...]
- *   on_delete: [...]
+ *   auto-create: true
+ *   trigger-mode: NONE | ENTER | LEAVE | PERSIST
+ *   trigger-script: ["message @trigger &c大门紧闭！"]
+ *   trigger-cooldown: 5
+ *   trigger-once: false
+ *   on-create: [...]
+ *   on-delete: [...]
  * </pre>
  */
 public record ObstacleConfig(
@@ -43,23 +43,23 @@ public record ObstacleConfig(
             TriggerMode mode;
             try {
                 mode = TriggerMode.valueOf(
-                    s.getString("trigger_mode", s.getString("trigger-mode", "NONE")).toUpperCase());
+                    s.getString("trigger-mode", s.getString("trigger_mode", "NONE")).toUpperCase());
             } catch (IllegalArgumentException e) {
                 mode = TriggerMode.NONE;
             }
             return new Obstacle(
                 name,
                 s.getStringList("blocks"),
-                s.getBoolean("auto_create", s.getBoolean("auto-create", true)),
+                s.getBoolean("auto-create", s.getBoolean("auto_create", true)),
                 mode,
-                s.getStringList("trigger_script").isEmpty()
-                    ? s.getStringList("trigger-script") : s.getStringList("trigger_script"),
-                s.getInt("trigger_cooldown", s.getInt("trigger-cooldown", 0)),
-                s.getBoolean("trigger_once", s.getBoolean("trigger-once", false)),
-                s.getStringList("on_create").isEmpty()
-                    ? s.getStringList("on-create") : s.getStringList("on_create"),
-                s.getStringList("on_delete").isEmpty()
-                    ? s.getStringList("on-delete") : s.getStringList("on_delete")
+                s.getStringList("trigger-script").isEmpty()
+                    ? s.getStringList("trigger_script") : s.getStringList("trigger-script"),
+                s.getInt("trigger-cooldown", s.getInt("trigger_cooldown", 0)),
+                s.getBoolean("trigger-once", s.getBoolean("trigger_once", false)),
+                s.getStringList("on-create").isEmpty()
+                    ? s.getStringList("on_create") : s.getStringList("on-create"),
+                s.getStringList("on-delete").isEmpty()
+                    ? s.getStringList("on_delete") : s.getStringList("on-delete")
             );
         }
     }

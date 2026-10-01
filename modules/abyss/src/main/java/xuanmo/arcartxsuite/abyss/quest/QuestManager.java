@@ -12,7 +12,7 @@ import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 
 /**
- * 任务管理器：副本任务的接取/提交状态机（QueDP quest 对齐）。
+ * 任务管理器：副本任务的接取/提交状态机。
  * <p>
  * 状态存于实例变量（quest.&lt;id&gt; = ACCEPTED/COMPLETED），玩家级状态不区分成员——
  * 副本内任务为全队共享。接取/提交脚本经 {@link ScriptRunner} 执行，

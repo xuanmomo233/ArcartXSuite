@@ -14,7 +14,7 @@ import org.bukkit.configuration.ConfigurationSection;
  *   times: [30, 60, 90]
  *   script: [...]               # 所有时间点共用（可用 {task_time} 变量）
  *   # 或者按时间分别配置:
- *   timed_scripts:
+ *   timed-scripts:
  *     30: ["message @all 已进行30秒"]
  * periodic_supply:
  *   type: INTERVAL
@@ -22,7 +22,7 @@ import org.bukkit.configuration.ConfigurationSection;
  *   script: [...]
  * on_wave_complete:
  *   type: EVENT
- *   event: wave_complete        # wave_complete | monster_kill | player_death
+ *   event: wave_complete        # wave_complete | monster_kill | player_death（事件名固定 snake）
  *   script: [...]
  * </pre>
  */
@@ -49,8 +49,8 @@ public record TaskConfig(
                 type = TaskType.TIMED;
             }
             Map<Integer, List<String>> timed = new LinkedHashMap<>();
-            ConfigurationSection ts = s.getConfigurationSection("timed_scripts");
-            if (ts == null) ts = s.getConfigurationSection("timed-scripts");
+            ConfigurationSection ts = s.getConfigurationSection("timed-scripts");
+            if (ts == null) ts = s.getConfigurationSection("timed_scripts");
             if (ts != null) {
                 for (String k : ts.getKeys(false)) {
                     try {
@@ -62,7 +62,7 @@ public record TaskConfig(
                 name,
                 type,
                 s.getIntegerList("times"),
-                s.getInt("interval", s.getInt("interval_seconds", s.getInt("interval-seconds", 60))),
+                s.getInt("interval", s.getInt("interval-seconds", s.getInt("interval_seconds", 60))),
                 s.getString("event", null),
                 s.getStringList("script"),
                 timed

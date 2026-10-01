@@ -18,32 +18,32 @@ world:
   #   mobGriefing: false
   #   randomTickSpeed: 0
   # 禁止环境驱动刷怪（自然/刷怪笼/巡逻队等；副本脚本刷怪走 CUSTOM 不受影响）
-  # disable_natural_spawn: true
+  # disable-natural-spawn: true
   # 额外禁用的生成来源（CreatureSpawnEvent.SpawnReason 名，可含 CUSTOM）
-  # disabled_spawn_reasons: [SPAWNER_EGG, DISPENSE_EGG]
+  # disabled-spawn-reasons: [SPAWNER_EGG, DISPENSE_EGG]
   # 副本级命令控制：mode=inherit(默认,沿用全局)/blacklist/whitelist
-  # command_control:
+  # command-control:
   #   mode: whitelist
   #   commands: [party, abyss, teammsg]
 
-time_limit: 600             # 10分钟
-timeout_action: "FAIL"      # FAIL=超时判负 / KICK=踢出
-max_instances: 0            # 0=不限
+time-limit: 600             # 10分钟
+timeout-action: "FAIL"      # FAIL=超时判负 / KICK=踢出
+max-instances: 0            # 0=不限
 
 requirements:
-  min_players: 1
-  max_players: 4
-  party_required: false
-  min_level: 0
-  max_level: 0
+  min-players: 1
+  max-players: 4
+  party-required: false
+  min-level: 0
+  max-level: 0
   cooldown: 300             # 通关冷却 5 分钟
-  money_cost: 0
-  currency_id: "money"
-  stamina_cost: 10
-  required_items: []
-  required_permissions: []
+  money-cost: 0
+  currency-id: "money"
+  stamina-cost: 10
+  required-items: []
+  required-permissions: []
   conditions: []
-  # require_all_players: true   # false 时 conditions/物品/货币等只需队长满足
-  # leader_conditions: []       # 仅队长需要满足的额外条件
-  disabled_commands: [spawn, tpa, home]
-  disabled_items: [CHORUS_FRUIT]
+  # require-all-players: true   # false 时 conditions/物品/货币等只需队长满足
+  # leader-conditions: []       # 仅队长需要满足的额外条件
+  disabled-commands: [spawn, tpa, home]
+  disabled-items: [CHORUS_FRUIT]

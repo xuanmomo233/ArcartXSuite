@@ -11,18 +11,17 @@ import org.bukkit.configuration.ConfigurationSection;
  *
  * <pre>
  * wave_1:
- *   auto_start: true
- *   spawn_timing: AUTO_START | DELAYED | TRIGGERED | MANUAL | SCRIPTED
- *   delay_seconds: 10              # DELAYED 用
- *   trigger_after: ["wave_1"]      # TRIGGERED 用：指定组完成后触发
+ *   spawn-timing: AUTO_START | DELAYED | TRIGGERED | MANUAL | SCRIPTED
+ *   delay-seconds: 10              # DELAYED 用
+ *   trigger-after: ["wave_1"]      # TRIGGERED 用：指定组完成后触发
  *   monsters:
- *     - mob_id: SkeletonKnight
+ *     - mob-id: SkeletonKnight
  *       location: "0,64,0"
  *       amount: 5
  *       level: 1
- *   complete_when_alive_below: 0   # 存活数 <= 该值时组完成
- *   on_start: ["message @all &e第一波来袭！"]
- *   on_end: ["spawn_group wave_2"]
+ *   complete-when-alive-below: 0   # 存活数 <= 该值时组完成
+ *   on-start: ["message @all &e第一波来袭！"]
+ *   on-end: ["spawn_group wave_2"]
  * </pre>
  */
 public record MonsterConfig(
@@ -39,7 +38,7 @@ public record MonsterConfig(
     ) {
         static MonsterSpawn load(ConfigurationSection s) {
             return new MonsterSpawn(
-                s.getString("mob_id", s.getString("mob-id", s.getString("id", ""))),
+                s.getString("mob-id", s.getString("mob_id", s.getString("id", ""))),
                 s.getString("location", "0,64,0"),
                 s.getInt("amount", 1),
                 s.getDouble("level", 1.0)
@@ -62,8 +61,8 @@ public record MonsterConfig(
             SpawnTiming timing;
             try {
                 timing = SpawnTiming.valueOf(
-                    s.getString("spawn_timing", s.getString("spawn-timing",
-                        s.getBoolean("auto_start", s.getBoolean("auto-start", false))
+                    s.getString("spawn-timing", s.getString("spawn_timing",
+                        s.getBoolean("auto-start", s.getBoolean("auto_start", false))
                             ? "AUTO_START" : "MANUAL")).toUpperCase());
             } catch (IllegalArgumentException e) {
                 timing = SpawnTiming.MANUAL;
@@ -79,18 +78,18 @@ public record MonsterConfig(
             }
             return new MonsterGroup(
                 name,
-                s.getBoolean("auto_start", s.getBoolean("auto-start", timing == SpawnTiming.AUTO_START)),
+                s.getBoolean("auto-start", s.getBoolean("auto_start", timing == SpawnTiming.AUTO_START)),
                 timing,
-                s.getInt("delay_seconds", s.getInt("delay-seconds", 0)),
-                s.getStringList("trigger_after").isEmpty()
-                    ? s.getStringList("trigger-after") : s.getStringList("trigger_after"),
+                s.getInt("delay-seconds", s.getInt("delay_seconds", 0)),
+                s.getStringList("trigger-after").isEmpty()
+                    ? s.getStringList("trigger_after") : s.getStringList("trigger-after"),
                 spawns,
-                s.getInt("complete_when_alive_below",
-                    s.getInt("complete-when-alive-below", 0)),
-                s.getStringList("on_start").isEmpty()
-                    ? s.getStringList("on-start") : s.getStringList("on_start"),
-                s.getStringList("on_end").isEmpty()
-                    ? s.getStringList("on-end") : s.getStringList("on_end")
+                s.getInt("complete-when-alive-below",
+                    s.getInt("complete_when_alive_below", 0)),
+                s.getStringList("on-start").isEmpty()
+                    ? s.getStringList("on_start") : s.getStringList("on-start"),
+                s.getStringList("on-end").isEmpty()
+                    ? s.getStringList("on_end") : s.getStringList("on-end")
             );
         }
     }

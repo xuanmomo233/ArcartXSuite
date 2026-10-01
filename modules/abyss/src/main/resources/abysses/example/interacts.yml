@@ -3,7 +3,7 @@
 trial_chest:
   type: RIGHT_CLICK_BLOCK
   location: "5,80,5"
-  required_block: "GOLD_BLOCK"
+  required-block: "GOLD_BLOCK"
   once: true
   script:
     - "message @trigger &e你发现了试炼宝箱！"

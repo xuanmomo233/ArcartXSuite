@@ -16,11 +16,11 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
  *         | STEP_ON | ENTER_REGION | RIGHT_CLICK_ENTITY
  *   location: "5,64,10"           # 点型
  *   region: ["0,60,0", "20,80,20"] # 区域型（STEP_ON/ENTER_REGION 用）
- *   required_item: "material:TRIPWIRE_HOOK:1"
- *   required_block: "CHEST"        # 目标方块类型（可空）
- *   entity_name: "宝箱守卫"         # RIGHT_CLICK_ENTITY 用
+ *   required-item: "material:TRIPWIRE_HOOK:1"
+ *   required-block: "CHEST"        # 目标方块类型（可空）
+ *   entity-name: "宝箱守卫"         # RIGHT_CLICK_ENTITY 用
  *   once: true
- *   fail_message: "&c需要一把钥匙"
+ *   fail-message: "&c需要一把钥匙"
  *   conditions: ["%player_level% >= 10"]
  *   script: ["grant_reward @trigger 宝箱奖励"]
  * </pre>
@@ -59,11 +59,11 @@ public record InteractConfig(
                 type,
                 s.getString("location", null),
                 s.getStringList("region"),
-                s.getString("required_item", s.getString("required-item", null)),
-                s.getString("required_block", s.getString("required-block", null)),
-                s.getString("entity_name", s.getString("entity-name", null)),
+                s.getString("required-item", s.getString("required_item", null)),
+                s.getString("required-block", s.getString("required_block", null)),
+                s.getString("entity-name", s.getString("entity_name", null)),
                 s.getBoolean("once", false),
-                s.getString("fail_message", s.getString("fail-message", null)),
+                s.getString("fail-message", s.getString("fail_message", null)),
                 ScriptConditionsLoader.load(s, "conditions"),
                 s.getStringList("script")
             );

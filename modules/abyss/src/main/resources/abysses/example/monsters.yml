@@ -1,33 +1,33 @@
 # 怪物组：vanilla: 前缀强制原版实体；mythic: 或无前缀走 MythicMobs（未装自动回退原版）
 
 wave_1:
-  spawn_timing: AUTO_START
+  spawn-timing: AUTO_START
   monsters:
-    - mob_id: "vanilla:ZOMBIE"
+    - mob-id: "vanilla:ZOMBIE"
       location: "3,80,3"
       amount: 3
-    - mob_id: "vanilla:ZOMBIE"
+    - mob-id: "vanilla:ZOMBIE"
       location: "-3,80,-3"
       amount: 3
-  complete_when_alive_below: 0
-  on_start:
+  complete-when-alive-below: 0
+  on-start:
     - "message @all &e第一波：尸群来袭！"
-  on_end:
+  on-end:
     - "spawn_group wave_2"
     - "message @all &a第一波已清剿，第二波即将出现..."
 
 wave_2:
-  spawn_timing: TRIGGERED
-  trigger_after: ["wave_1"]
+  spawn-timing: TRIGGERED
+  trigger-after: ["wave_1"]
   monsters:
-    - mob_id: "vanilla:SKELETON"
+    - mob-id: "vanilla:SKELETON"
       location: "4,80,0"
       amount: 2
-    - mob_id: "vanilla:ZOMBIE"
+    - mob-id: "vanilla:ZOMBIE"
       location: "-4,80,0"
       amount: 3
-  complete_when_alive_below: 0
-  on_start:
+  complete-when-alive-below: 0
+  on-start:
     - "message @all &c第二波：混合部队！"
-  on_end:
+  on-end:
     - "complete_dungeon"

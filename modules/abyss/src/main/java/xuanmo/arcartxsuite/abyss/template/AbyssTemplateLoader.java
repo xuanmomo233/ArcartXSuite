@@ -97,7 +97,7 @@ public final class AbyssTemplateLoader {
         AbyssTemplate.TimeoutAction timeoutAction;
         try {
             timeoutAction = AbyssTemplate.TimeoutAction.valueOf(
-                cfg.getString("timeout_action", cfg.getString("timeout-action", "FAIL")).toUpperCase());
+                cfg.getString("timeout-action", cfg.getString("timeout_action", "FAIL")).toUpperCase());
         } catch (IllegalArgumentException e) {
             timeoutAction = AbyssTemplate.TimeoutAction.FAIL;
         }
@@ -110,9 +110,9 @@ public final class AbyssTemplateLoader {
             cfg.getStringList("description"),
             worldSource,
             cfg.getString("world.spawn", cfg.getString("spawn", "0,64,0,0,0")),
-            cfg.getInt("time_limit", cfg.getInt("time-limit", 0)),
+            cfg.getInt("time-limit", cfg.getInt("time_limit", 0)),
             timeoutAction,
-            cfg.getInt("max_instances", cfg.getInt("max-instances", 0)),
+            cfg.getInt("max-instances", cfg.getInt("max_instances", 0)),
             requirements,
             WorldRules.load(cfg.getConfigurationSection("world")),
             monsters, obstacles, interacts, tasks, rewards, scripts, npcs,
@@ -130,7 +130,7 @@ public final class AbyssTemplateLoader {
             return new AbyssTemplate.WorldSource(AbyssTemplate.WorldSource.Kind.VOID, dir);
         }
 
-        // 1) 地牢目录内 world/ 文件夹（优先，QueDP 同款）
+        // 1) 地牢目录内 world/ 文件夹（优先）
         File worldDir = new File(dir, "world");
         if (worldDir.isDirectory() && new File(worldDir, "level.dat").isFile()) {
             return new AbyssTemplate.WorldSource(

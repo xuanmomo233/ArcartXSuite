@@ -13,8 +13,8 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.config.AbyssModuleConfiguration.RecoverySection;
 
 /**
- * 异常退出恢复（BTDungeons status-file 同款思路）：
- * 玩家在副本中掉线/崩服 → 记录标记文件；下次进服执行恢复动作后删除。
+ * 异常退出恢复：玩家在副本中掉线/崩服 → 记录标记文件；
+ * 下次进服执行恢复动作后删除。动作格式与副本脚本 DSL 一致。
  * <p>
  * 记录存 {@code data/abyss/recovery/<uuid>.yml}，轻量文件存储（量小，不上 DB）。
  */
@@ -65,45 +65,74 @@ public final class RecoveryManager {
         }
     }
 
+    /**
+     * 恢复动作执行，格式与副本脚本 DSL 一致（单目标、无选择器）：
+     * <pre>
+     *   message &lt;消息&gt;                     玩家消息
+     *   title &lt;in&gt; &lt;stay&gt; &lt;out&gt; &lt;主&gt;|&lt;副&gt;    标题
+     *   console &lt;命令&gt;                    控制台执行
+     *   player_command &lt;命令&gt;             玩家身份执行
+     *   teleport [世界] &lt;x,y,z[,yaw,pitch]&gt; 传送
+     *   clear_inventory                       清空背包
+     *   aria: &lt;表达式&gt; / js: &lt;脚本&gt;    宿主脚本引擎
+     * </pre>
+     */
     private void execute(Player p, String action, String dungeon) {
         String a = action == null ? "" : action.trim();
         if (a.isEmpty()) return;
         try {
-            if (a.startsWith("[tell]")) {
-                p.sendMessage(apply(a.substring(6), p, dungeon));
-            } else if (a.startsWith("[title]")) {
-                String[] parts = apply(a.substring(7), p, dungeon).split(";");
-                String main = parts.length > 0 ? parts[0] : "";
-                String sub = parts.length > 1 ? parts[1] : "";
-                int fi = parts.length > 2 ? parseInt(parts[2], 10) : 10;
-                int st = parts.length > 3 ? parseInt(parts[3], 40) : 40;
-                int fo = parts.length > 4 ? parseInt(parts[4], 20) : 20;
-                p.sendTitle(color(main), color(sub), fi, st, fo);
-            } else if (a.startsWith("[console]")) {
-                String cmd = apply(a.substring(9), p, dungeon);
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-            } else if (a.startsWith("[command]")) {
-                String cmd = apply(a.substring(9), p, dungeon);
-                p.performCommand(cmd);
-            } else if (a.startsWith("[teleport]")) {
-                String[] parts = apply(a.substring(10), p, dungeon).split(";");
-                if (parts.length >= 4) {
-                    World w = parts.length > 4 && !parts[4].isBlank()
-                        ? Bukkit.getWorld(parts[4].trim()) : p.getWorld();
-                    if (w != null) {
-                        float yaw = parts.length > 5 ? (float) parseDouble(parts[5], 0) : 0f;
-                        float pitch = parts.length > 6 ? (float) parseDouble(parts[6], 0) : 0f;
-                        p.teleport(new Location(w, parseDouble(parts[0], 0),
-                            parseDouble(parts[1], 64), parseDouble(parts[2], 0), yaw, pitch));
-                    }
+            String lower = a.toLowerCase();
+            if (lower.startsWith("aria:")) {
+                evalScript(p, xuanmo.arcartxsuite.api.condition.ScriptActionKind.ARIA,
+                    apply(a.substring(5), p, dungeon));
+            } else if (lower.startsWith("js:")) {
+                evalScript(p, xuanmo.arcartxsuite.api.condition.ScriptActionKind.JS,
+                    apply(a.substring(3), p, dungeon));
+            } else if (lower.startsWith("message ")) {
+                p.sendMessage(apply(a.substring(8), p, dungeon));
+            } else if (lower.startsWith("title ")) {
+                String[] parts = apply(a.substring(6), p, dungeon).split(" ", 4);
+                int fi = parseInt(parts[0], 10);
+                int st = parts.length > 1 ? parseInt(parts[1], 40) : 40;
+                int fo = parts.length > 2 ? parseInt(parts[2], 20) : 20;
+                String[] tt = (parts.length > 3 ? parts[3] : "").split("\\|", 2);
+                p.sendTitle(color(tt[0]), tt.length > 1 ? color(tt[1]) : "", fi, st, fo);
+            } else if (lower.startsWith("console ")) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
+                    apply(a.substring(8), p, dungeon));
+            } else if (lower.startsWith("player_command ")) {
+                p.performCommand(apply(a.substring(15), p, dungeon));
+            } else if (lower.startsWith("teleport ")) {
+                // teleport [世界名] <x,y,z[,yaw,pitch]>
+                String[] parts = apply(a.substring(9), p, dungeon).split(" ", 2);
+                String coordPart = parts.length > 1 ? parts[1] : parts[0];
+                World w = parts.length > 1 && !parts[0].isBlank()
+                    ? Bukkit.getWorld(parts[0].trim()) : p.getWorld();
+                String[] c = coordPart.split(",");
+                if (w != null && c.length >= 3) {
+                    float yaw = c.length > 3 ? (float) parseDouble(c[3], 0) : 0f;
+                    float pitch = c.length > 4 ? (float) parseDouble(c[4], 0) : 0f;
+                    p.teleport(new Location(w, parseDouble(c[0], 0),
+                        parseDouble(c[1], 64), parseDouble(c[2], 0), yaw, pitch));
                 }
-            } else if (a.startsWith("[clear]")) {
+            } else if (lower.equals("clear_inventory")) {
                 p.getInventory().clear();
             } else {
                 p.sendMessage(apply(a, p, dungeon));
             }
         } catch (Exception e) {
             logger.fine("[abyss] 恢复动作失败 [" + a + "]: " + e.getMessage());
+        }
+    }
+
+    private void evalScript(Player p, xuanmo.arcartxsuite.api.condition.ScriptActionKind kind,
+                            String code) {
+        if (code.isEmpty()) return;
+        try {
+            xuanmo.arcartxsuite.api.condition.ScriptConditionServices
+                .actionExecutor().execute(p, kind, code);
+        } catch (Throwable t) {
+            logger.fine("[abyss] 恢复 " + kind + " 脚本异常: " + t.getMessage());
         }
     }
 

@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
  * NMS 快速世界加载（可选快速通道）。
  * <p>
  * Bukkit {@code WorldCreator.createWorld()} 会做出生点搜索/出生区块预热，
- * 对"用完即焚"的副本世界浪费可观时间。QueDP 用 NMS {@code createWorldFast}
+ * 对"用完即焚"的副本世界浪费可观时间，可用 NMS 直建 {@code ServerLevel}
  * 跳过这段。本类按 axs-api {@code RawNbtAccess} 的模式做版本自适应反射：
  * 探测当前服务端 NMS/CraftBukkit 包结构，能快则快、探测失败一律回退 API。
  *

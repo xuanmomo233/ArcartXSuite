@@ -15,12 +15,12 @@ import org.bukkit.configuration.ConfigurationSection;
  *         | ENDERMAN | BLAZE | PILLAGER | WANDERING_TRADER | IRON_GOLEM
  *   location: "3,64,5,90,0"       # x,y,z,yaw,pitch
  *   skin: "玩家名或皮肤值"          # 仅 PLAYER 型（走 Adyeshach）
- *   look_at_player: true
+ *   look-at-player: true
  *   dialogs:
  *     - "你好，冒险者"
  *     - "前面就是 Boss 房了"
- *   dialog_interval: 40           # 逐句间隔 tick
- *   click_script: [...]
+ *   dialog-interval: 40           # 逐句间隔 tick
+ *   click-script: [...]
  *   once: false
  * </pre>
  */
@@ -47,11 +47,11 @@ public record NpcConfig(
                 s.getString("type", "VILLAGER").toUpperCase(),
                 s.getString("location", "0,64,0,0,0"),
                 s.getString("skin", null),
-                s.getBoolean("look_at_player", s.getBoolean("look-at-player", true)),
+                s.getBoolean("look-at-player", s.getBoolean("look_at_player", true)),
                 s.getStringList("dialogs"),
-                s.getInt("dialog_interval", s.getInt("dialog-interval", 40)),
-                s.getStringList("click_script").isEmpty()
-                    ? s.getStringList("click-script") : s.getStringList("click_script"),
+                s.getInt("dialog-interval", s.getInt("dialog_interval", 40)),
+                s.getStringList("click-script").isEmpty()
+                    ? s.getStringList("click_script") : s.getStringList("click-script"),
                 s.getBoolean("once", false)
             );
         }

@@ -192,7 +192,7 @@ public record AbyssModuleConfiguration(
         static RecoverySection load(ConfigurationSection s) {
             if (s == null) {
                 return new RecoverySection(true, java.util.List.of(
-                    "[tell] &c你上次没有正常退出副本"));
+                    "message &c你上次没有正常退出副本"));
             }
             return new RecoverySection(
                 s.getBoolean("enabled", true),

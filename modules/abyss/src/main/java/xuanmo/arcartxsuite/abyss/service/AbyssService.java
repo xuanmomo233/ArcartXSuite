@@ -449,7 +449,7 @@ public final class AbyssService {
     }
 
     /**
-     * 进本编排（对齐 QueDP DungeonService.enterDungeon）：
+     * 进本编排：
      * 校验 → 建实例 → 异步复制世界 → 存档 → 传送 → 全员进图 → init → start。
      */
     public EnterResult enterDungeon(List<Player> players, String templateId) {
@@ -569,7 +569,7 @@ public final class AbyssService {
         if (instance.getStatus() != AbyssStatus.PREPARING) return;
         // init 脚本
         runLifecycleScript(instance, "init", null);
-        // 40 tick 后 start（QueDP 同款等待玩家稳定）
+        // 40 tick 后 start（等待玩家传送稳定）
         scheduleOnce(instance, () -> startInstance(instance), 40L);
     }
 

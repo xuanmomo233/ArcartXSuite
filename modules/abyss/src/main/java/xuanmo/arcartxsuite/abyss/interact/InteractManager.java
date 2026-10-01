@@ -185,7 +185,7 @@ public final class InteractManager {
         String globalKey = "interact:" + i.name();
         String playerKey = globalKey + ":" + player.getUniqueId();
         if (i.once()) {
-            // once = 实例全局一次（QueDP 语义）
+            // once = 实例全局一次
             if (instance.isTriggered(globalKey)) return;
         } else {
             // 非 once：每玩家 500ms 防抖（防同一事件多次匹配触发）

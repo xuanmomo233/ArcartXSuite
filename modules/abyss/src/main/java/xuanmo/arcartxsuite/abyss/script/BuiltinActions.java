@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.api.potion.PotionEffectTypeResolver;
 
 /**
- * 内置动作集（对齐 QueDP ActionBridge 语义，走宿主基础设施）。
+ * 内置动作集（走宿主基础设施）。
  *
  * 选择器：@all @trigger @random @dead 或玩家名。
  * 所有 {player}/{var:x} 等占位由 context.replace 处理。

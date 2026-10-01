@@ -14,11 +14,11 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
  * slay_guard:
  *   name: "讨伐守卫"
  *   description: "帮向导消灭地牢守卫"
- *   accept_text: "谢谢你，勇士！消灭 5 只守卫后回来找我。"
- *   accept_script: ["message @trigger &a已接取任务: 讨伐守卫"]
- *   submit_text: "干得漂亮！这是给你的报酬。"
- *   submit_conditions: ["%axsabyss_dungeon_kills% >= 5"]
- *   submit_script: ["grant_reward @trigger quest_pack"]
+ *   accept-text: "谢谢你，勇士！消灭 5 只守卫后回来找我。"
+ *   accept-script: ["message @trigger &a已接取任务: 讨伐守卫"]
+ *   submit-text: "干得漂亮！这是给你的报酬。"
+ *   submit-conditions: ["%axsabyss_dungeon_kills% >= 5"]
+ *   submit-script: ["grant_reward @trigger quest_pack"]
  * </pre>
  */
 public record QuestConfig(
@@ -40,13 +40,13 @@ public record QuestConfig(
                 id,
                 s.getString("name", id),
                 s.getString("description", ""),
-                s.getString("accept_text", s.getString("accept-text", "")),
-                s.getStringList("accept_script").isEmpty()
-                    ? s.getStringList("accept-script") : s.getStringList("accept_script"),
-                s.getString("submit_text", s.getString("submit-text", "")),
-                ScriptConditionsLoader.load(s, "submit_conditions", "submit-conditions"),
-                s.getStringList("submit_script").isEmpty()
-                    ? s.getStringList("submit-script") : s.getStringList("submit_script")
+                s.getString("accept-text", s.getString("accept_text", "")),
+                s.getStringList("accept-script").isEmpty()
+                    ? s.getStringList("accept_script") : s.getStringList("accept-script"),
+                s.getString("submit-text", s.getString("submit_text", "")),
+                ScriptConditionsLoader.load(s, "submit-conditions", "submit_conditions"),
+                s.getStringList("submit-script").isEmpty()
+                    ? s.getStringList("submit_script") : s.getStringList("submit-script")
             );
         }
     }
