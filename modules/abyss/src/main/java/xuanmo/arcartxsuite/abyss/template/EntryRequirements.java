@@ -24,11 +24,13 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
  * @param leaderOnlyConditions 仅队长需要满足的额外条件
  * @param disabledCommands 副本内禁用命令（无前缀匹配）
  * @param disabledItems   副本内禁用物品 material 列表
+ * @param partyMode       要求的队伍模式（null=不限；如 "guild" 仅公会模式队伍可进，自由组队被拒）
  */
 public record EntryRequirements(
     int minPlayers,
     int maxPlayers,
     boolean partyRequired,
+    @org.jetbrains.annotations.Nullable String partyMode,
     int minLevel,
     int maxLevel,
     long cooldownSeconds,
@@ -72,12 +74,16 @@ public record EntryRequirements(
     }
 
     public static EntryRequirements defaults() {
-        return new EntryRequirements(1, 4, false, 0, 0, 0L, 0.0, "money", 0,
+        return new EntryRequirements(1, 4, false, null, 0, 0, 0L, 0.0, "money", 0,
             List.of(), List.of(), List.of(), true, List.of(), List.of(), List.of());
     }
 
     private static List<String> firstNonEmpty(List<String> a, List<String> b) {
         return a.isEmpty() ? b : a;
+    }
+
+    private static String empty2null(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     public static EntryRequirements load(ConfigurationSection s) {
@@ -86,6 +92,7 @@ public record EntryRequirements(
             s.getInt("min-players", s.getInt("min_players", 1)),
             s.getInt("max-players", s.getInt("max_players", 4)),
             s.getBoolean("party-required", s.getBoolean("party_required", false)),
+            empty2null(s.getString("party-mode", s.getString("party_mode", null))),
             s.getInt("min-level", s.getInt("min_level", 0)),
             s.getInt("max-level", s.getInt("max_level", 0)),
             s.getLong("cooldown", 0L),

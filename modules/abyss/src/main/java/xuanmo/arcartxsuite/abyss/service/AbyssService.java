@@ -262,7 +262,7 @@ public final class AbyssService {
             currencyManager, stamina, cooldown, rewards);
 
         // 8) 队伍
-        partyManager = new PartyManager(config.party(), s -> { });
+        partyManager = new PartyManager(config.party(), s -> { }, this::publishEvent);
 
         // 8.5) ArcartX UI 服务（浏览器/队伍/宝箱/HUD/排行统计 + 客户端包路由）
         AbyssUiService ui = new AbyssUiService(this, packetBridge, itemStackBridge, logger);
@@ -503,8 +503,8 @@ public final class AbyssService {
             && worldPool.preparedCount(template.id()) == 0) {
             return EnterResult.fail(msg("error.preload-empty"));
         }
-        // 队伍：多人进本时取首玩家队伍（队伍检查在 requirements 内）
-        Party party = players.size() > 1 ? partyManager.partyOf(players.get(0)) : null;
+        // 队伍：无论进本人数都取发起者队伍——party-mode 校验需要单人也识别 guild 队
+        Party party = partyManager.partyOf(players.get(0));
         RequirementChecker.CheckResult check = requirementChecker.check(template, players, party);
         if (!check.ok()) {
             return EnterResult.fail(msg("error.requirements-failed", "reason", check.reason()));

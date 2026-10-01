@@ -886,6 +886,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             player.sendMessage(service.msg("error.party-full"));
         } else if (r instanceof PartyManager.JoinLobbyResult.AlreadyMember) {
             openParty(player);
+        } else if (r instanceof PartyManager.JoinLobbyResult.Denied d) {
+            player.sendMessage(service.msg("error.join-denied", "reason", d.reason()));
         } else {
             player.sendMessage(service.msg("error.party-not-found"));
             pushLobbyList(player, "", "");

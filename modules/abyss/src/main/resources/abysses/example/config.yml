@@ -34,6 +34,8 @@ requirements:
   min-players: 1
   max-players: 4
   party-required: false
+  # party-mode: "guild"   # 要求队伍模式（AbyssPartyAccess 创建的 mode 标记）：
+                        # "free"自由队(默认)/"guild"公会队；设置后自由组队会被拒绝
   min-level: 0
   max-level: 0
   cooldown: 300             # 通关冷却 5 分钟

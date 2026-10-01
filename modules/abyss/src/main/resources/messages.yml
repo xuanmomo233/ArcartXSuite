@@ -23,6 +23,7 @@ error:
   invite-expired: "{prefix}&c邀请已过期"
   party-not-found: "{prefix}&c队伍不存在或已解散"
   no-application: "{prefix}&c没有来自 &f{player} &c的加入申请"
+  join-denied: "{prefix}&c{reason}"
   player-not-found: "{prefix}&c玩家 &f{player} &c不在线"
   player-not-online: "{prefix}&c玩家不在线"
   need-online-player: "{prefix}&c需指定在线玩家"

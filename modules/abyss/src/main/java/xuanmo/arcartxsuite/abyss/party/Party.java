@@ -26,6 +26,10 @@ public final class Party {
     private volatile String name;
     private volatile String color = "&f";
     private final long createTime = System.currentTimeMillis();
+    /** 队伍模式："free"自由组队（默认）/"guild"公会组队/外部插件自定义。 */
+    private volatile String mode = "free";
+    /** 队伍人数上限（>0 覆盖全局 party.max-members）。 */
+    private volatile int maxSize;
 
     // ── 组队大厅 ──
     /** 加入方式：OPEN=直接加入，APPLY=需队长审批。 */
@@ -43,6 +47,7 @@ public final class Party {
 
     public Party(UUID leader, int maxMembers) {
         this.leader = leader;
+        this.maxSize = maxMembers;
         members.add(leader);
     }
 
@@ -50,13 +55,19 @@ public final class Party {
     public UUID leader() { return leader; }
     public long createTime() { return createTime; }
 
+    public String mode() { return mode; }
+    public void mode(String m) { this.mode = m == null || m.isBlank() ? "free" : m; }
+    /** 实际人数上限（构造时写入，默认取全局 party.max-members）。 */
+    public int maxSize() { return maxSize; }
+    public void maxSize(int v) { if (v > 0) this.maxSize = v; }
+
     public synchronized List<UUID> members() { return List.copyOf(members); }
     public synchronized int size() { return members.size(); }
     public synchronized boolean isMember(UUID u) { return members.contains(u); }
     public boolean isLeader(UUID u) { return leader.equals(u); }
 
-    public synchronized boolean addMember(UUID u, int maxMembers) {
-        if (members.contains(u) || members.size() >= maxMembers) return false;
+    public synchronized boolean addMember(UUID u) {
+        if (members.contains(u) || members.size() >= maxSize) return false;
         members.add(u);
         invites.remove(u);
         return true;

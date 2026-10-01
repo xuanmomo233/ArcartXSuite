@@ -59,6 +59,16 @@ public final class RequirementChecker {
         if (r.partyRequired() && (party == null || party.size() < r.minPlayers())) {
             return CheckResult.fail("该地牢需要组队进入");
         }
+        // 队伍模式限制（公会团本等）：party-mode 要求队伍 mode 匹配，自由队/单人队被拒
+        if (r.partyMode() != null) {
+            if (party == null) {
+                return CheckResult.fail("该地牢需要 " + r.partyMode() + " 模式队伍进入");
+            }
+            if (!r.partyMode().equalsIgnoreCase(party.mode())) {
+                return CheckResult.fail("该地牢仅接受 " + r.partyMode()
+                    + " 模式队伍（当前队伍模式: " + party.mode() + "）");
+            }
+        }
         // 逐人校验；require-all-players=false 时只查队长（队伍为发起者或首个玩家）
         List<Player> toCheck = members;
         if (!r.requireAllPlayers()) {

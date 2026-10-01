@@ -185,6 +185,8 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     pushUpdate(ok.party());
                 } else if (result instanceof PartyManager.JoinResult.Full) {
                     player.sendMessage(service.msg("error.party-full"));
+                } else if (result instanceof PartyManager.JoinResult.Denied d) {
+                    player.sendMessage(service.msg("error.join-denied", "reason", d.reason()));
                 } else {
                     player.sendMessage(service.msg("error.invite-expired"));
                 }
@@ -360,6 +362,8 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     player.sendMessage(service.msg("error.party-full"));
                 } else if (r instanceof PartyManager.JoinLobbyResult.AlreadyMember) {
                     player.sendMessage(service.msg("error.already-member"));
+                } else if (r instanceof PartyManager.JoinLobbyResult.Denied d) {
+                    player.sendMessage(service.msg("error.join-denied", "reason", d.reason()));
                 } else {
                     player.sendMessage(service.msg("error.party-not-found"));
                 }
@@ -383,6 +387,8 @@ public final class AbyssPlayerCommand implements TabExecutor {
                     ok.party().appendFeed(null, ap.getName() + " 加入了队伍");
                     ok.party().broadcast(service.msg("party.joined", "player", ap.getName()));
                     pushUpdate(ok.party());
+                } else if (r instanceof PartyManager.JoinResult.Denied d) {
+                    player.sendMessage(service.msg("error.join-denied", "reason", d.reason()));
                 } else {
                     player.sendMessage(service.msg("error.no-application", "player", args[1]));
                 }

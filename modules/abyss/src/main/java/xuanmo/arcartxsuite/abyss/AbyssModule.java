@@ -85,6 +85,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
 
         // 公开能力
         registerCapability(AbyssQueryable.class, new AbyssQueryableImpl(service));
+        registerCapability(xuanmo.arcartxsuite.api.capability.AbyssPartyAccess.class,
+            new xuanmo.arcartxsuite.abyss.capability.AbyssPartyAccessImpl(service));
         registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "abyss"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
@@ -245,7 +247,12 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.player_fail",
             "axs.abyss.mob_kill",
             "axs.abyss.mob_group_start",
-            "axs.abyss.mob_group_complete"
+            "axs.abyss.mob_group_complete",
+            "axs.abyss.party_created",
+            "axs.abyss.party_member_join",
+            "axs.abyss.party_member_leave",
+            "axs.abyss.party_disbanded",
+            "axs.abyss.party_leader_change"
         );
     }
 
