@@ -118,6 +118,38 @@ public final class AbyssTemplateLoader {
             timeoutAction = AbyssTemplate.TimeoutAction.FAIL;
         }
 
+        // 作战方案表（进本前选择；空=无方案机制）
+        Map<String, AbyssTemplate.PlanEntry> plans = new LinkedHashMap<>();
+        ConfigurationSection plansSection = cfg.getConfigurationSection("plans");
+        if (plansSection != null) {
+            for (String pid : plansSection.getKeys(false)) {
+                ConfigurationSection pe = plansSection.getConfigurationSection(pid);
+                if (pe != null) {
+                    plans.put(pid, new AbyssTemplate.PlanEntry(pid,
+                        pe.getString("name", pid), pe.getStringList("lore")));
+                }
+            }
+        }
+
+        // 世界入口点（主世界物理入口，右键进本；列表逐项容错）
+        List<AbyssTemplate.EntrancePoint> entrances = new java.util.ArrayList<>();
+        for (Map<?, ?> m : cfg.getMapList("entrances")) {
+            try {
+                Object w = m.get("world");
+                Object loc = m.containsKey("location") ? m.get("location") : m.get("loc");
+                Object rg = m.get("region");
+                if (w == null || (loc == null && rg == null)) continue;
+                entrances.add(new AbyssTemplate.EntrancePoint(
+                    String.valueOf(w),
+                    loc != null ? String.valueOf(loc) : null,
+                    rg != null ? String.valueOf(rg) : null,
+                    m.get("plan") != null ? String.valueOf(m.get("plan")) : null,
+                    m.get("name") != null ? String.valueOf(m.get("name")) : null));
+            } catch (Exception e) {
+                logger.warning("[abyss] 地牢 " + id + " 入口点解析失败: " + e.getMessage());
+            }
+        }
+
         return new AbyssTemplate(
             id,
             cfg.getString("name", id),
@@ -137,6 +169,7 @@ public final class AbyssTemplateLoader {
             AbyssTemplate.DungeonLinks.load(
                 cfg.getConfigurationSection("links"), cfg),
             floors,
+            plans, entrances,
             functions, dir
         );
     }

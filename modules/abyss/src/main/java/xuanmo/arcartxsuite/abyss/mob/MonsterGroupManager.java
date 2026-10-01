@@ -69,10 +69,21 @@ public final class MonsterGroupManager {
 
     public void setCallback(GroupCallback callback) { this.callback = callback; }
 
+    /**
+     * 组是否匹配当前作战方案：组声明了 {@code plans} 且实例 {@code plan} 变量不在其中则跳过。
+     * plan 变量由进本流程写入（无方案机制的副本变量为 null → 声明了 plans 的组不刷）。
+     */
+    private boolean planAllowed(AbyssInstance instance, MonsterGroup g) {
+        if (g.plans().isEmpty()) return true;
+        Object plan = instance.getVariables().get("plan");
+        return plan != null && g.plans().contains(String.valueOf(plan));
+    }
+
     /** 初始化实例的组表（副本 start 时调用）。 */
     public void initInstance(AbyssInstance instance) {
         Map<String, GroupRuntime> groups = new ConcurrentHashMap<>();
         for (MonsterGroup g : instance.getTemplate().monsters().groups().values()) {
+            if (!planAllowed(instance, g)) continue;
             groups.put(g.name(), new GroupRuntime(g));
         }
         instanceGroups.put(instance.getInstanceId(), groups);
@@ -98,6 +109,7 @@ public final class MonsterGroupManager {
      * AUTO_START 不会立即刷——由调用方（如房间锁门）显式 spawnGroup。</p>
      */
     public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group) {
+        if (!planAllowed(instance, group)) return;
         Map<String, GroupRuntime> groups =
             instanceGroups.computeIfAbsent(instance.getInstanceId(),
                 k -> new ConcurrentHashMap<>());

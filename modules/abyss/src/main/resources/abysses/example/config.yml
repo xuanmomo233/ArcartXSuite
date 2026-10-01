@@ -64,3 +64,29 @@ links:
   # qq-notify-clear: false
   # 指定 QQ 群号（<=0 或不填=全部已配置群）
   # qq-group: 0
+
+# ═══ 世界入口点：主世界/场景里的物理入口（玩家右键方块进本）═══
+# 与 links.entrance（地图标记）不同——这个是真正触发进本的物理点。
+# 每项：world 所在世界 + location "x,y,z" 单点 或 region "x1,y1,z1;x2,y2,z2" 区域，
+#       plan 可选固定方案；不配 plan 且 plans 多于一个 → 点击者收到方案选择菜单。
+# 玩家是队长时自动带全队进本。
+# entrances:
+#   - world: world
+#     location: "100,64,-50"
+#     name: "正门"
+#   - world: world
+#     region: "90,60,-60;95,70,-55"
+#     plan: strong              # 这个入口固定"强攻"方案
+#     name: "缺口突入"
+
+# ═══ 作战方案：进本前选择，影响本局怪组/脚本分支 ═══
+# 配了之后：/abyss enter <本id> [方案]、入口点 plan 字段、方案菜单都可用；
+# 实例内 {plan}=方案id、{plan_name}=显示名；怪物组 plans: [id] 按方案过滤；
+# 奖励倾向/分支在脚本里用 check 判定 {plan}。
+# plans:
+#   strong:
+#     name: "&c强攻·正面突破"
+#     lore: ["怪群密集，火力压制", "掉落倾向：弹药/武器件"]
+#   sneak:
+#     name: "&b潜入·暗杀优先"
+#     lore: ["敌人分散警觉", "掉落倾向：稀有材料/情报"]

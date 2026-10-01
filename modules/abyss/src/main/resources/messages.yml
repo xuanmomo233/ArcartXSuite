@@ -35,6 +35,7 @@ error:
   enter-failed: "{prefix}&c进入副本失败: &f{reason}"
   ui-disabled: "{prefix}&cUI 未启用"
   preload-empty: "{prefix}&c副本正在预热中，请稍后再试"
+  plan-unknown: "{prefix}&c未知作战方案: &f{plan}"
 
 usage:
   enter: "{prefix}&e用法: /{label} enter <地牢>"
@@ -110,6 +111,10 @@ dungeon:
   room-locked: "{prefix}&c房间封锁！&e清除所有敌人后开启"
   room-clear: "{prefix}&a房间已肃清"
   floor-enter: "{prefix}&6进入 &e{floor}"
+
+plan:
+  menu-title: "{prefix}&6{dungeon} &e选择作战方案（点击条目进入）："
+  menu-row: "{prefix}&a▶ &f{name} &8[点击进入]"
 
 list:
   title: "{prefix}&6可进入的地牢"

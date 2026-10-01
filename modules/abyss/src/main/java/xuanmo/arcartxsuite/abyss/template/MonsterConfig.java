@@ -55,7 +55,8 @@ public record MonsterConfig(
         List<MonsterSpawn> monsters,
         int completeWhenAliveBelow,
         List<String> onStart,
-        List<String> onEnd
+        List<String> onEnd,
+        List<String> plans
     ) {
         static MonsterGroup load(String name, ConfigurationSection s) {
             SpawnTiming timing;
@@ -89,7 +90,12 @@ public record MonsterConfig(
                 s.getStringList("on-start").isEmpty()
                     ? s.getStringList("on_start") : s.getStringList("on-start"),
                 s.getStringList("on-end").isEmpty()
-                    ? s.getStringList("on_end") : s.getStringList("on-end")
+                    ? s.getStringList("on_end") : s.getStringList("on-end"),
+                // plans：限定作战方案的组（空=不限）；plan 单值是便捷写法
+                s.getStringList("plans").isEmpty()
+                    ? (s.getString("plan") != null && !s.getString("plan").isBlank()
+                        ? List.of(s.getString("plan").trim()) : List.of())
+                    : s.getStringList("plans")
             );
         }
     }

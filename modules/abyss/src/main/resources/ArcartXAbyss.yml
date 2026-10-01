@@ -153,4 +153,12 @@ recovery:
   actions:
     - "message &c你上次没有正常退出副本"
 
+# 全服共享计数阈值表（脚本动作 global_add/global_set 累加，
+# 首次跨越阈值时发 axs.abyss.global_threshold 事件供 eventpacket/外部订阅；
+# global_reset 归零并清触发记录）
+# 示例：
+# global-thresholds:
+#   reboot_key_fragments: [50, 100]
+global-thresholds: {}
+
 debug: false

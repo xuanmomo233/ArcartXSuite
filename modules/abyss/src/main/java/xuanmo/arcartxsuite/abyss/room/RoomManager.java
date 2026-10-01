@@ -302,7 +302,7 @@ public final class RoomManager {
             room.groupDelays.put(runtimeName, g.delaySeconds());
             mobGroups.registerRuntimeGroup(instance, new MonsterGroup(
                 runtimeName, false, timing, g.delaySeconds(), deps, shifted,
-                g.completeWhenAliveBelow(), g.onStart(), g.onEnd()));
+                g.completeWhenAliveBelow(), g.onStart(), g.onEnd(), g.plans()));
             room.groupNames.add(runtimeName);
             groupToRoom.put(groupKey(instance, runtimeName), room);
         }

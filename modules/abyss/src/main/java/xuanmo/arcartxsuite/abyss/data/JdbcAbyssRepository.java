@@ -29,12 +29,13 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
  *   <li>{@code <prefix>cooldowns} —— 进本冷却（player_uuid + dungeon_id）</li>
  *   <li>{@code <prefix>records} —— 通关次数、最佳用时</li>
  *   <li>{@code <prefix>pending_location} —— 断线待恢复位置（重进服拉回）</li>
+ *   <li>{@code <prefix>globals} —— 全服共享计数器（跨副本/跨实例，如全服收集进度）</li>
  * </ul>
  */
 public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     private boolean sqlite = true;
-    private String tPlayer, tCooldowns, tRecords, tPending;
+    private String tPlayer, tCooldowns, tRecords, tPending, tGlobals;
 
     public JdbcAbyssRepository(DataSource dataSource, StorageDescriptor descriptor,
                              File dataFolder, Logger logger) {
@@ -49,6 +50,7 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
         tCooldowns = p + "cooldowns";
         tRecords = p + "records";
         tPending = p + "pending_location";
+        tGlobals = p + "globals";
 
         try (Statement st = conn.createStatement()) {
             if (sqlite) {
@@ -74,6 +76,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                     + "x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,"
                     + "yaw REAL NOT NULL DEFAULT 0, pitch REAL NOT NULL DEFAULT 0,"
                     + "saved_at INTEGER NOT NULL DEFAULT 0)");
+                st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobals + " ("
+                    + "gkey TEXT PRIMARY KEY,"
+                    + "gvalue INTEGER NOT NULL DEFAULT 0)");
             } else {
                 st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayer + " ("
                     + "player_uuid CHAR(36) PRIMARY KEY,"
@@ -97,6 +102,9 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
                     + "x DOUBLE NOT NULL, y DOUBLE NOT NULL, z DOUBLE NOT NULL,"
                     + "yaw FLOAT NOT NULL DEFAULT 0, pitch FLOAT NOT NULL DEFAULT 0,"
                     + "saved_at BIGINT NOT NULL DEFAULT 0)");
+                st.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobals + " ("
+                    + "gkey VARCHAR(64) PRIMARY KEY,"
+                    + "gvalue BIGINT NOT NULL DEFAULT 0)");
             }
         }
         tryExecute(conn, "CREATE INDEX IF NOT EXISTS idx_abyss_records_dungeon ON "
@@ -110,7 +118,10 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     @Override
     protected List<String> allTables() {
-        return playerDataTables();
+        // globals 是全服共享计数（非玩家数据），不列入 playerDataTables 防清理误删
+        List<String> all = new ArrayList<>(playerDataTables());
+        all.add(tGlobals);
+        return all;
     }
 
     // ═══ 体力 ═══
@@ -302,4 +313,30 @@ public final class JdbcAbyssRepository extends AbstractModuleRepository {
 
     public record PendingLocation(String world, double x, double y, double z,
                                   float yaw, float pitch) { }
+
+    // ═══ 全服共享计数器 ═══
+
+    /** 启动时全量加载（计数器通常个位数，全表读无碍）。 */
+    public Map<String, Long> loadAllGlobals() throws SQLException {
+        Map<String, Long> m = new LinkedHashMap<>();
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT gkey, gvalue FROM " + tGlobals);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) m.put(rs.getString(1), rs.getLong(2));
+        }
+        return m;
+    }
+
+    public void saveGlobal(String key, long value) throws SQLException {
+        String sql = sqlite
+            ? "INSERT INTO " + tGlobals + " (gkey, gvalue) VALUES (?, ?)"
+              + " ON CONFLICT(gkey) DO UPDATE SET gvalue=excluded.gvalue"
+            : "INSERT INTO " + tGlobals + " (gkey, gvalue) VALUES (?, ?)"
+              + " ON DUPLICATE KEY UPDATE gvalue=VALUES(gvalue)";
+        try (Connection c = getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, key);
+            ps.setLong(2, value);
+            ps.executeUpdate();
+        }
+    }
 }

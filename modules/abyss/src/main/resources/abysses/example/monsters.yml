@@ -1,4 +1,8 @@
 # 怪物组：vanilla: 前缀强制原版实体；mythic: 或无前缀走 MythicMobs（未装自动回退原版）
+#
+# 作战方案过滤：组加 plans: [方案id] 后，只有该方案进本才注册此组
+# （例：plans: [strong] 的密集怪群只在"强攻"方案出现；不配 plans=所有方案都刷）。
+# 同样适用于 floors 模式 rooms.yml 里的房间怪物组。
 
 wave_1:
   spawn-timing: AUTO_START

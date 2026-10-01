@@ -36,7 +36,16 @@ public final class AbyssInteractListener implements Listener {
     public void onInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
-        if (instance == null || instance.getStatus() != AbyssStatus.ACTIVE) return;
+        if (instance == null) {
+            // 实例外：世界入口点（右键登记的方块/区域进本）；命中则取消交互防门/箱子打开
+            if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.getClickedBlock() != null
+                && service.tryEntranceEnter(player, event.getClickedBlock())) {
+                event.setCancelled(true);
+            }
+            return;
+        }
+        if (instance.getStatus() != AbyssStatus.ACTIVE) return;
         if (event.getClickedBlock() == null) return;
         InteractType type = switch (event.getAction()) {
             case RIGHT_CLICK_BLOCK -> InteractType.RIGHT_CLICK_BLOCK;

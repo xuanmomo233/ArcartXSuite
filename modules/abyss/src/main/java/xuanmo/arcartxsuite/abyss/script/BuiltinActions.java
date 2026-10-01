@@ -612,6 +612,52 @@ final class BuiltinActions {
             if (links == null) return;
             forEach(ctx, first(args), p -> links.removeAttribute(p, "abyss"));
         });
+
+        // ═══ 全服共享计数（跨副本/跨实例持久化；阈值→axs.abyss.global_threshold）═══
+        reg.register("global_add", (ctx, args, s) -> {
+            // global_add <key> [n]：累加全服计数（默认 +1），命中配置阈值时发阈值事件
+            String[] parts = splitFirst(args, 1);
+            if (parts.length < 1 || parts[0].isBlank()) return;
+            long delta = parts.length > 1 ? (long) parseDouble(rest(parts, 1), 1) : 1;
+            var gc = service.get().globalCounters();
+            if (gc != null) gc.add(ctx.replace(parts[0]), delta, globalCtx(ctx));
+        });
+        reg.register("global_set", (ctx, args, s) -> {
+            // global_set <key> <n>
+            String[] parts = splitFirst(args, 1);
+            if (parts.length < 2) return;
+            var gc = service.get().globalCounters();
+            if (gc != null) gc.set(ctx.replace(parts[0]),
+                (long) parseDouble(rest(parts, 1), 0), globalCtx(ctx));
+        });
+        reg.register("global_get", (ctx, args, s) -> {
+            // global_get <key> <变量名>：把全服计数读进实例变量
+            String[] parts = splitFirst(args, 1);
+            if (parts.length < 2) return;
+            var gc = service.get().globalCounters();
+            ctx.setVariable(rest(parts, 1),
+                gc != null ? gc.get(ctx.replace(parts[0])) : 0L);
+        });
+        reg.register("global_reset", (ctx, args, s) -> {
+            // global_reset <key>：归零并清阈值触发记录（一轮全服事件结束用）
+            if (args == null || args.isBlank()) return;
+            var gc = service.get().globalCounters();
+            if (gc != null) gc.reset(ctx.replace(args.trim()), globalCtx(ctx));
+        });
+    }
+
+    /** 全局计数事件的附带上下文（dungeon/instance/player）。 */
+    private static Map<String, Object> globalCtx(ScriptContext ctx) {
+        Map<String, Object> m = new java.util.HashMap<>();
+        var inst = ctx.getInstance();
+        if (inst != null) {
+            m.put("dungeon", inst.getTemplate().id());
+            m.put("instance", inst.getInstanceId().toString());
+        }
+        if (ctx.getTrigger() != null) {
+            m.put("player", ctx.getTrigger().getName());
+        }
+        return m;
     }
 
     // ═══ 工具 ═══

@@ -137,6 +137,8 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.room.RoomManager roomManager;
     private xuanmo.arcartxsuite.abyss.links.AbyssLinks links;
     private xuanmo.arcartxsuite.abyss.links.EntranceMarkerService entranceMarkers;
+    private xuanmo.arcartxsuite.abyss.interact.EntranceManager entranceManager;
+    private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
     private AbyssAdminCommand adminCommand;
@@ -295,6 +297,13 @@ public final class AbyssService {
             entranceMarkers.pushAll();
         }
 
+        // 8.9) 世界入口点 + 全服共享计数器
+        entranceManager = new xuanmo.arcartxsuite.abyss.interact.EntranceManager(logger);
+        entranceManager.rebuild(instances.getAllTemplates());
+        globalCounters = new GlobalCounterService(playerData,
+            config::globalThresholds, (topic, data) -> publishEvent(topic, null, data));
+        globalCounters.start();
+
         // 9) 管理命令
         adminCommand = new AbyssAdminCommand(this, logger);
 
@@ -382,9 +391,12 @@ public final class AbyssService {
             }
             worldPool.initPreload(tplMap, config.abyss().preload());
         }
-        // 入口配置可能变化：重推地图标记
+        // 入口配置可能变化：重推地图标记 + 重建世界入口点索引
         if (entranceMarkers != null) {
             entranceMarkers.pushAll();
+        }
+        if (entranceManager != null) {
+            entranceManager.rebuild(instances.getAllTemplates());
         }
     }
 
@@ -453,6 +465,10 @@ public final class AbyssService {
     public AbyssAdminCommand adminCommand() { return adminCommand; }
     public PlayerDataManager playerData() { return playerData; }
     public JdbcAbyssRepository repository() { return repository; }
+    public @Nullable GlobalCounterService globalCounters() { return globalCounters; }
+    public @Nullable xuanmo.arcartxsuite.abyss.interact.EntranceManager entranceManager() {
+        return entranceManager;
+    }
     public SchedulerAPI scheduler() { return scheduler; }
     public MessageProvider messages() { return messages; }
     public @Nullable PacketBridgeAPI packetBridge() { return packetBridge; }
@@ -490,14 +506,23 @@ public final class AbyssService {
 
     /** 玩家单人进本入口。 */
     public EnterResult enterDungeon(Player player, String templateId) {
-        return enterDungeon(List.of(player), templateId);
+        return enterDungeon(List.of(player), templateId, null);
+    }
+
+    /** 队伍进本入口（无方案）。 */
+    public EnterResult enterDungeon(List<Player> players, String templateId) {
+        return enterDungeon(players, templateId, null);
     }
 
     /**
      * 进本编排：
      * 校验 → 建实例 → 异步复制世界 → 存档 → 传送 → 全员进图 → init → start。
+     *
+     * @param plan 作战方案 id（模板定义了 plans 时生效；null=默认首项；
+     *             无效 id 拒绝。模板未定义 plans 时忽略）
      */
-    public EnterResult enterDungeon(List<Player> players, String templateId) {
+    public EnterResult enterDungeon(List<Player> players, String templateId,
+                                    @Nullable String plan) {
         if (!started || players.isEmpty()) {
             return EnterResult.fail("服务未就绪");
         }
@@ -532,20 +557,45 @@ public final class AbyssService {
                 return EnterResult.fail("该地牢需要 WorldEdit/FAWE 支持（服务端未安装）");
             }
         }
+        // 作战方案：模板定义 plans 时必须落定一个有效方案（null=默认首项）
+        String resolvedPlan = null;
+        if (!template.plans().isEmpty()) {
+            if (plan == null || plan.isBlank()) {
+                resolvedPlan = template.plans().keySet().iterator().next();
+            } else if (!template.plans().containsKey(plan)) {
+                return EnterResult.fail(msg("error.plan-unknown", "plan", plan));
+            } else {
+                resolvedPlan = plan;
+            }
+        }
 
         AbyssInstance instance = instances.createInstance(template, party);
+        // 方案写入实例变量：{plan}=id、{plan_name}=显示名；怪组 plans 过滤也读这里
+        if (resolvedPlan != null) {
+            instance.getVariables().put("plan", resolvedPlan);
+            AbyssTemplate.PlanEntry pe = template.plans().get(resolvedPlan);
+            instance.getVariables().put("plan_name", pe != null ? pe.name() : resolvedPlan);
+        }
         for (Player p : players) {
             instances.playerEnterInstance(p, instance);
         }
         broadcast(instance, msg("dungeon.preparing"));
-        publishEvent("axs.abyss.enter", players.get(0), Map.of(
-            "dungeon", template.id(), "instance", instance.getInstanceId().toString(),
-            "players", players.size()));
+        publishEvent("axs.abyss.enter", players.get(0),
+            resolvedPlan != null
+                ? Map.of("dungeon", template.id(), "instance", instance.getInstanceId().toString(),
+                         "players", players.size(), "plan", resolvedPlan)
+                : Map.of("dungeon", template.id(), "instance", instance.getInstanceId().toString(),
+                         "players", players.size()));
         // 玩家级事件：战令/任务等按玩家推进度的订阅方消费
         for (Player p : players) {
-            publishEvent("axs.abyss.player_enter", p, Map.of(
-                "dungeon", template.id(), "instance", instance.getInstanceId().toString(),
-                "party-size", players.size()));
+            publishEvent("axs.abyss.player_enter", p,
+                resolvedPlan != null
+                    ? Map.of("dungeon", template.id(), "instance",
+                             instance.getInstanceId().toString(),
+                             "party-size", players.size(), "plan", resolvedPlan)
+                    : Map.of("dungeon", template.id(), "instance",
+                             instance.getInstanceId().toString(),
+                             "party-size", players.size()));
         }
 
         // 异步申请世界
@@ -561,6 +611,61 @@ public final class AbyssService {
                 return null;
             });
         return EnterResult.success();
+    }
+
+    // ═══ 世界入口点 ═══
+
+    /**
+     * 世界入口点击触发（监听器调用，玩家不在副本内时）。
+     * 命中入口 → 队伍带入 → 方案落定（入口固定 plan 或多方案弹选择菜单）→ enterDungeon。
+     *
+     * @return true=命中入口（调用方应 cancel 交互事件，防门/箱子真的打开）
+     */
+    public boolean tryEntranceEnter(org.bukkit.entity.Player player, org.bukkit.block.Block block) {
+        if (entranceManager == null) return false;
+        var hit = entranceManager.match(block);
+        if (hit == null) return false;
+        AbyssTemplate template = hit.template();
+        AbyssTemplate.EntrancePoint ep = hit.point();
+
+        // 队伍带入：发起者是队长则带全队
+        Party party = partyManager.partyOf(player);
+        List<Player> members =
+            (party != null && party.isLeader(player.getUniqueId()) && party.size() > 1)
+                ? party.onlineMembers() : List.of(player);
+
+        // 方案落定：入口固定 plan 直接用；模板多方案且未固定 → 弹选择菜单
+        String plan = ep.plan();
+        if ((plan == null || plan.isBlank()) && template.plans().size() > 1) {
+            sendPlanMenu(player, template);
+            return true;
+        }
+        EnterResult r = enterDungeon(members, template.id(), plan);
+        if (!r.ok() && r.reason() != null) {
+            player.sendMessage(msg("error.enter-failed", "reason", r.reason()));
+        }
+        return true;
+    }
+
+    /** 方案选择菜单：可点击聊天行（点击执行 /abyss enter <dungeon> <plan>）。 */
+    private void sendPlanMenu(org.bukkit.entity.Player player, AbyssTemplate template) {
+        player.sendMessage(msg("plan.menu-title", "dungeon", template.name()));
+        for (AbyssTemplate.PlanEntry pe : template.plans().values()) {
+            // msg() 内 & 已转 §；方案名/lore 里的 & 是配置原文，需二次转色
+            net.md_5.bungee.api.chat.TextComponent line =
+                new net.md_5.bungee.api.chat.TextComponent(
+                    org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        msg("plan.menu-row", "name", pe.name())));
+            line.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
+                "/abyss enter " + template.id() + " " + pe.id()));
+            for (String lore : pe.lore()) {
+                line.addExtra(new net.md_5.bungee.api.chat.TextComponent(
+                    org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        "\n  &7" + lore)));
+            }
+            player.spigot().sendMessage(line);
+        }
     }
 
     /** 世界就绪：传送玩家 → 全员进图 → prepare → start。 */

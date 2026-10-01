@@ -27,6 +27,8 @@ import org.jetbrains.annotations.Nullable;
  * @param scripts        脚本配置
  * @param npcs           NPC 配置
  * @param links          跨模块联动配置（announce/qq/entrance 等）
+ * @param plans          作战方案表（config.yml plans 节；空=无方案机制）
+ * @param entrances      世界入口点列表（主世界物理入口，右键进本）
  * @param functions      functions.js 等自定义函数字符串（可空）
  * @param dir            地牢目录
  */
@@ -54,6 +56,8 @@ public record AbyssTemplate(
     QuestConfig quests,
     DungeonLinks links,
     FloorConfig floors,
+    java.util.Map<String, PlanEntry> plans,
+    List<EntrancePoint> entrances,
     @Nullable String functions,
     File dir
 ) {
@@ -62,6 +66,31 @@ public record AbyssTemplate(
 
     /** 副本模式：CLASSIC=单世界现有行为；FLOORS=多层房间地牢。 */
     public enum Mode { CLASSIC, FLOORS }
+
+    /**
+     * 作战方案（config.yml plans 节，进本前由队长/发起者选择）。
+     * 实例变量 {@code {plan}}=方案 id、{@code {plan_name}}=显示名；
+     * 怪物组 {@code plans: [id]} 字段按方案过滤，脚本可用 {@code check} 分支。
+     *
+     * @param id   方案 id（plans 节键名）
+     * @param name 显示名（可含 & 颜色）
+     * @param lore 描述行（方案选择菜单展示）
+     */
+    public record PlanEntry(String id, String name, List<String> lore) { }
+
+    /**
+     * 世界入口点：主世界/场景里的物理入口，右键方块进本。
+     * 支持单点（location）或区域（region "x1,y1,z1;x2,y2,z2"）。
+     *
+     * @param world    入口所在世界名（非副本世界）
+     * @param location 方块坐标 "x,y,z"（与 region 至少填一个）
+     * @param region   立方区域 "x1,y1,z1;x2,y2,z2"（区域内任意方块右键都触发）
+     * @param plan     固定方案 id（null=进本时给发起者发方案选择菜单；模板无 plans 时忽略）
+     * @param name     显示名（提示消息占位 {entrance}）
+     */
+    public record EntrancePoint(String world, @Nullable String location,
+                                @Nullable String region, @Nullable String plan,
+                                @Nullable String name) { }
 
     /**
      * 跨模块联动（声明式，无需脚本）。

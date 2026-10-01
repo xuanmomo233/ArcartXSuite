@@ -62,7 +62,9 @@ public final class AbyssPlayerCommand implements TabExecutor {
                 } else {
                     members = List.of(player);
                 }
-                var r = service.enterDungeon(members, args[1]);
+                // 可选第三参：作战方案 id（模板定义了 plans 时生效）
+                String plan = args.length >= 3 ? args[2] : null;
+                var r = service.enterDungeon(members, args[1], plan);
                 if (!r.ok()) player.sendMessage(service.msg("error.enter-failed", "reason", r.reason()));
             }
             case "leave", "quit" -> {
@@ -483,6 +485,13 @@ public final class AbyssPlayerCommand implements TabExecutor {
             || "rank".equalsIgnoreCase(args[0]) || "top".equalsIgnoreCase(args[0]))) {
             return filter(service.instances().getAllTemplates().stream()
                 .map(AbyssTemplate::id).toList(), args[1]);
+        }
+        // enter 第三参：作战方案 id（该模板的 plans 键名）
+        if (args.length == 3 && "enter".equalsIgnoreCase(args[0])) {
+            AbyssTemplate t = service.instances().getTemplate(args[1]);
+            return t != null
+                ? filter(new ArrayList<>(t.plans().keySet()), args[2])
+                : List.of();
         }
         if (args.length >= 2 && "party".equalsIgnoreCase(args[0])) {
             return partyTabComplete(sender,

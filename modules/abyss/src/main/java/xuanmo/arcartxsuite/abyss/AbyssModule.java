@@ -256,7 +256,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.room_enter",
             "axs.abyss.room_clear",
             "axs.abyss.floor_enter",
-            "axs.abyss.floor_clear"
+            "axs.abyss.floor_clear",
+            "axs.abyss.global_change",
+            "axs.abyss.global_threshold"
         );
     }
 

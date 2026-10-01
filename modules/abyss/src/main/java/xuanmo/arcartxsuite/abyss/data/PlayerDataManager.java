@@ -27,6 +27,8 @@ public final class PlayerDataManager {
     private final Map<UUID, int[]> staminaCache = new ConcurrentHashMap<>();      // [stamina]
     private final Map<UUID, Long> staminaRegenCache = new ConcurrentHashMap<>();  // lastRegenMillis
     private final Map<UUID, Map<String, Long>> cooldownCache = new ConcurrentHashMap<>();
+    /** 全服共享计数器缓存（跨副本/跨实例；启动时全量预载）。 */
+    private final Map<String, Long> globalCache = new ConcurrentHashMap<>();
 
     public PlayerDataManager(JdbcAbyssRepository repository, Logger logger) {
         this.repository = repository;
@@ -170,6 +172,45 @@ public final class PlayerDataManager {
             logger.warning("[abyss] 待恢复位置读取失败 " + player + ": " + e.getMessage());
             return null;
         }
+    }
+
+    // ═══ 全服共享计数器（跨副本的全局进度，如全服收集/归档） ═══
+
+    /** 启动预载全部计数（表通常很小）。 */
+    public void preloadGlobals() {
+        dbExecutor.submit(() -> {
+            try {
+                globalCache.putAll(repository.loadAllGlobals());
+            } catch (Exception e) {
+                logger.warning("[abyss] 全局计数预载失败: " + e.getMessage());
+            }
+        });
+    }
+
+    /** 累加并返回新值（缓存即时生效 + 异步落盘）。 */
+    public long addGlobal(String key, long delta) {
+        long v = globalCache.merge(key, delta, Long::sum);
+        persistGlobal(key, v);
+        return v;
+    }
+
+    public void setGlobal(String key, long value) {
+        globalCache.put(key, value);
+        persistGlobal(key, value);
+    }
+
+    public long getGlobal(String key) {
+        return globalCache.getOrDefault(key, 0L);
+    }
+
+    private void persistGlobal(String key, long value) {
+        dbExecutor.submit(() -> {
+            try {
+                repository.saveGlobal(key, value);
+            } catch (Exception e) {
+                logger.warning("[abyss] 全局计数保存失败 " + key + ": " + e.getMessage());
+            }
+        });
     }
 
     /** 玩家下线清理缓存（数据已异步落盘）。 */

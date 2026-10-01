@@ -18,6 +18,7 @@ public record AbyssModuleConfiguration(
     StorageSection storage,
     RecoverySection recovery,
     UiSection ui,
+    java.util.Map<String, java.util.List<Long>> globalThresholds,
     boolean debug
 ) {
 
@@ -34,8 +35,28 @@ public record AbyssModuleConfiguration(
             StorageSection.load(yaml.getConfigurationSection("storage")),
             RecoverySection.load(yaml.getConfigurationSection("recovery")),
             UiSection.load(yaml.getConfigurationSection("ui")),
+            loadGlobalThresholds(yaml.getConfigurationSection("global-thresholds")),
             yaml.getBoolean("debug", false)
         );
+    }
+
+    /**
+     * 全服计数阈值表：{@code global-thresholds: {reboot_key: [100, 500]}}。
+     * global_add/global_set 使计数首次跨越阈值时发 {@code axs.abyss.global_threshold} 事件。
+     * 值支持单数或列表。
+     */
+    private static java.util.Map<String, java.util.List<Long>> loadGlobalThresholds(
+            ConfigurationSection s) {
+        java.util.Map<String, java.util.List<Long>> m = new java.util.LinkedHashMap<>();
+        if (s == null) return m;
+        for (String key : s.getKeys(false)) {
+            java.util.List<Long> list = s.getLongList(key);
+            if (list.isEmpty() && s.isLong(key)) {
+                list = java.util.List.of(s.getLong(key));
+            }
+            if (!list.isEmpty()) m.put(key, list);
+        }
+        return m;
     }
 
     // ── 副本实例 ────────────────────────────────────────
