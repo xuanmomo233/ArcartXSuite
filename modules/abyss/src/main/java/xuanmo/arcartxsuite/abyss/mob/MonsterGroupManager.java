@@ -92,6 +92,18 @@ public final class MonsterGroupManager {
         }
     }
 
+    /**
+     * 注册运行期物化组（floors 房间怪组等动态来源）。
+     * <p>组名必须实例内唯一；房间组约定 {@code roomId:短名}。
+     * AUTO_START 不会立即刷——由调用方（如房间锁门）显式 spawnGroup。</p>
+     */
+    public void registerRuntimeGroup(AbyssInstance instance, MonsterGroup group) {
+        Map<String, GroupRuntime> groups =
+            instanceGroups.computeIfAbsent(instance.getInstanceId(),
+                k -> new ConcurrentHashMap<>());
+        groups.put(group.name(), new GroupRuntime(group));
+    }
+
     /** 生成怪物组（MANUAL/TRIGGERED/脚本均可调）。 */
     public boolean spawnGroup(AbyssInstance instance, String groupName, @Nullable Player trigger) {
         if (instance.isFinished()) return false;

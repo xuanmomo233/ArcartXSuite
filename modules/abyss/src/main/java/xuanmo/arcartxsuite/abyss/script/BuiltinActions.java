@@ -318,6 +318,41 @@ final class BuiltinActions {
             ctx.setVariable(rest(parts, 1), n);
         });
 
+        // ═══ 楼层/房间（floors 模式）═══
+        reg.register("floor_next", (ctx, args, s) -> {
+            var rm = service.get().roomManager();
+            if (rm != null) rm.advanceFloor(ctx.getInstance());
+        });
+        reg.register("room_lock", (ctx, args, s) -> {
+            var rm = service.get().roomManager();
+            if (rm != null) rm.lockRoom(ctx.getInstance(), ctx.replace(args));
+        });
+        reg.register("room_unlock", (ctx, args, s) -> {
+            var rm = service.get().roomManager();
+            if (rm != null) rm.unlockRoom(ctx.getInstance(), ctx.replace(args));
+        });
+        reg.register("room_status", (ctx, args, s) -> {
+            // room_status <房id> <变量名>：把房间状态写入变量（SEALED/FIGHTING/CLEARED/UNKNOWN）
+            var rm = service.get().roomManager();
+            String[] parts = splitFirst(args, 1);
+            if (rm == null || parts.length < 2) return;
+            var st = rm.stateOf(ctx.getInstance());
+            String val = "UNKNOWN";
+            if (st != null) {
+                String target = ctx.replace(parts[0]);
+                outer:
+                for (var f : st.floors) {
+                    for (var r : f.rooms) {
+                        if (r.id.equals(target) || r.tpl.id().equals(target)) {
+                            val = r.state.name();
+                            break outer;
+                        }
+                    }
+                }
+            }
+            ctx.setVariable(rest(parts, 1), val);
+        });
+
         // ═══ 障碍物/交互点 ═══
         reg.register("create_obstacle", (ctx, args, s) ->
             service.get().obstacles().create(ctx.getInstance(), ctx.replace(args)));

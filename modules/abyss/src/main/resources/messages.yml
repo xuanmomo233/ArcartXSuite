@@ -107,6 +107,9 @@ dungeon:
   cooldown: "{prefix}&c冷却中，还需 &f{time}"
   no-stamina: "{prefix}&c体力不足（需要 {cost}，当前 {current}）"
   afk-kick: "{prefix}&c挂机超时，已被移出副本"
+  room-locked: "{prefix}&c房间封锁！&e清除所有敌人后开启"
+  room-clear: "{prefix}&a房间已肃清"
+  floor-enter: "{prefix}&6进入 &e{floor}"
 
 list:
   title: "{prefix}&6可进入的地牢"

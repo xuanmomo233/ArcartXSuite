@@ -3,6 +3,7 @@
 # 或 world.template: <maps/下的模板名或schematic文件名>
 
 name: "&6虚空试炼场"
+# mode: floors        # 多层房间地牢：配 floors.yml/rooms.yml（本目录有示例文件）；缺省 classic 单世界
 icon: "END_STONE"
 difficulty: "简单"
 description:

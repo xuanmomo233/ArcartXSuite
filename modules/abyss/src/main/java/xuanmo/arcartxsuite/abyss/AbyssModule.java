@@ -252,7 +252,11 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.party_member_join",
             "axs.abyss.party_member_leave",
             "axs.abyss.party_disbanded",
-            "axs.abyss.party_leader_change"
+            "axs.abyss.party_leader_change",
+            "axs.abyss.room_enter",
+            "axs.abyss.room_clear",
+            "axs.abyss.floor_enter",
+            "axs.abyss.floor_clear"
         );
     }
 

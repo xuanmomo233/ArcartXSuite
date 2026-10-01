@@ -58,12 +58,34 @@ public final class SchematicWorldService {
      * 创建 schematic 会话：立即在主线程粘贴到世界原点。
      */
     public Session createSession(File schematicFile, World world) {
+        return createSession(schematicFile, world, 0, 64, 0);
+    }
+
+    /**
+     * 创建 schematic 会话：粘贴到指定锚点（floors pool 模式房间拼接用）。
+     */
+    public Session createSession(File schematicFile, World world, int x, int y, int z) {
         if (!isWorldEditAvailable()) {
             throw new IllegalStateException(
                 "schematic 地牢需要 WorldEdit/FAWE，但未检测到（请安装插件）");
         }
-        WorldEditAdapter.paste(schematicFile, world, logger);
+        WorldEditAdapter.paste(schematicFile, world, x, y, z, logger);
         return new Session(world);
+    }
+
+    /**
+     * 单次粘贴（不建会话）：floors pool 模式房间逐个拼接用。
+     * 必须主线程调用（FAWE 内部异步），返回是否成功。
+     */
+    public boolean paste(File schematicFile, World world, int x, int y, int z) {
+        if (!isWorldEditAvailable() || world == null) return false;
+        try {
+            WorldEditAdapter.paste(schematicFile, world, x, y, z, logger);
+            return true;
+        } catch (Throwable t) {
+            logger.warning("[abyss] 房间粘贴失败 " + schematicFile.getName() + ": " + t.getMessage());
+            return false;
+        }
     }
 
     /** 虚空生成器：全空气区块。 */
@@ -89,7 +111,8 @@ public final class SchematicWorldService {
      */
     static final class WorldEditAdapter {
 
-        static void paste(File schematicFile, World bukkitWorld, Logger logger) {
+        static void paste(File schematicFile, World bukkitWorld, int x, int y, int z,
+                          Logger logger) {
             try {
                 com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat format =
                     com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats.findByFile(schematicFile);
@@ -114,13 +137,13 @@ public final class SchematicWorldService {
                     com.sk89q.worldedit.function.operation.Operation op =
                         new com.sk89q.worldedit.session.ClipboardHolder(clipboard)
                             .createPaste(editSession)
-                            .to(com.sk89q.worldedit.math.BlockVector3.at(0, 64, 0))
+                            .to(com.sk89q.worldedit.math.BlockVector3.at(x, y, z))
                             .ignoreAirBlocks(false)
                             .build();
                     com.sk89q.worldedit.function.operation.Operations.complete(op);
                 }
                 logger.info("[abyss] schematic 粘贴完成: " + schematicFile.getName()
-                    + " -> " + bukkitWorld.getName());
+                    + " -> " + bukkitWorld.getName() + " @(" + x + "," + y + "," + z + ")");
             } catch (Throwable t) {
                 throw new RuntimeException("schematic 粘贴失败 " + schematicFile.getName()
                     + ": " + t.getMessage(), t);

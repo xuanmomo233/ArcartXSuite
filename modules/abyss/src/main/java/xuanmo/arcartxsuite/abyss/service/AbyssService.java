@@ -134,6 +134,7 @@ public final class AbyssService {
     private RequirementChecker requirementChecker;
     private PartyManager partyManager;
     private RecoveryManager recoveryManager;
+    private xuanmo.arcartxsuite.abyss.room.RoomManager roomManager;
     private xuanmo.arcartxsuite.abyss.links.AbyssLinks links;
     private xuanmo.arcartxsuite.abyss.links.EntranceMarkerService entranceMarkers;
     private JdbcAbyssRepository repository;
@@ -250,6 +251,13 @@ public final class AbyssService {
             ScriptContext.withVars(inst, e.player(), Map.of("npc", e.npcName()))),
             this::locParser);
 
+        // 6.5) 楼层/房间（floors 模式）
+        roomManager = new xuanmo.arcartxsuite.abyss.room.RoomManager(
+            plugin, scheduler, mobGroups,
+            new xuanmo.arcartxsuite.abyss.world.SchematicWorldService(plugin, logger),
+            logger);
+        roomManager.setCallback(new RoomCallbackImpl());
+
         // 7) 奖励/体力/统计/排行/冷却/条件
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
             pendingRewardService, currencyManager, logger);
@@ -324,6 +332,7 @@ public final class AbyssService {
             }
         }
         if (mobGroups != null) mobGroups.shutdown();
+        if (roomManager != null) roomManager.shutdown();
         if (npcs != null) npcs.shutdown();
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
@@ -346,7 +355,8 @@ public final class AbyssService {
         if (new File(example, "config.yml").isFile()) return;
         String[] files = {
             "config.yml", "monsters.yml", "scripts.yml", "rewards.yml",
-            "interacts.yml", "obstacles.yml", "tasks.yml", "npcs.yml", "quests.yml"
+            "interacts.yml", "obstacles.yml", "tasks.yml", "npcs.yml", "quests.yml",
+            "floors.yml", "rooms.yml"
         };
         for (String f : files) {
             try {
@@ -426,6 +436,11 @@ public final class AbyssService {
     public LeaderboardService leaderboard() { return leaderboard; }
     public CombatStatisticsService stats() { return stats; }
     public MonsterGroupManager mobGroups() { return mobGroups; }
+
+    /** floors 模式房间管理器（classic 模式也存在但无运行态）。 */
+    public @Nullable xuanmo.arcartxsuite.abyss.room.RoomManager roomManager() {
+        return roomManager;
+    }
     public ObstacleManager obstacles() { return obstacles; }
     public InteractManager interacts() { return interacts; }
     public DungeonNpcManager npcs() { return npcs; }
@@ -508,6 +523,14 @@ public final class AbyssService {
         RequirementChecker.CheckResult check = requirementChecker.check(template, players, party);
         if (!check.ok()) {
             return EnterResult.fail(msg("error.requirements-failed", "reason", check.reason()));
+        }
+        // floors+pool 模式需要 WorldEdit/FAWE 粘贴房间；缺席直接拒绝（不传进虚空再失败）
+        if (template.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {
+            boolean hasPool = template.floors().floors().stream()
+                .anyMatch(f -> f.source() == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.POOL);
+            if (hasPool && !roomManager.isWorldEditAvailable()) {
+                return EnterResult.fail("该地牢需要 WorldEdit/FAWE 支持（服务端未安装）");
+            }
         }
 
         AbyssInstance instance = instances.createInstance(template, party);
@@ -614,6 +637,23 @@ public final class AbyssService {
         AbyssTemplate t = instance.getTemplate();
         // 怪物组（AUTO_START/DELAYED 自动调度）
         mobGroups.initInstance(instance);
+        // floors 模式：物化楼层房间链（pool 粘贴/组注册，须在怪组表建好后）
+        if (t.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {
+            try {
+                roomManager.initInstance(instance);
+                // 物化完成后对齐到首层入口（进图时房间尚未生成，落点是模板 spawn）
+                Location entry = roomManager.currentSpawn(instance);
+                if (entry != null) {
+                    for (Player p : instance.getPlayers()) {
+                        teleportWithRetry(p, entry, 3);
+                    }
+                }
+            } catch (Throwable ex) {
+                logger.warning("[abyss] floors 物化失败 " + t.id() + ": " + ex.getMessage());
+                failDungeon(instance, FailReason.SCRIPTED);
+                return;
+            }
+        }
         // 障碍物 auto_create
         obstacles.initInstance(instance);
         // 交互点注册
@@ -947,8 +987,13 @@ public final class AbyssService {
 
     // ═══ 动作支持接口（BuiltinActions 调用） ═══
 
-    /** 出生点（模板 spawn 解析到实例世界）。 */
+    /** 出生点（floors 模式优先当前房 spawn；否则模板 spawn 解析）。 */
     public @Nullable Location spawnLocation(AbyssInstance instance) {
+        if (instance.getTemplate().mode() == AbyssTemplate.Mode.FLOORS
+            && roomManager != null) {
+            Location cur = roomManager.currentSpawn(instance);
+            if (cur != null) return cur;
+        }
         return parseLocation(instance, instance.getTemplate().spawn());
     }
 
@@ -1119,6 +1164,7 @@ public final class AbyssService {
             try { s.cancel(); } catch (Throwable ignored) { }
         }
         mobGroups.cleanup(instance);
+        if (roomManager != null) roomManager.cleanup(instance);
         obstacles.cleanup(instance);
         interacts.cleanup(instance);
         instanceTasks.cleanup(instance);
@@ -1270,6 +1316,7 @@ public final class AbyssService {
             if (i.getStatus() != AbyssStatus.ACTIVE) continue;
             try {
                 obstacles.tickProximity(i);
+                if (roomManager != null) roomManager.tick(i);
                 for (Player p : i.getPlayers()) {
                     interacts.onRegionTrigger(i, p,
                         xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType.STEP_ON);
@@ -1304,6 +1351,8 @@ public final class AbyssService {
             instanceTasks.fireEvent(instance, "wave_complete",
                 Map.of("group", groupName));
             broadcast(instance, msg("dungeon.mob-group-next", "group", groupName));
+            // floors：房间组全清 → 解锁判定
+            if (roomManager != null) roomManager.onGroupComplete(instance, groupName);
         }
 
         @Override
@@ -1341,6 +1390,46 @@ public final class AbyssService {
         @Override
         public void publishEvent(String topic, Map<String, Object> data) {
             AbyssService.this.publishEvent(topic, null, data);
+        }
+    }
+
+    /** RoomManager 回调实现（脚本/事件/广播/通关桥接）。 */
+    private final class RoomCallbackImpl
+        implements xuanmo.arcartxsuite.abyss.room.RoomManager.Callback {
+        @Override
+        public void runScript(AbyssInstance instance, List<String> lines,
+                              String contextName, @Nullable Player trigger) {
+            if (!lines.isEmpty()) {
+                AbyssService.this.runScript(instance, lines,
+                    ScriptContext.withVars(instance, trigger,
+                        Map.of("room", contextName)));
+            }
+        }
+
+        @Override
+        public void publishEvent(String topic, @Nullable Player player,
+                                 Map<String, Object> data) {
+            AbyssService.this.publishEvent(topic, player, data);
+        }
+
+        @Override
+        public void broadcast(AbyssInstance instance, String message) {
+            AbyssService.this.broadcast(instance, message);
+        }
+
+        @Override
+        public String msg(String key, String... kv) {
+            return AbyssService.this.msg(key, kv);
+        }
+
+        @Override
+        public void onDungeonComplete(AbyssInstance instance) {
+            completeDungeon(instance);
+        }
+
+        @Override
+        public void setVar(AbyssInstance instance, String key, Object value) {
+            instance.getVariables().put(key, value);
         }
     }
 }

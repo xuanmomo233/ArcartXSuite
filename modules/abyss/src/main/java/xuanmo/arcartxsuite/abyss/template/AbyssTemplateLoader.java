@@ -79,6 +79,22 @@ public final class AbyssTemplateLoader {
         NpcConfig npcs = NpcConfig.load(loadYaml(dir, "npcs.yml"));
         QuestConfig quests = QuestConfig.load(loadYaml(dir, "quests.yml"));
 
+        // floors 模式：floors.yml（层链+defaults）+ rooms.yml（房间模板池）
+        AbyssTemplate.Mode mode;
+        try {
+            mode = AbyssTemplate.Mode.valueOf(
+                cfg.getString("mode", "classic").toUpperCase());
+        } catch (IllegalArgumentException e) {
+            mode = AbyssTemplate.Mode.CLASSIC;
+        }
+        FloorConfig floors = mode == AbyssTemplate.Mode.FLOORS
+            ? FloorConfig.load(loadYaml(dir, "floors.yml"), loadYaml(dir, "rooms.yml"))
+            : FloorConfig.EMPTY;
+        if (mode == AbyssTemplate.Mode.FLOORS && floors.floors().isEmpty()) {
+            logger.warning("[abyss] 地牢 " + id + " mode=floors 但 floors.yml 无楼层定义，回退 classic");
+            mode = AbyssTemplate.Mode.CLASSIC;
+        }
+
         // rewards.yml + chest_rewards.yml 合并
         RewardConfig rewards = RewardConfig.load(loadYaml(dir, "rewards.yml"));
         Map<String, RewardConfig.ChestReward> chests =
@@ -108,6 +124,7 @@ public final class AbyssTemplateLoader {
             cfg.getString("icon", "STONE"),
             cfg.getString("difficulty", "普通"),
             cfg.getStringList("description"),
+            mode,
             worldSource,
             cfg.getString("world.spawn", cfg.getString("spawn", "0,64,0,0,0")),
             cfg.getInt("time-limit", cfg.getInt("time_limit", 0)),
@@ -119,6 +136,7 @@ public final class AbyssTemplateLoader {
             quests,
             AbyssTemplate.DungeonLinks.load(
                 cfg.getConfigurationSection("links"), cfg),
+            floors,
             functions, dir
         );
     }

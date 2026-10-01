@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
  * @param icon           图标 material（UI 用）
  * @param difficulty     难度标签
  * @param description    描述（可多行）
+ * @param mode           副本模式：classic=单世界 / floors=多层房间
  * @param worldSource    世界模板来源
  * @param spawn          出生点 "x,y,z,yaw,pitch"
  * @param timeLimitSeconds 时间限制（0=不限）
@@ -35,6 +36,7 @@ public record AbyssTemplate(
     String icon,
     String difficulty,
     List<String> description,
+    Mode mode,
     WorldSource worldSource,
     String spawn,
     int timeLimitSeconds,
@@ -51,11 +53,15 @@ public record AbyssTemplate(
     NpcConfig npcs,
     QuestConfig quests,
     DungeonLinks links,
+    FloorConfig floors,
     @Nullable String functions,
     File dir
 ) {
 
     public enum TimeoutAction { KICK, FAIL }
+
+    /** 副本模式：CLASSIC=单世界现有行为；FLOORS=多层房间地牢。 */
+    public enum Mode { CLASSIC, FLOORS }
 
     /**
      * 跨模块联动（声明式，无需脚本）。

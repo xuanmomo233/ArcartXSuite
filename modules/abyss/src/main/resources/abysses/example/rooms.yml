@@ -1,0 +1,153 @@
+# rooms.yml — 房间模板池（floors 模式房间定义；region/pool 两种来源共用）
+#
+# 坐标全部相对房间 origin：
+#   region 层房间：origin 默认 0,0,0 → 坐标即世界绝对值（建筑在大地图里量好填进来）
+#   pool 层房间：  origin=粘贴锚点  → 坐标相对 schematic 原点（在 WE 里 //pos1/2 量好）
+#
+# type 语义：
+#   combat —— 进房锁门刷怪，清完开门（默认）
+#   boss   —— 同 combat（用于层末 boss 房，语义标记）
+#   safe   —— 不锁门不刷怪（走廊/休整房）
+#   shop   —— 不锁门（商店房；挂 interact 接商店）
+
+rooms:
+  # ── region 模式房间示例（世界内已建好）──
+  corridor_a:
+    type: combat
+    region: ["0,60,0", "29,80,29"]        # 房间 box（世界绝对坐标）
+    spawn: "1,64,15,90,0"                  # 进房站位
+    exit: ["29,63,13", "31,67,17"]         # 出口传送区（清完激活，可空）
+    doors:                                  # 锁门填充的门盒
+      - region: ["30,64,14", "30,66,16"]
+        material: BARRIER
+    groups:                                 # 房内怪组（格式同 monsters.yml）
+      wave1:
+        spawn-timing: AUTO_START            # 锁门即刷
+        monsters:
+          - mob-id: minecraft:zombie
+            location: "15,64,15"
+            amount: 4
+          - mob-id: minecraft:skeleton
+            location: "20,64,10"
+            amount: 2
+      wave2:
+        spawn-timing: TRIGGERED             # wave1 清完触发
+        trigger-after: [wave1]
+        monsters:
+          - mob-id: minecraft:spider
+            location: "15,64,20"
+            amount: 3
+        complete-when-alive-below: 0
+    on-enter:
+      - "title @all &c遭遇战！"
+    on-clear:
+      - "message @all &a通道已打通"
+
+  corridor_b:
+    type: combat
+    region: ["40,60,0", "69,80,29"]
+    spawn: "41,64,15,90,0"
+    doors:
+      - region: ["70,64,14", "70,66,16"]
+    groups:
+      wave1:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: minecraft:zombie
+            location: "55,64,15"
+            amount: 5
+
+  boss_arena:
+    type: boss
+    region: ["80,60,0", "119,85,39"]
+    spawn: "81,64,20,90,0"
+    exit: ["119,63,18", "121,67,22"]        # 层末房 exit → 下一层首房
+    doors:
+      - region: ["80,64,18", "80,66,22"]
+        material: OBSIDIAN
+    groups:
+      boss:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: MythicMobs:SkeletonKing   # MythicMobs 怪也照写
+            location: "100,64,20"
+            amount: 1
+            level: 5
+    on-enter:
+      - "title @all &4&lBOSS 战"
+    on-clear:
+      - "announce_global &6{party} 击败了守层 Boss！"
+
+  # ── pool 模式房间示例（schematic 拼接）──
+  combat_a:
+    type: combat
+    schematic: "rooms/combat_a.schem"      # 相对地牢目录
+    region: ["0,0,0", "24,15,24"]          # 相对 schematic 原点
+    spawn: "2,1,12,90,0"
+    exit: ["24,0,10", "26,4,14"]
+    doors: []                               # pool 房独立盒子，一般无需物理门
+    groups:
+      wave1:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: minecraft:zombie
+            location: "12,1,12"
+            amount: 4
+
+  combat_b:
+    type: combat
+    schematic: "rooms/combat_b.schem"
+    region: ["0,0,0", "30,18,30"]
+    spawn: "2,1,15,90,0"
+    exit: ["30,0,13", "32,4,17"]
+    groups:
+      wave1:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: minecraft:skeleton
+            location: "15,1,15"
+            amount: 3
+      wave2:
+        spawn-timing: DELAYED               # 锁门 8s 后增援
+        delay-seconds: 8
+        monsters:
+          - mob-id: minecraft:creeper
+            location: "15,1,20"
+            amount: 2
+
+  shop_a:
+    type: shop
+    schematic: "rooms/shop_a.schem"
+    region: ["0,0,0", "14,10,14"]
+    spawn: "2,1,7,90,0"
+    exit: ["14,0,5", "16,4,9"]
+    groups: {}                              # 无怪房：进房即清
+    on-enter:
+      - "message @all &e发现补给点"
+
+  treasure_a:
+    type: safe
+    schematic: "rooms/treasure_a.schem"
+    region: ["0,0,0", "14,10,14"]
+    spawn: "2,1,7,90,0"
+    exit: ["14,0,5", "16,4,9"]
+    groups: {}
+    on-enter:
+      - "grant_reward @all 小宝箱"
+      - "message @all &6拾获战利品"
+
+  boss_2:
+    type: boss
+    schematic: "rooms/boss_2.schem"
+    region: ["0,0,0", "34,20,34"]
+    spawn: "2,1,17,90,0"
+    groups:
+      boss:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: minecraft:wither_skeleton
+            location: "17,1,17"
+            amount: 1
+            level: 10
+    on-enter:
+      - "title @all &4&l终层守卫"
