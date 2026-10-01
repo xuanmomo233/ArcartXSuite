@@ -134,12 +134,16 @@ public final class AbyssService {
     private RequirementChecker requirementChecker;
     private PartyManager partyManager;
     private RecoveryManager recoveryManager;
+    private xuanmo.arcartxsuite.abyss.links.AbyssLinks links;
+    private xuanmo.arcartxsuite.abyss.links.EntranceMarkerService entranceMarkers;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
     private AbyssAdminCommand adminCommand;
 
     /** worldName → instanceId（事件反向定位实例）。 */
     private final Map<String, UUID> worldIndex = new ConcurrentHashMap<>();
+    /** 玩家 → 进入 Essentials AFK 状态的起始时间戳（afk-kick 判定）。 */
+    private final Map<UUID, Long> afkSince = new ConcurrentHashMap<>();
     /** EventBus 提供者（模块注入 capability）。 */
     private Supplier<EventBusCapability> eventBusProvider = () -> null;
     /** 宝箱 UI 处理器（AbyssUiService 实现后注入；默认纯发放实现）。 */
@@ -216,7 +220,7 @@ public final class AbyssService {
         if (orphans > 0) {
             logger.info("[abyss] 清理残留副本世界 x" + orphans);
         }
-        recoveryManager = new RecoveryManager(dataFolder, config.recovery(), logger);
+        recoveryManager = new RecoveryManager(dataFolder, config.recovery(), logger, links);
 
         // 4) 脚本系统
         scriptRunner = new ScriptRunner(plugin, scheduler, () -> this, logger);
@@ -270,6 +274,19 @@ public final class AbyssService {
             logger.info("[abyss] ArcartX 不可用，UI 功能禁用（宝箱走直接发放兜底）");
         }
 
+        // 8.7) 属性桥伤害/治疗事件 → 战斗统计
+        if (links != null && stats != null) {
+            links.wireAttributeStats(stats, instances::getInstance);
+        }
+
+        // 8.8) 地图入口标记（map 模块缺席时静默）
+        if (links != null) {
+            entranceMarkers = new xuanmo.arcartxsuite.abyss.links.EntranceMarkerService(
+                links, instances::getAllTemplates, eventBusProvider, logger);
+            entranceMarkers.start();
+            entranceMarkers.pushAll();
+        }
+
         // 9) 管理命令
         adminCommand = new AbyssAdminCommand(this, logger);
 
@@ -308,6 +325,7 @@ public final class AbyssService {
         }
         if (mobGroups != null) mobGroups.shutdown();
         if (npcs != null) npcs.shutdown();
+        if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
         if (worldPool != null) {
             worldPool.releasePreload();
@@ -353,6 +371,10 @@ public final class AbyssService {
                 tplMap.put(t.id(), t);
             }
             worldPool.initPreload(tplMap, config.abyss().preload());
+        }
+        // 入口配置可能变化：重推地图标记
+        if (entranceMarkers != null) {
+            entranceMarkers.pushAll();
         }
     }
 
@@ -426,6 +448,14 @@ public final class AbyssService {
         this.eventBusProvider = provider;
     }
 
+    public void setLinks(xuanmo.arcartxsuite.abyss.links.AbyssLinks links) {
+        this.links = links;
+    }
+
+    public @Nullable xuanmo.arcartxsuite.abyss.links.AbyssLinks links() {
+        return links;
+    }
+
     public void setChestUiHandler(ChestUiHandler handler) {
         if (handler != null) this.chestUiHandler = handler;
     }
@@ -488,6 +518,12 @@ public final class AbyssService {
         publishEvent("axs.abyss.enter", players.get(0), Map.of(
             "dungeon", template.id(), "instance", instance.getInstanceId().toString(),
             "players", players.size()));
+        // 玩家级事件：战令/任务等按玩家推进度的订阅方消费
+        for (Player p : players) {
+            publishEvent("axs.abyss.player_enter", p, Map.of(
+                "dungeon", template.id(), "instance", instance.getInstanceId().toString(),
+                "party-size", players.size()));
+        }
 
         // 异步申请世界
         worldPool.acquireWorld(template, instance.getInstanceId())
@@ -621,6 +657,28 @@ public final class AbyssService {
         publishEvent("axs.abyss.complete", null, Map.of(
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
             "time_seconds", time));
+        // 玩家级通关事件（每名队员一条，供战令/任务/统计订阅）
+        for (Player p : instance.getPlayers()) {
+            publishEvent("axs.abyss.player_complete", p, Map.of(
+                "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
+                "time_seconds", time,
+                "party-size", instance.getPlayerUUIDs().size()));
+        }
+        // 声明式联动（links 节）：通关播报 / QQ 群通知
+        if (links != null && t.links() != null) {
+            AbyssTemplate.DungeonLinks dl = t.links();
+            if (dl.announceClear() != null) {
+                String text = dl.announceClear()
+                    .replace("{dungeon}", t.name())
+                    .replace("{time}", formatTime(time))
+                    .replace("{party}", partyName(instance));
+                links.announce(text, dl.announceForward());
+            }
+            if (dl.qqNotifyClear()) {
+                links.qqNotify(dl.qqGroup(),
+                    "[副本] " + t.name() + " 被通关，用时 " + formatTime(time));
+            }
+        }
         // 统计/宝箱 UI（auto_show）
         if (stats.autoShow() && uiFacade != null) {
             for (Player p : instance.getPlayers()) {
@@ -642,6 +700,11 @@ public final class AbyssService {
         publishEvent("axs.abyss.fail", null, Map.of(
             "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
             "reason", reason.name()));
+        for (Player p : instance.getPlayers()) {
+            publishEvent("axs.abyss.player_fail", p, Map.of(
+                "dungeon", t.id(), "instance", instance.getInstanceId().toString(),
+                "reason", reason.name()));
+        }
         scheduleOnce(instance, () -> finishAndCleanup(instance), 100L);
     }
 
@@ -671,6 +734,8 @@ public final class AbyssService {
         GameMode saved = instance.getSavedGameMode(player.getUniqueId());
         instance.removePlayer(player.getUniqueId());
         instances.playerLeaveInstance(player);
+        // 副本内属性修饰出本即清（apply_attribute 动作施加）
+        if (links != null) links.removeAttribute(player, "abyss");
 
         // 先传送后恢复模式：旁观者若已坠入虚空，先回安全点再切回生存，
         // 避免恢复 SURVIVAL 的瞬间在虚空世界吃到真实致死伤害。
@@ -723,6 +788,7 @@ public final class AbyssService {
             playerData.savePendingLocation(player.getUniqueId(), back);
         }
         instance.removePlayer(player.getUniqueId());
+        if (links != null) links.removeAttribute(player, "abyss");
         // 不触发退出消息；无人清理由 watchdog/playerExit 路径处理
         if (instance.getOnlinePlayerCount() == 0 && !instance.isFinished()) {
             long delay = config.abyss().emptyCleanupDelaySeconds() * 20L;
@@ -757,6 +823,18 @@ public final class AbyssService {
                     runOnMain(() -> recoveryManager.runIfMarked(player));
                 }
             }, 1L, Long.MAX_VALUE / 20);
+        }
+        // 地图入口标记（延迟 2s 等客户端地图就绪）
+        if (entranceMarkers != null) {
+            ScheduledTask[] eh = new ScheduledTask[1];
+            eh[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+                if (eh[0] != null) {
+                    try { eh[0].cancel(); } catch (Throwable ignored) { }
+                }
+                if (player.isOnline()) {
+                    runOnMain(() -> entranceMarkers.push(player));
+                }
+            }, 2L, Long.MAX_VALUE / 20);
         }
     }
 
@@ -1105,6 +1183,17 @@ public final class AbyssService {
         return messages != null && messages.has(k) ? messages.get(k) : reason.name();
     }
 
+    /** afk-kick-minutes 配置（<=0 关）。 */
+    private int afkKickMinutes() {
+        return config.abyss() != null ? Math.max(0, config.abyss().afkKickMinutes()) : 0;
+    }
+
+    /** 队伍显示名（无队伍返回空串）。 */
+    private String partyName(AbyssInstance instance) {
+        var p = instance.getParty();
+        return p != null ? p.name() : "";
+    }
+
     public static String formatTime(long seconds) {
         long m = seconds / 60, s = seconds % 60;
         return m > 0 ? m + "分" + s + "秒" : s + "秒";
@@ -1147,6 +1236,26 @@ public final class AbyssService {
                 if (age > config.abyss().instanceCleanupTimeout()) {
                     logger.warning("[abyss] 实例超时强制回收: " + i.getInstanceId());
                     destroyInstance(i, true);
+                    continue;
+                }
+                // 副本内 AFK 踢出（Essentials AFK 状态持续超限）
+                if (afkKickMinutes() > 0 && links != null
+                    && i.getStatus() == AbyssStatus.ACTIVE) {
+                    long now = System.currentTimeMillis();
+                    long limit = afkKickMinutes() * 60_000L;
+                    for (Player p : i.getPlayers()) {
+                        if (links.isAfk(p)) {
+                            long since = afkSince.merge(p.getUniqueId(),
+                                now, Math::min);
+                            if (now - since >= limit) {
+                                afkSince.remove(p.getUniqueId());
+                                playerExit(i, p, LeaveReason.AFK_KICK);
+                                p.sendMessage(msg("dungeon.afk-kick"));
+                            }
+                        } else {
+                            afkSince.remove(p.getUniqueId());
+                        }
+                    }
                 }
             } catch (Throwable t) {
                 logger.warning("[abyss] watchdog 异常 " + i.getInstanceId() + ": " + t.getMessage());
@@ -1201,6 +1310,10 @@ public final class AbyssService {
         public void onMobDeath(AbyssInstance instance, UUID entityUuid, @Nullable Player killer) {
             if (killer != null) {
                 instance.recordKill(killer.getUniqueId());
+                AbyssService.this.publishEvent("axs.abyss.mob_kill", killer, Map.of(
+                    "dungeon", instance.getTemplate().id(),
+                    "instance", instance.getInstanceId().toString(),
+                    "mob", entityUuid.toString()));
             }
             instanceTasks.fireEvent(instance, "monster_kill", Map.of(
                 "mob", entityUuid.toString(),

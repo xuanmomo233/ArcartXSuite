@@ -49,12 +49,13 @@ public record AbyssModuleConfiguration(
         boolean nmsFastLoad,
         boolean asyncWorldCopy,
         int emptyCleanupDelaySeconds,
+        int afkKickMinutes,
         PreloadSection preload
     ) {
         static AbyssSection load(ConfigurationSection s) {
             if (s == null) {
                 return new AbyssSection("axs_abyss_", 7200, 30, 120000L, 100, true, true,
-                    30, PreloadSection.defaults());
+                    30, 0, PreloadSection.defaults());
             }
             return new AbyssSection(
                 s.getString("world-prefix", "axs_abyss_"),
@@ -65,6 +66,7 @@ public record AbyssModuleConfiguration(
                 s.getBoolean("nms-fast-load", true),
                 s.getBoolean("async-world-copy", true),
                 s.getInt("empty-cleanup-delay-seconds", 30),
+                s.getInt("afk-kick-minutes", 0),
                 PreloadSection.load(s.getConfigurationSection("preload"))
             );
         }

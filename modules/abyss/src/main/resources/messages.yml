@@ -105,6 +105,7 @@ dungeon:
   mob-group-next: "{prefix}&e{group} &a即将出现..."
   cooldown: "{prefix}&c冷却中，还需 &f{time}"
   no-stamina: "{prefix}&c体力不足（需要 {cost}，当前 {current}）"
+  afk-kick: "{prefix}&c挂机超时，已被移出副本"
 
 list:
   title: "{prefix}&6可进入的地牢"

@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.abyss.script;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -483,6 +484,98 @@ final class BuiltinActions {
             var st = service.get().quests().status(
                 ctx.getInstance(), ctx.replace(parts[0]));
             ctx.setVariable(ctx.replace(rest(parts, 1)), st.name());
+        });
+
+        // ═══ 跨模块联动（capability 缺席时静默跳过）═══
+        reg.register("signal", (ctx, args, s) -> {
+            // signal <sel> <信号名>：触发 EventPacket 规则引擎信号
+            String[] parts = splitFirst(args, 1);
+            var links = service.get().links();
+            if (links == null || parts.length < 2) return;
+            String sig = ctx.replace(rest(parts, 1));
+            forEach(ctx, parts[0], p -> links.signal(p, sig, null));
+        });
+        reg.register("announce_global", (ctx, args, s) -> {
+            // announce_global <文本> [forward]：Announcer 全服公告（forward=true 跨服）
+            var links = service.get().links();
+            if (links == null || args == null || args.isBlank()) return;
+            boolean forward = args.trim().endsWith(" forward")
+                || args.trim().endsWith(" true");
+            String text = forward
+                ? args.trim().substring(0, args.trim().lastIndexOf(' ')) : args;
+            links.announce(color(ctx.replace(text)), forward);
+        });
+        reg.register("qq_group", (ctx, args, s) -> {
+            // qq_group [群号] <消息>：QQ 群推送（群号省略/0=全部已配置群）
+            var links = service.get().links();
+            if (links == null || args == null || args.isBlank()) return;
+            String[] parts = splitFirst(args, 1);
+            long group = 0;
+            String msg = args;
+            if (parts.length > 1 && parts[0].matches("-?\\d+")) {
+                group = Long.parseLong(parts[0]);
+                msg = rest(parts, 1);
+            }
+            links.qqNotify(group, ctx.replace(msg));
+        });
+        reg.register("subtitle", (ctx, args, s) -> {
+            // subtitle <sel> <字幕组id>：播放 Announcer/Subtitle 字幕组
+            String[] parts = splitFirst(args, 1);
+            var links = service.get().links();
+            if (links == null || parts.length < 2) return;
+            String group = ctx.replace(rest(parts, 1));
+            forEach(ctx, parts[0], p -> links.subtitle(p, group));
+        });
+        reg.register("chat_card", (ctx, args, s) -> {
+            // chat_card <sel> <卡片id> [k=v,k=v]：发送聊天卡片
+            String[] parts = splitFirst(args, 2);
+            var links = service.get().links();
+            if (links == null || parts.length < 2) return;
+            String card = ctx.replace(parts[1]);
+            Map<String, String> data = new java.util.LinkedHashMap<>();
+            if (parts.length > 2) {
+                for (String kv : ctx.replace(rest(parts, 2)).split(",")) {
+                    int eq = kv.indexOf('=');
+                    if (eq > 0) data.put(kv.substring(0, eq).trim(), kv.substring(eq + 1).trim());
+                }
+            }
+            forEach(ctx, parts[0], p -> links.chatCard(p, card, data));
+        });
+        reg.register("combat_effect", (ctx, args, s) -> {
+            // combat_effect <sel> <特效包id>：触发 CombatEffect 特效包
+            String[] parts = splitFirst(args, 1);
+            var links = service.get().links();
+            if (links == null || parts.length < 2) return;
+            String packet = ctx.replace(rest(parts, 1));
+            forEach(ctx, parts[0], p -> links.combatEffect(p, packet, null));
+        });
+        reg.register("bp_task", (ctx, args, s) -> {
+            // bp_task <sel> <任务id> [增量]：推进 BattlePass 任务进度
+            String[] parts = splitFirst(args, 2);
+            var links = service.get().links();
+            if (links == null || parts.length < 2) return;
+            String task = ctx.replace(parts[1]);
+            int inc = parts.length > 2 ? (int) parseDouble(rest(parts, 2), 1) : 1;
+            forEach(ctx, parts[0], p -> links.battlePassTask(p, task, inc));
+        });
+        reg.register("apply_attribute", (ctx, args, s) -> {
+            // apply_attribute <sel> <属性id> <值> [percent|flat]：
+            // 副本内属性修饰（Symphony 桥），出本/结束时统一 remove 清理
+            String[] parts = splitFirst(args, 3);
+            var links = service.get().links();
+            if (links == null || parts.length < 3) return;
+            String attr = ctx.replace(parts[1]);
+            double val = parseDouble(ctx.replace(parts[2]), 0);
+            boolean percent = parts.length > 3
+                && "percent".equalsIgnoreCase(ctx.replace(rest(parts, 3)).trim());
+            forEach(ctx, parts[0], p -> links.applyAttribute(
+                p, attr, percent, val, "abyss"));
+        });
+        reg.register("remove_attribute", (ctx, args, s) -> {
+            // remove_attribute <sel>：移除本副本施加的全部属性修饰
+            var links = service.get().links();
+            if (links == null) return;
+            forEach(ctx, first(args), p -> links.removeAttribute(p, "abyss"));
         });
     }
 

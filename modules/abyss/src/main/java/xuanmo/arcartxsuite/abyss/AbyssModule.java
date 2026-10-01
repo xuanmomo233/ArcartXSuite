@@ -77,6 +77,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             ariaBridge, scriptConditionEvaluator, placeholderResolver,
             storageManager, scheduler, crossServer, logger, messages());
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
+        service.setLinks(new xuanmo.arcartxsuite.abyss.links.AbyssLinks(
+            this::getCapability, attributeBridge, logger));
         service.start(dataFolder);
         playerCommand = new AbyssPlayerCommand(service);
         registerAbyssUis();
@@ -238,6 +240,10 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.fail",
             "axs.abyss.leave",
             "axs.abyss.player_death",
+            "axs.abyss.player_enter",
+            "axs.abyss.player_complete",
+            "axs.abyss.player_fail",
+            "axs.abyss.mob_kill",
             "axs.abyss.mob_group_start",
             "axs.abyss.mob_group_complete"
         );

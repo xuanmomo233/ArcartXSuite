@@ -20,7 +20,10 @@ abyss:
   async-world-copy: true
   # 副本无人后清理延迟（秒）：最后一名玩家退出/掉线后多久回收副本
   empty-cleanup-delay-seconds: 30
-  # 副本预热池：启动后预先建好世界，进入时秒开（BTDungeons 同款）
+  # 副本内挂机踢出（分钟）：玩家处于 Essentials AFK 状态超过该时长则被移出副本
+  # 0=关闭；需要 essentials 模块提供 AFK 判定，未安装时本项不生效
+  afk-kick-minutes: 0
+  # 副本预热池：启动后预先建好世界，进入时秒开
   preload:
     enabled: false
     # 严格模式：预热池空时禁止进入（false=回退即时创建）

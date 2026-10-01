@@ -23,11 +23,15 @@ public final class RecoveryManager {
     private final File dir;
     private final RecoverySection cfg;
     private final Logger logger;
+    /** 跨模块联动（Essentials 出生点兜底等），可空。 */
+    private final @Nullable xuanmo.arcartxsuite.abyss.links.AbyssLinks links;
 
-    public RecoveryManager(File moduleDataFolder, RecoverySection cfg, Logger logger) {
+    public RecoveryManager(File moduleDataFolder, RecoverySection cfg, Logger logger,
+                           @Nullable xuanmo.arcartxsuite.abyss.links.AbyssLinks links) {
         this.dir = new File(moduleDataFolder, "recovery");
         this.cfg = cfg;
         this.logger = logger;
+        this.links = links;
     }
 
     /** 标记玩家非正常退出副本。 */
@@ -73,6 +77,7 @@ public final class RecoveryManager {
      *   console &lt;命令&gt;                    控制台执行
      *   player_command &lt;命令&gt;             玩家身份执行
      *   teleport [世界] &lt;x,y,z[,yaw,pitch]&gt; 传送
+     *   teleport / teleport spawn             送回出生点（Essentials→世界 spawn 兜底）
      *   clear_inventory                       清空背包
      *   aria: &lt;表达式&gt; / js: &lt;脚本&gt;    宿主脚本引擎
      * </pre>
@@ -102,6 +107,14 @@ public final class RecoveryManager {
                     apply(a.substring(8), p, dungeon));
             } else if (lower.startsWith("player_command ")) {
                 p.performCommand(apply(a.substring(15), p, dungeon));
+            } else if (lower.equals("teleport") || lower.equals("teleport spawn")) {
+                // 裸 teleport：Essentials spawn → 玩家世界 spawn 兜底
+                Location dest = links != null ? links.essentialsSpawn(p) : null;
+                if (dest == null) {
+                    World w = p.getWorld();
+                    dest = w != null ? w.getSpawnLocation() : null;
+                }
+                if (dest != null) p.teleport(dest);
             } else if (lower.startsWith("teleport ")) {
                 // teleport [世界名] <x,y,z[,yaw,pitch]>
                 String[] parts = apply(a.substring(9), p, dungeon).split(" ", 2);

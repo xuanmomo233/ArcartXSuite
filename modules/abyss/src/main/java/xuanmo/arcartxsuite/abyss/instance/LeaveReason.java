@@ -10,6 +10,8 @@ public enum LeaveReason {
     END,
     /** 超时踢出 */
     TIMEOUT_KICK,
+    /** 副本内挂机踢出（Essentials AFK 状态超时） */
+    AFK_KICK,
     /** 管理员移除 */
     ADMIN
 }

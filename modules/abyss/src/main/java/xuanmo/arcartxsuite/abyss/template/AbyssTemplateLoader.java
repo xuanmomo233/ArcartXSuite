@@ -116,7 +116,10 @@ public final class AbyssTemplateLoader {
             requirements,
             WorldRules.load(cfg.getConfigurationSection("world")),
             monsters, obstacles, interacts, tasks, rewards, scripts, npcs,
-            quests, functions, dir
+            quests,
+            AbyssTemplate.DungeonLinks.load(
+                cfg.getConfigurationSection("links"), cfg),
+            functions, dir
         );
     }
 

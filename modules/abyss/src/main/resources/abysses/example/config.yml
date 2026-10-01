@@ -47,3 +47,17 @@ requirements:
   # leader-conditions: []       # 仅队长需要满足的额外条件
   disabled-commands: [spawn, tpa, home]
   disabled-items: [CHORUS_FRUIT]
+
+# 跨模块联动（全部可选；对应模块未启用时自动跳过）
+links:
+  # 地牢入口地图标记 "世界名;x,y,z"：推送到 map 模块为紫色外部目标，
+  # 玩家可在地图面板点"导航"由地图内置导航寻路（地图未启用则不推）
+  # entrance: "world;100,64,-50"
+  # 通关全服播报文本（announce 模块；占位 {party} {dungeon} {time}；注释掉=不播报）
+  # announce-clear: "&6{party} 通关 {dungeon}&6，用时 &f{time}&6！"
+  # 播报是否跨服转发（服务端跨服链路启用时生效）
+  # announce-forward: false
+  # 通关推 QQ 群（qqbot 模块）
+  # qq-notify-clear: false
+  # 指定 QQ 群号（<=0 或不填=全部已配置群）
+  # qq-group: 0
