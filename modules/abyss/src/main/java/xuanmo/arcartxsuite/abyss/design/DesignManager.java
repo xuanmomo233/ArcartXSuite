@@ -2,13 +2,17 @@ package xuanmo.arcartxsuite.abyss.design;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -38,6 +42,8 @@ public final class DesignManager {
     private final Map<UUID, DesignSession> sessions = new ConcurrentHashMap<>();
     /** 实例id → 会话（实例销毁时清理）。 */
     private final Map<UUID, DesignSession> byInstance = new ConcurrentHashMap<>();
+    /** 玩家 → 已下发的世界贴图 id 集（diff 清理用）。 */
+    private final Map<UUID, Set<String>> markers = new ConcurrentHashMap<>();
 
     /** UI 回调（打开主面板/编辑面板/副面板、提示刷新），由 UiService 注入。 */
     public interface Ui {
@@ -48,6 +54,8 @@ public final class DesignManager {
         void closeAll(Player p);
     }
     private volatile @Nullable Ui ui;
+    /** 世界贴图桥（R3 世界内对象标记；ArcartX 缺席时为 null 自动跳过）。 */
+    private volatile @Nullable xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI textureBridge;
 
     public DesignManager(Logger logger, BiConsumer<Player, String> messager) {
         this.logger = logger;
@@ -56,9 +64,71 @@ public final class DesignManager {
 
     public void setUi(Ui ui) { this.ui = ui; }
 
+    public void setTextureBridge(
+            @Nullable xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI bridge) {
+        this.textureBridge = bridge;
+    }
+
     public @Nullable DesignSession session(Player p) { return sessions.get(p.getUniqueId()); }
     public @Nullable DesignSession sessionOf(AbyssInstance i) { return byInstance.get(i.getInstanceId()); }
     public boolean isDesign(AbyssInstance i) { return byInstance.containsKey(i.getInstanceId()); }
+
+    // ═══ 世界内贴图标记（ArcartX WorldTexture）═══
+
+    /** 标记纹理资源 id（沿用导航箭头；后续可做成配置）。 */
+    private static final String MARKER_TEXTURE = "nav_arrow";
+
+    /** objKey → 贴图 id（sanitize 为安全字符）。 */
+    private static String markerId(String objKey) {
+        return "design_" + objKey.replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    /**
+     * diff 同步设计标记：为每个带锚点的对象下发一个面向玩家的高亮浮动贴图。
+     * 已存在的同锚点标记跳过；锚点移动/新建的重发；消失的对象标记删除。
+     */
+    public void syncMarkers(DesignSession s) {
+        var bridge = textureBridge;
+        if (bridge == null) return;
+        Player p = Bukkit.getPlayer(s.playerId());
+        if (p == null || !p.isOnline()) return;
+        org.bukkit.World world = s.instance().getWorld();
+        Set<String> want = new LinkedHashSet<>();
+        for (DesignObject o : s.objects().values()) {
+            int[] a = o.anchor();
+            if (a == null || world == null) continue;
+            String mid = markerId(o.key());
+            want.add(mid);
+            try {
+                bridge.spawnForPlayer(p, mid,
+                    new Location(world, a[0] + 0.5, a[1] + 1.6, a[2] + 0.5),
+                    MARKER_TEXTURE, 1.1, 1.1, 0f, 0f, true, true, -1, null);
+            } catch (Throwable t) {
+                logger.fine("[abyss/design] 贴图下发失败 " + mid + ": " + t.getMessage());
+            }
+        }
+        Set<String> prev = markers.computeIfAbsent(s.playerId(), k -> new LinkedHashSet<>());
+        for (String mid : new ArrayList<>(prev)) {
+            if (!want.contains(mid)) {
+                try { bridge.removeForPlayer(p, mid); }
+                catch (Throwable ignored) { }
+            }
+        }
+        markers.put(s.playerId(), want);
+    }
+
+    /** 清空玩家设计标记（退出/实例销毁/玩家离线时调用）。 */
+    public void clearMarkers(DesignSession s) {
+        Set<String> prev = markers.remove(s.playerId());
+        var bridge = textureBridge;
+        if (bridge == null || prev == null || prev.isEmpty()) return;
+        Player p = Bukkit.getPlayer(s.playerId());
+        if (p == null) return;
+        for (String mid : prev) {
+            try { bridge.removeForPlayer(p, mid); }
+            catch (Throwable ignored) { }
+        }
+    }
 
     // ═══ 会话生命周期 ═══
 
@@ -69,24 +139,32 @@ public final class DesignManager {
         sessions.put(player.getUniqueId(), s);
         byInstance.put(instance.getInstanceId(), s);
         s.selectedNode(defaultNode(instance.getTemplate()));
+        syncMarkers(s);
         return s;
     }
 
     /** 会话结束（玩家退出/设计实例销毁时调用）。 */
     public void close(Player player) {
         DesignSession s = sessions.remove(player.getUniqueId());
-        if (s != null) byInstance.remove(s.instance().getInstanceId(), s);
+        if (s != null) {
+            byInstance.remove(s.instance().getInstanceId(), s);
+            clearMarkers(s);
+        }
     }
 
     /** 保存后刷新：对象表从磁盘重建（dirty 清零，id 沿用文件键）。 */
     public void refresh(DesignSession s) {
         s.resetTracking();
         s.putAll(loadObjects(s.instance().getTemplate()));
+        syncMarkers(s);
     }
 
     public void closeInstance(AbyssInstance instance) {
         DesignSession s = byInstance.remove(instance.getInstanceId());
-        if (s != null) sessions.remove(s.playerId(), s);
+        if (s != null) {
+            sessions.remove(s.playerId(), s);
+            clearMarkers(s);
+        }
     }
 
     // ═══ 对象加载（YAML 节 → 快照）═══
@@ -169,7 +247,72 @@ public final class DesignManager {
             }
             fixed.add(o);
         }
-        return fixed;
+        return crossLink(fixed);
+    }
+
+    /** 脚本动作 → 其首个参数指向的对象类型（交叉引用吸附白名单）。 */
+    private static final Map<String, DesignObject.Kind> REF_ACTIONS = Map.ofEntries(
+        Map.entry("spawn_group", DesignObject.Kind.GROUP),
+        Map.entry("kill_group", DesignObject.Kind.GROUP),
+        Map.entry("remove_group", DesignObject.Kind.GROUP),
+        Map.entry("group_alive_count", DesignObject.Kind.GROUP),
+        Map.entry("create_obstacle", DesignObject.Kind.OBSTACLE),
+        Map.entry("delete_obstacle", DesignObject.Kind.OBSTACLE),
+        Map.entry("create_interact", DesignObject.Kind.INTERACT),
+        Map.entry("delete_interact", DesignObject.Kind.INTERACT),
+        Map.entry("puzzle_reset", DesignObject.Kind.PUZZLE),
+        Map.entry("puzzle_solve", DesignObject.Kind.PUZZLE),
+        Map.entry("puzzle_prompt", DesignObject.Kind.PUZZLE),
+        Map.entry("puzzle_state", DesignObject.Kind.PUZZLE),
+        Map.entry("room_lock", DesignObject.Kind.ROOM),
+        Map.entry("room_unlock", DesignObject.Kind.ROOM),
+        Map.entry("room_status", DesignObject.Kind.ROOM));
+
+    /**
+     * 交叉引用吸附：扫描对象脚本行，被引用的游离对象（misc:*）自动归进引用者的
+     * 房间节点——"由这个房间引用的门/怪组/机关"天然属于该房间。
+     * 仅吸附到 room: 节点；引用者本身在 misc:* 时不做处理（方向不可逆推）。
+     */
+    private List<DesignObject> crossLink(List<DesignObject> objects) {
+        Map<String, DesignObject> byKey = new LinkedHashMap<>();
+        for (DesignObject o : objects) byKey.put(o.key(), o);
+        Map<String, DesignObject> moved = new LinkedHashMap<>();
+        for (DesignObject o : objects) {
+            String node = o.node();
+            if (node == null || !node.startsWith("room:")) continue;
+            for (DesignObject.FieldSpec f : DesignObject.schema(o.kind())) {
+                if (f.editor() != DesignObject.Editor.SCRIPT
+                    && f.editor() != DesignObject.Editor.LIST) continue;
+                for (String line : o.strList(f.name())) {
+                    String[] tk = line.trim().split("\\s+");
+                    if (tk.length < 2) continue;
+                    DesignObject.Kind rk = REF_ACTIONS.get(tk[0]);
+                    if (rk == null) continue;
+                    String refId = tk[1].replaceAll("[\"'\\[\\],;]", "");
+                    if (refId.isEmpty()) continue;
+                    DesignObject ref = byKey.get(rk.name().toLowerCase() + ":" + refId);
+                    if (ref == null) {
+                        // 房内怪组后缀匹配（group:room.gid）
+                        for (var e : byKey.entrySet()) {
+                            if (e.getKey().endsWith("." + refId)
+                                && e.getValue().kind() == DesignObject.Kind.ROOM_GROUP) {
+                                ref = e.getValue();
+                                break;
+                            }
+                        }
+                    }
+                    if (ref != null && ref.node() != null && ref.node().startsWith("misc:")) {
+                        moved.put(ref.key(), ref.withNode(node));
+                    }
+                }
+            }
+        }
+        if (moved.isEmpty()) return objects;
+        List<DesignObject> out = new ArrayList<>(objects.size());
+        for (DesignObject o : objects) {
+            out.add(moved.getOrDefault(o.key(), o));
+        }
+        return out;
     }
 
     private void loadSection(List<DesignObject> out, AbyssTemplate t, File dir,
@@ -328,6 +471,7 @@ public final class DesignManager {
                     o.summary(), pt, o.box(), o.node(), vals, true));
                 s.pending(null);
                 messager.accept(p, msg("design.spawn-added", "id", o.id()));
+                syncMarkers(s);
                 if (ui != null) ui.openEdit(p, s, o.key());
                 return;
             }
@@ -341,6 +485,7 @@ public final class DesignManager {
             s.put(next);
             s.pending(null);
             messager.accept(p, msg("design.relocated", "id", o.id()));
+            syncMarkers(s);
             if (ui != null) ui.openEdit(p, s, o.key());
             return;
         }
@@ -369,6 +514,7 @@ public final class DesignManager {
         s.put(o);
         s.pending(null);
         messager.accept(p, msg("design.marked", "id", id));
+        syncMarkers(s);
         if (ui != null) ui.openEdit(p, s, key);
     }
 
@@ -412,6 +558,7 @@ public final class DesignManager {
                 inferNode(t, o.anchor(), box, floorsRegionBoxes(t), o.kind()), vals, true);
             s.put(next);
             messager.accept(p, msg("design.relocated", "id", o.id()));
+            syncMarkers(s);
             if (ui != null) ui.openEdit(p, s, o.key());
             return;
         }
@@ -441,6 +588,7 @@ public final class DesignManager {
             node, vals, true);
         s.put(o);
         messager.accept(p, msg("design.marked", "id", id));
+        syncMarkers(s);
         if (ui != null) ui.openEdit(p, s, key);
     }
 
@@ -479,10 +627,12 @@ public final class DesignManager {
             if (value == null) {
                 o = removeField(o, field);
                 s.put(o);
+                postEdit(s, o);
                 return true;
             }
         }
         s.put(o.withValue(field, value));
+        postEdit(s, s.get(key));
         return true;
     }
 
@@ -496,6 +646,7 @@ public final class DesignManager {
         int idx = spec.options().indexOf(cur);
         String next = spec.options().get((idx + 1) % spec.options().size());
         s.put(o.withValue(field, next));
+        postEdit(s, s.get(key));
         return next;
     }
 
@@ -506,6 +657,7 @@ public final class DesignManager {
         List<String> lines = new ArrayList<>(o.strList(field));
         lines.add(line);
         s.put(o.withValue(field, lines));
+        postEdit(s, s.get(key));
     }
 
     public void lineSet(DesignSession s, String key, String field, int idx, String line) {
@@ -515,6 +667,7 @@ public final class DesignManager {
         if (idx < 0 || idx >= lines.size()) return;
         lines.set(idx, line);
         s.put(o.withValue(field, lines));
+        postEdit(s, s.get(key));
     }
 
     public void lineDel(DesignSession s, String key, String field, int idx) {
@@ -524,6 +677,7 @@ public final class DesignManager {
         if (idx < 0 || idx >= lines.size()) return;
         lines.remove(idx);
         s.put(o.withValue(field, lines));
+        postEdit(s, s.get(key));
     }
 
     public void lineMove(DesignSession s, String key, String field, int idx, int dir) {
@@ -536,6 +690,7 @@ public final class DesignManager {
         lines.set(idx, lines.get(to));
         lines.set(to, tmp);
         s.put(o.withValue(field, lines));
+        postEdit(s, s.get(key));
     }
 
     /** 重命名 id。 */
@@ -544,12 +699,33 @@ public final class DesignManager {
         if (o == null || newId.isBlank() || !newId.matches("[a-zA-Z0-9_\\-]+")) return false;
         if (s.idTaken(o.kind(), newId, key)) return false;
         s.put(o.withId(newId));
+        postEdit(s, s.get(key));
         return true;
     }
 
     /** 删除对象。 */
     public void delete(DesignSession s, String key) {
         s.remove(key);
+        syncMarkers(s);
+    }
+
+    /**
+     * 编辑后处理：坐标字段文本直写后重建 anchor/box/node/summary（数组按值比较），
+     * 最后统一差量同步世界内贴图。
+     */
+    private void postEdit(DesignSession s, DesignObject o) {
+        if (o == null) { syncMarkers(s); return; }
+        int[] na = anchorOf(o.kind(), o.values());
+        int[] nb = o.kind() == DesignObject.Kind.INTERACT
+            ? DesignCoords.box(strListRaw(o.values(), "region")) : o.box();
+        if (!Arrays.equals(na, o.anchor()) || !Arrays.equals(nb, o.box())) {
+            AbyssTemplate t = s.instance().getTemplate();
+            s.put(new DesignObject(o.key(), o.kind(), o.id(), o.file(), o.path(),
+                summaryOf(o.kind(), o.id(), o.values(), na, nb), na, nb,
+                inferNode(t, na, nb, floorsRegionBoxes(t), o.kind()),
+                o.values(), true));
+        }
+        syncMarkers(s);
     }
 
     // ═══ 显示数据（UI 下发用）═══

@@ -83,6 +83,10 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             service.setWaypointBridge(createWaypointBridge());
         } catch (Throwable ignored) { }
         service.start(dataFolder);
+        // R3：设计模式世界内贴图标记（ArcartX 缺席时为 null，DesignManager 自动跳过）
+        if (service.designManager() != null) {
+            service.designManager().setTextureBridge(worldTextureBridge);
+        }
         playerCommand = new AbyssPlayerCommand(service);
         registerAbyssUis();
 

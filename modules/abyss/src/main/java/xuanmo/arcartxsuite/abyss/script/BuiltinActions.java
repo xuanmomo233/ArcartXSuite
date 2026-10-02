@@ -426,6 +426,30 @@ final class BuiltinActions {
             gs.clearGuide(ctx.getInstance(),
                 "all".equalsIgnoreCase(navId) ? null : navId);
         });
+        reg.register("quest_track", (ctx, args, s) -> {
+            // quest_track <questId> [taskId|-] [@sel]——questgps 任务追踪卡片联动
+            // taskId 省略（或写 -）= 追踪整个任务；sel 缺省 @trigger
+            var links = service.get().links();
+            if (links == null) return;
+            String[] parts = splitFirst(args, 3);
+            if (parts.length == 0 || parts[0].isEmpty()) return;
+            String questId = ctx.replace(parts[0]);
+            String taskId = null;
+            String sel = "@trigger";
+            if (parts.length >= 2) {
+                String second = ctx.replace(parts[1]);
+                if (second.startsWith("@")) {
+                    sel = second;
+                } else if (!"-".equals(second)) {
+                    taskId = second;
+                }
+            }
+            if (parts.length >= 3 && parts[2].startsWith("@")) {
+                sel = parts[2];
+            }
+            final String tid = taskId;
+            forEach(ctx, sel, p -> links.questTrack(p, questId, tid));
+        });
 
         // ═══ 增益选择池（buffs.yml）═══
         reg.register("buff_offer", (ctx, args, s) -> {

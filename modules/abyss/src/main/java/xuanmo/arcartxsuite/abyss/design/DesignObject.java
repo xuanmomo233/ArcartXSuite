@@ -232,6 +232,12 @@ public record DesignObject(
             values, true);
     }
 
+    /** 改归属节点（交叉引用吸附用，不标脏——归属只是展示层分组）。 */
+    public DesignObject withNode(String newNode) {
+        return new DesignObject(key, kind, id, file, path, summary, anchor, box,
+            newNode, values, dirty);
+    }
+
     public List<String> strList(String field) {
         Object v = values.get(field);
         if (v instanceof List<?> l) {

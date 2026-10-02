@@ -253,6 +253,24 @@ public final class AbyssLinks {
         return cap(MapNavigable.class);
     }
 
+    // ═══ QuestGPS ═══
+
+    /**
+     * 任务追踪联动：questgps 引导 HUD 卡片显示任务目标。
+     * {@code taskId} 为空时追踪整个任务，否则追踪指定步骤。
+     * questgps 未装载时静默跳过。
+     */
+    public void questTrack(Player player, String questId, @Nullable String taskId) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c == null) return;
+        if (taskId != null && !taskId.isEmpty()) {
+            safe(() -> c.trackTask(player, questId, taskId));
+        } else {
+            safe(() -> c.trackQuest(player, questId));
+        }
+    }
+
     private void safe(Runnable r) {
         try {
             r.run();
