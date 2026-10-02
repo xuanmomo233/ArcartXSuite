@@ -1,0 +1,207 @@
+# AXS 资源说明
+# 用途: Abyss 机关输入面板 —— puzzles.yml input 型机关的密码/口令输入
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+#
+# 通讯协议:
+#   服务端 → init: packetId/action_token/puzzleId/title/hint/length/pattern/masked/attemptsLeft/attemptsText
+#   客户端 → Packet.send('abyss', 'input_submit', puzzleId, answer, actionToken)
+#   答案永不下发客户端；服务端 PuzzleManager.submitInput 比对。
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.puzzleId = packet['puzzleId']
+      var.title = packet['title']
+      var.hint = packet['hint']
+      var.length = packet['length']
+      var.pattern = packet['pattern']
+      var.masked = packet['masked']
+      var.attemptsText = packet['attemptsText']
+      // 把服务端下发的元数据灌进输入框属性（渲染/输入约束为逐帧读）
+      if(var.length > 0) {
+        val.输入框.length = var.length
+      }
+      if(var.pattern != none && var.pattern != '') {
+        val.输入框.inputPattern = var.pattern
+      }
+      if(var.hint != none && var.hint != '') {
+        val.输入框.emptyText = var.hint
+      }
+      if(var.masked == '1') {
+        val.输入框.passwordChar = '*'
+      }
+      val.输入框.setFocus(true)
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.puzzleId = ''
+      var.title = ''
+      var.hint = ''
+      var.length = 16
+      var.pattern = ''
+      var.masked = '0'
+      var.attemptsText = ''
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+    open: |-
+      Sound.self('minecraft:block.note_block.pling', 0.8, 12)
+controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;16,12,30,220
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      输入面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 520
+          height: 340
+        children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;24,19,40,240
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          标题标线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 30
+              width: 26
+              height: 3
+              normal: var.accent
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 48
+              texts: "'&f' + var.title"
+              fontSize: 54
+              limit: 14
+              through: true
+          提示:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 118
+              texts: "'&7' + var.hint"
+              fontSize: 34
+              limit: 26
+              through: true
+          次数行:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 156
+              texts: "'&8' + var.attemptsText"
+              fontSize: 30
+              through: true
+          输入框:
+            type: TextBox
+            val: "输入框"
+            attribute:
+              point: ~top_center
+              y: 224
+              width: 420
+              height: 44
+              length: 16
+              fontSize: 34
+              background: ~10,8,20,220
+              cursorColor: ~186,140,232
+              emptyText: ~&8点击输入
+              canLoseFocus: true
+            action:
+              enter: |-
+                // 回车提交（等价点确认）
+                if(self.getContent() != '') {
+                  Packet.send(var.packetId, 'input_submit', var.puzzleId, self.getContent(), var.actionToken)
+                  Screen.close()
+                }
+          操作区:
+            type: HStack
+            attribute:
+              point: ~bottom_center
+              y: -30
+              spaceBetween: 20
+            children:
+              确认按钮:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 48
+                action:
+                  clickLeft: |-
+                    if(val.输入框.getContent() != '') {
+                      Packet.send(var.packetId, 'input_submit', var.puzzleId, val.输入框.getContent(), var.actionToken)
+                      Screen.close()
+                    }
+                children:
+                  确认底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,230
+                      hover: ~200,150,240,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  确认字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0确 认
+                      fontSize: 34
+                      through: true
+              取消按钮:
+                type: Canvas
+                attribute:
+                  width: 150
+                  height: 48
+                action:
+                  clickLeft: "Screen.close()"
+                children:
+                  取消底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~62,66,74,230
+                      hover: ~82,90,105,245
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: var.accentDim
+                  取消字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&f取 消
+                      fontSize: 34
+                      through: true

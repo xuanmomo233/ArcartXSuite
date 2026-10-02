@@ -28,6 +28,7 @@ public final class InteractManager {
 
     private final Map<UUID, Map<String, Interact>> active = new ConcurrentHashMap<>();
     private BiConsumer<AbyssInstance, FireEvent> fireCallback;
+    private BiConsumer<AbyssInstance, FireEvent> puzzleCallback;
     private Function<AbyssInstance, Function<String, Location>> locParser;
     private final ScriptConditionEvaluator evaluator;
     private final Logger logger;
@@ -44,6 +45,11 @@ public final class InteractManager {
                              Function<AbyssInstance, Function<String, Location>> locParser) {
         this.fireCallback = fireCallback;
         this.locParser = locParser;
+    }
+
+    /** 解谜钩子：interact 成功触发时回调（独立于脚本回调——纯机关步骤点可不挂 script）。 */
+    public void setPuzzleCallback(BiConsumer<AbyssInstance, FireEvent> puzzleCallback) {
+        this.puzzleCallback = puzzleCallback;
     }
 
     /** 副本 start：注册全部交互点。 */
@@ -211,6 +217,10 @@ public final class InteractManager {
             instance.markTriggeredOnce(globalKey);
         }
         lastFires.put(playerKey, System.currentTimeMillis());
+        // 机关解谜：成功触发即上报（不论是否挂脚本）
+        if (puzzleCallback != null) {
+            puzzleCallback.accept(instance, new FireEvent(i.name(), i.script(), player));
+        }
         if (fireCallback != null && !i.script().isEmpty()) {
             fireCallback.accept(instance, new FireEvent(i.name(), i.script(), player));
         }

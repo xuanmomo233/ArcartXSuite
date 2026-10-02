@@ -9,3 +9,30 @@ trial_chest:
     - "message @trigger &e你发现了试炼宝箱！"
     - "open_chest_ui @trigger trial_chest"
     - "setblock 5,80,5 AIR"
+
+# ═══ 机关解谜配套交互点（puzzles.yml）═══
+# 序列机关 valve_sequence 的 4 个阀门按钮（可重复触发，顺序由 PuzzleManager 判定）：
+valve_1:
+  type: RIGHT_CLICK_BLOCK
+  location: "8,80,2"
+  required-block: "STONE_BUTTON"
+valve_2:
+  type: RIGHT_CLICK_BLOCK
+  location: "8,80,4"
+  required-block: "STONE_BUTTON"
+valve_3:
+  type: RIGHT_CLICK_BLOCK
+  location: "8,80,6"
+  required-block: "STONE_BUTTON"
+valve_4:
+  type: RIGHT_CLICK_BLOCK
+  location: "8,80,8"
+  required-block: "STONE_BUTTON"
+
+# 输入机关 elevator_code 的打开入口（右键终端 → 弹输入面板）：
+elevator_terminal:
+  type: RIGHT_CLICK_BLOCK
+  location: "10,81,10"
+  required-block: "LECTERN"
+  script:
+    - "puzzle_prompt elevator_code"

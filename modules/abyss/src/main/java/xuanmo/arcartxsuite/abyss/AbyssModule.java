@@ -120,7 +120,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     }
 
     /**
-     * 将 uiSpec() 中声明的 7 个 UI 文件注册到 ArcartX 引擎。
+     * 将 uiSpec() 中声明的 9 个 UI 文件注册到 ArcartX 引擎。
      * 配置 id 统一规范化为 AXS: 前缀（与 UiService 的 runtimeId 一致）。
      */
     private void registerAbyssUis() {
@@ -134,6 +134,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerModuleUi("ui/abyss_stats.yml", axsUiId(ui.statsId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_leaderboard.yml", axsUiId(ui.leaderboardId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_hud.yml", axsUiId(ui.hudId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_input.yml", axsUiId(ui.inputId()), ui.registerOnEnable());
     }
 
     /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */
@@ -258,7 +259,10 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.floor_enter",
             "axs.abyss.floor_clear",
             "axs.abyss.global_change",
-            "axs.abyss.global_threshold"
+            "axs.abyss.global_threshold",
+            "axs.abyss.puzzle_step",
+            "axs.abyss.puzzle_complete",
+            "axs.abyss.puzzle_fail"
         );
     }
 
@@ -273,6 +277,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         mappings.put("arcartx/ui/abyss_stats.yml", "ui/abyss_stats.yml");
         mappings.put("arcartx/ui/abyss_leaderboard.yml", "ui/abyss_leaderboard.yml");
         mappings.put("arcartx/ui/abyss_hud.yml", "ui/abyss_hud.yml");
+        mappings.put("arcartx/ui/abyss_input.yml", "ui/abyss_input.yml");
         boolean overwrite = configuration != null
             && configuration.ui() != null && configuration.ui().overwriteUiFiles();
         return new xuanmo.arcartxsuite.api.ModuleUiSpec(mappings, overwrite);

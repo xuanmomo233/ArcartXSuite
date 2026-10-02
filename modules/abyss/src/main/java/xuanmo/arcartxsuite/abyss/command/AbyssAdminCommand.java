@@ -17,13 +17,14 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
  * 管理命令：/axs abyss <action>
  * <p>
  * 动作：help / status / reload / list / info / enter / leave / force_complete /
- *       force_fail / cancel / stamina / cooldown / tp
+ *       force_fail / cancel / stamina / cooldown / tp / puzzle
  */
 public final class AbyssAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of(
         "help", "status", "reload", "list", "info", "enter", "leave",
-        "force_complete", "force_fail", "cancel", "stamina", "cooldown", "tp");
+        "force_complete", "force_fail", "cancel", "stamina", "cooldown", "tp",
+        "puzzle");
 
     private final AbyssService service;
     private final java.util.logging.Logger logger;
@@ -63,6 +64,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "stamina" -> cmdStamina(sender, args);
                 case "cooldown" -> cmdCooldown(sender, args);
                 case "tp" -> cmdTp(sender, args);
+                case "puzzle" -> cmdPuzzle(sender, args);
                 default -> sender.sendMessage(service.msg("usage.admin-unknown", "label", label));
             }
         } catch (Exception e) {
@@ -93,6 +95,8 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "enter" -> null; // 玩家名
                 case "stamina" -> filter(List.of("give", "set"), args[3]);
                 case "cooldown" -> filter(List.of("clear", "check"), args[3]);
+                case "puzzle" -> filter(
+                    List.of("state", "reset", "solve", "fail", "prompt"), args[3]);
                 default -> List.of();
             };
         }
@@ -308,6 +312,91 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
             }
         }
         sender.sendMessage(service.msg("admin-action.no-instance"));
+    }
+
+    /**
+     * 机关局内管理（只改当前实例内存状态，不动磁盘配置）：
+     *   /axs abyss puzzle                         → 列出当前实例全部机关
+     *   /axs abyss puzzle &lt;id&gt;              → 单机关详情
+     *   /axs abyss puzzle &lt;id&gt; reset|solve|fail
+     *   /axs abyss puzzle &lt;id&gt; prompt [玩家] → 给玩家打开输入面板
+     */
+    private void cmdPuzzle(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage(service.msg("admin-action.only-player"));
+            return;
+        }
+        var pm = service.puzzles();
+        if (pm == null) {
+            sender.sendMessage(service.msg("puzzle.ui-unavailable"));
+            return;
+        }
+        AbyssInstance inst = service.instances().getInstance(p);
+        if (inst == null) {
+            sender.sendMessage(service.msg("error.not-in-dungeon"));
+            return;
+        }
+        var defs = inst.getTemplate().puzzles().puzzles();
+        if (defs.isEmpty()) {
+            sender.sendMessage(service.msg("puzzle.none"));
+            return;
+        }
+        // 无 id → 列表
+        if (args.length < 3) {
+            sender.sendMessage(service.msg("puzzle.list-title",
+                "dungeon", inst.getTemplate().name()));
+            for (var e : defs.entrySet()) {
+                var puzzle = e.getValue();
+                int prog = pm.progress(inst, e.getKey());
+                String state = pm.isLocked(inst, e.getKey()) ? "LOCKED"
+                    : pm.isDone(inst, e.getKey()) ? "DONE"
+                    : (prog < 0 ? "-" : String.valueOf(prog));
+                sender.sendMessage(service.msg("puzzle.list-row",
+                    "id", e.getKey(), "type", puzzle.type().name(),
+                    "name", puzzle.name(), "state", state));
+            }
+            return;
+        }
+        String puzzleId = args[2];
+        if (!defs.containsKey(puzzleId)) {
+            sender.sendMessage(service.msg("puzzle.not-found", "id", puzzleId));
+            return;
+        }
+        String op = args.length >= 4 ? args[3].toLowerCase(Locale.ROOT) : "state";
+        switch (op) {
+            case "reset" -> {
+                pm.reset(inst, puzzleId);
+                sender.sendMessage(service.msg("puzzle.op-reset", "id", puzzleId));
+            }
+            case "solve" -> {
+                pm.forceComplete(inst, puzzleId, p);
+                sender.sendMessage(service.msg("puzzle.op-solved", "id", puzzleId));
+            }
+            case "fail" -> {
+                pm.forceFail(inst, puzzleId, p);
+                sender.sendMessage(service.msg("puzzle.op-failed", "id", puzzleId));
+            }
+            case "prompt" -> {
+                Player target = args.length >= 5 ? Bukkit.getPlayer(args[4]) : p;
+                if (target == null) {
+                    sender.sendMessage(service.msg("error.player-not-online"));
+                    return;
+                }
+                boolean ok = pm.openInput(inst, target, puzzleId);
+                sender.sendMessage(service.msg(ok ? "puzzle.prompt-sent" : "puzzle.prompt-denied",
+                    "id", puzzleId, "player", target.getName()));
+            }
+            default -> {
+                // state：输出机关详情
+                var puzzle = defs.get(puzzleId);
+                int prog = pm.progress(inst, puzzleId);
+                sender.sendMessage(service.msg("puzzle.detail",
+                    "id", puzzleId, "type", puzzle.type().name(),
+                    "state", pm.isLocked(inst, puzzleId) ? "LOCKED"
+                        : pm.isDone(inst, puzzleId) ? "DONE" : String.valueOf(prog),
+                    "steps", String.valueOf(puzzle.steps().size())));
+            }
+        }
     }
 
     private static List<String> filter(List<String> candidates, String input) {

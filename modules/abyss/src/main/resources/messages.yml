@@ -112,6 +112,23 @@ dungeon:
   room-clear: "{prefix}&a房间已肃清"
   floor-enter: "{prefix}&6进入 &e{floor}"
 
+puzzle:
+  ui-unavailable: "{prefix}&c输入面板不可用（ArcartX 未接入）"
+  attempts-left: "&7剩余尝试次数: &e{left}"
+  step: "{prefix}&a机关推进 &e{step}/{steps}"
+  completed: "{prefix}&a机关已解除: &e{puzzle}"
+  locked: "{prefix}&c机关已锁定: &e{puzzle}"
+  none: "{prefix}&7当前副本未配置机关"
+  not-found: "{prefix}&c机关不存在: &f{id}"
+  list-title: "{prefix}&6{dungeon} &e机关列表："
+  list-row: "{prefix}&e{id} &f{name} &7[{type}] &f状态: {state}"
+  detail: "{prefix}&e{id} &7[{type}] &f进度: {state} &7步数: {steps}"
+  op-reset: "{prefix}&a机关 {id} 已重置"
+  op-solved: "{prefix}&a机关 {id} 已判定完成"
+  op-failed: "{prefix}&c机关 {id} 已强制锁定"
+  prompt-sent: "{prefix}&a已向 {player} 打开机关 {id} 输入面板"
+  prompt-denied: "{prefix}&c无法打开 {id}（非输入型/已完成/已锁定/次数耗尽）"
+
 plan:
   menu-title: "{prefix}&6{dungeon} &e选择作战方案（点击条目进入）："
   menu-row: "{prefix}&a▶ &f{name} &8[点击进入]"

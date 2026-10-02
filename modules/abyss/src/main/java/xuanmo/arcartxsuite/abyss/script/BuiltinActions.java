@@ -353,6 +353,50 @@ final class BuiltinActions {
             ctx.setVariable(rest(parts, 1), val);
         });
 
+        // ═══ 机关解谜 ═══
+        reg.register("puzzle_prompt", (ctx, args, s) -> {
+            // puzzle_prompt <机关id> [@触发者默认]：给触发者打开 input 型机关的输入面板
+            var pm = service.get().puzzles();
+            Player t = ctx.getTrigger();
+            if (pm == null || t == null) return;
+            pm.openInput(ctx.getInstance(), t, ctx.replace(args));
+        });
+        reg.register("puzzle_prompt_player", (ctx, args, s) -> {
+            // puzzle_prompt_player <玩家名|@all> <机关id>：指定玩家打开输入面板
+            var pm = service.get().puzzles();
+            if (pm == null) return;
+            String[] parts = splitFirst(args, 1);
+            if (parts.length < 2) return;
+            String target = ctx.replace(parts[0]);
+            String puzzleId = ctx.replace(rest(parts, 1));
+            if ("@all".equalsIgnoreCase(target)) {
+                for (Player p : ctx.getInstance().getPlayers()) {
+                    pm.openInput(ctx.getInstance(), p, puzzleId);
+                }
+            } else {
+                Player p = org.bukkit.Bukkit.getPlayerExact(target);
+                if (p != null) pm.openInput(ctx.getInstance(), p, puzzleId);
+            }
+        });
+        reg.register("puzzle_reset", (ctx, args, s) -> {
+            // puzzle_reset <机关id>：进度/锁定清零，机关回到初始状态
+            var pm = service.get().puzzles();
+            if (pm != null) pm.reset(ctx.getInstance(), ctx.replace(args));
+        });
+        reg.register("puzzle_solve", (ctx, args, s) -> {
+            // puzzle_solve <机关id>：直接判定完成（触发 on-complete + 事件）
+            var pm = service.get().puzzles();
+            if (pm != null) pm.forceComplete(ctx.getInstance(), ctx.replace(args), ctx.getTrigger());
+        });
+        reg.register("puzzle_state", (ctx, args, s) -> {
+            // puzzle_state <机关id> <变量名>：进度写入变量（无此机关=-1）
+            var pm = service.get().puzzles();
+            String[] parts = splitFirst(args, 1);
+            if (pm == null || parts.length < 2) return;
+            ctx.setVariable(rest(parts, 1),
+                String.valueOf(pm.progress(ctx.getInstance(), ctx.replace(parts[0]))));
+        });
+
         // ═══ 障碍物/交互点 ═══
         reg.register("create_obstacle", (ctx, args, s) ->
             service.get().obstacles().create(ctx.getInstance(), ctx.replace(args)));

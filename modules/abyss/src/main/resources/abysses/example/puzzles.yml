@@ -1,0 +1,59 @@
+# puzzles.yml — 副本内机关解谜定义（实例级状态，随副本创建/销毁）
+#
+# 两种机关类型：
+#   sequence — 按 steps 顺序触发 interact 点名（压力阀/符文顺序/接线板）
+#   input    — 弹 ArcartX 输入面板，玩家键盘输入密码/口令（电梯码/密码门）
+#
+# 实例变量（供 check / {var:...} 读取）：
+#   {var:puzzle.<id>}        当前进度（sequence=已走步数 / input=全队已尝试次数）
+#   {var:puzzle.<id>.done}   "1" = 已完成
+#   {var:puzzle.<id>.locked} "1" = 已锁定（超限，需 puzzle_reset 或重开本）
+#
+# 事件（EventBus topic）：
+#   axs.abyss.puzzle_step     每步正确（data: dungeon/instance/puzzle/step/steps）
+#   axs.abyss.puzzle_complete 完成（data: dungeon/instance/puzzle/player）
+#   axs.abyss.puzzle_fail     失败（data: ... reason=miss_input/miss_sequence/locked）
+#
+# 脚本上下文变量：机关脚本段内 {puzzle}=机关id，{trigger}=触发者。
+
+# ═══ 序列型：按顺序点 4 个阀门 ═══
+valve_sequence:
+  name: "冷却阀序列"
+  type: sequence
+  # interacts.yml 中的点名顺序；点名可重复（如 [a,b,a]）
+  steps: [valve_4, valve_2, valve_1, valve_3]
+  reset-on-miss: true          # 点错顺序→清空进度重来；false=错序只惩罚不回退
+  miss-limit: 5                # 累计错序上限（0=不限）；超限→on-fail并锁定机关
+  on-step:                     # 每步正确后执行
+    - "sound @trigger ui.button.click 1 1.6"
+    - "title @trigger &a阀门 {var:puzzle.valve_sequence}/4 已开启"
+  on-miss:                     # 错序惩罚
+    - "subtitle @all &c阀门顺序错误，压力泄漏！"
+    - "sound @all block.note_block.bass 1 0.5"
+  on-complete:                 # 全部步走完
+    - "broadcast &a冷却系统重启完成，泵房门开启"
+    - "fillblocks 12,80,12 14,82,14 AIR"
+  on-fail:                     # 超限锁定（需管理员 reset）
+    - "broadcast &c阀门组过载，控制台已锁定"
+
+# ═══ 输入型：加密电梯四位码 ═══
+elevator_code:
+  name: "加密电梯终端"
+  type: input
+  answer: "4312"               # 正确答案（仅服务端比对，永不下发客户端）
+  case-sensitive: false        # 大小写敏感（数字码无所谓；文本口令建议 true）
+  length: 4                    # 输入框最大长度（0=不限）
+  input-pattern: "^[0-9]*$"    # 客户端字符过滤正则（可删）
+  title: "加密电梯终端"
+  hint: "输入四位通行码"
+  masked: true                 # 掩码显示（*）
+  max-attempts: 3              # 允许错误次数（0=不限；超限→on-fail+锁定）
+  per-player: false            # true=每人独立计次；false=全队共享额度
+  on-miss:
+    - "title @trigger &c通行码错误"
+    - "sound @trigger block.note_block.bass 1 0.6"
+  on-complete:
+    - "broadcast &a电梯解锁，上行通道开启"
+    - "delete_obstacle elevator_gate"
+  on-fail:
+    - "broadcast &c终端连续错误，已锁定（需管理员解除）"

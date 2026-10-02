@@ -138,6 +138,7 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.links.AbyssLinks links;
     private xuanmo.arcartxsuite.abyss.links.EntranceMarkerService entranceMarkers;
     private xuanmo.arcartxsuite.abyss.interact.EntranceManager entranceManager;
+    private xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager puzzleManager;
     private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
@@ -244,6 +245,10 @@ public final class AbyssService {
             ScriptContext.withVars(inst, e.trigger(), Map.of("interact", e.interactName()))),
             this::locParser);
         interacts.setExternalItemMatcher((req, hand) -> rewards.matches(req, hand));
+        puzzleManager = new xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager(logger);
+        puzzleManager.setCallback(new PuzzleCallbackImpl());
+        interacts.setPuzzleCallback((inst, e) ->
+            puzzleManager.onInteractFired(inst, e.interactName(), e.trigger()));
         instanceTasks = new InstanceTaskScheduler(plugin, scheduler, logger);
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
@@ -365,7 +370,7 @@ public final class AbyssService {
         String[] files = {
             "config.yml", "monsters.yml", "scripts.yml", "rewards.yml",
             "interacts.yml", "obstacles.yml", "tasks.yml", "npcs.yml", "quests.yml",
-            "floors.yml", "rooms.yml"
+            "floors.yml", "rooms.yml", "puzzles.yml"
         };
         for (String f : files) {
             try {
@@ -468,6 +473,9 @@ public final class AbyssService {
     public @Nullable GlobalCounterService globalCounters() { return globalCounters; }
     public @Nullable xuanmo.arcartxsuite.abyss.interact.EntranceManager entranceManager() {
         return entranceManager;
+    }
+    public @Nullable xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager puzzles() {
+        return puzzleManager;
     }
     public SchedulerAPI scheduler() { return scheduler; }
     public MessageProvider messages() { return messages; }
@@ -763,6 +771,8 @@ public final class AbyssService {
         obstacles.initInstance(instance);
         // 交互点注册
         interacts.initInstance(instance);
+        // 机关解谜状态初始化
+        if (puzzleManager != null) puzzleManager.initInstance(instance);
         // 定时任务
         instanceTasks.initInstance(instance);
         // NPC
@@ -1209,6 +1219,10 @@ public final class AbyssService {
         void openParty(Player player);
         /** 组队大厅（无队伍时 /party 的入口）。 */
         void openLobby(Player player);
+        /** 机关输入面板（puzzles.yml input 型；UI 缺席时静默）。 */
+        void openPuzzleInput(Player player, AbyssInstance instance,
+                             xuanmo.arcartxsuite.abyss.template.PuzzleConfig.Puzzle puzzle,
+                             int attemptsLeft);
         /** 队伍数据变更后向全队推送房间 UI 更新（成员/消息流/副本/设置）。 */
         void pushPartyUpdate(Party party);
         void openStats(Player player, AbyssInstance instance);
@@ -1272,6 +1286,7 @@ public final class AbyssService {
         if (roomManager != null) roomManager.cleanup(instance);
         obstacles.cleanup(instance);
         interacts.cleanup(instance);
+        if (puzzleManager != null) puzzleManager.cleanup(instance);
         instanceTasks.cleanup(instance);
         npcs.cleanup(instance);
         worldIndex.remove(instance.getWorld() != null ? instance.getWorld().getName() : "");
@@ -1535,6 +1550,48 @@ public final class AbyssService {
         @Override
         public void setVar(AbyssInstance instance, String key, Object value) {
             instance.getVariables().put(key, value);
+        }
+    }
+
+    /** PuzzleManager 回调实现：脚本/事件/输入面板桥接。 */
+    private final class PuzzleCallbackImpl
+        implements xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager.Callback {
+
+        @Override
+        public void runScript(AbyssInstance instance, List<String> lines,
+                              String puzzleId, @Nullable Player trigger) {
+            if (!lines.isEmpty()) {
+                AbyssService.this.runScript(instance, lines,
+                    ScriptContext.withVars(instance, trigger,
+                        Map.of("puzzle", puzzleId)));
+            }
+        }
+
+        @Override
+        public void openInputUi(Player player, AbyssInstance instance,
+                                xuanmo.arcartxsuite.abyss.template.PuzzleConfig.Puzzle puzzle,
+                                int attemptsLeft) {
+            if (uiFacade != null) {
+                uiFacade.openPuzzleInput(player, instance, puzzle, attemptsLeft);
+            } else {
+                player.sendMessage(AbyssService.this.msg("puzzle.ui-unavailable"));
+            }
+        }
+
+        @Override
+        public void publishEvent(String topic, @Nullable Player player,
+                                 Map<String, Object> data) {
+            AbyssService.this.publishEvent(topic, player, data);
+        }
+
+        @Override
+        public void broadcast(AbyssInstance instance, String message) {
+            AbyssService.this.broadcast(instance, message);
+        }
+
+        @Override
+        public void msg(Player player, String message) {
+            player.sendMessage(message);
         }
     }
 }

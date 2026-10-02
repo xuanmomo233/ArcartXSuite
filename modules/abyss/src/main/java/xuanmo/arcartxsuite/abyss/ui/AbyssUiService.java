@@ -69,6 +69,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String statsUi() { return axsUiId(service.config().ui().statsId()); }
     private String leaderboardUi() { return axsUiId(service.config().ui().leaderboardId()); }
     private String hudUi() { return axsUiId(service.config().ui().hudId()); }
+    private String inputUi() { return axsUiId(service.config().ui().inputId()); }
 
     private String token(Player p) {
         String t = Long.toHexString(random.nextLong());
@@ -186,6 +187,31 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         putLobbyData(payload, player, "", "");
         packetBridge.sendPacket(player, lobbyUi(), "init", payload);
         packetBridge.openUiUnsafe(player, lobbyUi());
+    }
+
+    /**
+     * 机关输入面板：puzzles.yml input 型。
+     * 答案永不下发；init 只带元数据（标题/提示/长度/正则/掩码/剩余次数）。
+     * 客户端提交 → {@code input_submit <puzzleId> <answer> <token>} 回包。
+     */
+    @Override
+    public void openPuzzleInput(Player player, AbyssInstance instance,
+                                xuanmo.arcartxsuite.abyss.template.PuzzleConfig.Puzzle puzzle,
+                                int attemptsLeft) {
+        if (!available()) return;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        payload.put("action_token", token(player));
+        payload.put("puzzleId", puzzle.id());
+        payload.put("title", puzzle.title() != null ? puzzle.title() : puzzle.name());
+        payload.put("hint", puzzle.hint() != null ? puzzle.hint() : "");
+        payload.put("length", puzzle.length() > 0 ? puzzle.length() : 16);
+        payload.put("pattern", puzzle.inputPattern() != null ? puzzle.inputPattern() : "");
+        payload.put("masked", puzzle.masked() ? "1" : "0");
+        payload.put("attemptsText", attemptsLeft < 0 ? ""
+            : service.msg("puzzle.attempts-left", "left", String.valueOf(attemptsLeft)));
+        packetBridge.sendPacket(player, inputUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, inputUi());
     }
 
     /** 组装大厅列表数据（供 init / lobby_list 推送复用）。 */
@@ -840,6 +866,21 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             case "open_stats" -> {
                 if (checkToken(player, data, 1)) {
                     openStats(player, service.instances().getInstance(player));
+                }
+                return true;
+            }
+            case "input_submit" -> {
+                // input_submit <puzzleId> <answer> <token>
+                if (checkToken(player, data, 3)) {
+                    String puzzleId = data.size() > 1 ? data.get(1) : null;
+                    String answer = data.size() > 2 ? data.get(2) : "";
+                    if (puzzleId != null && service.puzzles() != null) {
+                        // 校验玩家确实在副本实例内（防伪造/跨实例提交）
+                        AbyssInstance inst = service.instances().getInstance(player);
+                        if (inst != null && !inst.isFinished()) {
+                            service.puzzles().submitInput(inst, player, puzzleId, answer);
+                        }
+                    }
                 }
                 return true;
             }
