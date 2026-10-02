@@ -46,6 +46,7 @@ public final class AbyssInteractListener implements Listener {
             return;
         }
         if (instance.getStatus() != AbyssStatus.ACTIVE) return;
+        if (service.isDesignInstance(instance)) return; // 设计实例交互交给 DesignListener
         if (event.getClickedBlock() == null) return;
         InteractType type = switch (event.getAction()) {
             case RIGHT_CLICK_BLOCK -> InteractType.RIGHT_CLICK_BLOCK;
@@ -63,6 +64,8 @@ public final class AbyssInteractListener implements Listener {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.getStatus() != AbyssStatus.ACTIVE) return;
+        // 设计实例：创造编辑放行（限制配置只管游玩副本）
+        if (service.isDesignInstance(instance)) return;
         // 限制配置：禁止破坏方块
         if (service.config().restrictions().blockBreak()) {
             event.setCancelled(true);
@@ -77,6 +80,7 @@ public final class AbyssInteractListener implements Listener {
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.getStatus() != AbyssStatus.ACTIVE) return;
+        if (service.isDesignInstance(instance)) return;
         if (service.config().restrictions().blockPlace()) {
             event.setCancelled(true);
             return;

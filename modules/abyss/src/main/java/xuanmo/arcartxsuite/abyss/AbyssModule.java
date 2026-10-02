@@ -139,6 +139,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerModuleUi("ui/abyss_hud.yml", axsUiId(ui.hudId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_input.yml", axsUiId(ui.inputId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_buff.yml", axsUiId(ui.buffId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_design.yml", axsUiId(ui.designId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_design_pick.yml", axsUiId(ui.designPickId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_design_edit.yml", axsUiId(ui.designEditId()), ui.registerOnEnable());
     }
 
     /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */
@@ -286,6 +289,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         mappings.put("arcartx/ui/abyss_hud.yml", "ui/abyss_hud.yml");
         mappings.put("arcartx/ui/abyss_input.yml", "ui/abyss_input.yml");
         mappings.put("arcartx/ui/abyss_buff.yml", "ui/abyss_buff.yml");
+        mappings.put("arcartx/ui/abyss_design.yml", "ui/abyss_design.yml");
+        mappings.put("arcartx/ui/abyss_design_pick.yml", "ui/abyss_design_pick.yml");
+        mappings.put("arcartx/ui/abyss_design_edit.yml", "ui/abyss_design_edit.yml");
         boolean overwrite = configuration != null
             && configuration.ui() != null && configuration.ui().overwriteUiFiles();
         return new xuanmo.arcartxsuite.api.ModuleUiSpec(mappings, overwrite);

@@ -30,7 +30,8 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
  * 所有回包带 action_token 校验（防伪造）。
  */
 public final class AbyssUiService implements AbyssService.UiServiceFacade,
-    AbyssService.ChestUiHandler {
+    AbyssService.ChestUiHandler,
+    xuanmo.arcartxsuite.abyss.design.DesignManager.Ui {
 
     public static final String CHANNEL = "abyss";
 
@@ -71,6 +72,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String hudUi() { return axsUiId(service.config().ui().hudId()); }
     private String inputUi() { return axsUiId(service.config().ui().inputId()); }
     private String buffUi() { return axsUiId(service.config().ui().buffId()); }
+    private String designUi() { return axsUiId(service.config().ui().designId()); }
+    private String designPickUi() { return axsUiId(service.config().ui().designPickId()); }
+    private String designEditUi() { return axsUiId(service.config().ui().designEditId()); }
 
     private String token(Player p) {
         String t = Long.toHexString(random.nextLong());
@@ -550,6 +554,201 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         packetBridge.openUiUnsafe(player, chestUi());
     }
 
+    // ═══ 设计模式 ═══
+
+    /** 主面板：流程节点链 + 当前节点对象列表 + 未保存角标。 */
+    public void openDesignMain(Player player,
+                               xuanmo.arcartxsuite.abyss.design.DesignSession s) {
+        if (!available()) return;
+        Map<String, Object> payload = designMainPayload(player, s, true);
+        packetBridge.sendPacket(player, designUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, designUi());
+    }
+
+    /** 主面板数据刷新（节点切换/对象变动后推 update）。 */
+    public void pushDesignMain(Player player,
+                               xuanmo.arcartxsuite.abyss.design.DesignSession s) {
+        if (!available()) return;
+        packetBridge.sendPacket(player, designUi(), "update",
+            designMainPayload(player, s, false));
+    }
+
+    private Map<String, Object> designMainPayload(Player player,
+            xuanmo.arcartxsuite.abyss.design.DesignSession s, boolean includeToken) {
+        var dm = service.designManager();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        if (includeToken) payload.put("action_token", token(player));
+        payload.put("dungeonName", s.instance().getTemplate().name());
+        payload.put("dungeonId", s.instance().getTemplate().id());
+        payload.put("dirty", s.dirtyCount());
+        payload.put("selNode", s.selectedNode() != null ? s.selectedNode() : "");
+        // 节点链
+        Map<String, Object> nodes = new LinkedHashMap<>();
+        List<xuanmo.arcartxsuite.abyss.design.DesignManager.Node> nodeList =
+            dm != null ? dm.buildNodes(s) : List.of();
+        int ni = 0;
+        for (var n : nodeList) {
+            nodes.put(Integer.toString(ni++), Map.of(
+                "key", n.key(), "label", n.label(),
+                "depth", n.depth(), "count", n.objectCount()));
+        }
+        payload.put("nodeRows", nodes);
+        payload.put("nodeCount", ni);
+        // 当前节点对象行
+        Map<String, Object> objs = new LinkedHashMap<>();
+        String sel = s.selectedNode();
+        int oi = 0;
+        if (sel != null && dm != null) {
+            for (var o : s.nodeObjects(sel)) {
+                objs.put(Integer.toString(oi++), Map.of(
+                    "key", o.key(), "icon", o.kind().icon(),
+                    "id", o.id(), "summary", o.summary(),
+                    "dirty", o.dirty()));
+            }
+        }
+        payload.put("objRows", objs);
+        payload.put("objCount", oi);
+        return payload;
+    }
+
+    /** 副面板：节点内添加对象——类型卡片挑选。 */
+    public void openDesignPick(Player player,
+                               xuanmo.arcartxsuite.abyss.design.DesignSession s,
+                               String nodeKey) {
+        if (!available()) return;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        payload.put("action_token", token(player));
+        payload.put("nodeKey", nodeKey);
+        Map<String, Object> kinds = new LinkedHashMap<>();
+        int i = 0;
+        for (var kind : xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.values()) {
+            // 房间/房内怪组不在挑选列表（房间由 floors.yml 结构决定，不在此处新建）
+            if (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM
+                || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM_GROUP) continue;
+            String mark = kind.pointMarkable() ? "point"
+                : (kind.regionMarkable() ? "region" : "none");
+            kinds.put(Integer.toString(i++), Map.of(
+                "kind", kind.name().toLowerCase(), "icon", kind.icon(),
+                "label", kind.label(), "mark", mark));
+        }
+        payload.put("kindRows", kinds);
+        payload.put("kindCount", i);
+        packetBridge.sendPacket(player, designPickUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, designPickUi());
+    }
+
+    /** 编辑面板：字段表单 + 脚本行组。 */
+    public void openDesignEdit(Player player,
+                               xuanmo.arcartxsuite.abyss.design.DesignSession s,
+                               String objKey) {
+        if (!available()) return;
+        var dm = service.designManager();
+        var obj = s.get(objKey);
+        if (dm == null || obj == null) return;
+        Map<String, Object> payload = designEditPayload(dm, s, obj, true, player);
+        packetBridge.sendPacket(player, designEditUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, designEditUi());
+    }
+
+    /** 编辑面板数据刷新。 */
+    public void pushDesignEdit(Player player,
+                               xuanmo.arcartxsuite.abyss.design.DesignSession s,
+                               String objKey) {
+        if (!available()) return;
+        var dm = service.designManager();
+        var obj = s.get(objKey);
+        if (dm == null || obj == null) return;
+        packetBridge.sendPacket(player, designEditUi(), "update",
+            designEditPayload(dm, s, obj, false, player));
+    }
+
+    private Map<String, Object> designEditPayload(
+            xuanmo.arcartxsuite.abyss.design.DesignManager dm,
+            xuanmo.arcartxsuite.abyss.design.DesignSession s,
+            xuanmo.arcartxsuite.abyss.design.DesignObject obj,
+            boolean includeToken, Player player) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        if (includeToken) payload.put("action_token", token(player));
+        payload.put("objKey", obj.key());
+        payload.put("objId", obj.id());
+        payload.put("kindLabel", obj.kind().label());
+        payload.put("kindIcon", obj.kind().icon());
+        payload.put("summary", obj.summary());
+        payload.put("dirty", obj.dirty());
+        payload.put("markable", obj.kind().pointMarkable() || obj.kind().regionMarkable());
+        // 单值字段行
+        Map<String, Object> fields = new LinkedHashMap<>();
+        List<String> rows = dm.fieldRows(obj);
+        for (int i = 0; i < rows.size(); i++) {
+            String[] v = rows.get(i).split("\\|", -1);
+            if (v.length < 5) continue;
+            fields.put(Integer.toString(i), Map.of(
+                "name", v[0], "editor", v[1], "label", v[2],
+                "value", v[3], "options", v[4]));
+        }
+        payload.put("fieldRows", fields);
+        payload.put("fieldCount", rows.size());
+        // 脚本/列表字段组
+        Map<String, Object> groups = new LinkedHashMap<>();
+        List<String> groupRows = dm.scriptGroupRows(obj);
+        int gi = 0;
+        for (String g : groupRows) {
+            String[] v = g.split("\\|", -1);
+            if (v.length < 2) continue;
+            String field = v[0];
+            List<String> lines = obj.strList(field);
+            Map<String, Object> lineMap = new LinkedHashMap<>();
+            for (int li = 0; li < lines.size(); li++) {
+                lineMap.put(Integer.toString(li), lines.get(li));
+            }
+            groups.put(Integer.toString(gi++), Map.of(
+                "field", field, "label", v[1],
+                "lines", lineMap, "lineCount", lines.size()));
+        }
+        payload.put("groupRows", groups);
+        payload.put("groupCount", gi);
+        return payload;
+    }
+
+    /** 关全部设计面板（退出设计/实例销毁时）。 */
+    public void closeDesignUis(Player player) {
+        if (!available()) return;
+        packetBridge.closeUiUnsafe(player, designUi());
+        packetBridge.closeUiUnsafe(player, designPickUi());
+        packetBridge.closeUiUnsafe(player, designEditUi());
+    }
+
+    // ── DesignManager.Ui 桥接（设计面板打开/刷新回调）──
+    @Override
+    public void openMain(Player p, xuanmo.arcartxsuite.abyss.design.DesignSession s) {
+        openDesignMain(p, s);
+    }
+
+    @Override
+    public void openEdit(Player p, xuanmo.arcartxsuite.abyss.design.DesignSession s,
+                         String objKey) {
+        openDesignEdit(p, s, objKey);
+    }
+
+    @Override
+    public void openPick(Player p, xuanmo.arcartxsuite.abyss.design.DesignSession s,
+                       String nodeKey) {
+        openDesignPick(p, s, nodeKey);
+    }
+
+    @Override
+    public void refreshMain(Player p, xuanmo.arcartxsuite.abyss.design.DesignSession s) {
+        pushDesignMain(p, s);
+    }
+
+    @Override
+    public void closeAll(Player p) {
+        closeDesignUis(p);
+    }
+
     // ═══ HUD ═══
 
     /** HUD 已确认打开的玩家（仅这些玩家会收到周期推送，避免给未渲染客户端刷屏包）。 */
@@ -958,6 +1157,189 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 }
                 return true;
             }
+            // ═══ 设计模式包（全部要求设计会话 + token）═══
+            case "design_node" -> {
+                // design_node <nodeKey> <token>
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 2)) {
+                    s.selectedNode(data.get(1));
+                    pushDesignMain(player, s);
+                }
+                return true;
+            }
+            case "design_pick_open" -> {
+                // design_pick_open <nodeKey> <token>
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 2)) {
+                    openDesignPick(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_pick" -> {
+                // design_pick <kind> <nodeKey> <token> —— 副面板选类型
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 3)) {
+                    var kind = parseKind(data.get(1));
+                    if (kind != null) {
+                        s.selectedNode(data.get(2));
+                        beginMarkOrCreate(player, s, dm, kind, null);
+                    }
+                }
+                return true;
+            }
+            case "design_edit" -> {
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 2)) {
+                    openDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_back" -> {
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 1)) {
+                    closeUi(player, designEditUi());
+                    openDesignMain(player, s);
+                }
+                return true;
+            }
+            case "design_set" -> {
+                // design_set <objKey> <field> <value> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 4)) {
+                    dm.setField(s, data.get(1), data.get(2), data.get(3));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_cycle" -> {
+                // design_cycle <objKey> <field> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 3)) {
+                    dm.cycleNext(s, data.get(1), data.get(2));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_rename" -> {
+                // design_rename <objKey> <newId> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 3)) {
+                    if (!dm.rename(s, data.get(1), data.get(2))) {
+                        player.sendMessage(service.msg("design.rename-fail"));
+                    }
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_remark" -> {
+                // design_remark <objKey> <field> <token> —— 重新标记位置/区域
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 3)) {
+                    var obj = s.get(data.get(1));
+                    String field = data.get(2);
+                    if (obj != null) {
+                        var kind = "region".equals(field)
+                            ? xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.REGION
+                            : xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.POINT;
+                        s.pending(new xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark(
+                            kind, obj.key(), field, obj.kind()));
+                        closeUi(player, designEditUi());
+                        player.sendMessage(service.msg(kind
+                            == xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.REGION
+                            ? "design.remark-region" : "design.remark-point"));
+                    }
+                }
+                return true;
+            }
+            case "design_del" -> {
+                // design_del <objKey> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 2)) {
+                    dm.delete(s, data.get(1));
+                    closeUi(player, designEditUi());
+                    player.sendMessage(service.msg("design.deleted"));
+                    openDesignMain(player, s);
+                }
+                return true;
+            }
+            case "design_tp" -> {
+                // design_tp <objKey> <token> —— 传送到对象位置
+                var s = designSession(player);
+                if (s != null && checkToken(player, data, 2)) {
+                    var obj = s.get(data.get(1));
+                    if (obj != null && obj.anchor() != null && s.instance().getWorld() != null) {
+                        int[] a = obj.anchor();
+                        player.teleport(new org.bukkit.Location(s.instance().getWorld(),
+                            a[0] + 0.5, a[1] + 1, a[2] + 0.5));
+                    }
+                }
+                return true;
+            }
+            case "design_line_add" -> {
+                // design_line_add <objKey> <field> <line> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 4)) {
+                    dm.lineAdd(s, data.get(1), data.get(2), data.get(3));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_line_set" -> {
+                // design_line_set <objKey> <field> <idx> <line> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 5)) {
+                    dm.lineSet(s, data.get(1), data.get(2),
+                        parseInt(data.get(3), -1), data.get(4));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_line_del" -> {
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 4)) {
+                    dm.lineDel(s, data.get(1), data.get(2), parseInt(data.get(3), -1));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_line_move" -> {
+                // design_line_move <objKey> <field> <idx> <dir> <token>
+                var s = designSession(player);
+                var dm = service.designManager();
+                if (s != null && dm != null && checkToken(player, data, 5)) {
+                    dm.lineMove(s, data.get(1), data.get(2),
+                        parseInt(data.get(3), -1), parseInt(data.get(4), 0));
+                    pushDesignEdit(player, s, data.get(1));
+                }
+                return true;
+            }
+            case "design_save" -> {
+                // design_save <config|world> <token>
+                if (designSession(player) != null && checkToken(player, data, 2)) {
+                    service.saveDesign(player, "world".equalsIgnoreCase(data.get(1)));
+                }
+                return true;
+            }
+            case "design_exit" -> {
+                if (designSession(player) != null && checkToken(player, data, 1)) {
+                    service.exitDesign(player);
+                }
+                return true;
+            }
+            case "design_cancel" -> {
+                // 关闭全部设计面板（设计会话保持）
+                closeDesignUis(player);
+                return true;
+            }
             default -> {
                 logger.fine("[abyss] 未识别的客户端包动作: " + action);
                 return false;
@@ -1055,5 +1437,66 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private static @Nullable UUID parseUuid(@Nullable String s) {
         if (s == null) return null;
         try { return UUID.fromString(s); } catch (Exception e) { return null; }
+    }
+
+    // ── 设计模式 helper ──
+
+    private @Nullable xuanmo.arcartxsuite.abyss.design.DesignSession designSession(Player p) {
+        var dm = service.designManager();
+        return dm != null ? dm.session(p) : null;
+    }
+
+    private static xuanmo.arcartxsuite.abyss.design.DesignObject.Kind parseKind(String s) {
+        try {
+            return xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.valueOf(s.toUpperCase());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void closeUi(Player p, String uiId) {
+        if (available()) packetBridge.closeUiUnsafe(p, uiId);
+    }
+
+    /**
+     * 副面板选类型后：point/region 类进待标记态（关面板走标记杖）；
+     * 无定位类（task/reward/puzzle/buff）直接建对象并开编辑。
+     */
+    private void beginMarkOrCreate(Player p,
+            xuanmo.arcartxsuite.abyss.design.DesignSession s,
+            xuanmo.arcartxsuite.abyss.design.DesignManager dm,
+            xuanmo.arcartxsuite.abyss.design.DesignObject.Kind kind,
+            @Nullable String nodeKey) {
+        closeDesignUis(p);
+        if (kind.pointMarkable()) {
+            // 怪组/房内怪组：标记点直接落成 monsters 结构化刷怪项
+            String field = (kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.GROUP
+                || kind == xuanmo.arcartxsuite.abyss.design.DesignObject.Kind.ROOM_GROUP)
+                ? "monsters" : "location";
+            s.pending(new xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark(
+                xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.POINT,
+                null, field, kind));
+            p.sendMessage(service.msg("design.mark-point", "kind", kind.label()));
+            return;
+        }
+        if (kind.regionMarkable()) {
+            s.pending(new xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark(
+                xuanmo.arcartxsuite.abyss.design.DesignSession.PendingMark.Kind.REGION,
+                null, "region", kind));
+            p.sendMessage(service.msg("design.mark-region", "kind", kind.label()));
+            return;
+        }
+        // 无定位对象：直接建
+        String id = kind.name().toLowerCase() + "_" + (s.objects().size() + 1);
+        Map<String, Object> vals = new LinkedHashMap<>();
+        xuanmo.arcartxsuite.abyss.design.DesignManager.seedDefaults(kind, vals);
+        String key = s.uniqueKey(kind, id);
+        var obj = new xuanmo.arcartxsuite.abyss.design.DesignObject(
+            key, kind, id, kind.file(), kind.path(), kind.label(),
+            null, null,
+            s.selectedNode() != null ? s.selectedNode() : "misc:global",
+            vals, true);
+        s.put(obj);
+        openDesignEdit(p, s, key);
     }
 }

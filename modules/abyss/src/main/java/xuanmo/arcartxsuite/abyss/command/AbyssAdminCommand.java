@@ -24,7 +24,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private static final List<String> ACTIONS = List.of(
         "help", "status", "reload", "list", "info", "enter", "leave",
         "force_complete", "force_fail", "cancel", "stamina", "cooldown", "tp",
-        "puzzle");
+        "puzzle", "design");
 
     private final AbyssService service;
     private final java.util.logging.Logger logger;
@@ -65,6 +65,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "cooldown" -> cmdCooldown(sender, args);
                 case "tp" -> cmdTp(sender, args);
                 case "puzzle" -> cmdPuzzle(sender, args);
+                case "design" -> cmdDesign(sender, args);
                 default -> sender.sendMessage(service.msg("usage.admin-unknown", "label", label));
             }
         } catch (Exception e) {
@@ -82,7 +83,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         String action = args[1].toLowerCase(Locale.ROOT);
         if (args.length == 3) {
             return switch (action) {
-                case "info", "enter", "cancel", "tp" ->
+                case "info", "enter", "cancel", "tp", "design" ->
                     filter(service.instances().getAllTemplates().stream()
                         .map(xuanmo.arcartxsuite.abyss.template.AbyssTemplate::id).toList(), args[2]);
                 case "leave", "stamina", "cooldown" -> null; // 玩家名
@@ -109,7 +110,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage(service.msg("admin-help.title"));
         for (String k : List.of("status", "list", "info", "enter", "leave", "force",
-                "cancel", "stamina", "cooldown", "tp", "reload")) {
+                "cancel", "stamina", "cooldown", "tp", "reload", "design")) {
             sender.sendMessage(service.msg("admin-help." + k, "label", label));
         }
     }
@@ -395,6 +396,36 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                     "state", pm.isLocked(inst, puzzleId) ? "LOCKED"
                         : pm.isDone(inst, puzzleId) ? "DONE" : String.valueOf(prog),
                     "steps", String.valueOf(puzzle.steps().size())));
+            }
+        }
+    }
+
+    /**
+     * 设计模式：/axs abyss design &lt;地牢id&gt; [玩家] —— 进可写副本实例，
+     * 冻结玩法，标记杖+AX 面板编辑配置，保存回写 YAML。
+     * /axs abyss design save|exit —— 会话内快捷命令（等价面板按钮）。
+     */
+    private void cmdDesign(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage(service.msg("admin-action.only-player"));
+            return;
+        }
+        String sub = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "";
+        switch (sub) {
+            case "save" -> service.saveDesign(p, args.length >= 4
+                && "world".equalsIgnoreCase(args[3]));
+            case "exit" -> service.exitDesign(p);
+            default -> {
+                // design <地牢id>：进入设计模式
+                if (sub.isEmpty()) {
+                    sender.sendMessage(service.msg("usage.admin-design"));
+                    return;
+                }
+                var r = service.enterDesign(p, sub);
+                if (!r.ok()) {
+                    sender.sendMessage(service.msg("admin-action.enter-failed",
+                        "reason", r.reason() != null ? r.reason() : "?"));
+                }
             }
         }
     }

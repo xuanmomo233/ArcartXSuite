@@ -76,6 +76,16 @@ public final class AbyssWorldPool {
         return new File(Bukkit.getWorldContainer(), worldName);
     }
 
+    /** 实例的世界目录（设计模式世界回写用；未绑定返回 null）。 */
+    public @Nullable File worldDirOf(UUID instanceId) {
+        return instanceWorldDirs.get(instanceId);
+    }
+
+    /** 在世界池 IO 线程跑任务（设计模式世界回拷用）。 */
+    public void runIo(Runnable r) {
+        ioExecutor.submit(r);
+    }
+
     /**
      * 申请世界：优先取预热池，否则异步复制 → 主线程加载 + 配置。
      *

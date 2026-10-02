@@ -1,0 +1,505 @@
+# AXS 资源说明
+# 用途: Abyss 设计模式副面板 —— 在当前流程节点内添加对象（类型卡片挑选）
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+#
+# 通讯协议:
+#   服务端 → init: packetId/action_token/nodeKey/kindRows{idx:{kind,icon,label,mark}}/kindCount
+#   客户端 → Packet.send('abyss', 'design_pick', kind, nodeKey, token)
+#     mark=point: 关面板后标记杖右键落点；region: 左键A/右键B；none: 直接创建开编辑
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.nodeKey = packet['nodeKey']
+      var.kindRows = packet['kindRows']
+      var.kindCount = packet['kindCount']
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.nodeKey = ''
+      var.kindRows = {}
+      var.kindCount = 0
+controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;10,8,20,225
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      面板:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 900
+          height: 480
+          normal: ~20,16,34,242
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~90,74,140,255
+      标题:
+        type: Text
+        attribute:
+          point: ~top_center
+          y: -330
+          texts: ~&f添加对象 —— 选择类型
+          fontSize: 44
+          through: true
+      提示:
+        type: Text
+        attribute:
+          point: ~top_center
+          y: -270
+          texts: ~&8点类型后按提示用标记杖标记位置 / 无定位类型直接创建
+          fontSize: 28
+          through: true
+      类型网格:
+        type: HGrid
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 300
+          hSpace: 20
+          vSpace: 20
+          column: 4
+        children:
+          卡0:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 0.round()
+              entry: "var.kindRows['0']"
+              visible: "var.kindCount > 0"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡1:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 1.round()
+              entry: "var.kindRows['1']"
+              visible: "var.kindCount > 1"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡2:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 2.round()
+              entry: "var.kindRows['2']"
+              visible: "var.kindCount > 2"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡3:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 3.round()
+              entry: "var.kindRows['3']"
+              visible: "var.kindCount > 3"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡4:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 4.round()
+              entry: "var.kindRows['4']"
+              visible: "var.kindCount > 4"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡5:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 5.round()
+              entry: "var.kindRows['5']"
+              visible: "var.kindCount > 5"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡6:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 6.round()
+              entry: "var.kindRows['6']"
+              visible: "var.kindCount > 6"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡7:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 7.round()
+              entry: "var.kindRows['7']"
+              visible: "var.kindCount > 7"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡8:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 8.round()
+              entry: "var.kindRows['8']"
+              visible: "var.kindCount > 8"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡9:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 9.round()
+              entry: "var.kindRows['9']"
+              visible: "var.kindCount > 9"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+          卡10:
+            type: Canvas
+            attribute:
+              width: 185
+              height: 120
+              entryKey: 10.round()
+              entry: "var.kindRows['10']"
+              visible: "var.kindCount > 10"
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_pick', self.entry['kind'], var.nodeKey, var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,38,70,230
+                  hover: ~70,56,105,245
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              图标:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  texts: "'&d' + self.parent.entry['icon']"
+                  fontSize: 44
+                  through: true
+              名:
+                type: Text
+                attribute:
+                  point: ~bottom_center
+                  y: -18
+                  texts: "'&f' + self.parent.entry['label']"
+                  fontSize: 30
+                  through: true
+      取消钮:
+        type: Canvas
+        attribute:
+          point: ~bottom_center
+          y: -320
+          width: 160
+          height: 50
+        action:
+          clickLeft: "Screen.close()"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~90,84,110,230
+              hover: ~115,108,135,245
+              shape: ~round_rect
+              radius: 10
+              through: true
+          字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: ~取消
+              fontSize: 30
+              through: true

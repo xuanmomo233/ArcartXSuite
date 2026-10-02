@@ -142,6 +142,8 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager puzzleManager;
     private xuanmo.arcartxsuite.abyss.guide.GuideService guideService;
     private xuanmo.arcartxsuite.abyss.buff.BuffManager buffManager;
+    private xuanmo.arcartxsuite.abyss.design.DesignManager designManager;
+    private xuanmo.arcartxsuite.abyss.design.DesignListener designListener;
     private xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge;
     private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
@@ -337,6 +339,15 @@ public final class AbyssService {
             plugin, scheduler, logger);
         buffManager.setCallback(new BuffCallbackImpl());
 
+        // 8.11) 设计模式（在实例内可视化编辑地牢配置）
+        designManager = new xuanmo.arcartxsuite.abyss.design.DesignManager(
+            logger, (p, m) -> p.sendMessage(m));
+        designManager.setMsgResolver((key, kv) -> msg(key, kv));
+        designManager.setUi(ui);
+        designListener = new xuanmo.arcartxsuite.abyss.design.DesignListener(
+            plugin, designManager);
+        org.bukkit.Bukkit.getPluginManager().registerEvents(designListener, plugin);
+
         // 9) 管理命令
         adminCommand = new AbyssAdminCommand(this, logger);
 
@@ -372,6 +383,10 @@ public final class AbyssService {
             for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
                 try { destroyInstance(i, true); } catch (Throwable ignored) { }
             }
+        }
+        if (designListener != null) {
+            org.bukkit.event.HandlerList.unregisterAll(designListener);
+            designListener = null;
         }
         if (mobGroups != null) mobGroups.shutdown();
         if (roomManager != null) roomManager.shutdown();
@@ -659,6 +674,154 @@ public final class AbyssService {
                 return null;
             });
         return EnterResult.success();
+    }
+
+    // ═══ 设计模式 ═══
+
+    public @Nullable xuanmo.arcartxsuite.abyss.design.DesignManager designManager() {
+        return designManager;
+    }
+
+    public @Nullable xuanmo.arcartxsuite.abyss.design.DesignListener designListener() {
+        return designListener;
+    }
+
+    /** 是否为设计实例（冻结玩法、编辑配置用）。 */
+    public boolean isDesignInstance(AbyssInstance instance) {
+        return designManager != null && designManager.isDesign(instance);
+    }
+
+    /**
+     * 进入设计模式：建冻结实例（不跑 prepare/startInstance——怪组/任务/机关/
+     * 障碍/interact 全不初始化）→ 世界就绪后传送 + 创造模式 + 发标记杖 + 开主面板。
+     * <p>
+     * 仅 floors-region 与 classic 支持；floors-pool 因房间随机拼接无法在实例内设计。
+     */
+    public EnterResult enterDesign(Player player, String templateId) {
+        if (!started || designManager == null) {
+            return EnterResult.fail("服务未就绪");
+        }
+        AbyssTemplate template = instances.getTemplate(templateId);
+        if (template == null) {
+            return EnterResult.fail(msg("error.dungeon-not-found", "dungeon", templateId));
+        }
+        if (instances.getInstance(player) != null || designManager.session(player) != null) {
+            return EnterResult.fail(msg("error.already-in-dungeon"));
+        }
+        if (template.mode() == AbyssTemplate.Mode.FLOORS) {
+            boolean hasPool = template.floors().floors().stream()
+                .anyMatch(f -> f.source() == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.POOL);
+            if (hasPool) {
+                return EnterResult.fail(msg("design.pool-unsupported"));
+            }
+        }
+        AbyssInstance instance = instances.createInstance(template, null);
+        instances.playerEnterInstance(player, instance);
+        player.sendMessage(msg("design.preparing"));
+        worldPool.acquireWorld(template, instance.getInstanceId())
+            .thenAccept(world -> runOnMain(() -> onDesignWorldReady(instance, world, player)))
+            .exceptionally(t -> {
+                runOnMain(() -> {
+                    player.sendMessage(msg("error.world-load-failed"));
+                    logger.warning("[abyss] 设计实例世界加载失败: " + t.getMessage());
+                    destroyInstance(instance, true);
+                });
+                return null;
+            });
+        return EnterResult.success();
+    }
+
+    private void onDesignWorldReady(AbyssInstance instance, World world, Player player) {
+        if (instance.isFinished() || !player.isOnline()) {
+            worldPool.releaseWorld(instance.getInstanceId());
+            return;
+        }
+        instance.setWorld(world);
+        worldIndex.put(world.getName(), instance.getInstanceId());
+        Location spawn = parseLocation(instance, instance.getTemplate().spawn());
+        if (spawn == null) spawn = world.getSpawnLocation();
+        instance.saveOriginalLocation(player, player.getLocation());
+        instance.savePlayerGameMode(player);
+        if (!teleportWithRetry(player, spawn, 3)) {
+            player.sendMessage(msg("error.enter-failed", "reason", "传送失败"));
+            destroyInstance(instance, true);
+            return;
+        }
+        instance.markEntered(player.getUniqueId());
+        // 直接激活：跳过 prepare/startInstance——玩法系统全冻结
+        instance.transitionTo(AbyssStatus.PREPARING, AbyssStatus.ACTIVE);
+        player.setGameMode(GameMode.CREATIVE);
+        var session = designManager.open(player, instance);
+        // 发标记杖（第一空格）
+        player.getInventory().setItem(0, designListener.wandItem());
+        player.sendMessage(msg("design.entered",
+            "dungeon", instance.getTemplate().name()));
+        if (uiFacade instanceof AbyssUiService ui) {
+            ui.openDesignMain(player, session);
+        }
+    }
+
+    /**
+     * 保存设计：会话快照写回地牢目录 YAML；withWorld 且模板为 FOLDER 源时
+     * 同步把实例世界存盘并回拷模板 world/ 目录。完成后重载模板并刷新会话快照。
+     */
+    public void saveDesign(Player player, boolean withWorld) {
+        var session = designManager != null ? designManager.session(player) : null;
+        if (session == null) {
+            player.sendMessage(msg("design.no-session"));
+            return;
+        }
+        AbyssInstance instance = session.instance();
+        AbyssTemplate template = instance.getTemplate();
+        if (withWorld) {
+            if (template.worldSource().kind() != AbyssTemplate.WorldSource.Kind.FOLDER) {
+                player.sendMessage(msg("design.world-unsupported"));
+            } else {
+                World w = instance.getWorld();
+                File srcDir = worldPool != null ? worldPool.worldDirOf(instance.getInstanceId()) : null;
+                File dstDir = template.worldSource().file();
+                if (w != null && srcDir != null && dstDir != null) {
+                    try {
+                        w.save(); // 同步落盘区块
+                    } catch (Throwable t) {
+                        logger.warning("[abyss] 设计世界保存失败: " + t.getMessage());
+                    }
+                    // 目录回拷走世界池 IO 线程
+                    final File src = srcDir, dst = dstDir;
+                    worldPool.runIo(() -> {
+                        try {
+                            xuanmo.arcartxsuite.abyss.world.WorldCopyUtil.copyWorldFolder(src, dst);
+                        } catch (Throwable t) {
+                            logger.warning("[abyss] 设计世界回写失败: " + t.getMessage());
+                        }
+                    });
+                }
+            }
+        }
+        var result = xuanmo.arcartxsuite.abyss.design.DesignWriter.save(template, session, logger);
+        reloadTemplates();
+        // 保存后刷新会话快照（对象表重建、dirty 清零）
+        designManager.refresh(session);
+        player.sendMessage(msg(result.ok() ? "design.saved" : "design.saved-partial",
+            "count", String.valueOf(result.objects()),
+            "del", String.valueOf(result.deletions()),
+            "errors", String.valueOf(result.errors().size())));
+    }
+
+    /** 退出设计模式：收杖 → 撤出 → 销毁实例（未保存改动丢失）。 */
+    public void exitDesign(Player player) {
+        var session = designManager != null ? designManager.session(player) : null;
+        if (session == null) return;
+        AbyssInstance instance = session.instance();
+        designManager.close(player);
+        designListener.removeWand(player);
+        if (uiFacade instanceof AbyssUiService ui) {
+            ui.closeAll(player);
+        }
+        // 传回原位 + 恢复模式 + 销毁实例
+        playerExit(instance, player, LeaveReason.END);
+        cancelDungeon(instance);
+        player.sendMessage(msg("design.exited"));
     }
 
     // ═══ 世界入口点 ═══
@@ -951,6 +1114,11 @@ public final class AbyssService {
         if (guideService != null) {
             try { guideService.clearPlayer(player, instance); } catch (Throwable ignored) { }
         }
+        // 设计会话清理：收杖 + 关会话
+        if (designManager != null && designManager.session(player) != null) {
+            designManager.close(player);
+            if (designListener != null) designListener.removeWand(player);
+        }
         if (uiFacade instanceof AbyssUiService ui) {
             ui.closeHud(player);
             ui.flushPendingChest(player);
@@ -981,6 +1149,7 @@ public final class AbyssService {
             ui0.onPlayerGone(player);
         }
         if (guideService != null) guideService.handleQuit(player);
+        if (designManager != null) designManager.close(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
         // 非正常退出标记（下次进服执行恢复动作）
@@ -1343,6 +1512,7 @@ public final class AbyssService {
         if (puzzleManager != null) puzzleManager.cleanup(instance);
         if (guideService != null) guideService.cleanup(instance);
         if (buffManager != null) buffManager.cleanup(instance);
+        if (designManager != null) designManager.closeInstance(instance);
         instanceTasks.cleanup(instance);
         npcs.cleanup(instance);
         worldIndex.remove(instance.getWorld() != null ? instance.getWorld().getName() : "");
@@ -1438,6 +1608,8 @@ public final class AbyssService {
     private void watchdog() {
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
+            // 设计实例冻结：不做消失扫描/超时/兜底回收/AFK 踢
+            if (isDesignInstance(i)) continue;
             try {
                 // 消失扫描（怪被刷掉兜底）
                 mobGroups.sweepVanished(i);
@@ -1490,6 +1662,7 @@ public final class AbyssService {
         if (!started) return;
         for (AbyssInstance i : new ArrayList<>(instances.getAllInstances())) {
             if (i.getStatus() != AbyssStatus.ACTIVE) continue;
+            if (isDesignInstance(i)) continue; // 设计实例无障碍/房间/interact 初始化
             try {
                 obstacles.tickProximity(i);
                 if (roomManager != null) roomManager.tick(i);

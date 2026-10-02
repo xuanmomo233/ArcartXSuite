@@ -54,6 +54,7 @@ usage:
   admin-stamina: "{prefix}&e用法: /axs abyss stamina <玩家> give|set <值>"
   admin-stamina-op: "{prefix}&e用法: give|set"
   admin-cooldown: "{prefix}&e用法: /axs abyss cooldown <玩家> clear|check [地牢]"
+  admin-design: "{prefix}&e用法: /axs abyss design <地牢>|save [world]|exit"
   admin-tp: "{prefix}&e用法: /axs abyss tp <地牢>（传送到该地牢运行中实例）"
   admin-unknown: "{prefix}&e未知子命令，输入 /{label} abyss help"
   admin-error: "{prefix}&c[abyss] 执行出错: {error}"
@@ -129,6 +130,30 @@ puzzle:
   prompt-sent: "{prefix}&a已向 {player} 打开机关 {id} 输入面板"
   prompt-denied: "{prefix}&c无法打开 {id}（非输入型/已完成/已锁定/次数耗尽）"
 
+design:
+  preparing: "{prefix}&7正在准备设计实例…"
+  entered: "{prefix}&a已进入设计模式: &f{dungeon} &7| 标记杖已放入背包·面板已打开"
+  exited: "{prefix}&7已退出设计模式"
+  no-session: "{prefix}&c当前不在设计会话中"
+  pool-unsupported: "{prefix}&c该地牢含 pool 随机拼接楼层，暂不支持实例内设计（请编辑房间 schematic）"
+  world-unsupported: "{prefix}&c非 world/ 目录模板，世界改动无法回写（仅配置已保存）"
+  saved: "{prefix}&a设计已保存: &f{count} 项写入 &7(删除 {del}) &a模板已重载"
+  saved-partial: "{prefix}&e设计部分保存: {count} 项写入, {errors} 个文件失败"
+  mark-hint: "{prefix}&7未命中对象——主面板 [+添加对象] 选类型后右键标记"
+  mark-point: "{prefix}&e用标记杖 &f右键目标方块 &e放置「{kind}」（Shift+右键取消）"
+  mark-region: "{prefix}&e选区模式：标记杖 &f左键=A点·右键=B点 &e圈「{kind}」（Shift+右键取消）"
+  region-a: "{prefix}&7已设 A 点，右键落 B 点完成选区"
+  region-empty: "{prefix}&c选区内没有非空气方块"
+  spawn-added: "{prefix}&a已向 &f{id} &a追加刷怪点（mob-id 待编辑）"
+  mark-cancelled: "{prefix}&7已取消标记"
+  marked: "{prefix}&a已标记新对象: &f{id}"
+  relocated: "{prefix}&a对象 &f{id} &a已重新定位"
+  deleted: "{prefix}&7对象已删除"
+  rename-fail: "{prefix}&c重命名失败（id 为空/非法字符/与同类对象重名）"
+  remark-point: "{prefix}&e重新标记：标记杖右键新位置（Shift+右键取消）"
+  remark-region: "{prefix}&e重新选区：左键 A 点·右键 B 点（Shift+右键取消）"
+  wand-given: "{prefix}&e标记杖已放入背包"
+
 plan:
   menu-title: "{prefix}&6{dungeon} &e选择作战方案（点击条目进入）："
   menu-row: "{prefix}&a▶ &f{name} &8[点击进入]"
@@ -199,6 +224,7 @@ admin-help:
   cooldown: "{prefix}&7/{label} abyss cooldown <玩家> clear|check [地牢]&f - 冷却管理"
   tp: "{prefix}&7/{label} abyss tp <地牢>&f - 传送到运行中实例"
   reload: "{prefix}&7/{label} abyss reload&f - 重载地牢模板"
+  design: "{prefix}&7/{label} abyss design <地牢>|save [world]|exit&f - 副本设计模式"
 
 admin-status:
   title: "{prefix}&6Abyss 状态"

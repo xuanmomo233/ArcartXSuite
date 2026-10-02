@@ -1,0 +1,4152 @@
+# AXS 资源说明
+# 用途: Abyss 设计模式对象编辑面板 —— 标量字段编辑 + 脚本/列表行编辑
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+#
+# 通讯协议:
+#   服务端 → init/update: packetId/action_token/objKey/objId/kindLabel/kindIcon/
+#     summary/dirty/fieldRows{idx:{name,editor,label,value,options}}/fieldCount/
+#     groupRows{idx:{field,label,lines{idx},lineCount}}/groupCount
+#   客户端 → Packet.send('abyss', ...):
+#     design_set <objKey> <field> <value> <token>       标量/开关提交
+#     design_cycle <objKey> <field> <token>            CYCLE 下一值
+#     design_remark <objKey> <field> <token>           开始标记(coord/region)
+#     design_rename <objKey> <newId> <token>           重命名
+#     design_line_add <objKey> <field> <text> <token>
+#     design_line_set <objKey> <field> <idx> <text> <token>
+#     design_line_del <objKey> <field> <idx> <token>
+#     design_line_move <objKey> <field> <idx> <dir> <token>
+#     design_back <token>                              返回主面板
+#   行内"改": 点行内容 → 装入该组输入框 + var.editG/var.editI 记编辑态 → 提交走 line_set
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.objKey = packet['objKey']
+      var.objId = packet['objId']
+      var.kindLabel = packet['kindLabel']
+      var.icon = packet['kindIcon']
+      var.summary = packet['summary']
+      var.dirty = packet['dirty']
+      var.fieldRows = packet['fieldRows']
+      var.fieldCount = packet['fieldCount']
+      var.groupRows = packet['groupRows']
+      var.groupCount = packet['groupCount']
+      var.editG = -1
+      var.editI = -1
+      for(i in range(0, 12)){
+        if(var.fieldRows['' + i] != none){
+          e = var.fieldRows['' + i]
+          if(e['editor'] == 'TEXT' || e['editor'] == 'NUMBER'){
+            val.字段列.get(i)['输入壳']['输入框'].setContent(e['value'])
+          }
+        }
+      }
+    update: |-
+      var.objId = packet['objId']
+      var.summary = packet['summary']
+      var.dirty = packet['dirty']
+      var.fieldRows = packet['fieldRows']
+      var.fieldCount = packet['fieldCount']
+      var.groupRows = packet['groupRows']
+      var.groupCount = packet['groupCount']
+      var.editG = -1
+      var.editI = -1
+      for(i in range(0, 12)){
+        if(var.fieldRows['' + i] != none){
+          e = var.fieldRows['' + i]
+          if(e['editor'] == 'TEXT' || e['editor'] == 'NUMBER'){
+            val.字段列.get(i)['输入壳']['输入框'].setContent(e['value'])
+          }
+        }
+      }
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.objKey = ''
+      var.objId = ''
+      var.kindLabel = ''
+      var.icon = ''
+      var.summary = ''
+      var.dirty = false
+      var.fieldRows = {}
+      var.fieldCount = 0
+      var.groupRows = {}
+      var.groupCount = 0
+      var.editG = -1
+      var.editI = -1
+    open: |-
+      Sound.self('minecraft:block.note_block.pling', 0.8, 8)
+controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;10,8,20,232
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1440
+          height: 820
+          normal: ~20,16,34,242
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~90,74,140,255
+      标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 148
+          texts: "'&d' + var.icon + ' &f' + var.kindLabel + ' &7· &f' + var.objId"
+          fontSize: 42
+          through: true
+      摘要:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 200
+          texts: "'&8' + var.summary"
+          fontSize: 26
+          through: true
+      未保存标:
+        type: Text
+        attribute:
+          point: ~top_right
+          x: -270
+          y: 152
+          texts: ~&e● 未保存
+          fontSize: 30
+          visible: var.dirty
+          through: true
+      改名标签:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 252
+          texts: ~&8ID
+          fontSize: 28
+          through: true
+      改名框:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 320
+          y: 242
+          width: 360
+          height: 44
+        children:
+          框底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~36,30,56,235
+              shape: ~round_rect
+              radius: 8
+          输入框:
+            type: TextBox
+            attribute:
+              x: 10
+              y: 5
+              width: 340
+              height: 34
+              length: 48
+              emptyText: ~&8新 id（回车应用）
+              fontSize: 28
+            action:
+              enter: "Packet.send(var.packetId, 'design_rename', var.objKey, self.getContent(), var.actionToken)"
+      分隔线:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 300
+          width: 1380
+          height: 2
+          normal: ~70,60,105,255
+          through: true
+      字段标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 320
+          texts: ~&8属性字段
+          fontSize: 28
+          through: true
+      字段滚动滑块:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: 1450
+          y: 358
+          width: 14
+          height: 60
+          normal: ~120,100,170,255
+          shape: ~round_rect
+          radius: 7
+          maxDragY: 430
+      字段滚动:
+        type: Scroll
+        attribute:
+          point: ~top_left
+          x: 270
+          y: 358
+          width: 1170
+          height: 480
+          moveY: "self.parent['字段滚动滑块'].getDragYRatio()"
+        children:
+          字段列:
+            val: "字段列"
+            type: VStack
+            attribute:
+              width: 1150
+              spaceBetween: 6
+            children:
+              字段0:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 0.round()
+                  entry: "var.fieldRows['0']"
+                  visible: "var.fieldCount > 0"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段1:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 1.round()
+                  entry: "var.fieldRows['1']"
+                  visible: "var.fieldCount > 1"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段2:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 2.round()
+                  entry: "var.fieldRows['2']"
+                  visible: "var.fieldCount > 2"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段3:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 3.round()
+                  entry: "var.fieldRows['3']"
+                  visible: "var.fieldCount > 3"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段4:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 4.round()
+                  entry: "var.fieldRows['4']"
+                  visible: "var.fieldCount > 4"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段5:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 5.round()
+                  entry: "var.fieldRows['5']"
+                  visible: "var.fieldCount > 5"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段6:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 6.round()
+                  entry: "var.fieldRows['6']"
+                  visible: "var.fieldCount > 6"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段7:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 7.round()
+                  entry: "var.fieldRows['7']"
+                  visible: "var.fieldCount > 7"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段8:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 8.round()
+                  entry: "var.fieldRows['8']"
+                  visible: "var.fieldCount > 8"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段9:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 9.round()
+                  entry: "var.fieldRows['9']"
+                  visible: "var.fieldCount > 9"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段10:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 10.round()
+                  entry: "var.fieldRows['10']"
+                  visible: "var.fieldCount > 10"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+              字段11:
+                type: Canvas
+                attribute:
+                  width: 1150
+                  height: 48
+                  entryKey: 11.round()
+                  entry: "var.fieldRows['11']"
+                  visible: "var.fieldCount > 11"
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~30,24,52,220
+                      shape: ~round_rect
+                      radius: 6
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 14
+                      texts: "'&8' + self.parent.entry['label']"
+                      fontSize: 26
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      width: 640
+                      height: 38
+                      visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 624
+                          height: 30
+                          length: 200
+                          fontSize: 25
+                        action:
+                          enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken)"
+                  值显示:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 240
+                      texts: "'&f' + self.parent.entry['value']"
+                      fontSize: 26
+                      limit: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                      through: true
+                  操作钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -16
+                      width: 110
+                      height: 34
+                      visible: "self.parent.entry['editor'] != 'TEXT' && self.parent.entry['editor'] != 'NUMBER'"
+                    action:
+                      clickLeft: |-
+                        e = self.parent.entry
+                        if(e['editor'] == 'COORD' || e['editor'] == 'REGION'){
+                          Packet.send(var.packetId, 'design_remark', var.objKey, e['name'], var.actionToken)
+                          Screen.close()
+                        } else {
+                          if(e['editor'] == 'TOGGLE'){
+                            nv = e['value'] == 'true' ? '0' : '1'
+                            Packet.send(var.packetId, 'design_set', var.objKey, e['name'], nv, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_cycle', var.objKey, e['name'], var.actionToken)
+                          }
+                        }
+                    children:
+                      钮底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~150,110,220,235
+                          hover: ~180,140,235,250
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      钮字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.parent.parent.entry['editor'] == 'TOGGLE' ? '&0切换' : '&0设置'"
+                          fontSize: 24
+                          through: true
+      脚本标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: 1500
+          y: 320
+          texts: ~&8脚本 / 列表
+          fontSize: 28
+          through: true
+      脚本滚动滑块:
+        type: Texture
+        attribute:
+          point: ~top_right
+          x: -250
+          y: 358
+          width: 14
+          height: 60
+          normal: ~120,100,170,255
+          shape: ~round_rect
+          radius: 7
+          maxDragY: 430
+      脚本滚动:
+        type: Scroll
+        attribute:
+          point: ~top_right
+          x: -270
+          y: 358
+          width: 400
+          height: 480
+          moveY: "self.parent['脚本滚动滑块'].getDragYRatio()"
+        children:
+          脚本列:
+            type: VStack
+            attribute:
+              width: 380
+              spaceBetween: 10
+            children:
+              组0:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 0.round()
+                  entry: "var.groupRows['0']"
+                  visible: "var.groupCount > 0"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 0
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 0 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 0
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 0 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 0
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 0 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 0
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 0 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 0 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 0 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 0 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+              组1:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 1.round()
+                  entry: "var.groupRows['1']"
+                  visible: "var.groupCount > 1"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 1
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 1 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 1
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 1 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 1
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 1 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 1
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 1 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 1 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 1 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 1 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+              组2:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 2.round()
+                  entry: "var.groupRows['2']"
+                  visible: "var.groupCount > 2"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 2
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 2 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 2
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 2 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 2
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 2 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 2
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 2 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 2 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 2 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 2 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+              组3:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 3.round()
+                  entry: "var.groupRows['3']"
+                  visible: "var.groupCount > 3"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 3
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 3 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 3
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 3 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 3
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 3 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 3
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 3 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 3 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 3 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 3 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+              组4:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 4.round()
+                  entry: "var.groupRows['4']"
+                  visible: "var.groupCount > 4"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 4
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 4 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 4
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 4 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 4
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 4 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 4
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 4 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 4 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 4 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 4 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+              组5:
+                type: Canvas
+                attribute:
+                  width: 380
+                  height: 320
+                  entryKey: 5.round()
+                  entry: "var.groupRows['5']"
+                  visible: "var.groupCount > 5"
+                children:
+                  组底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~26,20,46,225
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  组名:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 8
+                      texts: "'&d' + self.parent.entry['label'] + ' &8(' + self.parent.entry['lineCount'].round() + ')'"
+                      fontSize: 24
+                      through: true
+                  行0:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 42
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 0"
+                    action:
+                      clickLeft: |-
+                        var.editG = 5
+                        var.editI = 0
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['0'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 5 && var.editI == 0 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['0']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '0', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "0 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '0', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行1:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 80
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 1"
+                    action:
+                      clickLeft: |-
+                        var.editG = 5
+                        var.editI = 1
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['1'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 5 && var.editI == 1 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['1']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "1 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '1', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行2:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 118
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 2"
+                    action:
+                      clickLeft: |-
+                        var.editG = 5
+                        var.editI = 2
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['2'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 5 && var.editI == 2 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['2']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '2', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "2 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '2', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  行3:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 156
+                      width: 356
+                      height: 32
+                      visible: "self.parent.entry['lineCount'] > 3"
+                    action:
+                      clickLeft: |-
+                        var.editG = 5
+                        var.editI = 3
+                        self.parent['输入壳']['输入框'].setContent(self.parent.entry['lines']['3'])
+                    children:
+                      行底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 5 && var.editI == 3 ? '80,60,120,240' : '40,32,62,220'"
+                          shape: ~round_rect
+                          radius: 5
+                          through: true
+                      行文:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 8
+                          texts: "'&7' + self.parent.entry['lines']['3']"
+                          fontSize: 22
+                          limit: 22
+                          through: true
+                      删钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -4
+                          width: 40
+                          height: 24
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.entry['field'], '3', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~140,52,62,230
+                              hover: ~175,68,78,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~删
+                              fontSize: 19
+                              through: true
+                      上钮:
+                        type: Canvas
+                        attribute:
+                          point: ~middle_right
+                          x: -48
+                          width: 40
+                          height: 24
+                          visible: "3 > 0"
+                        action:
+                          clickLeft: "Packet.send(var.packetId, 'design_line_move', var.objKey, self.parent.parent.entry['field'], '3', '-1', var.actionToken)"
+                        children:
+                          底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~52,84,140,230
+                              hover: ~70,110,170,250
+                              shape: ~round_rect
+                              radius: 5
+                              through: true
+                          字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              texts: ~↑
+                              fontSize: 19
+                              through: true
+                  更多提示:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 12
+                      y: 194
+                      texts: "'&8… 共 ' + self.parent.entry['lineCount'].round() + ' 行（仅显前4行）'"
+                      fontSize: 20
+                      visible: "self.parent.entry['lineCount'] > 4"
+                      through: true
+                  输入壳:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_left
+                      x: 12
+                      y: -12
+                      width: 270
+                      height: 36
+                    children:
+                      框底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~44,36,66,240
+                          shape: ~round_rect
+                          radius: 6
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 4
+                          width: 254
+                          height: 28
+                          length: 200
+                          emptyText: ~&8行内容（点上行可改）
+                          fontSize: 22
+                  提交钮:
+                    type: Canvas
+                    attribute:
+                      point: ~bottom_right
+                      x: -12
+                      y: -12
+                      width: 84
+                      height: 36
+                    action:
+                      clickLeft: |-
+                        txt = self.parent['输入壳']['输入框'].getContent()
+                        if(txt != ''){
+                          if(var.editG == 5 && var.editI >= 0){
+                            Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.entry['field'], '' + var.editI, txt, var.actionToken)
+                          } else {
+                            Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.entry['field'], txt, var.actionToken)
+                          }
+                          self.parent['输入壳']['输入框'].setContent('')
+                          var.editG = -1
+                          var.editI = -1
+                        }
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.editG == 5 && var.editI >= 0 ? '200,150,60,240' : '52,120,80,240'"
+                          hover: ~80,150,105,255
+                          shape: ~round_rect
+                          radius: 6
+                          through: true
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "var.editG == 5 && var.editI >= 0 ? '&0改行' : '&f追加'"
+                          fontSize: 22
+                          through: true
+      关闭钮:
+        type: Canvas
+        attribute:
+          point: ~bottom_right
+          x: -270
+          y: -220
+          width: 160
+          height: 52
+        action:
+          clickLeft: "Packet.send(var.packetId, 'design_back', var.actionToken)"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~150,110,220,240
+              hover: ~180,140,235,255
+              shape: ~round_rect
+              radius: 10
+              through: true
+          字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: ~&0返回列表
+              fontSize: 30
+              through: true
+      提示行:
+        type: Text
+        attribute:
+          point: ~bottom_left
+          x: 270
+          y: -224
+          texts: ~&8字段回车提交 · 标记字段点「设置」后到世界里用标记杖操作 · 点脚本行装入输入框改该行
+          fontSize: 24
+          through: true

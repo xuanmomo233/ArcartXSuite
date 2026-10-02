@@ -140,6 +140,14 @@ ui:
   leaderboard-id: "abyss_leaderboard"
   # 副本内 HUD
   hud-id: "abyss_hud"
+  # 增益三选一面板（buffs.yml panel 池）
+  buff-id: "abyss_buff"
+  # 设计模式主面板（流程节点 + 对象列表）
+  design-id: "abyss_design"
+  # 设计模式添加对象副面板
+  design-pick-id: "abyss_design_pick"
+  # 设计模式对象编辑面板
+  design-edit-id: "abyss_design_edit"
 
 recovery:
   # 玩家非正常离开副本（掉线/崩服）后，下次进服执行恢复动作
