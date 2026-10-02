@@ -1,0 +1,543 @@
+# AXS 资源说明
+# 用途: Abyss 增益选择面板 —— buffs.yml panel 池的候选卡片展示与选择
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+#
+# 通讯协议:
+#   服务端 → init: packetId/action_token/poolId/poolName/timeout/count/cards{idx:{id,name,iconJson,rarityColor,desc0..2}}
+#   客户端 → Packet.send('abyss', 'buff_pick', poolId, optionId, actionToken)
+#   超时由服务端兜底（timeout-auto）；客户端倒数仅做展示与到时自动关闭。
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.poolId = packet['poolId']
+      var.poolName = packet['poolName']
+      var.timeout = packet['timeout']
+      var.count = packet['count']
+      var.cards = packet['cards']
+      var.remain = var.timeout
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.poolId = ''
+      var.poolName = ''
+      var.timeout = 0
+      var.count = 0
+      var.cards = {}
+      var.remain = 0
+      var.air = '{"id": "minecraft:air","Count":1b}'
+      var.accent = '186,140,232,255'
+      var.accentDim = '96,80,140,190'
+    open: |-
+      Sound.self('minecraft:block.note_block.pling', 0.8, 10)
+    seconds: |-
+      if(var.timeout > 0 && var.remain > 0) {
+        var.remain = var.remain - 1
+        if(var.remain <= 0) {
+          Screen.close()
+        }
+      }
+controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;14,11,26,225
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      标题标线:
+        type: Texture
+        attribute:
+          point: ~top_center
+          y: 208
+          width: 30
+          height: 4
+          normal: var.accent
+          through: true
+      池名:
+        type: Text
+        attribute:
+          point: ~top_center
+          y: 226
+          texts: "'&f' + var.poolName"
+          fontSize: 60
+          limit: 16
+          through: true
+      副标题:
+        type: Text
+        attribute:
+          point: ~top_center
+          y: 300
+          texts: ~&7选择一项增益，伴随本次副本生效
+          fontSize: 36
+          through: true
+      倒计时文字:
+        type: Text
+        attribute:
+          point: ~top_center
+          y: 348
+          texts: "var.timeout > 0 ? '&8' + var.remain.round() + 's 后自动选择' : ''"
+          fontSize: 32
+          through: true
+      倒计时条背景:
+        type: Texture
+        attribute:
+          point: ~top_center
+          y: 392
+          width: 420
+          height: 6
+          normal: ~40,32,62,220
+          shape: ~round_rect
+          radius: 3
+          visible: "var.timeout > 0"
+          through: true
+      倒计时条:
+        type: Texture
+        attribute:
+          point: ~top_center
+          y: 392
+          width: "var.timeout > 0 ? 420 * var.remain / var.timeout : 0"
+          height: 6
+          normal: var.accent
+          shape: ~round_rect
+          radius: 3
+          visible: "var.timeout > 0"
+          through: true
+      卡片区:
+        type: HStack
+        attribute:
+          point: ~middle_center
+          y: 60
+          spaceBetween: 36
+        children:
+          卡片0:
+            type: Canvas
+            attribute:
+              width: 300
+              height: 400
+              entryKey: 0.round()
+              entry: "var.cards['0']"
+              visible: "var.count > 0"
+            children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:25;26,21,44,242
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.parent.entry['rarityColor']"
+              图标槽:
+                type: Slot
+                attribute:
+                  point: ~top_center
+                  y: 44
+                  width: 64
+                  height: 64
+                  normal: ~0,0,0,0
+                  visible: "self.parent.entry['iconJson'] != ''"
+                  entryKey: 0.round()
+                  seticon: "self.setItemIcon(self.parent.entry['iconJson'])"
+                  through: true
+              增益名:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 128
+                  texts: "self.parent.entry['name']"
+                  fontSize: 46
+                  limit: 8
+                  through: true
+              稀有度文字:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 184
+                  texts: "'&8◆ ' + self.parent.entry['rarity']"
+                  fontSize: 30
+                  through: true
+              描述0:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 234
+                  texts: "'&7' + self.parent.entry['desc0']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述1:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 272
+                  texts: "'&7' + self.parent.entry['desc1']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述2:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 310
+                  texts: "'&7' + self.parent.entry['desc2']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              选择按钮:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -26
+                  width: 180
+                  height: 56
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'buff_pick', var.poolId, self.parent.entry['id'], var.actionToken)
+                    Screen.close()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,235
+                      hover: ~200,150,240,250
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0选 择
+                      fontSize: 36
+                      through: true
+          卡片1:
+            type: Canvas
+            attribute:
+              width: 300
+              height: 400
+              entryKey: 1.round()
+              entry: "var.cards['1']"
+              visible: "var.count > 1"
+            children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:25;26,21,44,242
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.parent.entry['rarityColor']"
+              图标槽:
+                type: Slot
+                attribute:
+                  point: ~top_center
+                  y: 44
+                  width: 64
+                  height: 64
+                  normal: ~0,0,0,0
+                  visible: "self.parent.entry['iconJson'] != ''"
+                  entryKey: 1.round()
+                  seticon: "self.setItemIcon(self.parent.entry['iconJson'])"
+                  through: true
+              增益名:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 128
+                  texts: "self.parent.entry['name']"
+                  fontSize: 46
+                  limit: 8
+                  through: true
+              稀有度文字:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 184
+                  texts: "'&8◆ ' + self.parent.entry['rarity']"
+                  fontSize: 30
+                  through: true
+              描述0:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 234
+                  texts: "'&7' + self.parent.entry['desc0']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述1:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 272
+                  texts: "'&7' + self.parent.entry['desc1']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述2:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 310
+                  texts: "'&7' + self.parent.entry['desc2']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              选择按钮:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -26
+                  width: 180
+                  height: 56
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'buff_pick', var.poolId, self.parent.entry['id'], var.actionToken)
+                    Screen.close()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,235
+                      hover: ~200,150,240,250
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0选 择
+                      fontSize: 36
+                      through: true
+          卡片2:
+            type: Canvas
+            attribute:
+              width: 300
+              height: 400
+              entryKey: 2.round()
+              entry: "var.cards['2']"
+              visible: "var.count > 2"
+            children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:25;26,21,44,242
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.parent.entry['rarityColor']"
+              图标槽:
+                type: Slot
+                attribute:
+                  point: ~top_center
+                  y: 44
+                  width: 64
+                  height: 64
+                  normal: ~0,0,0,0
+                  visible: "self.parent.entry['iconJson'] != ''"
+                  entryKey: 2.round()
+                  seticon: "self.setItemIcon(self.parent.entry['iconJson'])"
+                  through: true
+              增益名:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 128
+                  texts: "self.parent.entry['name']"
+                  fontSize: 46
+                  limit: 8
+                  through: true
+              稀有度文字:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 184
+                  texts: "'&8◆ ' + self.parent.entry['rarity']"
+                  fontSize: 30
+                  through: true
+              描述0:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 234
+                  texts: "'&7' + self.parent.entry['desc0']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述1:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 272
+                  texts: "'&7' + self.parent.entry['desc1']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述2:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 310
+                  texts: "'&7' + self.parent.entry['desc2']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              选择按钮:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -26
+                  width: 180
+                  height: 56
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'buff_pick', var.poolId, self.parent.entry['id'], var.actionToken)
+                    Screen.close()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,235
+                      hover: ~200,150,240,250
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0选 择
+                      fontSize: 36
+                      through: true
+          卡片3:
+            type: Canvas
+            attribute:
+              width: 300
+              height: 400
+              entryKey: 3.round()
+              entry: "var.cards['3']"
+              visible: "var.count > 3"
+            children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~Frosted:25;26,21,44,242
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.parent.entry['rarityColor']"
+              图标槽:
+                type: Slot
+                attribute:
+                  point: ~top_center
+                  y: 44
+                  width: 64
+                  height: 64
+                  normal: ~0,0,0,0
+                  visible: "self.parent.entry['iconJson'] != ''"
+                  entryKey: 3.round()
+                  seticon: "self.setItemIcon(self.parent.entry['iconJson'])"
+                  through: true
+              增益名:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 128
+                  texts: "self.parent.entry['name']"
+                  fontSize: 46
+                  limit: 8
+                  through: true
+              稀有度文字:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 184
+                  texts: "'&8◆ ' + self.parent.entry['rarity']"
+                  fontSize: 30
+                  through: true
+              描述0:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 234
+                  texts: "'&7' + self.parent.entry['desc0']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述1:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 272
+                  texts: "'&7' + self.parent.entry['desc1']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              描述2:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 310
+                  texts: "'&7' + self.parent.entry['desc2']"
+                  fontSize: 32
+                  limit: 12
+                  through: true
+              选择按钮:
+                type: Canvas
+                attribute:
+                  point: ~bottom_center
+                  y: -26
+                  width: 180
+                  height: 56
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'buff_pick', var.poolId, self.parent.entry['id'], var.actionToken)
+                    Screen.close()
+                children:
+                  按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~170,120,220,235
+                      hover: ~200,150,240,250
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                  按钮字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0选 择
+                      fontSize: 36
+                      through: true

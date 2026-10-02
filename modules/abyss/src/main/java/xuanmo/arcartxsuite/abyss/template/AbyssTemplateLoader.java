@@ -79,6 +79,7 @@ public final class AbyssTemplateLoader {
         NpcConfig npcs = NpcConfig.load(loadYaml(dir, "npcs.yml"));
         QuestConfig quests = QuestConfig.load(loadYaml(dir, "quests.yml"));
         PuzzleConfig puzzles = PuzzleConfig.load(loadYaml(dir, "puzzles.yml"));
+        BuffConfig buffs = BuffConfig.load(loadYaml(dir, "buffs.yml"));
 
         // floors 模式：floors.yml（层链+defaults）+ rooms.yml（房间模板池）
         AbyssTemplate.Mode mode;
@@ -171,7 +172,7 @@ public final class AbyssTemplateLoader {
                 cfg.getConfigurationSection("links"), cfg),
             floors,
             plans, entrances,
-            puzzles,
+            puzzles, buffs,
             functions, dir
         );
     }

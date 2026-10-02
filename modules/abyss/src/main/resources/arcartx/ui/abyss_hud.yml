@@ -22,6 +22,7 @@ ui:
       var.timeText = packet['timeText']
       var.timeRatio = packet['timeRatio']
       var.questRows = packet['questRows']
+      var.guideText = packet['guideText']
       var.quest0 = var.questRows != none ? var.questRows[0.round()] : none
       var.quest1 = var.questRows != none ? var.questRows[1.round()] : none
       var.quest2 = var.questRows != none ? var.questRows[2.round()] : none
@@ -41,6 +42,7 @@ ui:
       var.quest0 = none
       var.quest1 = none
       var.quest2 = none
+      var.guideText = ''
       var.accent = '186,140,232,255'
 controls:
   自适应全局布局:
@@ -135,6 +137,45 @@ controls:
               normal: "var.timeRatio > 0.3 ? '186,140,232,240' : '235,100,100,240'"
               shape: ~round_rect
               radius: 4
+              through: true
+      引导面板:
+        type: Canvas
+        attribute:
+          point: ~top_center
+          y: 150
+          width: 520
+          height: 56
+          visible: "var.guideText != '' && var.guideText != none"
+          through: true
+        children:
+          引导背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,14,36,150
+              shape: ~round_rect
+              radius: 12
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~96,80,140,120
+          引导箭头:
+            type: Text
+            attribute:
+              x: 18
+              point: ~middle_left
+              texts: ~&e➤
+              fontSize: 36
+              through: true
+          引导文字:
+            type: Text
+            attribute:
+              x: 56
+              point: ~middle_left
+              texts: "'&f' + var.guideText"
+              fontSize: 36
+              limit: 20
               through: true
       任务面板:
         type: Canvas

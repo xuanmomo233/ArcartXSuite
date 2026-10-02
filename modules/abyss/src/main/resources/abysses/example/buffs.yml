@@ -1,0 +1,85 @@
+# ═══ 增益选择池（buffs.yml）═══
+# roguelike 祝福：脚本 buff_offer <池id> 触发——可写进任何生命周期段/
+# interact/机关脚本，时机完全由编排决定。
+#
+# 字段:
+#   pick             每人可选几个（目前实现固定发 1 次选择，预留多选）
+#   candidates       面板候选数（<=0 或超池 = 全显；按 weight 加权抽取）
+#   presentation     panel = AX 选择卡片 / hud = 不弹窗直接按权重生效
+#   timeout          选择限时秒（0=不限）；到时按 timeout-auto 兜底
+#   timeout-auto     first | random | none（none=放弃不给）
+#   once-per-instance  true=同一实例内本池只能 offer 一次
+#
+# 选项字段:
+#   id/name/icon     图标是物品材质名（IRON_SWORD 等），面板渲染物品图标
+#   rarity           common|rare|epic|legendary —— 卡片描边色
+#   weight           抽中权重（默认 10）
+#   desc             描述行（面板最多显示前 3 行）
+#   effects          脚本行（全动作可用；@trigger=选择者）
+#
+# 实例变量: {var:buff.<poolId>}=最近所选 option id；{var:buff.<poolId>.count}=已发放人次
+# 事件: axs.abyss.buff_offer / axs.abyss.buff_pick
+pools:
+  # 清房祝福：经典三选一
+  room_blessing:
+    name: "房间肃清祝福"
+    pick: 1
+    candidates: 3
+    presentation: panel
+    timeout: 20
+    timeout-auto: random
+    options:
+      - id: sharp_edge
+        name: "&c利刃"
+        icon: IRON_SWORD
+        rarity: rare
+        weight: 10
+        desc:
+          - "攻击伤害 +15%"
+        effects:
+          - "apply_attribute @trigger attack_damage 15 percent"
+          - "message @trigger &d✦ &c利刃 &7已生效"
+          - "sound @trigger item.enchant.equip 1 1.2"
+      - id: swift_feet
+        name: "&b疾风"
+        icon: FEATHER
+        rarity: common
+        weight: 15
+        desc:
+          - "移动速度提升"
+        effects:
+          - "apply_potion @trigger SPEED 1 9999"
+          - "message @trigger &d✦ &b疾风 &7已生效"
+      - id: ember_mark
+        name: "&6余烬烙印"
+        icon: BLAZE_POWDER
+        rarity: epic
+        weight: 5
+        desc:
+          - "获得余烬标记"
+          - "（脚本可检查变量做增伤分支）"
+        effects:
+          - "setvar buff_ember_mark 1"
+          - "message @trigger &d✦ &6余烬烙印 &7已烙下"
+
+  # 层间休整：非选择型，直接按权重生效一项
+  floor_mend:
+    name: "层间休整"
+    presentation: hud
+    options:
+      - id: mend_light
+        name: "&a轻伤愈合"
+        icon: BREAD
+        rarity: common
+        weight: 8
+        effects:
+          - "apply_potion @trigger REGENERATION 1 10"
+          - "message @trigger &d✦ 休整: &a轻伤愈合"
+      - id: mend_heavy
+        name: "&a伤势平复"
+        icon: GOLDEN_APPLE
+        rarity: rare
+        weight: 3
+        effects:
+          - "apply_potion @trigger REGENERATION 2 10"
+          - "message @trigger &d✦ 休整: &a伤势平复"

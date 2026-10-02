@@ -361,14 +361,15 @@ public record AbyssModuleConfiguration(
         String statsId,
         String leaderboardId,
         String hudId,
-        String inputId
+        String inputId,
+        String buffId
     ) {
         static UiSection load(ConfigurationSection s) {
             if (s == null) {
                 return new UiSection(true, false,
                     "abyss_browser", "abyss_confirm", "abyss_lobby",
                     "abyss_party", "abyss_chest", "abyss_stats",
-                    "abyss_leaderboard", "abyss_hud", "abyss_input");
+                    "abyss_leaderboard", "abyss_hud", "abyss_input", "abyss_buff");
             }
             return new UiSection(
                 s.getBoolean("register-on-enable", true),
@@ -381,7 +382,8 @@ public record AbyssModuleConfiguration(
                 s.getString("stats-id", "abyss_stats"),
                 s.getString("leaderboard-id", "abyss_leaderboard"),
                 s.getString("hud-id", "abyss_hud"),
-                s.getString("input-id", "abyss_input")
+                s.getString("input-id", "abyss_input"),
+                s.getString("buff-id", "abyss_buff")
             );
         }
     }

@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
  * @param plans          作战方案表（config.yml plans 节；空=无方案机制）
  * @param entrances      世界入口点列表（主世界物理入口，右键进本）
  * @param puzzles        机关解谜配置（puzzles.yml：sequence 序列/input 输入面板）
+ * @param buffs          增益选择池（buffs.yml：roguelike 祝福/三选一）
  * @param functions      functions.js 等自定义函数字符串（可空）
  * @param dir            地牢目录
  */
@@ -60,6 +61,7 @@ public record AbyssTemplate(
     java.util.Map<String, PlanEntry> plans,
     List<EntrancePoint> entrances,
     PuzzleConfig puzzles,
+    BuffConfig buffs,
     @Nullable String functions,
     File dir
 ) {

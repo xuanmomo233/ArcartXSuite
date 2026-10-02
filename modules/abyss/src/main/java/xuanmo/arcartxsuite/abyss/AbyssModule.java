@@ -79,6 +79,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.setLinks(new xuanmo.arcartxsuite.abyss.links.AbyssLinks(
             this::getCapability, attributeBridge, logger));
+        try {
+            service.setWaypointBridge(createWaypointBridge());
+        } catch (Throwable ignored) { }
         service.start(dataFolder);
         playerCommand = new AbyssPlayerCommand(service);
         registerAbyssUis();
@@ -135,6 +138,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerModuleUi("ui/abyss_leaderboard.yml", axsUiId(ui.leaderboardId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_hud.yml", axsUiId(ui.hudId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_input.yml", axsUiId(ui.inputId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_buff.yml", axsUiId(ui.buffId()), ui.registerOnEnable());
     }
 
     /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */
@@ -262,7 +266,10 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             "axs.abyss.global_threshold",
             "axs.abyss.puzzle_step",
             "axs.abyss.puzzle_complete",
-            "axs.abyss.puzzle_fail"
+            "axs.abyss.puzzle_fail",
+            "axs.abyss.guide_arrive",
+            "axs.abyss.buff_offer",
+            "axs.abyss.buff_pick"
         );
     }
 
@@ -278,6 +285,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         mappings.put("arcartx/ui/abyss_leaderboard.yml", "ui/abyss_leaderboard.yml");
         mappings.put("arcartx/ui/abyss_hud.yml", "ui/abyss_hud.yml");
         mappings.put("arcartx/ui/abyss_input.yml", "ui/abyss_input.yml");
+        mappings.put("arcartx/ui/abyss_buff.yml", "ui/abyss_buff.yml");
         boolean overwrite = configuration != null
             && configuration.ui() != null && configuration.ui().overwriteUiFiles();
         return new xuanmo.arcartxsuite.api.ModuleUiSpec(mappings, overwrite);

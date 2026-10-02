@@ -397,6 +397,57 @@ final class BuiltinActions {
                 String.valueOf(pm.progress(ctx.getInstance(), ctx.replace(parts[0]))));
         });
 
+        // ═══ 副本内引导（路标/路径渲染）═══
+        reg.register("guide_point", (ctx, args, s) -> {
+            // guide_point <navId> <x,y,z> [到达半径] <标题...>
+            var gs = service.get().guide();
+            if (gs == null) return;
+            String[] parts = splitFirst(args, 3);
+            if (parts.length < 3) return;
+            String navId = ctx.replace(parts[0]);
+            Location loc = parseLoc(ctx, parts[1]);
+            if (loc == null) return;
+            // 第3段可能是半径（数字开头）或直接是标题
+            String tail = rest(parts, 2);
+            double range = 3.0;
+            if (!tail.isEmpty() && Character.isDigit(tail.trim().charAt(0))) {
+                String[] tt = splitFirst(tail, 1);
+                range = parseDouble(tt[0], 3.0);
+                tail = rest(tt, 1);
+            }
+            String title = color(ctx.replace(tail));
+            gs.setGuide(ctx.getInstance(), navId, loc, title, range);
+        });
+        reg.register("guide_clear", (ctx, args, s) -> {
+            // guide_clear <navId|all>：撤导航目标（all=全部）
+            var gs = service.get().guide();
+            if (gs == null) return;
+            String navId = ctx.replace(args.trim());
+            gs.clearGuide(ctx.getInstance(),
+                "all".equalsIgnoreCase(navId) ? null : navId);
+        });
+
+        // ═══ 增益选择池（buffs.yml）═══
+        reg.register("buff_offer", (ctx, args, s) -> {
+            // buff_offer <池id>：向副本全员发起增益选择（panel/hud 按池配置）
+            var bm = service.get().buffs();
+            if (bm != null) bm.offer(ctx.getInstance(), ctx.replace(args.trim()), ctx.getTrigger());
+        });
+        reg.register("buff_grant", (ctx, args, s) -> {
+            // buff_grant <池id> <sel> [optionId]：直接赋予（不弹窗）；optionId 空=按权重随机
+            var bm = service.get().buffs();
+            String[] parts = splitFirst(args, 2);
+            if (bm == null || parts.length < 2) return;
+            String poolId = ctx.replace(parts[0]);
+            String optId = parts.length > 2 ? ctx.replace(rest(parts, 2)) : null;
+            forEach(ctx, parts[1], p -> bm.grant(ctx.getInstance(), p, poolId, optId));
+        });
+        reg.register("buff_clear", (ctx, args, s) -> {
+            // buff_clear <池id>：撤下未完成的增益选择面板
+            var bm = service.get().buffs();
+            if (bm != null) bm.clearOffer(ctx.getInstance(), ctx.replace(args.trim()));
+        });
+
         // ═══ 障碍物/交互点 ═══
         reg.register("create_obstacle", (ctx, args, s) ->
             service.get().obstacles().create(ctx.getInstance(), ctx.replace(args)));

@@ -13,6 +13,15 @@ start:
   - "title @all 10 40 10 &6虚空试炼场|&e消灭全部怪物"
   - "sound @all ENTITY_ENDER_DRAGON_GROWL 1 1"
   - "bossbar @all 600 RED SOLID &c虚空试炼场"
+  # 引导演示：HUD 目标行 + 世界路标指向机关区（到点后跑 guide_valve_area 段）
+  - "guide_point valve_area 0,80,6 3 &e前往机关平台"
+  - "wait 8"
+  - "buff_offer room_blessing"          # 开场祝福三选一演示
+
+# guide_<navId> 段：到达该导航点时自动运行（可选）
+guide_valve_area:
+  - "guide_clear valve_area"
+  - "message @all &a已抵达机关平台 &8（按顺序扳动阀门）"
 
 complete:
   - "message @all &a&l通关！干得漂亮！"

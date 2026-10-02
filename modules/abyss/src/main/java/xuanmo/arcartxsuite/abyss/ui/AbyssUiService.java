@@ -70,6 +70,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String leaderboardUi() { return axsUiId(service.config().ui().leaderboardId()); }
     private String hudUi() { return axsUiId(service.config().ui().hudId()); }
     private String inputUi() { return axsUiId(service.config().ui().inputId()); }
+    private String buffUi() { return axsUiId(service.config().ui().buffId()); }
 
     private String token(Player p) {
         String t = Long.toHexString(random.nextLong());
@@ -212,6 +213,62 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             : service.msg("puzzle.attempts-left", "left", String.valueOf(attemptsLeft)));
         packetBridge.sendPacket(player, inputUi(), "init", payload);
         packetBridge.openUiUnsafe(player, inputUi());
+    }
+
+    /**
+     * 增益选择面板：buffs.yml panel 池。
+     * init 下发候选卡片（≤4 槽位）；客户端选择 →
+     * {@code buff_pick <poolId> <optionId> <token>} 回包。
+     */
+    @Override
+    public void openBuffOffer(Player player, AbyssInstance instance,
+                              xuanmo.arcartxsuite.abyss.template.BuffConfig.Pool pool,
+                              List<xuanmo.arcartxsuite.abyss.template.BuffConfig.Option> candidates,
+                              int timeoutSeconds) {
+        if (!available() || candidates.isEmpty()) return;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        payload.put("action_token", token(player));
+        payload.put("poolId", pool.id());
+        payload.put("poolName", pool.name());
+        payload.put("timeout", Math.max(0, timeoutSeconds));
+        Map<String, Object> rows = new LinkedHashMap<>();
+        int i = 0;
+        for (var opt : candidates) {
+            if (i >= 4) break; // UI 固定 4 卡槽
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", opt.id());
+            row.put("name", opt.name());
+            row.put("icon", opt.icon());
+            // 物品图标 JSON（材质名 → itemJson；无 icon/桥不可用时下发空串，UI 隐藏槽位）
+            String iconJson = "";
+            if (!opt.icon().isBlank() && itemBridge != null) {
+                try {
+                    org.bukkit.Material mat = org.bukkit.Material.matchMaterial(opt.icon());
+                    if (mat != null) {
+                        iconJson = itemBridge.itemToJson(
+                            new org.bukkit.inventory.ItemStack(mat)).orElse("");
+                    }
+                } catch (Throwable ignored) { }
+            }
+            row.put("iconJson", iconJson);
+            row.put("rarity", opt.rarity());
+            // 稀有度描边色服务端算好（UI 侧规避嵌套三元表达式坑）
+            row.put("rarityColor", switch (opt.rarity()) {
+                case "rare" -> "80,150,235,255";
+                case "epic" -> "170,100,235,255";
+                case "legendary" -> "235,180,60,255";
+                default -> "140,145,155,255";
+            });
+            row.put("desc0", opt.desc().size() > 0 ? opt.desc().get(0) : "");
+            row.put("desc1", opt.desc().size() > 1 ? opt.desc().get(1) : "");
+            row.put("desc2", opt.desc().size() > 2 ? opt.desc().get(2) : "");
+            rows.put(Integer.toString(i++), row);
+        }
+        payload.put("count", i);
+        payload.put("cards", rows);
+        packetBridge.sendPacket(player, buffUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, buffUi());
     }
 
     /** 组装大厅列表数据（供 init / lobby_list 推送复用）。 */
@@ -543,6 +600,9 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 "name", q.name(), "status", e.getValue().name()));
         }
         p.put("questRows", quests);
+        // 引导目标行（guide_point 动作驱动；无目标=空串隐藏）
+        var gs = service.guide();
+        p.put("guideText", gs != null ? gs.guideText(instance) : "");
         packetBridge.sendPacket(player, hudUi(), "update", p);
     }
 
@@ -879,6 +939,20 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                         AbyssInstance inst = service.instances().getInstance(player);
                         if (inst != null && !inst.isFinished()) {
                             service.puzzles().submitInput(inst, player, puzzleId, answer);
+                        }
+                    }
+                }
+                return true;
+            }
+            case "buff_pick" -> {
+                // buff_pick <poolId> <optionId> <token>
+                if (checkToken(player, data, 3)) {
+                    String poolId = data.size() > 1 ? data.get(1) : null;
+                    String optionId = data.size() > 2 ? data.get(2) : "";
+                    if (poolId != null && service.buffs() != null) {
+                        AbyssInstance inst = service.instances().getInstance(player);
+                        if (inst != null && !inst.isFinished()) {
+                            service.buffs().pick(inst, player, poolId, optionId);
                         }
                     }
                 }

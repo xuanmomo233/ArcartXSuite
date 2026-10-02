@@ -21,6 +21,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.AbyssModule;
@@ -139,6 +140,9 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.links.EntranceMarkerService entranceMarkers;
     private xuanmo.arcartxsuite.abyss.interact.EntranceManager entranceManager;
     private xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager puzzleManager;
+    private xuanmo.arcartxsuite.abyss.guide.GuideService guideService;
+    private xuanmo.arcartxsuite.abyss.buff.BuffManager buffManager;
+    private xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge;
     private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
@@ -309,6 +313,30 @@ public final class AbyssService {
             config::globalThresholds, (topic, data) -> publishEvent(topic, null, data));
         globalCounters.start();
 
+        // 8.10) 副本内引导（路标/路径渲染）+ 增益选择池
+        if (waypointBridge != null) {
+            guideService = new xuanmo.arcartxsuite.abyss.guide.GuideService(
+                (JavaPlugin) plugin, waypointBridge, logger);
+            guideService.setArriveCallback((inst, navId, player) -> {
+                publishEvent("axs.abyss.guide_arrive", player, Map.of(
+                    "dungeon", inst.getTemplate().id(),
+                    "instance", inst.getInstanceId().toString(),
+                    "nav", navId));
+                // scripts.yml 自定义段 guide_<navId> 存在则跑（可选钩）
+                var seg = inst.getTemplate().scripts().customs().get("guide_" + navId);
+                if (seg != null && !seg.isEmpty()) {
+                    runScript(inst, seg, ScriptContext.withVars(inst, player,
+                        Map.of("nav", navId)));
+                }
+            });
+            guideService.start();
+        } else {
+            logger.info("[abyss] WaypointBridge 不可用，guide_point 引导禁用");
+        }
+        buffManager = new xuanmo.arcartxsuite.abyss.buff.BuffManager(
+            plugin, scheduler, logger);
+        buffManager.setCallback(new BuffCallbackImpl());
+
         // 9) 管理命令
         adminCommand = new AbyssAdminCommand(this, logger);
 
@@ -347,6 +375,7 @@ public final class AbyssService {
         }
         if (mobGroups != null) mobGroups.shutdown();
         if (roomManager != null) roomManager.shutdown();
+        if (guideService != null) guideService.shutdown();
         if (npcs != null) npcs.shutdown();
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
@@ -370,7 +399,7 @@ public final class AbyssService {
         String[] files = {
             "config.yml", "monsters.yml", "scripts.yml", "rewards.yml",
             "interacts.yml", "obstacles.yml", "tasks.yml", "npcs.yml", "quests.yml",
-            "floors.yml", "rooms.yml", "puzzles.yml"
+            "floors.yml", "rooms.yml", "puzzles.yml", "buffs.yml"
         };
         for (String f : files) {
             try {
@@ -476,6 +505,17 @@ public final class AbyssService {
     }
     public @Nullable xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager puzzles() {
         return puzzleManager;
+    }
+    public @Nullable xuanmo.arcartxsuite.abyss.guide.GuideService guide() {
+        return guideService;
+    }
+    public @Nullable xuanmo.arcartxsuite.abyss.buff.BuffManager buffs() {
+        return buffManager;
+    }
+    /** WaypointBridge 由模块创建后注入（start 之前调用）。 */
+    public void setWaypointBridge(
+        xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI bridge) {
+        this.waypointBridge = bridge;
     }
     public SchedulerAPI scheduler() { return scheduler; }
     public MessageProvider messages() { return messages; }
@@ -779,10 +819,15 @@ public final class AbyssService {
         npcs.initInstance(instance);
         // start 脚本
         runLifecycleScript(instance, "start", null);
-        // 副本 HUD
+        // 副本 HUD + 引导目标补推
         if (uiFacade instanceof AbyssUiService ui) {
             for (Player p : instance.getPlayers()) {
                 try { ui.openHud(p, instance); } catch (Throwable ignored) { }
+            }
+        }
+        if (guideService != null) {
+            for (Player p : instance.getPlayers()) {
+                try { guideService.syncPlayer(p, instance); } catch (Throwable ignored) { }
             }
         }
         broadcast(instance, msg("dungeon.started", "dungeon", t.name()));
@@ -903,6 +948,9 @@ public final class AbyssService {
             instance.restorePlayerGameMode(player);
         }
         clearBossBars(player);
+        if (guideService != null) {
+            try { guideService.clearPlayer(player, instance); } catch (Throwable ignored) { }
+        }
         if (uiFacade instanceof AbyssUiService ui) {
             ui.closeHud(player);
             ui.flushPendingChest(player);
@@ -932,6 +980,7 @@ public final class AbyssService {
             ui0.closeHud(player);
             ui0.onPlayerGone(player);
         }
+        if (guideService != null) guideService.handleQuit(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
         // 非正常退出标记（下次进服执行恢复动作）
@@ -1223,6 +1272,11 @@ public final class AbyssService {
         void openPuzzleInput(Player player, AbyssInstance instance,
                              xuanmo.arcartxsuite.abyss.template.PuzzleConfig.Puzzle puzzle,
                              int attemptsLeft);
+        /** 增益选择面板（buffs.yml panel 池）。 */
+        void openBuffOffer(Player player, AbyssInstance instance,
+                           xuanmo.arcartxsuite.abyss.template.BuffConfig.Pool pool,
+                           java.util.List<xuanmo.arcartxsuite.abyss.template.BuffConfig.Option> candidates,
+                           int timeoutSeconds);
         /** 队伍数据变更后向全队推送房间 UI 更新（成员/消息流/副本/设置）。 */
         void pushPartyUpdate(Party party);
         void openStats(Player player, AbyssInstance instance);
@@ -1287,6 +1341,8 @@ public final class AbyssService {
         obstacles.cleanup(instance);
         interacts.cleanup(instance);
         if (puzzleManager != null) puzzleManager.cleanup(instance);
+        if (guideService != null) guideService.cleanup(instance);
+        if (buffManager != null) buffManager.cleanup(instance);
         instanceTasks.cleanup(instance);
         npcs.cleanup(instance);
         worldIndex.remove(instance.getWorld() != null ? instance.getWorld().getName() : "");
@@ -1575,6 +1631,45 @@ public final class AbyssService {
                 uiFacade.openPuzzleInput(player, instance, puzzle, attemptsLeft);
             } else {
                 player.sendMessage(AbyssService.this.msg("puzzle.ui-unavailable"));
+            }
+        }
+
+        @Override
+        public void publishEvent(String topic, @Nullable Player player,
+                                 Map<String, Object> data) {
+            AbyssService.this.publishEvent(topic, player, data);
+        }
+
+        @Override
+        public void broadcast(AbyssInstance instance, String message) {
+            AbyssService.this.broadcast(instance, message);
+        }
+
+        @Override
+        public void msg(Player player, String message) {
+            player.sendMessage(message);
+        }
+    }
+
+    private final class BuffCallbackImpl
+        implements xuanmo.arcartxsuite.abyss.buff.BuffManager.Callback {
+
+        @Override
+        public void runScript(AbyssInstance instance, List<String> lines,
+                              @Nullable Player trigger) {
+            if (!lines.isEmpty()) {
+                AbyssService.this.runScript(instance, lines,
+                    ScriptContext.withVars(instance, trigger, Map.of()));
+            }
+        }
+
+        @Override
+        public void openBuffUi(Player player, AbyssInstance instance,
+                               xuanmo.arcartxsuite.abyss.template.BuffConfig.Pool pool,
+                               List<xuanmo.arcartxsuite.abyss.template.BuffConfig.Option> candidates,
+                               int timeoutSeconds) {
+            if (uiFacade != null) {
+                uiFacade.openBuffOffer(player, instance, pool, candidates, timeoutSeconds);
             }
         }
 
