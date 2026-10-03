@@ -44,11 +44,23 @@ public record MapNavigationState(
         return active && targetType == TargetType.WAYPOINT && safe(targetId).equalsIgnoreCase(safe(waypointId));
     }
 
+    /**
+     * 判断当前追踪目标是否匹配指定标记点。
+     *
+     * @param pinId 标记点 ID
+     * @return 若追踪活跃且目标类型为标记点且 ID 匹配则返回 {@code true}
+     */
+    public boolean matchesPin(String pinId) {
+        return active && targetType == TargetType.PIN && safe(targetId).equalsIgnoreCase(safe(pinId));
+    }
+
     public enum TargetType {
         NONE,
         ANCHOR,
         WAYPOINT,
-        EXTERNAL
+        EXTERNAL,
+        /** 标记点追踪：纯地图标记态（不建导航路标，仅驱动地图边缘指示）。 */
+        PIN
     }
 
     private static String safe(String value) {

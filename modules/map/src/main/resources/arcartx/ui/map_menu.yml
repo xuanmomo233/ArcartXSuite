@@ -162,7 +162,7 @@ ui:
           for(key in var.pinRows.keys()) {
             row = var.pinRows[key]
             if(row != none) {
-              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], false, true)
+              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
             }
           }
         }
@@ -309,7 +309,7 @@ ui:
           for(key in var.pinRows.keys()) {
             row = var.pinRows[key]
             if(row != none) {
-              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], false, true)
+              var.mapRenderer.addMarker(row['id'], 'pin', row['name'], row['x'], row['z'], row['selected'], row['tracked'], true)
             }
           }
         }
@@ -1261,7 +1261,7 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 260
-                  width: 110
+                  width: 90
                   height: 44
                 action:
                   clickLeft: |-
@@ -1293,14 +1293,51 @@ controls:
                       texts: ~&f编辑
                       fontSize: 36
                       through: true
+              标记点追踪按钮:
+                type: Canvas
+                attribute:
+                  tip: ~&f在地图上追踪标记点
+                  point: ~top_left
+                  x: 120
+                  y: 260
+                  width: 90
+                  height: 44
+                action:
+                  clickLeft: |-
+                    if (var.detailNavigated) {
+                      Packet.send(var.packetId, 'untrack', 'pin', var.detailSelectedId)
+                    } else {
+                      Packet.send(var.packetId, 'track_pin', var.detailSelectedId)
+                    }
+                children:
+                  标记点追踪按钮底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.detailNavigated ? '200,84,84,255' : '236,180,24,255'"
+                      hover: "var.detailNavigated ? '220,104,104,255' : '246,200,44,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: "self.isHovered() ? '4' : '3'"
+                        color: ~255,255,255,255
+                  标记点追踪按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "var.detailNavigated ? '&f取消' : '&f追踪'"
+                      fontSize: 36
+                      through: true
               标记点分享按钮:
                 type: Canvas
                 attribute:
                   tip: ~&f分享标记点
                   point: ~top_left
-                  x: 146
+                  x: 216
                   y: 260
-                  width: 110
+                  width: 90
                   height: 44
                   visible: "var.shareEnabled"
                 action:
@@ -1332,9 +1369,9 @@ controls:
                 attribute:
                   tip: ~&c删除标记点
                   point: ~top_left
-                  x: 268
+                  x: 312
                   y: 260
-                  width: 110
+                  width: 90
                   height: 44
                   enable: "!var.actionBusy && var.actionToken != none"
                 action:

@@ -139,7 +139,8 @@ public final class MapSnapshotBuilder {
                     pin.description(),
                     pin.x(),
                     pin.z(),
-                    pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId())
+                    pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId()),
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesPin(pin.pinId()))
                 )
             );
         }
@@ -416,7 +417,7 @@ public final class MapSnapshotBuilder {
                     canCreateWaypoint,
                     !input.navigationStates().isEmpty(),
                     trackingText(input.navigationStates()),
-                    false,
+                    input.navigationStates().values().stream().anyMatch(state -> state.matchesPin(pin.pinId())),
                     0, -1, true, "",
                     "",
                     false,
@@ -558,7 +559,7 @@ public final class MapSnapshotBuilder {
                 pin.x(),
                 pin.z(),
                 pin.pinId().equalsIgnoreCase(input.viewState().selectedPinId()),
-                false,
+                input.navigationStates().values().stream().anyMatch(state -> state.matchesPin(pin.pinId())),
                 true
             ));
         }
@@ -980,6 +981,7 @@ public final class MapSnapshotBuilder {
      * @param x           X 坐标
      * @param z           Z 坐标
      * @param selected    是否当前选中
+     * @param tracked     是否正在追踪（PIN 导航态；驱动"追踪/取消"按钮与地图边缘指示）
      */
     public record PinRow(
         String id,
@@ -987,7 +989,8 @@ public final class MapSnapshotBuilder {
         String description,
         double x,
         double z,
-        boolean selected
+        boolean selected,
+        boolean tracked
     ) {
     }
 

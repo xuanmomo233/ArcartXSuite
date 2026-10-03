@@ -942,6 +942,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             case MapNavigationRequest.TYPE_ANCHOR -> MapNavigationState.TargetType.ANCHOR;
             case MapNavigationRequest.TYPE_WAYPOINT -> MapNavigationState.TargetType.WAYPOINT;
             case MapNavigationRequest.TYPE_EXTERNAL -> MapNavigationState.TargetType.EXTERNAL;
+            case "pin" -> MapNavigationState.TargetType.PIN;
             default -> MapNavigationState.TargetType.NONE;
         };
     }
@@ -951,6 +952,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             case ANCHOR -> MapNavigationRequest.TYPE_ANCHOR;
             case WAYPOINT -> MapNavigationRequest.TYPE_WAYPOINT;
             case EXTERNAL -> MapNavigationRequest.TYPE_EXTERNAL;
+            case PIN -> "pin";
             default -> "none";
         };
     }
@@ -1362,6 +1364,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
+    public void trackPin(Player player, String pinId) {
+        MapOperationResult result = trackPinInternal(player, pinId);
+        sendPlayerResult(player, result);
+    }
+
+    @Override
     public void trackExternalTarget(Player player, String targetId) {
         // 外部目标导航不由地图执行：转发给来源模块/插件的回调，来源自行接管。
         requestExternalNavigate(player, targetId);
@@ -1618,6 +1626,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             invalidatePlayerDataCache(player.getUniqueId());
             if (state(player).selectedPinId().equalsIgnoreCase(pin.pinId())) {
                 state(player).clearSelection();
+            }
+            // 标记点被删时同步清掉它的追踪态——否则 HUD 边缘指示会指向已不存在的目标
+            MapNavigationState pinNav = findNavigation(player, TargetType.PIN, pin.pinId());
+            if (pinNav != null) {
+                removeNavigation(player, navKey(TargetType.PIN, pin.pinId()), pinNav);
             }
             sync(player, false);
             return MapOperationResult.success(message("player.pin-deleted", pin.name()));
@@ -2217,6 +2230,30 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         publishNavStarted(player, TargetType.WAYPOINT, waypoint.waypointId(), waypoint.world());
         sync(player, false);
         return MapOperationResult.success(message("player.waypoint-navigation-started", waypoint.name()));
+    }
+
+    /**
+     * 标记点追踪：纯地图标记态——不建导航路标、不要求导航服务，
+     * 只记录 PIN 导航态驱动客户端大小地图的边缘指示与标记高亮。
+     */
+    private MapOperationResult trackPinInternal(Player player, String pinId) {
+        if (player == null || !player.isOnline()) {
+            return MapOperationResult.failure(message("player.offline"));
+        }
+        MapPin pin = findPin(player, pinId);
+        if (pin == null) {
+            return MapOperationResult.failure(message("player.pin-not-found", pinId));
+        }
+        navigationMapOrCreate(player).put(
+            navKey(TargetType.PIN, pin.pinId()),
+            new MapNavigationState(
+                true, TargetType.PIN, normalizeId(pin.world()), pin.pinId(),
+                "", pin.name(), "map"
+            )
+        );
+        publishNavStarted(player, TargetType.PIN, pin.pinId(), pin.world());
+        sync(player, false);
+        return MapOperationResult.success(message("player.pin-tracked", pin.name()));
     }
 
     /**
@@ -2900,6 +2937,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("x", row.x());
             entry.put("z", row.z());
             entry.put("selected", row.selected());
+            entry.put("tracked", row.tracked());
             pinRows.put(Integer.toString(i), entry);
         }
         payload.put("pinRows", pinRows);

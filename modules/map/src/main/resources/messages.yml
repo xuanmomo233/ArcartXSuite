@@ -111,6 +111,7 @@ player:
   share-claim-hover: "&7执行 {0}"
   waypoint-claimed: "已领取路径点: {0}（来自 {1}）"
   pin-claimed: "已领取标记点: {0}（来自 {1}）"
+  pin-tracked: "已开始追踪标记点: {0}"
   claim-usage: "&e用法: /{0} claim <分享码>"
   no-active-navigation: "当前没有活动导航。"
   clear-navigation-failed: "清除导航失败。"

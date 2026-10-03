@@ -119,6 +119,13 @@ public final class MapUiPacketHandler {
                     target.refresh(player);
                 }
             }
+            case "track_pin" -> {
+                if (hasValue(data, 1)) {
+                    target.trackPin(player, data.get(1));
+                } else {
+                    target.refresh(player);
+                }
+            }
             case "track_external", "external_navigate" -> {
                 // 外部目标"导航"：转发给来源模块/插件执行，地图不自建信标
                 if (hasValue(data, 1)) {
@@ -288,6 +295,8 @@ public final class MapUiPacketHandler {
         void trackAnchor(Player player, String anchorId);
 
         void trackWaypoint(Player player, String waypointId);
+
+        void trackPin(Player player, String pinId);
 
         void trackExternalTarget(Player player, String targetId);
 
