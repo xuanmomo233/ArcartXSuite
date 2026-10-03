@@ -84,6 +84,8 @@ public final class ModuleRegistry {
     private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
     /** 持续药水效果服务：持有在 Registry 层，GlobalBridgeFactory 重建时实例不变，避免重复调度任务 */
     private final xuanmo.arcartxsuite.bridge.DefaultPotionAuraService potionAuraService;
+    /** Mod 实体属性服务：持有在 Registry 层，实例不变 */
+    private final xuanmo.arcartxsuite.bridge.DefaultModAttributeService modAttributeService;
 
     // ─── 拆分组件 ──────────────────────────────────────────────
     private final CapabilityRegistry capabilityRegistry;
@@ -126,6 +128,7 @@ public final class ModuleRegistry {
         this.storageManager = storageManager;
         this.scheduler = scheduler;
         this.potionAuraService = new xuanmo.arcartxsuite.bridge.DefaultPotionAuraService(plugin);
+        this.modAttributeService = new xuanmo.arcartxsuite.bridge.DefaultModAttributeService(plugin);
         this.capabilityRegistry = new CapabilityRegistry();
         this.clientPacketRouter = new ClientPacketRouter(packetGuard);
         this.globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
@@ -982,6 +985,11 @@ public final class ModuleRegistry {
     /** 获取持续药水效果（光环）服务 */
     public xuanmo.arcartxsuite.bridge.DefaultPotionAuraService potionAura() {
         return potionAuraService;
+    }
+
+    /** 获取 Mod 实体属性服务 */
+    public xuanmo.arcartxsuite.bridge.DefaultModAttributeService modAttributes() {
+        return modAttributeService;
     }
 
     /** 获取 Rondo 经济系统桥接 */

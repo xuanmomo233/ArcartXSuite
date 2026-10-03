@@ -392,6 +392,7 @@ public record TitleModuleConfiguration(
                 readAttributeMap(child.getConfigurationSection("display-attributes"), logger, id, "display-attributes"),
                 readAttributeMap(child.getConfigurationSection("collection-attributes"), logger, id, "collection-attributes"),
                 readEffectMap(child.getConfigurationSection("display-effects"), logger, id),
+                readModBonusMap(child.getConfigurationSection("permanent-display-bonuses"), logger, id),
                 readStringList(child, logger, id, "display-attribute-lines"),
                 readStringList(child, logger, id, "collection-attribute-lines"),
                 child.getInt("sort-order", index),
@@ -482,6 +483,66 @@ public record TitleModuleConfiguration(
             values.merge(type, level, Math::max);
         }
         return values;
+    }
+
+    /**
+     * 解析 {@code permanent-display-bonuses} 节：Mod 属性 ID → 数值或
+     * {@code {amount, operation}} 子节（仅当称号被装备且为永久拥有时生效）。
+     * <p>
+     * 标量值默认按加算（ADDITION）写入；operation 支持
+     * {@code addition / multiply_base / multiply_total}。
+     */
+    private static Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> readModBonusMap(
+        ConfigurationSection section,
+        Logger logger,
+        String titleId
+    ) {
+        if (section == null) {
+            return Map.of();
+        }
+
+        LinkedHashMap<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> values = new LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            String attributeId = normalizeId(key);
+            if (attributeId.isBlank()) {
+                continue;
+            }
+
+            Object rawValue = section.get(key);
+            double amount;
+            xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation operation =
+                xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation.ADDITION;
+            if (rawValue instanceof ConfigurationSection childSection) {
+                amount = childSection.getDouble("amount", Double.NaN);
+                operation = parseModOperation(childSection.getString("operation"));
+            } else {
+                try {
+                    amount = Double.parseDouble(String.valueOf(rawValue).trim());
+                } catch (NumberFormatException | NullPointerException exception) {
+                    logger.warning("称号 '" + titleId + "' 的 permanent-display-bonuses." + key + " 不是数值，已跳过。");
+                    continue;
+                }
+            }
+            if (Double.isNaN(amount)) {
+                logger.warning("称号 '" + titleId + "' 的 permanent-display-bonuses." + key + " 缺少有效数值，已跳过。");
+                continue;
+            }
+            values.put(attributeId, new xuanmo.arcartxsuite.api.modattr.ModAttributeModifier(attributeId, amount, operation));
+        }
+        return values;
+    }
+
+    private static xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation parseModOperation(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation.ADDITION;
+        }
+        return switch (rawValue.trim().toLowerCase(Locale.ROOT)) {
+            case "multiply_base", "multiply-base", "multiplybase" ->
+                xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation.MULTIPLY_BASE;
+            case "multiply_total", "multiply-total", "multiplytotal", "total" ->
+                xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation.MULTIPLY_TOTAL;
+            default -> xuanmo.arcartxsuite.api.modattr.ModAttributeModifier.Operation.ADDITION;
+        };
     }
 
     private static List<String> readStringList(

@@ -216,6 +216,15 @@ potion-aura:
   # 施加的效果是否在物品栏显示图标。
   icon: true
 
+# ========== Mod 实体属性（通用 Mod 属性加成）==========
+# 仅混合核心（Mohist / Arclight 等 Forge+Bukkit 环境）可用。
+# 本体统一维护的「按来源登记」属性修饰器服务，模块（如 title 称号的
+# permanent-display-bonuses）登记后可给玩家挂载任意 Mod 注册的实体属性，
+# 例如 gunsmithlib:bullet_damage（枪械伤害）、apothic_attributes:crit_damage 等。
+mod-attributes:
+  # 是否启用该服务；false 时所有登记调用为空操作。
+  enabled: true
+
 # ========== 全局内容审核（敏感词过滤）==========
 # 统一管理本地词库、云端词库、标点穿透防护、白名单等过滤规则，
 # 供 chat / market / mail 等模块统一调用。

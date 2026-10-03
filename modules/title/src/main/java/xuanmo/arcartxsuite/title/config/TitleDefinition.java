@@ -27,6 +27,7 @@ import java.util.Map;
  * @param displayAttributes       装备时生效的展示属性映射
  * @param collectionAttributes    拥有即生效的收集属性映射
  * @param displayEffects          装备时生效的持续药水效果（类型 → 等级，1 起）
+ * @param permanentDisplayBonuses 装备且称号为永久拥有时生效的 Mod 属性加成（属性 ID → 修饰器）
  * @param displayAttributeLines   展示属性原始文本行
  * @param collectionAttributeLines 收集属性原始文本行
  * @param sortOrder               排序权重
@@ -54,6 +55,7 @@ public record TitleDefinition(
     Map<String, Double> displayAttributes,
     Map<String, Double> collectionAttributes,
     Map<org.bukkit.potion.PotionEffectType, Integer> displayEffects,
+    Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> permanentDisplayBonuses,
     List<String> displayAttributeLines,
     List<String> collectionAttributeLines,
     int sortOrder,
@@ -69,6 +71,7 @@ public record TitleDefinition(
         displayAttributes = immutableCopy(displayAttributes);
         collectionAttributes = immutableCopy(collectionAttributes);
         displayEffects = immutableEffectCopy(displayEffects);
+        permanentDisplayBonuses = immutableBonusCopy(permanentDisplayBonuses);
         displayAttributeLines = immutableListCopy(displayAttributeLines);
         collectionAttributeLines = immutableListCopy(collectionAttributeLines);
     }
@@ -103,6 +106,15 @@ public record TitleDefinition(
 
     private static Map<org.bukkit.potion.PotionEffectType, Integer> immutableEffectCopy(
         Map<org.bukkit.potion.PotionEffectType, Integer> values
+    ) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private static Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> immutableBonusCopy(
+        Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> values
     ) {
         if (values == null || values.isEmpty()) {
             return Map.of();

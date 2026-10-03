@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.title.config.TitleDefinition;
  * @param displayAttributes               展示属性汇总（仅装备称号）
  * @param collectionAttributes            收集属性汇总（所有拥有称号）
  * @param displayEffects                  持续药水效果汇总（仅装备称号，类型 → 等级，1 起）
+ * @param permanentDisplayBonuses         Mod 属性加成汇总（仅装备且为永久拥有的称号，属性 ID → 修饰器）
  * @param totalAttributes                 总属性汇总（收集 + 展示 + 套装奖励）
  * @param displayAttributeSourceLines     展示属性源文本行
  * @param collectionAttributeSourceLines  收集属性源文本行
@@ -36,6 +37,7 @@ public record ResolvedTitleState(
     Map<String, Double> displayAttributes,
     Map<String, Double> collectionAttributes,
     Map<org.bukkit.potion.PotionEffectType, Integer> displayEffects,
+    Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> permanentDisplayBonuses,
     Map<String, Double> totalAttributes,
     List<String> displayAttributeSourceLines,
     List<String> collectionAttributeSourceLines,
@@ -54,6 +56,7 @@ public record ResolvedTitleState(
         displayAttributes = immutableDoubleCopy(displayAttributes);
         collectionAttributes = immutableDoubleCopy(collectionAttributes);
         displayEffects = immutableEffectCopy(displayEffects);
+        permanentDisplayBonuses = immutableBonusCopy(permanentDisplayBonuses);
         totalAttributes = immutableDoubleCopy(totalAttributes);
         displayAttributeSourceLines = immutableListCopy(displayAttributeSourceLines);
         collectionAttributeSourceLines = immutableListCopy(collectionAttributeSourceLines);
@@ -73,6 +76,15 @@ public record ResolvedTitleState(
 
     private static Map<org.bukkit.potion.PotionEffectType, Integer> immutableEffectCopy(
         Map<org.bukkit.potion.PotionEffectType, Integer> values
+    ) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private static Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> immutableBonusCopy(
+        Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> values
     ) {
         if (values == null || values.isEmpty()) {
             return Map.of();

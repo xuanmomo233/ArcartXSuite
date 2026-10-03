@@ -544,6 +544,8 @@ public final class SuiteCoreImpl implements SuiteCore {
         }
         if (moduleRegistry != null) {
             moduleRegistry.unloadAll();
+            // Mod 属性修饰器挂在实体上不会像药水效果那样自行衰减，停用时主动移除
+            moduleRegistry.modAttributes().shutdown();
             moduleRegistry = null;
         }
         xuanmo.arcartxsuite.api.AxsCapabilities.setLookup(null);

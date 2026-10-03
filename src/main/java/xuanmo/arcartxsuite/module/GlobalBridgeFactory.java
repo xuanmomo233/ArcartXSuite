@@ -154,6 +154,12 @@ final class GlobalBridgeFactory {
         potionAuraService.configure(auraEnabled, auraInterval, auraDuration, auraParticles, auraIcon);
         potionAuraService.initialize();
 
+        // Mod 实体属性服务：实例由 ModuleRegistry 持有，此处仅按最新配置刷新开关
+        ConfigurationSection modAttrSection = rootConfig.getConfigurationSection("mod-attributes");
+        boolean modAttrEnabled = modAttrSection == null || modAttrSection.getBoolean("enabled", true);
+        registry.modAttributes().configure(modAttrEnabled);
+        registry.modAttributes().initialize();
+
         if (rondoBridge == null) {
             rondoBridge = new DefaultRondoBridge();
         }

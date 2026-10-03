@@ -43,7 +43,7 @@ public final class TitleStateResolver {
     ) {
         PlayerTitleState sanitized = state == null ? null : state.sanitize(now);
         if (sanitized == null) {
-            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
+            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
         }
 
         TitleDefinition totalDisplayTitle = resolveTotalDisplayTitle(sanitized, configuration, accessibleGroupIds);
@@ -63,6 +63,8 @@ public final class TitleStateResolver {
         LinkedHashMap<String, TitleDefinition> equippedTitlesByGroup = new LinkedHashMap<>();
         LinkedHashMap<String, Double> displayAttributes = new LinkedHashMap<>();
         LinkedHashMap<org.bukkit.potion.PotionEffectType, Integer> displayEffects = new LinkedHashMap<>();
+        LinkedHashMap<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> permanentDisplayBonuses =
+            new LinkedHashMap<>();
         List<String> displayAttributeLines = new ArrayList<>();
         for (Map.Entry<String, String> entry : sanitized.equippedTitleIdsByGroup().entrySet()) {
             TitleDefinition equippedTitle = configuration.title(entry.getValue());
@@ -76,6 +78,11 @@ public final class TitleStateResolver {
             mergeAttributes(displayAttributes, equippedTitle.displayAttributes());
             mergeEffects(displayEffects, equippedTitle.displayEffects());
             mergeAttributeLines(displayAttributeLines, equippedTitle.displayAttributeLines());
+            // 永久加成：仅当该称号为永久拥有（expiresAt == null）时生效
+            PlayerOwnedTitle owned = sanitized.ownedTitles().get(equippedTitle.id());
+            if (owned != null && owned.expiresAt() == null) {
+                mergeModBonuses(permanentDisplayBonuses, equippedTitle.permanentDisplayBonuses());
+            }
         }
 
         LinkedHashMap<String, Integer> setCompletionCounts = new LinkedHashMap<>();
@@ -115,6 +122,7 @@ public final class TitleStateResolver {
             displayAttributes,
             collectionAttributes,
             displayEffects,
+            permanentDisplayBonuses,
             totalAttributes,
             TitleTextFormats.toSourceLines(displayAttributes, displayAttributeLines),
             TitleTextFormats.toSourceLines(collectionAttributes, collectionAttributeLines),
@@ -222,6 +230,26 @@ public final class TitleStateResolver {
         }
         for (Map.Entry<org.bukkit.potion.PotionEffectType, Integer> entry : source.entrySet()) {
             target.merge(entry.getKey(), entry.getValue(), Math::max);
+        }
+    }
+
+    /**
+     * 合并 Mod 属性加成：同一属性来自多个装备中的永久称号时，
+     * 运算模式相同的数值加总；模式不同的保留先出现的条目（不建议混用模式）。
+     */
+    private static void mergeModBonuses(
+        Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> target,
+        Map<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> source
+    ) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, xuanmo.arcartxsuite.api.modattr.ModAttributeModifier> entry : source.entrySet()) {
+            target.merge(entry.getKey(), entry.getValue(), (existing, incoming) ->
+                existing.operation() == incoming.operation()
+                    ? new xuanmo.arcartxsuite.api.modattr.ModAttributeModifier(
+                        existing.attributeId(), existing.amount() + incoming.amount(), existing.operation())
+                    : existing);
         }
     }
 

@@ -88,6 +88,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected @NotNull StorageManager storageManager;
     protected @NotNull xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
     protected @NotNull xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura;
+    protected @NotNull xuanmo.arcartxsuite.api.modattr.ModAttributeService modAttributes;
 
 
     private boolean ready;
@@ -275,6 +276,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.storageManager = context.storageManager();
         this.scheduler = context.scheduler();
         this.potionAura = context.potionAura();
+        this.modAttributes = context.modAttributes();
 
         Logger logger = context.logger();
 

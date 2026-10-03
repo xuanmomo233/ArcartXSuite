@@ -48,7 +48,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("title")
             .name("Title")
-            .version("1.5.0")
+            .version("1.6.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -163,6 +163,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             attributeBridge,
             worldTextureBridge,
             potionAura,
+            modAttributes,
             messages()
         );
         service.start();

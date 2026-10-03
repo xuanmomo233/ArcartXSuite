@@ -113,4 +113,16 @@ public interface BridgeContext {
      */
     @ApiStability.Stable
     @NotNull xuanmo.arcartxsuite.api.potion.PotionAuraService potionAura();
+
+    /**
+     * Forge Mod 实体属性服务（通用 Mod 属性加成）。
+     * <p>
+     * 仅在混合核心（Forge+Bukkit）上可用；按「玩家 → 来源 → 属性修饰器表」登记，
+     * 供称号等模块向玩家挂载任意 Mod 注册的实体属性加成
+     * （如 {@code gunsmithlib:bullet_damage}）。
+     *
+     * @since 1.7.0
+     */
+    @ApiStability.Stable
+    @NotNull xuanmo.arcartxsuite.api.modattr.ModAttributeService modAttributes();
 }

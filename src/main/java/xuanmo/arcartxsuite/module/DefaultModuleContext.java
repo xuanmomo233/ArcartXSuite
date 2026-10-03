@@ -338,6 +338,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public @NotNull xuanmo.arcartxsuite.api.modattr.ModAttributeService modAttributes() {
+        return registry.modAttributes();
+    }
+
+    @Override
     public xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge() {
         return worldTextureBridge;
     }
