@@ -10,7 +10,7 @@ dependencies {
     compileOnly(files("../../libs/MythicLib-dist-1.7.1-49.jar"))
     compileOnly(files("../../libs/Mythic-Dist-5.8.0.jar"))
     compileOnly(files("../../libs/Chronos_Plugin-2.0.1.jar"))
-    compileOnly(files("../../libs/ArcartX-2.7.77.jar"))
+    compileOnly(files("../../libs/ArcartX-2.7.92.jar"))
 }
 
 tasks.compileJava {

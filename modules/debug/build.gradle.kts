@@ -10,7 +10,7 @@ dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
     // PackDiag 需要读取 ArcartX 网络层常量（MessageID/DecodeType）与
     // ArcartXEntityManager（encryptor/sentResource 状态）、ClientCustomPacketEvent
-    compileOnly(files("../../libs/ArcartX-2.7.77.jar"))
+    compileOnly(files("../../libs/ArcartX-2.7.92.jar"))
     // WebSocket 服务端库（需打包进 jar，宿主未提供）
     implementation("org.java-websocket:Java-WebSocket:1.5.6")
 }
