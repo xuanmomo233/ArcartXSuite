@@ -51,9 +51,11 @@ public record MonsterConfig(
         boolean autoStart,
         SpawnTiming spawnTiming,
         int delaySeconds,
+        int restSeconds,        // 休整秒数（-1=未配）：TRIGGERED 触发时若 delay-seconds<=0 用此值
         List<String> triggerAfter,
         List<MonsterSpawn> monsters,
         int completeWhenAliveBelow,
+        List<String> onPrespawn, // 预告段：触发后延迟期内跑（"下一波来袭"title/音效）
         List<String> onStart,
         List<String> onEnd,
         List<String> plans
@@ -82,11 +84,14 @@ public record MonsterConfig(
                 s.getBoolean("auto-start", s.getBoolean("auto_start", timing == SpawnTiming.AUTO_START)),
                 timing,
                 s.getInt("delay-seconds", s.getInt("delay_seconds", 0)),
+                firstNonNeg(s.getInt("rest-seconds", s.getInt("rest_seconds",
+                    s.getInt("wave-rest", s.getInt("wave_rest", -1))))),
                 s.getStringList("trigger-after").isEmpty()
                     ? s.getStringList("trigger_after") : s.getStringList("trigger-after"),
                 spawns,
                 s.getInt("complete-when-alive-below",
                     s.getInt("complete_when_alive_below", 0)),
+                firstNonEmpty(s, "on-prespawn", "pre-spawn", "on_prespawn"),
                 s.getStringList("on-start").isEmpty()
                     ? s.getStringList("on_start") : s.getStringList("on-start"),
                 s.getStringList("on-end").isEmpty()
@@ -98,6 +103,20 @@ public record MonsterConfig(
                     : s.getStringList("plans")
             );
         }
+    }
+
+    /** 多键取首个非空字符串列表。 */
+    private static List<String> firstNonEmpty(ConfigurationSection s, String... keys) {
+        for (String k : keys) {
+            List<String> v = s.getStringList(k);
+            if (!v.isEmpty()) return v;
+        }
+        return List.of();
+    }
+
+    /** 负值归一为 -1（未配语义），其余原样。 */
+    private static int firstNonNeg(int v) {
+        return Math.max(v, -1);
     }
 
     public static MonsterConfig load(ConfigurationSection root) {

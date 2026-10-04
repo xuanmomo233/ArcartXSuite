@@ -21,6 +21,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * </pre>
  */
 public record ScriptConfig(
+    List<String> worldInit,
     List<String> init,
     List<String> start,
     List<String> complete,
@@ -32,12 +33,12 @@ public record ScriptConfig(
 ) {
 
     private static final List<String> LIFECYCLE = List.of(
-        "init", "start", "complete", "fail", "player_death", "all_death", "exit");
+        "world_init", "init", "start", "complete", "fail", "player_death", "all_death", "exit");
 
     public static ScriptConfig load(ConfigurationSection root) {
         if (root == null) {
             return new ScriptConfig(List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), Map.of());
+                List.of(), List.of(), List.of(), List.of(), Map.of());
         }
         Map<String, List<String>> customs = new LinkedHashMap<>();
         for (String key : root.getKeys(false)) {
@@ -48,6 +49,7 @@ public record ScriptConfig(
             }
         }
         return new ScriptConfig(
+            firstNonEmpty(root, "world-init", "world_init"),
             root.getStringList("init"),
             root.getStringList("start"),
             root.getStringList("complete"),

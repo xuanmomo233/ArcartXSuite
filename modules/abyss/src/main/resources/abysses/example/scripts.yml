@@ -1,11 +1,22 @@
 # 生命周期脚本：模块动作行 + aria:/js: 行内脚本 + wait 挂起
 # 选择器: @all @trigger @random @dead 或玩家名
+#
+# 段执行时机：
+#   world-init —— 世界就绪后、玩家传送【之前】跑（造平台/铺场景专用）
+#   init       —— 玩家全部进图后、副本激活前跑（此时玩法对象尚未初始化）
+#   start      —— 副本激活时跑（怪组已注册，AUTO_START 组已刷）
+
+world-init:
+  # 虚空世界先搭竞技场（在玩家传送之前执行，否则会掉虚空）：
+  # 17x17 末地石地板 y=79 + 上方清空 + 一圈屏障围栏 y=80..82
+  - "fillblocks -8,79,-8 8,79,8 END_STONE"
+  - "fillblocks -8,80,-8 8,84,8 AIR"
+  - "fillblocks -8,80,-8 -8,82,8 BARRIER"
+  - "fillblocks 8,80,-8 8,82,8 BARRIER"
+  - "fillblocks -7,80,-8 7,82,-8 BARRIER"
+  - "fillblocks -7,80,8 7,82,8 BARRIER"
 
 init:
-  # 虚空世界先搭一个 13x13 平台（y=79），玩家落点 y=80
-  - "fillblocks -6,79,-6 6,79,6 END_STONE"
-  - "fillblocks -6,80,-6 6,83,6 AIR"
-  - "message @all &7正在构建竞技场..."
   - "wait 1"
 
 start:

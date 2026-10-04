@@ -35,6 +35,8 @@ public final class MonsterGroupManager {
     public static final class GroupRuntime {
         final MonsterGroup group;
         volatile GroupState state = GroupState.PENDING;
+        /** 休整/延迟 spawn 已排队（防多前置组重复排队）。 */
+        volatile boolean spawnQueued;
         final Set<UUID> alive = ConcurrentHashMap.newKeySet();
         ScheduledTask delayedTask;
         GroupRuntime(MonsterGroup g) { this.group = g; }
@@ -203,18 +205,42 @@ public final class MonsterGroupManager {
                     "instance", instance.getInstanceId().toString(),
                     "group", rt.group.name()));
             }
-            // 触发依赖组
+            // 触发依赖组（休整/延迟生效 + 预告段）
             Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
             if (groups != null) {
                 for (GroupRuntime dep : groups.values()) {
                     if (dep.state == GroupState.PENDING
                         && dep.group.spawnTiming() == MonsterConfig.SpawnTiming.TRIGGERED
                         && dep.group.triggerAfter().contains(rt.group.name())) {
-                        spawnGroup(instance, dep.group.name(), null);
+                        queueTriggeredSpawn(instance, dep);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * TRIGGERED 组被前置触发：delay-seconds 优先、rest-seconds 兜底。
+     * 有休整期则先跑 on-prespawn 预告段（title/音效），再排一次性延迟 spawn；
+     * spawnQueued 防 trigger-after 多前置组重复排队。
+     */
+    private void queueTriggeredSpawn(AbyssInstance instance, GroupRuntime dep) {
+        int delay = dep.group.delaySeconds() > 0
+            ? dep.group.delaySeconds() : Math.max(0, dep.group.restSeconds());
+        if (delay <= 0) {
+            spawnGroup(instance, dep.group.name(), null);
+            return;
+        }
+        if (dep.spawnQueued) return;
+        dep.spawnQueued = true;
+        if (callback != null) {
+            callback.runGroupScript(instance, dep.group.onPrespawn(),
+                dep.group.name(), null);
+        }
+        dep.delayedTask = scheduler.scheduleEverySeconds(plugin,
+            () -> spawnGroup(instance, dep.group.name(), null),
+            delay, Long.MAX_VALUE / 20);
+        instance.registerTask(dep.delayedTask);
     }
 
     /** 击杀整组（不触发完成联动——管理性操作）。 */

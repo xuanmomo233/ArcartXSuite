@@ -300,9 +300,12 @@ public final class RoomManager {
                 timing = SpawnTiming.MANUAL;
             }
             room.groupDelays.put(runtimeName, g.delaySeconds());
+            // 波次休整：组自身 rest-seconds 优先，房间 wave-rest 兜底
+            int rest = g.restSeconds() >= 0 ? g.restSeconds() : tpl.restSeconds();
             mobGroups.registerRuntimeGroup(instance, new MonsterGroup(
-                runtimeName, false, timing, g.delaySeconds(), deps, shifted,
-                g.completeWhenAliveBelow(), g.onStart(), g.onEnd(), g.plans()));
+                runtimeName, false, timing, g.delaySeconds(), rest, deps, shifted,
+                g.completeWhenAliveBelow(), g.onPrespawn(),
+                g.onStart(), g.onEnd(), g.plans()));
             room.groupNames.add(runtimeName);
             groupToRoom.put(groupKey(instance, runtimeName), room);
         }

@@ -143,6 +143,12 @@ public final class DesignManager {
         return s;
     }
 
+    /** 重开主面板（命令/杖手势入口）。 */
+    public void openMain(Player p) {
+        DesignSession s = session(p);
+        if (s != null && ui != null) ui.openMain(p, s);
+    }
+
     /** 会话结束（玩家退出/设计实例销毁时调用）。 */
     public void close(Player player) {
         DesignSession s = sessions.remove(player.getUniqueId());
@@ -603,6 +609,48 @@ public final class DesignManager {
         return null;
     }
 
+    // ═══ 枚举值 → 中文显示层（UI 展示用；YAML 原值不动）═══
+
+    /** 全局枚举值翻译表（值级映射，跨字段不撞语义）。 */
+    private static final Map<String, String> VALUE_ZH = Map.ofEntries(
+        // spawn-timing
+        Map.entry("AUTO_START", "进本即刷"), Map.entry("DELAYED", "延迟刷怪"),
+        Map.entry("TRIGGERED", "联动触发"), Map.entry("MANUAL", "手动触发"),
+        Map.entry("SCRIPTED", "脚本控制"),
+        // interact type
+        Map.entry("RIGHT_CLICK_BLOCK", "右键方块"),
+        Map.entry("LEFT_CLICK_BLOCK", "左键方块"),
+        Map.entry("BREAK_BLOCK", "破坏方块"), Map.entry("PLACE_BLOCK", "放置方块"),
+        Map.entry("STEP_ON", "踩踏触发"), Map.entry("ENTER_REGION", "进入区域"),
+        Map.entry("RIGHT_CLICK_ENTITY", "右键实体"),
+        // obstacle trigger-mode
+        Map.entry("NONE", "手动触发"), Map.entry("ENTER", "进入触发"),
+        Map.entry("LEAVE", "离开触发"), Map.entry("PERSIST", "持续触发"),
+        // room type / floor advance / source
+        Map.entry("combat", "战斗房"), Map.entry("boss", "BOSS房"),
+        Map.entry("safe", "安全房"), Map.entry("shop", "商店房"),
+        Map.entry("COMBAT", "战斗房"), Map.entry("BOSS", "BOSS房"),
+        Map.entry("SAFE", "安全房"), Map.entry("SHOP", "商店房"),
+        Map.entry("portal", "出口传送"), Map.entry("auto", "自动推进"),
+        Map.entry("region", "世界内区域"), Map.entry("pool", "随机拼接"),
+        // task type
+        Map.entry("TIMED", "定时触发"), Map.entry("INTERVAL", "周期触发"),
+        Map.entry("EVENT", "事件触发"),
+        // puzzle type
+        Map.entry("SEQUENCE", "序列机关"), Map.entry("INPUT", "输入机关"),
+        // reward / buff
+        Map.entry("fixed", "固定奖励"), Map.entry("random", "随机抽取"),
+        Map.entry("pool", "奖池抽取"), Map.entry("panel", "面板选择"),
+        Map.entry("hud", "HUD直给"),
+        // 通用
+        Map.entry("true", "是"), Map.entry("false", "否"));
+
+    /** 枚举值中文（无映射原样返回）。 */
+    static String zh(String value) {
+        if (value == null || value.isEmpty() || "-".equals(value)) return value;
+        return VALUE_ZH.getOrDefault(value, value);
+    }
+
     // ═══ 编辑操作 ═══
 
     /** 字段写入（UI 回包 design_set）。raw 已按 editor 类型格式化。 */
@@ -730,16 +778,22 @@ public final class DesignManager {
 
     // ═══ 显示数据（UI 下发用）═══
 
-    /** 编辑面板字段行：name|editor|label|value|options(CYCLE 逗号分隔)。 */
+    /**
+     * 编辑面板字段行：{@code name|editor|label|value|valueZh|options}。
+     * valueZh=展示中文（CYCLE/TOGGLE 枚举值翻译；其余=value）；options 为原值列表。
+     */
     public List<String> fieldRows(DesignObject o) {
         List<String> out = new ArrayList<>();
         for (DesignObject.FieldSpec f : DesignObject.schema(o.kind())) {
             if (f.editor() == DesignObject.Editor.SCRIPT
                 || f.editor() == DesignObject.Editor.LIST) continue;
             String val = fieldStr(o, f.name());
+            String valZh = (f.editor() == DesignObject.Editor.CYCLE
+                || f.editor() == DesignObject.Editor.TOGGLE) ? zh(val) : val;
             String opts = f.options().isEmpty() ? "-" : String.join(",", f.options());
             out.add(f.name() + "|" + f.editor().name() + "|" + f.label()
-                + "|" + val.replace("|", "/") + "|" + opts);
+                + "|" + val.replace("|", "/") + "|"
+                + valZh.replace("|", "/") + "|" + opts);
         }
         return out;
     }
@@ -837,21 +891,22 @@ public final class DesignManager {
                                     Map<String, Object> vals,
                                     int[] anchor, int[] box) {
         String base = switch (kind) {
-            case INTERACT -> str(vals, "type");
-            case OBSTACLE -> str(vals, "trigger-mode").isEmpty()
-                ? str(vals, "trigger_mode") : str(vals, "trigger-mode");
+            case INTERACT -> zh(str(vals, "type"));
+            case OBSTACLE -> zh(str(vals, "trigger-mode").isEmpty()
+                ? str(vals, "trigger_mode") : str(vals, "trigger-mode"));
             case GROUP, ROOM_GROUP -> {
                 Object mobs = vals.get("monsters");
                 int n = mobs instanceof List<?> l ? l.size() : 0;
-                yield str(vals, "spawn-timing") + "·" + n + "处";
+                yield zh(str(vals, "spawn-timing")) + "·" + n + "处";
             }
             case NPC -> str(vals, "name");
-            case PUZZLE -> str(vals, "type") + "·" + strListRaw(vals, "steps").size() + "步";
-            case TASK -> str(vals, "type");
-            case REWARD -> str(vals, "type").isEmpty() ? "fixed" : str(vals, "type");
+            case PUZZLE -> zh(str(vals, "type")) + "·"
+                + strListRaw(vals, "steps").size() + "步";
+            case TASK -> zh(str(vals, "type"));
+            case REWARD -> str(vals, "type").isEmpty() ? "固定奖励" : zh(str(vals, "type"));
             case CHEST -> str(vals, "title");
             case BUFF -> str(vals, "name");
-            case ROOM -> str(vals, "type");
+            case ROOM -> zh(str(vals, "type"));
         };
         String pos = anchor != null ? " " + DesignCoords.pointStr(anchor)
             : (box != null ? " 区域" : "");

@@ -187,6 +187,7 @@ public record FloorConfig(
         @Nullable List<String> exit,
         List<Door> doors,
         Map<String, MonsterGroup> groups,
+        int restSeconds,       // 波次休整兜底（-1=未配）：房内 TRIGGERED 组 delay<=0 时用
         List<String> onEnter,
         List<String> onLock,
         List<String> onClear
@@ -226,6 +227,8 @@ public record FloorConfig(
                 exit.isEmpty() ? null : exit,
                 doors,
                 groups,
+                s.getInt("wave-rest", s.getInt("wave_rest",
+                    s.getInt("rest-seconds", s.getInt("rest_seconds", -1)))),
                 s.getStringList("on-enter").isEmpty()
                     ? s.getStringList("on_enter") : s.getStringList("on-enter"),
                 s.getStringList("on-lock").isEmpty()

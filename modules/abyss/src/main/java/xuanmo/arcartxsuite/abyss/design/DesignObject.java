@@ -39,34 +39,38 @@ public record DesignObject(
 ) {
 
     public enum Kind {
-        INTERACT("◆", "交互点", "interacts.yml", ""),
-        OBSTACLE("▣", "障碍物", "obstacles.yml", ""),
-        GROUP("⚔", "怪组", "monsters.yml", ""),
-        ROOM_GROUP("⚔", "房内怪组", "rooms.yml", "rooms"),
-        NPC("♦", "NPC", "npcs.yml", ""),
-        PUZZLE("⚙", "机关", "puzzles.yml", ""),
-        TASK("☰", "任务", "tasks.yml", ""),
-        REWARD("❖", "奖励", "rewards.yml", "rewards"),
-        CHEST("▤", "宝箱", "rewards.yml", "chest-rewards"),
-        ROOM("⌂", "房间", "rooms.yml", "rooms"),
-        BUFF("✦", "增益池", "buffs.yml", "pools");
+        INTERACT("◆", "交互点", "interacts.yml", "", "245,205,130"),
+        OBSTACLE("▣", "障碍物", "obstacles.yml", "", "120,200,200"),
+        GROUP("⚔", "怪组", "monsters.yml", "", "232,110,110"),
+        ROOM_GROUP("⚔", "房内怪组", "rooms.yml", "rooms", "232,110,110"),
+        NPC("♦", "NPC", "npcs.yml", "", "190,140,240"),
+        PUZZLE("⚙", "机关", "puzzles.yml", "", "120,160,235"),
+        TASK("☰", "任务", "tasks.yml", "", "130,210,140"),
+        REWARD("❖", "奖励", "rewards.yml", "rewards", "245,200,110"),
+        CHEST("▤", "宝箱", "rewards.yml", "chest-rewards", "230,160,90"),
+        ROOM("⌂", "房间", "rooms.yml", "rooms", "170,170,190"),
+        BUFF("✦", "增益池", "buffs.yml", "pools", "240,150,200");
 
         private final String icon;
         private final String label;
         private final String file;
         private final String path;
+        /** UI 类型色 "r,g,b"（色条/徽标描边用）。 */
+        private final String color;
 
-        Kind(String icon, String label, String file, String path) {
+        Kind(String icon, String label, String file, String path, String color) {
             this.icon = icon;
             this.label = label;
             this.file = file;
             this.path = path;
+            this.color = color;
         }
 
         public String icon() { return icon; }
         public String label() { return label; }
         public String file() { return file; }
         public String path() { return path; }
+        public String color() { return color; }
 
         /** 是否可用"标记杖右键方块"定位。 */
         public boolean pointMarkable() {

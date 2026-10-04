@@ -46,6 +46,7 @@ public final class DesignListener implements Listener {
             meta.setLore(List.of(
                 "§7右键方块: 选中/标记对象",
                 "§7选区模式: 左键A点·右键B点",
+                "§7左键空气: 重开设计面板",
                 "§7Shift+右键: 取消标记"));
             meta.getPersistentDataContainer().set(wandKey, PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
@@ -73,7 +74,14 @@ public final class DesignListener implements Listener {
         DesignSession s = manager.session(p);
         if (s == null) return;
         if (!isWand(e.getItem())) return;
-        if (e.getClickedBlock() == null) return;
+        if (e.getClickedBlock() == null) {
+            // 左键空气 = 重开主面板（无 pending 时的重开入口）
+            if (e.getAction() == Action.LEFT_CLICK_AIR) {
+                e.setCancelled(true);
+                manager.openMain(p);
+            }
+            return;
+        }
         e.setCancelled(true); // 设计模式下标记杖永不触发方块自身行为
         boolean right = e.getAction() == Action.RIGHT_CLICK_BLOCK;
         boolean left = e.getAction() == Action.LEFT_CLICK_BLOCK;

@@ -83,7 +83,14 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         String action = args[1].toLowerCase(Locale.ROOT);
         if (args.length == 3) {
             return switch (action) {
-                case "info", "enter", "cancel", "tp", "design" ->
+                case "design" -> {
+                    List<String> c = new ArrayList<>(
+                        service.instances().getAllTemplates().stream()
+                            .map(xuanmo.arcartxsuite.abyss.template.AbyssTemplate::id).toList());
+                    c.addAll(List.of("save", "exit", "ui"));
+                    yield filter(c, args[2]);
+                }
+                case "info", "enter", "cancel", "tp" ->
                     filter(service.instances().getAllTemplates().stream()
                         .map(xuanmo.arcartxsuite.abyss.template.AbyssTemplate::id).toList(), args[2]);
                 case "leave", "stamina", "cooldown" -> null; // 玩家名
@@ -415,6 +422,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
             case "save" -> service.saveDesign(p, args.length >= 4
                 && "world".equalsIgnoreCase(args[3]));
             case "exit" -> service.exitDesign(p);
+            case "ui" -> service.openDesignUi(p);
             default -> {
                 // design <地牢id>：进入设计模式
                 if (sub.isEmpty()) {

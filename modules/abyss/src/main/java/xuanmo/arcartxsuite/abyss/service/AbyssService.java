@@ -742,6 +742,8 @@ public final class AbyssService {
         if (spawn == null) spawn = world.getSpawnLocation();
         instance.saveOriginalLocation(player, player.getLocation());
         instance.savePlayerGameMode(player);
+        // 设计模式不跑脚本——虚空模板同样要落点兜底
+        ensureFooting(world, spawn);
         if (!teleportWithRetry(player, spawn, 3)) {
             player.sendMessage(msg("error.enter-failed", "reason", "传送失败"));
             destroyInstance(instance, true);
@@ -806,6 +808,16 @@ public final class AbyssService {
             "count", String.valueOf(result.objects()),
             "del", String.valueOf(result.deletions()),
             "errors", String.valueOf(result.errors().size())));
+    }
+
+    /** 重开设计主面板（/axs abyss design ui）。 */
+    public void openDesignUi(Player player) {
+        var session = designManager != null ? designManager.session(player) : null;
+        if (session == null) {
+            player.sendMessage(msg("design.no-session"));
+            return;
+        }
+        designManager.openMain(player);
     }
 
     /** 退出设计模式：收杖 → 撤出 → 销毁实例（未保存改动丢失）。 */
@@ -896,6 +908,11 @@ public final class AbyssService {
             return;
         }
 
+        // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
+        runLifecycleScript(instance, "world_init", null);
+        // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
+        ensureFooting(world, spawn);
+
         // 扣费（世界就绪后才扣，失败不花钱）
         requirementChecker.charge(instance.getTemplate(), players);
 
@@ -938,6 +955,24 @@ public final class AbyssService {
         if (instance.allEntered()) {
             prepare(instance);
         }
+    }
+
+    /**
+     * 落点兜底：spawn 下方 4 格内无可站立方块时，在脚下铺一个 5×5 实心平台。
+     * void/无地形模板未写 world-init 也不会坠虚空。
+     */
+    private void ensureFooting(World world, Location spawn) {
+        int sx = spawn.getBlockX(), sy = spawn.getBlockY(), sz = spawn.getBlockZ();
+        for (int dy = 1; dy <= 4; dy++) {
+            if (world.getBlockAt(sx, sy - dy, sz).getType().isSolid()) return;
+        }
+        int py = sy - 1;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                world.getBlockAt(sx + dx, py, sz + dz).setType(Material.BEDROCK, false);
+            }
+        }
+        logger.info("[abyss] " + world.getName() + " 出生点无支撑，已垫 5x5 兜底平台");
     }
 
     private void prepare(AbyssInstance instance) {
@@ -1292,10 +1327,11 @@ public final class AbyssService {
         return scriptRunner.run("script", lines, context, instance);
     }
 
-    /** 生命周期脚本（init/start/complete/fail/player_death/all_death/exit）。 */
+    /** 生命周期脚本（world_init/init/start/complete/fail/player_death/all_death/exit）。 */
     public void runLifecycleScript(AbyssInstance instance, String kind, @Nullable Player trigger) {
         var scripts = instance.getTemplate().scripts();
         List<String> lines = switch (kind) {
+            case "world_init" -> scripts.worldInit();
             case "init" -> scripts.init();
             case "start" -> scripts.start();
             case "complete" -> scripts.complete();

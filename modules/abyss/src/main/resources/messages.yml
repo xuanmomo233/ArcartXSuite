@@ -54,7 +54,7 @@ usage:
   admin-stamina: "{prefix}&e用法: /axs abyss stamina <玩家> give|set <值>"
   admin-stamina-op: "{prefix}&e用法: give|set"
   admin-cooldown: "{prefix}&e用法: /axs abyss cooldown <玩家> clear|check [地牢]"
-  admin-design: "{prefix}&e用法: /axs abyss design <地牢>|save [world]|exit"
+  admin-design: "{prefix}&e用法: /axs abyss design <地牢>|save [world]|ui|exit"
   admin-tp: "{prefix}&e用法: /axs abyss tp <地牢>（传送到该地牢运行中实例）"
   admin-unknown: "{prefix}&e未知子命令，输入 /{label} abyss help"
   admin-error: "{prefix}&c[abyss] 执行出错: {error}"

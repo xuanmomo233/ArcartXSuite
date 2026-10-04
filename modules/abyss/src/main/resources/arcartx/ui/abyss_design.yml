@@ -1,19 +1,16 @@
 # AXS 资源说明
-# 用途: Abyss 设计模式主面板 —— 流程节点链 + 当前节点对象列表 + 保存/退出
+# 用途: Abyss 设计模式主面板（battlepass 范式·数据驱动）——左导航节点链 + 对象卡片行
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 #
 # 通讯协议:
-#   服务端 → init/update: packetId/action_token/dungeonName/dungeonId/dirty/selNode/
+#   服务端 → init/update: packetId/action_token/dungeonName/dungeonId/dirty(int)/selNode/
 #     nodeRows{idx:{key,label,depth,count}}/nodeCount/
-#     objRows{idx:{key,icon,id,summary,dirty}}/objCount
+#     objRows{idx:{key,icon,kindLabel,kindColor,id,summary,dirty(bool)}}/objCount
 #   客户端 → Packet.send('abyss', ...):
-#     design_node <nodeKey> <token>        切节点
-#     design_pick_open <nodeKey> <token>   开添加对象副面板
-#     design_edit <objKey> <token>         开编辑面板
-#     design_tp <objKey> <token>           传送到对象
-#     design_del <objKey> <token>          删除对象
-#     design_save <config|world> <token>   保存
-#     design_exit <token>                  退出设计模式
+#     design_node <nodeKey> <token>        design_pick_open <nodeKey> <token>
+#     design_edit <objKey> <token>         design_tp <objKey> <token>
+#     design_del <objKey> <token>          design_save <config|world> <token>
+#     design_exit <token>
 ui:
   isHud: false
   defaultOpen: false
@@ -35,6 +32,38 @@ ui:
       var.nodeCount = packet['nodeCount']
       var.objRows = packet['objRows']
       var.objCount = packet['objCount']
+      // ── 节点项重建 ──
+      节点目标数 = var.nodeCount.round()
+      if(val.节点容器.childrenCount() - 1 != 节点目标数 - 1){
+        for(key in var.节点引用.keys()){
+          var.节点引用[key].remove()
+        }
+        var.节点引用 = {}
+        var.轮次 = (var.轮次 + 1).round()
+        模板 = val.节点容器.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 节点目标数 - 1)){
+          e = 模板.copy('节点项_' + var.轮次 + '_' + i.round())
+          e.entryKey = i.round()
+          var.节点引用[i.round()] = e
+        }
+      }
+      // ── 对象行重建 ──
+      对象目标数 = var.objCount.round()
+      if(val.对象容器.childrenCount() - 1 != 对象目标数 - 1){
+        for(key in var.对象引用.keys()){
+          var.对象引用[key].remove()
+        }
+        var.对象引用 = {}
+        var.轮次 = (var.轮次 + 1).round()
+        模板 = val.对象容器.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 对象目标数 - 1)){
+          e = 模板.copy('对象行_' + var.轮次 + '_' + i.round())
+          e.entryKey = i.round()
+          var.对象引用[i.round()] = e
+        }
+      }
     update: |-
       var.dirty = packet['dirty']
       var.selNode = packet['selNode']
@@ -42,20 +71,65 @@ ui:
       var.nodeCount = packet['nodeCount']
       var.objRows = packet['objRows']
       var.objCount = packet['objCount']
+      // ── 节点项重建 ──
+      节点目标数 = var.nodeCount.round()
+      if(val.节点容器.childrenCount() - 1 != 节点目标数 - 1){
+        for(key in var.节点引用.keys()){
+          var.节点引用[key].remove()
+        }
+        var.节点引用 = {}
+        var.轮次 = (var.轮次 + 1).round()
+        模板 = val.节点容器.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 节点目标数 - 1)){
+          e = 模板.copy('节点项_' + var.轮次 + '_' + i.round())
+          e.entryKey = i.round()
+          var.节点引用[i.round()] = e
+        }
+      }
+      // ── 对象行重建 ──
+      对象目标数 = var.objCount.round()
+      if(val.对象容器.childrenCount() - 1 != 对象目标数 - 1){
+        for(key in var.对象引用.keys()){
+          var.对象引用[key].remove()
+        }
+        var.对象引用 = {}
+        var.轮次 = (var.轮次 + 1).round()
+        模板 = val.对象容器.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 对象目标数 - 1)){
+          e = 模板.copy('对象行_' + var.轮次 + '_' + i.round())
+          e.entryKey = i.round()
+          var.对象引用[i.round()] = e
+        }
+      }
   action:
     load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 392
       var.packetId = 'abyss'
-      var.actionToken = ''
-      var.dungeonName = ''
-      var.dungeonId = ''
       var.dirty = 0
       var.selNode = ''
       var.nodeRows = {}
       var.nodeCount = 0
       var.objRows = {}
       var.objCount = 0
-      var.accent = '186,140,232,255'
-      var.panelBg = '20,16,34,238'
+      var.节点引用 = {}
+      var.对象引用 = {}
+      var.轮次 = 0
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 392
     open: |-
       Sound.self('minecraft:block.note_block.pling', 0.8, 8)
 controls:
@@ -63,1373 +137,242 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:30;10,8,20,232
+      normal: ~Frosted:30;10,8,20,235
+      through: true
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~middle_center
+      point: ~top_center
       width: 1920
       height: 1080
     children:
       # ═══ 顶栏 ═══
-      主面板:
+      顶栏底:
         type: Texture
         attribute:
-          point: ~middle_center
-          width: 1440
-          height: 760
-          normal: var.panelBg
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 88
+          normal: ~Frosted:28;14,11,26,240
+          through: true
+      标题色块:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 24
+          width: 8
+          height: 40
+          normal: "186,140,232,255"
           shape: ~round_rect
-          radius: 16
-        effect:
-          stroke:
-            width: 2
-            color: ~90,74,140,255
+          radius: 4
+          through: true
       标题:
         type: Text
         attribute:
           point: ~top_left
-          x: 270
-          y: 178
-          texts: "'&f⚙ 设计模式 &7· &f' + var.dungeonName"
-          fontSize: 44
+          x: "68 - var.offX"
+          y: 26
+          texts: "'&f设计模式 &8· &6' + var.dungeonName"
+          fontSize: 40
           through: true
-      未保存角标底:
-        type: Texture
-        attribute:
-          point: ~top_right
-          x: -560
-          y: 174
-          width: 96
-          height: 44
-          normal: ~180,60,60,230
-          shape: ~round_rect
-          radius: 10
-          visible: "var.dirty > 0"
-          through: true
-      未保存角标字:
-        type: Text
-        attribute:
-          point: ~top_right
-          x: -512
-          y: 180
-          texts: "'&f' + var.dirty + ' 改'"
-          fontSize: 32
-          visible: "var.dirty > 0"
-          through: true
-      # ═══ 流程节点链（横排，固定 12 槽）═══
-      节点链标签:
+      副标题:
         type: Text
         attribute:
           point: ~top_left
-          x: 270
-          y: 248
+          x: "70 - var.offX"
+          y: 66
+          texts: ~&8Esc 关面板不退设计 · 杖左键空气或 /axs abyss design ui 重开 · 改动保存前仅内存生效
+          fontSize: 22
+          through: true
+      未保存角标:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: "-200 - var.offX"
+          y: 22
+          width: 150
+          height: 44
+          visible: "var.dirty > 0"
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~180,60,64,235
+              shape: ~round_rect
+              radius: 10
+              through: true
+          字:
+            type: Text
+            attribute:
+              point: ~middle_center
+              texts: "'&f' + var.dirty + ' 处未保存'"
+              fontSize: 24
+              through: true
+      # ═══ 左栏：流程节点 ═══
+      左栏底:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 104
+          width: 264
+          height: "var.viewH - 128"
+          normal: ~18,14,30,238
+          shape: ~round_rect
+          radius: 14
+          through: true
+        effect:
+          stroke:
+            width: 1
+            color: ~255,255,255,50
+      左栏标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "72 - var.offX"
+          y: 124
           texts: ~&8流程节点
+          fontSize: 28
+          through: true
+      节点滑轨:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "292 - var.offX"
+          y: 170
+          width: 8
+          height: "var.viewH - 220"
+          normal: ~40,36,58,220
+          shape: ~round_rect
+          radius: 4
+          through: true
+      节点滑块:
+        type: Texture
+        val: 节点滑块
+        attribute:
+          point: ~top_left
+          x: "292 - var.offX"
+          y: 170
+          width: 8
+          height: 90
+          normal: "186,140,232,255"
+          maxDragY: "var.viewH - 310"
+          shape: ~round_rect
+          radius: 4
+      节点滚动:
+        type: Scroll
+        attribute:
+          point: ~top_left
+          x: "64 - var.offX"
+          y: 166
+          width: 232
+          height: "var.viewH - 226"
+          moveY: "self.parent['节点滑块'].getDragYRatio()"
+        action:
+          wheel: |-
+            if(self.moveY >= 0 && self.wheelValue > 0){
+              self.parent['节点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
+            if(self.moveY <= 1 && self.wheelValue < 0){
+              self.parent['节点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
+        children:
+          节点容器:
+            type: VStack
+            val: 节点容器
+            attribute:
+              width: 224
+              spaceBetween: 8
+            children:
+              节点项:
+                type: Canvas
+                attribute:
+                  width: 224
+                  height: 54
+                  entryKey: 0.round()
+                  entry: "var.nodeRows[self.entryKey]"
+                  visible: "self.entry != none"
+                action:
+                  clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selNode == self.parent.entry['key'] ? '186,140,232,235' : '30,25,50,215'"
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                    effect:
+                      stroke:
+                        width: "var.selNode == self.parent.entry['key'] ? 2 : 1"
+                        color: "var.selNode == self.parent.entry['key'] ? '255,255,255,235' : '255,255,255,60'"
+                  缩进条:
+                    type: Texture
+                    attribute:
+                      point: ~middle_left
+                      x: 8
+                      width: 4
+                      height: 30
+                      normal: "186,140,232,255"
+                      shape: ~round_rect
+                      radius: 2
+                      visible: "self.parent.entry['depth'] == 0"
+                      through: true
+                  名:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: "self.parent.entry['depth'] == 0 ? 20 : 34"
+                      texts: "self.parent.entry['depth'] == 0 ? '&f' + self.parent.entry['label'] : '&7└ ' + self.parent.entry['label']"
+                      fontSize: "self.parent.entry['depth'] == 0 ? 28 : 25"
+                      limit: 10
+                      through: true
+                  数:
+                    type: Text
+                    attribute:
+                      point: ~middle_right
+                      x: -12
+                      texts: "'&8' + self.parent.entry['count'] + '项'"
+                      fontSize: 23
+                      through: true
+      # ═══ 内容区 ═══
+      内容底:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "332 - var.offX"
+          y: 104
+          width: "var.contentW"
+          height: "var.viewH - 128"
+          normal: ~18,14,30,238
+          shape: ~round_rect
+          radius: 14
+          through: true
+        effect:
+          stroke:
+            width: 1
+            color: ~255,255,255,50
+      内容标题:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "356 - var.offX"
+          y: 122
+          texts: "'&f对象 &8· ' + var.objCount + ' 项'"
           fontSize: 30
           through: true
-      节点链:
-        type: HStack
-        attribute:
-          point: ~top_left
-          x: 270
-          y: 290
-          spaceBetween: 10
-        children:
-          节点0:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 0.round()
-              entry: "var.nodeRows['0']"
-              visible: "var.nodeCount > 0"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点1:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 1.round()
-              entry: "var.nodeRows['1']"
-              visible: "var.nodeCount > 1"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点2:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 2.round()
-              entry: "var.nodeRows['2']"
-              visible: "var.nodeCount > 2"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点3:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 3.round()
-              entry: "var.nodeRows['3']"
-              visible: "var.nodeCount > 3"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点4:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 4.round()
-              entry: "var.nodeRows['4']"
-              visible: "var.nodeCount > 4"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点5:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 5.round()
-              entry: "var.nodeRows['5']"
-              visible: "var.nodeCount > 5"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点6:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 6.round()
-              entry: "var.nodeRows['6']"
-              visible: "var.nodeCount > 6"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-          节点7:
-            type: Canvas
-            attribute:
-              width: 160
-              height: 64
-              entryKey: 7.round()
-              entry: "var.nodeRows['7']"
-              visible: "var.nodeCount > 7"
-            action:
-              clickLeft: "Packet.send(var.packetId, 'design_node', self.entry['key'], var.actionToken)"
-            children:
-              节点底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.selNode == self.parent.entry['key'] ? '150,110,220,240' : '46,38,70,220'"
-                  shape: ~round_rect
-                  radius: 8
-                  through: true
-              节点名:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: -10
-                  texts: "self.parent.entry['label']"
-                  fontSize: 28
-                  limit: 6
-                  through: true
-              节点数:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  y: 16
-                  texts: "'&8' + self.parent.entry['count'] + '项'"
-                  fontSize: 24
-                  through: true
-      # ═══ 对象列表（8 行槽）═══
-      列表底:
-        type: Texture
-        attribute:
-          point: ~top_left
-          x: 250
-          y: 380
-          width: 1420
-          height: 430
-          normal: ~14,11,26,200
-          shape: ~round_rect
-          radius: 12
-          through: true
-      空提示:
-        type: Text
-        attribute:
-          point: ~middle_center
-          y: 30
-          texts: ~&8此节点暂无对象 —— 点下方「+ 添加对象」创建
-          fontSize: 34
-          visible: "var.objCount == 0"
-          through: true
-      对象列:
-        type: VStack
-        attribute:
-          point: ~top_left
-          x: 270
-          y: 396
-          spaceBetween: 8
-        children:
-          行0:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 0.round()
-              entry: "var.objRows['0']"
-              visible: "var.objCount > 0"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行1:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 1.round()
-              entry: "var.objRows['1']"
-              visible: "var.objCount > 1"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行2:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 2.round()
-              entry: "var.objRows['2']"
-              visible: "var.objCount > 2"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行3:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 3.round()
-              entry: "var.objRows['3']"
-              visible: "var.objCount > 3"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行4:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 4.round()
-              entry: "var.objRows['4']"
-              visible: "var.objCount > 4"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行5:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 5.round()
-              entry: "var.objRows['5']"
-              visible: "var.objCount > 5"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行6:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 6.round()
-              entry: "var.objRows['6']"
-              visible: "var.objCount > 6"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-          行7:
-            type: Canvas
-            attribute:
-              width: 1380
-              height: 46
-              entryKey: 7.round()
-              entry: "var.objRows['7']"
-              visible: "var.objCount > 7"
-            children:
-              行底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "self.parent.entry['dirty'] ? '62,50,96,220' : '30,24,52,220'"
-                  shape: ~round_rect
-                  radius: 6
-                  through: true
-              类型图标:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 16
-                  texts: "'&d' + self.parent.entry['icon']"
-                  fontSize: 32
-                  through: true
-              对象名:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 56
-                  texts: "'&f' + self.parent.entry['id']"
-                  fontSize: 30
-                  limit: 14
-                  through: true
-              摘要:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 420
-                  texts: "'&8' + self.parent.entry['summary']"
-                  fontSize: 26
-                  limit: 26
-                  through: true
-              传送钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -300
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~52,84,140,230
-                      hover: ~70,110,170,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~传送
-                      fontSize: 24
-                      through: true
-              编辑钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -200
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~150,110,220,235
-                      hover: ~180,140,235,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0编辑
-                      fontSize: 24
-                      through: true
-              删除钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_right
-                  x: -80
-                  width: 76
-                  height: 34
-                action:
-                  clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
-                children:
-                  底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~140,52,62,230
-                      hover: ~175,68,78,250
-                      shape: ~round_rect
-                      radius: 6
-                      through: true
-                  字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~删除
-                      fontSize: 24
-                      through: true
-      # ═══ 底栏操作 ═══
       添加钮:
         type: Canvas
         attribute:
-          point: ~bottom_left
-          x: 270
-          y: -262
-          width: 240
-          height: 56
+          point: ~top_right
+          x: "-392 - var.offX"
+          y: 118
+          width: 150
+          height: 44
         action:
           clickLeft: "Packet.send(var.packetId, 'design_pick_open', var.selNode, var.actionToken)"
         children:
@@ -1437,104 +380,358 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~52,120,80,240
-              hover: ~66,150,98,255
+              normal: "186,140,232,235"
               shape: ~round_rect
-              radius: 10
+              radius: 8
               through: true
+            effect:
+              stroke:
+                width: 1
+                color: "self.parent.isHovered() ? '255,255,255,230' : '255,255,255,70'"
           字:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&f＋ 添加对象
-              fontSize: 32
+              texts: ~&0+ 添加对象
+              fontSize: 26
               through: true
-      保存配置钮:
-        type: Canvas
+      内容滑轨:
+        type: Texture
         attribute:
-          point: ~bottom_right
-          x: -560
-          y: -262
-          width: 220
-          height: 56
-        action:
-          clickLeft: "Packet.send(var.packetId, 'design_save', 'config', var.actionToken)"
-        children:
-          底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~150,110,220,240
-              hover: ~180,140,235,255
-              shape: ~round_rect
-              radius: 10
-              through: true
-          字:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts: ~&0保存配置
-              fontSize: 32
-              through: true
-      保存世界钮:
-        type: Canvas
+          point: ~top_right
+          x: "-360 - var.offX"
+          y: 176
+          width: 8
+          height: "var.viewH - 290"
+          normal: ~40,36,58,220
+          shape: ~round_rect
+          radius: 4
+          through: true
+      内容滑块:
+        type: Texture
+        val: 内容滑块
         attribute:
-          point: ~bottom_right
-          x: -320
-          y: -262
-          width: 220
-          height: 56
-        action:
-          clickLeft: "Packet.send(var.packetId, 'design_save', 'world', var.actionToken)"
-        children:
-          底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~200,150,60,240
-              hover: ~225,175,80,255
-              shape: ~round_rect
-              radius: 10
-              through: true
-          字:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts: ~&0配置+世界
-              fontSize: 32
-              through: true
-      退出钮:
-        type: Canvas
+          point: ~top_right
+          x: "-360 - var.offX"
+          y: 176
+          width: 8
+          height: 90
+          normal: "186,140,232,255"
+          maxDragY: "var.viewH - 380"
+          shape: ~round_rect
+          radius: 4
+      对象滚动:
+        type: Scroll
         attribute:
-          point: ~bottom_right
-          x: -120
-          y: -262
-          width: 130
-          height: 56
+          point: ~top_left
+          x: "356 - var.offX"
+          y: 172
+          width: "var.contentW - 60"
+          height: "var.viewH - 296"
+          moveY: "self.parent['内容滑块'].getDragYRatio()"
         action:
-          clickLeft: "Packet.send(var.packetId, 'design_exit', var.actionToken)"
+          wheel: |-
+            if(self.moveY >= 0 && self.wheelValue > 0){
+              self.parent['内容滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
+            if(self.moveY <= 1 && self.wheelValue < 0){
+              self.parent['内容滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+            }
         children:
-          底:
-            type: Texture
+          对象容器:
+            type: VStack
+            val: 对象容器
             attribute:
-              point: ~stretch_all
-              normal: ~150,52,62,240
-              hover: ~185,68,78,255
-              shape: ~round_rect
-              radius: 10
-              through: true
-          字:
-            type: Text
-            attribute:
-              point: ~middle_center
-              texts: ~退出
-              fontSize: 32
-              through: true
-      关闭提示:
+              width: "var.contentW - 60"
+              spaceBetween: 8
+            children:
+              行:
+                type: Canvas
+                attribute:
+                  width: "var.contentW - 60"
+                  height: 58
+                  entryKey: 0.round()
+                  entry: "var.objRows[self.entryKey]"
+                  visible: "self.entry != none"
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "self.parent.entry['dirty'] ? '42,32,60,225' : '26,22,44,215'"
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                    effect:
+                      stroke:
+                        width: 1
+                        color: "self.parent.isHovered() ? '245,205,130,200' : '255,255,255,40'"
+                  色条:
+                    type: Texture
+                    attribute:
+                      point: ~middle_left
+                      x: 0
+                      width: 5
+                      height: 58
+                      normal: "self.parent.entry['kindColor'] + ',255'"
+                      shape: ~round_rect
+                      radius: 2
+                      through: true
+                  图标:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 18
+                      texts: "self.parent.entry['icon']"
+                      fontSize: 30
+                      through: true
+                  名:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 58
+                      texts: "'&f' + self.parent.entry['id']"
+                      fontSize: 28
+                      limit: 11
+                      through: true
+                  徽标底:
+                    type: Texture
+                    attribute:
+                      point: ~middle_left
+                      x: 380
+                      width: 92
+                      height: 32
+                      normal: "self.parent.entry['kindColor'] + ',40'"
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                  徽标字:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 392
+                      texts: "self.parent.entry['kindLabel']"
+                      fontSize: 23
+                      limit: 4
+                      through: true
+                  摘要:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 490
+                      texts: "'&7' + self.parent.entry['summary']"
+                      fontSize: 24
+                      limit: 28
+                      through: true
+                  传送钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -252
+                      width: 76
+                      height: 38
+                    action:
+                      clickLeft: "Packet.send(var.packetId, 'design_tp', self.parent.entry['key'], var.actionToken)"
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~52,84,140,235
+                          shape: ~round_rect
+                          radius: 7
+                          through: true
+                        effect:
+                          stroke:
+                            width: 1
+                            color: "self.parent.isHovered() ? '255,255,255,200' : '255,255,255,50'"
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~传送
+                          fontSize: 24
+                          through: true
+                  编辑钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -166
+                      width: 76
+                      height: 38
+                    action:
+                      clickLeft: "Packet.send(var.packetId, 'design_edit', self.parent.entry['key'], var.actionToken)"
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "186,140,232,240"
+                          shape: ~round_rect
+                          radius: 7
+                          through: true
+                        effect:
+                          stroke:
+                            width: 1
+                            color: "self.parent.isHovered() ? '255,255,255,220' : '255,255,255,60'"
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&0编辑
+                          fontSize: 24
+                          through: true
+                  删除钮:
+                    type: Canvas
+                    attribute:
+                      point: ~middle_right
+                      x: -80
+                      width: 76
+                      height: 38
+                    action:
+                      clickLeft: "Packet.send(var.packetId, 'design_del', self.parent.entry['key'], var.actionToken)"
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "200,80,88,225"
+                          shape: ~round_rect
+                          radius: 7
+                          through: true
+                        effect:
+                          stroke:
+                            width: 1
+                            color: "self.parent.isHovered() ? '255,255,255,200' : '255,255,255,50'"
+                      字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~删除
+                          fontSize: 24
+                          through: true
+      空提示:
         type: Text
         attribute:
-          point: ~bottom_center
-          y: -320
-          texts: ~&8Esc/关闭面板不退出设计模式 · 标记杖 Shift+右键 取消标记
-          fontSize: 26
+          point: ~middle_center
+          x: "(var.contentW - 1920) / 2 + 156"
+          y: 60
+          texts: ~&8此节点暂无对象 —— 点右上「+ 添加对象」创建
+          fontSize: 30
+          visible: "var.objCount == 0"
           through: true
+      # ═══ 底栏 ═══
+      底部分隔:
+        type: Texture
+        attribute:
+          point: ~bottom_left
+          x: "332 - var.offX"
+          y: -102
+          width: "var.contentW"
+          height: 2
+          normal: ~255,255,255,30
+          through: true
+      底部栏:
+        type: Canvas
+        attribute:
+          point: ~bottom_left
+          x: "332 - var.offX"
+          y: -88
+          width: "var.contentW"
+          height: 76
+        children:
+          提示字:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 8
+              texts: ~&8世界内可自由建造 · 标记杖右键落点/编辑 · Shift+右键取消选区
+              fontSize: 22
+              through: true
+          保存钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -560
+              width: 150
+              height: 46
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_save', 'config', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~70,150,110,235
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.parent.isHovered() ? '255,255,255,220' : '255,255,255,60'"
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f保存配置
+                  fontSize: 26
+                  through: true
+          存世界钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -340
+              width: 170
+              height: 46
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_save', 'world', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "232,180,90,235"
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.parent.isHovered() ? '255,255,255,220' : '255,255,255,60'"
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f配置+世界
+                  fontSize: 26
+                  through: true
+          退出钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -170
+              width: 120
+              height: 46
+            action:
+              clickLeft: "Packet.send(var.packetId, 'design_exit', var.actionToken)"
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "200,80,88,225"
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+                effect:
+                  stroke:
+                    width: 1
+                    color: "self.parent.isHovered() ? '255,255,255,220' : '255,255,255,60'"
+              字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f退出
+                  fontSize: 26
+                  through: true

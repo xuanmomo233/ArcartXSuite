@@ -603,6 +603,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             for (var o : s.nodeObjects(sel)) {
                 objs.put(Integer.toString(oi++), Map.of(
                     "key", o.key(), "icon", o.kind().icon(),
+                    "kindLabel", o.kind().label(),
+                    "kindColor", o.kind().color(),
                     "id", o.id(), "summary", o.summary(),
                     "dirty", o.dirty()));
             }
@@ -631,7 +633,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 : (kind.regionMarkable() ? "region" : "none");
             kinds.put(Integer.toString(i++), Map.of(
                 "kind", kind.name().toLowerCase(), "icon", kind.icon(),
-                "label", kind.label(), "mark", mark));
+                "label", kind.label(), "mark", mark,
+                "kindColor", kind.color()));
         }
         payload.put("kindRows", kinds);
         payload.put("kindCount", i);
@@ -684,10 +687,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         List<String> rows = dm.fieldRows(obj);
         for (int i = 0; i < rows.size(); i++) {
             String[] v = rows.get(i).split("\\|", -1);
-            if (v.length < 5) continue;
+            if (v.length < 6) continue;
             fields.put(Integer.toString(i), Map.of(
                 "name", v[0], "editor", v[1], "label", v[2],
-                "value", v[3], "options", v[4]));
+                "value", v[3], "valueZh", v[4], "options", v[5]));
         }
         payload.put("fieldRows", fields);
         payload.put("fieldCount", rows.size());
@@ -1199,6 +1202,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 var s = designSession(player);
                 if (s != null && checkToken(player, data, 1)) {
                     closeUi(player, designEditUi());
+                    closeUi(player, designPickUi());
                     openDesignMain(player, s);
                 }
                 return true;
