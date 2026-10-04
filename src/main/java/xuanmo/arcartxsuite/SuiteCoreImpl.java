@@ -630,10 +630,15 @@ public final class SuiteCoreImpl implements SuiteCore {
 
     private void reloadClientPacketGuard() {
         clientPacketGuardConfiguration = ClientPacketGuardConfiguration.load(getConfig(), getLogger());
-        if (clientPacketGuard != null) {
-            clientPacketGuard.shutdown();
+        if (clientPacketGuard == null) {
+            clientPacketGuard = new ClientPacketGuard(host, clientPacketGuardConfiguration);
+        } else {
+            // 实例保持稳定、只热替换配置：路由层与各模块捕获的 PacketGuardAPI
+            // 引用在 reload 后仍然有效（此前重建实例会导致 router/模块继续
+            // 持有已 shutdown 的旧实例，reload 不生效）。
+            clientPacketGuard.updateConfiguration(clientPacketGuardConfiguration);
         }
-        clientPacketGuard = new ClientPacketGuard(host, clientPacketGuardConfiguration);
+        // start() 内部先 shutdown()——清空限流状态、按新配置重启清理任务。
         clientPacketGuard.start();
     }
 

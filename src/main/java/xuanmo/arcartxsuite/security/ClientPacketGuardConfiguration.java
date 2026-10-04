@@ -14,6 +14,7 @@ import org.bukkit.configuration.file.FileConfiguration;
  * 客户端包频率限制器配置记录。
  *
  * @param enabled             是否启用限流
+ * @param debug               是否在控制台输出丢包日志（定位静默丢包用）
  * @param cleanupIntervalTicks 状态清理任务间隔（tick）
  * @param defaults            默认限流规则
  * @param moduleRules         按模块 id 覆盖的规则
@@ -21,6 +22,7 @@ import org.bukkit.configuration.file.FileConfiguration;
  */
 public record ClientPacketGuardConfiguration(
     boolean enabled,
+    boolean debug,
     long cleanupIntervalTicks,
     ClientPacketGuardRule defaults,
     Map<String, ClientPacketGuardRule> moduleRules,
@@ -42,6 +44,7 @@ public record ClientPacketGuardConfiguration(
 
     public static ClientPacketGuardConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean enabled = configuration.getBoolean(ROOT_PATH + ".enabled", true);
+        boolean debug = configuration.getBoolean(ROOT_PATH + ".debug", false);
         long cleanupIntervalTicks = Math.max(20L, configuration.getLong(ROOT_PATH + ".cleanup-interval-ticks", 200L));
 
         ConfigurationSection rootSection = configuration.getConfigurationSection(ROOT_PATH);
@@ -56,6 +59,7 @@ public record ClientPacketGuardConfiguration(
 
         return new ClientPacketGuardConfiguration(
             enabled,
+            debug,
             cleanupIntervalTicks,
             defaults,
             Map.copyOf(moduleRules),

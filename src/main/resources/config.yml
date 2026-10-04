@@ -484,6 +484,9 @@ auth:
 # 各模块可独立覆盖 defaults；actions 下可按动作名进一步细化（如 title 的 equip/unequip 等）。
 client-packet-guard:
   enabled: true
+  # 丢包日志：开启后被 guard 拦截的包会在控制台输出一行诊断
+  # （玩家/路由/packetId/原因），排查"个别玩家按钮无响应"时打开。
+  debug: false
   # 清理过期计数器的周期（ticks，20 ticks = 1 秒）。
   # 减小此值可降低内存占用，但会增加清理开销；增大则节省 CPU，但计数器会滞留更久。
   cleanup-interval-ticks: 200

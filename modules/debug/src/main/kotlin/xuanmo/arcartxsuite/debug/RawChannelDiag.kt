@@ -11,6 +11,7 @@ import priv.seventeen.artist.arcartx.network.message.MessageID
 import java.io.ByteArrayInputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.logging.Logger
 import java.util.zip.GZIPInputStream
@@ -363,6 +364,67 @@ class RawChannelDiag(
 
     private fun yn(v: Boolean) = if (v) "§a是" else "§c否"
     private fun nb(v: Boolean?) = when (v) { null -> "§7未知"; true -> "§a已建立"; false -> "§c未建立" }
+
+    // ── ClientPacketGuard 内省（走 PacketGuardAPI.actionKeys 公开接口）────
+
+    /**
+     * 通过 [PacketGuardAPI.actionKeys] 导出该玩家的 per-(module|packetId) action 键集，
+     * 用于验证"指纹洪泛塞满 64 键上限 → 新 action 被静默拒绝"的假说。
+     */
+    fun guardReport(player: Player, packetGuard: Any?): List<String> {
+        val out = ArrayList<String>()
+        out.add("§6=== Guard 键集: ${player.name} ===")
+        val api = packetGuard as? xuanmo.arcartxsuite.api.security.PacketGuardAPI
+        if (api == null) {
+            out.add("§cPacketGuardAPI 不可用")
+            return out
+        }
+        try {
+            // 新本体走公开 API；旧本体（无 actionKeys 方法）回退反射读旧字段
+            val buckets: Map<String, Collection<String>> = try {
+                api.actionKeys(player.uniqueId)
+            } catch (e: IncompatibleClassChangeError) {
+                legacyGuardBuckets(api, player.uniqueId)
+            }
+            var saturated = 0
+            for ((bucket, keys) in buckets) {
+                val size = keys.size
+                if (size >= 64) saturated++
+                val sample = keys.take(6).joinToString(",")
+                out.add("§7  $bucket: §f$size/64§7 键${if (size >= 64) " §c[已塞满]" else ""} §8($sample...)")
+            }
+            if (buckets.isEmpty()) {
+                out.add("§7该玩家无 guard 键集记录（可能刚清理/未触发）")
+            } else {
+                out.add("§e键桶数: ${buckets.size}，塞满(64)的: §c$saturated")
+                if (saturated > 0) {
+                    out.add("§c→ 已塞满的 (模块|packetId) 桶上，任何『未见过』的 action 都会被静默拒绝——匹配『按钮全死』症状")
+                }
+            }
+        } catch (t: Throwable) {
+            out.add("§c读取失败: ${t.javaClass.simpleName}: ${t.message}")
+        }
+        return out
+    }
+
+    /**
+     * 旧本体兜底：反射读 `actionKeysByModulePlayer`（旧键格式 `module|playerId`），
+     * 仅在公开 API 不存在时使用。键标签直接显示模块名。
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun legacyGuardBuckets(api: Any, uuid: UUID): Map<String, Collection<String>> {
+        val field = api.javaClass.getDeclaredField("actionKeysByModulePlayer")
+        field.isAccessible = true
+        val map = field.get(api) as ConcurrentMap<String, Set<String>>
+        val suffix = "|$uuid"
+        val result = LinkedHashMap<String, Collection<String>>()
+        for ((key, value) in map) {
+            if (key.endsWith(suffix)) {
+                result[key.substringBefore('|')] = value.toList()
+            }
+        }
+        return result
+    }
 
     private fun notifyWatchers(uuid: UUID, name: String, line: String) {
         val w = watches[uuid] ?: return

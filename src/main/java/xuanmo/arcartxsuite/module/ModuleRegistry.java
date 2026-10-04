@@ -305,8 +305,12 @@ public final class ModuleRegistry {
         clearAllRegistrations();
         // 全局桥接单例的生命周期由 GlobalBridgeFactory 管理，此处重建并立即初始化，
         // 保证卸载后桥接对象始终就绪，支持「卸载全部 → 重新加载」场景。
-        globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
-        globalBridgeFactory.initialize();
+        // 服务器关停路径（onDisable）中插件已被标记禁用，initialize() 内的
+        // registerEvents/调度注册会抛 IllegalPluginAccessException，故仅在插件仍启用时重建。
+        if (plugin.isEnabled()) {
+            globalBridgeFactory = new GlobalBridgeFactory(plugin, placeholderResolver, storageManager, this, capabilityRegistry);
+            globalBridgeFactory.initialize();
+        }
     }
 
     /**

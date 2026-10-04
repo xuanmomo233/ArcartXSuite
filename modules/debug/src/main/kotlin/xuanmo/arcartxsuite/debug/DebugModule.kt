@@ -61,7 +61,7 @@ class DebugModule : AbstractAXSModule(), ModuleCommandHandler {
     override fun startService() {
         // 通道诊断不依赖 WebSocket，debug 模块启用时始终挂载
         rawDiag = RawChannelDiag(plugin, logger).also { it.start() }
-        adminCommand = DebugAdminCommand { rawDiag }
+        adminCommand = DebugAdminCommand({ rawDiag }, { packetGuard })
 
         val cfg = config
             ?: throw IllegalStateException("Debug 配置未加载")

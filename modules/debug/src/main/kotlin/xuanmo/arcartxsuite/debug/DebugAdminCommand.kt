@@ -20,10 +20,11 @@ import java.util.function.Supplier
  */
 class DebugAdminCommand(
     private val diagProvider: Supplier<RawChannelDiag?>,
+    private val packetGuardProvider: Supplier<Any?>,
 ) : ModuleCommandHandler {
 
     companion object {
-        private val ACTIONS = listOf("help", "watch", "unwatch", "info", "stats", "reset")
+        private val ACTIONS = listOf("help", "watch", "unwatch", "info", "stats", "guard", "reset")
         private const val PERMISSION = "arcartxsuite.debug.admin"
     }
 
@@ -86,6 +87,14 @@ class DebugAdminCommand(
                     }
                 }
             }
+            "guard" -> {
+                val target = args.getOrNull(2)?.let { Bukkit.getPlayerExact(it) }
+                if (target == null) {
+                    sender.sendMessage("§c用法: /$label debug guard <在线玩家>")
+                    return true
+                }
+                for (line in diag.guardReport(target, packetGuardProvider.get())) sender.sendMessage(line)
+            }
             "reset" -> {
                 val target = args.getOrNull(2)?.let { Bukkit.getPlayerExact(it) }
                 if (target != null) {
@@ -101,6 +110,7 @@ class DebugAdminCommand(
                 sender.sendMessage("§7/$label debug watch <player> [秒] §8- 实时播报该玩家的 RAW/EVT 包")
                 sender.sendMessage("§7/$label debug unwatch <player>  §8- 停止播报")
                 sender.sendMessage("§7/$label debug info <player>    §8- 通道/握手快照 + 判定结论")
+                sender.sendMessage("§7/$label debug guard <player>   §8- PacketGuard 键集内省（验证 64 键塞满假说）")
                 sender.sendMessage("§7/$label debug stats [player]   §8- 计数汇总")
                 sender.sendMessage("§7/$label debug reset [player]   §8- 清零计数")
                 sender.sendMessage("§8判定语义: 无RAW=客户端没发包 | 有RAW无EVT=ArcartX解码丢弃 | 有EVT=到达AXS路由")
@@ -111,7 +121,7 @@ class DebugAdminCommand(
 
     override fun onTabComplete(@NotNull sender: CommandSender, @NotNull args: Array<String>): List<String>? {
         if (args.size == 2) return ACTIONS.filter { it.startsWith(args[1].lowercase(Locale.ROOT)) }
-        if (args.size == 3 && args[1].lowercase(Locale.ROOT) in listOf("watch", "unwatch", "info", "stats", "reset")) {
+        if (args.size == 3 && args[1].lowercase(Locale.ROOT) in listOf("watch", "unwatch", "info", "stats", "guard", "reset")) {
             return null // 玩家名补全
         }
         return emptyList()

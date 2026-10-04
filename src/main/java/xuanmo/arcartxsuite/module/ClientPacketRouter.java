@@ -72,7 +72,7 @@ final class ClientPacketRouter {
                 if (packetGuard != null
                     && (ph.packetId() == null || ph.packetId().equalsIgnoreCase(packetId))) {
                     String guardModule = ph.guardModule() == null ? ph.moduleId() : ph.guardModule();
-                    if (!packetGuard.allow(player, guardModule, action, false)) {
+                    if (!packetGuard.allow(player, guardModule, packetId, action, packetGuard.isDebugLogging())) {
                         return true;
                     }
                 }
