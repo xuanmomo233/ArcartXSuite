@@ -324,22 +324,24 @@ const ZipEntry *find_entry(const std::vector<ZipEntry> &es, const std::string &n
 }
 
 // 按 UTF-8 路径打开文件。Windows 的 ifstream(const char*) 走 ANSI 代码页，
-// 中文/非 ASCII 路径会打不开 → 转换为 UTF-16 宽路径用 wifstream。
+// 中文/非 ASCII 路径会打不开 → 转换为 UTF-16 宽路径用 _wfopen（标准 CRT，
+// MinGW/MSVC 均支持；wifstream(wstring) 只是 MSVC 扩展，MinGW 不可用）。
 bool open_file_utf8(const std::string &path, std::vector<uint8_t> &out) {
 #ifdef _WIN32
     int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
-    if (wlen > 1) {
-        std::wstring wpath(static_cast<size_t>(wlen - 1), L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
-        std::wifstream f(wpath, std::ios::binary | std::ios::ate);
-        if (!f) return false;
-        std::streamsize sz = f.tellg();
-        if (sz <= 0 || sz > 512LL * 1024 * 1024) return false;
-        out.resize(static_cast<size_t>(sz));
-        f.seekg(0);
-        return static_cast<bool>(f.read(reinterpret_cast<char *>(out.data()), sz));
-    }
-    return false;
+    if (wlen <= 1) return false;
+    std::wstring wpath(static_cast<size_t>(wlen - 1), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
+    FILE *fp = _wfopen(wpath.c_str(), L"rb");
+    if (!fp) return false;
+    fseek(fp, 0, SEEK_END);
+    long sz = ftell(fp);
+    if (sz <= 0 || sz > 512L * 1024 * 1024) { fclose(fp); return false; }
+    out.resize(static_cast<size_t>(sz));
+    fseek(fp, 0, SEEK_SET);
+    bool ok = fread(out.data(), 1, static_cast<size_t>(sz), fp) == static_cast<size_t>(sz);
+    fclose(fp);
+    return ok;
 #else
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return false;

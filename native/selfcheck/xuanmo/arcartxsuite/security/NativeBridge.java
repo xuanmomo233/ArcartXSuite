@@ -19,6 +19,8 @@ public class NativeBridge {
     public static native byte[] n6(byte[] a, byte[] b);         // decryptClass             ([B[B)[B
     public static native byte[] n11(byte[] a, byte[] b, byte[] c); // decryptModuleClass    ([B[B[B)[B
     public static native boolean n7(byte[] a, byte[] b);        // verifyIntegrity          ([B[B)Z
+    public static native boolean verifyResponseSig(long t, byte[] a, byte[] b); // verifyResponseSig (J[B[B)Z
+    public static native boolean responseVerifyActive();        // responseVerifyActive     ()Z
     public static native int n8();                              // enhancedEnvironmentCheck ()I
     public static native byte[] n9();                           // getHardwareFingerprint   ()[B
 }
