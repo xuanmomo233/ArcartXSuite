@@ -27,6 +27,12 @@ name: Encrypted CI Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: '只构建验证（加密/签名/native 编译全链路），不上传云端'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -536,7 +542,7 @@ jobs:
           retention-days: 1
 
       - name: Upload encrypted core JAR to cloud (本体 jar 自动上传)
-        if: success()
+        if: success() && inputs.skip_upload != true
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
@@ -627,7 +633,7 @@ jobs:
         run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
-        if: success() && needs.detect-changes.outputs.proxy_changed == 'true'
+        if: success() && needs.detect-changes.outputs.proxy_changed == 'true' && inputs.skip_upload != true
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
@@ -728,6 +734,7 @@ jobs:
         run: gradle :proxy:bungee:shadowJar :proxy:velocity:shadowJar --no-build-cache --parallel
 
       - name: Upload proxy JARs to cloud
+        if: inputs.skip_upload != true
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
@@ -859,6 +866,7 @@ jobs:
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
       - name: Upload encrypted modules (.axb) to cloud
+        if: inputs.skip_upload != true
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}

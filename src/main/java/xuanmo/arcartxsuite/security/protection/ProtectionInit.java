@@ -66,6 +66,7 @@ public final class ProtectionInit {
         if (!encrypted) {
             if (nativeOk) {
                 try { NativeBridge.n5(); } catch (Throwable ignored) {}
+                finally { NativeBridge.cleanupExtractedLib(); }
                 ProtectionEnvironment.ensureCleanEnvironment();
                 JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
             }
@@ -83,6 +84,8 @@ public final class ProtectionInit {
         int initResult;
         try { initResult = NativeBridge.n5(); }
         catch (Throwable t) { LOGGER.severe("[Protection] native n5 异常: " + t); return false; }
+        // n5 自检需要按路径读取明文库文件，故清理只能在自检返回后进行
+        finally { NativeBridge.cleanupExtractedLib(); }
         if (initResult != 0) {
             LOGGER.severe("[Protection] native 初始化失败 code=" + initResult);
             return false;

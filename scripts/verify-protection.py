@@ -231,6 +231,53 @@ def main():
         else:
             print(f"    [!] 未找到 PROTECTION.MF")
 
+        # BOOTSTRAP.MF 明文类清单校验（与 native verify_bootstrap_classes 同构）
+        results["bootstrap_manifest_ok"] = None
+        if has_pmf:
+            has_bmf = "META-INF/BOOTSTRAP.MF" in all_names
+            has_bsig = "META-INF/BOOTSTRAP.SIG" in all_names
+            if not (has_bmf and has_bsig):
+                print(f"    [!] 缺少 BOOTSTRAP.MF/BOOTSTRAP.SIG（native 引导类完整性校验将拒绝启动）")
+                results["bootstrap_manifest_ok"] = False
+            else:
+                mf_data = zin.read("META-INF/BOOTSTRAP.MF")
+                sig_data = zin.read("META-INF/BOOTSTRAP.SIG")
+                ok = len(sig_data) == 64
+                # 解析清单并逐一比对
+                entries = {}
+                in_entries = False
+                for line in mf_data.decode("utf-8").splitlines():
+                    if not in_entries:
+                        if line == "":
+                            in_entries = True
+                        continue
+                    if not line:
+                        continue
+                    name, _, hexv = line.rpartition(" ")
+                    entries[name] = hexv
+                plain = {n: zin.read(n) for n in all_names
+                         if n.endswith(".class") and not n.startswith("ENCRYPTED/")}
+                problems = []
+                if set(plain.keys()) != set(entries.keys()):
+                    missing = set(entries) - set(plain)
+                    extra = set(plain) - set(entries)
+                    problems.append(f"集合不符(缺 {len(missing)} 多 {len(extra)})")
+                else:
+                    bad = [n for n, d in plain.items() if hashlib.sha256(d).hexdigest() != entries[n]]
+                    if bad:
+                        problems.append(f"{len(bad)} 个类哈希不符")
+                if args.keys_dir and ok:
+                    pub_key = Path(args.keys_dir) / "ed25519_public.pem"
+                    sig_ok, msg = verify_signature(hashlib.sha256(mf_data).digest(), sig_data.hex(), pub_key)
+                    if not sig_ok:
+                        problems.append(f"清单签名无效: {msg}")
+                if problems:
+                    print(f"    [!] BOOTSTRAP.MF 校验失败: {'; '.join(problems)}")
+                    results["bootstrap_manifest_ok"] = False
+                else:
+                    print(f"    BOOTSTRAP.MF 明文类清单: {len(entries)} 类，哈希与签名一致")
+                    results["bootstrap_manifest_ok"] = True
+
         # 结构验证
         print(f"\n[4/5] JAR 结构:")
         structure_ok = True
@@ -274,6 +321,8 @@ def main():
         gaps.append("缺少双平台 native 库")
     if results["signature_valid"] is not True:
         gaps.append("签名未验证")
+    if results.get("bootstrap_manifest_ok") is False:
+        gaps.append("BOOTSTRAP.MF 明文类清单校验失败")
     if gaps:
         print(f"  GAPS: {'; '.join(gaps)}")
     print(f"{'='*50}")

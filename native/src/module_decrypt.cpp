@@ -76,6 +76,7 @@ jbyteArray decryptModule(
 
     if (!encryptedAxb || !key) return nullptr;
     if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
+    if (!trusted_decrypt_caller(env)) return nullptr;
 
     jsize enc_len = env->GetArrayLength(encryptedAxb);
     jsize key_len = env->GetArrayLength(key);
@@ -148,6 +149,7 @@ jbyteArray decryptModuleVerified(
 
     if (!encryptedAxb || !key) return nullptr;
     if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
+    if (!trusted_decrypt_caller(env)) return nullptr;
 
     jsize axb_len = env->GetArrayLength(encryptedAxb);
     jsize sig_len = signature ? env->GetArrayLength(signature) : 0;

@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-static constexpr bool kHardenedBuild = (AXS_HARDENED != 0);
-
 // Ed25519 公钥（构建时由 generate-keys.py 生成并嵌入）
 // !!! 以下占位值必须在构建前替换为真实公钥 !!!
 static const uint8_t ed25519_public_key[32] = {
@@ -99,7 +97,9 @@ jboolean verifyIntegrity(JNIEnv *env, jclass clazz, jbyteArray rootHash, jbyteAr
 
 jboolean verifyResponseSig(JNIEnv *env, jclass clazz, jlong timestamp, jbyteArray body, jbyteArray signature) {
     if (!body || !signature) return JNI_FALSE;
-    if (kHardenedBuild && is_all_zero_key(ed25519_response_public_key)) return JNI_FALSE;
+    // 占位公钥（未注入真钥的 dev/测试构建）直接拒绝，避免零密钥误验；
+    // 真公钥已在 CI 嵌入时，所有构建变体都应实际验签（不再仅限 hardened）。
+    if (is_all_zero_key(ed25519_response_public_key)) return JNI_FALSE;
 
     jsize body_len = env->GetArrayLength(body);
     jsize sig_len = env->GetArrayLength(signature);
@@ -136,7 +136,9 @@ jboolean verifyResponseSig(JNIEnv *env, jclass clazz, jlong timestamp, jbyteArra
 jboolean responseVerifyActive(JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
-    return (kHardenedBuild && !is_all_zero_key(ed25519_response_public_key)) ? JNI_TRUE : JNI_FALSE;
+    // 有真公钥即启用验签——原先仅限 hardened 构建导致生产版全程 fail-open 明文信任。
+    // dev 构建占位公钥仍返回 false，Java 侧继续走兼容 fail-open。
+    return !is_all_zero_key(ed25519_response_public_key) ? JNI_TRUE : JNI_FALSE;
 }
 
 // ─── Native 自校验 ──────────────────────────────

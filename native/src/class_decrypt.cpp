@@ -290,6 +290,9 @@ static jbyteArray decrypt_class_with_session(
 // ─── 本体路径：用全局 session_key（root_seed 派生）解密 ──────────
 jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData) {
     if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
+    // 调用方校验（全构建生效）：仅允许 ProtectedClassLoader 加载链发起解密，
+    // 阻断外部插件直接反射 n6 批量脱壳
+    if (!trusted_decrypt_caller(env)) return nullptr;
     if (!keys_initialized) return nullptr;
     return decrypt_class_with_session(env, session_key, classNameHash, encData);
 }
@@ -301,8 +304,10 @@ jbyteArray decryptModuleClass(
         JNIEnv *env, jclass clazz,
         jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed) {
     if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
+    if (!trusted_decrypt_caller(env)) return nullptr;
     if (!moduleSeed || env->GetArrayLength(moduleSeed) != 32) return nullptr;
     jbyte *seed_raw = env->GetByteArrayElements(moduleSeed, nullptr);
+    if (!seed_raw) return nullptr; // OOM —— 不能解引用 nullptr
     uint8_t session[32];
     derive_session_from_seed(reinterpret_cast<uint8_t*>(seed_raw), session);
     env->ReleaseByteArrayElements(moduleSeed, seed_raw, JNI_ABORT);

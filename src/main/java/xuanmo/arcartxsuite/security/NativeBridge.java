@@ -32,12 +32,19 @@ public final class NativeBridge {
     private static final byte[] _ENC_SALT =
             "axs-native-enc-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
+    /** 已释放到磁盘的明文 native 临时文件（n5 自检完成后由 cleanupExtractedLib 清理） */
+    private static volatile java.nio.file.Path extractedLibFile;
+    private static volatile java.nio.file.Path extractedLibDir;
+
     static {
         try {
             loadNativeFromClasspath();
             available = true;
-        } catch (Exception e) {
-            loadError = e.getMessage();
+        } catch (Throwable t) {
+            // 连 UnsatisfiedLinkError 也吞掉：native 加载失败不能让 NativeBridge 类初始化
+            // 连带失败（否则任何 isAvailable() 调用都会抛 NoClassDefFoundError），
+            // 明文兼容模式下的插件仍应能正常启动。
+            loadError = String.valueOf(t);
         }
     }
 
@@ -94,22 +101,41 @@ public final class NativeBridge {
         Path tempFile = tempDir.resolve(libName);
         Files.write(tempFile, libBytes);
         applyOwnerOnlyPermissions(tempDir, tempFile);
-        System.load(tempFile.toAbsolutePath().toString());
-        java.util.Arrays.fill(libBytes, (byte) 0);
-        // 加载完成后立即删除明文文件：Windows/Linux 上已加载的库句柄保留内存映射，
-        // 文件可安全删除，最大程度缩短明文 native 在磁盘上的暴露窗口。
+        extractedLibDir = tempDir;
+        extractedLibFile = tempFile;
         try {
-            Files.deleteIfExists(tempFile);
-        } catch (IOException ignored) {
-            // 某些 JVM/OS 可能锁定文件，回退到 shutdown hook 清理。
+            System.load(tempFile.toAbsolutePath().toString());
+        } catch (Throwable t) {
+            // 加载失败时立即清场，避免明文 native 滞留磁盘
+            cleanupExtractedLib();
+            throw t;
         }
-        // 注册 shutdown hook 确保临时目录在 JVM 退出时被清理（文件若已删除则只清空目录）
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
-                Files.deleteIfExists(tempFile);
-                Files.deleteIfExists(tempDir);
-            } catch (IOException ignored) {}
-        }, "axs-native-cleanup"));
+        java.util.Arrays.fill(libBytes, (byte) 0);
+        // 不在此处删除明文文件：n5() → verify_native_self_integrity 需要按路径
+        // 读取自身文件重算哈希，Linux 下 mmap 的文件虽可 unlink 但 dladdr 路径随即失效，
+        // 自检会误判失败。由 ProtectionInit 在 n5 返回后调用 cleanupExtractedLib()；
+        // shutdown hook 兜底覆盖未走到 n5 的路径（如保护层初始化提前返回）。
+        Runtime.getRuntime().addShutdownHook(new Thread(NativeBridge::cleanupExtractedLib,
+                "axs-native-cleanup"));
+    }
+
+    /**
+     * 清理解密后释放到临时目录的明文 native 库文件与目录。
+     * <p>必须在 {@link #n5()}（native 自检按文件路径重算自身哈希）返回之后再调用。
+     * 幂等：重复调用、文件已被删、或 Windows 下 DLL 被 JVM 文件锁占用导致删除失败，
+     * 均静默处理（shutdown hook 会在 JVM 退出时兜底重试）。
+     */
+    public static void cleanupExtractedLib() {
+        Path file = extractedLibFile;
+        Path dir = extractedLibDir;
+        extractedLibFile = null;
+        extractedLibDir = null;
+        if (file != null) {
+            try { Files.deleteIfExists(file); } catch (Throwable ignored) {}
+        }
+        if (dir != null) {
+            try { Files.deleteIfExists(dir); } catch (Throwable ignored) {}
+        }
     }
 
     /**
@@ -279,7 +305,8 @@ public final class NativeBridge {
     public static native boolean verifyResponseSig(long timestamp, byte[] body, byte[] signature);
 
     /**
-     * 响应验签是否启用：仅硬化构建且内嵌的响应公钥非占位时返回 true。
+     * 响应验签是否启用：内嵌的响应公钥非占位（CI 已注入真钥）时返回 true，
+     * 与构建变体无关；dev 构建占位公钥下返回 false，走兼容 fail-open。
      */
     public static native boolean responseVerifyActive();
 

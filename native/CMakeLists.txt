@@ -43,11 +43,16 @@ set(SOURCES
     src/class_decrypt.cpp
     src/anti_debug_enhanced.cpp
     src/integrity_check.cpp
+    src/bootstrap_verify.cpp
     src/hw_fingerprint.cpp
 )
 
 add_library(axs-native SHARED ${SOURCES})
-target_compile_definitions(axs-native PRIVATE AXS_HARDENED=$<BOOL:${AXS_PRODUCTION}>)
+# AXS_HARDENED 默认跟随 AXS_PRODUCTION；也接受独立的 -DAXS_HARDENED=ON
+# （CI 硬化编译验证路径），二者任一开启即定义。
+option(AXS_HARDENED "Enable hardened-only code paths" OFF)
+target_compile_definitions(axs-native PRIVATE
+    AXS_HARDENED=$<OR:$<BOOL:${AXS_PRODUCTION}>,$<BOOL:${AXS_HARDENED}>>)
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
 target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 

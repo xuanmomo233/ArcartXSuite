@@ -24,6 +24,8 @@
 #endif
 
 // 威胁标志位（与 Java 层对齐）
+// Java 侧 NATIVE_HARD_MASK = 0x07：仅 DEBUGGER/FRIDA/HW_BP 触发硬降级；
+// 0x08 起为软信号（仅上报）——HOOK/TIMING/PROCESS 单独出现不杀插件。
 static constexpr int THREAT_DEBUGGER    = 0x0001;
 static constexpr int THREAT_FRIDA       = 0x0002;
 static constexpr int THREAT_HW_BP       = 0x0004;
@@ -212,8 +214,10 @@ jint enhancedEnvironmentCheck(JNIEnv *env, jclass clazz) {
         threats |= THREAT_FRIDA;
 #endif
 
+    // 27042/27043 端口监听只说明本机跑着 frida-server（可能在调试别的进程），
+    // 不是本进程被注入的证据 → 降为软信号；进程内 maps/模块/线程命中才是硬信号。
     if (check_frida_port())
-        threats |= THREAT_FRIDA;
+        threats |= THREAT_PROCESS;
     if (check_timing_anomaly())
         threats |= THREAT_TIMING;
 

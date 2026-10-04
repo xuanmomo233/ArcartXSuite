@@ -34,6 +34,18 @@ void get_hardware_fingerprint(uint8_t out[32]);
 // Native 自校验（integrity_check.cpp）
 bool verify_native_self_integrity();
 bool native_hard_reject_signal(JNIEnv *env);
+
+// 解密入口调用方校验（axs_native.cpp）
+// 回调 Java 侧 JvmAntiDebug.isTrustedDecryptCaller()，用 StackWalker 核对调用栈中
+// 是否存在 ProtectedClassLoader 自身或其定义的类（即加密类）的帧。
+// 保护层未就位（pcl == null：明文 dev jar / 测试 / CI harness）或检测基础设施异常时放行。
+bool trusted_decrypt_caller(JNIEnv *env);
+
+// JAR 明文层完整性校验（bootstrap_verify.cpp）
+// 通过 JVM CodeSource 定位插件 JAR，自行解析 ZIP，验签 BOOTSTRAP.MF 清单，
+// 比对全部非 ENCRYPTED/ .class 条目哈希，并复核 .enc Merkle+Ed25519。
+// 明文 jar（无 PROTECTION.MF）或 jar 无法定位时跳过；加密 jar 校验失败返回 false。
+bool verify_bootstrap_classes(JNIEnv *env);
 // .axb 验签复用的 Ed25519 公钥（integrity_check.cpp 内嵌的同一密钥）
 const uint8_t* axb_sign_pubkey();
 

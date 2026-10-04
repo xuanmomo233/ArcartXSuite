@@ -475,6 +475,30 @@ def main():
         len(final_enc_entries), list(algorithms_used), native_platforms, signature, root_hash
     )
 
+    # ─── 明文引导类清单（BOOTSTRAP.MF + BOOTSTRAP.SIG） ────────────
+    # 覆盖 jar 内全部明文 .class 条目（引导类 + api/auth 包 + shaded 库），
+    # native 侧 verify_bootstrap_classes() 据此做字节级完整性比对——
+    # 任何对明文类的 patch（插桩 defineEncrypted 旁路解密）都会被检出。
+    # 模块 jar（--module-seed-b64 模式）不生成：.axb 载荷本身已带 Ed25519 平台签名。
+    bootstrap_mf_bytes = None
+    bootstrap_sig = None
+    if not args.module_seed_b64:
+        manifest_lines = ["Bootstrap-Version: 1.0",
+                          f"Class-Count: {len(bootstrap)}",
+                          ""]
+        for name in sorted(bootstrap.keys()):
+            manifest_lines.append(f"{name} {hashlib.sha256(bootstrap[name]).hexdigest()}")
+        bootstrap_mf_bytes = ("\n".join(manifest_lines) + "\n").encode("utf-8")
+
+        bootstrap_sig = b'\x00' * 64
+        if args.keys_dir:
+            priv_key_path = Path(args.keys_dir) / "ed25519_private.pem"
+            if priv_key_path.exists():
+                bootstrap_sig = sign_hash(hashlib.sha256(bootstrap_mf_bytes).digest(), priv_key_path)
+                print(f"    BOOTSTRAP.MF 已签名（明文类 {len(bootstrap)} 个）")
+            else:
+                print("    [!] Ed25519 私钥未找到，BOOTSTRAP.SIG 使用占位签名")
+
     # 保留原始 MANIFEST.MF 主属性区，并做净化防御。
     # Protection-Enabled 标记已移至 PROTECTION.MF，无需写入 MANIFEST.MF。
     # 防御点：旧版本曾把 Protection-Enabled 追加到「终止空行之后」，导致 Java
@@ -518,6 +542,9 @@ def main():
         mf_info.compress_type = zipfile.ZIP_STORED
         zout.writestr(mf_info, manifest_bytes)
         zout.writestr("META-INF/PROTECTION.MF", protection_mf)
+        if bootstrap_mf_bytes is not None:
+            zout.writestr("META-INF/BOOTSTRAP.MF", bootstrap_mf_bytes)
+            zout.writestr("META-INF/BOOTSTRAP.SIG", bootstrap_sig)
 
         # 额外嵌入的 native 库（--no-native 时为空；正常 CI 走资源保留分支）
         for name, data in native_files.items():
@@ -538,11 +565,37 @@ def main():
         # 资源文件（不加密）：保留除 MANIFEST/PROTECTION/JAR 签名文件外的所有原始资源
         # （含 plugin.yml、native/ 库、语言文件等），确保插件运行所需资源完整
         for name, data in resource_files.items():
-            if name in ("META-INF/MANIFEST.MF", "META-INF/PROTECTION.MF"):
+            if name in ("META-INF/MANIFEST.MF", "META-INF/PROTECTION.MF",
+                        "META-INF/BOOTSTRAP.MF", "META-INF/BOOTSTRAP.SIG"):
                 continue
             if _is_sig_file(name):
                 continue
             zout.writestr(name, data)
+
+    # ─── 输出自校验：清单写错 = 所有用户 n5 拒绝启动，必须在生成时 fail-fast ──
+    if bootstrap_mf_bytes is not None:
+        print(f"\n[自检] 校验输出 JAR 的 BOOTSTRAP.MF 完整性...")
+        with zipfile.ZipFile(output_jar, 'r') as zin:
+            names = set(zin.namelist())
+            if "META-INF/BOOTSTRAP.MF" not in names or "META-INF/BOOTSTRAP.SIG" not in names:
+                sys.exit("[!] 自检失败：BOOTSTRAP.MF/BOOTSTRAP.SIG 未写入输出 JAR")
+            if zin.read("META-INF/BOOTSTRAP.MF") != bootstrap_mf_bytes:
+                sys.exit("[!] 自检失败：BOOTSTRAP.MF 内容与生成值不一致")
+            plain = {n for n in names if n.endswith(".class") and not n.startswith("ENCRYPTED/")}
+            manifest_names = {l.rsplit(" ", 1)[0] for l in
+                              bootstrap_mf_bytes.decode("utf-8").split("\n\n", 1)[1].splitlines() if l}
+            if plain != manifest_names:
+                sys.exit(f"[!] 自检失败：明文类集合与清单不符 (jar={len(plain)} 清单={len(manifest_names)})")
+            pub = Path(args.keys_dir) / "ed25519_public.pem" if args.keys_dir else None
+            if pub is not None and pub.exists() and HAS_SIGN:
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+                pub_key = serialization.load_pem_public_key(pub.read_bytes())
+                try:
+                    pub_key.verify(zin.read("META-INF/BOOTSTRAP.SIG"),
+                                   hashlib.sha256(bootstrap_mf_bytes).digest())
+                except Exception as exc:
+                    sys.exit(f"[!] 自检失败：BOOTSTRAP.SIG 验签不通过: {exc}")
+        print(f"    自检通过（{len(manifest_names)} 个明文类）")
 
     jar_size = output_jar.stat().st_size
     print(f"\n[+] 加密 JAR 生成完成！")

@@ -19,12 +19,43 @@ jint initProtection(JNIEnv *env, jclass clazz) {
         return -1; // native 库被篡改
     }
 
+    // 验证 JAR 明文层完整性（引导类哈希清单 + .enc Merkle，native 侧锚定）
+    if (!verify_bootstrap_classes(env)) {
+        return -3; // 插件 JAR 明文类被篡改
+    }
+
     // 初始化密钥链
     if (!protection_init_keys()) {
         return -2; // 密钥初始化失败
     }
 
     return 0;
+}
+
+// 解密入口调用方校验：回调 JvmAntiDebug.isTrustedDecryptCaller()。
+// 阻断同服恶意插件/脚本直接反射 n6/n10/n11 脱壳：反射得到的栈帧里不存在
+// ProtectedClassLoader 或其定义的类，校验必返回 false。
+// fail-open 说明：检测类缺失 / 检测过程异常时放行——生产 JAR 中 JvmAntiDebug 为
+// bootstrap 明文类且受 Merkle+Ed25519 完整性门保护，缺失只可能发生在 harness/测试环境；
+// 若因基础设施异常误拒合法解密，整个插件将无法启动。
+bool trusted_decrypt_caller(JNIEnv *env) {
+    if (!env) return true;
+    jclass antiDebug = env->FindClass("xuanmo/arcartxsuite/security/protection/JvmAntiDebug");
+    if (!antiDebug) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return true;
+    }
+    jmethodID m = env->GetStaticMethodID(antiDebug, "isTrustedDecryptCaller", "()Z");
+    if (!m) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return true;
+    }
+    jboolean ok = env->CallStaticBooleanMethod(antiDebug, m);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return true;
+    }
+    return ok == JNI_TRUE;
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {

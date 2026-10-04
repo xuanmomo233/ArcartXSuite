@@ -253,6 +253,39 @@ public final class JvmAntiDebug {
     }
 
     /**
+     * 解密入口调用方校验（由 native 层在每次类解密前回调）。
+     *
+     * <p>放行条件（任一）：
+     * <ul>
+     *   <li>保护层未就位（{@code pcl == null}，如明文 dev jar、单元测试、CI harness）——
+     *       此时不存在受保护边界，放行不影响安全态势；</li>
+     *   <li>调用栈中存在 {@link ProtectedClassLoader} 自身帧（本体 .enc 解密路径），
+     *       或存在由 ProtectedClassLoader 定义的类（即全部加密类，如
+     *       ByteArrayModuleClassLoader / CloudModuleService）的帧。</li>
+     * </ul>
+     * 反射调用也逃不过：StackWalker 返回的是真实调用帧，攻击者类由其自身
+     * PluginClassLoader 定义，不可能出现在受保护加载链上。
+     *
+     * <p>注意：检测自身异常时放行（fail-open），避免 JVM 差异导致合法解密被拒、
+     * 插件无法启动。常见攻击形态（无任何受保护帧）仍会返回 false。
+     */
+    public static boolean isTrustedDecryptCaller() {
+        try {
+            ClassLoader pcl = ProtectionInit.getProtectedLoader();
+            if (pcl == null) {
+                return true;
+            }
+            return StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                    .walk(frames -> frames.anyMatch(f -> {
+                        Class<?> dc = f.getDeclaringClass();
+                        return dc == ProtectedClassLoader.class || dc.getClassLoader() == pcl;
+                    }));
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /**
      * 威胁响应回调接口
      */
     @FunctionalInterface
