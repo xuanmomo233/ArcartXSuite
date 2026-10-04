@@ -229,16 +229,17 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
                 .getConstructor(String.class);
 
             Class<?> attributeClass = Class.forName(ATTRIBUTE_CLASS, true, loader);
-            livingGetAttribute = Class.forName(LIVING_ENTITY_CLASS, true, loader)
-                .getMethod("getAttribute", attributeClass);
-
-            Class<?> instanceClass = Class.forName(ATTRIBUTE_INSTANCE_CLASS, true, loader);
-            instanceGetModifier = instanceClass.getMethod("getModifier", UUID.class);
-            instanceAddTransientModifier = instanceClass.getMethod(
-                "addTransientModifier", Class.forName(ATTRIBUTE_MODIFIER_CLASS, false, loader));
-            instanceRemoveModifier = instanceClass.getMethod("removeModifier", UUID.class);
+            livingGetAttribute = resolveMethod(
+                Class.forName(LIVING_ENTITY_CLASS, true, loader), attributeClass,
+                "m_21051_", "getAttribute");
 
             Class<?> modifierClass = Class.forName(ATTRIBUTE_MODIFIER_CLASS, true, loader);
+            Class<?> instanceClass = Class.forName(ATTRIBUTE_INSTANCE_CLASS, true, loader);
+            instanceGetModifier = resolveMethod(instanceClass, UUID.class, "m_22111_", "getModifier");
+            instanceAddTransientModifier = resolveMethod(
+                instanceClass, modifierClass, "m_22125_", "addTransientModifier");
+            instanceRemoveModifier = resolveMethod(instanceClass, UUID.class, "m_22120_", "removeModifier");
+
             Class<?> operationEnum = Class.forName(ATTRIBUTE_MODIFIER_CLASS + "$Operation", true, loader);
             modifierCtor = modifierClass.getConstructor(UUID.class, String.class, double.class, operationEnum);
             operationConstants = operationEnum.getEnumConstants();
@@ -247,6 +248,21 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
             logger.fine("[ModAttribute] Forge 属性反射解析失败: " + throwable);
             return false;
         }
+    }
+
+    /**
+     * 按候选名解析方法：Forge 生产环境 net.minecraft 方法为 SRG 名（m_xxxxx_），
+     * MojMap 名为兜底（开发环境/非常规核心）。
+     */
+    private static Method resolveMethod(Class<?> owner, Class<?> paramType, String... names)
+        throws NoSuchMethodException {
+        for (String name : names) {
+            try {
+                return owner.getMethod(name, paramType);
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        throw new NoSuchMethodException(owner.getName() + " 缺少方法 " + String.join("/", names));
     }
 
     // ── 修饰器施加/移除 ──
