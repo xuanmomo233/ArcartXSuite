@@ -365,6 +365,25 @@ public final class QuestGpsService implements Listener {
         }));
     }
 
+    /**
+     * 查询玩家某任务的 Chemdah 档案状态（供 {@code QuestGpsNavigable.questState} 能力）。
+     */
+    public xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState questState(Player player, String questId) {
+        PlayerProfile profile = loadProfile(player, false);
+        if (profile == null) {
+            return xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.NONE;
+        }
+        String resolved = resolveQuestId(player, questId);
+        QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(resolved);
+        Quest quest = profile.getQuestById(definition != null ? definition.id() : resolved, false);
+        if (quest == null) {
+            return xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.NONE;
+        }
+        return quest.isCompleted()
+            ? xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.COMPLETED
+            : xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.ACTIVE;
+    }
+
     public void abandonQuest(Player player, String questId) {
         PlayerProfile profile = loadProfile(player, true);
         if (profile == null) {

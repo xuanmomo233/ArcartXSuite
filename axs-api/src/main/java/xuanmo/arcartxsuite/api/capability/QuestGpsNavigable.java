@@ -13,6 +13,16 @@ import org.jetbrains.annotations.Nullable;
 @PublicCapability
 public interface QuestGpsNavigable {
 
+    /** 任务状态（Chemdah 档案视角：未接/进行中/已完成） */
+    enum QuestState {
+        /** 未接取（或档案未加载） */
+        NONE,
+        /** 已接取进行中 */
+        ACTIVE,
+        /** 已完成 */
+        COMPLETED
+    }
+
     /** 向玩家推送任务供选择 */
     void offerQuest(@NotNull Player player, @NotNull String questId, boolean openMenu);
 
@@ -33,4 +43,12 @@ public interface QuestGpsNavigable {
 
     /** 检查其他模块入口是否被主线门禁锁定 */
     boolean moduleEntryLocked(@NotNull Player player, @NotNull String moduleEntryId);
+
+    /**
+     * 查询玩家某任务的 Chemdah 档案状态。
+     * <p>
+     * questId 与 {@link #acceptQuest} 同语义（questgps 配置/别名可解析的 id）。
+     * 档案未加载或从未接取返回 {@link QuestState#NONE}。
+     */
+    @NotNull QuestState questState(@NotNull Player player, @NotNull String questId);
 }

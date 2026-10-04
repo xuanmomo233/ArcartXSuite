@@ -39,12 +39,18 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     private boolean available;
     private boolean debug;
     private Manager publicManager;
+    private Manager publicTemporaryManager;
 
     private Listener adyeshachVisibleListener;
     private BiConsumer<Player, Object> adyeshachVisibleHandler;
     private Method adyVisibleGetEntityMethod;
     private Method adyVisibleGetViewerMethod;
     private Method adyVisibleGetVisibleMethod;
+
+    private Listener adyeshachInteractListener;
+    private BiConsumer<Player, Object> adyeshachInteractHandler;
+    private Method adyInteractGetEntityMethod;
+    private Method adyInteractGetPlayerMethod;
 
     public AdyeshachNpcBridge(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -59,6 +65,7 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     public boolean initialize() {
         available = false;
         publicManager = null;
+        publicTemporaryManager = null;
         privateMarkerEntities.clear();
 
         Plugin adyeshach = plugin.getServer().getPluginManager().getPlugin("Adyeshach");
@@ -71,6 +78,11 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
             if (publicManager == null) {
                 throw new IllegalStateException("Adyeshach 公共实体管理器不可用。");
             }
+            try {
+                publicTemporaryManager = AdyeshachAPI.INSTANCE.getEntityManagerPublicTemporary();
+            } catch (RuntimeException exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("Adyeshach 公共临时管理器不可用，临时 NPC 能力停用: " + exception.getMessage());
+            }
             available = true;
             return true;
         } catch (RuntimeException exception) {
@@ -82,9 +94,11 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
     @Override
     public void shutdown() {
         unregisterVisibleHandler();
+        unregisterInteractHandler();
         clearAllPrivateMarkers();
         available = false;
         publicManager = null;
+        publicTemporaryManager = null;
         privateMarkerEntities.clear();
     }
 
@@ -103,14 +117,19 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         Location playerLocation = player.getLocation();
         double rangeSquared = range * range;
         List<xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc> result = new ArrayList<>();
-        for (EntityInstance entity : publicManager.getEntities()) {
-            try {
-                xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc nearbyNpc = resolveNearbyNpc(entity, player, playerWorld, playerLocation, rangeSquared);
-                if (nearbyNpc != null) {
-                    result.add(nearbyNpc);
+        for (Manager manager : publicManagers()) {
+            if (manager == null) {
+                continue;
+            }
+            for (EntityInstance entity : manager.getEntities()) {
+                try {
+                    xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc nearbyNpc = resolveNearbyNpc(entity, player, playerWorld, playerLocation, rangeSquared);
+                    if (nearbyNpc != null) {
+                        result.add(nearbyNpc);
+                    }
+                } catch (RuntimeException exception) {
+                    logWarning("scan-entity", entity, exception);
                 }
-            } catch (RuntimeException exception) {
-                logWarning("scan-entity", entity, exception);
             }
         }
 
@@ -128,21 +147,26 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
             return Optional.empty();
         }
         String lower = name.strip().toLowerCase(Locale.ROOT);
-        for (EntityInstance entity : publicManager.getEntities()) {
-            if (entity == null || entity.isDeleted() || entity.getInvalid()) {
+        for (Manager manager : publicManagers()) {
+            if (manager == null) {
                 continue;
             }
-            String displayName = entity.getDisplayName();
-            if (displayName != null && !displayName.isBlank() && displayName.strip().toLowerCase(Locale.ROOT).equals(lower)) {
-                return Optional.of(entity);
-            }
-            String customName = entity.getCustomName();
-            if (customName != null && !customName.isBlank() && customName.strip().toLowerCase(Locale.ROOT).equals(lower)) {
-                return Optional.of(entity);
-            }
-            String id = entity.getId();
-            if (id != null && !id.isBlank() && id.strip().toLowerCase(Locale.ROOT).equals(lower)) {
-                return Optional.of(entity);
+            for (EntityInstance entity : manager.getEntities()) {
+                if (entity == null || entity.isDeleted() || entity.getInvalid()) {
+                    continue;
+                }
+                String displayName = entity.getDisplayName();
+                if (displayName != null && !displayName.isBlank() && displayName.strip().toLowerCase(Locale.ROOT).equals(lower)) {
+                    return Optional.of(entity);
+                }
+                String customName = entity.getCustomName();
+                if (customName != null && !customName.isBlank() && customName.strip().toLowerCase(Locale.ROOT).equals(lower)) {
+                    return Optional.of(entity);
+                }
+                String id = entity.getId();
+                if (id != null && !id.isBlank() && id.strip().toLowerCase(Locale.ROOT).equals(lower)) {
+                    return Optional.of(entity);
+                }
             }
         }
         return Optional.empty();
@@ -455,6 +479,141 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
         } catch (RuntimeException exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("AdyeshachNpcBridge: applyDefaultStateForPlayer 失败 - " + exception.getMessage());
             return false;
+        }
+    }
+
+    /** 公共管理器集合（持久 + 临时；去重防缺临时管理器时重复扫描）。 */
+    private List<Manager> publicManagers() {
+        if (publicTemporaryManager != null && publicTemporaryManager != publicManager) {
+            return List.of(publicManager, publicTemporaryManager);
+        }
+        return List.of(publicManager);
+    }
+
+    // ======================== 公共临时 NPC（实例化场景） ========================
+
+    @Override
+    public Object spawnPublicTemporaryNpc(String entityType, Location location, String npcId, String displayName) {
+        if (!available || publicTemporaryManager == null || location == null) {
+            return null;
+        }
+        try {
+            EntityTypes type;
+            try {
+                type = entityType == null ? EntityTypes.VILLAGER : EntityTypes.valueOf(entityType.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException exception) {
+                type = EntityTypes.VILLAGER;
+            }
+            EntityInstance entity = publicTemporaryManager.create(type, location);
+            if (entity == null) {
+                return null;
+            }
+            if (npcId != null && !npcId.isBlank()) {
+                try {
+                    entity.setId(npcId);
+                } catch (RuntimeException exception) {
+                    logWarning("set-id", entity, exception);
+                }
+            }
+            if (displayName != null && !displayName.isBlank()) {
+                try {
+                    entity.setCustomName(org.bukkit.ChatColor.translateAlternateColorCodes('&', displayName));
+                    entity.setCustomNameVisible(true);
+                } catch (RuntimeException exception) {
+                    logWarning("set-name", entity, exception);
+                }
+            }
+            try {
+                entity.setVisibleAfterLoaded(true);
+            } catch (RuntimeException ignored) {
+            }
+            return entity;
+        } catch (RuntimeException exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("AdyeshachNpcBridge: spawnPublicTemporaryNpc 失败 - " + exception.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public boolean removeEntity(Object adyeshachEntity) {
+        if (!(adyeshachEntity instanceof EntityInstance entity)) {
+            return false;
+        }
+        return deleteEntity(entity);
+    }
+
+    @Override
+    public boolean registerInteractHandler(BiConsumer<Player, Object> handler) {
+        unregisterInteractHandler();
+        if (!available || handler == null) {
+            return false;
+        }
+        Plugin adyeshach = plugin.getServer().getPluginManager().getPlugin("Adyeshach");
+        if (adyeshach == null) {
+            return false;
+        }
+        try {
+            ClassLoader classLoader = adyeshach.getClass().getClassLoader();
+            Class<?> eventClass = Class.forName(
+                "ink.ptms.adyeshach.api.event.AdyeshachEntityInteractEvent", true, classLoader);
+            if (!Event.class.isAssignableFrom(eventClass)) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("AdyeshachNpcBridge: AdyeshachEntityInteractEvent 不是 Bukkit Event，无法注册监听器。");
+                return false;
+            }
+            adyInteractGetEntityMethod = eventClass.getMethod("getEntity");
+            adyInteractGetPlayerMethod = eventClass.getMethod("getPlayer");
+
+            adyeshachInteractHandler = handler;
+            adyeshachInteractListener = new Listener() {};
+
+            @SuppressWarnings("unchecked")
+            Class<? extends Event> typed = (Class<? extends Event>) eventClass;
+            EventExecutor executor = (listener, event) -> dispatchAdyeshachInteractEvent(event);
+            plugin.getServer().getPluginManager().registerEvent(
+                typed,
+                adyeshachInteractListener,
+                EventPriority.NORMAL,
+                executor,
+                plugin
+            );
+            if (debug) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().info("AdyeshachNpcBridge: 已注册 AdyeshachEntityInteractEvent 监听器。");
+            }
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning("AdyeshachNpcBridge: 注册 AdyeshachEntityInteractEvent 监听器失败 - " + exception.getMessage());
+            unregisterInteractHandler();
+            return false;
+        }
+    }
+
+    @Override
+    public void unregisterInteractHandler() {
+        if (adyeshachInteractListener != null) {
+            xuanmo.arcartxsuite.util.ListenerUnregister.safeUnregisterAll(adyeshachInteractListener, "AdyeshachNpcBridge");
+            adyeshachInteractListener = null;
+        }
+        adyeshachInteractHandler = null;
+        adyInteractGetEntityMethod = null;
+        adyInteractGetPlayerMethod = null;
+    }
+
+    private void dispatchAdyeshachInteractEvent(Event event) {
+        BiConsumer<Player, Object> handler = adyeshachInteractHandler;
+        if (handler == null || event == null) {
+            return;
+        }
+        try {
+            Object entity = adyInteractGetEntityMethod.invoke(event);
+            Object playerObj = adyInteractGetPlayerMethod.invoke(event);
+            if (!(playerObj instanceof Player player) || entity == null) {
+                return;
+            }
+            handler.accept(player, entity);
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            if (debug) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("AdyeshachNpcBridge: 处理 AdyeshachEntityInteractEvent 失败 - " + exception.getMessage());
+            }
         }
     }
 

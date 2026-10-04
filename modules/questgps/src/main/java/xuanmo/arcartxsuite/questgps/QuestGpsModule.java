@@ -278,6 +278,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             public boolean moduleEntryLocked(@NotNull org.bukkit.entity.Player player, @NotNull String moduleEntryId) {
                 return service.moduleEntryLocked(player, moduleEntryId);
             }
+
+            @Override
+            public @NotNull QuestState questState(@NotNull org.bukkit.entity.Player player, @NotNull String questId) {
+                return service.questState(player, questId);
+            }
         });
         adminCommand = new QuestGpsAdminCommand(() -> service, messages());
 

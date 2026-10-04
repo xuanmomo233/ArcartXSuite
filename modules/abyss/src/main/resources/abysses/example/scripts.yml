@@ -2,58 +2,185 @@
 # 选择器: @all @trigger @random @dead 或玩家名
 #
 # 段执行时机：
-#   world-init —— 世界就绪后、玩家传送【之前】跑（造平台/铺场景专用）
-#   init       —— 玩家全部进图后、副本激活前跑（此时玩法对象尚未初始化）
+#   world-init —— 世界就绪后、玩家传送【之前】跑（造场景专用；虚空世界必须在这里
+#                 把落脚点建好，否则玩家进图即坠虚空）
+#   init       —— 玩家全部进图后、副本激活前跑（玩法对象尚未初始化）
 #   start      —— 副本激活时跑（怪组已注册，AUTO_START 组已刷）
 
 world-init:
-  # 虚空世界先搭竞技场（在玩家传送之前执行，否则会掉虚空）：
-  # 17x17 末地石地板 y=79 + 上方清空 + 一圈屏障围栏 y=80..82
-  - "fillblocks -8,79,-8 8,79,8 END_STONE"
-  - "fillblocks -8,80,-8 8,84,8 AIR"
-  - "fillblocks -8,80,-8 -8,82,8 BARRIER"
-  - "fillblocks 8,80,-8 8,82,8 BARRIER"
-  - "fillblocks -7,80,-8 7,82,-8 BARRIER"
-  - "fillblocks -7,80,8 7,82,8 BARRIER"
-
+  # ══════════════════════════════════════════════════════════
+  # 元气试炼之地 · 程序化建筑（11 间房 + 8 条走廊，region 绝对坐标）
+  # 房间：24x16x24 壳（y60 地板 / y61-74 内空 / y75 顶），门洞 y61-64
+  # 走廊：16 格封闭通道连接相邻房间，入口 3 格铺金块=portal 传送垫
+  # 层末凹室：死端通道 + 金块垫 = 层间传送区
+  # ══════════════════════════════════════════════════════════
+  # ── 第 1 层 · 苔痕前哨 ──────────────────────────────────────
+  # f1_start 起始房 [0,23]：红毯 + 向导站位
+  - "fillblocks 0,60,0 23,75,23 STONE_BRICKS"
+  - "fillblocks 1,61,1 22,74,22 AIR"
+  - "fillblocks 23,61,9 23,64,14 AIR"
+  - "fillblocks 10,74,10 13,74,13 GLOWSTONE"
+  - "fillblocks 6,61,6 17,61,17 RED_CARPET"
+  - "fillblocks 24,60,8 39,66,15 STONE_BRICKS"
+  - "fillblocks 24,61,9 39,65,14 AIR"
+  - "fillblocks 24,60,10 26,60,13 GOLD_BLOCK"
+  # f1_combat_a 战斗房 [40,63]：双石柱掩体
+  - "fillblocks 40,60,0 63,75,23 STONE_BRICKS"
+  - "fillblocks 41,61,1 62,74,22 AIR"
+  - "fillblocks 40,61,9 40,64,14 AIR"
+  - "fillblocks 63,61,9 63,64,14 AIR"
+  - "fillblocks 50,74,10 53,74,13 GLOWSTONE"
+  - "fillblocks 46,61,5 47,66,6 CHISELED_STONE_BRICKS"
+  - "fillblocks 56,61,16 57,66,17 CHISELED_STONE_BRICKS"
+  - "fillblocks 64,60,8 79,66,15 STONE_BRICKS"
+  - "fillblocks 64,61,9 79,65,14 AIR"
+  - "fillblocks 64,60,10 66,60,13 GOLD_BLOCK"
+  # f1_altar 祭坛房 [80,103]：黑曜石祭坛 + 附魔台 + 末地烛
+  - "fillblocks 80,60,0 103,75,23 STONE_BRICKS"
+  - "fillblocks 81,61,1 102,74,22 AIR"
+  - "fillblocks 80,61,9 80,64,14 AIR"
+  - "fillblocks 103,61,9 103,64,14 AIR"
+  - "fillblocks 90,74,10 93,74,13 GLOWSTONE"
+  - "fillblocks 89,60,9 93,60,13 OBSIDIAN"
+  - "setblock 91,61,11 ENCHANTING_TABLE"
+  - "setblock 89,61,9 END_ROD"
+  - "setblock 93,61,9 END_ROD"
+  - "setblock 89,61,13 END_ROD"
+  - "setblock 93,61,13 END_ROD"
+  - "fillblocks 104,60,8 119,66,15 STONE_BRICKS"
+  - "fillblocks 104,61,9 119,65,14 AIR"
+  - "fillblocks 104,60,10 106,60,13 GOLD_BLOCK"
+  # f1_boss Boss房 [120,143]：四角石柱；层末凹室=下层传送垫
+  - "fillblocks 120,60,0 143,75,23 STONE_BRICKS"
+  - "fillblocks 121,61,1 142,74,22 AIR"
+  - "fillblocks 120,61,9 120,64,14 AIR"
+  - "fillblocks 143,61,9 143,64,14 AIR"
+  - "fillblocks 130,74,10 133,74,13 GLOWSTONE"
+  - "fillblocks 126,61,4 127,66,5 CHISELED_STONE_BRICKS"
+  - "fillblocks 136,61,4 137,66,5 CHISELED_STONE_BRICKS"
+  - "fillblocks 126,61,18 127,66,19 CHISELED_STONE_BRICKS"
+  - "fillblocks 136,61,18 137,66,19 CHISELED_STONE_BRICKS"
+  - "fillblocks 144,60,8 146,66,15 STONE_BRICKS"
+  - "fillblocks 144,61,9 145,65,14 AIR"
+  - "fillblocks 144,60,10 146,60,13 GOLD_BLOCK"
+  # ── 第 2 层 · 熔岩矿道 ──────────────────────────────────────
+  # f2_combat_a 三连战房 [200,223]
+  - "fillblocks 200,60,0 223,75,23 STONE_BRICKS"
+  - "fillblocks 201,61,1 222,74,22 AIR"
+  - "fillblocks 200,61,9 200,64,14 AIR"
+  - "fillblocks 223,61,9 223,64,14 AIR"
+  - "fillblocks 210,74,10 213,74,13 GLOWSTONE"
+  - "fillblocks 206,61,5 207,66,6 CHISELED_STONE_BRICKS"
+  - "fillblocks 216,61,16 217,66,17 CHISELED_STONE_BRICKS"
+  - "fillblocks 204,60,10 219,60,13 CRACKED_STONE_BRICKS"
+  - "fillblocks 224,60,8 239,66,15 STONE_BRICKS"
+  - "fillblocks 224,61,9 239,65,14 AIR"
+  - "fillblocks 224,60,10 226,60,13 GOLD_BLOCK"
+  # f2_shop 商店房 [240,263]：货架 + 三售货台座
+  - "fillblocks 240,60,0 263,75,23 STONE_BRICKS"
+  - "fillblocks 241,61,1 262,74,22 AIR"
+  - "fillblocks 240,61,9 240,64,14 AIR"
+  - "fillblocks 263,61,9 263,64,14 AIR"
+  - "fillblocks 250,74,10 253,74,13 GLOWSTONE"
+  - "fillblocks 246,61,1 256,61,1 SPRUCE_PLANKS"
+  - "setblock 247,61,2 GOLD_BLOCK"
+  - "setblock 251,61,2 REDSTONE_BLOCK"
+  - "setblock 255,61,2 DIAMOND_BLOCK"
+  - "fillblocks 264,60,8 279,66,15 STONE_BRICKS"
+  - "fillblocks 264,61,9 279,65,14 AIR"
+  - "fillblocks 264,60,10 266,60,13 GOLD_BLOCK"
+  # f2_puzzle 解谜房 [280,303]：四拉杆 + 铁栅封死东出口（解谜才开）
+  - "fillblocks 280,60,0 303,75,23 STONE_BRICKS"
+  - "fillblocks 281,61,1 302,74,22 AIR"
+  - "fillblocks 280,61,9 280,64,14 AIR"
+  - "fillblocks 290,74,10 293,74,13 GLOWSTONE"
+  - "fillblocks 283,61,7 299,61,7 SPRUCE_PLANKS"
+  - "setblock 285,62,7 LEVER"
+  - "setblock 289,62,7 LEVER"
+  - "setblock 293,62,7 LEVER"
+  - "setblock 297,62,7 LEVER"
+  - "fillblocks 303,61,9 303,64,14 IRON_BARS"
+  - "fillblocks 304,60,8 319,66,15 STONE_BRICKS"
+  - "fillblocks 304,61,9 319,65,14 AIR"
+  - "fillblocks 304,60,10 306,60,13 GOLD_BLOCK"
+  # f2_boss Boss房 [320,343]；层末凹室
+  - "fillblocks 320,60,0 343,75,23 STONE_BRICKS"
+  - "fillblocks 321,61,1 342,74,22 AIR"
+  - "fillblocks 320,61,9 320,64,14 AIR"
+  - "fillblocks 343,61,9 343,64,14 AIR"
+  - "fillblocks 330,74,10 333,74,13 GLOWSTONE"
+  - "fillblocks 326,61,4 327,66,5 CHISELED_STONE_BRICKS"
+  - "fillblocks 336,61,18 337,66,19 CHISELED_STONE_BRICKS"
+  - "fillblocks 344,60,8 346,66,15 STONE_BRICKS"
+  - "fillblocks 344,61,9 345,65,14 AIR"
+  - "fillblocks 344,60,10 346,60,13 GOLD_BLOCK"
+  # ── 第 3 层 · 深渊王座 ──────────────────────────────────────
+  # f3_corridor 走廊决战 [400,423]：陷阱带由 obstacles.yml 铺灵魂沙/岩浆块
+  - "fillblocks 400,60,0 423,75,23 NETHER_BRICKS"
+  - "fillblocks 401,61,1 422,74,22 AIR"
+  - "fillblocks 400,61,9 400,64,14 AIR"
+  - "fillblocks 423,61,9 423,64,14 AIR"
+  - "fillblocks 410,74,10 413,74,13 GLOWSTONE"
+  - "fillblocks 424,60,8 439,66,15 STONE_BRICKS"
+  - "fillblocks 424,61,9 439,65,14 AIR"
+  - "fillblocks 424,60,10 426,60,13 GOLD_BLOCK"
+  # f3_treasure 宝箱房 [440,463]：金台宝箱
+  - "fillblocks 440,60,0 463,75,23 STONE_BRICKS"
+  - "fillblocks 441,61,1 462,74,22 AIR"
+  - "fillblocks 440,61,9 440,64,14 AIR"
+  - "fillblocks 463,61,9 463,64,14 AIR"
+  - "fillblocks 450,74,10 453,74,13 GLOWSTONE"
+  - "fillblocks 449,60,9 453,60,13 GOLD_BLOCK"
+  - "setblock 451,61,11 CHEST"
+  - "fillblocks 464,60,8 479,66,15 STONE_BRICKS"
+  - "fillblocks 464,61,9 479,65,14 AIR"
+  - "fillblocks 464,60,10 466,60,13 GOLD_BLOCK"
+  # f3_final 终层王座 [480,513]：黑曜石壳+基岩地板（凋零拆不动），无东出口
+  - "fillblocks 480,60,0 513,75,23 OBSIDIAN"
+  - "fillblocks 481,61,1 512,74,22 AIR"
+  - "fillblocks 480,60,0 513,60,23 BEDROCK"
+  - "fillblocks 480,61,9 480,64,14 AIR"
+  - "fillblocks 494,74,10 499,74,13 GLOWSTONE"
+  - "fillblocks 486,61,4 487,67,5 OBSIDIAN"
+  - "fillblocks 506,61,18 507,67,19 OBSIDIAN"
 init:
   - "wait 1"
+  - "setvar coins 0"
 
 start:
-  - "message @all &6═══ 虚空试炼场 ═══"
-  - "title @all 10 40 10 &6虚空试炼场|&e消灭全部怪物"
+  - "message @all &6═══ 元气试炼之地 ═══"
+  - "title @all 10 40 10 &6元气试炼之地|&e三层地牢 · 层层递进"
   - "sound @all ENTITY_ENDER_DRAGON_GROWL 1 1"
-  - "bossbar @all 600 RED SOLID &c虚空试炼场"
-  # 引导演示：HUD 目标行 + 世界路标指向机关区（到点后跑 guide_valve_area 段）
-  - "guide_point valve_area 0,80,6 3 &e前往机关平台"
-  - "wait 8"
-  - "buff_offer room_blessing"          # 开场祝福三选一演示
+  - "bossbar @all 1200 RED SOLID &c元气试炼之地"
+  # 引导：HUD 目标行 + 路标指向向导（到达跑 guide_guide 段）
+  - "guide_point guide 11,62,11 2 &e先与向导·艾琳交谈"
 
-# guide_<navId> 段：到达该导航点时自动运行（可选）
-guide_valve_area:
-  - "guide_clear valve_area"
-  - "message @all &a已抵达机关平台 &8（按顺序扳动阀门）"
+# guide_<navId> 段：到达该导航点时自动运行
+guide_guide:
+  - "guide_clear guide"
+  - "message @all &7右键 艾琳 可交谈并接取讨伐委托"
 
 complete:
-  - "message @all &a&l通关！干得漂亮！"
+  - "message @all &a&l通关！深渊领主已陨落！"
   - "title @all 10 60 10 &a&l通关|&e奖励已发放"
   - "grant_reward @all clear_pack"
+  - "open_chest_ui @all final_chest"
   - "firework @all BURST GOLD"
-  - "wait 3"
+  - "wait 5"
   - "exit_dungeon @all"
 
 fail:
-  - "message @all &c试炼失败，下次再来！"
+  - "message @all &c试炼失败……地牢把你们吐了出来"
   - "wait 2"
   - "exit_dungeon @all"
 
 player-death:
-  - "message @all &c{player} 阵亡了！"
-  - "wait 5"
+  - "message @all &c{player} 阵亡了！&7将在 8 秒后复活，撑住！"
+  - "wait 8"
   - "revive_player @trigger"
 
 all-death:
   - "fail_dungeon"
 
 exit:
-  - "message @trigger &7已离开虚空试炼场"
+  - "message @trigger &7已离开元气试炼之地"

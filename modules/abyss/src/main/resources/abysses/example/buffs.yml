@@ -1,32 +1,65 @@
-# ═══ 增益选择池（buffs.yml）═══
-# roguelike 祝福：脚本 buff_offer <池id> 触发——可写进任何生命周期段/
-# interact/机关脚本，时机完全由编排决定。
-#
-# 字段:
-#   pick             每人可选几个（目前实现固定发 1 次选择，预留多选）
-#   candidates       面板候选数（<=0 或超池 = 全显；按 weight 加权抽取）
-#   presentation     panel = AX 选择卡片 / hud = 不弹窗直接按权重生效
-#   timeout          选择限时秒（0=不限）；到时按 timeout-auto 兜底
-#   timeout-auto     first | random | none（none=放弃不给）
-#   once-per-instance  true=同一实例内本池只能 offer 一次
-#
-# 选项字段:
-#   id/name/icon     图标是物品材质名（IRON_SWORD 等），面板渲染物品图标
-#   rarity           common|rare|epic|legendary —— 卡片描边色
-#   weight           抽中权重（默认 10）
-#   desc             描述行（面板最多显示前 3 行）
-#   effects          脚本行（全动作可用；@trigger=选择者）
-#
-# 实例变量: {var:buff.<poolId>}=最近所选 option id；{var:buff.<poolId>.count}=已发放人次
-# 事件: axs.abyss.buff_offer / axs.abyss.buff_pick
+# ═══ 增益选择池（元气骑士式三选一天赋/祝福）═══
+# buff_offer <池id> 触发：层间 Boss 清完、祭坛供奉后发起。
+# candidates=3 → 面板三选一；timeout-auto: random → 超时随机兜底。
 pools:
-  # 清房祝福：经典三选一
-  room_blessing:
-    name: "房间肃清祝福"
+  # 祭坛祝福（f1_altar 供奉 15 金币）
+  altar_pool:
+    name: "祭坛祝福"
     pick: 1
     candidates: 3
     presentation: panel
-    timeout: 20
+    timeout: 30
+    timeout-auto: random
+    options:
+      - id: holy_light
+        name: "&e圣光庇佑"
+        icon: TOTEM_OF_UNDYING
+        rarity: epic
+        weight: 8
+        desc:
+          - "伤害减免，屹立不倒"
+        effects:
+          - "apply_attribute @trigger damage_resistance 20 percent"
+          - "message @trigger &d✦ &e圣光庇佑 &7已生效"
+          - "sound @trigger BLOCK_BEACON_ACTIVATE 1 1.2"
+      - id: vampire_edge
+        name: "&c嗜血锋刃"
+        icon: NETHERITE_SWORD
+        rarity: epic
+        weight: 8
+        desc:
+          - "攻击伤害 +20%"
+        effects:
+          - "apply_attribute @trigger attack_damage 20 percent"
+          - "message @trigger &d✦ &c嗜血锋刃 &7已生效"
+      - id: guardian_skin
+        name: "&b守护之肤"
+        icon: DIAMOND_CHESTPLATE
+        rarity: rare
+        weight: 12
+        desc:
+          - "护甲与韧性提升"
+        effects:
+          - "apply_potion @trigger RESISTANCE 0 9999"
+          - "message @trigger &d✦ &b守护之肤 &7已生效"
+      - id: altar_gold
+        name: "&6献金回馈"
+        icon: GOLD_INGOT
+        rarity: common
+        weight: 15
+        desc:
+          - "返还 10 金币"
+        effects:
+          - "addvar coins 10"
+          - "message @trigger &d✦ 祭坛吐回 &e10 &7金币"
+
+  # 第 1 层 Boss 后·三选一天赋
+  f1_blessing:
+    name: "首层天赋"
+    pick: 1
+    candidates: 3
+    presentation: panel
+    timeout: 25
     timeout-auto: random
     options:
       - id: sharp_edge
@@ -39,7 +72,7 @@ pools:
         effects:
           - "apply_attribute @trigger attack_damage 15 percent"
           - "message @trigger &d✦ &c利刃 &7已生效"
-          - "sound @trigger item.enchant.equip 1 1.2"
+          - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 1.2"
       - id: swift_feet
         name: "&b疾风"
         icon: FEATHER
@@ -50,36 +83,80 @@ pools:
         effects:
           - "apply_potion @trigger SPEED 1 9999"
           - "message @trigger &d✦ &b疾风 &7已生效"
+      - id: thick_blood
+        name: "&a厚血"
+        icon: APPLE
+        rarity: common
+        weight: 15
+        desc:
+          - "生命上限提升并治疗"
+        effects:
+          - "apply_attribute @trigger max_health 6 flat"
+          - "heal @trigger 8"
+          - "message @trigger &d✦ &a厚血 &7已生效"
       - id: ember_mark
         name: "&6余烬烙印"
         icon: BLAZE_POWDER
         rarity: epic
         weight: 5
         desc:
-          - "获得余烬标记"
-          - "（脚本可检查变量做增伤分支）"
+          - "获得余烬标记与抗火"
+          - "（写入实例变量供脚本做分支）"
         effects:
           - "setvar buff_ember_mark 1"
+          - "apply_potion @trigger FIRE_RESISTANCE 0 9999"
           - "message @trigger &d✦ &6余烬烙印 &7已烙下"
 
-  # 层间休整：非选择型，直接按权重生效一项
-  floor_mend:
-    name: "层间休整"
-    presentation: hud
+  # 第 2 层 Boss 后·三选一天赋（更激进的取舍）
+  f2_blessing:
+    name: "二层天赋"
+    pick: 1
+    candidates: 3
+    presentation: panel
+    timeout: 25
+    timeout-auto: random
     options:
-      - id: mend_light
-        name: "&a轻伤愈合"
-        icon: BREAD
-        rarity: common
+      - id: berserk
+        name: "&4狂战"
+        icon: NETHERITE_AXE
+        rarity: epic
         weight: 8
+        desc:
+          - "攻速与力量大幅提升"
+          - "代价：防御力下降"
         effects:
-          - "apply_potion @trigger REGENERATION 1 10"
-          - "message @trigger &d✦ 休整: &a轻伤愈合"
-      - id: mend_heavy
-        name: "&a伤势平复"
-        icon: GOLDEN_APPLE
+          - "apply_potion @trigger STRENGTH 1 9999"
+          - "apply_attribute @trigger armor -4 flat"
+          - "message @trigger &d✦ &4狂战 &7已生效——以攻为守！"
+      - id: iron_faith
+        name: "&7铁壁"
+        icon: SHIELD
         rarity: rare
-        weight: 3
+        weight: 10
+        desc:
+          - "护甲 +6，获得抗性"
         effects:
-          - "apply_potion @trigger REGENERATION 2 10"
-          - "message @trigger &d✦ 休整: &a伤势平复"
+          - "apply_attribute @trigger armor 6 flat"
+          - "apply_potion @trigger RESISTANCE 0 9999"
+          - "message @trigger &d✦ &7铁壁 &7已生效"
+      - id: swift_reload
+        name: "&b迅捷"
+        icon: SUGAR
+        rarity: rare
+        weight: 10
+        desc:
+          - "速度 II，身法如风"
+        effects:
+          - "apply_potion @trigger SPEED 2 9999"
+          - "apply_potion @trigger JUMP_BOOST 1 9999"
+          - "message @trigger &d✦ &b迅捷 &7已生效"
+      - id: gold_lust
+        name: "&6掘金"
+        icon: GOLD_NUGGET
+        rarity: common
+        weight: 12
+        desc:
+          - "立即获得 20 金币"
+        effects:
+          - "addvar coins 20"
+          - "message @trigger &d✦ 囊中 +20 金币"

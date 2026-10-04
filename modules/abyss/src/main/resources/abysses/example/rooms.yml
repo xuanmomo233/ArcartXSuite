@@ -1,153 +1,351 @@
-# rooms.yml — 房间模板池（floors 模式房间定义；region/pool 两种来源共用）
+# rooms.yml — 元气试炼之地 · 房间池（region 模式，origin=0,0,0 绝对坐标）
 #
-# 坐标全部相对房间 origin：
-#   region 层房间：origin 默认 0,0,0 → 坐标即世界绝对值（建筑在大地图里量好填进来）
-#   pool 层房间：  origin=粘贴锚点  → 坐标相对 schematic 原点（在 WE 里 //pos1/2 量好）
-#
-# type 语义：
-#   combat —— 进房锁门刷怪，清完开门（默认）
-#   boss   —— 同 combat（用于层末 boss 房，语义标记）
-#   safe   —— 不锁门不刷怪（走廊/休整房）
-#   shop   —— 不锁门（商店房；挂 interact 接商店）
+# type 语义：combat=进房锁门刷怪 | boss=同 combat（层末语义标记）|
+#            safe=不锁门（休整/NPC/解谜）| shop=不锁门（商店）
+# 波次节奏：TRIGGERED 组前置清完后按 delay-seconds > rest-seconds > 房间
+#           wave-rest 三级休整延迟刷怪；on-prespawn 在休整期开始瞬间跑预告。
 
 rooms:
-  # ── region 模式房间示例（世界内已建好）──
-  corridor_a:
-    type: combat
-    region: ["0,60,0", "29,80,29"]        # 房间 box（世界绝对坐标）
-    spawn: "1,64,15,90,0"                  # 进房站位
-    exit: ["29,63,13", "31,67,17"]         # 出口传送区（清完激活，可空）
-    doors:                                  # 锁门填充的门盒
-      - region: ["30,64,14", "30,66,16"]
-        material: BARRIER
-    groups:                                 # 房内怪组（格式同 monsters.yml）
-      wave1:
-        spawn-timing: AUTO_START            # 锁门即刷
-        monsters:
-          - mob-id: minecraft:zombie
-            location: "15,64,15"
-            amount: 4
-          - mob-id: minecraft:skeleton
-            location: "20,64,10"
-            amount: 2
-      wave2:
-        spawn-timing: TRIGGERED             # wave1 清完触发
-        trigger-after: [wave1]
-        monsters:
-          - mob-id: minecraft:spider
-            location: "15,64,20"
-            amount: 3
-        complete-when-alive-below: 0
-    on-enter:
-      - "title @all &c遭遇战！"
-    on-clear:
-      - "message @all &a通道已打通"
+  # ═══════════ 第 1 层 · 苔痕前哨 ═══════════
 
-  corridor_b:
+  # 起始房：向导 NPC（Chemdah 会话 sk_guide + quest_step 委托）
+  f1_start:
+    type: safe
+    region: ["0,60,0", "23,75,23"]
+    spawn: "2,61,11,270,0"
+    exit: ["24,61,9", "26,64,14"]
+    on-enter:
+      - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
+      - "sound @all ENTITY_VILLAGER_YES 1 1"
+
+  # 战斗房 A：两波 + 波间 5s 休整 + 预告
+  f1_combat_a:
     type: combat
-    region: ["40,60,0", "69,80,29"]
-    spawn: "41,64,15,90,0"
+    region: ["40,60,0", "63,75,23"]
+    spawn: "42,61,11,270,0"
+    exit: ["64,61,9", "66,64,14"]
+    wave-rest: 5                       # 房内 TRIGGERED 组默认休整秒
     doors:
-      - region: ["70,64,14", "70,66,16"]
+      - region: ["40,61,9", "40,64,14"]
+      - region: ["63,61,9", "63,64,14"]
     groups:
-      wave1:
+      w1:
         spawn-timing: AUTO_START
         monsters:
-          - mob-id: minecraft:zombie
-            location: "55,64,15"
-            amount: 5
+          - mob-id: vanilla:zombie
+            location: "52,61,7"
+            amount: 2
+          - mob-id: vanilla:zombie
+            location: "52,61,15"
+            amount: 2
+          - mob-id: vanilla:skeleton
+            location: "57,61,11"
+            amount: 1
+      w2:
+        spawn-timing: TRIGGERED
+        trigger-after: [w1]
+        # 前置清完 → 休整期开始瞬间发预告（此刻怪还没刷）
+        on-prespawn:
+          - "title @all 5 30 10 &e第二波 &c5 秒后来袭！"
+          - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
+          - "actionbar @all &7利用休整时间调整站位"
+        monsters:
+          - mob-id: vanilla:zombie
+            location: "56,61,6"
+            amount: 2
+          - mob-id: vanilla:spider
+            location: "56,61,16"
+            amount: 2
+          - mob-id: vanilla:creeper
+            location: "51,61,11"
+            amount: 1
+    on-enter:
+      - "title @all 10 30 10 &c遭遇战！|&7肃清房间以解除封锁"
+    on-lock:
+      - "sound @all BLOCK_IRON_DOOR_CLOSE 1 0.6"
+    on-clear:
+      - "title @all 5 30 10 &a房间肃清|&e踩金块地标前进"
+      - "guide_point f1_exit 65,62,11 2 &e前往出口"
+      - "sound @all ENTITY_PLAYER_LEVELUP 1 1.4"
 
-  boss_arena:
+  # 祭坛房：15 金币供奉 → 三选一祝福（金币由击杀掉落累积）
+  f1_altar:
+    type: safe
+    region: ["80,60,0", "103,75,23"]
+    spawn: "82,61,11,270,0"
+    exit: ["104,61,9", "106,64,14"]
+    on-enter:
+      - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
+      - "message @all &7当前金币：&e{var:coins} &7（击杀掉落，全队共享）"
+      - "guide_clear f1_exit"
+
+  # Boss 房：冲撞兽 + 20s 增援（DELAYED 定时阶段）
+  f1_boss:
     type: boss
-    region: ["80,60,0", "119,85,39"]
-    spawn: "81,64,20,90,0"
-    exit: ["119,63,18", "121,67,22"]        # 层末房 exit → 下一层首房
+    region: ["120,60,0", "143,75,23"]
+    spawn: "122,61,11,270,0"
+    exit: ["144,61,9", "146,64,14"]
     doors:
-      - region: ["80,64,18", "80,66,22"]
+      - region: ["120,61,9", "120,64,14"]
+        material: OBSIDIAN
+      - region: ["143,61,9", "143,64,14"]
         material: OBSIDIAN
     groups:
       boss:
         spawn-timing: AUTO_START
         monsters:
-          - mob-id: MythicMobs:SkeletonKing   # MythicMobs 怪也照写
-            location: "100,64,20"
+          - mob-id: vanilla:ravager
+            location: "132,61,11"
             amount: 1
-            level: 5
-    on-enter:
-      - "title @all &4&lBOSS 战"
-    on-clear:
-      - "announce_global &6{party} 击败了守层 Boss！"
-
-  # ── pool 模式房间示例（schematic 拼接）──
-  combat_a:
-    type: combat
-    schematic: "rooms/combat_a.schem"      # 相对地牢目录
-    region: ["0,0,0", "24,15,24"]          # 相对 schematic 原点
-    spawn: "2,1,12,90,0"
-    exit: ["24,0,10", "26,4,14"]
-    doors: []                               # pool 房独立盒子，一般无需物理门
-    groups:
-      wave1:
-        spawn-timing: AUTO_START
-        monsters:
-          - mob-id: minecraft:zombie
-            location: "12,1,12"
-            amount: 4
-
-  combat_b:
-    type: combat
-    schematic: "rooms/combat_b.schem"
-    region: ["0,0,0", "30,18,30"]
-    spawn: "2,1,15,90,0"
-    exit: ["30,0,13", "32,4,17"]
-    groups:
-      wave1:
-        spawn-timing: AUTO_START
-        monsters:
-          - mob-id: minecraft:skeleton
-            location: "15,1,15"
-            amount: 3
-      wave2:
-        spawn-timing: DELAYED               # 锁门 8s 后增援
-        delay-seconds: 8
-        monsters:
-          - mob-id: minecraft:creeper
-            location: "15,1,20"
+          - mob-id: vanilla:zombie
+            location: "128,61,6"
             amount: 2
+      reinforce:
+        spawn-timing: DELAYED            # 锁门 20s 后增援（Boss 阶段压力）
+        delay-seconds: 20
+        on-prespawn:
+          - "title @all 5 30 10  |&7黑暗中有援军逼近……"
+          - "sound @all ENTITY_WITHER_AMBIENT 0.6 0.7"
+        monsters:
+          - mob-id: vanilla:skeleton
+            location: "126,61,11"
+            amount: 2
+    on-enter:
+      - "title @all 10 40 10 &4&l守层 Boss|&c冲撞兽·蛮岩"
+      - "sound @all ENTITY_RAVAGER_ROAR 1 0.7"
+    on-clear:
+      - "title @all 10 40 10 &a&lBoss 击破！"
+      - "sound @all UI_TOAST_CHALLENGE_COMPLETE 1 1"
+      - "guide_point f1_next 145,62,11 2 &e前往下一层"
 
-  shop_a:
+  # ═══════════ 第 2 层 · 熔岩矿道 ═══════════
+
+  # 三连战：三波递进（5s/6s 休整 + 预告）
+  f2_combat_a:
+    type: combat
+    region: ["200,60,0", "223,75,23"]
+    spawn: "202,61,11,270,0"
+    exit: ["224,61,9", "226,64,14"]
+    wave-rest: 5
+    doors:
+      - region: ["200,61,9", "200,64,14"]
+      - region: ["223,61,9", "223,64,14"]
+    groups:
+      w1:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: vanilla:zombie
+            location: "211,61,7"
+            amount: 2
+          - mob-id: vanilla:skeleton
+            location: "211,61,15"
+            amount: 2
+      w2:
+        spawn-timing: TRIGGERED
+        trigger-after: [w1]
+        on-prespawn:
+          - "title @all 5 30 10 &e第二波 &c5 秒后来袭！"
+          - "sound @all ENTITY_WITCH_AMBIENT 0.7 0.9"
+        monsters:
+          - mob-id: vanilla:spider
+            location: "216,61,7"
+            amount: 2
+          - mob-id: vanilla:spider
+            location: "216,61,15"
+            amount: 2
+          - mob-id: vanilla:witch
+            location: "211,61,11"
+            amount: 1
+      w3:
+        spawn-timing: TRIGGERED
+        trigger-after: [w2]
+        rest-seconds: 6                  # 组级休整覆盖房间默认
+        on-prespawn:
+          - "title @all 5 30 10 &c精英波 &46 秒后来袭！"
+          - "sound @all ENTITY_EVOKER_PREPARE_SUMMON 0.8 0.8"
+        monsters:
+          - mob-id: vanilla:creeper
+            location: "216,61,8"
+            amount: 2
+          - mob-id: vanilla:zombie
+            location: "216,61,14"
+            amount: 2
+          - mob-id: vanilla:witch
+            location: "211,61,11"
+            amount: 1
+    on-enter:
+      - "title @all 10 30 10 &c三连战！|&7每一波之间是喘息之机"
+    on-clear:
+      - "title @all 5 30 10 &a矿道肃清|&e踩金块地标前进"
+      - "guide_point f2_exit 225,62,11 2 &e前往出口"
+
+  # 商店：金币购物（金块=治疗 / 红石块=力量 / 钻石块=金苹果）
+  f2_shop:
     type: shop
-    schematic: "rooms/shop_a.schem"
-    region: ["0,0,0", "14,10,14"]
-    spawn: "2,1,7,90,0"
-    exit: ["14,0,5", "16,4,9"]
-    groups: {}                              # 无怪房：进房即清
+    region: ["240,60,0", "263,75,23"]
+    spawn: "242,61,11,270,0"
+    exit: ["264,61,9", "266,64,14"]
     on-enter:
-      - "message @all &e发现补给点"
+      - "title @all 10 30 10 &6旅行商队|&7金币兑换补给"
+      - "message @all &e金块台座&7：治疗 8 金 &8｜ &c红石台座&7：力量 12 金 &8｜ &b钻石台座&7：金苹果 15 金"
+      - "message @all &7当前金币：&e{var:coins}"
+      - "guide_clear f2_exit"
 
-  treasure_a:
+  # 解谜房：四拉杆按序扳动，解开铁栅出口（错序重置）
+  f2_puzzle:
     type: safe
-    schematic: "rooms/treasure_a.schem"
-    region: ["0,0,0", "14,10,14"]
-    spawn: "2,1,7,90,0"
-    exit: ["14,0,5", "16,4,9"]
-    groups: {}
+    region: ["280,60,0", "303,75,23"]
+    spawn: "282,61,11,270,0"
+    exit: ["304,61,9", "306,64,14"]
     on-enter:
-      - "grant_reward @all 小宝箱"
-      - "message @all &6拾获战利品"
+      - "title @all 10 30 10 &b尘封机关|&7按正确顺序扳动四根拉杆"
+      - "message @all &7墙上的刻痕写着：&e三 → 一 → 四 → 二"
+      - "sound @all BLOCK_NOTE_BLOCK_CHIME 1 1"
 
-  boss_2:
+  # Boss 房：唤魔者 + 卫道士 + 18s 增援
+  f2_boss:
     type: boss
-    schematic: "rooms/boss_2.schem"
-    region: ["0,0,0", "34,20,34"]
-    spawn: "2,1,17,90,0"
+    region: ["320,60,0", "343,75,23"]
+    spawn: "322,61,11,270,0"
+    exit: ["344,61,9", "346,64,14"]
+    doors:
+      - region: ["320,61,9", "320,64,14"]
+        material: OBSIDIAN
+      - region: ["343,61,9", "343,64,14"]
+        material: OBSIDIAN
     groups:
       boss:
         spawn-timing: AUTO_START
         monsters:
-          - mob-id: minecraft:wither_skeleton
-            location: "17,1,17"
+          - mob-id: vanilla:evoker
+            location: "332,61,11"
             amount: 1
-            level: 10
+          - mob-id: vanilla:vindicator
+            location: "328,61,7"
+            amount: 2
+      reinforce:
+        spawn-timing: DELAYED
+        delay-seconds: 18
+        on-prespawn:
+          - "title @all 5 30 10  |&7邪教增援正在赶来……"
+          - "sound @all ENTITY_EVOKER_PREPARE_WOLOLO 0.8 0.9"
+        monsters:
+          - mob-id: vanilla:vindicator
+            location: "326,61,15"
+            amount: 2
+          - mob-id: vanilla:witch
+            location: "331,61,11"
+            amount: 1
     on-enter:
-      - "title @all &4&l终层守卫"
+      - "title @all 10 40 10 &4&l守层 Boss|&5邪教唤魔者"
+      - "sound @all ENTITY_EVOKER_PREPARE_ATTACK 1 0.8"
+    on-clear:
+      - "title @all 10 40 10 &a&lBoss 击破！"
+      - "sound @all UI_TOAST_CHALLENGE_COMPLETE 1 1"
+      - "guide_point f2_next 345,62,11 2 &e前往深渊王座"
+
+  # ═══════════ 第 3 层 · 深渊王座 ═══════════
+
+  # 走廊决战：灵魂沙岩浆陷阱地带 + 两波下界卫队
+  f3_corridor:
+    type: combat
+    region: ["400,60,0", "423,75,23"]
+    spawn: "402,61,11,270,0"
+    exit: ["424,61,9", "426,64,14"]
+    wave-rest: 6
+    doors:
+      - region: ["400,61,9", "400,64,14"]
+      - region: ["423,61,9", "423,64,14"]
+    groups:
+      w1:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: vanilla:wither_skeleton
+            location: "412,61,7"
+            amount: 2
+          - mob-id: vanilla:blaze
+            location: "412,61,15"
+            amount: 2
+      w2:
+        spawn-timing: TRIGGERED
+        trigger-after: [w1]
+        on-prespawn:
+          - "title @all 5 30 10 &c卫队增援 &46 秒后来袭！"
+          - "sound @all ENTITY_BLAZE_AMBIENT 0.8 0.7"
+        monsters:
+          - mob-id: vanilla:wither_skeleton
+            location: "416,61,8"
+            amount: 2
+          - mob-id: vanilla:blaze
+            location: "416,61,14"
+            amount: 2
+          - mob-id: vanilla:creeper
+            location: "411,61,11"
+            amount: 1
+    on-enter:
+      - "title @all 10 30 10 &4走廊决战！|&7小心脚下的灼热地带"
+    on-clear:
+      - "title @all 5 30 10 &a卫队覆灭|&e踩金块地标前进"
+      - "guide_point f3_exit 425,62,11 2 &e前往出口"
+
+  # 宝箱房：开启战利品 + 全队恢复
+  f3_treasure:
+    type: safe
+    region: ["440,60,0", "463,75,23"]
+    spawn: "442,61,11,270,0"
+    exit: ["464,61,9", "466,64,14"]
+    on-enter:
+      - "title @all 10 30 10 &6战利品之厅|&7开启宝箱，补给备战"
+      - "heal @all 10"
+      - "feed @all"
+      - "guide_clear f3_exit"
+
+  # 终层 Boss：凋零 + 定时增援 + 清剿增援后终波（三阶段节奏）
+  f3_final:
+    type: boss
+    region: ["480,60,0", "513,75,23"]
+    spawn: "482,61,11,270,0"
+    doors:
+      - region: ["480,61,9", "480,64,14"]
+        material: OBSIDIAN
+    groups:
+      boss:
+        spawn-timing: AUTO_START
+        monsters:
+          - mob-id: vanilla:wither
+            location: "497,62,11"
+            amount: 1
+      reinforce_1:
+        spawn-timing: DELAYED            # 一阶段：25s 后深渊增援
+        delay-seconds: 25
+        on-prespawn:
+          - "title @all 5 30 10  |&7深渊领主召唤了它的卫队！"
+          - "sound @all ENTITY_WITHER_AMBIENT 0.8 0.6"
+        monsters:
+          - mob-id: vanilla:wither_skeleton
+            location: "490,61,7"
+            amount: 2
+          - mob-id: vanilla:blaze
+            location: "490,61,15"
+            amount: 1
+      reinforce_2:
+        spawn-timing: TRIGGERED         # 二阶段：清完一阶增援后终波
+        trigger-after: [reinforce_1]
+        rest-seconds: 5
+        on-prespawn:
+          - "title @all 5 30 10  |&c最后的卫队压上来了！"
+          - "sound @all ENTITY_ENDER_DRAGON_GROWL 0.7 0.8"
+        monsters:
+          - mob-id: vanilla:wither_skeleton
+            location: "488,61,11"
+            amount: 2
+          - mob-id: vanilla:creeper
+            location: "488,61,6"
+            amount: 2
+    on-enter:
+      - "title @all 10 50 10 &4&l终层 Boss|&5深渊领主·凋零"
+      - "sound @all ENTITY_WITHER_SPAWN 0.8 0.8"
+      - "bossbar @all 600 PURPLE SOLID &5深渊领主"
+    on-clear:
+      - "title @all 10 50 10 &a&l深渊领主已陨落！"
+      - "sound @all UI_TOAST_CHALLENGE_COMPLETE 1 1"

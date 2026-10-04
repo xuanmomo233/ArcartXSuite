@@ -4,9 +4,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -15,29 +15,39 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.instance.AbyssInstance;
 import xuanmo.arcartxsuite.abyss.template.NpcConfig.DungeonNpc;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.scheduler.SchedulerAPI;
 
 /**
- * 副本 NPC 管理器（实体实现：LivingEntity + NoAI + 无敌 + 自定义名）。
+ * 副本 NPC 管理器。
  * <p>
- * PLAYER 型 NPC（皮肤）需要 Adyeshach——host 桥的 createAdyeshachNpcBridge
- * 仅支持查找/增强既有 NPC；副本 NPC 走 {@code ink.ptms.adyeshach} API 直接创建，
- * 未安装时降级为 ZOMBIE 实体提示。对话/点击/商店全部自己管理。
+ * 实体呈现委托 Adyeshach：经宿主桥 {@link AdyeshachNpcBridgeAPI#spawnPublicTemporaryNpc}
+ * 在公共临时管理器创建实例内 NPC（不入持久库、可被 conversation 模块靠近扫描发现）。
+ * 玩家右键经 {@link #initInteractHandler} 注册的 AdyeshachEntityInteractEvent 路由；
+ * 绑定 Chemdah 会话的 NPC 由 conversation capability 开真对话 UI，否则聊天栏逐句兜底。
+ * <p>
+ * 本类只保留 abyss 编排面：实例生命周期内的生成/移除登记、once 判定、
+ * click-script 回调、对话降级（Adyeshach 缺席时回退 Bukkit LivingEntity）。
  */
 public final class DungeonNpcManager {
 
-    private final Map<UUID, Map<String, Object>> spawned = new ConcurrentHashMap<>(); // instanceId -> npcName -> entity/adyeshachEntity
-    private final Map<UUID, String> entityToNpc = new ConcurrentHashMap<>();          // entityUuid -> npcName
+    private final Map<UUID, Map<String, Object>> spawned = new ConcurrentHashMap<>(); // instanceId -> npcName -> handle
+    private final Map<String, String> handleToNpc = new ConcurrentHashMap<>();        // handleKey -> npcName@instanceId
     private final SchedulerAPI scheduler;
     private final org.bukkit.plugin.Plugin plugin;
     private final Logger logger;
 
-    /** 点击回调（由监听器转发）。 */
+    /** 点击回调（click-script 执行钩子）。 */
     private BiConsumer<AbyssInstance, ClickEvent> clickCallback;
     private Function<AbyssInstance, Function<String, Location>> locParser;
+    /** 玩家 → 所在实例（Adyeshach 交互事件无实例上下文，需反查）。 */
+    private Function<Player, AbyssInstance> instanceLookup;
+    /** 打开 NPC 绑定会话（conversation capability；无会话/模块缺席返回 false）。 */
+    private BiFunction<Player, String, Boolean> conversationOpener;
 
-    /** Adyeshach 直接 API 桥（可选依赖，懒加载）。 */
-    private volatile AdyeshachNpcAdapter adyeshach;
+    /** 宿主 Adyeshach 桥（模块注入；不可用时降级 Bukkit 实体）。 */
+    private volatile AdyeshachNpcBridgeAPI npcBridge;
+    private volatile boolean interactRegistered;
 
     public record ClickEvent(String npcName, DungeonNpc config, Player player) { }
 
@@ -48,25 +58,43 @@ public final class DungeonNpcManager {
         this.logger = logger;
     }
 
-    public void setCallbacks(BiConsumer<AbyssInstance, ClickEvent> clickCallback,
-                             Function<AbyssInstance, Function<String, Location>> locParser) {
-        this.clickCallback = clickCallback;
-        this.locParser = locParser;
+    public void setNpcBridge(@Nullable AdyeshachNpcBridgeAPI bridge) {
+        this.npcBridge = bridge;
     }
 
-    public void initAdyeshachIfAvailable() {
-        if (adyeshach == null
-            && Bukkit.getPluginManager().isPluginEnabled("Adyeshach")) {
-            try {
-                adyeshach = new AdyeshachNpcAdapter(logger);
-            } catch (Throwable t) {
-                logger.fine("[abyss] Adyeshach 适配不可用: " + t.getMessage());
-            }
-        }
+    public void setCallbacks(BiConsumer<AbyssInstance, ClickEvent> clickCallback,
+                             Function<AbyssInstance, Function<String, Location>> locParser,
+                             Function<Player, AbyssInstance> instanceLookup,
+                             BiFunction<Player, String, Boolean> conversationOpener) {
+        this.clickCallback = clickCallback;
+        this.locParser = locParser;
+        this.instanceLookup = instanceLookup;
+        this.conversationOpener = conversationOpener;
+    }
+
+    /** 注册 Adyeshach 右键交互路由（service.start 调用一次，可重入）。 */
+    public void initInteractHandler() {
+        AdyeshachNpcBridgeAPI bridge = npcBridge;
+        if (interactRegistered || bridge == null || !bridge.isAvailable()) return;
+        interactRegistered = bridge.registerInteractHandler(this::onAdyeshachInteract);
+    }
+
+    /** AdyeshachEntityInteractEvent → 实例/NPC 匹配 → once → 对话 + click-script。 */
+    private void onAdyeshachInteract(Player player, Object entity) {
+        if (player == null || entity == null) return;
+        String tag = handleToNpc.get(handleKey(entity));
+        if (tag == null) return;
+        AbyssInstance instance = instanceLookup != null ? instanceLookup.apply(player) : null;
+        if (instance == null) return;
+        String npcName = tag.substring(0, tag.lastIndexOf('@'));
+        String instId = tag.substring(tag.lastIndexOf('@') + 1);
+        if (!instId.equals(instance.getInstanceId().toString())) return;
+        fireClick(instance, player, npcName);
     }
 
     /** 副本 start：生成全部 NPC。 */
     public void initInstance(AbyssInstance instance) {
+        initInteractHandler(); // 桥晚初始化时补注册（幂等）
         for (DungeonNpc npc : instance.getTemplate().npcs().npcs().values()) {
             spawn(instance, npc.name());
         }
@@ -80,8 +108,13 @@ public final class DungeonNpcManager {
         if (loc == null) return false;
 
         Object handle = null;
-        if ("PLAYER".equals(npc.type()) && adyeshach != null && adyeshach.available()) {
-            handle = adyeshach.spawnPlayerNpc(npc, loc);
+        AdyeshachNpcBridgeAPI bridge = npcBridge;
+        if (bridge != null && bridge.isAvailable()) {
+            try {
+                handle = bridge.spawnPublicTemporaryNpc(npc.type(), loc, npcName, npc.displayName());
+            } catch (Throwable t) {
+                logger.fine("[abyss] Adyeshach NPC 生成失败，降级实体: " + t.getMessage());
+            }
         }
         if (handle == null) {
             handle = spawnEntityNpc(npc, loc);
@@ -90,7 +123,7 @@ public final class DungeonNpcManager {
 
         spawned.computeIfAbsent(instance.getInstanceId(), k -> new ConcurrentHashMap<>())
             .put(npcName, handle);
-        entityToNpc.put(entityUuidOf(handle), npcName + "@" + instance.getInstanceId());
+        handleToNpc.put(handleKey(handle), npcName + "@" + instance.getInstanceId());
         return true;
     }
 
@@ -129,45 +162,72 @@ public final class DungeonNpcManager {
     }
 
     private void removeHandle(Object handle) {
+        handleToNpc.remove(handleKey(handle));
         if (handle instanceof Entity e) {
-            entityToNpc.remove(e.getUniqueId());
             e.remove();
-        } else if (adyeshach != null) {
-            adyeshach.remove(handle);
+            return;
+        }
+        AdyeshachNpcBridgeAPI bridge = npcBridge;
+        if (bridge != null) {
+            try {
+                bridge.removeEntity(handle);
+            } catch (Throwable t) {
+                logger.fine("[abyss] Adyeshach NPC 移除失败: " + t.getMessage());
+            }
         }
     }
 
-    private static UUID entityUuidOf(Object handle) {
-        if (handle instanceof Entity e) return e.getUniqueId();
-        return UUID.nameUUIDFromBytes(("ady:" + System.identityHashCode(handle)).getBytes());
+    private static String handleKey(Object handle) {
+        if (handle instanceof Entity e) return e.getUniqueId().toString();
+        try {
+            if (handle instanceof ink.ptms.adyeshach.common.entity.EntityBase eb) {
+                String uid = eb.getUniqueId();
+                if (uid != null && !uid.isBlank()) return "ady:" + uid;
+            }
+        } catch (Throwable ignored) { }
+        return "h" + System.identityHashCode(handle);
     }
 
-    /** 玩家右键实体 → 匹配 NPC 触发对话+点击脚本。 */
+    /**
+     * Bukkit 实体点击（降级 NPC 路径；Adyeshach 实体走 {@link #onAdyeshachInteract}）。
+     */
     public boolean handleClick(AbyssInstance instance, Player player, Entity entity) {
-        String tag = entityToNpc.get(entity.getUniqueId());
+        String tag = handleToNpc.get(entity.getUniqueId().toString());
         if (tag == null) return false;
-        int sep = tag.lastIndexOf('@');
-        String npcName = tag.substring(0, sep);
-        String instId = tag.substring(sep + 1);
-        if (!instId.equals(instance.getInstanceId().toString())) {
-            // UUID 包含连字符，取前段比较即可——tag 存的已是完整 instanceId 字符串
-        }
+        String npcName = tag.substring(0, tag.lastIndexOf('@'));
+        fireClick(instance, player, npcName);
+        return true;
+    }
+
+    /** 统一点击处理：once 判定 → 会话/降级对话 → click-script。 */
+    private void fireClick(AbyssInstance instance, Player player, String npcName) {
         DungeonNpc npc = instance.getTemplate().npcs().npcs().get(npcName);
-        if (npc == null) return false;
+        if (npc == null) return;
         if (npc.once() && instance.isTriggered("npc:" + npcName + ":" + player.getUniqueId())) {
-            return true;
+            return;
         }
         if (npc.once()) {
             instance.markTriggeredOnce("npc:" + npcName + ":" + player.getUniqueId());
         }
-        playDialog(instance, npcName, player);
+        // 对话：该 npcId 绑定 Chemdah 会话 → 开真对话 UI；否则聊天栏逐句兜底
+        boolean opened = false;
+        BiFunction<Player, String, Boolean> opener = conversationOpener;
+        if (opener != null) {
+            try {
+                opened = Boolean.TRUE.equals(opener.apply(player, npcName));
+            } catch (Throwable t) {
+                logger.fine("[abyss] 会话开启失败 npc=" + npcName + ": " + t.getMessage());
+            }
+        }
+        if (!opened) {
+            playDialog(instance, npcName, player);
+        }
         if (clickCallback != null && !npc.clickScript().isEmpty()) {
             clickCallback.accept(instance, new ClickEvent(npcName, npc, player));
         }
-        return true;
     }
 
-    /** 逐句播放 NPC 对话。 */
+    /** 逐句播放 NPC 对话（无 Chemdah 会话绑定时的聊天栏兜底）。 */
     public void playDialog(AbyssInstance instance, String npcName, Player player) {
         DungeonNpc npc = instance.getTemplate().npcs().npcs().get(npcName);
         if (npc == null || npc.dialogs().isEmpty() || player == null) return;
@@ -199,9 +259,19 @@ public final class DungeonNpcManager {
         Map<String, Object> map = spawned.get(instance.getInstanceId());
         if (map == null) return;
         Object handle = map.get(npcName);
-        if (handle != null && adyeshach != null) {
-            adyeshach.playAnimation(handle, anim, speed, transitionTime, keepTime);
+        AdyeshachNpcBridgeAPI bridge = npcBridge;
+        if (handle == null || bridge == null) return;
+        try {
+            bridge.applyAnimation(handle, anim, speed, transitionTime, keepTime);
+        } catch (Throwable t) {
+            logger.fine("[abyss] NPC 动画播放失败: " + t.getMessage());
         }
+    }
+
+    /** NPC 的 Adyeshach 实体句柄（conversation/外观增强用；Bukkit 降级时为 Entity）。 */
+    public @Nullable Object handleOf(AbyssInstance instance, String npcName) {
+        Map<String, Object> map = spawned.get(instance.getInstanceId());
+        return map == null ? null : map.get(npcName);
     }
 
     public void cleanup(AbyssInstance instance) {
@@ -213,43 +283,13 @@ public final class DungeonNpcManager {
     public void shutdown() {
         spawned.values().forEach(m -> m.values().forEach(this::removeHandle));
         spawned.clear();
-        entityToNpc.clear();
-    }
-
-    // ═══ Adyeshach 直接 API 适配（可选依赖隔离） ═══
-
-    /**
-     * Adyeshach 直连适配器：创建临时 PLAYER 型 NPC（皮肤/视角跟随）。
-     * <p>
-     * Adyeshach API 版本间差异较大，为稳妥起见通过反射调用核心方法
-     * （createPublicEntity / setCustomName / teleport），不可用即回退实体实现。
-     */
-    static final class AdyeshachNpcAdapter {
-        private final Logger logger;
-        private boolean ready;
-
-        AdyeshachNpcAdapter(Logger logger) {
-            this.logger = logger;
+        handleToNpc.clear();
+        AdyeshachNpcBridgeAPI bridge = npcBridge;
+        if (bridge != null && interactRegistered) {
             try {
-                Class.forName("ink.ptms.adyeshach.core.Adyeshach");
-                ready = true;
-            } catch (Throwable t) {
-                ready = false;
-            }
+                bridge.unregisterInteractHandler();
+            } catch (Throwable ignored) { }
+            interactRegistered = false;
         }
-
-        boolean available() { return ready; }
-
-        /** 创建 PLAYER NPC。返回句柄对象（Adyeshach entity）。 */
-        @Nullable Object spawnPlayerNpc(DungeonNpc npc, Location loc) {
-            // Adyeshach API 跨版本差异大，采用最小反射面：
-            // WorldEdit 模式下直接退回实体实现更稳。
-            // 后续版本需要 PLAYER NPC 时在此接 ink.ptms.adyeshach API。
-            return null;
-        }
-
-        void remove(Object handle) { }
-
-        void playAnimation(Object handle, String anim, double speed, int transitionTime, long keepTime) { }
     }
 }

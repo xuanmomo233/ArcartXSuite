@@ -1,0 +1,26 @@
+# Chemdah 会话：向导·艾琳（绑定 Adyeshach npcId = abyss npcs.yml 的 key "guide"）
+# 部署：复制到 plugins/Chemdah/conversation/sk_guide.yml
+# （以实际 Chemdah 会话目录为准，部分版本为 conversations/）
+
+sk_guide:
+  # 绑定触发对象：abyss npcs.yml 的 guide NPC（Adyeshach id=guide）
+  npc id: 'adyeshach guide'
+  # 发言内容
+  npc:
+    - '&e欢迎来到元气试炼之地，冒险者。'
+    - '&7这座地牢共三层——肃清战斗房，沿途的祭坛和商队都能换补给，'
+    - '&7每层尽头守着一位守层 Boss。击杀魔物会掉落全队共享的金币。'
+  format: generic
+  # 玩家回复分支
+  player:
+    - reply: '给我登记讨伐委托。'
+      then: |
+        tell "&e[艾琳] &f已为你登记——去 questgps 菜单或看我的追踪标记吧。"
+        tell "&7提示：委托进度在任务面板里实时更新。"
+    - reply: '祭坛和商店怎么用？'
+      then: |
+        talk "&e[艾琳] &f第 1 层的祭坛收 15 金币换一次三选一的祝福；"
+        talk "&f第 2 层的商队有治疗、力量和金苹果，都收金币。"
+    - reply: '准备好了，前进！'
+      then: |
+        talk "&e[艾琳] &f祝武运昌隆。踩金块地标推进，别回头。"

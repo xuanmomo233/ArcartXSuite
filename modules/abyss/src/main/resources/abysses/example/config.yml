@@ -1,33 +1,36 @@
-# 示例地牢：虚空竞技场（world.template: void 直接生成虚空世界，无需模板文件）
-# 更常用方式：把世界存档文件夹放到本目录 world/（需含 level.dat），
-# 或 world.template: <maps/下的模板名或schematic文件名>
+# 示例地牢：元气试炼之地（元气骑士式三层地牢）
+# world.template: void 生成虚空世界；全部建筑由 scripts.yml 的 world-init
+# 段用 fillblocks 程序化搭建——无需任何 schematic/模板文件即可直接进本。
+#
+# 玩法结构（floors 模式）：
+#   第 1 层 苔痕前哨：起始房(向导 NPC + Chemdah 会话/委托) → 战斗房(两波+休整)
+#                    → 祭坛房(金币换三选一祝福) → Boss房(冲撞兽+增援) → 层间三选一天赋
+#   第 2 层 熔岩矿道：三连战(波间休整) → 商店(金币购物) → 拉杆解谜(封门)
+#                    → Boss房(唤魔者+卫道士) → 层间三选一天赋
+#   第 3 层 深渊王座：走廊决战(陷阱地带+两波) → 宝箱房 → 终层Boss(凋零+两阶段增援)
+#   全程：击杀掉金币(全队共享)、guide_point 导航、questgps 委托追踪、通关宝箱
 
-name: "&6虚空试炼场"
-# mode: floors        # 多层房间地牢：配 floors.yml/rooms.yml（本目录有示例文件）；缺省 classic 单世界
+name: "&6元气试炼之地"
+mode: floors              # 多层房间地牢（floors.yml + rooms.yml）
 icon: "END_STONE"
-difficulty: "简单"
+difficulty: "普通"
 description:
-  - "&7在虚空平台上击退两波怪物"
-  - "&7与向导对话接取任务获取额外奖励"
+  - "&7元气骑士式三层地牢：战斗→休整→祭坛/商店→Boss"
+  - "&7击杀攒金币，祭坛与商店兑换补给，每层Boss后三选一天赋"
+  - "&7适配 Adyeshach NPC + Chemdah 会话/委托（缺省自动降级）"
 
 world:
   template: "void"          # void=虚空世界 / <maps目录名> / 本目录world/文件夹
-  spawn: "0,80,0,90,0"      # x,y,z,yaw,pitch
+  spawn: "2,61,11,270,0"     # 第 1 层起始房内（world-init 会先建好房间再传送）
   # 副本游戏规则覆盖（键=Bukkit GameRule 名，值=布尔或整数；默认已内置一套副本规则）
   # gamerules:
   #   keepInventory: true
   #   mobGriefing: false
   #   randomTickSpeed: 0
-  # 禁止环境驱动刷怪（自然/刷怪笼/巡逻队等；副本脚本刷怪走 CUSTOM 不受影响）
+  # 禁止环境驱动刷怪（虚空世界本就不刷；模板世界建议开启）
   # disable-natural-spawn: true
-  # 额外禁用的生成来源（CreatureSpawnEvent.SpawnReason 名，可含 CUSTOM）
-  # disabled-spawn-reasons: [SPAWNER_EGG, DISPENSE_EGG]
-  # 副本级命令控制：mode=inherit(默认,沿用全局)/blacklist/whitelist
-  # command-control:
-  #   mode: whitelist
-  #   commands: [party, abyss, teammsg]
 
-time-limit: 600             # 10分钟
+time-limit: 1200            # 20 分钟（三层内容量）
 timeout-action: "FAIL"      # FAIL=超时判负 / KICK=踢出
 max-instances: 0            # 0=不限
 
@@ -35,8 +38,6 @@ requirements:
   min-players: 1
   max-players: 4
   party-required: false
-  # party-mode: "guild"   # 要求队伍模式（AbyssPartyAccess 创建的 mode 标记）：
-                        # "free"自由队(默认)/"guild"公会队；设置后自由组队会被拒绝
   min-level: 0
   max-level: 0
   cooldown: 300             # 通关冷却 5 分钟
@@ -46,47 +47,14 @@ requirements:
   required-items: []
   required-permissions: []
   conditions: []
-  # require-all-players: true   # false 时 conditions/物品/货币等只需队长满足
-  # leader-conditions: []       # 仅队长需要满足的额外条件
   disabled-commands: [spawn, tpa, home]
   disabled-items: [CHORUS_FRUIT]
 
+# questgps 主线门禁（可选）：在 QuestGPS 配置 gate.blocked-module-entries 声明
+# "abyss.example" 后，未完成前置主线的玩家进本会被拒（questgps 未启用恒放行）。
+
 # 跨模块联动（全部可选；对应模块未启用时自动跳过）
 links:
-  # 地牢入口地图标记 "世界名;x,y,z"：推送到 map 模块为紫色外部目标，
-  # 玩家可在地图面板点"导航"由地图内置导航寻路（地图未启用则不推）
-  # entrance: "world;100,64,-50"
-  # 通关全服播报文本（announce 模块；占位 {party} {dungeon} {time}；注释掉=不播报）
-  # announce-clear: "&6{party} 通关 {dungeon}&6，用时 &f{time}&6！"
-  # 播报是否跨服转发（服务端跨服链路启用时生效）
-  # announce-forward: false
-  # 通关推 QQ 群（qqbot 模块）
+  # 通关全服播报（announce 模块；{party} {dungeon} {time}）
+  announce-clear: "&6{party} 通关 {dungeon}&6，用时 &f{time}&6！"
   # qq-notify-clear: false
-  # 指定 QQ 群号（<=0 或不填=全部已配置群）
-  # qq-group: 0
-
-# ═══ 世界入口点：主世界/场景里的物理入口（玩家右键方块进本）═══
-# 与 links.entrance（地图标记）不同——这个是真正触发进本的物理点。
-# 每项：world 所在世界 + location "x,y,z" 单点 或 region "x1,y1,z1;x2,y2,z2" 区域，
-#       plan 可选固定方案；不配 plan 且 plans 多于一个 → 点击者收到方案选择菜单。
-# 玩家是队长时自动带全队进本。
-# entrances:
-#   - world: world
-#     location: "100,64,-50"
-#     name: "正门"
-#   - world: world
-#     region: "90,60,-60;95,70,-55"
-#     plan: strong              # 这个入口固定"强攻"方案
-#     name: "缺口突入"
-
-# ═══ 作战方案：进本前选择，影响本局怪组/脚本分支 ═══
-# 配了之后：/abyss enter <本id> [方案]、入口点 plan 字段、方案菜单都可用；
-# 实例内 {plan}=方案id、{plan_name}=显示名；怪物组 plans: [id] 按方案过滤；
-# 奖励倾向/分支在脚本里用 check 判定 {plan}。
-# plans:
-#   strong:
-#     name: "&c强攻·正面突破"
-#     lore: ["怪群密集，火力压制", "掉落倾向：弹药/武器件"]
-#   sneak:
-#     name: "&b潜入·暗杀优先"
-#     lore: ["敌人分散警觉", "掉落倾向：稀有材料/情报"]

@@ -795,7 +795,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         // 任务行
         Map<String, Object> quests = new LinkedHashMap<>();
         int qi = 0;
-        for (var e : service.quests().statusMap(instance).entrySet()) {
+        for (var e : service.quests().statusMap(instance, player).entrySet()) {
             var q = instance.getTemplate().quests().quests().get(e.getKey());
             if (q == null) continue;
             quests.put(Integer.toString(qi++), Map.of(

@@ -1,47 +1,14 @@
-# 怪物组：vanilla: 前缀强制原版实体；mythic: 或无前缀走 MythicMobs（未装自动回退原版）
-#
-# spawn-timing：AUTO_START=进本即刷 / DELAYED=进本 delay-seconds 后刷 /
-#               TRIGGERED=trigger-after 组清完后触发 / MANUAL=脚本 spawn_group 触发 /
-#               SCRIPTED=脚本控制
-# 波次休整（两级）：
-#   delay-seconds —— 组级覆盖：触发后延迟 N 秒刷（TRIGGERED 也生效）
-#   rest-seconds  —— 休整兜底：delay-seconds<=0 时用；floors 房间可用房间级 wave-rest
-#   on-prespawn   —— 预告段：触发后、休整期内立即跑（title/音效"下一波来袭"）
-# 作战方案过滤：组加 plans: [方案id] 后，只有该方案进本才注册此组
+# monsters.yml — 全局怪组定义
+# floors 模式副本的怪组通常直接写在 rooms.yml 各房间的 groups 段内
+# （本示例即是如此）。此文件保留给 classic 单世界副本或脚本 spawn_group
+# 动态调用的全局组；字段格式与房间内 groups 完全一致。
 
-wave_1:
-  spawn-timing: AUTO_START
+# 示例：脚本增援组（"spawn_group flank_pack" 可在任何脚本段调用）
+flank_pack:
+  spawn-timing: MANUAL            # 只被 spawn_group 动作拉起
   monsters:
-    - mob-id: "vanilla:ZOMBIE"
-      location: "3,80,3"
+    - mob-id: vanilla:zombie
+      location: "12,61,11"        # f1_start 房（演示用坐标）
       amount: 3
-    - mob-id: "vanilla:ZOMBIE"
-      location: "-3,80,-3"
-      amount: 3
-  complete-when-alive-below: 0
-  on-start:
-    - "message @all &e第一波：尸群来袭！"
   on-end:
-    - "message @all &a第一波已清剿！"
-    # 不要在这里手动 spawn_group wave_2——trigger-after 已自动触发（会双触发）
-
-wave_2:
-  spawn-timing: TRIGGERED
-  trigger-after: ["wave_1"]
-  delay-seconds: 6              # 清完休整 6 秒再刷（预告段立刻跑）
-  on-prespawn:
-    - "title @all 5 40 5 &c第二波 &76 秒后来袭！"
-    - "sound @all ENTITY_RAVAGER_ROAR 1 0.8"
-    - "actionbar @all &e喘口气，准备接敌..."
-  monsters:
-    - mob-id: "vanilla:SKELETON"
-      location: "4,80,0"
-      amount: 2
-    - mob-id: "vanilla:ZOMBIE"
-      location: "-4,80,0"
-      amount: 3
-  complete-when-alive-below: 0
-  on-start:
-    - "message @all &c第二波：混合部队！"
-  on-end:
-    - "complete_dungeon"
+    - "message @all &7增援已被肃清"

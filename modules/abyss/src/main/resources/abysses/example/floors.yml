@@ -1,45 +1,59 @@
-# floors.yml — 多层房间地牢（config.yml 设 mode: floors 后生效）
-#
-# 两种房间来源可混用：
-#   source: region —— 房间已手工建在世界模板里，region/spawn/doors/groups 写绝对坐标
-#   source: pool   —— 世界用 void 虚空，房间从 rooms.yml 池随机抽取 .schem 粘贴拼接
-#                     （坐标相对 schematic 原点；需 WorldEdit/FAWE）
+# floors.yml — 元气试炼之地 · 三层链（region 模式）
+# 房间建筑全部由 scripts.yml world-init 搭建，无需 schematic。
+# 推进：房清完 → 踩出口凹室金块地标（portal）→ 下一房；层末清完 → 下层入口。
 
 defaults:
   lock-material: BARRIER        # 锁门填充材质（锁=填塞，清完还原）
-  border-pullback: true         # 战斗房锁门期间离开区域 → 拉回房中心（双保险）
-  room-spacing: 200             # pool 模式相邻房锚点间距（格）
-  paste-y: 64                   # pool 模式粘贴基准高度
-  advance-timeout: 60           # portal 推进兜底秒数（超时未踩出口自动推进，0=关）
+  border-pullback: true         # 战斗房锁门期间离开区域 → 拉回房中心
+  room-spacing: 200             # pool 模式用（本示例全 region）
+  paste-y: 64
+  advance-timeout: 90           # portal 兜底秒数（超时不踩出口自动推进，0=关）
 
 floors:
-  # ── 示例 1：固定区域层（大地图里建好的房间链）──
+  # ── 第 1 层 · 苔痕前哨 ─────────────────────────────────────
   - id: f1
-    name: "石廊"
+    name: "&a第 1 层 · 苔痕前哨"
     source: region
-    spawn: "0,65,0,90,0"          # 本层入口站位（绝对坐标）
-    rooms: [corridor_a, corridor_b]  # rooms.yml 引用链，按序推进
-    boss-room: boss_arena          # 层末固定房（可选；不配则链尾房即层末）
-    advance: portal                # portal=踩出口传送下一层 | auto=清完自动传送
-    advance-timeout: 60
-    on-enter:
-      - "title @all &f第 1 层 &7石廊"
-    on-clear:
-      - "message @all &a本层已肃清，进入下一层"
-
-  # ── 示例 2：随机拼接层（虚空世界 + schematic 房间池）──
-  - id: f2
-    name: "回廊"
-    source: pool
-    pool: [combat_a, combat_b, shop_a, treasure_a]
-    room-count: 3                  # 从池随机抽 3 个（0=全用且打乱顺序）
-    boss-room: boss_2              # 池抽完后末尾固定追加
-    direction: x                   # 排列轴 x|z（沿轴每 room-spacing 一格锚点）
+    spawn: "2,61,11,270,0"        # 本层入口 = 起始房站位
+    rooms: [f1_start, f1_combat_a, f1_altar, f1_boss]
     advance: portal
+    advance-timeout: 90
     on-enter:
-      - "title @all &f第 2 层 &7回廊"
+      - "title @all 10 40 10 &a第 1 层|&7苔痕前哨"
+      - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
+    on-clear:
+      - "title @all 10 40 10 &a第 1 层肃清|&e领取你的天赋祝福"
+      - "buff_offer f1_blessing"           # 层间三选一天赋（元气核心节奏）
+      - "wait 6"
+      - "message @all &7前方通往 &6第 2 层 · 熔岩矿道"
 
-# 说明：
-# - 最终层（列表最后一个 floor）链尾房清完即通关
-# - 房间未配 exit 且层 advance=portal 时，advance-timeout 到期自动推进
-# - 层内房间推进：清完当前房 → portal 模式踩该房 exit 区 | auto 模式 3s 后自动传送
+  # ── 第 2 层 · 熔岩矿道 ─────────────────────────────────────
+  - id: f2
+    name: "&6第 2 层 · 熔岩矿道"
+    source: region
+    spawn: "202,61,11,270,0"
+    rooms: [f2_combat_a, f2_shop, f2_puzzle, f2_boss]
+    advance: portal
+    advance-timeout: 90
+    on-enter:
+      - "title @all 10 40 10 &6第 2 层|&7熔岩矿道"
+      - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
+    on-clear:
+      - "title @all 10 40 10 &6第 2 层肃清|&e领取你的天赋祝福"
+      - "buff_offer f2_blessing"
+      - "wait 6"
+      - "message @all &7深渊的气息扑面而来——&4第 3 层 · 深渊王座"
+
+  # ── 第 3 层 · 深渊王座 ─────────────────────────────────────
+  - id: f3
+    name: "&4第 3 层 · 深渊王座"
+    source: region
+    spawn: "402,61,11,270,0"
+    rooms: [f3_corridor, f3_treasure, f3_final]
+    advance: portal
+    advance-timeout: 90
+    on-enter:
+      - "title @all 10 40 10 &4第 3 层|&7深渊王座"
+      - "sound @all ENTITY_WITHER_SPAWN 0.5 0.8"
+      - "message @all &7王座就在前方。整备好补给，一击制胜。"
+    # 层末 f3_final 清完 → 自动通关（complete 生命周期段）

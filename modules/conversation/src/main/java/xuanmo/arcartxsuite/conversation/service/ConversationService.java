@@ -275,6 +275,54 @@ public final class ConversationService implements Listener {
     }
 
     /**
+     * 能力实现：为玩家强制打开绑定到指定 Adyeshach NPC 的 Chemdah 会话。
+     * <p>
+     * 供 {@link xuanmo.arcartxsuite.api.capability.ConversationPlayable} 能力实现使用；
+     * 与选择器/按键路径一致，最终走 {@code TriggerAdyeshachKt.openConversation}。
+     */
+    public boolean openConversationFor(Player player, String npcId) {
+        if (!conversationOpenerReady || player == null || !player.isOnline() || npcId == null || npcId.isBlank()) {
+            return false;
+        }
+        if (!hasConversation(npcId)) {
+            return false;
+        }
+        java.util.Optional<Object> found;
+        try {
+            found = npcBridge.findByName(npcId);
+        } catch (RuntimeException exception) {
+            this.logger.warning("ConversationPlayable: 查找 NPC 失败 npcId=" + npcId + " - " + exception.getMessage());
+            return false;
+        }
+        if (found.isEmpty()) {
+            return false;
+        }
+        Object conversationEntity = found.get();
+        if (conversationEntity instanceof ink.ptms.adyeshach.common.entity.EntityInstance common) {
+            ink.ptms.adyeshach.core.entity.EntityInstance v2 = common.getV2();
+            if (v2 != null) {
+                conversationEntity = v2;
+            }
+        }
+        return invokeOpenConversation(conversationEntity, player) != null;
+    }
+
+    /**
+     * 能力实现：查询指定 NPC 是否绑定了至少一个 Chemdah 会话。
+     * 供 {@link xuanmo.arcartxsuite.api.capability.ConversationPlayable} 能力实现使用。
+     */
+    public boolean hasConversation(String npcId) {
+        if (npcId == null || npcId.isBlank()) {
+            return false;
+        }
+        try {
+            return hasConversationForNpcId(npcId, new HashMap<>());
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    /**
      * 查询玩家是否正在与 Conversation 模块交互（对话中或 NPC 选择器已打开）。
      * 供 {@link xuanmo.arcartxsuite.api.capability.InteractionState} 能力实现使用。
      */

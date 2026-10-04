@@ -1,11 +1,65 @@
-# 障碍物示例：边界墙（防止玩家掉出平台）
-# auto-create: 副本开始时自动放置方块；on-delete 脚本在障碍移除时跑
+# 障碍物：f3_corridor 的灼热陷阱地带（y60 地板层，与走道齐平）
+# auto-create 在副本开始（world-init 建房之后）自动铺设；
+# trigger-mode ENTER = 玩家进入障碍区触发脚本（带冷却）。
 
-edge_wall:
+soul_trap:
+  # 灵魂沙减速带 x=408..409 + 岩浆块 x=410..411（覆盖整条东西走道 z=5..17）
   blocks:
-    - "-7,79,-7,BEDROCK"
-    - "-7,79,7,BEDROCK"
-    - "7,79,-7,BEDROCK"
-    - "7,79,7,BEDROCK"
+    - "408,60,5,SOUL_SAND"
+    - "408,60,6,SOUL_SAND"
+    - "408,60,7,SOUL_SAND"
+    - "408,60,8,SOUL_SAND"
+    - "408,60,9,SOUL_SAND"
+    - "408,60,10,SOUL_SAND"
+    - "408,60,11,SOUL_SAND"
+    - "408,60,12,SOUL_SAND"
+    - "408,60,13,SOUL_SAND"
+    - "408,60,14,SOUL_SAND"
+    - "408,60,15,SOUL_SAND"
+    - "408,60,16,SOUL_SAND"
+    - "408,60,17,SOUL_SAND"
+    - "409,60,5,SOUL_SAND"
+    - "409,60,6,SOUL_SAND"
+    - "409,60,7,SOUL_SAND"
+    - "409,60,8,SOUL_SAND"
+    - "409,60,9,SOUL_SAND"
+    - "409,60,10,SOUL_SAND"
+    - "409,60,11,SOUL_SAND"
+    - "409,60,12,SOUL_SAND"
+    - "409,60,13,SOUL_SAND"
+    - "409,60,14,SOUL_SAND"
+    - "409,60,15,SOUL_SAND"
+    - "409,60,16,SOUL_SAND"
+    - "409,60,17,SOUL_SAND"
+    - "410,60,5,MAGMA_BLOCK"
+    - "410,60,6,MAGMA_BLOCK"
+    - "410,60,7,MAGMA_BLOCK"
+    - "410,60,8,MAGMA_BLOCK"
+    - "410,60,9,MAGMA_BLOCK"
+    - "410,60,10,MAGMA_BLOCK"
+    - "410,60,11,MAGMA_BLOCK"
+    - "410,60,12,MAGMA_BLOCK"
+    - "410,60,13,MAGMA_BLOCK"
+    - "410,60,14,MAGMA_BLOCK"
+    - "410,60,15,MAGMA_BLOCK"
+    - "410,60,16,MAGMA_BLOCK"
+    - "410,60,17,MAGMA_BLOCK"
+    - "411,60,5,MAGMA_BLOCK"
+    - "411,60,6,MAGMA_BLOCK"
+    - "411,60,7,MAGMA_BLOCK"
+    - "411,60,8,MAGMA_BLOCK"
+    - "411,60,9,MAGMA_BLOCK"
+    - "411,60,10,MAGMA_BLOCK"
+    - "411,60,11,MAGMA_BLOCK"
+    - "411,60,12,MAGMA_BLOCK"
+    - "411,60,13,MAGMA_BLOCK"
+    - "411,60,14,MAGMA_BLOCK"
+    - "411,60,15,MAGMA_BLOCK"
+    - "411,60,16,MAGMA_BLOCK"
+    - "411,60,17,MAGMA_BLOCK"
   auto-create: true
-  trigger-mode: NONE
+  trigger-mode: ENTER
+  trigger-cooldown: 6
+  trigger-script:
+    - "actionbar @trigger &c灼热之地！快离开地面"
+    - "sound @trigger BLOCK_FIRE_AMBIENT 1 0.7"

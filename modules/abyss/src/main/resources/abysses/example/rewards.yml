@@ -1,19 +1,24 @@
-# 命名奖励集（grant_reward <集名> 调用）
+# 命名奖励集（grant_reward <集名>）+ 宝箱奖励（open_chest_ui <名>）
 rewards:
+  # 通关大包
   clear_pack:
     items:
       - "material:DIAMOND:3"
       - "material:GOLDEN_APPLE:2"
-    money: 100
+      - "material:EMERALD:8"
+    money: 150
     currency: "money"
-    exp: 50
+    exp: 100
     commands: []
 
+  # 委托奖励（Chemdah 委托完成时发放）
   quest_pack:
     items:
       - "material:EMERALD:5"
-    money: 50
+      - "material:IRON_INGOT:8"
+    money: 80
 
+  # 随机小包示例
   random_pack:
     type: random
     picks: 1
@@ -23,15 +28,32 @@ rewards:
       - reward: quest_pack
         weight: 20
 
-# 宝箱奖励（open_chest <名> 调用，ArcartX UI 阶段后走客户端 UI，当前直接发放）
+# 宝箱奖励（open_chest_ui <名>）
 chest-rewards:
-  trial_chest:
-    title: "试炼宝箱"
+  # f3_treasure 战利品宝箱
+  abyss_chest:
+    title: "战利品宝箱"
     rows: 3
     options:
-      - item: "material:IRON_INGOT:5"
+      - item: "material:IRON_INGOT:6"
         weight: 50
       - item: "material:DIAMOND:2"
+        weight: 25
+      - item: "material:GOLDEN_APPLE:1"
         weight: 20
       - item: "material:NETHERITE_SCRAP:1"
         weight: 5
+
+  # 通关宝箱（complete 段统一弹）
+  final_chest:
+    title: "深渊秘宝"
+    rows: 3
+    options:
+      - item: "material:DIAMOND:5"
+        weight: 40
+      - item: "material:NETHERITE_INGOT:1"
+        weight: 15
+      - item: "material:TOTEM_OF_UNDYING:1"
+        weight: 10
+      - item: "material:EMERALD:12"
+        weight: 35

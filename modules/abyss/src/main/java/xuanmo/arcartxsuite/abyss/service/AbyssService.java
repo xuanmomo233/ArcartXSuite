@@ -145,6 +145,9 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.design.DesignManager designManager;
     private xuanmo.arcartxsuite.abyss.design.DesignListener designListener;
     private xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge;
+    private xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge;
+    /** EventBus quest_completed 订阅 id（questgps 任务完成 → 副本任务钩子）。 */
+    private volatile String questCompletedSubId;
     private GlobalCounterService globalCounters;
     private JdbcAbyssRepository repository;
     private PlayerDataManager playerData;
@@ -259,10 +262,13 @@ public final class AbyssService {
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
         npcs = new DungeonNpcManager(plugin, scheduler, logger);
-        npcs.initAdyeshachIfAvailable();
+        npcs.setNpcBridge(npcBridge);
         npcs.setCallbacks((inst, e) -> runScript(inst, e.config().clickScript(),
             ScriptContext.withVars(inst, e.player(), Map.of("npc", e.npcName()))),
-            this::locParser);
+            this::locParser,
+            instances::getInstance,
+            (player, npcId) -> links != null && links.conversationOpen(player, npcId));
+        npcs.initInteractHandler();
 
         // 6.5) 楼层/房间（floors 模式）
         roomManager = new xuanmo.arcartxsuite.abyss.room.RoomManager(
@@ -274,7 +280,7 @@ public final class AbyssService {
         // 7) 奖励/体力/统计/排行/冷却/条件
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
             pendingRewardService, currencyManager, logger);
-        quests = new QuestManager(scriptConditionEvaluator);
+        quests = new QuestManager(this::links);
         stamina = new StaminaManager(config.stamina(), playerData);
         stats = new CombatStatisticsService(config.statistics());
         leaderboard = new LeaderboardService(config.leaderboard(), playerData);
@@ -364,6 +370,7 @@ public final class AbyssService {
         }
         worldPool.initPreload(tplMap, config.abyss().preload());
 
+        subscribeQuestCompleted(); // EventBus 晚注册时补订（幂等）
         started = true;
         logger.info("[abyss] 已启动，地牢模板: " + instances.getAllTemplates().size());
     }
@@ -392,6 +399,14 @@ public final class AbyssService {
         if (roomManager != null) roomManager.shutdown();
         if (guideService != null) guideService.shutdown();
         if (npcs != null) npcs.shutdown();
+        // 退订 questgps 完成事件
+        if (questCompletedSubId != null && eventBusProvider != null) {
+            try {
+                EventBusCapability bus = eventBusProvider.get();
+                if (bus != null) bus.unsubscribe(questCompletedSubId);
+            } catch (Throwable ignored) { }
+            questCompletedSubId = null;
+        }
         if (entranceMarkers != null) entranceMarkers.shutdown();
         if (partyManager != null) partyManager.shutdown();
         if (worldPool != null) {
@@ -540,10 +555,39 @@ public final class AbyssService {
 
     public void setEventBusProvider(Supplier<EventBusCapability> provider) {
         this.eventBusProvider = provider;
+        subscribeQuestCompleted();
+    }
+
+    /** 订阅 questgps 任务完成事件 → 副本任务钩子（幂等；总线缺席下次重试）。 */
+    private void subscribeQuestCompleted() {
+        if (questCompletedSubId != null) return;
+        EventBusCapability bus;
+        try {
+            bus = eventBusProvider.get();
+        } catch (Throwable t) {
+            return;
+        }
+        if (bus == null) return;
+        try {
+            questCompletedSubId = bus.subscribe("axs.questgps.quest_completed", event -> {
+                Player player = event.player();
+                if (player == null || quests == null || instances == null) return;
+                AbyssInstance inst = instances.getInstance(player);
+                if (inst == null) return;
+                String questId = event.payload().get("quest_id");
+                quests.onQuestCompleted(inst, player, scriptRunner, questId);
+            });
+        } catch (Throwable t) {
+            logger.fine("[abyss] 订阅 quest_completed 失败: " + t.getMessage());
+        }
     }
 
     public void setLinks(xuanmo.arcartxsuite.abyss.links.AbyssLinks links) {
         this.links = links;
+    }
+
+    public void setNpcBridge(xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI bridge) {
+        this.npcBridge = bridge;
     }
 
     public @Nullable xuanmo.arcartxsuite.abyss.links.AbyssLinks links() {
@@ -611,6 +655,15 @@ public final class AbyssService {
         RequirementChecker.CheckResult check = requirementChecker.check(template, players, party);
         if (!check.ok()) {
             return EnterResult.fail(msg("error.requirements-failed", "reason", check.reason()));
+        }
+        // questgps 主线门禁：abyss.<副本id> 被 gate.blocked-module-entries 声明时，
+        // 未完成主线的队员拒绝进入（questgps 未装载时恒放行）
+        if (links != null) {
+            for (Player member : players) {
+                if (links.moduleEntryLocked(member, "abyss." + template.id())) {
+                    return EnterResult.fail(msg("dungeon.module-locked"));
+                }
+            }
         }
         // floors+pool 模式需要 WorldEdit/FAWE 粘贴房间；缺席直接拒绝（不传进虚空再失败）
         if (template.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {

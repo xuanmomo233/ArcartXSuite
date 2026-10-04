@@ -5,7 +5,9 @@ main: xuanmo.arcartxsuite.abyss.AbyssModule
 api-version: 1.0
 
 depends: []
-softdepends: []
+softdepends:
+  - conversation
+  - questgps
 external-depends:
   - PlaceholderAPI
 external-softdepends:

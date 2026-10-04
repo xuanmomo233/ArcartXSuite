@@ -1,22 +1,18 @@
-# 副本内定时任务
+# 副本内定时任务（abyss 自有调度——实例级，无外部对应系统）
 
-tips:
-  type: TIMED
-  times: [60, 300, 540]
-  timed-scripts:
-    60: ["message @all &7提示：已进行 1 分钟"]
-    300: ["message @all &e时间过半，抓紧清怪！"]
-    540: ["message @all &c最后 1 分钟！"]
-
-supply:
-  type: INTERVAL
-  interval: 120
-  script:
-    - "message @all &7空投补给已投放"
-    - "setblock 0,80,0 CHEST"
-
-on_kill:
+# 击杀掉金币：每杀一只副本怪 +2 全队金币（祭坛/商店消耗）
+coin_drop:
   type: EVENT
   event: monster_kill
   script:
-    - "setvar last_killer {killer}"
+    - "addvar coins 2"
+    - "actionbar {killer} &e+2 金币 &7（全队 {var:coins}）"
+
+# 阶段提示
+tips:
+  type: TIMED
+  times: [240, 600, 960]
+  timed-scripts:
+    240: ["message @all &7提示：祭坛和商队收金币——别攒着不用"]
+    600: ["message @all &e时间过半，注意推进节奏"]
+    960: ["message @all &c最后 4 分钟！深渊开始躁动"]

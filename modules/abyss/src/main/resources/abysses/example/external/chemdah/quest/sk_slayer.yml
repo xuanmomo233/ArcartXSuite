@@ -1,0 +1,41 @@
+# Chemdah 任务模板：讨伐深渊魔物（abyss quests.yml 的 slayer.chemdah-id 指向这里）
+# 部署：复制到 plugins/Chemdah/quest/sk_slayer.yml
+# 玩家级持久档案；副本内击杀计数自动推进，完成事件经 questgps EventBus
+# 路由回 abyss quests.yml 的 on-complete 钩子发副本侧奖励。
+# 可重复接取：Chemdah 默认完成后可再次接取（如需间隔可在 agent 里加条件）。
+
+sk_slayer:
+  meta:
+    name: "讨伐深渊魔物"
+    # 任务类型 → questgps categories 注册 id（mainline/side/encounter…）
+    type: side
+  task:
+    kills:
+      objective: player kill            # 玩家击杀实体（AEntityDeath 系）
+      # 默认计任意击杀。要限定"只算副本怪"可加 condition——支持
+      # victim(Entity)/weapon(ItemStack)/position(location)/cause 等条件，
+      # 例：victim 配实体类型白名单、position 配副本世界名前缀
+      # （abyss 实例世界名 = config.yml abyss.world-prefix + 实例id，默认 axs_abyss_*）。
+      # condition:
+      #   victim: zombie skeleton spider witch blaze wither_skeleton creeper evoker vindicator ravager wither
+      goal:
+        amount: 15                      # 击杀 15 只魔物
+      addon:
+        stats:
+          visible: true
+        track:
+          name: '深渊魔物'
+          description: '&7击杀地牢魔物 &c{{ quest progress value task kills }}/{{ quest progress target task kills }}'
+  addon:
+    track:
+      scoreboard: true
+    ui:
+      icon: iron_sword
+      description: |-
+        &7深入地牢，击杀 &c15 &7只魔物。
+        &7向导·艾琳会按约定支付报酬。
+  agent:
+    accepted: |
+      tell colored "&e[委托] &7已接取：讨伐深渊魔物"
+    completed: |
+      tell colored "&6[委托] &a讨伐深渊魔物 完成！"

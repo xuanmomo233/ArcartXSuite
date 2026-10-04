@@ -19,7 +19,8 @@ import xuanmo.arcartxsuite.abyss.service.AbyssService;
  * 变量：
  * stamina / stamina_max / in_dungeon / dungeon_id / dungeon_name /
  * dungeon_time / deaths / alive_count / party_size / party_name /
- * party_leader / cooldown_<地牢> / completions_<地牢> / best_time_<地牢>
+ * party_leader / cooldown_<地牢> / completions_<地牢> / best_time_<地牢> /
+ * var_<实例变量名>（读当前副本实例变量，供 interact 条件/外部 UI 使用）
  */
 public final class AbyssPlaceholderExpansion extends PlaceholderExpansion {
 
@@ -96,6 +97,12 @@ public final class AbyssPlaceholderExpansion extends PlaceholderExpansion {
                 return leader != null ? leader.getName() : party.leader().toString().substring(0, 8);
             }
             default: break;
+        }
+        if (p.startsWith("var_")) {
+            AbyssInstance i = player != null ? service.instances().getInstance(player) : null;
+            if (i == null) return "0";
+            Object v = i.getVariables().get(p.substring("var_".length()));
+            return v != null ? String.valueOf(v) : "0";
         }
         if (p.startsWith("cooldown_")) {
             String dungeon = p.substring("cooldown_".length());

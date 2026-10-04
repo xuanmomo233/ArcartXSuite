@@ -1,38 +1,81 @@
-# 交互点示例：平台上的金块右键开宝箱（一次性）
+# 交互点：祭坛供奉 / 商店台座 / 解谜拉杆 / 战利品宝箱
+# conditions 用 PAPI 条件（%axsabyss_var_<名>% 读副本实例变量）；
+# fail-message 在条件不满足时发给点击者。
 
-trial_chest:
+# ═══ 祭坛（f1_altar）：15 金币供奉 → 三选一祝福 ═══
+altar:
   type: RIGHT_CLICK_BLOCK
-  location: "5,80,5"
-  required-block: "GOLD_BLOCK"
-  once: true
+  location: "91,61,11"
+  required-block: ENCHANTING_TABLE
+  conditions: ["%axsabyss_var_coins% >= 15"]
+  fail-message: "&c祭坛沉默着……供奉需要 &e15 &c金币"
   script:
-    - "message @trigger &e你发现了试炼宝箱！"
-    - "open_chest_ui @trigger trial_chest"
-    - "setblock 5,80,5 AIR"
+    - "addvar coins -15"
+    - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
+    - "buff_offer altar_pool"
 
-# ═══ 机关解谜配套交互点（puzzles.yml）═══
-# 序列机关 valve_sequence 的 4 个阀门按钮（可重复触发，顺序由 PuzzleManager 判定）：
-valve_1:
+# ═══ 商店台座（f2_shop）═══
+shop_heal:
   type: RIGHT_CLICK_BLOCK
-  location: "8,80,2"
-  required-block: "STONE_BUTTON"
-valve_2:
-  type: RIGHT_CLICK_BLOCK
-  location: "8,80,4"
-  required-block: "STONE_BUTTON"
-valve_3:
-  type: RIGHT_CLICK_BLOCK
-  location: "8,80,6"
-  required-block: "STONE_BUTTON"
-valve_4:
-  type: RIGHT_CLICK_BLOCK
-  location: "8,80,8"
-  required-block: "STONE_BUTTON"
-
-# 输入机关 elevator_code 的打开入口（右键终端 → 弹输入面板）：
-elevator_terminal:
-  type: RIGHT_CLICK_BLOCK
-  location: "10,81,10"
-  required-block: "LECTERN"
+  location: "247,61,2"
+  required-block: GOLD_BLOCK
+  conditions: ["%axsabyss_var_coins% >= 8"]
+  fail-message: "&c治疗台座需要 &e8 &c金币"
   script:
-    - "puzzle_prompt elevator_code"
+    - "addvar coins -8"
+    - "heal @trigger 12"
+    - "apply_potion @trigger REGENERATION 1 5"
+    - "message @trigger &a✚ 治疗完成，继续深入吧"
+    - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
+
+shop_power:
+  type: RIGHT_CLICK_BLOCK
+  location: "251,61,2"
+  required-block: REDSTONE_BLOCK
+  conditions: ["%axsabyss_var_coins% >= 12"]
+  fail-message: "&c力量台座需要 &e12 &c金币"
+  script:
+    - "addvar coins -12"
+    - "apply_potion @trigger STRENGTH 1 120"
+    - "message @trigger &c⚔ 力量灌注：攻击提升 2 分钟"
+    - "sound @trigger ENTITY_ZOMBIE_VILLAGER_CURE 1 1.4"
+
+shop_apple:
+  type: RIGHT_CLICK_BLOCK
+  location: "255,61,2"
+  required-block: DIAMOND_BLOCK
+  conditions: ["%axsabyss_var_coins% >= 15"]
+  fail-message: "&c金苹果需要 &e15 &c金币"
+  script:
+    - "addvar coins -15"
+    - "give_item @trigger material:GOLDEN_APPLE:1"
+    - "message @trigger &6✦ 入手 金苹果 ×1"
+    - "sound @trigger ENTITY_ITEM_PICKUP 1 1.2"
+
+# ═══ 解谜拉杆（f2_puzzle）：顺序由 puzzles.yml lever_gate 判定 ═══
+lever_1:
+  type: RIGHT_CLICK_BLOCK
+  location: "285,62,7"
+  required-block: LEVER
+lever_2:
+  type: RIGHT_CLICK_BLOCK
+  location: "289,62,7"
+  required-block: LEVER
+lever_3:
+  type: RIGHT_CLICK_BLOCK
+  location: "293,62,7"
+  required-block: LEVER
+lever_4:
+  type: RIGHT_CLICK_BLOCK
+  location: "297,62,7"
+  required-block: LEVER
+
+# ═══ 战利品宝箱（f3_treasure）═══
+abyss_chest:
+  type: RIGHT_CLICK_BLOCK
+  location: "451,61,11"
+  required-block: CHEST
+  once: true                          # 每实例一次
+  script:
+    - "open_chest_ui @trigger abyss_chest"
+    - "sound @trigger BLOCK_CHEST_OPEN 1 1"

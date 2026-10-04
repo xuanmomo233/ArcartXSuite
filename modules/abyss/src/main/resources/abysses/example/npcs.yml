@@ -1,15 +1,32 @@
-# 副本 NPC：平台中央的向导
+# 副本 NPC：Adyeshach 临时公共实体（npc key = Adyeshach npcId）
+# Chemdah 会话用 'adyeshach <npc key>' 绑定；右键 NPC 时：
+#   ① 绑定了会话 → 打开 ArcartX 对话 UI（conversation 模块）
+#   ② 未绑定/模块缺席 → 聊天栏逐句播放 dialogs 兜底
+# click-script 与会话并行执行。
 
 guide:
   name: "&e向导·艾琳"
   type: VILLAGER
-  location: "0,80,-5,0,0"
+  location: "11,61,11,90,0"        # f1_start 房中心，面向入口(+x→-x 看西边=yaw90)
   look-at-player: true
-  dialogs:
-    - "&e欢迎来到虚空试炼场！"
-    - "&7消灭两波怪物即可通关。"
-    - "&a右键我接取讨伐任务，有额外奖励！"
+  dialogs:                        # 无 Chemdah 会话时的聊天栏兜底
+    - "&e欢迎来到元气试炼之地！"
+    - "&7地牢共三层：战斗房肃清 → 祭坛/商店补给 → 守层 Boss。"
+    - "&7击杀魔物掉金币，祭坛和商队都收这个。"
+    - "&a需要委托的话，我可以给你登记讨伐任务。"
   dialog-interval: 40
   click-script:
-    - "quest_step slay_guard"
+    - "quest_step slayer"          # 未接取→接 Chemdah 委托；已完成→领奖励
+  once: false
+
+merchant:
+  name: "&6旅行商人·老陈"
+  type: WANDERING_TRADER
+  location: "251,61,5,180,0"       # f2_shop 台座南侧，面向台座/来客(-z 北=yaw180)
+  look-at-player: true
+  dialogs:
+    - "&6客人，随便看看。台座上的货都标着价。"
+    - "&7金块治伤、红石壮力、钻石换苹果——金币够就行。"
+  click-script:
+    - "message @trigger &7右键台座购买：金块=治疗8金 红石=力量12金 钻石=金苹果15金"
   once: false

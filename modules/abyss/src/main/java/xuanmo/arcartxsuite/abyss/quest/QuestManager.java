@@ -2,100 +2,152 @@ package xuanmo.arcartxsuite.abyss.quest;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.abyss.instance.AbyssInstance;
+import xuanmo.arcartxsuite.abyss.links.AbyssLinks;
 import xuanmo.arcartxsuite.abyss.script.ScriptContext;
 import xuanmo.arcartxsuite.abyss.script.ScriptRunner;
 import xuanmo.arcartxsuite.abyss.template.QuestConfig;
-import xuanmo.arcartxsuite.api.condition.ScriptCondition;
-import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
+import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 
 /**
- * 任务管理器：副本任务的接取/提交状态机。
- * <p>
- * 状态存于实例变量（quest.&lt;id&gt; = ACCEPTED/COMPLETED），玩家级状态不区分成员——
- * 副本内任务为全队共享。接取/提交脚本经 {@link ScriptRunner} 执行，
- * 提交条件走宿主 {@link ScriptConditionEvaluator}。
+ * 副本任务适配层：任务语义全部委托 questgps/Chemdah（玩家级档案），
+ * 本类只保留 abyss 编排面——
+ * <ul>
+ *   <li>quests.yml 的 abyssId → chemdahId 映射解析</li>
+ *   <li>接取/完成时的副本脚本钩子（on-accept/on-complete）</li>
+ *   <li>manual-claim 任务的"回 NPC 领取"状态（实例变量）</li>
+ *   <li>{@code quest.<id>} 实例变量投影（脚本 check 用，最后写入者为准）</li>
+ * </ul>
+ * Chemdah 任务为玩家级：接取/完成均按成员各自结算；重复刷本需任务配置为可重复接取。
  */
 public final class QuestManager {
 
     public enum QuestStatus { NONE, ACCEPTED, COMPLETED }
 
-    private final ScriptConditionEvaluator conditionEvaluator;
+    private final Supplier<AbyssLinks> linksSupplier;
 
-    public QuestManager(ScriptConditionEvaluator conditionEvaluator) {
-        this.conditionEvaluator = conditionEvaluator;
+    public QuestManager(Supplier<AbyssLinks> linksSupplier) {
+        this.linksSupplier = linksSupplier;
     }
 
-    /** 任务当前状态。 */
-    public QuestStatus status(AbyssInstance instance, String questId) {
-        Object v = instance.getVariables().get(questKey(questId));
-        if (v instanceof QuestStatus qs) return qs;
-        if (v instanceof String s) {
-            try { return QuestStatus.valueOf(s); } catch (IllegalArgumentException ignored) { }
-        }
-        return QuestStatus.NONE;
+    private @Nullable AbyssLinks links() {
+        return linksSupplier != null ? linksSupplier.get() : null;
+    }
+
+    /** 玩家在任务上的真实状态（questgps 缺席/未接取 → NONE）。 */
+    public QuestStatus status(AbyssInstance instance, Player player, String questId) {
+        QuestConfig.Quest q = find(instance, questId);
+        AbyssLinks l = links();
+        if (q == null || l == null || player == null) return QuestStatus.NONE;
+        QuestGpsNavigable.QuestState state = l.questState(player, q.chemdahId());
+        if (state == null) return QuestStatus.NONE;
+        return switch (state) {
+            case COMPLETED -> QuestStatus.COMPLETED;
+            case ACTIVE -> QuestStatus.ACCEPTED;
+            case NONE -> QuestStatus.NONE;
+        };
     }
 
     /**
-     * 接取任务：发送接受文本 + 跑接受脚本 + 标记 ACCEPTED。
-     *
-     * @return false=任务不存在/已接取/已完成
+     * 接取任务：questgps acceptQuest（Chemdah 玩家级）+ on-accept 副本脚本
+     * + auto-track 时自动追踪。返回 false=任务不存在/该玩家已接取/questgps 缺席。
      */
     public boolean accept(AbyssInstance instance, Player trigger,
                           ScriptRunner runner, String questId) {
         QuestConfig.Quest q = find(instance, questId);
-        if (q == null || status(instance, questId) != QuestStatus.NONE) return false;
+        AbyssLinks l = links();
+        if (q == null || l == null || trigger == null) return false;
+        if (status(instance, trigger, questId) != QuestStatus.NONE) return false;
+        l.questAccept(trigger, q.chemdahId());
         instance.getVariables().put(questKey(questId), QuestStatus.ACCEPTED);
-        ScriptContext ctx = ScriptContext.of(instance, trigger);
-        if (!q.acceptText().isEmpty()) {
-            trigger.sendMessage(color(ctx.replace(q.acceptText())));
+        if (!q.onAccept().isEmpty()) {
+            runner.run("quest_accept_" + questId, q.onAccept(),
+                ScriptContext.of(instance, trigger), instance);
         }
-        if (!q.acceptScript().isEmpty()) {
-            runner.run("quest_accept_" + questId, q.acceptScript(), ctx, instance);
+        if (q.autoTrack()) {
+            l.questTrack(trigger, q.chemdahId(), null);
         }
         return true;
     }
 
     /**
-     * 提交任务：条件校验 → 提交文本 + 提交脚本 + 标记 COMPLETED。
-     *
-     * @return SubmitResult
+     * 提交任务（manual-claim 任务的"回 NPC 领取奖励"）：
+     * 该玩家已完成且未领 → 跑 on-complete 副本脚本 + 记已领。
+     * 非 manual-claim 的任务完成时已自动发放，此路径作为兜底领取。
      */
     public SubmitResult submit(AbyssInstance instance, Player trigger,
                                ScriptRunner runner, String questId) {
         QuestConfig.Quest q = find(instance, questId);
         if (q == null) return SubmitResult.NOT_FOUND;
-        if (status(instance, questId) == QuestStatus.COMPLETED) return SubmitResult.ALREADY_DONE;
-        if (status(instance, questId) != QuestStatus.ACCEPTED) return SubmitResult.NOT_ACCEPTED;
-        // 提交条件（空条件=直接可交）
-        if (!q.submitConditions().isEmpty()) {
-            ScriptCondition failed = conditionEvaluator.firstFailed(trigger, q.submitConditions());
-            if (failed != null) return SubmitResult.CONDITION_FAILED;
-        }
-        instance.getVariables().put(questKey(questId), QuestStatus.COMPLETED);
-        ScriptContext ctx = ScriptContext.of(instance, trigger);
-        if (!q.submitText().isEmpty()) {
-            trigger.sendMessage(color(ctx.replace(q.submitText())));
-        }
-        if (!q.submitScript().isEmpty()) {
-            runner.run("quest_submit_" + questId, q.submitScript(), ctx, instance);
-        }
+        if (isClaimed(instance, trigger, q)) return SubmitResult.ALREADY_DONE;
+        QuestStatus st = status(instance, trigger, questId);
+        if (st == QuestStatus.NONE) return SubmitResult.NOT_ACCEPTED;
+        if (st != QuestStatus.COMPLETED) return SubmitResult.CONDITION_FAILED;
+        grantComplete(instance, trigger, runner, q);
         return SubmitResult.OK;
+    }
+
+    /**
+     * EventBus {@code axs.questgps.quest_completed} 路由入口：
+     * 按 chemdahId 匹配副本任务，manual-claim → 记可领取标记；
+     * 否则立即跑 on-complete 发奖并记已领。写 quest.&lt;id&gt; 投影变量。
+     */
+    public void onQuestCompleted(AbyssInstance instance, Player player,
+                               ScriptRunner runner, String chemdahId) {
+        if (instance == null || player == null || chemdahId == null) return;
+        for (QuestConfig.Quest q : instance.getTemplate().quests().quests().values()) {
+            if (!q.chemdahId().equalsIgnoreCase(chemdahId)) continue;
+            instance.getVariables().put(questKey(q.id()), QuestStatus.COMPLETED);
+            if (q.manualClaim()) {
+                instance.getVariables().put(claimableKey(q.id(), player), Boolean.TRUE);
+            } else if (!isClaimed(instance, player, q)) {
+                grantComplete(instance, player, runner, q);
+            }
+        }
+    }
+
+    /** 实例内全部任务 id → 该玩家状态（HUD 任务行用）。 */
+    public Map<String, QuestStatus> statusMap(AbyssInstance instance, Player player) {
+        Map<String, QuestStatus> out = new ConcurrentHashMap<>();
+        for (String id : instance.getTemplate().quests().quests().keySet()) {
+            out.put(id, status(instance, player, id));
+        }
+        return out;
+    }
+
+    /** abyss 任务 id → chemdah 任务 id（无映射时原样返回）。 */
+    public String resolveChemdahId(AbyssInstance instance, String questId) {
+        QuestConfig.Quest q = find(instance, questId);
+        return q != null ? q.chemdahId() : questId;
+    }
+
+    /** 该玩家是否已领取完成奖励。 */
+    public boolean isClaimed(AbyssInstance instance, Player player, QuestConfig.Quest q) {
+        Object v = instance.getVariables().get(claimedKey(q.id(), player));
+        return Boolean.TRUE.equals(v) || "true".equals(String.valueOf(v));
+    }
+
+    /** 该玩家是否有待领取的完成奖励（manual-claim）。 */
+    public boolean isClaimable(AbyssInstance instance, Player player, QuestConfig.Quest q) {
+        Object v = instance.getVariables().get(claimableKey(q.id(), player));
+        return Boolean.TRUE.equals(v) || "true".equals(String.valueOf(v));
+    }
+
+    private void grantComplete(AbyssInstance instance, Player player,
+                               ScriptRunner runner, QuestConfig.Quest q) {
+        instance.getVariables().put(claimedKey(q.id(), player), Boolean.TRUE);
+        instance.getVariables().remove(claimableKey(q.id(), player));
+        if (!q.onComplete().isEmpty()) {
+            runner.run("quest_complete_" + q.id(), q.onComplete(),
+                ScriptContext.of(instance, player), instance);
+        }
     }
 
     public enum SubmitResult {
         OK, NOT_FOUND, NOT_ACCEPTED, CONDITION_FAILED, ALREADY_DONE
-    }
-
-    /** 实例内全部任务 id → 状态（UI/调试展示用）。 */
-    public Map<String, QuestStatus> statusMap(AbyssInstance instance) {
-        Map<String, QuestStatus> out = new ConcurrentHashMap<>();
-        for (String id : instance.getTemplate().quests().quests().keySet()) {
-            out.put(id, status(instance, id));
-        }
-        return out;
     }
 
     private @Nullable QuestConfig.Quest find(AbyssInstance instance, String questId) {
@@ -103,8 +155,10 @@ public final class QuestManager {
     }
 
     private static String questKey(String id) { return "quest." + id; }
-
-    private static String color(String s) {
-        return org.bukkit.ChatColor.translateAlternateColorCodes('&', s);
+    private static String claimableKey(String id, Player p) {
+        return "quest.claimable." + id + "." + p.getUniqueId();
+    }
+    private static String claimedKey(String id, Player p) {
+        return "quest.claimed." + id + "." + p.getUniqueId();
     }
 }

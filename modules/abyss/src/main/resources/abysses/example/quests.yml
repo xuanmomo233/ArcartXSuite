@@ -1,14 +1,15 @@
-# 副本任务：NPC 接取/条件提交
+# 副本任务 → questgps/Chemdah 适配层
+# 任务语义（目标/进度/完成）全部在 Chemdah 侧定义（external/chemdah/quest/sk_slayer.yml），
+# 这里只登记映射 + 副本内钩子。Chemdah 任务为玩家级持久档案，重复刷本需任务可重复接取。
 
-slay_guard:
-  name: "讨伐虚空怪物"
-  description: "击杀 5 只副本怪物后回来找向导领取报酬"
-  accept-text: "&e[艾琳] &f拜托了！击杀 &c5 &f只怪物后回来找我。"
-  accept-script:
-    - "message @trigger &a已接取任务: 讨伐虚空怪物（0/5）"
-  submit-text: "&e[艾琳] &f太感谢了！这是说好的报酬。"
-  submit-conditions:
-    - "%axsabyss_dungeon_kills% >= 5"
-  submit-script:
+slayer:
+  chemdah-id: "sk_slayer"            # Chemdah 任务模板 id（QuestGPS 呈现层同名）
+  name: "讨伐深渊魔物"
+  description: "深入地牢，击杀 15 只魔物并击败深渊领主"
+  auto-track: true                   # 接取后自动 quest_track 追踪
+  on-accept:
+    - "message @trigger &a已接取委托：讨伐深渊魔物 &7（追踪已开启）"
+  on-complete:                       # Chemdah 完成 → EventBus 路由到此发奖
     - "grant_reward @trigger quest_pack"
-    - "message @trigger &a任务完成: 讨伐虚空怪物"
+    - "message @trigger &6委托达成！奖励已发放"
+  manual-claim: false                # true=完成不自动发奖，回 NPC submit_quest 领取

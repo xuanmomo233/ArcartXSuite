@@ -181,6 +181,34 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
             || (cinematicService != null && cinematicService.isPlaying(player))
         );
 
+        registerCapability(xuanmo.arcartxsuite.api.capability.ConversationPlayable.class,
+            new xuanmo.arcartxsuite.api.capability.ConversationPlayable() {
+                @Override
+                public boolean openConversation(@NotNull org.bukkit.entity.Player player, @NotNull String npcId) {
+                    return service != null && service.openConversationFor(player, npcId);
+                }
+
+                @Override
+                public boolean hasConversation(@NotNull String npcId) {
+                    return service != null && service.hasConversation(npcId);
+                }
+
+                @Override
+                public boolean playCinematic(@NotNull org.bukkit.entity.Player player, @NotNull String sequenceId) {
+                    return cinematicService != null && cinematicService.play(player, sequenceId);
+                }
+
+                @Override
+                public boolean stopCinematic(@NotNull org.bukkit.entity.Player player) {
+                    if (cinematicService == null || !cinematicService.isPlaying(player)) {
+                        return false;
+                    }
+                    cinematicService.stop(player);
+                    return true;
+                }
+            }
+        );
+
         // 注册宿主全局按键回调（优先级 50，拾取优先于对话）
         registerKeybindHandler("AXS_INTERACT", 50, (player, keyName) -> {
             if (service == null || !service.interactionReady()) return false;

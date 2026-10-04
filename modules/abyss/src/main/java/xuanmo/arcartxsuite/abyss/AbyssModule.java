@@ -81,6 +81,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             this::getCapability, attributeBridge, logger));
         try {
             service.setWaypointBridge(createWaypointBridge());
+            service.setNpcBridge(createAdyeshachNpcBridge());
         } catch (Throwable ignored) { }
         service.start(dataFolder);
         // R3：设计模式世界内贴图标记（ArcartX 缺席时为 null，DesignManager 自动跳过）

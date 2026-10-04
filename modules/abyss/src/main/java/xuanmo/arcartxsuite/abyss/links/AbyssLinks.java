@@ -253,6 +253,47 @@ public final class AbyssLinks {
         return cap(MapNavigable.class);
     }
 
+    // ═══ Conversation ═══
+
+    /**
+     * 为玩家强制打开绑定到指定 Adyeshach NPC 的 Chemdah 会话（ArcartX 对话 UI）。
+     * conversation 模块未装载 / NPC 未绑定会话时返回 false，调用方可降级处理。
+     */
+    public boolean conversationOpen(Player player, String npcId) {
+        xuanmo.arcartxsuite.api.capability.ConversationPlayable c =
+            cap(xuanmo.arcartxsuite.api.capability.ConversationPlayable.class);
+        if (c == null) return false;
+        try {
+            return c.openConversation(player, npcId);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 指定 NPC id 是否绑定了至少一个 Chemdah 会话。 */
+    public boolean hasConversation(String npcId) {
+        xuanmo.arcartxsuite.api.capability.ConversationPlayable c =
+            cap(xuanmo.arcartxsuite.api.capability.ConversationPlayable.class);
+        if (c == null) return false;
+        try {
+            return c.hasConversation(npcId);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 播放电影序列（conversation 模块 cinematics），返回是否成功开始。 */
+    public boolean playCinematic(Player player, String sequenceId) {
+        xuanmo.arcartxsuite.api.capability.ConversationPlayable c =
+            cap(xuanmo.arcartxsuite.api.capability.ConversationPlayable.class);
+        if (c == null) return false;
+        try {
+            return c.playCinematic(player, sequenceId);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     // ═══ QuestGPS ═══
 
     /**
@@ -268,6 +309,65 @@ public final class AbyssLinks {
             safe(() -> c.trackTask(player, questId, taskId));
         } else {
             safe(() -> c.trackQuest(player, questId));
+        }
+    }
+
+    /** 推送任务供玩家选择（questgps offer）。 */
+    public void questOffer(Player player, String questId, boolean openMenu) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c != null) {
+            safe(() -> c.offerQuest(player, questId, openMenu));
+        }
+    }
+
+    /** 让玩家接取 Chemdah 任务（questgps acceptQuest，玩家级）。 */
+    public void questAccept(Player player, String questId) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c != null) {
+            safe(() -> c.acceptQuest(player, questId));
+        }
+    }
+
+    /** 打开 questgps 任务菜单。 */
+    public void questMenu(Player player) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c != null) {
+            safe(() -> c.openMenu(player));
+        }
+    }
+
+    /**
+     * 查询玩家任务档案状态（Chemdah 视角）。
+     * questgps 缺席返回 {@link xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState#NONE}。
+     */
+    public xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState questState(
+            Player player, String questId) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c == null) {
+            return xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.NONE;
+        }
+        try {
+            var s = c.questState(player, questId);
+            return s != null ? s
+                : xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.NONE;
+        } catch (Throwable t) {
+            return xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.QuestState.NONE;
+        }
+    }
+
+    /** 其他模块入口是否被 questgps 主线门禁锁定（如 "abyss.&lt;副本id&gt;"）。 */
+    public boolean moduleEntryLocked(Player player, String moduleEntryId) {
+        xuanmo.arcartxsuite.api.capability.QuestGpsNavigable c =
+            cap(xuanmo.arcartxsuite.api.capability.QuestGpsNavigable.class);
+        if (c == null) return false;
+        try {
+            return c.moduleEntryLocked(player, moduleEntryId);
+        } catch (Throwable t) {
+            return false;
         }
     }
 

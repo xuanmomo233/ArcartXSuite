@@ -433,7 +433,11 @@ final class BuiltinActions {
             if (links == null) return;
             String[] parts = splitFirst(args, 3);
             if (parts.length == 0 || parts[0].isEmpty()) return;
-            String questId = ctx.replace(parts[0]);
+            // quests.yml 声明的 abyss 任务 id → chemdah 任务 id（无映射时原样）
+            String questId = service.get().quests() != null
+                ? service.get().quests().resolveChemdahId(
+                    ctx.getInstance(), ctx.replace(parts[0]))
+                : ctx.replace(parts[0]);
             String taskId = null;
             String sel = "@trigger";
             if (parts.length >= 2) {
@@ -513,11 +517,38 @@ final class BuiltinActions {
         reg.register("remove_npc", (ctx, args, s) ->
             service.get().npcs().remove(ctx.getInstance(), ctx.replace(args)));
         reg.register("npc_dialog", (ctx, args, s) -> {
-            // npc_dialog <npc名> [sel]：对玩家播放该 NPC 的对话
+            // npc_dialog <npc名> [sel]：优先打开 Chemdah 会话（NPC 绑定了会话时），
+            // 否则回退 npcs.yml dialogs 的聊天栏逐句播放
             String[] parts = splitFirst(args, 1);
             String sel = parts.length > 1 ? rest(parts, 1) : "@all";
-            forEach(ctx, sel, p -> service.get().npcs().playDialog(
-                ctx.getInstance(), ctx.replace(parts[0]), p));
+            String npcName = ctx.replace(parts[0]);
+            var links = service.get().links();
+            forEach(ctx, sel, p -> {
+                if (links == null || !links.conversationOpen(p, npcName)) {
+                    service.get().npcs().playDialog(ctx.getInstance(), npcName, p);
+                }
+            });
+        });
+        reg.register("open_conversation", (ctx, args, s) -> {
+            // open_conversation <npcId> [sel]：强制打开 Adyeshach NPC 绑定的 Chemdah 会话
+            // （conversation 模块缺席/NPC 未绑定时静默跳过）
+            String[] parts = splitFirst(args, 1);
+            String sel = parts.length > 1 ? rest(parts, 1) : "@trigger";
+            String npcId = ctx.replace(parts[0]);
+            var links = service.get().links();
+            if (links != null) {
+                forEach(ctx, sel, p -> links.conversationOpen(p, npcId));
+            }
+        });
+        reg.register("play_cinematic", (ctx, args, s) -> {
+            // play_cinematic <序列id> [sel]：播放 conversation 模块 cinematics 电影序列
+            String[] parts = splitFirst(args, 1);
+            String sel = parts.length > 1 ? rest(parts, 1) : "@trigger";
+            String seqId = ctx.replace(parts[0]);
+            var links = service.get().links();
+            if (links != null) {
+                forEach(ctx, sel, p -> links.playCinematic(p, seqId));
+            }
         });
 
         // ═══ 奖励/宝箱 ═══
@@ -586,58 +617,87 @@ final class BuiltinActions {
             });
         });
 
-        // ═══ 任务 ═══
+        // ═══ 任务（questgps/Chemdah 适配层；玩家级档案）═══
         reg.register("accept_quest", (ctx, args, s) -> {
-            // accept_quest <任务id>
-            if (args == null || args.isBlank()) return;
-            Player t = ctx.getTrigger();
-            if (t == null) return;
-            boolean ok = service.get().quests().accept(
-                ctx.getInstance(), t, runner, ctx.replace(args.trim()));
-            if (!ok) {
-                t.sendMessage(color("&c任务无法接取（不存在或已处理）"));
-            }
+            // accept_quest <任务id> [sel]：让指定玩家接取 Chemdah 任务（缺省 @trigger）
+            String[] parts = splitFirst(args == null ? "" : args, 1);
+            if (parts.length == 0 || parts[0].isEmpty()) return;
+            String qid = ctx.replace(parts[0]);
+            String sel = parts.length > 1 ? rest(parts, 1) : "@trigger";
+            forEach(ctx, sel, p -> {
+                if (!service.get().quests().accept(ctx.getInstance(), p, runner, qid)) {
+                    p.sendMessage(color("&c任务无法接取（不存在或已处理）"));
+                }
+            });
         });
         reg.register("submit_quest", (ctx, args, s) -> {
-            // submit_quest <任务id>
-            if (args == null || args.isBlank()) return;
-            Player t = ctx.getTrigger();
-            if (t == null) return;
-            var r = service.get().quests().submit(
-                ctx.getInstance(), t, runner, ctx.replace(args.trim()));
-            switch (r) {
-                case NOT_FOUND -> t.sendMessage(color("&c任务不存在"));
-                case NOT_ACCEPTED -> t.sendMessage(color("&c尚未接取该任务"));
-                case CONDITION_FAILED -> t.sendMessage(color("&c任务条件未达成"));
-                case ALREADY_DONE -> t.sendMessage(color("&c任务已完成"));
-                default -> { }
-            }
+            // submit_quest <任务id> [sel]：manual-claim 任务的领取奖励入口（缺省 @trigger）
+            String[] parts = splitFirst(args == null ? "" : args, 1);
+            if (parts.length == 0 || parts[0].isEmpty()) return;
+            String qid = ctx.replace(parts[0]);
+            String sel = parts.length > 1 ? rest(parts, 1) : "@trigger";
+            forEach(ctx, sel, p -> {
+                var r = service.get().quests().submit(ctx.getInstance(), p, runner, qid);
+                switch (r) {
+                    case NOT_FOUND -> p.sendMessage(color("&c任务不存在"));
+                    case NOT_ACCEPTED -> p.sendMessage(color("&c尚未接取该任务"));
+                    case CONDITION_FAILED -> p.sendMessage(color("&c任务条件未达成"));
+                    case ALREADY_DONE -> p.sendMessage(color("&c任务奖励已领取"));
+                    default -> { }
+                }
+            });
         });
         reg.register("quest_step", (ctx, args, s) -> {
-            // quest_step <任务id>：智能推进——未接取→接取；已接取→尝试提交（条件不过仅提示）
+            // quest_step <任务id>：智能推进——未接取→接取；已完成→领取奖励（manual-claim）
             if (args == null || args.isBlank()) return;
             Player t = ctx.getTrigger();
             if (t == null) return;
             var qm = service.get().quests();
             String qid = ctx.replace(args.trim());
-            switch (qm.status(ctx.getInstance(), qid)) {
+            switch (qm.status(ctx.getInstance(), t, qid)) {
                 case NONE -> qm.accept(ctx.getInstance(), t, runner, qid);
-                case ACCEPTED -> {
+                case COMPLETED -> {
                     var r = qm.submit(ctx.getInstance(), t, runner, qid);
-                    if (r == xuanmo.arcartxsuite.abyss.quest.QuestManager.SubmitResult.CONDITION_FAILED) {
-                        t.sendMessage(color("&e任务条件还未达成"));
+                    if (r == xuanmo.arcartxsuite.abyss.quest.QuestManager.SubmitResult.ALREADY_DONE) {
+                        t.sendMessage(color("&7该任务已完成"));
                     }
                 }
-                default -> t.sendMessage(color("&7该任务已完成"));
+                default -> t.sendMessage(color("&e任务进行中，目标尚未达成"));
             }
         });
         reg.register("quest_status", (ctx, args, s) -> {
-            // quest_status <任务id> <变量名>：把任务状态写入实例变量(NONE/ACCEPTED/COMPLETED)
+            // quest_status <任务id> <变量名>：触发玩家的 Chemdah 任务状态写入变量
             String[] parts = splitFirst(args, 1);
             if (parts.length < 2) return;
-            var st = service.get().quests().status(
-                ctx.getInstance(), ctx.replace(parts[0]));
+            Player t = ctx.getTrigger();
+            var st = t != null
+                ? service.get().quests().status(ctx.getInstance(), t, ctx.replace(parts[0]))
+                : xuanmo.arcartxsuite.abyss.quest.QuestManager.QuestStatus.NONE;
             ctx.setVariable(ctx.replace(rest(parts, 1)), st.name());
+        });
+        reg.register("quest_offer", (ctx, args, s) -> {
+            // quest_offer <questId> [sel] [menu]：questgps 推送任务供玩家选择（menu=true 弹菜单）
+            String[] parts = splitFirst(args == null ? "" : args, 2);
+            if (parts.length == 0 || parts[0].isEmpty()) return;
+            var links = service.get().links();
+            if (links == null) return;
+            String qid = ctx.replace(parts[0]);
+            String sel = "@trigger";
+            boolean menu = false;
+            for (int i = 1; i < parts.length; i++) {
+                String tok = ctx.replace(parts[i]);
+                if (tok.startsWith("@")) sel = tok;
+                else if ("menu".equalsIgnoreCase(tok) || "true".equalsIgnoreCase(tok)) menu = true;
+            }
+            final boolean m = menu;
+            forEach(ctx, sel, p -> links.questOffer(p, qid, m));
+        });
+        reg.register("quest_menu", (ctx, args, s) -> {
+            // quest_menu [sel]：打开 questgps 任务菜单
+            var links = service.get().links();
+            if (links == null) return;
+            String sel = args == null || args.isBlank() ? "@trigger" : args.trim();
+            forEach(ctx, sel, links::questMenu);
         });
 
         // ═══ 跨模块联动（capability 缺席时静默跳过）═══
