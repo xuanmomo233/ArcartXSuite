@@ -56,10 +56,14 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         new ConcurrentHashMap<>();
     /** 已警告过的缺失属性 ID（避免日志刷屏） */
     private final ConcurrentMap<String, Boolean> warnedAttributes = new ConcurrentHashMap<>();
+    /** 已记过首次挂载成功日志的「玩家:来源」（避免重复 info） */
+    private final java.util.Set<String> appliedOnce = ConcurrentHashMap.newKeySet();
 
     private volatile boolean enabled = true;
     private volatile boolean forgeAvailable;
     private boolean listenerRegistered;
+    /** 服务不可用时已告警过一次（模块登记时提示，避免静默跳过） */
+    private volatile boolean warnedUnavailable;
 
     // ── Forge 反射缓存 ──
     private Object attributesRegistry;
@@ -89,6 +93,7 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
             Bukkit.getPluginManager().registerEvents(this, plugin);
             listenerRegistered = true;
         }
+        warnedUnavailable = false;
         if (!enabled) {
             forgeAvailable = false;
             clearAllTracked();
@@ -116,7 +121,11 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         if (player == null || sourceId == null || sourceId.isBlank()) {
             return;
         }
-        if (!available() || !player.isOnline()) {
+        if (!available()) {
+            warnUnavailableOnce();
+            return;
+        }
+        if (!player.isOnline()) {
             return;
         }
         if (modifiers == null || modifiers.isEmpty()) {
@@ -201,7 +210,9 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
     /** transient 修饰器随实体销毁自然失效，退出时仅解除追踪。 */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        tracked.remove(event.getPlayer().getUniqueId());
+        UUID uuid = event.getPlayer().getUniqueId();
+        tracked.remove(uuid);
+        appliedOnce.removeIf(key -> key.startsWith(uuid + ":"));
     }
 
     // ── Forge 反射解析 ──
@@ -258,12 +269,19 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
                 }
             }
         }
+        int applied = 0;
         for (Map.Entry<String, ModAttributeModifier> entry : current.entrySet()) {
             ModAttributeModifier modifier = entry.getValue();
             if (previous != null && modifier.equals(previous.get(entry.getKey()))) {
                 continue;
             }
-            addModifier(player, handle, sourceId, modifier);
+            if (addModifier(player, handle, sourceId, modifier)) {
+                applied++;
+            }
+        }
+        if (applied > 0 && appliedOnce.add(player.getUniqueId() + ":" + sourceId)) {
+            logger.info("[ModAttribute] 已为 " + player.getName() + " 挂载 " + applied
+                + " 个属性修饰器（来源 " + sourceId + "）");
         }
     }
 
@@ -277,17 +295,17 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         }
     }
 
-    private void addModifier(Player player, Object handle, String sourceId, ModAttributeModifier modifier) {
+    private boolean addModifier(Player player, Object handle, String sourceId, ModAttributeModifier modifier) {
         try {
             Object attribute = resolveAttribute(modifier.attributeId());
             if (attribute == null) {
                 warnMissing(player, modifier.attributeId());
-                return;
+                return false;
             }
             Object instance = livingGetAttribute.invoke(handle, attribute);
             if (instance == null) {
                 warnMissing(player, modifier.attributeId());
-                return;
+                return false;
             }
             UUID modifierId = modifierUuid(sourceId, modifier.attributeId());
             Object operation = operationConstants[modifier.operation().ordinal()];
@@ -297,9 +315,11 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
                 instanceRemoveModifier.invoke(instance, modifierId);
             }
             instanceAddTransientModifier.invoke(instance, nmsModifier);
+            return true;
         } catch (Throwable throwable) {
             logger.warning("[ModAttribute] 挂载属性失败 " + player.getName()
                 + " <- " + modifier.attributeId() + " : " + throwable.getMessage());
+            return false;
         }
     }
 
@@ -325,6 +345,18 @@ public final class DefaultModAttributeService implements ModAttributeService, Li
         } catch (Throwable throwable) {
             return null;
         }
+    }
+
+    /** 模块登记时服务不可用：每次 initialize 只告警一次，给出具体原因便于排查。 */
+    private void warnUnavailableOnce() {
+        if (warnedUnavailable) {
+            return;
+        }
+        warnedUnavailable = true;
+        String reason = !enabled
+            ? "已在 config.yml mod-attributes.enabled 禁用"
+            : "未检测到 Forge 属性环境（纯 Bukkit 核心或反射初始化失败）";
+        logger.warning("[ModAttribute] 模块尝试登记属性加成但服务不可用（" + reason + "），本次加成已跳过。");
     }
 
     private void warnMissing(Player player, String attributeId) {
