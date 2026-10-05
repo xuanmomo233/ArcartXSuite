@@ -181,7 +181,7 @@ controls:
                       height: 48
                       slotType: ~Icon
                       normal: ~0,0,0,0
-                      itemScale: 2.2
+                      itemScale: 1.0
                       seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
                     action:
                       enter: |-
