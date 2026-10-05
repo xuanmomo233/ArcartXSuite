@@ -2,14 +2,17 @@
 # 客户端 mod 悬停配件按 Shift → AXS_GUN_LIST["open"] → 服务端 openUi 本界面。
 # 枪数据不走包：open 触发器直接调客户端全局函数 axstooltip.* 获取
 # （持有优先排序，前 ownedCount 项绿框标记为已持有）。
-# 交互: 滚轮/←→键/按钮翻页，悬停图标顶部显示枪名，ESC(256)/✕关闭。
+# 交互: 滚轮/←→键/按钮翻页，悬停图标顶部显示枪名，ESC/✕关闭。
+#
+# Menu 型 UI（不是 HUD）：HUD 渲染在界面栈底层，背包开着时会被压在下面
+# 且抢不到鼠标交互。Menu 接管当前屏幕，输入/渲染都在最上层。
 #
 # 动态格子按 pitfalls §15.5 可靠模式构建：
 #   模板 get(0) 定位 + copy 引用存 var.格子引用 + 轮次命名防重名 +
 #   entryKey + seticon/visible 懒绑定，不在 copy 后立刻调用子控件方法。
 ui:
-  isHud: true
-  defaultOpen: false
+  escClose: true
+  background: false
   through: false
   show: true
   action:
@@ -71,7 +74,7 @@ ui:
       }
     keyPress: |-
       pages = math.ceil(var.guns.size() / 60)
-      # 263=LEFT 262=RIGHT 256=ESC（GLFW；escClose 是 Menu 专属，HUD 需手动关）
+      # 263=LEFT 262=RIGHT（GLFW）；ESC 由 Menu 的 escClose 处理
       if(self.currentKeyPress == 263 && var.page > 0){
         var.page = var.page - 1
         var.dirty = true
@@ -79,9 +82,6 @@ ui:
       if(self.currentKeyPress == 262 && var.page < pages - 1){
         var.page = var.page + 1
         var.dirty = true
-      }
-      if(self.currentKeyPress == 256){
-        self.close()
       }
 controls:
   遮罩:
@@ -91,6 +91,13 @@ controls:
       width: 1920
       height: 1080
     children:
+      # 全屏暗化（Menu 已关 vanilla 背景遮罩，自己画）
+      暗化:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,160
+          through: true
       # 640×640 面板：标题/统计/悬停名(36-48 档位字号) → 10×6 网格 → 底部翻页行
       面板:
         type: Canvas
