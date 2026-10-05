@@ -163,11 +163,16 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~0,200,80,110
+                      # alpha=4 近乎透明的底（§21: normal alpha=0 会连 effect 一起不渲染）
+                      normal: ~0,200,80,4
                       shape: ~round_rect
                       radius: 8
                       through: true
                       visible: "var.ownedFlags[self.parent.entryKey]"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~60,255,120,255
                   图标:
                     type: Slot
                     attribute:
