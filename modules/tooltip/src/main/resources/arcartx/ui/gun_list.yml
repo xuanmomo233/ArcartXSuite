@@ -49,8 +49,8 @@ ui:
             gi = i.round()
             idx = (start + gi).round()
             mb = 模板.copy('gun_' + var.轮次 + '_' + gi)
-            mb.x = (gi % 10) * 62
-            mb.y = math.floor(gi / 10) * 62
+            mb.x = (gi % 10) * 84
+            mb.y = math.floor(gi / 10) * 84
             mb.entryKey = idx
             var.iconJsons[idx] = var.guns.get(start + gi)
             var.ownedFlags[idx] = (start + gi) < var.ownedCount
@@ -98,13 +98,13 @@ controls:
           point: ~stretch_all
           normal: ~0,0,0,160
           through: true
-      # 640×640 面板：标题/统计/悬停名(36-48 档位字号) → 10×6 网格 → 底部翻页行
+      # 960×720 面板：标题/统计/悬停名(36-48 档位字号) → 10×6 网格(72 格/84 距) → 底部翻页行
       面板:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 640
-          height: 640
+          width: 960
+          height: 720
         children:
           背景:
             type: Texture
@@ -146,16 +146,16 @@ controls:
             val: grid
             attribute:
               point: ~top_left
-              x: 12
-              y: 152
-              width: 616
-              height: 368
+              x: 66
+              y: 160
+              width: 828
+              height: 492
             children:
               枪格模板:
                 type: Canvas
                 attribute:
-                  width: 56
-                  height: 56
+                  width: 72
+                  height: 72
                   visible: false
                 children:
                   底纹:
@@ -184,8 +184,8 @@ controls:
                     type: Slot
                     attribute:
                       point: ~middle_center
-                      width: 48
-                      height: 48
+                      width: 64
+                      height: 64
                       slotType: ~Icon
                       normal: ~0,0,0,0
                       itemScale: 1.0
