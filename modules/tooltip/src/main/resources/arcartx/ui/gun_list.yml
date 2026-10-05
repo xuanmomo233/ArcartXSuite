@@ -1,0 +1,239 @@
+# TACZ 配件"支持枪械"浏览界面（ax 模式）
+# 客户端 mod 悬停配件按 Shift → AXS_GUN_LIST["open"] → 服务端 openUi 本界面。
+# 枪数据不走包：open 触发器直接调客户端全局函数 axstooltip.* 获取
+# （持有优先排序，前 ownedCount 项绿框标记为已持有）。
+# 交互: 滚轮/←→键/按钮翻页，悬停图标顶部显示枪名，ESC(256)/✕关闭。
+#
+# 动态格子按 pitfalls §15.5 可靠模式构建：
+#   模板 get(0) 定位 + copy 引用存 var.格子引用 + 轮次命名防重名 +
+#   entryKey + seticon/visible 懒绑定，不在 copy 后立刻调用子控件方法。
+ui:
+  isHud: true
+  defaultOpen: false
+  through: false
+  show: true
+  action:
+    load: |-
+      var.guns = []
+      var.ownedCount = 0
+      var.page = 0
+      var.格子引用 = {}
+      var.轮次 = 0
+      var.iconJsons = {}
+      var.ownedFlags = {}
+      var.hoverName = ''
+      var.dirty = false
+    open: |-
+      var.guns = axstooltip.getTaczGuns()
+      var.ownedCount = axstooltip.getTaczOwnedCount()
+      var.page = 0
+      var.dirty = true
+    # 翻页/重建统一走 dirty 标记：tick 中先按引用删旧格子再按当前页 copy
+    tick: |-
+      if(var.dirty){
+        for(key in var.格子引用.keys()){
+          var.格子引用[key].remove()
+        }
+        var.格子引用 = {}
+        var.轮次 = (var.轮次 + 1).round()
+        start = var.page * 60
+        count = math.min(var.guns.size() - start, 60)
+        模板 = val.grid.get(0)
+        var.iconJsons = {}
+        var.ownedFlags = {}
+        if(count > 0){
+          for(i in range(0, count - 1)){
+            gi = i.round()
+            idx = (start + gi).round()
+            mb = 模板.copy('gun_' + var.轮次 + '_' + gi)
+            mb.x = (gi % 10) * 62
+            mb.y = math.floor(gi / 10) * 62
+            mb.entryKey = idx
+            var.iconJsons[idx] = var.guns.get(start + gi)
+            var.ownedFlags[idx] = (start + gi) < var.ownedCount
+            var.格子引用[gi] = mb
+            mb['图标'].seticon()
+            mb.visible = true
+          }
+        }
+        var.hoverName = ''
+        var.dirty = false
+      }
+    wheel: |-
+      pages = math.ceil(var.guns.size() / 60)
+      if(self.wheelValue > 0 && var.page > 0){
+        var.page = var.page - 1
+        var.dirty = true
+      }
+      if(self.wheelValue < 0 && var.page < pages - 1){
+        var.page = var.page + 1
+        var.dirty = true
+      }
+    keyPress: |-
+      pages = math.ceil(var.guns.size() / 60)
+      # 263=LEFT 262=RIGHT 256=ESC（GLFW；escClose 是 Menu 专属，HUD 需手动关）
+      if(self.currentKeyPress == 263 && var.page > 0){
+        var.page = var.page - 1
+        var.dirty = true
+      }
+      if(self.currentKeyPress == 262 && var.page < pages - 1){
+        var.page = var.page + 1
+        var.dirty = true
+      }
+      if(self.currentKeyPress == 256){
+        self.close()
+      }
+controls:
+  遮罩:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      # 640×640 面板：标题/统计/悬停名(36-48 档位字号) → 10×6 网格 → 底部翻页行
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 640
+          height: 640
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,20,26,235
+              shape: ~round_rect
+              radius: 12
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 14
+              fontSize: 48
+              through: true
+              texts:
+                - '§b支持枪械'
+          统计:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 68
+              fontSize: 36
+              through: true
+              texts:
+                - "~{var.guns.size() == 0 ? '' : '§7已持有 ' + var.ownedCount.round() + ' / 共 ' + var.guns.size().round() + ' 把'}"
+          悬停名称:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 110
+              fontSize: 36
+              through: true
+              texts:
+                - "~{var.hoverName == '' ? '§7悬停图标查看名称' : var.hoverName}"
+          网格:
+            type: Canvas
+            val: grid
+            attribute:
+              point: ~top_left
+              x: 12
+              y: 152
+              width: 616
+              height: 368
+            children:
+              枪格模板:
+                type: Canvas
+                attribute:
+                  width: 56
+                  height: 56
+                  visible: false
+                children:
+                  底纹:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~40,40,50,160
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                  持有:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~0,200,80,110
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                      visible: "var.ownedFlags[self.parent.entryKey]"
+                  图标:
+                    type: Slot
+                    attribute:
+                      point: ~middle_center
+                      width: 48
+                      height: 48
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      itemScale: 2.2
+                      seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
+                    action:
+                      enter: |-
+                        if(self.getSlotItemStack() != none){
+                          var.hoverName = self.getSlotItemStack().getName()
+                        }
+                      leave: |-
+                        var.hoverName = ''
+          上一页:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -46
+              fontSize: 36
+              texts:
+                - "~{var.page > 0 ? '§f< 上一页' : '§7< 上一页'}"
+            action:
+              clickLeft: |-
+                if(var.page > 0){
+                  var.page = var.page - 1
+                  var.dirty = true
+                }
+          页码:
+            type: Text
+            attribute:
+              point: ~bottom_center
+              y: -46
+              fontSize: 36
+              through: true
+              texts:
+                - "~{(var.page + 1).round() + ' / ' + math.max(1, math.ceil(var.guns.size() / 60)).round()}"
+          下一页:
+            type: Text
+            attribute:
+              point: ~bottom_right
+              x: -20
+              y: -46
+              fontSize: 36
+              texts:
+                - "~{var.page < math.ceil(var.guns.size() / 60) - 1 ? '§f下一页 >' : '§7下一页 >'}"
+            action:
+              clickLeft: |-
+                pages = math.ceil(var.guns.size() / 60)
+                if(var.page < pages - 1){
+                  var.page = var.page + 1
+                  var.dirty = true
+                }
+          关闭:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -14
+              y: 10
+              fontSize: 36
+              texts:
+                - '§c✕'
+            action:
+              clickLeft: |-
+                Screen.close()

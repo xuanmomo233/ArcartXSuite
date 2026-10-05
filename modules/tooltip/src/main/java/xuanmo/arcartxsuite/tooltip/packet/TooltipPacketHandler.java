@@ -3,23 +3,25 @@ package xuanmo.arcartxsuite.tooltip.packet;
 import java.util.List;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.tooltip.cache.TooltipDataCache;
+import xuanmo.arcartxsuite.tooltip.service.GunListService;
 import xuanmo.arcartxsuite.tooltip.service.TooltipJsonParser;
 
 /**
  * Tooltip 客户端数据包处理器。
  * <p>
- * 接收客户端 Forge mod（ArcartX-Suite-Mod）通过 ArcartX 自定义网络包
- * 发来的 tooltip 数据，解析后存入 {@link TooltipDataCache}。
- * <p>
- * 数据包格式：
+ * 接收客户端 Forge mod（ArcartX-Suite-Tooltips）通过 ArcartX 自定义网络包
+ * 发来的数据，解析后分发：
+ * <ul>
+ *   <li>{@link #PACKET_ID} — 物品 tooltip 文本缓存（聊天预览）</li>
+ *   <li>{@link #GUN_LIST_PACKET_ID} — TACZ 配件支持枪械列表，打开浏览 UI</li>
+ * </ul>
+ * 数据包格式（AXS_GUN_LIST）：
  * <pre>
- * packetId: "AXS_TOOLTIP_DATA"
- * data[0]: 物品指纹（物品注册名，如 "tacz:ak47"）
- * data[1]: 物品类型 ID（同 data[0]）
- * data[2]: tooltip 文本行（JSON 数组字符串）
- * data[3]: 结构化数据（JSON 对象字符串）
+ * data[0]: 动作（"open"）——请求打开支持枪械浏览界面；
+ *          枪械数据由客户端 axstooltip.* 函数直供，不走网络包
  * </pre>
  * <p>
  * 缓存操作同步执行：{@link TooltipDataCache} 内部使用 {@code ConcurrentHashMap}，
@@ -28,18 +30,26 @@ import xuanmo.arcartxsuite.tooltip.service.TooltipJsonParser;
 public final class TooltipPacketHandler implements ClientPacketHandler {
 
     public static final String PACKET_ID = "AXS_TOOLTIP_DATA";
+    public static final String GUN_LIST_PACKET_ID = "AXS_GUN_LIST";
 
     private final TooltipDataCache cache;
     private final TooltipJsonParser parser;
+    private final GunListService gunListService;
 
-    public TooltipPacketHandler(@NotNull TooltipDataCache cache, @NotNull TooltipJsonParser parser) {
+    public TooltipPacketHandler(@NotNull TooltipDataCache cache, @NotNull TooltipJsonParser parser,
+                                @Nullable GunListService gunListService) {
         this.cache = cache;
         this.parser = parser;
+        this.gunListService = gunListService;
     }
 
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId,
                                       @NotNull List<String> data) {
+        if (GUN_LIST_PACKET_ID.equalsIgnoreCase(packetId)) {
+            handleGunList(player, data);
+            return true;
+        }
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
 
         if (data.size() < 4) return true; // 数据不完整，消费但不处理
@@ -60,5 +70,10 @@ public final class TooltipPacketHandler implements ClientPacketHandler {
         }
 
         return true;
+    }
+
+    private void handleGunList(@NotNull Player player, @NotNull List<String> data) {
+        if (gunListService == null || data.isEmpty() || !"open".equalsIgnoreCase(data.get(0))) return;
+        gunListService.requestOpen(player);
     }
 }
