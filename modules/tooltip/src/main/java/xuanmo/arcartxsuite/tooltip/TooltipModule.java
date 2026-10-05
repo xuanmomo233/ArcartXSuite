@@ -104,6 +104,8 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
         gunListService.registerChannels();
         UiBinding gunListBinding = registerModuleUi(GUN_LIST_UI_FILE_PATH, null, true);
         gunListService.bindUi(gunListBinding.runtimeUiId());
+        // reload 后给在线玩家补推模式（init 回调只在进服时触发）
+        gunListService.pushModeToAll();
 
         // 注册跨模块能力
         registerCapability(TooltipDataCapable.class, capability);

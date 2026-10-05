@@ -63,6 +63,18 @@ public final class GunListService {
             mode.name().toLowerCase().getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * 向所有在线玩家推送当前模式。
+     * <p>
+     * 用于模块启动/reload 后补推——{@code ClientInitializedHandler} 只在进服时
+     * 触发一次，单纯 reload 改配置不会自动生效。
+     */
+    public void pushModeToAll() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            pushMode(player);
+        }
+    }
+
     /** 处理客户端 AXS_GUN_LIST["open"] 请求（ax 模式下才会到达）。 */
     public void requestOpen(@NotNull Player player) {
         if (!packetBridge.isAvailable() || gunListUiId == null) return;
