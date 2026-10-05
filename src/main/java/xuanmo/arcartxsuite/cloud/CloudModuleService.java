@@ -65,9 +65,13 @@ public final class CloudModuleService {
     );
 
 
-    /** 加密密钥对文件格式版本标识。 */
+    /** 加密密钥对文件格式版本标识（旧版：机器指纹加密私钥，仅用于迁移读取）。 */
 
     private static final String KEYPAIR_MAGIC = "AXSKP1";
+
+    /** 当前密钥对文件格式：AXSKP2，私钥由文件内 serverSecret 派生密钥加密，与机器无关。 */
+
+    private static final String KEYPAIR_MAGIC_V2 = "AXSKP2";
 
     /** 指纹绑定密钥派生用的 HKDF salt，必须与云端 crypto.ts 中的 KEY_BIND_SALT 一致。 */
 
@@ -101,6 +105,10 @@ public final class CloudModuleService {
     private volatile String serverCode;
     private final KeyPair keyPair;
     private final String serverPublicKeyB64;
+
+    /** 服务器密钥锚：.cloud-keypair 内随机持久化，模块密钥下发绑定的身份根，与机器指纹无关。 */
+
+    private volatile byte[] serverSecret;
 
     private volatile String moduleToken;
     private volatile long tokenExpiry;
@@ -467,6 +475,7 @@ public final class CloudModuleService {
             + "\"qq\":\"" + escapeJson(qq) + "\","
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\","
             + "\"pubkey\":\"" + serverPublicKeyB64 + "\","
+            + "\"keyAnchor\":\"" + escapeJson(serverSecretB64()) + "\","
             + "\"fingerprintHash\":\"" + sha256(fingerprint) + "\","
             + "\"name\":\"" + escapeJson(serverName) + "\""
             + "}";
@@ -578,6 +587,7 @@ public final class CloudModuleService {
 
         String refreshPayload = "{"
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
+            + ",\"keyAnchor\":\"" + escapeJson(serverSecretB64()) + "\""
             + "}";
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(apiBaseUrl + "/v1/servers/refresh"))
@@ -820,24 +830,11 @@ public final class CloudModuleService {
 
                         return CompletableFuture.completedFuture(false);
                     }
-                    String keyBind = extractJsonField(keyResp, "keyBind");
-                    if ("fp-hkdf-v1".equals(keyBind)) {
-                        String version = extractJsonField(keyResp, "version");
-                        String fph = sha256(generateFingerprint());
-                        byte[] pad = hkdfSha256(
-                            fph.getBytes(StandardCharsets.UTF_8),
-                            KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
-                            ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
-                            32);
-                        if (pad == null) {
+                    if (!unwrapBoundKey(key, keyResp, moduleId)) {
 
-                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：指纹密钥派生失败");
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：模块密钥绑定解包失败");
 
-                            return CompletableFuture.completedFuture(false);
-                        }
-                        for (int i = 0; i < 32; i++) {
-                            key[i] ^= pad[i];
-                        }
+                        return CompletableFuture.completedFuture(false);
                     }
 
 
@@ -1127,23 +1124,11 @@ public final class CloudModuleService {
             // 用本机实时指纹重新派生 pad 还原真实 moduleKey；换机器指纹不同 → 还原出错误 key → native 解密失败。
 
             String keyBind = extractJsonField(keyResp, "keyBind");
-            if ("fp-hkdf-v1".equals(keyBind)) {
-                String version = extractJsonField(keyResp, "version");
-                String fph = sha256(generateFingerprint());
-                byte[] pad = hkdfSha256(
-                    fph.getBytes(StandardCharsets.UTF_8),
-                    KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
-                    ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
-                    32);
-                if (pad == null) {
+            if (!unwrapBoundKey(key, keyResp, moduleId)) {
 
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：指纹密钥派生失败");
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：模块密钥绑定解包失败");
 
-                    return CompletableFuture.<Void>completedFuture(null);
-                }
-                for (int i = 0; i < 32; i++) {
-                    key[i] ^= pad[i];
-                }
+                return CompletableFuture.<Void>completedFuture(null);
             }
             if (debugLogging) {
                 String keyHash = sha256Hex(key);
@@ -1549,6 +1534,55 @@ public final class CloudModuleService {
         }
     }
 
+    private byte[] newServerSecret() {
+        byte[] secret = new byte[32];
+        new SecureRandom().nextBytes(secret);
+        this.serverSecret = secret;
+        return secret;
+    }
+
+    private String serverSecretB64() {
+        byte[] secret = this.serverSecret;
+        return secret == null ? "" : Base64.getEncoder().encodeToString(secret);
+    }
+
+    /**
+     * 还原云端绑定的模块密钥：deliveredKey = moduleKey XOR HKDF(锚)。
+     * anchor-hkdf-v1 锚 = 本机 serverSecret（.cloud-keypair 自包含，换 IP/换机不影响）；
+     * fp-hkdf-v1 锚 = 机器指纹（旧云端兼容路径）；未知/未绑定类型原样放行。
+     */
+    private boolean unwrapBoundKey(byte[] key, String keyResp, String moduleId) {
+        String keyBind = extractJsonField(keyResp, "keyBind");
+        if (keyBind == null || keyBind.isEmpty()) {
+            return true;
+        }
+        byte[] ikm;
+        if ("anchor-hkdf-v1".equals(keyBind)) {
+            String secretB64 = serverSecretB64();
+            if (secretB64.isEmpty()) {
+                return false;
+            }
+            ikm = secretB64.getBytes(StandardCharsets.UTF_8);
+        } else if ("fp-hkdf-v1".equals(keyBind)) {
+            ikm = sha256(generateFingerprint()).getBytes(StandardCharsets.UTF_8);
+        } else {
+            return true;
+        }
+        String version = extractJsonField(keyResp, "version");
+        byte[] pad = hkdfSha256(
+            ikm,
+            KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
+            ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
+            32);
+        if (pad == null) {
+            return false;
+        }
+        for (int i = 0; i < 32; i++) {
+            key[i] ^= pad[i];
+        }
+        return true;
+    }
+
     /**
 
      * 从持久化文件加载 Ed25519 密钥对；不存在则生成并保存。
@@ -1559,16 +1593,76 @@ public final class CloudModuleService {
     private KeyPair loadOrGenerateKeyPair() {
         File keyFile = new File(plugin.getDataFolder(), ".cloud-keypair");
         if (keyFile.exists()) {
-            KeyPair loaded = tryLoadKeyPair(keyFile);
-            if (loaded != null) return loaded;
+            KeyPair loaded = tryLoadKeyPairV2(keyFile);
+            if (loaded == null) {
+                loaded = tryLoadKeyPairV1(keyFile);
+            }
+            if (loaded != null) {
+                if (this.serverSecret == null) {
+                    // 旧格式迁移：保留原密钥对（pubkey 不变 → 云端按 pubkey 匹配复用原服务器码），
+                    // 文件重写为 AXSKP2 并配发新的 serverSecret。
+                    plugin.consoleInfo("[Cloud] 密钥文件迁移为 AXSKP2 格式（身份不再绑定机器指纹）。");
+                    saveKeyPair(loaded, newServerSecret(), keyFile);
+                }
+                return loaded;
+            }
         }
         KeyPair kp = generateKeyPair();
-        if (kp != null) saveKeyPair(kp, keyFile);
+        if (kp != null) saveKeyPair(kp, newServerSecret(), keyFile);
         return kp;
     }
 
+    /** V2 格式：AXSKP2 + 公钥 + serverSecret + salt + iv + 私钥密文（私钥由 serverSecret 派生密钥包裹）。 */
+    private KeyPair tryLoadKeyPairV2(File keyFile) {
+        try {
+            String[] parts = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).trim().split("\\R", -1);
+            if (parts.length == 0 || !KEYPAIR_MAGIC_V2.equals(parts[0].trim())) {
+                return null;
+            }
+            if (parts.length != 6) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（AXSKP2 字段结构无效），将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            byte[] publicEncoded;
+            byte[] secret;
+            byte[] salt;
+            byte[] iv;
+            byte[] ciphertext;
+            try {
+                publicEncoded = Base64.getDecoder().decode(parts[1].trim());
+                secret = Base64.getDecoder().decode(parts[2].trim());
+                salt = Base64.getDecoder().decode(parts[3].trim());
+                iv = Base64.getDecoder().decode(parts[4].trim());
+                ciphertext = Base64.getDecoder().decode(parts[5].trim());
+            } catch (IllegalArgumentException exception) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（Base64 字段无效），将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            if (publicEncoded.length == 0 || secret.length != 32 || salt.length != 16 || iv.length != 12 || ciphertext.length == 0) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（字段长度无效），将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            byte[] privateEncoded = decryptPrivateKey(ciphertext, iv, salt, Base64.getEncoder().encodeToString(secret));
+            if (privateEncoded == null) {
+                plugin.consoleWarn("[Cloud] 密钥文件结构有效但 serverSecret 无法解出私钥，将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
+            if (kp == null) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件解密内容无效，将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            this.serverSecret = secret;
+            debugLog("[Cloud] 已加载持久化 Ed25519 密钥对（AXSKP2），裸公钥: " + encodeRawEd25519PublicKey(kp));
+            return kp;
+        } catch (Exception exception) {
+            plugin.consoleWarn("[Cloud] 持久化密钥文件读取失败，将重新生成并触发自动重新绑定。: " + exception.getMessage());
+            return null;
+        }
+    }
+
     /** Try the stable fingerprint first, then migrate from the legacy fingerprint. */
-    private KeyPair tryLoadKeyPair(File keyFile) {
+    private KeyPair tryLoadKeyPairV1(File keyFile) {
         try {
             String content = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).trim();
             String[] parts = content.split("\\R", -1);
@@ -1609,8 +1703,7 @@ public final class CloudModuleService {
                 return null;
             }
             if (migrated) {
-                plugin.consoleInfo("[Cloud] 已使用旧版机器指纹恢复密钥对，正在用稳定指纹重新加密迁移，服务器码将保持不变。");
-                saveKeyPair(kp, keyFile);
+                plugin.consoleInfo("[Cloud] 已使用旧版机器指纹恢复密钥对，服务器码将保持不变。");
             }
             debugLog("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
             return kp;
@@ -1632,7 +1725,7 @@ public final class CloudModuleService {
         }
     }
 
-    private void saveKeyPair(KeyPair keyPair, File keyFile) {
+    private void saveKeyPair(KeyPair keyPair, byte[] secret, File keyFile) {
         java.nio.file.Path temporaryPath = null;
         try {
             if (!keyFile.getParentFile().exists()) keyFile.getParentFile().mkdirs();
@@ -1641,13 +1734,15 @@ public final class CloudModuleService {
             SecureRandom rng = new SecureRandom();
             rng.nextBytes(salt);
             rng.nextBytes(iv);
-            byte[] ciphertext = encryptPrivateKey(keyPair.getPrivate().getEncoded(), iv, salt);
+            String secretB64 = Base64.getEncoder().encodeToString(secret);
+            byte[] ciphertext = encryptPrivateKey(keyPair.getPrivate().getEncoded(), iv, salt, secretB64);
             if (ciphertext == null) {
                 plugin.consoleWarn("[Cloud] 私钥加密失败，未写入密钥文件。");
                 return;
             }
-            String out = KEYPAIR_MAGIC + "\n"
+            String out = KEYPAIR_MAGIC_V2 + "\n"
                 + Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()) + "\n"
+                + secretB64 + "\n"
                 + Base64.getEncoder().encodeToString(salt) + "\n"
                 + Base64.getEncoder().encodeToString(iv) + "\n"
                 + Base64.getEncoder().encodeToString(ciphertext);
@@ -1690,10 +1785,10 @@ public final class CloudModuleService {
         return new SecretKeySpec(keyBytes, "AES");
     }
 
-    private byte[] encryptPrivateKey(byte[] plaintext, byte[] iv, byte[] salt) {
+    private byte[] encryptPrivateKey(byte[] plaintext, byte[] iv, byte[] salt, String password) {
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromFingerprint(salt), new GCMParameterSpec(128, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromFingerprint(salt, password), new GCMParameterSpec(128, iv));
             return cipher.doFinal(plaintext);
         } catch (Exception exception) {
                 plugin.consoleWarn("[Cloud] 私钥加密异常: " + exception.getMessage());
