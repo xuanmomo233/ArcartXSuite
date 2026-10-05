@@ -46,6 +46,10 @@ public final class GunListService {
         if (mode != null) this.mode = mode;
     }
 
+    public @NotNull UiMode mode() {
+        return mode;
+    }
+
     /** 注册模式推送的 outgoing plugin message 通道。 */
     public void registerChannels() {
         plugin.getServer().getMessenger()

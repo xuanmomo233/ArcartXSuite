@@ -95,8 +95,6 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
         cache = new TooltipDataCache();
         parser = new TooltipJsonParser();
         capability = new TooltipDataCapability(cache);
-        adminCommand = new TooltipAdminCommand(cache, messages());
-
         // 枪械浏览 UI：gun_list 为 ax 模式界面；模式通过 plugin message
         // 通道 axstooltip:gunui 下发（客户端初始化完成后推送，与 map 模块同机制）
         gunListService = new GunListService(plugin, packetBridge);
@@ -106,6 +104,8 @@ public final class TooltipModule extends AbstractAXSModule implements ModuleComm
         gunListService.bindUi(gunListBinding.runtimeUiId());
         // reload 后给在线玩家补推模式（init 回调只在进服时触发）
         gunListService.pushModeToAll();
+
+        adminCommand = new TooltipAdminCommand(cache, messages(), gunListService);
 
         // 注册跨模块能力
         registerCapability(TooltipDataCapable.class, capability);

@@ -10,7 +10,15 @@ admin:
   status-packet-id: "&7数据包 ID: &f{0}"
   status-ttl: "&7缓存 TTL: &f{0}秒"
   status-no-cache: "&7缓存为空，等待客户端 mod 发送数据"
+  status-gun-ui-mode: "&7枪械 UI 模式: &f{0}"
+  status-gun-ui-channel: "&7模式推送通道: &f{0}"
+  status-gun-ui-unavailable: "&7枪械 UI: &c服务未启动"
+  push-ok: "&a已向 &f{0} &a推送枪械 UI 模式: &f{1}"
+  push-notfound: "&c玩家 &f{0} &c不在线"
+  push-unavailable: "&c枪械 UI 服务未启动"
+  push-usage: "&c用法: /axs tooltip push <玩家>"
 
 help:
   title: "&6Tooltip 管理"
   status: "&7{0} status&f - 查看模块状态"
+  push: "&7{0} push <玩家>&f - 手动重推枪械 UI 模式"
