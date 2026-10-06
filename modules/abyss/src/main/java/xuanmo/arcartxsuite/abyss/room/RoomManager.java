@@ -417,10 +417,15 @@ public final class RoomManager {
         for (String gn : room.groupNames) {
             int delay = room.groupDelays.getOrDefault(gn, 0);
             if (delay > 0) {
-                var task = scheduler.scheduleEverySeconds(plugin,
-                    () -> mobGroups.spawnGroup(instance, gn, null),
-                    delay, Long.MAX_VALUE / 20);
-                instance.registerTask(task);
+                // 一次性延迟（自取消）：period≈MAX_VALUE 会溢出 nextRun → 每 tick 重跑
+                xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] h = new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+                h[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+                    if (h[0] != null) {
+                        try { h[0].cancel(); } catch (Throwable ignored) { }
+                    }
+                    mobGroups.spawnGroup(instance, gn, null);
+                }, delay, Long.MAX_VALUE / 20);
+                instance.registerTask(h[0]);
             } else {
                 mobGroups.spawnGroup(instance, gn, null);
             }
@@ -462,10 +467,14 @@ public final class RoomManager {
         if (!isLastRoom) {
             if (fr.floor.advance() == FloorConfig.Advance.AUTO) {
                 room.advanceFired = true;
-                var task = scheduler.scheduleEverySeconds(plugin, () -> {
+                xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] h = new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+                h[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+                    if (h[0] != null) {
+                        try { h[0].cancel(); } catch (Throwable ignored) { }
+                    }
                     if (!instance.isFinished()) advance(instance, rt, fr, room);
                 }, 3, Long.MAX_VALUE / 20);
-                instance.registerTask(task);
+                instance.registerTask(h[0]);
             }
             // portal 模式：exit 区域由 tick 检测
             return;
@@ -541,13 +550,17 @@ public final class RoomManager {
                                         FloorRuntime fr, RoomRuntime room) {
         int timeout = fr.floor.advanceTimeout();
         if (timeout <= 0) return;
-        var task = scheduler.scheduleEverySeconds(plugin, () -> {
+        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] h = new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+        h[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+            if (h[0] != null) {
+                try { h[0].cancel(); } catch (Throwable ignored) { }
+            }
             if (!instance.isFinished() && !room.advanceFired) {
                 room.advanceFired = true;
                 advance(instance, rt, fr, room);
             }
         }, timeout, Long.MAX_VALUE / 20);
-        instance.registerTask(task);
+        instance.registerTask(h[0]);
     }
 
     /** 层入口站位：floor.spawn（绝对）→ 缺省首房 spawn。 */

@@ -95,9 +95,10 @@ public final class MonsterGroupManager {
             switch (rt.group.spawnTiming()) {
                 case AUTO_START -> spawnGroup(instance, rt.group.name(), null);
                 case DELAYED -> {
-                    rt.delayedTask = scheduler.scheduleEverySeconds(plugin, () ->
-                        spawnGroup(instance, rt.group.name(), null),
-                        rt.group.delaySeconds(), Long.MAX_VALUE / 20);
+                    rt.delayedTask = scheduler.scheduleEverySeconds(plugin, () -> {
+                        cancelDelayed(rt);
+                        spawnGroup(instance, rt.group.name(), null);
+                    }, rt.group.delaySeconds(), Long.MAX_VALUE / 20);
                     instance.registerTask(rt.delayedTask);
                 }
                 default -> { }
@@ -237,10 +238,19 @@ public final class MonsterGroupManager {
             callback.runGroupScript(instance, dep.group.onPrespawn(),
                 dep.group.name(), null);
         }
-        dep.delayedTask = scheduler.scheduleEverySeconds(plugin,
-            () -> spawnGroup(instance, dep.group.name(), null),
-            delay, Long.MAX_VALUE / 20);
+        dep.delayedTask = scheduler.scheduleEverySeconds(plugin, () -> {
+            cancelDelayed(dep);
+            spawnGroup(instance, dep.group.name(), null);
+        }, delay, Long.MAX_VALUE / 20);
         instance.registerTask(dep.delayedTask);
+    }
+
+    /** 取消组的延迟任务（一次性延迟自取消/清理路径共用）。 */
+    private void cancelDelayed(GroupRuntime rt) {
+        if (rt.delayedTask != null) {
+            try { rt.delayedTask.cancel(); } catch (Throwable ignored) { }
+            rt.delayedTask = null;
+        }
     }
 
     /** 击杀整组（不触发完成联动——管理性操作）。 */
@@ -269,7 +279,7 @@ public final class MonsterGroupManager {
         if (groups == null) return;
         GroupRuntime rt = groups.remove(groupName);
         if (rt == null) return;
-        if (rt.delayedTask != null) rt.delayedTask.cancel();
+        cancelDelayed(rt);
         for (UUID u : rt.alive) {
             Entity e = Bukkit.getEntity(u);
             if (e != null) e.remove();
@@ -345,7 +355,7 @@ public final class MonsterGroupManager {
         Map<String, GroupRuntime> groups = instanceGroups.remove(instance.getInstanceId());
         if (groups != null) {
             for (GroupRuntime rt : groups.values()) {
-                if (rt.delayedTask != null) rt.delayedTask.cancel();
+                cancelDelayed(rt);
                 for (UUID u : rt.alive) entityToGroup.remove(u);
             }
         }
@@ -362,7 +372,7 @@ public final class MonsterGroupManager {
     public void shutdown() {
         for (Map<String, GroupRuntime> groups : instanceGroups.values()) {
             for (GroupRuntime rt : groups.values()) {
-                if (rt.delayedTask != null) rt.delayedTask.cancel();
+                cancelDelayed(rt);
             }
         }
         instanceGroups.clear();

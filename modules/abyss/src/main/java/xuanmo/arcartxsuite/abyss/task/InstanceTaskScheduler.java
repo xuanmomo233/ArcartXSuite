@@ -52,12 +52,18 @@ public final class InstanceTaskScheduler {
                     for (int sec : t.times()) {
                         java.util.List<String> script = t.timedScripts().getOrDefault(sec, t.script());
                         if (script.isEmpty()) continue;
-                        ScheduledTask h = scheduler.scheduleEverySeconds(plugin,
-                            () -> fire(instance, new TaskFire(t.name(), script,
-                                Map.of("task_time", String.valueOf(sec)))),
-                            sec, Long.MAX_VALUE / 20);
-                        map.put(t.name() + ":" + sec, h);
-                        instance.registerTask(h);
+                        // 一次性延迟：超长周期 + 首跑即自取消
+                        // （period≈Long.MAX_VALUE 会致 nextRun 溢出为负值 → 每 tick 重跑）
+                        ScheduledTask[] h = new ScheduledTask[1];
+                        h[0] = scheduler.scheduleEverySeconds(plugin, () -> {
+                            if (h[0] != null) {
+                                try { h[0].cancel(); } catch (Throwable ignored) { }
+                            }
+                            fire(instance, new TaskFire(t.name(), script,
+                                Map.of("task_time", String.valueOf(sec))));
+                        }, sec, Long.MAX_VALUE / 20);
+                        map.put(t.name() + ":" + sec, h[0]);
+                        instance.registerTask(h[0]);
                     }
                 }
                 case INTERVAL -> {
