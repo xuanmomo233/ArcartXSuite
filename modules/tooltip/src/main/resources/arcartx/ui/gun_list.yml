@@ -24,7 +24,7 @@ ui:
       var.轮次 = 0
       var.iconJsons = {}
       var.ownedFlags = {}
-      var.hoverName = ''
+      var.hoverName = none
       var.dirty = false
     open: |-
       var.guns = axstooltip.getTaczGuns()
@@ -59,16 +59,17 @@ ui:
             mb.visible = true
           }
         }
-        var.hoverName = ''
+        var.hoverName = none
         var.dirty = false
       }
     wheel: |-
       pages = math.ceil(var.guns.size() / 60)
-      if(self.wheelValue > 0 && var.page > 0){
+      # wheelValue < 0 = 向上滚（前一页），> 0 = 向下滚（后一页）
+      if(self.wheelValue < 0 && var.page > 0){
         var.page = var.page - 1
         var.dirty = true
       }
-      if(self.wheelValue < 0 && var.page < pages - 1){
+      if(self.wheelValue > 0 && var.page < pages - 1){
         var.page = var.page + 1
         var.dirty = true
       }
@@ -114,6 +115,10 @@ controls:
               shape: ~round_rect
               radius: 12
               through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~90,90,110,255
           标题:
             type: Text
             attribute:
@@ -121,8 +126,7 @@ controls:
               y: 14
               fontSize: 48
               through: true
-              texts:
-                - '§b支持枪械'
+              texts: ~§b支持枪械
           统计:
             type: Text
             attribute:
@@ -130,8 +134,7 @@ controls:
               y: 68
               fontSize: 36
               through: true
-              texts:
-                - "~{var.guns.size() == 0 ? '' : '§7已持有 ' + var.ownedCount.round() + ' / 共 ' + var.guns.size().round() + ' 把'}"
+              texts: "var.guns.size() == 0 ? none : '§7已持有 ' + var.ownedCount.round() + ' / 共 ' + var.guns.size().round() + ' 把'"
           悬停名称:
             type: Text
             attribute:
@@ -139,15 +142,14 @@ controls:
               y: 110
               fontSize: 36
               through: true
-              texts:
-                - "~{var.hoverName == '' ? '§7悬停图标查看名称' : var.hoverName}"
+              texts: "var.hoverName == none ? '§7悬停图标查看名称' : var.hoverName"
           网格:
             type: Canvas
             val: grid
             attribute:
               point: ~top_left
               x: 66
-              y: 160
+              y: 144
               width: 828
               height: 492
             children:
@@ -196,7 +198,7 @@ controls:
                           var.hoverName = self.getSlotItemStack().getName()
                         }
                       leave: |-
-                        var.hoverName = ''
+                        var.hoverName = none
           上一页:
             type: Text
             attribute:
