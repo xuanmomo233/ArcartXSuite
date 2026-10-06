@@ -125,6 +125,22 @@ public final class SchedulerServiceImpl implements SchedulerAPI {
         return new BukkitTaskWrapper(bt);
     }
 
+    // ── 一次性延迟调度 ──────────────────────────────────────
+
+    @Override
+    public @NotNull ScheduledTask scheduleOnce(@NotNull Plugin p, @NotNull Runnable task,
+                                               long delayTicks) {
+        org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskLater(p, task, delayTicks);
+        return new BukkitTaskWrapper(bt);
+    }
+
+    @Override
+    public @NotNull ScheduledTask scheduleOnceAsync(@NotNull Plugin p, @NotNull Runnable task,
+                                                    long delayTicks) {
+        org.bukkit.scheduler.BukkitTask bt = Bukkit.getScheduler().runTaskLaterAsynchronously(p, task, delayTicks);
+        return new BukkitTaskWrapper(bt);
+    }
+
     // ── 日历触发调度 ──────────────────────────────────────
 
     @Override

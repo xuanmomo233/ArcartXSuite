@@ -213,18 +213,13 @@ public final class BuffManager {
     private void scheduleTimeout(AbyssInstance instance, String poolId) {
         Pool pool = pool(instance, poolId);
         if (pool == null) return;
-        // 一次性延迟（自取消 + 挂实例）：period≈MAX_VALUE 会溢出 nextRun → 每 tick 重跑
-        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] h =
-            new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
-        h[0] = scheduler.scheduleEverySeconds(plugin, () -> {
-            if (h[0] != null) {
-                try { h[0].cancel(); } catch (Throwable ignored) { }
-            }
+        instance.registerTask(scheduler.scheduleOnceSeconds(plugin, () -> {
             Map<String, Offer> map = offers.get(instance.getInstanceId());
             Offer offer = map != null ? map.get(poolId) : null;
             if (offer == null) return;
-            // 超时兜底：first/random/none
+            // 超时兜底：first/random/none（跳过已手动选过的玩家）
             for (Player p : instance.getPlayers()) {
+                if (!offer.picked().add(p.getUniqueId())) continue;
                 Option pick = switch (pool.timeoutAuto()) {
                     case "first" -> offer.candidates().get(0);
                     case "none" -> null;
@@ -234,8 +229,7 @@ public final class BuffManager {
                 if (pick != null) grant(instance, p, offer.pool(), pick);
             }
             map.remove(poolId);
-        }, pool.timeout(), Long.MAX_VALUE / 20);
-        instance.registerTask(h[0]);
+        }, pool.timeout()));
     }
 
     // ═══ 加权抽取（不重复） ═══

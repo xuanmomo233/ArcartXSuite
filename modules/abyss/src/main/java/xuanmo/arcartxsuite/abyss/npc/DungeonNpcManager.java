@@ -245,15 +245,9 @@ public final class DungeonNpcManager {
             if (delay == 0) {
                 player.sendMessage(msg);
             } else {
-                xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
-                    new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
-                holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
-                    if (holder[0] != null) {
-                        try { holder[0].cancel(); } catch (Throwable ignored) { }
-                    }
+                instance.registerTask(scheduler.scheduleOnce(plugin, () -> {
                     if (player.isOnline()) player.sendMessage(msg);
-                }, delay, Long.MAX_VALUE);
-                instance.registerTask(holder[0]);
+                }, delay));
             }
             i++;
         }

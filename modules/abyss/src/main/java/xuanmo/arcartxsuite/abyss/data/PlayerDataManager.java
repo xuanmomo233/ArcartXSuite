@@ -29,6 +29,11 @@ public final class PlayerDataManager {
     private final Map<UUID, Map<String, Long>> cooldownCache = new ConcurrentHashMap<>();
     /** 全服共享计数器缓存（跨副本/跨实例；启动时全量预载）。 */
     private final Map<String, Long> globalCache = new ConcurrentHashMap<>();
+    /** 通关记录 TTL 缓存（占位符/TAB 等高频同步读防打穿 DB）。key=uuid:dungeonId */
+    private final Map<String, RecordEntry> recordCache = new ConcurrentHashMap<>();
+    private static final long RECORD_CACHE_TTL_MS = 30_000;
+
+    private record RecordEntry(long completions, long bestTime, long expiry) { }
 
     public PlayerDataManager(JdbcAbyssRepository repository, Logger logger) {
         this.repository = repository;
@@ -84,9 +89,13 @@ public final class PlayerDataManager {
         if (m != null && m.containsKey(dungeonId)) {
             return m.get(dungeonId);
         }
-        // 未缓存：同步读一次（调用方一般在异步/预处理路径），失败按 0 处理
+        // 未缓存：同步读一次并回写缓存（含未命中结果——防占位符等高频路径
+        // 对从未玩过的地牢每次刷新都打一次 DB）；失败按 0 处理
         try {
-            return repository.loadCooldown(player, dungeonId);
+            long v = repository.loadCooldown(player, dungeonId);
+            cooldownCache.computeIfAbsent(player, k -> new ConcurrentHashMap<>())
+                .put(dungeonId, v);
+            return v;
         } catch (Exception e) {
             return 0;
         }
@@ -118,6 +127,8 @@ public final class PlayerDataManager {
     // ═══ 通关记录 ═══
 
     public void saveRecord(UUID player, String dungeonId, long timeSeconds) {
+        // 失效记录缓存：新通关成绩立即可见
+        recordCache.remove(player + ":" + dungeonId);
         dbExecutor.submit(() -> {
             try {
                 repository.saveRecord(player, dungeonId, timeSeconds);
@@ -127,10 +138,30 @@ public final class PlayerDataManager {
         });
     }
 
-    /** 同步读记录（排行榜/统计 UI 调用，应在异步路径）。 */
+    /**
+     * 读记录（30s TTL 缓存）。
+     * <p>占位符 %axsabyss_completions_%/%axsabyss_best_time_% 等高频同步路径
+     * 走此缓存，防止计分板/TAB 每 tick 刷新打穿 DB。
+     * 缓存未命中时仍是同步 DB 读——首查路径调用方应在异步或低频上下文。</p>
+     */
     public long[] loadRecord(UUID player, String dungeonId) {
+        String key = player + ":" + dungeonId;
+        RecordEntry c = recordCache.get(key);
+        if (c != null && System.currentTimeMillis() < c.expiry()) {
+            return new long[]{c.completions(), c.bestTime()};
+        }
+        // 惰性清扫过期项（防长期运行积累离线玩家条目）
+        if (recordCache.size() > 512) {
+            long now = System.currentTimeMillis();
+            recordCache.entrySet().removeIf(e -> e.getValue().expiry() <= now);
+        }
         try {
-            return repository.loadRecord(player, dungeonId);
+            long[] r = repository.loadRecord(player, dungeonId);
+            if (r != null) {
+                recordCache.put(key, new RecordEntry(r[0], r[1],
+                    System.currentTimeMillis() + RECORD_CACHE_TTL_MS));
+            }
+            return r;
         } catch (Exception e) {
             return null;
         }
@@ -218,6 +249,9 @@ public final class PlayerDataManager {
         staminaCache.remove(player);
         staminaRegenCache.remove(player);
         cooldownCache.remove(player);
+        // 记录缓存前缀清扫（key=uuid:dungeonId）
+        String prefix = player.toString() + ":";
+        recordCache.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
     public void shutdown() {

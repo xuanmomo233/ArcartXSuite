@@ -256,18 +256,12 @@ final class BuiltinActions {
             String[] parts = splitFirst(args, 1);
             double sec = parseDouble(parts[0], 0);
             String line = rest(parts, 1);
-            xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
-                new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
-            holder[0] = runner.scheduler().scheduleAtFixedRate(runner.plugin(), () -> {
-                if (holder[0] != null) {
-                    try { holder[0].cancel(); } catch (Throwable ignored) { }
-                }
+            // 挂到实例：destroyInstance 时随实例任务统一取消
+            ctx.getInstance().registerTask(runner.scheduler().scheduleOnce(runner.plugin(), () -> {
                 // 实例已结束/脚本已取消 → 不再执行（防孤儿任务对已销毁实例发命令发物品）
                 if (ctx.getInstance().isFinished() || s.isCancelled()) return;
                 runner.executeLine(line, ctx, s);
-            }, (long) (sec * 20), Long.MAX_VALUE);
-            // 挂到实例：destroyInstance 时随实例任务统一取消
-            ctx.getInstance().registerTask(holder[0]);
+            }, (long) (sec * 20)));
         });
 
         // ═══ 变量 ═══

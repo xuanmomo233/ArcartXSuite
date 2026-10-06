@@ -84,12 +84,7 @@ public final class QuestManager {
             finishAccept(instance, player, runner, q);
             return;
         }
-        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
-            new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
-        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
-            try {
-                if (holder[0] != null) holder[0].cancel();
-            } catch (Throwable ignored) { }
+        instance.registerTask(scheduler.scheduleOnce(plugin, () -> {
             if (!player.isOnline()) return;
             if (status(instance, player, q.id()) == QuestStatus.ACCEPTED) {
                 finishAccept(instance, player, runner, q);
@@ -97,8 +92,7 @@ public final class QuestManager {
                 verifyAccepted(instance, player, runner, q, attempt + 1);
             }
             // 复查超时仍未 ACTIVE → questgps 已自行提示失败原因，静默收尾
-        }, attempt == 0 ? 15L : 5L, Long.MAX_VALUE);
-        instance.registerTask(holder[0]);
+        }, attempt == 0 ? 15L : 5L));
     }
 
     private void finishAccept(AbyssInstance instance, Player player,

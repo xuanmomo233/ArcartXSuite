@@ -77,6 +77,57 @@ public interface SchedulerAPI {
         return scheduleAsyncAtFixedRate(plugin, task, delaySeconds * 20L, periodSeconds * 20L);
     }
 
+    // ── 一次性延迟调度 ──────────────────────────────────────
+
+    /**
+     * 一次性延迟同步任务（tick 单位，触发一次即完成）。
+     * <p>
+     * <b>禁止用 {@code scheduleAtFixedRate(task, delay, Long.MAX_VALUE)} 模拟一次性</b>：
+     * period≈MAX_VALUE 会使调度器下次执行时间 long 溢出为负 → 首触发后每 tick 重跑
+     * （abyss 曾因此聊天刷屏/全团重复传送）。统一用本方法。
+     *
+     * @param plugin     宿主插件实例
+     * @param task       要执行的任务（在主线程执行一次）
+     * @param delayTicks 延迟 tick 数
+     * @return 任务句柄（取消语义同周期任务）
+     */
+    @NotNull default ScheduledTask scheduleOnce(@NotNull Plugin plugin, @NotNull Runnable task,
+                                                long delayTicks) {
+        ScheduledTask[] holder = new ScheduledTask[1];
+        holder[0] = scheduleAtFixedRate(plugin, () -> {
+            ScheduledTask h = holder[0];
+            if (h != null) {
+                try { h.cancel(); } catch (Throwable ignored) { }
+            }
+            task.run();
+        }, delayTicks, Long.MAX_VALUE);
+        return holder[0];
+    }
+
+    /**
+     * 一次性延迟异步任务（tick 单位，触发一次即完成）。
+     */
+    @NotNull default ScheduledTask scheduleOnceAsync(@NotNull Plugin plugin, @NotNull Runnable task,
+                                                     long delayTicks) {
+        ScheduledTask[] holder = new ScheduledTask[1];
+        holder[0] = scheduleAsyncAtFixedRate(plugin, () -> {
+            ScheduledTask h = holder[0];
+            if (h != null) {
+                try { h.cancel(); } catch (Throwable ignored) { }
+            }
+            task.run();
+        }, delayTicks, Long.MAX_VALUE);
+        return holder[0];
+    }
+
+    /**
+     * 一次性延迟同步任务（秒单位，内部 ×20 换算 tick）。
+     */
+    default @NotNull ScheduledTask scheduleOnceSeconds(@NotNull Plugin plugin, @NotNull Runnable task,
+                                                       long delaySeconds) {
+        return scheduleOnce(plugin, task, delaySeconds * 20L);
+    }
+
     // ── 日历触发调度 ──────────────────────────────────────────
 
     /**

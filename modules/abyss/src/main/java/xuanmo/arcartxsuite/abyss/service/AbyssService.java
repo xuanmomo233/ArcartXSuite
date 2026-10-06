@@ -1287,39 +1287,27 @@ public final class AbyssService {
     /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
     public void handleJoin(Player player) {
         playerData.preloadCooldowns(player.getUniqueId());
-        ScheduledTask[] holder = new ScheduledTask[1];
-        holder[0] = scheduler.scheduleEverySeconds(plugin, () -> {
-            if (holder[0] != null) {
-                try { holder[0].cancel(); } catch (Throwable ignored) { }
-            }
+        scheduler.scheduleOnce(plugin, () -> {
             Location loc = playerData.takePendingLocation(player.getUniqueId());
             if (loc != null && player.isOnline()) {
                 runOnMain(() -> player.teleport(loc));
             }
-        }, 0L, Long.MAX_VALUE / 20);
+        }, 0L);
         // 异常退出恢复（在传送恢复后一拍执行）
         if (recoveryManager != null) {
-            ScheduledTask[] rh = new ScheduledTask[1];
-            rh[0] = scheduler.scheduleEverySeconds(plugin, () -> {
-                if (rh[0] != null) {
-                    try { rh[0].cancel(); } catch (Throwable ignored) { }
-                }
+            scheduler.scheduleOnce(plugin, () -> {
                 if (player.isOnline()) {
                     runOnMain(() -> recoveryManager.runIfMarked(player));
                 }
-            }, 1L, Long.MAX_VALUE / 20);
+            }, 1L);
         }
         // 地图入口标记（延迟 2s 等客户端地图就绪）
         if (entranceMarkers != null) {
-            ScheduledTask[] eh = new ScheduledTask[1];
-            eh[0] = scheduler.scheduleEverySeconds(plugin, () -> {
-                if (eh[0] != null) {
-                    try { eh[0].cancel(); } catch (Throwable ignored) { }
-                }
+            scheduler.scheduleOnceSeconds(plugin, () -> {
                 if (player.isOnline()) {
                     runOnMain(() -> entranceMarkers.push(player));
                 }
-            }, 2L, Long.MAX_VALUE / 20);
+            }, 2L);
         }
     }
 
@@ -1654,14 +1642,7 @@ public final class AbyssService {
 
     /** 实例级一次性延迟任务（随实例清理）。 */
     public void scheduleOnce(AbyssInstance instance, Runnable r, long delayTicks) {
-        ScheduledTask[] holder = new ScheduledTask[1];
-        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
-            if (holder[0] != null) {
-                try { holder[0].cancel(); } catch (Throwable ignored) { }
-            }
-            r.run();
-        }, delayTicks, Long.MAX_VALUE);
-        instance.registerTask(holder[0]);
+        instance.registerTask(scheduler.scheduleOnce(plugin, r, delayTicks));
     }
 
     /** 主线程执行。 */

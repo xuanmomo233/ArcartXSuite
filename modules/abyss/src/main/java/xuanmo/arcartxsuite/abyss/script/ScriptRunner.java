@@ -115,17 +115,11 @@ public final class ScriptRunner {
     private boolean doWait(String arg, ScriptContext context, ScriptSession session) {
         long ticks = parseWaitTicks(context.replace(arg));
         if (ticks <= 0) return false;
-        // SchedulerAPI 无 runTaskLater，用固定速率+回调内自取消实现一次性延迟
-        ScheduledTask[] holder = new ScheduledTask[1];
-        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
-            if (holder[0] != null) {
-                try { holder[0].cancel(); } catch (Throwable ignored) { }
-            }
+        session.suspend(scheduler.scheduleOnce(plugin, () -> {
             if (!session.isCancelled()) {
                 runOnMain(session::resume);
             }
-        }, ticks, Long.MAX_VALUE);
-        session.suspend(holder[0]);
+        }, ticks));
         return true;
     }
 

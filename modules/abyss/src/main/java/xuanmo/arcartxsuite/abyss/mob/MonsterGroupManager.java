@@ -95,10 +95,10 @@ public final class MonsterGroupManager {
             switch (rt.group.spawnTiming()) {
                 case AUTO_START -> spawnGroup(instance, rt.group.name(), null);
                 case DELAYED -> {
-                    rt.delayedTask = scheduler.scheduleEverySeconds(plugin, () -> {
-                        cancelDelayed(rt);
+                    rt.delayedTask = scheduler.scheduleOnceSeconds(plugin, () -> {
+                        rt.delayedTask = null;
                         spawnGroup(instance, rt.group.name(), null);
-                    }, rt.group.delaySeconds(), Long.MAX_VALUE / 20);
+                    }, rt.group.delaySeconds());
                     instance.registerTask(rt.delayedTask);
                 }
                 default -> { }
@@ -238,10 +238,10 @@ public final class MonsterGroupManager {
             callback.runGroupScript(instance, dep.group.onPrespawn(),
                 dep.group.name(), null);
         }
-        dep.delayedTask = scheduler.scheduleEverySeconds(plugin, () -> {
-            cancelDelayed(dep);
+        dep.delayedTask = scheduler.scheduleOnceSeconds(plugin, () -> {
+            dep.delayedTask = null;
             spawnGroup(instance, dep.group.name(), null);
-        }, delay, Long.MAX_VALUE / 20);
+        }, delay);
         instance.registerTask(dep.delayedTask);
     }
 
