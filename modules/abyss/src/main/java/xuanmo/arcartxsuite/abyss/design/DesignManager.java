@@ -640,7 +640,7 @@ public final class DesignManager {
         Map.entry("SEQUENCE", "序列机关"), Map.entry("INPUT", "输入机关"),
         // reward / buff
         Map.entry("fixed", "固定奖励"), Map.entry("random", "随机抽取"),
-        Map.entry("pool", "奖池抽取"), Map.entry("panel", "面板选择"),
+        Map.entry("panel", "面板选择"),
         Map.entry("hud", "HUD直给"),
         // 通用
         Map.entry("true", "是"), Map.entry("false", "否"));
