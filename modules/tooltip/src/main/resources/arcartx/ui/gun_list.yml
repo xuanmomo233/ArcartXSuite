@@ -206,8 +206,8 @@ controls:
               x: 20
               y: -46
               fontSize: 36
-              texts:
-                - "~{var.page > 0 ? '§f< 上一页' : '§7< 上一页'}"
+              visible: "var.page > 0"
+              texts: ~§f< 上一页
             action:
               clickLeft: |-
                 if(var.page > 0){
@@ -230,8 +230,8 @@ controls:
               x: -20
               y: -46
               fontSize: 36
-              texts:
-                - "~{var.page < math.ceil(var.guns.size() / 60) - 1 ? '§f下一页 >' : '§7下一页 >'}"
+              visible: "var.page < (math.ceil(var.guns.size() / 60) - 1)"
+              texts: ~§f下一页 >
             action:
               clickLeft: |-
                 pages = math.ceil(var.guns.size() / 60)
