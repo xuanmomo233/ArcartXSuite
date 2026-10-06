@@ -52,6 +52,10 @@ import xuanmo.arcartxsuite.security.protection.ProtectionEnvironment;
 public final class CloudModuleService {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    /** 请求级总超时（连接+响应），防止对端缓慢挂起时请求永久阻塞。 */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
+    /** 网络层失败时同端点重试前的延迟（容忍瞬态抖动/高延迟，不立即切换备用端）。 */
+    private static final long RETRY_DELAY_MS = 1500;
     private static final HttpClient HTTP = HttpClient.newBuilder()
         .connectTimeout(TIMEOUT)
         .build();
@@ -224,6 +228,7 @@ public final class CloudModuleService {
             || cause instanceof java.net.UnknownHostException
             || cause instanceof java.net.http.HttpTimeoutException
             || cause instanceof java.net.SocketTimeoutException
+            || cause instanceof java.util.concurrent.TimeoutException
             || cause instanceof java.io.IOException;
     }
 
@@ -277,7 +282,12 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         HttpResponse.BodyHandler<T> bodyHandler
     ) {
-        return sendWithFailover(operation, requestFactory, bodyHandler, orderedApiBaseUrls(), 0);
+        return sendWithFailover(operation, requestFactory, bodyHandler, orderedApiBaseUrls(), 0, 0);
+    }
+
+    private static CompletableFuture<Void> retryDelay() {
+        return CompletableFuture.runAsync(() -> {},
+            CompletableFuture.delayedExecutor(RETRY_DELAY_MS, java.util.concurrent.TimeUnit.MILLISECONDS));
     }
 
     private <T> CompletableFuture<CloudResponse<T>> sendWithFailover(
@@ -285,7 +295,8 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         HttpResponse.BodyHandler<T> bodyHandler,
         List<String> endpoints,
-        int index
+        int index,
+        int attempt
     ) {
         if (endpoints == null || index >= endpoints.size()) {
             return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null));
@@ -293,10 +304,19 @@ public final class CloudModuleService {
         String endpoint = endpoints.get(index);
         HttpRequest request = requestFactory.apply(endpoint);
         return HTTP.sendAsync(request, bodyHandler)
+            .orTimeout(REQUEST_TIMEOUT.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
             .handle((response, throwable) -> classifyResponse(endpoint, response, throwable))
             .thenCompose((CloudResponse<T> result) -> {
-                if (result.isTransient() && index + 1 < endpoints.size()) {
-                    return sendWithFailover(operation, requestFactory, bodyHandler, endpoints, index + 1);
+                if (result.isTransient()) {
+                    // 网络层失败（httpStatus=0：DNS/连接/超时）先延迟重试本端点一次；
+                    // HTTP 层暂时性状态（429/5xx）直接换下一端点，不做无谓重试。
+                    if (result.httpStatus() == 0 && attempt < 1) {
+                        return retryDelay().thenCompose(v ->
+                            sendWithFailover(operation, requestFactory, bodyHandler, endpoints, index, attempt + 1));
+                    }
+                    if (index + 1 < endpoints.size()) {
+                        return sendWithFailover(operation, requestFactory, bodyHandler, endpoints, index + 1, 0);
+                    }
                 }
                 if ((result.isOk() || result.isRejected()) && result.endpoint() != null) {
                     rememberSuccessfulEndpoint(result.endpoint());
@@ -312,7 +332,7 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor
     ) {
-        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0);
+        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0, 0);
     }
 
     private CompletableFuture<SignedCloudResponse> sendSignedWithFailover(
@@ -320,7 +340,8 @@ public final class CloudModuleService {
         java.util.function.Function<String, HttpRequest> requestFactory,
         java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor,
         List<String> endpoints,
-        int index
+        int index,
+        int attempt
     ) {
         if (endpoints == null || index >= endpoints.size()) {
             return CompletableFuture.completedFuture(new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null, null, null));
@@ -328,11 +349,18 @@ public final class CloudModuleService {
         String endpoint = endpoints.get(index);
         HttpRequest request = requestFactory.apply(endpoint);
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+            .orTimeout(REQUEST_TIMEOUT.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
             .handle((response, throwable) -> classifySignedResponse(endpoint, response, throwable))
             .thenCompose(result -> {
                 SignedCloudResponse processed = responseProcessor.apply(result);
-                if (processed.isTransient() && index + 1 < endpoints.size()) {
-                    return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1);
+                if (processed.isTransient()) {
+                    if (processed.httpStatus() == 0 && attempt < 1) {
+                        return retryDelay().thenCompose(v ->
+                            sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index, attempt + 1));
+                    }
+                    if (index + 1 < endpoints.size()) {
+                        return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1, 0);
+                    }
                 }
                 return CompletableFuture.completedFuture(processed);
             });
