@@ -10,6 +10,12 @@ title: "&f&l菜单"
 # 布局模式：esc = 左侧滑出式（专用于 ESC 界面），其他可选：panel（居中面板）
 layout: esc
 
+# 自定义渲染 UI：留空或删除此行则使用默认的 menu_esc.yml（左侧滑出布局）
+# 可选 menu_esc_grid.yml 渲染（浮岛网格布局）
+# 注意：两套 UI 都声明了 match: 暂停界面，同时启用时只应保留一套绑定，
+# 切换菜单时建议将 ui/menu_esc.yml 的 match 段修改
+ui-id: menu_esc
+
 # 每行按钮列数
 columns: 2
 

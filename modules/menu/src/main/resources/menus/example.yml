@@ -37,9 +37,28 @@ buttons-per-page: 64
 
 # ─── 自定义 UI 目标（可选）────────────────────────────────────
 # 默认情况下，菜单根据 layout 自动选择 panel / esc UI 并使用 init/update handler。
-# 如果需要指定自定义 UI 或自定义 handler，可配置以下字段：
+# 想让某个菜单使用完全不同的界面风格时，用 ui-id 指定一个自定义 UI 文件：
 #
-# 单 UI 目标（简写格式）：
+#   1. 把写好的 UI 文件放到  plugins/ArcartXSuite/ui/<名字>.yml
+#      （ui-id 不带命名空间前缀，文件名必须与 ui-id 完全一致）
+#   2. 在这里写  ui-id: <名字>
+#   3. 模块启动 / 菜单重载时会自动把该文件注册下发给客户端，无需手动注册
+#
+# 自定义 UI 的数据包字段与内置菜单 UI 完全一致（buttonRows / footerRows /
+# action_token / summary / detailRows 等），不写 packet-handler 时默认走
+# init / update 生命周期 —— 直接复制 ui/menu_panel.yml、ui/menu_esc.yml
+# 或 ui/menu_esc_grid.yml（内置的浮岛网格版 ESC 布局）的 packetHandler
+# 和 action 写法再改布局即可。
+#
+# 单 UI 目标（简写格式，面板菜单示例）：
+# ui-id: "my_custom_panel"
+#
+# ESC 菜单示例（esc_main.yml 即通过此方式启用网格版布局）：
+# ui-id: "menu_esc_grid"
+#   注意：ESC 专用 UI 需在文件内声明 match: [暂停界面]，且同一时间
+#   只应有一套 ESC UI 生效，避免与 menu_esc.yml 抢占暂停界面绑定。
+#
+# 需要完全自定义回包动作时，可附加 packet-handler 指定 UI 内的处理器名：
 # ui-id: "my_custom_panel"
 # packet-handler: "menu"
 #
@@ -51,7 +70,8 @@ buttons-per-page: 64
 #     packet-handler: "overlay"
 #
 # 注意：ui-targets 优先级高于 ui-id + packet-handler；两者不要同时写。
-# 自定义 ui-id 对应的 UI 文件需要自行注册或放到 ArcartXSuite/ui/ 目录下。
+# 配置了 ui-id 但 ui/ 目录下不存在对应文件时，菜单数据包无处可去，
+# 该菜单将无法正常打开（后台会打印 warning 提示缺失文件）。
 
 # ─── 权限与条件 ─────────────────────────────────────────────
 

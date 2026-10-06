@@ -44,6 +44,8 @@ public final class MenuService {
     public static final String PANEL_UI_FILE_PATH = "ui/menu_panel.yml";
     public static final String ESC_UI_RESOURCE_PATH = "arcartx/ui/menu_esc.yml";
     public static final String ESC_UI_FILE_PATH = "ui/menu_esc.yml";
+    public static final String ESC_GRID_UI_RESOURCE_PATH = "arcartx/ui/menu_esc_grid.yml";
+    public static final String ESC_GRID_UI_FILE_PATH = "ui/menu_esc_grid.yml";
 
     private final JavaPlugin plugin;
     private final Logger logger;

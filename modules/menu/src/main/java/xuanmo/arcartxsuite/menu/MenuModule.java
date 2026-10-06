@@ -77,6 +77,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(MenuService.PANEL_UI_RESOURCE_PATH, MenuService.PANEL_UI_FILE_PATH);
         mappings.put(MenuService.ESC_UI_RESOURCE_PATH, MenuService.ESC_UI_FILE_PATH);
+        mappings.put(MenuService.ESC_GRID_UI_RESOURCE_PATH, MenuService.ESC_GRID_UI_FILE_PATH);
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 
@@ -197,7 +198,11 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 PacketBridgeAPI.UiRegistrationResult result = packetBridge.registerOrReloadUi(uiId, uiFile);
                 if (!result.success()) {
                     logger.warning("自定义菜单 UI 注册失败: " + uiId + " -> " + result.message());
-                } else if (!uiId.equals(result.runtimeUiId())) {
+                    continue;
+                }
+                // 纳入基类生命周期管理：onDisable / reload 时自动注销，避免卸载后残留 match 绑定
+                recordExternalUi(result.runtimeUiId(), result.registeredUiId());
+                if (!uiId.equals(result.runtimeUiId())) {
                     logger.warning("自定义菜单 UI runtime id 与配置不一致(请让 ui-id 使用不带命名空间前缀的 id): 配置="
                         + uiId + " runtime=" + result.runtimeUiId());
                 } else {
