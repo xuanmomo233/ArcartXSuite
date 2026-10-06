@@ -1,6 +1,5 @@
 # Chemdah 会话：向导·艾琳（绑定 Adyeshach npcId = abyss npcs.yml 的 key "guide"）
-# 部署：复制到 plugins/Chemdah/conversation/sk_guide.yml
-# （以实际 Chemdah 会话目录为准，部分版本为 conversations/）
+# 部署：plugins/Chemdah/core/conversation/sk_guide.yml（abyss 启动/重载时自动部署）
 
 sk_guide:
   # 绑定触发对象：abyss npcs.yml 的 guide NPC（Adyeshach id=guide）

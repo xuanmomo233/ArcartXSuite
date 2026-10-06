@@ -6,9 +6,12 @@ slayer:
   chemdah-id: "sk_slayer"            # Chemdah 任务模板 id（QuestGPS 呈现层同名）
   name: "讨伐深渊魔物"
   description: "深入地牢，击杀 15 只魔物并击败深渊领主"
-  auto-track: true                   # 接取后自动 quest_track 追踪
+  # quest_track 只对「有导航点」的任务有效——questgps overlay 里本任务
+  # navigation.enabled=false（副本内坐标是动态世界，导航由 abyss guide_point 承担），
+  # 故关闭自动追踪；进度展示走 Chemdah addon.track.scoreboard。
+  auto-track: false
   on-accept:
-    - "message @trigger &a已接取委托：讨伐深渊魔物 &7（追踪已开启）"
+    - "message @trigger &a已接取委托：讨伐深渊魔物 &7（进度见任务面板/记分板）"
   on-complete:                       # Chemdah 完成 → EventBus 路由到此发奖
     - "grant_reward @trigger quest_pack"
     - "message @trigger &6委托达成！奖励已发放"

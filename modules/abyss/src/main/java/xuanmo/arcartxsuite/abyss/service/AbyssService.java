@@ -146,6 +146,9 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.design.DesignListener designListener;
     private xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge;
     private xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge;
+    private xuanmo.arcartxsuite.abyss.integration.DungeonExternalInstaller externalInstaller;
+    /** 模块数据目录（external 部署/模板加载共用）。 */
+    private File moduleDataFolder;
     /** EventBus quest_completed 订阅 id（questgps 任务完成 → 副本任务钩子）。 */
     private volatile String questCompletedSubId;
     private GlobalCounterService globalCounters;
@@ -209,6 +212,7 @@ public final class AbyssService {
     // ═══ 启动/停止 ═══
 
     public void start(File dataFolder) throws Exception {
+        this.moduleDataFolder = dataFolder;
         // 1) 数据层（共享/自建双模式：resolveModuleDataSource 统一解析）
         AbyssModuleConfiguration.StorageSection storage = config.storage();
         xuanmo.arcartxsuite.api.storage.StorageDescriptor desc = storage.hasOverride()
@@ -280,7 +284,7 @@ public final class AbyssService {
         // 7) 奖励/体力/统计/排行/冷却/条件
         rewards = new RewardResolver(itemSourceRegistry, itemRewardDispatcher,
             pendingRewardService, currencyManager, logger);
-        quests = new QuestManager(this::links);
+        quests = new QuestManager(this::links, plugin, scheduler);
         stamina = new StaminaManager(config.stamina(), playerData);
         stats = new CombatStatisticsService(config.statistics());
         leaderboard = new LeaderboardService(config.leaderboard(), playerData);
@@ -422,19 +426,25 @@ public final class AbyssService {
         started = false;
     }
 
-    /** 首次启动时把 jar 内示例地牢导出到 data/abyss/abysses/example。 */
+    /** 启动时把 jar 内示例地牢的缺失文件导出到 data/abyss/abysses/example（逐文件判定，不覆盖已有）。 */
     private void exportExampleDungeon(File dataFolder) {
         File example = new File(dataFolder, "abysses/example");
-        if (new File(example, "config.yml").isFile()) return;
         String[] files = {
             "config.yml", "monsters.yml", "scripts.yml", "rewards.yml",
             "interacts.yml", "obstacles.yml", "tasks.yml", "npcs.yml", "quests.yml",
-            "floors.yml", "rooms.yml", "puzzles.yml", "buffs.yml"
+            "floors.yml", "rooms.yml", "puzzles.yml", "buffs.yml",
+            // 外部系统配套（Chemdah 会话/任务 + questgps 呈现层；由 installer 部署）
+            "external/README.md",
+            "external/chemdah/conversation/sk_guide.yml",
+            "external/chemdah/conversation/sk_merchant.yml",
+            "external/chemdah/quest/sk_slayer.yml",
+            "external/questgps/sk_slayer.yml"
         };
         for (String f : files) {
+            File target = new File(example, f);
+            if (target.isFile()) continue;
             try {
-                module.exportModuleResource("abysses/example/" + f,
-                    new File(example, f), false);
+                module.exportModuleResource("abysses/example/" + f, target, false);
             } catch (Throwable t) {
                 logger.fine("[abyss] 示例资源导出失败 " + f + ": " + t.getMessage());
             }
@@ -461,6 +471,14 @@ public final class AbyssService {
         }
         if (entranceManager != null) {
             entranceManager.rebuild(instances.getAllTemplates());
+        }
+        // 外部配套文件部署（external/ → Chemdah/questgps 目录；缺席即跳过）
+        if (externalInstaller == null && moduleDataFolder != null) {
+            externalInstaller = new xuanmo.arcartxsuite.abyss.integration.DungeonExternalInstaller(
+                moduleDataFolder, this::links, logger);
+        }
+        if (externalInstaller != null) {
+            externalInstaller.installAll();
         }
     }
 

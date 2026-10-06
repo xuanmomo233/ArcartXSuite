@@ -1,18 +1,23 @@
 # 元气试炼之地 · 外部依赖配套文件
 
 example 副本的 **NPC 对话** 与 **讨伐委托** 由 Conversation(Chemdah)
-与 QuestGPS(Chemdah) 承担——它们的定义文件在各自插件的配置目录，
-不在 abyss 地牢目录内。把下面文件复制到对应位置：
+与 QuestGPS(Chemdah) 承担——它们的定义文件在各自插件的配置目录。
 
-| 本目录文件 | 部署目标 | 作用 |
-|---|---|---|
-| `chemdah/conversation/sk_guide.yml` | `plugins/Chemdah/conversation/` | 向导会话（绑定 `adyeshach guide`） |
-| `chemdah/conversation/sk_merchant.yml` | `plugins/Chemdah/conversation/` | 商人会话（绑定 `adyeshach merchant`） |
-| `chemdah/quest/sk_slayer.yml` | `plugins/Chemdah/quest/` | 讨伐委托任务模板 |
-| `questgps/sk_slayer.yml` | `plugins/ArcartXSuite/data/questgps/quests/` | 任务菜单呈现层 |
+## 自动部署（推荐）
 
-> Chemdah 会话/任务目录名随版本可能为 `conversation(s)`/`quest(s)`，
-> 以实际插件目录为准；放好后 `/chemdah reload`（或重启）。
+abyss 在每次加载地牢模板（`/axs abyss reload`、模块启动）时自动把
+本目录文件部署到对应插件目录并触发重载——**无需手动复制**：
+
+| 本目录文件 | 部署目标 |
+|---|---|
+| `chemdah/conversation/sk_guide.yml` | `plugins/Chemdah/core/conversation/` |
+| `chemdah/conversation/sk_merchant.yml` | `plugins/Chemdah/core/conversation/` |
+| `chemdah/quest/sk_slayer.yml` | `plugins/Chemdah/core/quest/` |
+| `questgps/sk_slayer.yml` | `plugins/ArcartXSuite/data/questgps/quests/` |
+
+规则：目标插件/模块缺席则整组跳过；目标文件已存在则跳过
+（管理员自行修改不会被覆盖）。部署成功后自动执行
+`chemdah reload` 与 questgps 模块重载。
 
 ## 模块分工（本示例演示的边界）
 
@@ -34,3 +39,8 @@ example 副本的 **NPC 对话** 与 **讨伐委托** 由 Conversation(Chemdah)
 - 无 questgps/Chemdah → `quest_step` 等动作静默跳过；委托线不存在。
 - 有 questgps 但想在进本处卡主线：在 QuestGPS 配置
   `gate.blocked-module-entries` 加入 `abyss.example`。
+
+## 复用到你自己的地牢
+
+任何地牢都可以建同名 `external/` 目录（结构如上）——abyss 部署器
+对所有模板目录生效，不只是 example。

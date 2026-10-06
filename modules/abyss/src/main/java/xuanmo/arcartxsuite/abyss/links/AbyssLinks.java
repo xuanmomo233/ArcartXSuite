@@ -371,6 +371,17 @@ public final class AbyssLinks {
         }
     }
 
+    // ═══ 宿主模块管理（external 部署后重载目标模块用） ═══
+
+    /** 模块管理 capability（宿主注册；缺席返回 null）。 */
+    public @Nullable xuanmo.arcartxsuite.api.capability.ModuleAdminCapability moduleAdmin() {
+        try {
+            return cap(xuanmo.arcartxsuite.api.capability.ModuleAdminCapability.class);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private void safe(Runnable r) {
         try {
             r.run();

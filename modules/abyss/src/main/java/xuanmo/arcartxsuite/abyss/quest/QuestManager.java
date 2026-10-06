@@ -28,9 +28,15 @@ public final class QuestManager {
     public enum QuestStatus { NONE, ACCEPTED, COMPLETED }
 
     private final Supplier<AbyssLinks> linksSupplier;
+    private final org.bukkit.plugin.Plugin plugin;
+    private final xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler;
 
-    public QuestManager(Supplier<AbyssLinks> linksSupplier) {
+    public QuestManager(Supplier<AbyssLinks> linksSupplier,
+                        org.bukkit.plugin.Plugin plugin,
+                        xuanmo.arcartxsuite.api.scheduler.SchedulerAPI scheduler) {
         this.linksSupplier = linksSupplier;
+        this.plugin = plugin;
+        this.scheduler = scheduler;
     }
 
     private @Nullable AbyssLinks links() {
@@ -52,25 +58,60 @@ public final class QuestManager {
     }
 
     /**
-     * 接取任务：questgps acceptQuest（Chemdah 玩家级）+ on-accept 副本脚本
-     * + auto-track 时自动追踪。返回 false=任务不存在/该玩家已接取/questgps 缺席。
+     * 接取任务：questgps acceptQuest（Chemdah 玩家级，异步落档）→ 延迟复查，
+     * 真正进入 ACTIVE 后才跑 on-accept 副本脚本 + auto-track 追踪。
+     * 返回 false=任务不存在/该玩家已接取/已完成/questgps 缺席。
+     * 接取失败的提示由 questgps 自己下发（如"任务未配置到 QuestGPS"），
+     * abyss 不重复报错，也不会误跑 on-accept。
      */
     public boolean accept(AbyssInstance instance, Player trigger,
                           ScriptRunner runner, String questId) {
         QuestConfig.Quest q = find(instance, questId);
         AbyssLinks l = links();
         if (q == null || l == null || trigger == null) return false;
-        if (status(instance, trigger, questId) != QuestStatus.NONE) return false;
+        QuestStatus st = status(instance, trigger, questId);
+        if (st == QuestStatus.ACCEPTED) return true;
+        if (st == QuestStatus.COMPLETED) return false;
         l.questAccept(trigger, q.chemdahId());
-        instance.getVariables().put(questKey(questId), QuestStatus.ACCEPTED);
+        verifyAccepted(instance, trigger, runner, q, 0);
+        return true;
+    }
+
+    /** 接取复查：每 5 tick 查一次，最多 40 tick；进入 ACTIVE 即跑钩子。 */
+    private void verifyAccepted(AbyssInstance instance, Player player,
+                                ScriptRunner runner, QuestConfig.Quest q, int attempt) {
+        if (scheduler == null || plugin == null) {
+            finishAccept(instance, player, runner, q);
+            return;
+        }
+        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
+            new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
+            try {
+                if (holder[0] != null) holder[0].cancel();
+            } catch (Throwable ignored) { }
+            if (!player.isOnline()) return;
+            if (status(instance, player, q.id()) == QuestStatus.ACCEPTED) {
+                finishAccept(instance, player, runner, q);
+            } else if (attempt < 8) {
+                verifyAccepted(instance, player, runner, q, attempt + 1);
+            }
+            // 复查超时仍未 ACTIVE → questgps 已自行提示失败原因，静默收尾
+        }, attempt == 0 ? 15L : 5L, Long.MAX_VALUE);
+        instance.registerTask(holder[0]);
+    }
+
+    private void finishAccept(AbyssInstance instance, Player player,
+                              ScriptRunner runner, QuestConfig.Quest q) {
+        instance.getVariables().put(questKey(q.id()), QuestStatus.ACCEPTED);
         if (!q.onAccept().isEmpty()) {
-            runner.run("quest_accept_" + questId, q.onAccept(),
-                ScriptContext.of(instance, trigger), instance);
+            runner.run("quest_accept_" + q.id(), q.onAccept(),
+                ScriptContext.of(instance, player), instance);
         }
         if (q.autoTrack()) {
-            l.questTrack(trigger, q.chemdahId(), null);
+            AbyssLinks l = links();
+            if (l != null) l.questTrack(player, q.chemdahId(), null);
         }
-        return true;
     }
 
     /**
