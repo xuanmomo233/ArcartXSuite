@@ -4,12 +4,6 @@
 # （持有优先排序，前 ownedCount 项绿框标记为已持有）。
 # 交互: 滚轮/←→键/按钮翻页，悬停图标顶部显示枪名，ESC/✕关闭。
 #
-# Menu 型 UI（不是 HUD）：HUD 渲染在界面栈底层，背包开着时会被压在下面
-# 且抢不到鼠标交互。Menu 接管当前屏幕，输入/渲染都在最上层。
-#
-# 动态格子按 pitfalls §15.5 可靠模式构建：
-#   模板 get(0) 定位 + copy 引用存 var.格子引用 + 轮次命名防重名 +
-#   entryKey + seticon/visible 懒绑定，不在 copy 后立刻调用子控件方法。
 ui:
   escClose: true
   background: false
@@ -164,24 +158,14 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~40,40,50,160
+                      normal: ~40,40,50,255
                       shape: ~round_rect
                       radius: 8
                       through: true
-                  持有:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      # 低透明度绿底（§21: normal alpha=0 会连 effect 一起不渲染）
-                      normal: ~0,200,80,16
-                      shape: ~round_rect
-                      radius: 8
-                      through: true
-                      visible: "var.ownedFlags[self.parent.entryKey]"
                     effect:
                       stroke:
-                        width: 3
-                        color: ~60,255,120,255
+                        width: 2
+                        color: "var.ownedFlags[self.parent.entryKey] ? '60,255,120,255' : '0,0,0,0'"
                   图标:
                     type: Slot
                     attribute:
