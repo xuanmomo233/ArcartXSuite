@@ -18,7 +18,9 @@ rooms:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
 
-  # 战斗房 A：两波 + 波间 5s 休整 + 预告
+  # 战斗房 A：随机首波包（近卫冲阵/蛛影伏击）+ 二波休整推进
+  # 首波 w1a/w1b 为 MANUAL：锁门时不自动刷，由 on-lock 掷签 pick 其一，
+  # 未选中的包被 kill_group 标完成（不卡房间清判链）
   f1_combat_a:
     type: combat
     region: ["40,60,0", "63,75,23"]
@@ -29,8 +31,8 @@ rooms:
       - region: ["40,61,9", "40,64,14"]
       - region: ["63,61,9", "63,64,14"]
     groups:
-      w1:
-        spawn-timing: AUTO_START
+      w1a:                             # 首波包A：近卫冲阵（正面压上）
+        spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
             location: "52,61,7"
@@ -41,9 +43,21 @@ rooms:
           - mob-id: vanilla:skeleton
             location: "57,61,11"
             amount: 1
+      w1b:                             # 首波包B：蛛影伏击（散点包围）
+        spawn-timing: MANUAL
+        monsters:
+          - mob-id: vanilla:spider
+            location: "47,61,5"
+            amount: 2
+          - mob-id: vanilla:spider
+            location: "47,61,18"
+            amount: 2
+          - mob-id: vanilla:creeper
+            location: "56,61,11"
+            amount: 1
       w2:
         spawn-timing: TRIGGERED
-        trigger-after: [w1]
+        trigger-after: [w1a, w1b]      # 选中包清完 + 未选包被跳过 = 两条件齐
         # 前置清完 → 休整期开始瞬间发预告（此刻怪还没刷）
         on-prespawn:
           - "title @all 5 30 10 &e第二波 &c5 秒后来袭！"
@@ -61,8 +75,13 @@ rooms:
             amount: 1
     on-enter:
       - "title @all 10 30 10 &c遭遇战！|&7肃清房间以解除封锁"
+      - "guide_clear f1_a"
     on-lock:
       - "sound @all BLOCK_IRON_DOOR_CLOSE 1 0.6"
+      # 掷签选首波包（未选包 kill_group 标完成，TRIGGERED w2 照常接力）
+      - "random f1a_pack 1 2"
+      - "run_script wpk_f1a_a"
+      - "run_script wpk_f1a_b"
     on-clear:
       - "title @all 5 30 10 &a房间肃清|&e踩金块地标前进"
       - "guide_point f1_exit 65,62,11 2 &e前往出口"
@@ -78,6 +97,7 @@ rooms:
       - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
       - "message @all &7当前金币：&e{var:coins} &7（击杀掉落，全队共享）"
       - "guide_clear f1_exit"
+      - "guide_point f1_altar_pt 91,62,11 2 &d青金石环中的祭坛"
 
   # Boss 房：冲撞兽 + 20s 增援（DELAYED 定时阶段）
   f1_boss:
@@ -116,11 +136,12 @@ rooms:
     on-clear:
       - "title @all 10 40 10 &a&lBoss 击破！"
       - "sound @all UI_TOAST_CHALLENGE_COMPLETE 1 1"
-      - "guide_point f1_next 145,62,11 2 &e前往下一层"
+      - "guide_clear f1_altar_pt"
+      - "guide_point f1_next 145,62,11 2 &e踩金色地标·前往下一层"
 
   # ═══════════ 第 2 层 · 熔岩矿道 ═══════════
 
-  # 三连战：三波递进（5s/6s 休整 + 预告）
+  # 三连战：随机首波包（列队守卫/巫蛛潜伏）+ 二波休整 + 精英波
   f2_combat_a:
     type: combat
     region: ["200,60,0", "223,75,23"]
@@ -131,8 +152,8 @@ rooms:
       - region: ["200,61,9", "200,64,14"]
       - region: ["223,61,9", "223,64,14"]
     groups:
-      w1:
-        spawn-timing: AUTO_START
+      w1a:                             # 包A：矿道守卫列队
+        spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
             location: "211,61,7"
@@ -140,9 +161,21 @@ rooms:
           - mob-id: vanilla:skeleton
             location: "211,61,15"
             amount: 2
+      w1b:                             # 包B：巫蛛潜伏（侧翼包抄）
+        spawn-timing: MANUAL
+        monsters:
+          - mob-id: vanilla:spider
+            location: "206,61,5"
+            amount: 2
+          - mob-id: vanilla:spider
+            location: "206,61,18"
+            amount: 1
+          - mob-id: vanilla:witch
+            location: "215,61,11"
+            amount: 1
       w2:
         spawn-timing: TRIGGERED
-        trigger-after: [w1]
+        trigger-after: [w1a, w1b]
         on-prespawn:
           - "title @all 5 30 10 &e第二波 &c5 秒后来袭！"
           - "sound @all ENTITY_WITCH_AMBIENT 0.7 0.9"
@@ -175,6 +208,12 @@ rooms:
             amount: 1
     on-enter:
       - "title @all 10 30 10 &c三连战！|&7每一波之间是喘息之机"
+      - "guide_clear f2_shop_pt"
+    on-lock:
+      - "sound @all BLOCK_IRON_DOOR_CLOSE 1 0.5"
+      - "random f2a_pack 1 2"
+      - "run_script wpk_f2a_a"
+      - "run_script wpk_f2a_b"
     on-clear:
       - "title @all 5 30 10 &a矿道肃清|&e踩金块地标前进"
       - "guide_point f2_exit 225,62,11 2 &e前往出口"
@@ -190,6 +229,7 @@ rooms:
       - "message @all &e金块台座&7：治疗 8 金 &8｜ &c红石台座&7：力量 12 金 &8｜ &b钻石台座&7：金苹果 15 金"
       - "message @all &7当前金币：&e{var:coins}"
       - "guide_clear f2_exit"
+      - "guide_point f2_shop_pt 251,62,4 2 &e柜台台座·找老陈询价"
 
   # 解谜房：四拉杆按序扳动，解开铁栅出口（错序重置）
   f2_puzzle:
@@ -201,6 +241,7 @@ rooms:
       - "title @all 10 30 10 &b尘封机关|&7按正确顺序扳动四根拉杆"
       - "message @all &7墙上的刻痕写着：&e三 → 一 → 四 → 二"
       - "sound @all BLOCK_NOTE_BLOCK_CHIME 1 1"
+      - "guide_point f2_pzl_pt 291,62,7 2 &b拉杆台座·按序扳动"
 
   # Boss 房：唤魔者 + 卫道士 + 18s 增援
   f2_boss:
@@ -257,8 +298,8 @@ rooms:
       - region: ["400,61,9", "400,64,14"]
       - region: ["423,61,9", "423,64,14"]
     groups:
-      w1:
-        spawn-timing: AUTO_START
+      w1a:                             # 包A：凋零卫队拔剑
+        spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:wither_skeleton
             location: "412,61,7"
@@ -266,9 +307,21 @@ rooms:
           - mob-id: vanilla:blaze
             location: "412,61,15"
             amount: 2
+      w1b:                             # 包B：烈焰行者齐燃（远程压制）
+        spawn-timing: MANUAL
+        monsters:
+          - mob-id: vanilla:blaze
+            location: "416,61,5"
+            amount: 2
+          - mob-id: vanilla:blaze
+            location: "416,61,18"
+            amount: 2
+          - mob-id: vanilla:wither_skeleton
+            location: "410,61,11"
+            amount: 1
       w2:
         spawn-timing: TRIGGERED
-        trigger-after: [w1]
+        trigger-after: [w1a, w1b]
         on-prespawn:
           - "title @all 5 30 10 &c卫队增援 &46 秒后来袭！"
           - "sound @all ENTITY_BLAZE_AMBIENT 0.8 0.7"
@@ -284,6 +337,12 @@ rooms:
             amount: 1
     on-enter:
       - "title @all 10 30 10 &4走廊决战！|&7小心脚下的灼热地带"
+      - "guide_clear f3_chest_pt"
+    on-lock:
+      - "sound @all BLOCK_IRON_DOOR_CLOSE 1 0.4"
+      - "random f3c_pack 1 2"
+      - "run_script wpk_f3c_a"
+      - "run_script wpk_f3c_b"
     on-clear:
       - "title @all 5 30 10 &a卫队覆灭|&e踩金块地标前进"
       - "guide_point f3_exit 425,62,11 2 &e前往出口"
@@ -299,6 +358,7 @@ rooms:
       - "heal @all 10"
       - "feed @all"
       - "guide_clear f3_exit"
+      - "guide_point f3_chest_pt 451,63,11 2 &6金台上的宝箱"
 
   # 终层 Boss：凋零 + 定时增援 + 清剿增援后终波（三阶段节奏）
   f3_final:

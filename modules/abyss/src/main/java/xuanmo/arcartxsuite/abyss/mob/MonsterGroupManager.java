@@ -198,23 +198,31 @@ public final class MonsterGroupManager {
         }
         if (rt.alive.size() <= rt.group.completeWhenAliveBelow()) {
             rt.state = GroupState.COMPLETED;
-            if (callback != null) {
-                callback.onGroupComplete(instance, rt.group.name());
-                callback.runGroupScript(instance, rt.group.onEnd(), rt.group.name(), null);
-                callback.publishEvent("axs.abyss.mob_group_complete", Map.of(
-                    "dungeon", instance.getTemplate().id(),
-                    "instance", instance.getInstanceId().toString(),
-                    "group", rt.group.name()));
-            }
-            // 触发依赖组（休整/延迟生效 + 预告段）
-            Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
-            if (groups != null) {
-                for (GroupRuntime dep : groups.values()) {
-                    if (dep.state == GroupState.PENDING
-                        && dep.group.spawnTiming() == MonsterConfig.SpawnTiming.TRIGGERED
-                        && dep.group.triggerAfter().contains(rt.group.name())) {
-                        queueTriggeredSpawn(instance, dep);
-                    }
+            fireGroupComplete(instance, rt);
+        }
+    }
+
+    /**
+     * 组完成统一出口：完成回调 + on-end 脚本 + 事件 + 依赖组触发。
+     * ACTIVE（全清）与 PENDING（kill_group 跳过）组共用。
+     */
+    private void fireGroupComplete(AbyssInstance instance, GroupRuntime rt) {
+        if (callback != null) {
+            callback.onGroupComplete(instance, rt.group.name());
+            callback.runGroupScript(instance, rt.group.onEnd(), rt.group.name(), null);
+            callback.publishEvent("axs.abyss.mob_group_complete", Map.of(
+                "dungeon", instance.getTemplate().id(),
+                "instance", instance.getInstanceId().toString(),
+                "group", rt.group.name()));
+        }
+        // 触发依赖组（休整/延迟生效 + 预告段）
+        Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
+        if (groups != null) {
+            for (GroupRuntime dep : groups.values()) {
+                if (dep.state == GroupState.PENDING
+                    && dep.group.spawnTiming() == MonsterConfig.SpawnTiming.TRIGGERED
+                    && dep.group.triggerAfter().contains(rt.group.name())) {
+                    queueTriggeredSpawn(instance, dep);
                 }
             }
         }
@@ -271,9 +279,14 @@ public final class MonsterGroupManager {
             }
         }
         rt.alive.clear();
-        // 保持 ACTIVE 状态交 checkGroupComplete 走正常完成链
-        // （先置 COMPLETED 会被其 ACTIVE 前置守卫直接返回 → 联动永远不触发）
-        checkGroupComplete(instance, rt);
+        // ACTIVE 走正常完成链；PENDING（从未生成）也视为完成——随机波次等场景
+        // 用 kill_group 显式跳过备选组，否则它永远 PENDING 卡住房间清判
+        if (rt.state == GroupState.ACTIVE) {
+            checkGroupComplete(instance, rt);
+        } else if (rt.state == GroupState.PENDING) {
+            rt.state = GroupState.COMPLETED;
+            fireGroupComplete(instance, rt);
+        }
     }
 
     /** 移除组（连同怪）且不触发完成。 */
@@ -346,6 +359,13 @@ public final class MonsterGroupManager {
         Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
         GroupRuntime rt = groups != null ? groups.get(groupName) : null;
         return rt != null ? rt.state : null;
+    }
+
+    /** 组 spawn-timing（房间锁门按此分流点火/脚本/依赖）。 */
+    public @Nullable MonsterConfig.SpawnTiming timingOf(AbyssInstance instance, String groupName) {
+        Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
+        GroupRuntime rt = groups != null ? groups.get(groupName) : null;
+        return rt != null ? rt.group.spawnTiming() : null;
     }
 
     /** 实体是否属于本实例怪物组。 */

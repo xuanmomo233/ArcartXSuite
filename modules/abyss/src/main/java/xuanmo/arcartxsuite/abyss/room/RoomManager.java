@@ -297,10 +297,8 @@ public final class RoomManager {
                 deps.add(dep.contains(":") ? dep : room.id + ":" + dep);
             }
             SpawnTiming timing = g.spawnTiming();
-            // 房间内 AUTO_START/DELAYED 语义 = 锁门触发（由本管理器调度）
-            if (timing == SpawnTiming.AUTO_START || timing == SpawnTiming.DELAYED) {
-                timing = SpawnTiming.MANUAL;
-            }
+            // 保留原 timing：AUTO_START/DELAYED 由锁门循环按 delay 点火；
+            // TRIGGERED 由依赖链驱动；MANUAL/SCRIPTED 由 on-lock 脚本 spawn_group。
             room.groupDelays.put(runtimeName, g.delaySeconds());
             // 波次休整：组自身 rest-seconds 优先，房间 wave-rest 兜底
             int rest = g.restSeconds() >= 0 ? g.restSeconds() : tpl.restSeconds();
@@ -419,8 +417,12 @@ public final class RoomManager {
             callback.broadcast(instance,
                 callback.msg("dungeon.room-locked", "room", room.tpl.id()));
         }
-        // 锁门触发房内组：delay>0 排延迟任务，否则立即刷
+        // 锁门点火房内组：仅 AUTO_START/DELAYED（delay>0 排延迟任务）；
+        // TRIGGERED 由依赖链驱动、MANUAL/SCRIPTED 由 on-lock 脚本 spawn_group——
+        // 无条件全刷会让波次休整/prespawn/trigger-after 链失效
         for (String gn : room.groupNames) {
+            SpawnTiming t = mobGroups.timingOf(instance, gn);
+            if (t != SpawnTiming.AUTO_START && t != SpawnTiming.DELAYED) continue;
             int delay = room.groupDelays.getOrDefault(gn, 0);
             if (delay > 0) {
                 instance.registerTask(scheduler.scheduleOnceSeconds(plugin,

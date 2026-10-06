@@ -281,6 +281,40 @@ final class BuiltinActions {
             double nv = base + parseDouble(rest(parts, 1), 0);
             ctx.setVariable(parts[0], nv == Math.floor(nv) ? (long) nv : nv);
         });
+        reg.register("random", (ctx, args, s) -> {
+            // random <var> <min> <max>：写均匀随机整数到实例变量
+            // （元气骑士式随机分支地基：配合 run_script + if_var 做变体选择）
+            String[] parts = splitFirst(args, 2);
+            if (parts.length < 3) return;
+            int lo = (int) parseDouble(ctx.replace(parts[1]), 0);
+            int hi = (int) parseDouble(ctx.replace(parts[2]), lo);
+            if (hi < lo) { int t = lo; lo = hi; hi = t; }
+            ctx.setVariable(parts[0],
+                lo + java.util.concurrent.ThreadLocalRandom.current().nextInt(hi - lo + 1));
+        });
+        reg.register("if_var", (ctx, args, s) -> {
+            // if_var <名> <比较符> <值>：实例变量不满足则终止本段
+            // 与 check 的区别：check 逐玩家评估（无玩家时@all空转不拦）；
+            // if_var 直接读实例变量，world-init 等无玩家阶段也可用——随机分支的闸门。
+            String[] parts = args.trim().split("\\s+", 3);
+            if (parts.length < 3) return;
+            Object cur = ctx.getVariable(ctx.replace(parts[0]));
+            String lhs = cur != null ? String.valueOf(cur) : "";
+            String rhs = ctx.replace(parts[2]);
+            double a = parseDouble(lhs, Double.NaN);
+            double b = parseDouble(rhs, Double.NaN);
+            boolean numeric = !Double.isNaN(a) && !Double.isNaN(b);
+            boolean ok = switch (parts[1]) {
+                case "==" -> numeric ? a == b : lhs.equals(rhs);
+                case "!=" -> numeric ? a != b : !lhs.equals(rhs);
+                case ">" -> numeric && a > b;
+                case ">=" -> numeric && a >= b;
+                case "<" -> numeric && a < b;
+                case "<=" -> numeric && a <= b;
+                default -> false;
+            };
+            if (!ok) s.cancel();
+        });
 
         // ═══ 条件守卫 ═══
         reg.register("check", (ctx, args, s) -> {

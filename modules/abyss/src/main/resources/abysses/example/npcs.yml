@@ -22,7 +22,7 @@ guide:
 merchant:
   name: "&6旅行商人·老陈"
   type: WANDERING_TRADER
-  location: "251,61,5,180,0"       # f2_shop 台座南侧，面向台座/来客(-z 北=yaw180)
+  location: "251,61,5,0,0"         # f2_shop 台座南侧柜台后，面南(+z=yaw0)迎客
   look-at-player: true
   dialogs:
     - "&6客人，随便看看。台座上的货都标着价。"

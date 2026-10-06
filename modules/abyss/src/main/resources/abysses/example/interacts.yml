@@ -13,6 +13,8 @@ altar:
     - "addvar coins -15"
     - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
     - "buff_offer altar_pool"
+    - "guide_clear f1_altar_pt"
+    - "guide_point f1_e2 105,62,11 2 &e前往守层 Boss"
 
 # ═══ 商店台座（f2_shop）═══
 shop_heal:
@@ -28,6 +30,7 @@ shop_heal:
     - "message @trigger &a✚ 治疗完成，继续深入吧"
     - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
 
+# 力量台座：同价 12 金，档位由 shop_power_lvl 随机（I 3分钟/II 2分钟/III 1分钟）
 shop_power:
   type: RIGHT_CLICK_BLOCK
   location: "251,61,2"
@@ -36,8 +39,9 @@ shop_power:
   fail-message: "&c力量台座需要 &e12 &c金币"
   script:
     - "addvar coins -12"
-    - "apply_potion @trigger STRENGTH 1 120"
-    - "message @trigger &c⚔ 力量灌注：攻击提升 2 分钟"
+    - "run_script shop_power_t1"
+    - "run_script shop_power_t2"
+    - "run_script shop_power_t3"
     - "sound @trigger ENTITY_ZOMBIE_VILLAGER_CURE 1 1.4"
 
 shop_apple:
@@ -70,12 +74,14 @@ lever_4:
   location: "297,62,7"
   required-block: LEVER
 
-# ═══ 战利品宝箱（f3_treasure）═══
+# ═══ 战利品宝箱（f3_treasure，金台顶端）═══
 abyss_chest:
   type: RIGHT_CLICK_BLOCK
-  location: "451,61,11"
+  location: "451,62,11"
   required-block: CHEST
   once: true                          # 每实例一次
   script:
     - "open_chest_ui @trigger abyss_chest"
     - "sound @trigger BLOCK_CHEST_OPEN 1 1"
+    - "guide_clear f3_chest_pt"
+    - "guide_point f3_next 465,62,11 2 &e整备完成·前往王座"
