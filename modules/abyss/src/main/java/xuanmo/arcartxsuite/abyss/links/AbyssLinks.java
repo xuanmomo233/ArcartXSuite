@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.abyss.links;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -20,8 +19,8 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 
 /**
- * 跨模块联动封装：懒解析宿主 capability（正缓存、负结果每次重试——容忍
- * 其它模块在 abyss 之后才注册能力），全部方法在目标模块缺席时静默跳过。
+ * 跨模块联动封装：实时解析宿主 capability（不缓存——目标模块 reload 后
+ * 实现对象整体更换，缓存会持陈旧引用静默失效），全部方法在目标模块缺席时静默跳过。
  * <p>
  * 同时承接 attributeBridge（属性修饰/伤害治疗统计桥）与 essentials
  * （出生点兜底/AFK 判定）。
@@ -37,8 +36,6 @@ public final class AbyssLinks {
     private final CapabilityResolver capabilityResolver;
     private final AttributeBridgeRegistry attributeBridge;
     private final Logger logger;
-    /** 已解析的 capability 缓存（key=接口类）；解析失败不缓存以便重试。 */
-    private final Map<Class<?>, Object> resolved = new ConcurrentHashMap<>();
 
     public AbyssLinks(CapabilityResolver capabilityResolver,
                       AttributeBridgeRegistry attributeBridge, Logger logger) {
@@ -49,22 +46,18 @@ public final class AbyssLinks {
 
     // ═══ 内部：capability 懒解析 ═══
 
+    /**
+     * 每次调用实时解析——不缓存。
+     * capability 实现对象在目标模块 reload 时整体更换（如 DungeonExternalInstaller
+     * 部署配套文件后 reloadModule(questgps)），正缓存会持有陈旧实现导致静默失效；
+     * 解析本身只是注册表查表，开销可忽略。
+     */
     private <T> @Nullable T cap(Class<T> type) {
-        Object cached = resolved.get(type);
-        if (cached != null) {
-            return type.cast(cached);
-        }
-        T found;
         try {
-            found = capabilityResolver.get(type);
+            return capabilityResolver.get(type);
         } catch (Throwable t) {
             return null;
         }
-        if (found == null) {
-            return null;
-        }
-        resolved.put(type, found);
-        return found;
     }
 
     // ═══ EventPacket 信号 ═══

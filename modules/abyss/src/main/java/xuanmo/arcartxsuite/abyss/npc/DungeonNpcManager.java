@@ -103,6 +103,12 @@ public final class DungeonNpcManager {
     public boolean spawn(AbyssInstance instance, String npcName) {
         DungeonNpc npc = instance.getTemplate().npcs().npcs().get(npcName);
         if (npc == null || instance.getWorld() == null) return false;
+        // 重复 spawn 同名 NPC：先移除旧实体（spawn_npc 重复调用会残留孤儿实体）
+        Map<String, Object> existing = spawned.get(instance.getInstanceId());
+        if (existing != null) {
+            Object old = existing.remove(npcName);
+            if (old != null) removeHandle(old);
+        }
         Function<String, Location> parse = locParser.apply(instance);
         Location loc = parse.apply(npc.location());
         if (loc == null) return false;

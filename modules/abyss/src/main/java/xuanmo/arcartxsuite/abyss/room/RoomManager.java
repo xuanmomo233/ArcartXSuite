@@ -83,6 +83,8 @@ public final class RoomManager {
         /** 组名 → 原始 delaySeconds（锁门时延迟刷怪用）。 */
         final Map<String, Integer> groupDelays = new ConcurrentHashMap<>();
         final Set<UUID> inside = ConcurrentHashMap.newKeySet();
+        /** 战斗房登记集合：进过房的玩家永驻（拉回判定用；inside 每 tick 进出变动不可靠）。 */
+        final Set<UUID> enrolled = ConcurrentHashMap.newKeySet();
         volatile long clearedAt;
         volatile boolean advanceFired;
 
@@ -345,22 +347,24 @@ public final class RoomManager {
         RoomRuntime cur = currentRoom(instance);
         if (cur == null) return;
 
-        // 边界拉回：FIGHTING 房逃逸兜底（inside 集合含刚触发的玩家）
+        // 边界拉回：FIGHTING 房逃逸兜底。
+        // 用 enrolled（进过房即登记）而非 inside——inside 每 tick 随进出增删，
+        // 离开盒子的玩家同一 tick 已被 remove，永不可能满足 inside&&!inBox。
         if (cur.state == RoomState.FIGHTING
             && instance.getTemplate().floors().defaults().borderPullback()) {
             for (Player p : instance.getPlayers()) {
                 if (instance.isPlayerCurrentlyDead(p)) continue;
-                if (cur.inside.contains(p.getUniqueId()) && cur.boxMin != null
+                if (cur.enrolled.contains(p.getUniqueId()) && cur.boxMin != null
                     && !inBox(p.getLocation(), cur.boxMin, cur.boxMax)) {
                     p.teleport(cur.spawn);
                 }
             }
         }
-        // 虚空防护：掉到当前房底部以下 → 拉回（pool 虚空世界/region 摔坑通用）
+        // 虚空防护：掉到当前房底部以下 → 拉回（pool 虚空世界/region 摔坑通用）。
+        // 旁观玩家同样拉回——旁观态在虚空里会持续坠落且本检查跳过死亡玩家会让他们无限漂失
         if (cur.boxMin != null) {
             double floorY = cur.boxMin.getY() - 8;
             for (Player p : instance.getPlayers()) {
-                if (instance.isPlayerCurrentlyDead(p)) continue;
                 if (p.getWorld().equals(cur.boxMin.getWorld())
                     && p.getLocation().getY() < floorY) {
                     p.teleport(cur.spawn);
@@ -384,6 +388,8 @@ public final class RoomManager {
     /** 玩家首次进入房间。 */
     private void onEnterRoom(AbyssInstance instance, InstanceRuntime rt,
                              FloorRuntime fr, RoomRuntime room, Player p) {
+        // 进过房即登记（FIGHTING 拉回判定基准；非战斗房登记无副作用）
+        room.enrolled.add(p.getUniqueId());
         if (room.floorIndex == rt.currentFloor && room.roomIndex > rt.currentRoom) {
             rt.currentRoom = room.roomIndex;
             if (callback != null) callback.setVar(instance, "room", room.roomIndex + 1);

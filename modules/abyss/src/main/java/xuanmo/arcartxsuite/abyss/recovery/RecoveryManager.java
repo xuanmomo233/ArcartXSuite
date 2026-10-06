@@ -34,14 +34,15 @@ public final class RecoveryManager {
         this.links = links;
     }
 
-    /** 标记玩家非正常退出副本。 */
-    public void mark(UUID uuid, String dungeonId) {
+    /** 标记玩家非正常退出副本（记录其进本前 GameMode，进服恢复时还原）。 */
+    public void mark(UUID uuid, String dungeonId, @Nullable String savedGameMode) {
         if (!cfg.enabled()) return;
         try {
             if (!dir.isDirectory() && !dir.mkdirs()) return;
             File f = fileOf(uuid);
             YamlConfiguration y = new YamlConfiguration();
             y.set("dungeon", dungeonId);
+            if (savedGameMode != null) y.set("gamemode", savedGameMode);
             y.set("time", System.currentTimeMillis());
             y.save(f);
         } catch (Exception e) {
@@ -56,13 +57,23 @@ public final class RecoveryManager {
         if (!f.isFile()) return;
         // 先删标记再执行（防动作失败导致重复执行）
         String dungeon;
+        String gamemode;
         try {
             YamlConfiguration y = YamlConfiguration.loadConfiguration(f);
             dungeon = y.getString("dungeon", "?");
+            gamemode = y.getString("gamemode", null);
             f.delete();
         } catch (Exception e) {
             f.delete();
             return;
+        }
+        // 先还原进本前模式：副本内死亡旁观（SPECTATOR）断线重连会卡旁观，
+        // 必须在传送/动作之前恢复，否则玩家在旁观态坠落还可能再触发异常路径
+        if (gamemode != null) {
+            try {
+                org.bukkit.GameMode gm = org.bukkit.GameMode.valueOf(gamemode);
+                if (player.getGameMode() != gm) player.setGameMode(gm);
+            } catch (Throwable ignored) { }
         }
         for (String action : cfg.actions()) {
             execute(player, action, dungeon);

@@ -12,6 +12,7 @@ error:
   player-only: "{prefix}&c该命令仅玩家可执行"
   dungeon-not-found: "{prefix}&c地牢 &f{dungeon} &c不存在"
   already-in-dungeon: "{prefix}&c你已经在副本中"
+  already-in-dungeon-member: "{prefix}&c成员 &f{player} &c已在副本中，无法整队进入"
   not-in-dungeon: "{prefix}&c你不在副本中"
   not-in-party: "{prefix}&c你不在队伍中"
   not-party-leader: "{prefix}&c只有队长可以执行此操作"

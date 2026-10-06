@@ -262,8 +262,12 @@ final class BuiltinActions {
                 if (holder[0] != null) {
                     try { holder[0].cancel(); } catch (Throwable ignored) { }
                 }
+                // 实例已结束/脚本已取消 → 不再执行（防孤儿任务对已销毁实例发命令发物品）
+                if (ctx.getInstance().isFinished() || s.isCancelled()) return;
                 runner.executeLine(line, ctx, s);
             }, (long) (sec * 20), Long.MAX_VALUE);
+            // 挂到实例：destroyInstance 时随实例任务统一取消
+            ctx.getInstance().registerTask(holder[0]);
         });
 
         // ═══ 变量 ═══
@@ -505,6 +509,13 @@ final class BuiltinActions {
             int x1 = Math.min(a.getBlockX(), b.getBlockX()), x2 = Math.max(a.getBlockX(), b.getBlockX());
             int y1 = Math.min(a.getBlockY(), b.getBlockY()), y2 = Math.max(a.getBlockY(), b.getBlockY());
             int z1 = Math.min(a.getBlockZ(), b.getBlockZ()), z2 = Math.max(a.getBlockZ(), b.getBlockZ());
+            // 体积上限：防配置笔误（如把百万级区域写进脚本）主线程卡死
+            long volume = (long) (x2 - x1 + 1) * (y2 - y1 + 1) * (z2 - z1 + 1);
+            if (volume > 131072) {
+                runner.logger().warning("[abyss] fillblocks 区域过大被拒: "
+                    + volume + " 块（上限 131072）");
+                return;
+            }
             for (int x = x1; x <= x2; x++)
                 for (int y = y1; y <= y2; y++)
                     for (int z = z1; z <= z2; z++)

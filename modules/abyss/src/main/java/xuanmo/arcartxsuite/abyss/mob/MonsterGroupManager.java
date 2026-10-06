@@ -253,7 +253,11 @@ public final class MonsterGroupManager {
         }
     }
 
-    /** 击杀整组（不触发完成联动——管理性操作）。 */
+    /**
+     * 击杀整组并视为"清完"：触发完成联动（on-end/trigger-after/房间清判）。
+     * <p>需要静默移除且不触发联动的场景用 {@link #removeGroup}。
+     * 不触发联动会让依赖链/房间清判软锁（该组永不推进）。</p>
+     */
     public void killGroup(AbyssInstance instance, String groupName) {
         Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
         if (groups == null) return;
@@ -267,10 +271,9 @@ public final class MonsterGroupManager {
             }
         }
         rt.alive.clear();
-        if (rt.state == GroupState.ACTIVE) {
-            rt.state = GroupState.COMPLETED;
-            checkGroupComplete(instance, rt);
-        }
+        // 保持 ACTIVE 状态交 checkGroupComplete 走正常完成链
+        // （先置 COMPLETED 会被其 ACTIVE 前置守卫直接返回 → 联动永远不触发）
+        checkGroupComplete(instance, rt);
     }
 
     /** 移除组（连同怪）且不触发完成。 */

@@ -81,9 +81,32 @@ public final class AbyssPlayerListener implements Listener {
             event.setDroppedExp(0);
         }
         if (!instance.isPlayerCurrentlyDead(player)) {
-            instance.recordDeath(player);
+            int deaths = instance.recordDeath(player);
             service.runLifecycleScript(instance, "player_death", player);
+            // 与拦截路径对齐：EVENT 任务（player_death）+ EventBus + 全队覆灭判定
+            service.notifyPlayerDeath(instance, player, deaths);
         }
+    }
+
+    /**
+     * 真死兜底的重生位置：fatal-damage-check 关闭时玩家会真死，
+     * 原版默认复活到床位/世界出生点（副本外）——拉回副本出生点并旁观化，
+     * 与拦截路径的观感一致。
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        AbyssInstance instance = service.instances().getInstance(player);
+        if (instance == null || !instance.isPlayerCurrentlyDead(player)) return;
+        var spawn = service.spawnLocation(instance);
+        if (spawn != null) event.setRespawnLocation(spawn);
+        // 旁观化需下一拍执行（respawn 事件内直接改模式无效）
+        service.scheduleOnce(instance, () -> {
+            if (player.isOnline() && instance.isPlayerCurrentlyDead(player)
+                && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
+                player.setGameMode(org.bukkit.GameMode.SPECTATOR);
+            }
+        }, 1L);
     }
 
     // ═══ 实体死亡 → 怪物组 ═══

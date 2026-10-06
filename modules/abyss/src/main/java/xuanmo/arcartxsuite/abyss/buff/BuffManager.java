@@ -40,8 +40,9 @@ public final class BuffManager {
     private final Logger logger;
     private Callback callback;
 
-    /** 一次进行中的增益选择。 */
-    private record Offer(Pool pool, List<Option> candidates, long deadlineEpochMs) { }
+    /** 一次进行中的增益选择；picked 记录已选玩家（防回包重放重复领取）。 */
+    private record Offer(Pool pool, List<Option> candidates, long deadlineEpochMs,
+                         java.util.Set<UUID> picked) { }
 
     public interface Callback {
         /** 执行效果脚本行（effects 逐行，trigger=选择者）。 */
@@ -118,7 +119,8 @@ public final class BuffManager {
             instance.getInstanceId(), k -> new ConcurrentHashMap<>());
         long deadline = pool.timeout() > 0
             ? System.currentTimeMillis() + pool.timeout() * 1000L : 0L;
-        map.put(poolId, new Offer(pool, candidates, deadline));
+        map.put(poolId, new Offer(pool, candidates, deadline,
+            ConcurrentHashMap.newKeySet()));
 
         for (Player p : instance.getPlayers()) {
             callback.openBuffUi(p, instance, pool, candidates, pool.timeout());
@@ -140,11 +142,16 @@ public final class BuffManager {
         Map<String, Offer> map = offers.get(instance.getInstanceId());
         Offer offer = map != null ? map.get(poolId) : null;
         if (offer == null) return false;
+        // 每玩家限领一次：buff_pick 回包可能被重放/快速双击
+        if (!offer.picked().add(player.getUniqueId())) return false;
         Option opt = null;
         for (Option o : offer.candidates()) {
             if (o.id().equals(optionId)) { opt = o; break; }
         }
-        if (opt == null) return false;
+        if (opt == null) {
+            offer.picked().remove(player.getUniqueId()); // 无效选项不消耗领取资格
+            return false;
+        }
         grant(instance, player, offer.pool(), opt);
         return true;
     }

@@ -363,9 +363,16 @@ public final class AbyssWorldPool {
 
     /** 启动时扫描并回收残留世界（上次非正常关服的副本世界）。 */
     public int cleanupOrphanWorlds() {
+        String prefix = cfg.worldPrefix();
+        // 前缀为空/过短时 startsWith 命中范围过大，有整容器误删风险——拒绝执行并告警
+        if (prefix == null || prefix.length() < 8) {
+            logger.warning("[abyss] world-prefix 无效或过短（\"" + prefix
+                + "\"，需 >=8 字符），跳过孤儿世界清理以防误删");
+            return 0;
+        }
         File container = Bukkit.getWorldContainer();
         File[] orphans = container.listFiles(f ->
-            f.isDirectory() && f.getName().startsWith(cfg.worldPrefix()));
+            f.isDirectory() && f.getName().startsWith(prefix));
         if (orphans == null) return 0;
         int n = 0;
         for (File dir : orphans) {

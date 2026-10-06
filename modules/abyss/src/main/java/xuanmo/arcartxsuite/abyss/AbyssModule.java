@@ -40,7 +40,8 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
             .version("1.0.0")
             .mainClass(getClass().getName())
             .externalSoftDepends(List.of("MythicMobs", "MythicBukkit",
-                "FastAsyncWorldEdit", "WorldEdit", "Adyeshach", "PlaceholderAPI"))
+                "FastAsyncWorldEdit", "WorldEdit", "Adyeshach", "Chemdah",
+                "PlaceholderAPI"))
             .build();
     }
 

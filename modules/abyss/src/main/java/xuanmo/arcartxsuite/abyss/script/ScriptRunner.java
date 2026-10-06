@@ -156,4 +156,5 @@ public final class ScriptRunner {
 
     public SchedulerAPI scheduler() { return scheduler; }
     public Plugin plugin() { return plugin; }
+    public Logger logger() { return logger; }
 }

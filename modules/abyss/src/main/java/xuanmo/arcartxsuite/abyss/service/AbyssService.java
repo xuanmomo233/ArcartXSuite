@@ -655,8 +655,13 @@ public final class AbyssService {
         if (template == null) {
             return EnterResult.fail(msg("error.dungeon-not-found", "dungeon", templateId));
         }
-        if (instances.getInstance(players.get(0)) != null) {
-            return EnterResult.fail(msg("error.already-in-dungeon"));
+        // 逐人查重：任一成员已在其它实例则整队拒绝
+        // （只查首人会漏掉队员→其旧实例成员关系残留、被映射进新实例双重记账）
+        for (Player member : players) {
+            if (instances.getInstance(member) != null) {
+                return EnterResult.fail(msg("error.already-in-dungeon-member",
+                    "player", member.getName()));
+            }
         }
         if (!instances.hasAvailableSlot(template)) {
             return EnterResult.fail("副本实例已达上限");
@@ -984,16 +989,14 @@ public final class AbyssService {
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
         ensureFooting(world, spawn);
 
-        // 扣费（世界就绪后才扣，失败不花钱）
-        requirementChecker.charge(instance.getTemplate(), players);
-
-        // 逐人存档+传送
+        // 逐人存档+传送；扣费只算传送成功的玩家（传送失败不花门票）
         for (Player p : players) {
             if (!p.isOnline() || instance.isFinished()) continue;
             instance.saveOriginalLocation(p, p.getLocation());
             instance.savePlayerGameMode(p);
             boolean ok = teleportWithRetry(p, spawn, 3);
             if (ok) {
+                requirementChecker.charge(instance.getTemplate(), List.of(p));
                 instance.markEntered(p.getUniqueId());
             } else {
                 // 传送失败：移出实例并送回
@@ -1258,9 +1261,12 @@ public final class AbyssService {
         if (designManager != null) designManager.close(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
-        // 非正常退出标记（下次进服执行恢复动作）
+        // 非正常退出标记（下次进服执行恢复动作；顺带记录进本前 GameMode——
+        // 旁观死亡态断线重连若不还原会永久卡 SPECTATOR）
         if (recoveryManager != null) {
-            recoveryManager.mark(player.getUniqueId(), instance.getTemplate().id());
+            org.bukkit.GameMode saved = instance.getSavedGameMode(player.getUniqueId());
+            recoveryManager.mark(player.getUniqueId(), instance.getTemplate().id(),
+                saved != null ? saved.name() : null);
         }
         Location back = instance.getOriginalLocation(player.getUniqueId());
         if (back != null) {
@@ -1341,6 +1347,16 @@ public final class AbyssService {
         player.setGameMode(GameMode.SPECTATOR);
         player.sendMessage(msg("dungeon.death", "deaths", String.valueOf(deaths)));
         runLifecycleScript(instance, "player_death", player);
+        notifyPlayerDeath(instance, player, deaths);
+        return true;
+    }
+
+    /**
+     * 副本内玩家死亡的统一通报：EventBus + EVENT 任务 + 全队覆灭判定。
+     * 致命拦截路径（旁观化）与真死兜底路径（PlayerDeathEvent）共用，
+     * 保证两条路径语义一致。
+     */
+    public void notifyPlayerDeath(AbyssInstance instance, Player player, int deaths) {
         publishEvent("axs.abyss.player_death", player, Map.of(
             "dungeon", instance.getTemplate().id(),
             "instance", instance.getInstanceId().toString(),
@@ -1362,7 +1378,6 @@ public final class AbyssService {
                 }, config.death().teamWipeDelayTicks());
             }
         }
-        return true;
     }
 
     private boolean hasTotem(Player p) {
