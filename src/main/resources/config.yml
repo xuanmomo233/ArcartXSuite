@@ -893,3 +893,14 @@ modules:
     # 枪械浏览：客户端悬停 TACZ 配件按 Shift 打开"支持枪械"界面——gun-list.mode=ax 走服务端 AX UI（ui/gun_list.yml），mod 走客户端本地界面；模式经 axstooltip:gunui 通道推送。
     # 前置：需客户端安装 ArcartX-Suite-Tooltips，否则服务端无法获取 tooltip 数据、枪械浏览不可用。
     # 配置文件：ArcartXTooltip.yml（gun-list.mode）；管理命令 /axs tooltip（status 查看缓存与模式、push <玩家> 手动重推模式）。
+
+  abyss:
+    enabled: true
+    # Abyss 深渊副本系统
+    # 功能：多层 Roguelike 地牢实例（房间/波次/传送门链）、队伍管理与匹配、经济/奖励（金币·祭坛·商店·宝箱）、
+    #      副本内 NPC/对话/任务联动、Buff 三选一、排行榜、副本内 HUD 与 UI 面板、设计模式（世界内可视化编辑）。
+    # 前置：NPC 实体需 Adyeshach；对话 UI 依赖 conversation（桥 Chemdah），任务导航依赖 questgps（桥 Chemdah 任务）；
+    #      怪池支持 vanilla:/mythic: 前缀（mythic 需 MythicMobs）。缺软依赖时降级运行（聊天栏兜底对话、无任务追踪），不影响副本主流程。
+    # 配置文件：plugins/ArcartX-Suite/data/abyss/abysses/<id>/（示例副本 example 自动生成）；
+    #      abysses/<id>/external/ 下的 Chemdah 会话/任务、questgps 任务文件在模板加载时自动部署到对应插件目录。
+    # 命令：/abyss enter|lobby|party|stats|top|design；模块管理 /axs abyss。
