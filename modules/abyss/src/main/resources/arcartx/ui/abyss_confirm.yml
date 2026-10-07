@@ -141,6 +141,7 @@ controls:
             attribute:
               point: ~bottom_center
               y: -36
+              height: 54
               spaceBetween: 24
             children:
               进入按钮:

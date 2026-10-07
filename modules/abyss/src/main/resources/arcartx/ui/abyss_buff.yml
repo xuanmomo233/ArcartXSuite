@@ -103,7 +103,7 @@ controls:
           point: ~top_center
           y: 220
           texts: "'&f' + var.poolName"
-          fontSize: 60
+          fontSize: 64
           limit: 16
           through: true
       副标题:
@@ -120,7 +120,7 @@ controls:
           point: ~top_center
           y: 344
           texts: "var.timeout > 0 ? '&8' + var.remain.round() + 's 后自动选择' : ''"
-          fontSize: 32
+          fontSize: 36
           through: true
       倒计时条背景:
         type: Texture
@@ -152,6 +152,7 @@ controls:
         attribute:
           point: ~middle_center
           y: 70
+          height: 420
           spaceBetween: 36
         children:
           卡片:
@@ -193,7 +194,7 @@ controls:
                   point: ~top_center
                   y: 132
                   texts: "self.parent.entry['name']"
-                  fontSize: 46
+                  fontSize: 48
                   limit: 8
                   through: true
               稀有度文字:
@@ -202,7 +203,7 @@ controls:
                   point: ~top_center
                   y: 190
                   texts: "'&8◆ ' + self.parent.entry['rarity']"
-                  fontSize: 30
+                  fontSize: 36
                   through: true
               描述0:
                 type: Text
@@ -210,7 +211,7 @@ controls:
                   point: ~top_center
                   y: 240
                   texts: "'&7' + self.parent.entry['desc0']"
-                  fontSize: 30
+                  fontSize: 36
                   limit: 12
                   through: true
               描述1:
@@ -219,7 +220,7 @@ controls:
                   point: ~top_center
                   y: 278
                   texts: "'&7' + self.parent.entry['desc1']"
-                  fontSize: 30
+                  fontSize: 36
                   limit: 12
                   through: true
               描述2:
@@ -228,7 +229,7 @@ controls:
                   point: ~top_center
                   y: 316
                   texts: "'&7' + self.parent.entry['desc2']"
-                  fontSize: 30
+                  fontSize: 36
                   limit: 12
                   through: true
               选择按钮:

@@ -480,6 +480,7 @@ controls:
             attribute:
               x: "var.leftW + 78"
               y: "var.viewH - 156"
+              height: 54
               spaceBetween: 16
             children:
               进入按钮:

@@ -218,7 +218,7 @@ controls:
           point: ~top_left
           x: "48 - var.offX"
           y: 20
-          width: 110
+          width: 130
           height: 44
         action:
           clickLeft: "Packet.send(var.packetId, 'design_back', var.actionToken)"
@@ -240,34 +240,34 @@ controls:
             attribute:
               point: ~middle_center
               texts: ~&f‹ 返回
-              fontSize: 26
+              fontSize: 36
               through: true
       标题:
         type: Text
         attribute:
           point: ~top_left
-          x: "180 - var.offX"
-          y: 18
+          x: "196 - var.offX"
+          y: 16
           texts: "var.icon + ' &f' + var.kindLabel + ' &8· &f' + var.objId"
-          fontSize: 38
+          fontSize: 48
           through: true
       摘要:
         type: Text
         attribute:
           point: ~top_left
-          x: "182 - var.offX"
-          y: 60
+          x: "198 - var.offX"
+          y: 62
           texts: "'&8' + var.summary"
-          fontSize: 24
+          fontSize: 32
           through: true
       未保存标:
         type: Text
         attribute:
           point: ~top_right
           x: "-60 - var.offX"
-          y: 26
+          y: 30
           texts: ~&e● 未保存
-          fontSize: 28
+          fontSize: 32
           visible: var.dirty
           through: true
       # ═══ 左栏：属性字段 ═══
@@ -294,31 +294,31 @@ controls:
           x: "72 - var.offX"
           y: 118
           texts: ~&8属性字段
-          fontSize: 28
+          fontSize: 36
           through: true
       改名壳:
         type: Canvas
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 158
+          y: 160
           width: "var.colW - 40"
-          height: 44
+          height: 48
         children:
           改名标:
             type: Text
             attribute:
               point: ~middle_left
               texts: ~&8ID
-              fontSize: 24
+              fontSize: 32
               through: true
           框:
             type: Canvas
             attribute:
               point: ~middle_left
-              x: 40
-              width: "var.colW - 80"
-              height: 38
+              x: 56
+              width: "var.colW - 96"
+              height: 42
             children:
               底:
                 type: Texture
@@ -332,11 +332,11 @@ controls:
                 type: TextBox
                 attribute:
                   x: 10
-                  y: 4
-                  width: "var.colW - 100"
-                  height: 30
+                  y: 5
+                  width: "var.colW - 116"
+                  height: 32
                   length: 48
-                  fontSize: 24
+                  fontSize: 32
                   emptyText: ~&8新 id（回车应用）
                 action:
                   enter: "Packet.send(var.packetId, 'design_rename', var.objKey, self.getContent(), var.actionToken); self.setContent('')"
@@ -346,11 +346,11 @@ controls:
         attribute:
           point: ~top_right
           x: "-68 - var.offX"
-          y: 218
+          y: 222
           width: 8
           height: 80
           normal: "186,140,232,255"
-          maxDragY: "var.viewH - 410"
+          maxDragY: "var.viewH - 414"
           shape: ~round_rect
           radius: 4
       左滚动:
@@ -358,9 +358,9 @@ controls:
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 212
+          y: 216
           width: "var.colW - 40"
-          height: "var.viewH - 330"
+          height: "var.viewH - 334"
           moveY: "self.parent['左滑块'].getDragYRatio()"
         action:
           wheel: |-
@@ -390,7 +390,10 @@ controls:
                   行底:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
+                      x: 2
+                      y: 2
+                      width: "self.parent.width - 4"
+                      height: "self.parent.height - 4"
                       normal: ~26,22,44,215
                       shape: ~round_rect
                       radius: 8
@@ -405,7 +408,7 @@ controls:
                       point: ~middle_left
                       x: 16
                       texts: "'&7' + self.parent.entry['label']"
-                      fontSize: 25
+                      fontSize: 32
                       limit: 9
                       through: true
                   # ── TEXT/NUMBER：输入框，emptyText 显示当前值 ──
@@ -430,11 +433,11 @@ controls:
                         type: TextBox
                         attribute:
                           x: 10
-                          y: 4
+                          y: 5
                           width: "var.colW - 320"
-                          height: 30
+                          height: 32
                           length: 96
-                          fontSize: 24
+                          fontSize: 32
                           emptyText: "'&f' + self.parent.parent.entry['valueZh'] + ' &8(回车修改)'"
                         action:
                           enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken); self.setContent('')"
@@ -467,7 +470,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "self.parent.parent.entry['valueZh']"
-                          fontSize: 24
+                          fontSize: 32
                           through: true
                   # ── CYCLE：循环钮 ──
                   循环钮:
@@ -499,8 +502,8 @@ controls:
                           point: ~middle_left
                           x: 12
                           texts: "'&e' + self.parent.parent.entry['valueZh'] + '  &8▸'"
-                          fontSize: 24
-                          limit: 30
+                          fontSize: 32
+                          limit: 24
                           through: true
                   # ── COORD/REGION：值 + 重标 ──
                   坐标钮:
@@ -532,8 +535,8 @@ controls:
                           point: ~middle_left
                           x: 12
                           texts: "'&b' + self.parent.parent.entry['value'] + '  &8[点我重标]'"
-                          fontSize: 23
-                          limit: 30
+                          fontSize: 32
+                          limit: 22
                           through: true
       # ═══ 右栏：脚本·列表 ═══
       右栏底:
@@ -559,7 +562,7 @@ controls:
           x: "132 - var.offX + var.colW"
           y: 118
           texts: ~&8脚本 · 列表
-          fontSize: 28
+          fontSize: 36
           through: true
       右滑块:
         type: Texture
@@ -603,7 +606,7 @@ controls:
                 type: Canvas
                 attribute:
                   width: "var.colW - 40"
-                  height: "self.entry['lineCount'] * 46 + 130"
+                  height: "self.entry['lineCount'] * 50 + 140"
                   entryKey: 0.round()
                   entry: "var.groupRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -623,14 +626,14 @@ controls:
                       x: 16
                       y: 12
                       texts: "'&d' + self.parent.entry['label'] + ' &8· ' + self.parent.entry['lineCount'] + ' 行'"
-                      fontSize: 26
+                      fontSize: 32
                       through: true
                   行容器:
                     type: VStack
                     attribute:
                       point: ~top_left
                       x: 12
-                      y: 52
+                      y: 56
                       width: "var.colW - 80"
                       spaceBetween: 6
                     children:
@@ -638,7 +641,7 @@ controls:
                         type: Canvas
                         attribute:
                           width: "var.colW - 80"
-                          height: 40
+                          height: 44
                           entryKey: 0.round()
                           entry: "self.parent.parent.entry['lines'][self.entryKey]"
                           visible: "self.entry != none"
@@ -646,7 +649,10 @@ controls:
                           行底:
                             type: Texture
                             attribute:
-                              point: ~stretch_all
+                              x: 1
+                              y: 1
+                              width: "self.parent.width - 2"
+                              height: "self.parent.height - 2"
                               normal: ~14,11,26,225
                               shape: ~round_rect
                               radius: 6
@@ -661,16 +667,16 @@ controls:
                               point: ~middle_left
                               x: 10
                               texts: "'&f' + self.parent.entry"
-                              fontSize: 22
-                              limit: 42
+                              fontSize: 32
+                              limit: 26
                               through: true
                           改钮:
                             type: Canvas
                             attribute:
                               point: ~middle_right
-                              x: -104
-                              width: 44
-                              height: 30
+                              x: -110
+                              width: 52
+                              height: 36
                             action:
                               clickLeft: "var.editField = self.parent.parent.parent.entry['field']; var.editI = self.parent.entryKey; self.parent.parent.parent['追加框']['框']['输入框'].setContent(self.parent.entry)"
                             children:
@@ -687,15 +693,15 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~改
-                                  fontSize: 20
+                                  fontSize: 32
                                   through: true
                           删钮:
                             type: Canvas
                             attribute:
                               point: ~middle_right
                               x: -54
-                              width: 44
-                              height: 30
+                              width: 52
+                              height: 36
                             action:
                               clickLeft: "Packet.send(var.packetId, 'design_line_del', var.objKey, self.parent.parent.parent.entry['field'], self.parent.entryKey, var.actionToken)"
                             children:
@@ -712,7 +718,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~✕
-                                  fontSize: 20
+                                  fontSize: 32
                                   through: true
                   追加框:
                     type: Canvas
@@ -721,14 +727,14 @@ controls:
                       x: 12
                       y: -12
                       width: "var.colW - 80"
-                      height: 44
+                      height: 48
                     children:
                       框:
                         type: Canvas
                         attribute:
                           point: ~middle_left
                           width: "var.colW - 190"
-                          height: 38
+                          height: 44
                         children:
                           底:
                             type: Texture
@@ -742,11 +748,11 @@ controls:
                             type: TextBox
                             attribute:
                               x: 10
-                              y: 4
+                              y: 6
                               width: "var.colW - 210"
-                              height: 30
+                              height: 32
                               length: 200
-                              fontSize: 22
+                              fontSize: 32
                               emptyText: ~&8追加新行·回车提交（点行「改」改为编辑该行）
                             action:
                               enter: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.parent.parent.entry['field'], var.editI, self.getContent(), var.actionToken) : Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.parent.parent.entry['field'], self.getContent(), var.actionToken); var.editI = -1; var.editField = ''; self.setContent('')"
@@ -754,8 +760,8 @@ controls:
                         type: Canvas
                         attribute:
                           point: ~middle_right
-                          width: 76
-                          height: 38
+                          width: 80
+                          height: 44
                         action:
                           clickLeft: "var.editField == self.parent.parent.entry['field'] && var.editI >= 0 ? Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.parent.entry['field'], var.editI, self.parent['框']['输入框'].getContent(), var.actionToken) : Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.parent.entry['field'], self.parent['框']['输入框'].getContent(), var.actionToken); var.editI = -1; var.editField = ''; self.parent['框']['输入框'].setContent('')"
                         children:
@@ -772,15 +778,15 @@ controls:
                             attribute:
                               point: ~middle_center
                               texts: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? '&0改' : '&0加'"
-                              fontSize: 24
+                              fontSize: 36
                               through: true
       空组提示:
         type: Text
         attribute:
           point: ~middle_center
-          x: "var.colW / 2 - 960"
+          x: "var.colW * 1.5 - 852"
           y: 40
           texts: ~&8此对象无脚本/列表字段
-          fontSize: 26
+          fontSize: 36
           visible: "var.groupCount == 0"
           through: true

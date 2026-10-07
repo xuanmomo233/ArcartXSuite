@@ -340,5 +340,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f✕
-                  fontSize: 32
+                  fontSize: 36
                   through: true

@@ -342,7 +342,7 @@ controls:
                           x: 22
                           y: 58
                           texts: "'&7队长 &f' + self.parent.entry['leader'] + '  &7人数 &f' + self.parent.entry['size'].round() + '/' + self.parent.entry['max'].round() + '  &7目标 &e' + self.parent.entry['dungeonName'] + '  &7' + (self.parent.entry['joinMode'] == 'OPEN' ? '&a直接加入' : '&e需要审批')"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                       加入按钮:
                         type: Canvas
@@ -447,7 +447,7 @@ controls:
               height: 36
               length: 20
               emptyText: ~&7队伍名 / 队长名
-              fontSize: 32
+              fontSize: 36
             action:
               textChange: |-
                 var.searchText = self.getContent()
@@ -477,7 +477,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&0搜 索
-                  fontSize: 32
+                  fontSize: 36
                   through: true
           # 副本筛选
           筛选标题:
@@ -486,7 +486,7 @@ controls:
               x: "var.rightX + 28"
               y: 404
               texts: ~&7按目标副本筛选
-              fontSize: 32
+              fontSize: 36
               through: true
           全部标签:
             type: Canvas
@@ -514,7 +514,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: "var.dungeonFilter == '' ? '&0全部' : '&f全部'"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
           筛选列表:
             type: HStack
@@ -522,6 +522,7 @@ controls:
             attribute:
               x: "var.rightX + 140"
               y: 446
+              height: 40
               spaceBetween: 10
             children:
               筛选项:
@@ -551,7 +552,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.dungeonFilter == self.parent.entry['id'] ? '&0' + self.parent.entry['name'] : '&f' + self.parent.entry['name']"
-                      fontSize: 32
+                      fontSize: 36
                       limit: 5
                       through: true
           # 收到的邀请
@@ -608,7 +609,7 @@ controls:
                       point: ~middle_left
                       x: 16
                       texts: "'&f' + self.parent.entry['from'] + ' &7邀请你加入 &f' + self.parent.entry['partyName']"
-                      fontSize: 32
+                      fontSize: 36
                       limit: 22
                       through: true
                   拒绝按钮:
@@ -636,7 +637,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f拒绝
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   接受按钮:
                     type: Canvas
@@ -663,7 +664,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f接受
-                          fontSize: 32
+                          fontSize: 36
                           through: true
           # 我的操作区
           操作分隔线:
@@ -706,7 +707,7 @@ controls:
                   point: ~middle_left
                   x: 18
                   texts: "var.allowInvite ? '&f接收组队邀请  &a已开启' : '&f接收组队邀请  &8已关闭'"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
               开关圆点:
                 type: Texture

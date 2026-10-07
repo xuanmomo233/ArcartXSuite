@@ -44,11 +44,23 @@ ui:
       var.quest2 = none
       var.guideText = ''
       var.accent = '186,140,232,255'
+      // 视口换算：Adaptive(1920x1080) 等比缩放后，贴边面板需要 offX 补偿
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
@@ -56,7 +68,7 @@ controls:
         type: Canvas
         attribute:
           point: ~top_right
-          x: -24
+          x: "-24 + var.offX"
           y: 96
           width: 320
           height: 224
@@ -181,7 +193,7 @@ controls:
         type: Canvas
         attribute:
           point: ~top_right
-          x: -24
+          x: "-24 + var.offX"
           y: 336
           width: 320
           height: 160

@@ -153,7 +153,7 @@ controls:
           point: ~top_left
           x: "-var.offX"
           width: "var.viewW"
-          height: 88
+          height: 100
           normal: ~Frosted:28;14,11,26,240
           through: true
       标题色块:
@@ -161,7 +161,7 @@ controls:
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 24
+          y: 30
           width: 8
           height: 40
           normal: "186,140,232,255"
@@ -173,9 +173,9 @@ controls:
         attribute:
           point: ~top_left
           x: "68 - var.offX"
-          y: 26
+          y: 20
           texts: "'&f设计模式 &8· &6' + var.dungeonName"
-          fontSize: 40
+          fontSize: 48
           through: true
       副标题:
         type: Text
@@ -184,15 +184,15 @@ controls:
           x: "70 - var.offX"
           y: 66
           texts: ~&8Esc 关面板不退设计 · 杖左键空气或 /axs abyss design ui 重开 · 改动保存前仅内存生效
-          fontSize: 22
+          fontSize: 32
           through: true
       未保存角标:
         type: Canvas
         attribute:
           point: ~top_right
           x: "-200 - var.offX"
-          y: 22
-          width: 150
+          y: 28
+          width: 190
           height: 44
           visible: "var.dirty > 0"
         children:
@@ -209,7 +209,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: "'&f' + var.dirty + ' 处未保存'"
-              fontSize: 24
+              fontSize: 32
               through: true
       # ═══ 左栏：流程节点 ═══
       左栏底:
@@ -235,7 +235,7 @@ controls:
           x: "72 - var.offX"
           y: 124
           texts: ~&8流程节点
-          fontSize: 28
+          fontSize: 36
           through: true
       节点滑轨:
         type: Texture
@@ -328,7 +328,7 @@ controls:
                       point: ~middle_left
                       x: "self.parent.entry['depth'] == 0 ? 20 : 34"
                       texts: "self.parent.entry['depth'] == 0 ? '&f' + self.parent.entry['label'] : '&7└ ' + self.parent.entry['label']"
-                      fontSize: "self.parent.entry['depth'] == 0 ? 28 : 25"
+                      fontSize: "self.parent.entry['depth'] == 0 ? 36 : 32"
                       limit: 10
                       through: true
                   数:
@@ -337,7 +337,7 @@ controls:
                       point: ~middle_right
                       x: -12
                       texts: "'&8' + self.parent.entry['count'] + '项'"
-                      fontSize: 23
+                      fontSize: 32
                       through: true
       # ═══ 内容区 ═══
       内容底:
@@ -363,7 +363,7 @@ controls:
           x: "356 - var.offX"
           y: 122
           texts: "'&f对象 &8· ' + var.objCount + ' 项'"
-          fontSize: 30
+          fontSize: 36
           through: true
       添加钮:
         type: Canvas
@@ -371,7 +371,7 @@ controls:
           point: ~top_right
           x: "-392 - var.offX"
           y: 118
-          width: 150
+          width: 200
           height: 44
         action:
           clickLeft: "Packet.send(var.packetId, 'design_pick_open', var.selNode, var.actionToken)"
@@ -393,7 +393,7 @@ controls:
             attribute:
               point: ~middle_center
               texts: ~&0+ 添加对象
-              fontSize: 26
+              fontSize: 36
               through: true
       内容滑轨:
         type: Texture
@@ -457,7 +457,10 @@ controls:
                   底:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
+                      x: 2
+                      y: 2
+                      width: "self.parent.width - 4"
+                      height: "self.parent.height - 4"
                       normal: "self.parent.entry['dirty'] ? '42,32,60,225' : '26,22,44,215'"
                       shape: ~round_rect
                       radius: 8
@@ -483,7 +486,7 @@ controls:
                       point: ~middle_left
                       x: 18
                       texts: "self.parent.entry['icon']"
-                      fontSize: 30
+                      fontSize: 36
                       through: true
                   名:
                     type: Text
@@ -491,16 +494,16 @@ controls:
                       point: ~middle_left
                       x: 58
                       texts: "'&f' + self.parent.entry['id']"
-                      fontSize: 28
+                      fontSize: 36
                       limit: 11
                       through: true
                   徽标底:
                     type: Texture
                     attribute:
                       point: ~middle_left
-                      x: 380
-                      width: 92
-                      height: 32
+                      x: 390
+                      width: 140
+                      height: 34
                       normal: "self.parent.entry['kindColor'] + ',40'"
                       shape: ~round_rect
                       radius: 8
@@ -509,19 +512,19 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 392
+                      x: 402
                       texts: "self.parent.entry['kindLabel']"
-                      fontSize: 23
+                      fontSize: 32
                       limit: 4
                       through: true
                   摘要:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 490
+                      x: 546
                       texts: "'&7' + self.parent.entry['summary']"
-                      fontSize: 24
-                      limit: 28
+                      fontSize: 32
+                      limit: 24
                       through: true
                   传送钮:
                     type: Canvas
@@ -550,7 +553,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~传送
-                          fontSize: 24
+                          fontSize: 36
                           through: true
                   编辑钮:
                     type: Canvas
@@ -579,7 +582,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&0编辑
-                          fontSize: 24
+                          fontSize: 36
                           through: true
                   删除钮:
                     type: Canvas
@@ -608,16 +611,16 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~删除
-                          fontSize: 24
+                          fontSize: 36
                           through: true
       空提示:
         type: Text
         attribute:
           point: ~middle_center
-          x: "(var.contentW - 1920) / 2 + 156"
+          x: "var.contentW / 2 - 628"
           y: 60
           texts: ~&8此节点暂无对象 —— 点右上「+ 添加对象」创建
-          fontSize: 30
+          fontSize: 36
           visible: "var.objCount == 0"
           through: true
       # ═══ 底栏 ═══
@@ -646,7 +649,7 @@ controls:
               point: ~middle_left
               x: 8
               texts: ~&8世界内可自由建造 · 标记杖右键落点/编辑 · Shift+右键取消选区
-              fontSize: 22
+              fontSize: 32
               through: true
           保存钮:
             type: Canvas
@@ -675,14 +678,14 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f保存配置
-                  fontSize: 26
+                  fontSize: 36
                   through: true
           存世界钮:
             type: Canvas
             attribute:
               point: ~middle_right
               x: -340
-              width: 170
+              width: 190
               height: 46
             action:
               clickLeft: "Packet.send(var.packetId, 'design_save', 'world', var.actionToken)"
@@ -704,7 +707,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f配置+世界
-                  fontSize: 26
+                  fontSize: 36
                   through: true
           退出钮:
             type: Canvas
@@ -733,5 +736,5 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f退出
-                  fontSize: 26
+                  fontSize: 36
                   through: true

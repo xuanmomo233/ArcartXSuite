@@ -339,6 +339,7 @@ controls:
               point: ~middle_center
               x: 0
               y: 20
+              height: 560
               spaceBetween: 40
             children:
               成员卡:
@@ -405,7 +406,7 @@ controls:
                       point: ~bottom_center
                       y: -22
                       texts: "self.parent.entry['leader'] ? '&e队长' : (self.parent.entry['ready'] ? '&a已准备' : '&8未准备')"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
                   踢出按钮:
                     type: Canvas
@@ -434,7 +435,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f踢
-                          fontSize: 32
+                          fontSize: 36
                           through: true
           舞台提示:
             type: Text
@@ -443,7 +444,7 @@ controls:
               x: 0
               y: "0 - (var.viewH - 400) / 2 + 40"
               texts: ~&8等待队友加入… 点击底部「邀请玩家」召集小队
-              fontSize: 32
+              fontSize: 36
               visible: "var.memberCount.round() <= 1"
               through: true
           # ── 右栏 ──
@@ -515,7 +516,7 @@ controls:
               x: "var.rightX + 116"
               y: 384
               texts: "var.hasDungeon ? '&7难度 &e' + var.dungeon['difficulty'] + '  &7人数 &f' + var.dungeon['minPlayers'].round() + '-' + var.dungeon['maxPlayers'].round() + '  &7体力 &f' + var.dungeon['staminaCost'].round() : '&7队长点击右下角「更换副本」'"
-              fontSize: 32
+              fontSize: 36
               visible: "var.hasDungeon || var.isLeader"
               through: true
           副本信息行2:
@@ -524,7 +525,7 @@ controls:
               x: "var.rightX + 116"
               y: 426
               texts: "var.hasDungeon ? '&7时限 &f' + var.dungeon['timeLimit'].round() + 's  &7' + var.dungeon['desc0'] : '&7等待队长选择目标副本'"
-              fontSize: 32
+              fontSize: 36
               visible: "var.hasDungeon || !var.isLeader"
               through: true
           更换副本按钮:
@@ -558,7 +559,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&f更换副本
-                  fontSize: 32
+                  fontSize: 36
                   through: true
           # ── 右下：消息流 + 队聊 ──
           消息底:
@@ -644,10 +645,8 @@ controls:
                       entryKey: 0.round()
                       entry: var.feedRows[self.entryKey]
                       visible: self.entry != none
-                      width: "var.rightW - 72"
-                      height: 40
                       texts: "self.entry['sender'] == '' ? '&8· ' + self.entry['text'] : '&d' + self.entry['sender'] + ' &7: &f' + self.entry['text']"
-                      fontSize: 32
+                      fontSize: 36
                       limit: 34
                       through: true
           队聊框底:
@@ -673,7 +672,7 @@ controls:
               height: 34
               length: 48
               emptyText: ~&7说点什么…
-              fontSize: 32
+              fontSize: 36
             action:
               textChange: |-
                 var.chatMsg = self.getContent()
@@ -705,7 +704,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   texts: ~&0发送
-                  fontSize: 32
+                  fontSize: 36
                   through: true
           # ── 加入申请（仅队长可见，浮于消息区上方）──
           申请列表:
@@ -714,6 +713,7 @@ controls:
             attribute:
               x: "var.rightX + 22"
               y: "var.viewH - 642 - 120"
+              width: "var.rightW - 44"
               spaceBetween: 8
               visible: "var.isLeader && var.applicantCount.round() > 0"
             children:
@@ -744,7 +744,7 @@ controls:
                       point: ~middle_left
                       x: 14
                       texts: "'&e' + self.parent.entry['name'] + ' &7申请加入'"
-                      fontSize: 32
+                      fontSize: 36
                       limit: 16
                       through: true
                   拒按钮:
@@ -772,7 +772,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f拒
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   准按钮:
                     type: Canvas
@@ -799,7 +799,7 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: ~&f准
-                          fontSize: 32
+                          fontSize: 36
                           through: true
           # ── 底部操作栏 ──
           底栏:
@@ -808,6 +808,7 @@ controls:
               point: ~bottom_left
               x: 76
               y: -140
+              height: 56
               spaceBetween: 14
             children:
               邀请按钮:
@@ -917,7 +918,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.listed ? '&a已公开' : '&f公开到大厅'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               审批开关:
                 type: Canvas
@@ -947,7 +948,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: "var.joinMode == 'OPEN' ? '&f直接加入' : '&f需要审批'"
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               离开按钮:
                 type: Canvas
@@ -977,7 +978,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f离开队伍
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               解散按钮:
                 type: Canvas
@@ -1004,7 +1005,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f解散队伍
-                      fontSize: 32
+                      fontSize: 36
                       through: true
           # ═══════ 邀请副面板（居中模态）═══════
           邀请遮罩:
@@ -1056,7 +1057,7 @@ controls:
                   x: 30
                   y: 104
                   texts: ~&7同一玩家 60 秒内只能邀请一次；已关闭邀请的玩家不会出现在列表中
-                  fontSize: 32
+                  fontSize: 36
                   limit: 30
                   through: true
               关闭按钮:
@@ -1084,7 +1085,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               在线列表区:
                 type: Scroll
@@ -1125,7 +1126,7 @@ controls:
                               point: ~middle_left
                               x: 16
                               texts: "'&f' + self.parent.entry['name']"
-                              fontSize: 32
+                              fontSize: 36
                               through: true
                           邀请小按钮:
                             type: Canvas
@@ -1152,7 +1153,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~&0邀请
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
               无在线提示:
                 type: Text
@@ -1160,7 +1161,7 @@ controls:
                   x: 30
                   y: 300
                   texts: ~&8暂无可邀请的在线玩家
-                  fontSize: 32
+                  fontSize: 36
                   visible: "var.onlineCount.round() == 0"
                   through: true
               邀请输入底:
@@ -1186,7 +1187,7 @@ controls:
                   height: 36
                   length: 16
                   emptyText: ~&7输入玩家名邀请…
-                  fontSize: 32
+                  fontSize: 36
                 action:
                   textChange: |-
                     var.inviteName = self.getContent()
@@ -1217,7 +1218,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0邀 请
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               刷新列表按钮:
                 type: Canvas
@@ -1248,7 +1249,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f刷新列表
-                      fontSize: 32
+                      fontSize: 36
                       through: true
           # ═══════ 副本选择副面板（居中模态）═══════
           副本遮罩:
@@ -1310,7 +1311,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f✕
-                      fontSize: 32
+                      fontSize: 36
                       through: true
               副本列表区:
                 type: Scroll
@@ -1359,7 +1360,7 @@ controls:
                               point: ~middle_left
                               x: 16
                               texts: "'&f' + self.parent.entry['name'] + '  &8' + self.parent.entry['id']"
-                              fontSize: 32
+                              fontSize: 36
                               through: true
                           副本难度:
                             type: Text
@@ -1367,5 +1368,5 @@ controls:
                               point: ~middle_right
                               x: -16
                               texts: "'&e难度' + self.parent.entry['difficulty'].round()"
-                              fontSize: 32
+                              fontSize: 36
                               through: true

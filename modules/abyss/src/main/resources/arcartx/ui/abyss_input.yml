@@ -110,7 +110,7 @@ controls:
               point: ~top_center
               y: 118
               texts: "'&7' + var.hint"
-              fontSize: 34
+              fontSize: 36
               limit: 26
               through: true
           次数行:
@@ -119,34 +119,56 @@ controls:
               point: ~top_center
               y: 156
               texts: "'&8' + var.attemptsText"
-              fontSize: 30
+              fontSize: 36
               through: true
-          输入框:
-            type: TextBox
-            val: "输入框"
+          # §26：TextBox 渲染尺寸大于声明值——Canvas 承载布局 + Texture 承载视觉 + TextBox 留 padding
+          输入框容器:
+            type: Canvas
             attribute:
               point: ~top_center
-              y: 224
+              y: 218
               width: 420
-              height: 44
-              length: 16
-              fontSize: 34
-              background: ~10,8,20,220
-              cursorColor: ~186,140,232
-              emptyText: ~&8点击输入
-              canLoseFocus: true
-            action:
-              enter: |-
-                // 回车提交（等价点确认）
-                if(self.getContent() != '') {
-                  Packet.send(var.packetId, 'input_submit', var.puzzleId, self.getContent(), var.actionToken)
-                  Screen.close()
-                }
+              height: 56
+              through: true
+            children:
+              输入框底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~10,8,20,230
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: "self.parent.isHovered() ? '186,140,232,220' : '96,80,140,140'"
+              输入框:
+                type: TextBox
+                val: "输入框"
+                attribute:
+                  x: 12
+                  y: 8
+                  width: 396
+                  height: 40
+                  length: 16
+                  fontSize: 36
+                  cursorColor: ~186,140,232
+                  emptyText: ~&8点击输入
+                  canLoseFocus: true
+                action:
+                  enter: |-
+                    // 回车提交（等价点确认）
+                    if(self.getContent() != '') {
+                      Packet.send(var.packetId, 'input_submit', var.puzzleId, self.getContent(), var.actionToken)
+                      Screen.close()
+                    }
           操作区:
             type: HStack
             attribute:
               point: ~bottom_center
               y: -30
+              height: 48
               spaceBetween: 20
             children:
               确认按钮:
@@ -175,7 +197,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&0确 认
-                      fontSize: 34
+                      fontSize: 36
                       through: true
               取消按钮:
                 type: Canvas
@@ -203,5 +225,5 @@ controls:
                     attribute:
                       point: ~middle_center
                       texts: ~&f取 消
-                      fontSize: 34
+                      fontSize: 36
                       through: true
