@@ -78,7 +78,7 @@ public final class ObstacleManager {
             if (loc == null || mat == null) continue;
             Block block = loc.getBlock();
             rt.originalBlocks.putIfAbsent(block.getLocation(), block.getType());
-            block.setType(mat);
+            block.setType(mat, false);
         }
         fire(instance, new TriggerEvent(name, "on_create", o.onCreate(), null));
         return true;
@@ -90,7 +90,7 @@ public final class ObstacleManager {
         ObstacleRuntime rt = map.remove(name);
         if (rt == null) return false;
         for (Map.Entry<Location, Material> e : rt.originalBlocks.entrySet()) {
-            e.getKey().getBlock().setType(e.getValue());
+            e.getKey().getBlock().setType(e.getValue(), false);
         }
         fire(instance, new TriggerEvent(name, "on_delete", rt.config.onDelete(), null));
         return true;
@@ -184,7 +184,7 @@ public final class ObstacleManager {
         // 恢复原始方块（世界即将删除，其实不必恢复；但脚本/逻辑层依赖语义正确性）
         for (ObstacleRuntime rt : map.values()) {
             for (Map.Entry<Location, Material> e : rt.originalBlocks.entrySet()) {
-                try { e.getKey().getBlock().setType(e.getValue()); } catch (Throwable ignored) { }
+                try { e.getKey().getBlock().setType(e.getValue(), false); } catch (Throwable ignored) { }
             }
         }
     }

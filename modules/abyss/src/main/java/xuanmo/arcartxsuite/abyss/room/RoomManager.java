@@ -579,7 +579,7 @@ public final class RoomManager {
             if (mat == null) mat = Material.BARRIER;
             for (Block b : d.blocks) {
                 d.snapshot.putIfAbsent(b.getLocation(), b.getType());
-                b.setType(mat);
+                b.setType(mat, false);
             }
         }
     }
@@ -588,7 +588,7 @@ public final class RoomManager {
     private void unlockDoors(RoomRuntime room) {
         for (DoorRuntime d : room.doors) {
             for (Map.Entry<Location, Material> e : d.snapshot.entrySet()) {
-                try { e.getKey().getBlock().setType(e.getValue()); } catch (Throwable ignored) { }
+                try { e.getKey().getBlock().setType(e.getValue(), false); } catch (Throwable ignored) { }
             }
         }
     }

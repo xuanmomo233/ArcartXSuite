@@ -524,7 +524,7 @@ final class BuiltinActions {
             String[] parts = splitFirst(args, 1);
             Location loc = parseLoc(ctx, parts[0]);
             Material mat = Material.matchMaterial(ctx.replace(rest(parts, 1)).toUpperCase());
-            if (loc != null && mat != null) loc.getBlock().setType(mat);
+            if (loc != null && mat != null) loc.getBlock().setType(mat, false);
         });
         reg.register("fillblocks", (ctx, args, s) -> {
             // fillblocks <x1,y1,z1> <x2,y2,z2> <material>
@@ -544,10 +544,12 @@ final class BuiltinActions {
                     + volume + " 块（上限 131072）");
                 return;
             }
+            // applyPhysics=false：跳过邻接/红石更新——否则每块都触发 ItemsAdder 等
+            // 插件的 BlockPhysics 监听器（查盘级联），几万块填充会卡死主线程
             for (int x = x1; x <= x2; x++)
                 for (int y = y1; y <= y2; y++)
                     for (int z = z1; z <= z2; z++)
-                        a.getWorld().getBlockAt(x, y, z).setType(mat);
+                        a.getWorld().getBlockAt(x, y, z).setType(mat, false);
         });
 
         // ═══ NPC ═══
