@@ -239,7 +239,7 @@ rooms:
     exit: ["304,61,9", "306,64,14"]
     on-enter:
       - "title @all 10 30 10 &b尘封机关|&7按正确顺序扳动四根拉杆"
-      - "message @all &7墙上的刻痕写着：&e三 → 一 → 四 → 二"
+      - "message @all &7墙上的刻痕写着：&b青 → &c红 → &a绿 → &e黄 &7（看拉杆上方的彩窗）"
       - "sound @all BLOCK_NOTE_BLOCK_CHIME 1 1"
       - "guide_point f2_pzl_pt 291,62,7 2 &b拉杆台座·按序扳动"
 

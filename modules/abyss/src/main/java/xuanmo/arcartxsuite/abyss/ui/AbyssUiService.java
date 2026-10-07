@@ -108,11 +108,10 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             row.put("name", t.name());
             row.put("difficulty", t.difficulty());
             row.put("icon", t.icon());
-            // 图标 itemJson（Slot.setItemIcon 渲染）
+            // 图标 itemJson（Slot.setItemIcon 渲染；桥缺席时 itemJsonOf 兜底基础图标）
             org.bukkit.Material iconMat = org.bukkit.Material.matchMaterial(t.icon());
-            row.put("iconJson", iconMat != null && itemBridge != null
-                ? itemBridge.itemToJson(new org.bukkit.inventory.ItemStack(iconMat)).orElse("")
-                : "");
+            row.put("iconJson", iconMat != null
+                ? itemJsonOf(new org.bukkit.inventory.ItemStack(iconMat)) : "");
             // 描述按行下发（ARIA texts 多行需逐行表达式，\n 不会渲染换行）
             List<String> dl = t.description();
             row.put("desc0", dl.size() > 0 ? dl.get(0) : "");
@@ -244,14 +243,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             row.put("id", opt.id());
             row.put("name", opt.name());
             row.put("icon", opt.icon());
-            // 物品图标 JSON（材质名 → itemJson；无 icon/桥不可用时下发空串，UI 隐藏槽位）
+            // 物品图标 JSON（材质名 → itemJson；桥缺席时 itemJsonOf 兜底基础图标）
             String iconJson = "";
-            if (!opt.icon().isBlank() && itemBridge != null) {
+            if (!opt.icon().isBlank()) {
                 try {
                     org.bukkit.Material mat = org.bukkit.Material.matchMaterial(opt.icon());
                     if (mat != null) {
-                        iconJson = itemBridge.itemToJson(
-                            new org.bukkit.inventory.ItemStack(mat)).orElse("");
+                        iconJson = itemJsonOf(new org.bukkit.inventory.ItemStack(mat));
                     }
                 } catch (Throwable ignored) { }
             }
@@ -385,9 +383,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             d.put("name", t.name());
             d.put("difficulty", t.difficulty());
             org.bukkit.Material iconMat = org.bukkit.Material.matchMaterial(t.icon());
-            d.put("iconJson", iconMat != null && itemBridge != null
-                ? itemBridge.itemToJson(new org.bukkit.inventory.ItemStack(iconMat)).orElse("")
-                : "");
+            d.put("iconJson", iconMat != null
+                ? itemJsonOf(new org.bukkit.inventory.ItemStack(iconMat)) : "");
             List<String> dl = t.description();
             d.put("desc0", dl.isEmpty() ? "" : dl.get(0));
             var req = t.requirements();
@@ -538,7 +535,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             return;
         }
         List<ItemStack> items = service.rewards().rollChestOptions(chest,
-            Math.min(27, chest.rows() * 9));
+            Math.min(9, chest.rows() * 9)); // UI 固定 9 槽，多 roll 的看不见却会被领取
         pendingChests.put(player.getUniqueId(), items);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -547,11 +544,27 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("chestTitle", chest.title());
         payload.put("itemCount", items.size());
         for (int i = 0; i < items.size(); i++) {
-            payload.put("itemJson" + i, itemBridge != null
-                ? itemBridge.itemToJson(items.get(i)).orElse("") : "");
+            payload.put("itemJson" + i, itemJsonOf(items.get(i)));
         }
         packetBridge.sendPacket(player, chestUi(), "init", payload);
         packetBridge.openUiUnsafe(player, chestUi());
+    }
+
+    /**
+     * ItemStack → itemJson（Slot.setItemIcon 渲染格式）。
+     * itemStackBridge 缺席/序列化失败时兜底拼基础 NBT——只丢自定义 meta，
+     * 材质图标一定渲染，避免槽位整体隐藏成空面板。
+     */
+    private String itemJsonOf(ItemStack it) {
+        if (it == null) return "";
+        if (itemBridge != null) {
+            try {
+                String j = itemBridge.itemToJson(it).orElse("");
+                if (!j.isEmpty()) return j;
+            } catch (Throwable ignored) { }
+        }
+        return "{\"id\":\"minecraft:" + it.getType().name().toLowerCase(java.util.Locale.ROOT)
+            + "\",\"Count\":" + it.getAmount() + "b}";
     }
 
     // ═══ 设计模式 ═══

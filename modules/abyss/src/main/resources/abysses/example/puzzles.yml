@@ -4,7 +4,8 @@
 lever_gate:
   name: "尘封闸门"
   type: sequence
-  # interacts.yml 拉杆点名顺序：三→一→四→二（刻在房间提示里）
+  # 拉杆点名顺序 = 彩窗颜色序：青(lever_3) → 红(lever_1) → 绿(lever_4) → 黄(lever_2)
+  # 颜色标识由 world-init 在拉杆头顶生成（scripts.yml f2_puzzle 段）
   steps: [lever_3, lever_1, lever_4, lever_2]
   reset-on-miss: true                # 点错顺序 → 清空进度重来
   miss-limit: 5                      # 累计错序上限；超限 on-fail 并锁定

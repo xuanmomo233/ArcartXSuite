@@ -237,12 +237,16 @@ world-init:
   - "fillblocks 283,61,7 299,61,7 SPRUCE_PLANKS"
   - "setblock 285,62,7 LEVER"
   - "setblock 285,61,5 REDSTONE_WIRE"
+  - "setblock 285,64,7 RED_STAINED_GLASS"      # lever_1 标识：红
   - "setblock 289,62,7 LEVER"
   - "setblock 289,61,5 REDSTONE_WIRE"
+  - "setblock 289,64,7 YELLOW_STAINED_GLASS"   # lever_2 标识：黄
   - "setblock 293,62,7 LEVER"
   - "setblock 293,61,5 REDSTONE_WIRE"
+  - "setblock 293,64,7 CYAN_STAINED_GLASS"     # lever_3 标识：青
   - "setblock 297,62,7 LEVER"
   - "setblock 297,61,5 REDSTONE_WIRE"
+  - "setblock 297,64,7 LIME_STAINED_GLASS"     # lever_4 标识：绿
   - "fillblocks 303,61,9 303,64,14 IRON_BARS"
   - "fillblocks 303,61,8 303,66,8 DEEPSLATE_BRICK_WALL"
   - "fillblocks 303,61,15 303,66,15 DEEPSLATE_BRICK_WALL"
