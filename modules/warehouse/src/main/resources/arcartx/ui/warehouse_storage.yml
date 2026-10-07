@@ -1307,18 +1307,6 @@ controls:
                   stroke:
                     width: 3
                     color: "self.isHovered() ? '220,230,240,255' : (self.entry != none && self.entry['locked'] == true ? '232,180,90,255' : (self.entryKey == var.selectedBackpackSlot ? '160,170,180,255' : '100,110,120,220'))"
-                children:
-                  锁定标记:
-                    type: Texture
-                    attribute:
-                      x: 48
-                      y: 4
-                      width: 16
-                      height: 16
-                      normal: ~232,180,90,245
-                      shape: ~circle
-                      visible: "self.parent.entry != none && self.parent.entry['locked'] == true"
-                      through: true
 
           # ── 底部密码栏（背包网格下方，独立背景）──────────────
           底部密码栏:

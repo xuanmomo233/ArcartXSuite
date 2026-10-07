@@ -40,7 +40,7 @@ requirements:
   party-required: false
   min-level: 0
   max-level: 0
-  cooldown: 300             # 通关冷却 5 分钟
+  cooldown: 10             # 通关冷却 10 秒
   money-cost: 0
   currency-id: "money"
   stamina-cost: 10
