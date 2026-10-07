@@ -98,7 +98,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     .obsoletePath("warehouses.personal.default-level")
                     .obsoletePath("warehouses.personal.levels")
                 .build())
-            .currentVersion(4)
+            .currentVersion(5)
             .validations(List.of(
                     // storage.shared 必须是布尔值
                     ValidationRule.required("storage.shared", ValueType.BOOLEAN),
@@ -111,6 +111,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                     // flush-interval-ticks 必须为正
                     ValidationRule.of("settings.flush-interval-ticks", ValueType.INT)
                         .withRange(1, null),
+                    // 存入往返校验级别枚举串
+                    ValidationRule.of("settings.verify-on-deposit", ValueType.STRING),
+                    // 物品序列化字节上限，0 = 不限制
+                    ValidationRule.of("settings.max-item-bytes", ValueType.INT)
+                        .withRange(0, null),
                     // 二级密码长度限制
                     ValidationRule.required("security.min-length", ValueType.INT)
                         .withRange(1, 32),

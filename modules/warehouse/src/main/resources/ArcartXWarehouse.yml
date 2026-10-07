@@ -1,4 +1,4 @@
-config-version: 4
+config-version: 5
 # AXS Warehouse AXUI
 # 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
 # 重载: /axs warehouse reload
@@ -10,6 +10,17 @@ settings:
   flush-interval-ticks: 100  # 数据落库间隔（ticks，20 = 1 秒）
   # 共享仓库转让确认等待时长（小时），<=0 表示永不过期。
   transfer-confirm-expire-hours: 24
+  # 存入前往返校验级别：off / meta / all。
+  #   off  — 不校验（最快；序列化能写但反序列化会损坏的物品可能在取出时才暴露问题）
+  #   meta — 校验全部带 Meta 的物品（默认，覆盖潜影盒/附魔/成书/mod 物品等全部风险项）
+  #   all  — 连无 Meta 的纯物品也校验（几乎无额外收益，略增 CPU）
+  # 混合端（Mohist/Arclight/Magma 等）强烈建议保持 meta 或 all：
+  # 往返验证失败的物品会被拒绝存入（留在玩家背包），而不是存进去后取回时数据损坏。
+  verify-on-deposit: "meta"
+  # 单个物品序列化字节数上限（原始字节，非 Base64 后长度；0 = 不限制）。
+  # 防御病态嵌套容器（潜影盒套潜影盒装满成书等）写爆 MySQL max_allowed_packet。
+  # 默认 4MB；MySQL max_allowed_packet 较小时可再调低。
+  max-item-bytes: 4194304
 
 # 跨服共享仓库编辑锁；MySQL 共享库 + 多子服时建议开启。连接参数见宿主 config.yml cross-server 节。
 cross-server:
@@ -324,6 +335,13 @@ showcase:
 
 # ─── 黑名单 ────────────────────────────────────────
 # 匹配任意一条规则的物品将无法存入仓库。
+#
+# 【混合端服主注意】Mohist/Arclight/Magma 等 Forge+Bukkit 混合端上，部分 mod 物品的
+# 复杂嵌套 NBT 在 Bukkit 序列化回读时可能被降级为字符串（服务端会输出
+# "[ItemSerializer] 物品反序列化发生有损降级" 警告）。开启 settings.verify-on-deposit
+# 可以让这类物品存入时被拒绝；如果你知道某 mod 的物品必然损坏（如把内容物存在
+# mod 自己的外部数据库、NBT 里只有引用 ID），建议直接用 material-prefixes 拉黑整个
+# 命名空间，例如：material-prefixes: ["somemod:"]
 blacklist:
   # 按原版 Material ID 拦截，例如 ["BEDROCK", "COMMAND_BLOCK"]。
   material-ids: []

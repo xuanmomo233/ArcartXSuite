@@ -4,11 +4,15 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import org.bukkit.configuration.serialization.ConfigurationSerialization;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -20,10 +24,15 @@ import org.bukkit.util.io.BukkitObjectOutputStream;
  * <p>
  * 反序列化失败时降级到兼容路径：解包 {@code Wrapper} 旧对象、递归清洗 ItemMeta 中
  * 复杂 NBT 值（转为 SNBT 字符串），以适配拒绝嵌套 NBT 的平台。
+ * <p>
+ * 注意：兼容路径是有损的——被转为 SNBT 字符串的 NBT 值反序列化后是 String 而非
+ * 复合标签，依赖该 NBT 的 mod/插件可能无法识别。每次实际发生降级时都会输出
+ * 警告日志（含物品数据哈希摘要，便于与数据库记录对照定位）。
  */
 public final class ItemSerializer {
 
     private static final String WRAPPER_CLASS_NAME = "org.bukkit.util.io.Wrapper";
+    private static final Logger LOGGER = Logger.getLogger("ArcartX-Suite");
 
     private ItemSerializer() {
     }
@@ -85,22 +94,29 @@ public final class ItemSerializer {
                 return itemStack;
             }
             if (object instanceof Map<?, ?> map) {
-                return deserializeItemStackMap(asStringObjectMap(map));
+                boolean[] degraded = new boolean[1];
+                ItemStack itemStack = deserializeItemStackMap(asStringObjectMap(map), degraded);
+                if (degraded[0]) {
+                    // 走 SNBT 降级意味着部分 NBT 已变成字符串而非复合标签，取出后 mod/插件可能无法识别。
+                    LOGGER.warning("[ItemSerializer] 物品反序列化发生有损降级：部分嵌套 NBT 已转为 SNBT 字符串，"
+                        + "依赖原始 NBT 的 mod/插件数据可能无法读取。物品数据摘要 sha256=" + shortHash(bytes));
+                }
+                return itemStack;
             }
             return null;
         }
     }
 
-    private static ItemStack deserializeItemStackMap(Map<String, Object> map) {
+    private static ItemStack deserializeItemStackMap(Map<String, Object> map, boolean[] degraded) {
         Map<String, Object> copy = new LinkedHashMap<>(map);
         Object rawMeta = copy.get("meta");
         if (rawMeta instanceof Map<?, ?> metaMap) {
-            copy.put("meta", deserializeItemMetaMap(asStringObjectMap(metaMap)));
+            copy.put("meta", deserializeItemMetaMap(asStringObjectMap(metaMap), degraded));
         }
         return ItemStack.deserialize(copy);
     }
 
-    private static ItemMeta deserializeItemMetaMap(Map<String, Object> map) {
+    private static ItemMeta deserializeItemMetaMap(Map<String, Object> map, boolean[] degraded) {
         try {
             Object direct = ConfigurationSerialization.deserializeObject(map);
             if (direct instanceof ItemMeta itemMeta) {
@@ -110,7 +126,7 @@ public final class ItemSerializer {
             // Mohist may reject nested NBT-shaped values that Spigot accepts.
         }
 
-        for (Map<String, Object> candidate : List.of(sanitizeMetaMap(map, false), sanitizeMetaMap(map, true))) {
+        for (Map<String, Object> candidate : List.of(sanitizeMetaMap(map, false, degraded), sanitizeMetaMap(map, true, degraded))) {
             try {
                 Object fallback = ConfigurationSerialization.deserializeObject(candidate);
                 if (fallback instanceof ItemMeta itemMeta) {
@@ -123,30 +139,31 @@ public final class ItemSerializer {
         throw new IllegalStateException("Unable to deserialize item meta.");
     }
 
-    private static Map<String, Object> sanitizeMetaMap(Map<String, Object> map, boolean aggressive) {
+    private static Map<String, Object> sanitizeMetaMap(Map<String, Object> map, boolean aggressive, boolean[] degraded) {
         Map<String, Object> sanitized = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : map.entrySet()) {
-            sanitized.put(entry.getKey(), sanitizeMetaValue(entry.getKey(), entry.getValue(), aggressive));
+            sanitized.put(entry.getKey(), sanitizeMetaValue(entry.getKey(), entry.getValue(), aggressive, degraded));
         }
         return sanitized;
     }
 
-    private static Object sanitizeMetaValue(String key, Object value, boolean aggressive) {
+    private static Object sanitizeMetaValue(String key, Object value, boolean aggressive, boolean[] degraded) {
         if (shouldConvertToSnbt(key, value, aggressive)) {
+            degraded[0] = true;
             return toSnbt(value);
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> copy = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String nestedKey = String.valueOf(entry.getKey());
-                copy.put(nestedKey, sanitizeMetaValue(nestedKey, entry.getValue(), aggressive));
+                copy.put(nestedKey, sanitizeMetaValue(nestedKey, entry.getValue(), aggressive, degraded));
             }
             return copy;
         }
         if (value instanceof List<?> list) {
             List<Object> copy = new ArrayList<>(list.size());
             for (Object element : list) {
-                copy.add(sanitizeMetaValue(key, element, aggressive));
+                copy.add(sanitizeMetaValue(key, element, aggressive, degraded));
             }
             return copy;
         }
@@ -279,7 +296,37 @@ public final class ItemSerializer {
         if (value instanceof Boolean booleanValue) {
             return booleanValue ? "1b" : "0b";
         }
+        if (value.getClass().isArray()) {
+            return arrayToSnbt(value);
+        }
+        if (value instanceof Character character) {
+            return '"' + escapeString(character.toString()) + '"';
+        }
         return String.valueOf(value);
+    }
+
+    /**
+     * 数组转 SNBT：byte[]/int[]/long[] 使用 SNBT 类型化数组语法（[B;…]/[I;…]/[L;…]），
+     * 其他数组退化为普通列表逐元素转换。修复旧实现中数组走 {@code String.valueOf}
+     * 输出 "[B@哈希码" 导致原始数据彻底丢失的问题。
+     */
+    private static String arrayToSnbt(Object array) {
+        Class<?> componentType = array.getClass().getComponentType();
+        String prefix = switch (componentType == null ? "" : componentType.getName()) {
+            case "byte", "java.lang.Byte" -> "[B;";
+            case "int", "java.lang.Integer" -> "[I;";
+            case "long", "java.lang.Long" -> "[L;";
+            default -> "[";
+        };
+        int length = Array.getLength(array);
+        StringBuilder builder = new StringBuilder(prefix);
+        for (int index = 0; index < length; index++) {
+            if (index > 0) {
+                builder.append(',');
+            }
+            builder.append(toSnbt(Array.get(array, index)));
+        }
+        return builder.append(']').toString();
     }
 
     private static String escapeKey(String value) {
@@ -295,5 +342,20 @@ public final class ItemSerializer {
     private static String stripTrailingZero(Number value) {
         String text = String.valueOf(value);
         return text.endsWith(".0") ? text.substring(0, text.length() - 2) : text;
+    }
+
+    /** 物品字节摘要（sha256 前 12 位十六进制），用于日志与库内 item_hash 对照。 */
+    private static String shortHash(byte[] bytes) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder builder = new StringBuilder(12);
+            for (int i = 0; i < 6 && i < digest.length; i++) {
+                builder.append(Character.forDigit((digest[i] >> 4) & 0xF, 16));
+                builder.append(Character.forDigit(digest[i] & 0xF, 16));
+            }
+            return builder.toString();
+        } catch (GeneralSecurityException exception) {
+            return "unavailable";
+        }
     }
 }

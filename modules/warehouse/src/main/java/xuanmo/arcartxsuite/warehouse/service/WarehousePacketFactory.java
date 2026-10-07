@@ -97,7 +97,7 @@ final class WarehousePacketFactory {
         packet.put("page", state.page());
         packet.put("pageTotal", pageTotal);
         packet.put("pageText", state.page() + "/" + pageTotal);
-        packet.put("usedSlots", service.loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).size());
+        packet.put("usedSlots", service.countSlots(state.ownerType(), state.ownerId(), state.warehouseId()));
         packet.put("matchedSlots", visibleSlots.size());
         putCapacityFields(player, state, packet);
         packet.put("readOnly", !service.canModifyCurrent(player, state));
@@ -235,7 +235,7 @@ final class WarehousePacketFactory {
         row.put("category", item.categoryId());
         row.put("material", item.materialId());
         row.put("updated", WarehouseService.TIME_FORMATTER.format(Instant.ofEpochMilli(item.updatedAt())));
-        row.put("lore", WarehouseTexts.storedLoreLines(item));
+        row.put("lore", service.loreLinesFor(item));
         return row;
     }
 
@@ -433,6 +433,7 @@ final class WarehousePacketFactory {
             row.put("material", item.getType().name());
             row.put("itemJson", service.itemJson(item, item.getAmount()));
             row.put("lore", WarehouseTexts.loreLines(item));
+            row.put("locked", service.isItemLocked(item));
             result.put(Integer.toString(raw), row);
         }
         return result;
@@ -450,6 +451,7 @@ final class WarehousePacketFactory {
         row.put("material", "");
         row.put("itemJson", "");
         row.put("lore", List.of());
+        row.put("locked", false);
         return row;
     }
 
@@ -599,7 +601,7 @@ final class WarehousePacketFactory {
     void putCapacityFields(Player player, WarehouseService.ViewState state, Map<String, Object> packet) throws Exception {
         String ownerType = state.ownerType();
         long capacity = currentWarehouseCapacity(player, ownerType, state.ownerId(), state.warehouseId());
-        long used = service.loadSlots(ownerType, state.ownerId(), state.warehouseId()).size();
+        long used = service.countSlots(ownerType, state.ownerId(), state.warehouseId());
         packet.put("capacity", capacity);
         packet.put("used", used);
         packet.put("capacityText", used + "/" + capacity);
@@ -669,13 +671,24 @@ final class WarehousePacketFactory {
                 definition.maxSlots() - unlocked));
     }
 
+    /**
+     * 槽位展示 JSON：优先使用存入时冗余写入的 item_json（零反序列化开销）；
+     * 历史遗留空值时才回退到反序列化 item_data 重新生成。
+     */
     String displayItemJson(SlotItemRecord item) {
+        String stored = item.itemJson();
+        if (stored != null && !stored.isBlank()) {
+            return stored;
+        }
+        if (item.itemData() == null || item.itemData().isBlank()) {
+            return stored == null ? "" : stored;
+        }
         try {
             ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
             String json = service.itemJson(stack, 1L);
-            return json.isBlank() ? item.itemJson() : json;
+            return json.isBlank() ? (stored == null ? "" : stored) : json;
         } catch (RuntimeException exception) {
-            return item.itemJson();
+            return stored == null ? "" : stored;
         }
     }
 

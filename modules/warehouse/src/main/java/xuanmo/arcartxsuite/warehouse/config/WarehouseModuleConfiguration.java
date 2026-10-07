@@ -26,6 +26,8 @@ public record WarehouseModuleConfiguration(
     boolean debug,
     long flushIntervalTicks,
     long transferConfirmExpireHours,
+    VerifyMode verifyOnDeposit,
+    long maxItemBytes,
     UiConfiguration ui,
     StorageConfiguration storage,
     PickupConfiguration pickup,
@@ -56,6 +58,8 @@ public record WarehouseModuleConfiguration(
         boolean debug = configuration.getBoolean("settings.debug", false);
         long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
         long transferConfirmExpireHours = configuration.getLong("settings.transfer-confirm-expire-hours", 24L);
+        VerifyMode verifyOnDeposit = VerifyMode.parse(configuration.getString("settings.verify-on-deposit", "meta"), logger);
+        long maxItemBytes = Math.max(0L, configuration.getLong("settings.max-item-bytes", 4194304L));
 
         UiConfiguration ui = new UiConfiguration(
             readString(configuration, "ui.ui-id", "AXS:warehouse_storage"),
@@ -110,6 +114,8 @@ public record WarehouseModuleConfiguration(
             debug,
             flushIntervalTicks,
             transferConfirmExpireHours,
+            verifyOnDeposit,
+            maxItemBytes,
             ui,
             storage,
             pickup,
@@ -129,6 +135,44 @@ public record WarehouseModuleConfiguration(
     public record ShowcaseConfiguration(boolean enabled, int cooldownSeconds, int maxItems, String cardId, String permission) {
         public boolean useCard() {
             return cardId != null && !cardId.isBlank();
+        }
+    }
+
+    /**
+     * 存入前往返校验级别（settings.verify-on-deposit）：
+     * <ul>
+     *   <li>{@code OFF} — 不做校验（最快，损坏物品可能入库后取出时才发现）</li>
+     *   <li>{@code META} — 校验所有带 ItemMeta 的物品（默认，覆盖潜影盒/附魔/mod 物品等全部风险项）</li>
+     *   <li>{@code ALL} — 校验全部物品，包括无 Meta 的纯物品</li>
+     * </ul>
+     */
+    public enum VerifyMode {
+        OFF,
+        META,
+        ALL;
+
+        static VerifyMode parse(String raw, Logger logger) {
+            String normalized = normalizeId(raw);
+            return switch (normalized) {
+                case "off", "false", "none" -> OFF;
+                case "all", "true" -> ALL;
+                case "meta", "" -> META;
+                default -> {
+                    if (logger != null) {
+                        logger.warning("未知 settings.verify-on-deposit 值 '" + raw + "'，已回退为 meta");
+                    }
+                    yield META;
+                }
+            };
+        }
+
+        /** @return 是否需要对该物品执行序列化→反序列化往返校验 */
+        public boolean covers(org.bukkit.inventory.ItemStack item) {
+            return switch (this) {
+                case OFF -> false;
+                case ALL -> true;
+                case META -> item != null && item.hasItemMeta();
+            };
         }
     }
 

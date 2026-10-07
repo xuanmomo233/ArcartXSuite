@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,8 +15,6 @@ import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombi
 import org.bukkit.ChatColor;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import xuanmo.arcartxsuite.api.util.ItemSerializer;
-import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SlotItemRecord;
 
 /**
  * 仓库模块纯静态工具集：数值解析、字符串规整、物品描述/lore、包摘要、SHA-256、拼音搜索 token 等无状态辅助方法。
@@ -36,13 +33,31 @@ final class WarehouseTexts {
     }
 
 
-    static List<String> storedLoreLines(SlotItemRecord item) {
-        try {
-            ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-            return loreLines(stack);
-        } catch (RuntimeException exception) {
-            return List.of("&f物品描述读取失败。");
+    /**
+     * 提取物品展示用 lore 文本：与 {@link #loreLines} 相同的 k!→§ 转换，
+     * 行间以 {@code \n} 连接；无 lore 返回空串。供存入时冗余写入 lore_text 列。
+     */
+    static String loreText(ItemStack itemStack) {
+        ItemMeta meta = itemStack == null ? null : itemStack.getItemMeta();
+        if (meta == null || !meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty()) {
+            return "";
         }
+        StringBuilder builder = new StringBuilder();
+        for (String line : meta.getLore()) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(line == null ? "" : line.replace("k!", "§"));
+        }
+        return builder.toString();
+    }
+
+    /** 已存储 lore_text 还原为展示行列表；空串返回默认占位提示。 */
+    static List<String> loreLinesFromStored(String loreText) {
+        if (loreText == null || loreText.isEmpty()) {
+            return List.of("&f这个物品没有额外描述。");
+        }
+        return List.of(loreText.split("\n", -1));
     }
 
 
@@ -289,5 +304,17 @@ final class WarehouseTexts {
     static String crop(String value, int maxLength) {
         String safe = safe(value);
         return safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
+    }
+
+
+    /** 字节数格式化为可读大小（如 "3.5 MB"），用于物品超限提示。 */
+    static String formatByteSize(long bytes) {
+        if (bytes < 1024L) {
+            return bytes + " B";
+        }
+        if (bytes < 1024L * 1024L) {
+            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+        }
+        return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576.0);
     }
 }

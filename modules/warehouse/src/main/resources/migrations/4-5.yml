@@ -1,0 +1,11 @@
+from-version: 4
+to-version: 5
+description: "settings 节新增 verify-on-deposit（存入往返校验）与 max-item-bytes（物品字节上限）"
+
+operations:
+  - type: set-if-missing
+    path: "settings.verify-on-deposit"
+    value: "meta"
+  - type: set-if-missing
+    path: "settings.max-item-bytes"
+    value: 4194304

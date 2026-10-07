@@ -19,13 +19,13 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
  * 仓库模块的管理员命令处理器。
  * <p>
  * 实现 {@link ModuleCommandHandler}，在 {@code /axs warehouse ...} 下注册管理员子命令，
- * 支持 help / status / reload / open / info / view / delete / bank 等动作。
+ * 支持 help / status / reload / open / info / view / delete / bank / export 等动作。
  * 所有动作均要求 {@code arcartxsuite.warehouse.admin} 权限。
  * 关联模块：warehouse。
  */
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "open", "info", "view", "delete", "bank");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "info", "view", "delete", "bank", "export");
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
@@ -74,6 +74,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
             case "view" -> handleView(sender, args);
             case "delete" -> handleDelete(sender, args);
             case "bank" -> handleBank(sender, args);
+            case "export" -> handleExport(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -89,14 +90,14 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
-        if (args.length == 3 && List.of("open", "info", "view", "delete", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (args.length == 3 && List.of("open", "info", "view", "delete", "bank", "export").contains(args[1].toLowerCase(Locale.ROOT))) {
             return null; // player names
         }
         WarehouseService svc = serviceProvider.get();
         if (args.length == 4) {
             String action = args[1].toLowerCase(Locale.ROOT);
             if ("bank".equalsIgnoreCase(action) && svc != null) return filter(new ArrayList<>(svc.currencyIds()), args[3]);
-            if ("delete".equalsIgnoreCase(action) || "view".equalsIgnoreCase(action)) {
+            if ("delete".equalsIgnoreCase(action) || "view".equalsIgnoreCase(action) || "export".equalsIgnoreCase(action)) {
                 org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
                 if (target != null && svc != null) return filter(svc.personalWarehouseIds(target.getUniqueId()), args[3]);
                 return List.of();
@@ -118,6 +119,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.view", cmd));
         sender.sendMessage(fullMsg("help.delete", cmd));
         sender.sendMessage(fullMsg("help.bank", cmd));
+        sender.sendMessage(fullMsg("help.export", cmd));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -196,6 +198,35 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         if (online != null) return online;
         org.bukkit.OfflinePlayer offline = Bukkit.getOfflinePlayer(name);
         return offline.hasPlayedBefore() ? offline : null;
+    }
+
+    /**
+     * 导出槽位物品原始序列化数据到 exports/warehouse 目录（损坏物品人工恢复用）。
+     */
+    private void handleExport(CommandSender sender, String[] args) {
+        WarehouseService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        if (args.length < 5) {
+            sender.sendMessage(fullMsg("admin.export.usage"));
+            return;
+        }
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        int slot;
+        try {
+            slot = Integer.parseInt(args[4].trim());
+        } catch (NumberFormatException exception) {
+            sender.sendMessage(fullMsg("admin.export.invalid-slot", args[4]));
+            return;
+        }
+        if (slot < 0) {
+            sender.sendMessage(fullMsg("admin.export.invalid-slot", args[4]));
+            return;
+        }
+        String prefix = messages != null ? messages.get("prefix") : "";
+        svc.exportSlotItem(target.getUniqueId(), args[3], slot,
+            text -> sender.sendMessage(prefix + ChatColor.GREEN + text),
+            error -> sender.sendMessage(prefix + ChatColor.RED + error));
     }
 
     private void handleBank(CommandSender sender, String[] args) {

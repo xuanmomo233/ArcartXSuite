@@ -3,9 +3,9 @@ package xuanmo.arcartxsuite.warehouse.service;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.math.RoundingMode;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -171,6 +171,9 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     private String manageRegisteredUiId = "";
     private String bankRegisteredUiId = "";
 
+    /** 物品级锁定标记的 PDC key：写入物品 NBT，随物品移动/掉落/交易持久保留。 */
+    private final NamespacedKey warehouseLockKey;
+
     public WarehouseService(
         JavaPlugin plugin,
         Logger logger,
@@ -232,6 +235,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         this.crossServerChannelConfig = crossServerChannelConfig == null
             ? CrossServerChannelConfig.disabled() : crossServerChannelConfig;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.warehouseLockKey = new NamespacedKey(plugin, "warehouse_locked");
         this.packetFactory = new WarehousePacketFactory(this);
     }
 
@@ -685,6 +689,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 case "select" -> selectSlot(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")));
                 case "deposit_slot" -> depositSlot(player, WarehouseTexts.value(data, 1, ""), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L));
                 case "deposit_all_backpack" -> depositAllBackpack(player);
+                case "toggle_lock" -> toggleBackpackLock(player, WarehouseTexts.value(data, 1, ""));
                 case "withdraw" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "1"), 1L), false, false);
                 case "withdraw_quick" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), WarehouseTexts.parseLong(WarehouseTexts.value(data, 2, "64"), 64L), false, true);
                 case "withdraw_all" -> withdraw(player, parsePacketSlot(WarehouseTexts.value(data, 1, "-1")), Long.MAX_VALUE, true, false);
@@ -786,7 +791,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         try {
             Optional<WarehouseRecord> warehouse = repository.loadPersonalWarehouses(playerUuid).stream().filter(record -> record.warehouseId().equals(warehouseId)).findFirst();
             if (warehouse.isEmpty()) { errorCallback.accept(message("player.warehouse-not-found", warehouseId)); return; }
-            List<SlotItemRecord> slots = repository.loadSlots(OWNER_PERSONAL, playerUuid.toString(), warehouseId);
+            List<SlotItemRecord> slots = repository.loadSlotSummaries(OWNER_PERSONAL, playerUuid.toString(), warehouseId);
             List<String> lines = new ArrayList<>();
             lines.add(ChatColor.GRAY + "玩家: " + ChatColor.WHITE + playerName);
             lines.add(ChatColor.GRAY + "仓库: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
@@ -845,10 +850,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     public long totalItems(UUID playerUuid) {
         try {
-            return personalRecords(playerUuid).stream()
-                .flatMap(record -> loadSlots(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId()).stream())
-                .mapToLong(SlotItemRecord::amount)
-                .sum();
+            long total = 0L;
+            for (WarehouseRecord record : personalRecords(playerUuid)) {
+                total += repository.sumAmount(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
+            }
+            return total;
         } catch (Exception exception) {
             return 0L;
         }
@@ -856,9 +862,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
 
     public long personalUsed(UUID playerUuid) {
         try {
-            return personalRecords(playerUuid).stream()
-                .mapToLong(record -> loadSlots(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId()).size())
-                .sum();
+            long total = 0L;
+            for (WarehouseRecord record : personalRecords(playerUuid)) {
+                total += repository.countSlots(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
+            }
+            return total;
         } catch (Exception exception) {
             return 0L;
         }
@@ -879,11 +887,13 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     public long categoryAmount(UUID playerUuid, String categoryId) {
         try {
             String normalized = WarehouseTexts.normalizeId(categoryId);
-            return personalRecords(playerUuid).stream()
-                .flatMap(record -> loadSlots(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId()).stream())
-                .filter(item -> normalized.equals(item.categoryId()))
-                .mapToLong(SlotItemRecord::amount)
-                .sum();
+            long total = 0L;
+            for (WarehouseRecord record : personalRecords(playerUuid)) {
+                // 先确保该仓库分类已按当前规则懒重算，再走 SQL 聚合
+                recategorizeIfStale(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
+                total += repository.sumAmountByCategory(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId(), normalized);
+            }
+            return total;
         } catch (Exception exception) {
             return 0L;
         }
@@ -1550,6 +1560,60 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     /**
+     * 物品是否带有仓库锁定标记（PDC 写在物品自身 NBT 上，随物品移动/掉落/交易保留）。
+     */
+    boolean isItemLocked(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || !stack.hasItemMeta()) {
+            return false;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        return meta != null && meta.getPersistentDataContainer().has(warehouseLockKey, PersistentDataType.BYTE);
+    }
+
+    /**
+     * 切换背包指定槽位物品的仓库锁定标记。
+     * 标记写在物品 PDC 上（随物品本体），与槽位无关——物品换格、丢弃再捡、交易给他人都保留。
+     * 不涉及仓库数据写入，因此不要求二级密码解锁。
+     */
+    private void toggleBackpackLock(Player player, String rawSlotValue) throws Exception {
+        int rawSlot = parseRawBackpackSlot(rawSlotValue);
+        if (rawSlot < 9 || rawSlot > 44) {
+            sendMessage(player, false, message("player.invalid-slot", WarehouseTexts.safe(rawSlotValue)));
+            refreshBoth(player);
+            return;
+        }
+        int slot = toBukkitBackpackSlot(rawSlot);
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (stack == null || stack.getType().isAir()) {
+            sendMessage(player, false, message("player.slot-empty"));
+            refreshBoth(player);
+            return;
+        }
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) {
+            sendMessage(player, false, message("player.item-lock-unsupported"));
+            refreshBoth(player);
+            return;
+        }
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        boolean locked;
+        if (pdc.has(warehouseLockKey, PersistentDataType.BYTE)) {
+            pdc.remove(warehouseLockKey);
+            locked = false;
+        } else {
+            pdc.set(warehouseLockKey, PersistentDataType.BYTE, (byte) 1);
+            locked = true;
+        }
+        stack.setItemMeta(meta);
+        player.getInventory().setItem(slot, stack);
+        player.updateInventory();
+        debug("TOGGLE-LOCK player=" + player.getName() + " rawSlot=" + rawSlot + " bukkitSlot=" + slot
+            + " locked=" + locked + " stack=" + WarehouseTexts.describeStack(stack));
+        sendMessage(player, true, message(locked ? "player.item-lock-on" : "player.item-lock-off"));
+        refreshBoth(player);
+    }
+
+    /**
      * 将玩家背包指定槽位的物品存入当前仓库。
      * 会检查只读权限、黑名单和容量上限，成功时扣除背包物品并刷新 UI。
      * 支持指定存入数量（requestedAmount），若大于实际堆叠数量则按实际数量存入。
@@ -1642,6 +1706,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         long totalStored = 0L;
         int changedSlots = 0;
         int skippedBlacklisted = 0;
+        int skippedLocked = 0;
         int failedSlots = 0;
         boolean foundItem = false;
         for (int rawSlot = 9; rawSlot <= 44; rawSlot++) {
@@ -1651,6 +1716,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 continue;
             }
             foundItem = true;
+            if (isItemLocked(stack)) {
+                skippedLocked++;
+                continue;
+            }
             if (itemMatcherSupport.matches(configuration.blacklist(), stack)) {
                 skippedBlacklisted++;
                 continue;
@@ -1672,13 +1741,23 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
         if (totalStored > 0L) {
             player.updateInventory();
-            String suffix = skippedBlacklisted > 0 || failedSlots > 0
-                ? "，跳过 " + skippedBlacklisted + " 格禁存物品，" + failedSlots + " 格未能存入。"
-                : "。";
+            List<String> skippedParts = new ArrayList<>(3);
+            if (skippedBlacklisted > 0) {
+                skippedParts.add(skippedBlacklisted + " 格禁存物品");
+            }
+            if (skippedLocked > 0) {
+                skippedParts.add(skippedLocked + " 格锁定物品");
+            }
+            if (failedSlots > 0) {
+                skippedParts.add(failedSlots + " 格未能存入");
+            }
+            String suffix = skippedParts.isEmpty() ? "。" : "，跳过 " + String.join("，", skippedParts) + "。";
             sendMessage(player, true, message("player.deposit-from-inventory", totalStored, changedSlots, suffix));
         } else if (!foundItem) {
             sendMessage(player, false, message("player.no-deposit-items"));
-        } else if (skippedBlacklisted > 0 && failedSlots == 0) {
+        } else if (skippedLocked > 0 && skippedBlacklisted == 0 && failedSlots == 0) {
+            sendMessage(player, false, message("player.all-items-locked"));
+        } else if (skippedBlacklisted > 0 && failedSlots == 0 && skippedLocked == 0) {
             sendMessage(player, false, message("player.all-items-blocked"));
         } else {
             sendMessage(player, false, message("player.deposit-none"));
@@ -1703,6 +1782,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=invalid-stack stack=" + WarehouseTexts.describeStack(stack));
             return DepositResult.failure(message("player.item-not-depositable"));
         }
+        if (isItemLocked(stack)) {
+            debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=item-locked stack=" + WarehouseTexts.describeStack(stack));
+            return DepositResult.failure(message("player.item-locked"));
+        }
         if (OWNER_SHARED.equals(ownerType) && !canModifyCurrent(player, state(player))) {
             debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=shared-read-only ownerId=" + ownerId);
             return DepositResult.failure(message("player.shared-read-only"));
@@ -1710,20 +1793,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         ItemStack prototype = stack.clone();
         prototype.setAmount(1);
         byte[] bytes = ItemSerializer.serialize(prototype);
-        boolean blockStateItem = prototype.getItemMeta() instanceof BlockStateMeta;
-        if (blockStateItem) {
-            try {
-                ItemStack verify = ItemSerializer.deserialize(bytes);
-                if (verify == null || verify.getType().isAir() || !(verify.getItemMeta() instanceof BlockStateMeta)) {
-                    this.logger.warning("BlockEntityMeta 物品序列化验证失败，拒绝存入: "
-                        + prototype.getType().name() + " player=" + player.getName());
-                    return DepositResult.failure(message("player.item-not-depositable"));
-                }
-            } catch (RuntimeException exception) {
-                this.logger.warning("BlockEntityMeta 物品序列化验证异常，拒绝存入: "
-                    + prototype.getType().name() + " player=" + player.getName() + " - " + exception.getMessage());
-                return DepositResult.failure(message("player.item-not-depositable"));
-            }
+        String rejectReason = validateSerializedItem(player, prototype, bytes);
+        if (rejectReason != null) {
+            debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=" + rejectReason
+                + " stack=" + WarehouseTexts.describeStack(stack));
+            return DepositResult.failure(rejectMessage(rejectReason));
         }
         String itemData = Base64.getEncoder().encodeToString(bytes);
         String itemHash = WarehouseTexts.sha256Hex(bytes);
@@ -1734,10 +1808,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             ownerType + ':' + ownerId + ':' + warehouseId, ignored -> new Object());
         List<SlotItemRecord> currentSlots;
         synchronized (warehouseLock) {
-            currentSlots = repository.loadSlots(ownerType, ownerId, warehouseId);
+            currentSlots = repository.loadSlotSummaries(ownerType, ownerId, warehouseId);
         debug("DEPOSIT-STACK load player=" + player.getName() + " ownerType=" + ownerType + " ownerId=" + ownerId
             + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + WarehouseTexts.shortHash(itemHash)
-            + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " blockState=" + blockStateItem);
+            + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " verify=" + configuration.verifyOnDeposit());
 
         for (SlotItemRecord current : currentSlots) {
             if (remaining <= 0 || !itemHash.equals(current.itemHash())) {
@@ -1746,7 +1820,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             long room = Math.max(0L, MAX_AGGREGATED_AMOUNT - current.amount());
             int moved = (int) Math.min(remaining, room);
             if (moved > 0) {
-                repository.upsertSlot(copySlot(current, current.amount() + moved, now));
+                repository.updateSlotAmount(ownerType, ownerId, warehouseId, current.slot(), current.amount() + moved, now);
                 debug("DEPOSIT-STACK merge player=" + player.getName() + " slot=" + current.slot()
                     + " moved=" + moved + " oldAmount=" + current.amount() + " newAmount=" + (current.amount() + moved));
                 remaining -= moved;
@@ -1778,7 +1852,8 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                     displayJson,
                     remaining,
                     now,
-                    now
+                    now,
+                    WarehouseTexts.loreText(prototype)
                 ));
                 debug("DEPOSIT-STACK insert player=" + player.getName() + " slot=" + emptySlot + " amount=" + remaining
                     + " item=" + WarehouseTexts.describeStack(prototype) + " itemJsonEmpty=" + displayJson.isBlank());
@@ -1797,25 +1872,49 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         }
     }
 
-    private SlotItemRecord copySlot(SlotItemRecord current, long amount, long updatedAt) {
-        return new SlotItemRecord(
-            current.ownerType(),
-            current.ownerId(),
-            current.warehouseId(),
-            current.slot(),
-            current.itemHash(),
-            current.categoryId(),
-            current.displayName(),
-            current.materialId(),
-            current.searchText(),
-            current.pinyin(),
-            current.initials(),
-            current.itemData(),
-            current.itemJson(),
-            amount,
-            current.createdAt(),
-            updatedAt
-        );
+    /**
+     * 已序列化物品的入库前校验：大小上限 + 按 {@code settings.verify-on-deposit} 级别的往返验证。
+     * <p>
+     * 往返验证能拦下"序列化成功但反序列化降级/损坏"的物品（混合端尤其常见），
+     * 让坏物品在存入时就被拒绝而不是取回时才发现。返回 {@code null} 表示通过，
+     * 否则返回消息键后缀（对应 messages.yml 中 {@code player.<key>} 条目）。
+     */
+    private String validateSerializedItem(Player player, ItemStack prototype, byte[] bytes) {
+        long maxBytes = configuration.maxItemBytes();
+        if (maxBytes > 0 && bytes.length > maxBytes) {
+            this.logger.warning("拒绝存入超限物品: " + prototype.getType().name()
+                + " bytes=" + bytes.length + " max=" + maxBytes + " player=" + player.getName());
+            return "item-too-large:" + bytes.length;
+        }
+        if (!configuration.verifyOnDeposit().covers(prototype)) {
+            return null;
+        }
+        try {
+            ItemStack verify = ItemSerializer.deserialize(bytes);
+            if (verify == null || verify.getType().isAir() || verify.getType() != prototype.getType()
+                || !prototype.isSimilar(verify)
+                || (prototype.getItemMeta() instanceof BlockStateMeta && !(verify.getItemMeta() instanceof BlockStateMeta))) {
+                this.logger.warning("物品序列化往返校验失败，拒绝存入: "
+                    + prototype.getType().name() + " player=" + player.getName());
+                return "item-not-depositable";
+            }
+        } catch (RuntimeException exception) {
+            this.logger.warning("物品序列化往返校验异常，拒绝存入: "
+                + prototype.getType().name() + " player=" + player.getName() + " - " + exception.getMessage());
+            return "item-not-depositable";
+        }
+        return null;
+    }
+
+    /**
+     * 提取校验失败原因对应的消息键：{@code "item-too-large:<bytes>"} 携带字节数参数。
+     */
+    private String rejectMessage(String rejectReason) {
+        if (rejectReason != null && rejectReason.startsWith("item-too-large:")) {
+            long bytes = WarehouseTexts.parseLong(rejectReason.substring("item-too-large:".length()), 0L);
+            return message("player.item-too-large", WarehouseTexts.formatByteSize(bytes));
+        }
+        return message("player.item-not-depositable");
     }
 
     /**
@@ -1885,7 +1984,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 repository.deleteSlot(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot);
                 state.setSelectedSlot(-1);
             } else {
-                repository.upsertSlot(copySlot(item, updatedAmount, System.currentTimeMillis()));
+                repository.updateSlotAmount(state.ownerType(), state.ownerId(), state.warehouseId(), selectedSlot, updatedAmount, System.currentTimeMillis());
             }
         }
         sendMessage(player, true, message("player.withdraw-success", delivered));
@@ -2548,10 +2647,14 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         return definition.baseSlots() + Math.max(0L, record.extraSlots());
     }
 
+    /**
+     * 加载槽位摘要（不含 item_data 大字段）。返回前按需触发分类懒重算，
+     * 保证 category_id 已按当前规则刷新。
+     */
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) {
         try {
-            List<SlotItemRecord> records = repository.loadSlots(ownerType, ownerId, warehouseId);
-            return recategorizeIfStale(ownerType, ownerId, warehouseId, records);
+            recategorizeIfStale(ownerType, ownerId, warehouseId);
+            return repository.loadSlotSummaries(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
             if (configuration.debug()) {
                 this.logger.warning("读取仓库槽位失败: " + exception.getMessage());
@@ -2561,55 +2664,65 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     }
 
     /**
+     * 仓库已用格数（SQL COUNT，不加载物品数据）。
+     */
+    long countSlots(String ownerType, String ownerId, String warehouseId) {
+        try {
+            return repository.countSlots(ownerType, ownerId, warehouseId);
+        } catch (Exception exception) {
+            if (configuration.debug()) {
+                this.logger.warning("统计仓库槽位失败: " + exception.getMessage());
+            }
+            return 0L;
+        }
+    }
+
+    /**
      * 分类规则变更后的存量物品重归类：按仓库懒执行。
      * <p>
      * 每个仓库记录上次重算时使用的分类规则指纹；指纹与当前配置一致直接返回。
-     * 不一致时反序列化所有槽位物品按当前规则重算 categoryId，差异写回数据库
-     * 并同步替换内存中的记录——下次读取走指纹短路，零开销。
+     * 不一致时加载完整槽位数据、反序列化所有物品按当前规则重算 categoryId，
+     * 差异经 {@code updateSlotCategory} 轻量写回——下次调用走指纹短路，零开销。
      */
-    private List<SlotItemRecord> recategorizeIfStale(String ownerType, String ownerId, String warehouseId, List<SlotItemRecord> records) {
-        if (records.isEmpty()) {
-            return records;
-        }
+    private void recategorizeIfStale(String ownerType, String ownerId, String warehouseId) {
         String key = ownerType + '|' + ownerId + '|' + warehouseId;
         String fingerprint = categoriesFingerprint();
         if (fingerprint.equals(recategorizedRules.get(key))) {
-            return records;
+            return;
         }
         recategorizedRules.put(key, fingerprint);
-        List<SlotItemRecord> result = new ArrayList<>(records.size());
+        List<SlotItemRecord> records;
+        try {
+            records = repository.loadSlots(ownerType, ownerId, warehouseId);
+        } catch (Exception exception) {
+            if (configuration.debug()) {
+                this.logger.warning("重归类读取仓库槽位失败: " + exception.getMessage());
+            }
+            return;
+        }
+        if (records.isEmpty()) {
+            return;
+        }
         int changed = 0;
         for (SlotItemRecord record : records) {
             ItemStack stack = deserializeSlotItem(record);
             if (stack == null) {
-                result.add(record);
                 continue;
             }
             String categoryId = resolveCategory(stack);
             if (record.categoryId().equals(categoryId)) {
-                result.add(record);
                 continue;
             }
-            SlotItemRecord updated = new SlotItemRecord(
-                record.ownerType(), record.ownerId(), record.warehouseId(), record.slot(),
-                record.itemHash(), categoryId, record.displayName(), record.materialId(),
-                record.searchText(), record.pinyin(), record.initials(),
-                record.itemData(), record.itemJson(), record.amount(),
-                record.createdAt(), System.currentTimeMillis()
-            );
             try {
-                repository.upsertSlot(updated);
-                result.add(updated);
+                repository.updateSlotCategory(ownerType, ownerId, warehouseId, record.slot(), categoryId, System.currentTimeMillis());
                 changed++;
             } catch (Exception exception) {
                 this.logger.warning("槽位重分类写回失败 " + ownerId + "/" + warehouseId + "#" + record.slot() + ": " + exception.getMessage());
-                result.add(record);
             }
         }
         if (changed > 0) {
             this.logger.info("仓库 " + ownerId + "/" + warehouseId + " 存量物品重分类完成: " + changed + " 个槽位已更新");
         }
-        return result;
     }
 
     private ItemStack deserializeSlotItem(SlotItemRecord record) {
@@ -2620,6 +2733,72 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             return ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    /**
+     * 槽位展示 lore：优先返回存入时冗余写入的 lore_text（零反序列化开销）；
+     * 历史行（lore_text 为 NULL）按需加载完整槽位、反序列化派生 lore 并回填写库。
+     */
+    List<String> loreLinesFor(SlotItemRecord item) {
+        String stored = item.loreText();
+        if (stored != null) {
+            return WarehouseTexts.loreLinesFromStored(stored);
+        }
+        try {
+            SlotItemRecord full = item.itemData() != null && !item.itemData().isBlank()
+                ? item
+                : repository.loadSlot(item.ownerType(), item.ownerId(), item.warehouseId(), item.slot()).orElse(null);
+            ItemStack stack = full == null ? null : deserializeSlotItem(full);
+            String lore = WarehouseTexts.loreText(stack);
+            if (full != null) {
+                try {
+                    repository.updateSlotLore(full.ownerType(), full.ownerId(), full.warehouseId(), full.slot(), lore, System.currentTimeMillis());
+                } catch (Exception exception) {
+                    if (configuration.debug()) {
+                        this.logger.warning("槽位 lore 回填失败 " + full.ownerId() + "/" + full.warehouseId() + "#" + full.slot() + ": " + exception.getMessage());
+                    }
+                }
+            }
+            return WarehouseTexts.loreLinesFromStored(lore);
+        } catch (Exception exception) {
+            return List.of("&f物品描述读取失败。");
+        }
+    }
+
+    /**
+     * 导出指定槽位的原始物品数据到 exports/warehouse 目录（损坏物品人工恢复用）。
+     */
+    public void exportSlotItem(UUID playerUuid, String warehouseId, int slot, Consumer<String> successCallback, Consumer<String> errorCallback) {
+        try {
+            Optional<SlotItemRecord> record = repository.loadSlot(OWNER_PERSONAL, playerUuid.toString(), warehouseId, slot);
+            if (record.isEmpty()) {
+                errorCallback.accept(message("player.slot-no-item"));
+                return;
+            }
+            SlotItemRecord item = record.get();
+            File dir = new File(plugin.getDataFolder(), "exports" + File.separator + "warehouse");
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                throw new IOException("无法创建导出目录: " + dir.getAbsolutePath());
+            }
+            File target = new File(dir,
+                playerUuid + "_" + warehouseId + "_slot" + slot + "_" + System.currentTimeMillis() + ".txt");
+            String content = "# ArcartXSuite Warehouse 槽位物品导出（item_data 为 BukkitObjectOutputStream 序列化的 Base64）\n"
+                + "player_uuid=" + playerUuid + '\n'
+                + "warehouse_id=" + warehouseId + '\n'
+                + "slot=" + item.slot() + '\n'
+                + "item_hash=" + item.itemHash() + '\n'
+                + "display_name=" + item.displayName() + '\n'
+                + "material_id=" + item.materialId() + '\n'
+                + "amount=" + item.amount() + '\n'
+                + "created_at=" + item.createdAt() + '\n'
+                + "updated_at=" + item.updatedAt() + '\n'
+                + "item_data_base64=\n" + item.itemData() + '\n'
+                + "item_json=\n" + (item.itemJson() == null ? "" : item.itemJson()) + '\n';
+            Files.writeString(target.toPath(), content, StandardCharsets.UTF_8);
+            successCallback.accept(message("admin.export.success", target.getAbsolutePath()));
+        } catch (Exception exception) {
+            errorCallback.accept(message("admin.export.failed", exception.getMessage()));
         }
     }
 
@@ -3324,7 +3503,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 return new WarehouseAccess.Snapshot(false, 0L, 0L, 0L, false, new WarehouseAccess.SlotPrice("", BigDecimal.ZERO));
             }
             long unlocked = personalUnlockedSlots(uuid, warehouseId);
-            long used = loadSlots(OWNER_PERSONAL, uuid.toString(), warehouseId).size();
+            long used = repository.countSlots(OWNER_PERSONAL, uuid.toString(), warehouseId);
             WarehouseModuleConfiguration.UpgradeCost price = definition.slotPrice();
             WarehouseAccess.SlotPrice slotPrice = price == null
                 ? new WarehouseAccess.SlotPrice("", BigDecimal.ZERO)
@@ -3344,8 +3523,10 @@ public final class WarehouseService implements Listener, WarehouseAccess {
     public @NotNull List<WarehouseAccess.SlotItem> slots(@NotNull Player player) {
         try {
             String warehouseId = packetFactory.firstPersonalWarehouseId();
+            // 需要完整物品数据走全列加载；先确保分类已按当前规则重算
+            recategorizeIfStale(OWNER_PERSONAL, player.getUniqueId().toString(), warehouseId);
             List<WarehouseAccess.SlotItem> items = new ArrayList<>();
-            for (SlotItemRecord record : loadSlots(OWNER_PERSONAL, player.getUniqueId().toString(), warehouseId)) {
+            for (SlotItemRecord record : repository.loadSlots(OWNER_PERSONAL, player.getUniqueId().toString(), warehouseId)) {
                 ItemStack item;
                 try {
                     item = ItemSerializer.deserialize(Base64.getDecoder().decode(record.itemData()));
@@ -3394,9 +3575,16 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                     repository.deleteSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
                     return new WarehouseAccess.SlotWriteResult(true, "");
                 }
+                if (isItemLocked(itemStack)) {
+                    return new WarehouseAccess.SlotWriteResult(false, message("player.item-locked"));
+                }
                 ItemStack prototype = itemStack.clone();
                 prototype.setAmount(1);
                 byte[] bytes = ItemSerializer.serialize(prototype);
+                String rejectReason = validateSerializedItem(player, prototype, bytes);
+                if (rejectReason != null) {
+                    return new WarehouseAccess.SlotWriteResult(false, rejectMessage(rejectReason));
+                }
                 String itemData = Base64.getEncoder().encodeToString(bytes);
                 String itemHash = WarehouseTexts.sha256Hex(bytes);
                 String displayName = resolveDisplayName(prototype);
@@ -3410,7 +3598,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                     OWNER_PERSONAL, ownerId, warehouseId, slotIndex, itemHash, categoryId,
                     displayName, prototype.getType().name(), searchTokens.searchText(),
                     searchTokens.pinyin(), searchTokens.initials(), itemData, displayJson,
-                    itemStack.getAmount(), createdAt, now));
+                    itemStack.getAmount(), createdAt, now, WarehouseTexts.loreText(prototype)));
                 return new WarehouseAccess.SlotWriteResult(true, "");
             }
         } catch (Exception exception) {
@@ -3442,7 +3630,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 if (taken >= record.amount()) {
                     repository.deleteSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex);
                 } else {
-                    repository.upsertSlot(copySlot(record, record.amount() - taken, System.currentTimeMillis()));
+                    repository.updateSlotAmount(OWNER_PERSONAL, ownerId, warehouseId, slotIndex, record.amount() - taken, System.currentTimeMillis());
                 }
                 return new WarehouseAccess.WithdrawResult(true, taken, item, "");
             }

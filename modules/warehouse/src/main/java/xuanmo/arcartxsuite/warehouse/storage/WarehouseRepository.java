@@ -29,11 +29,37 @@ public interface WarehouseRepository {
 
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException;
 
+    /**
+     * 加载槽位摘要：包含除 {@code item_data} 序列化大字段外的全部列。
+     * <p>
+     * 返回记录的 {@link SlotItemRecord#itemData()} 为空串——仅供列表展示、搜索、
+     * 合并扫描等元数据场景使用，严禁回传给 {@link #upsertSlot}（会清空物品数据）。
+     */
+    List<SlotItemRecord> loadSlotSummaries(String ownerType, String ownerId, String warehouseId) throws SQLException;
+
     Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
 
     Optional<SlotItemRecord> findSlotByHash(String ownerType, String ownerId, String warehouseId, String itemHash) throws SQLException;
 
     void upsertSlot(SlotItemRecord item) throws SQLException;
+
+    /** 仅更新槽位数量与时间戳，不重写物品数据大字段（聚合合并/部分取出用）。 */
+    void updateSlotAmount(String ownerType, String ownerId, String warehouseId, int slot, long amount, long updatedAt) throws SQLException;
+
+    /** 仅更新槽位分类与时间戳（分类规则变更后的懒重归类用）。 */
+    void updateSlotCategory(String ownerType, String ownerId, String warehouseId, int slot, String categoryId, long updatedAt) throws SQLException;
+
+    /** 回写展示用 lore 文本（旧行 lore_text 为 NULL 时的惰性回填用）。 */
+    void updateSlotLore(String ownerType, String ownerId, String warehouseId, int slot, String loreText, long updatedAt) throws SQLException;
+
+    /** 槽位占用数（已用格数），不加载物品数据。 */
+    long countSlots(String ownerType, String ownerId, String warehouseId) throws SQLException;
+
+    /** 物品总件数（amount 求和），不加载物品数据。 */
+    long sumAmount(String ownerType, String ownerId, String warehouseId) throws SQLException;
+
+    /** 指定分类下的物品总件数，不加载物品数据。 */
+    long sumAmountByCategory(String ownerType, String ownerId, String warehouseId, String categoryId) throws SQLException;
 
     void deleteSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
 
@@ -119,6 +145,10 @@ public interface WarehouseRepository {
     record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt, long extraSlots) {
     }
 
+    /**
+     * @param loreText 展示用 lore 文本（存入时写入，{@code \n} 分行）；
+     *                 {@code null} 表示历史遗留行未回填
+     */
     record SlotItemRecord(
         String ownerType,
         String ownerId,
@@ -135,7 +165,8 @@ public interface WarehouseRepository {
         String itemJson,
         long amount,
         long createdAt,
-        long updatedAt
+        long updatedAt,
+        String loreText
     ) {
     }
 

@@ -226,18 +226,47 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     /**
+     * 加载槽位摘要（不含 item_data 序列化大字段），用于列表展示/搜索/合并扫描等
+     * 只需要元数据与展示字段的场景。返回记录的 {@code itemData} 为空串。
+     */
+    @Override
+    public List<SlotItemRecord> loadSlotSummaries(String ownerType, String ownerId, String warehouseId) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT owner_type, owner_id, warehouse_id, slot, item_hash, category_id, display_name, material_id, "
+                     + "search_text, pinyin, initials, item_json, amount, created_at, updated_at, lore_text "
+                     + "FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? ORDER BY slot ASC"
+             )) {
+            statement.setString(1, ownerType);
+            statement.setString(2, ownerId);
+            statement.setString(3, warehouseId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<SlotItemRecord> result = new ArrayList<>();
+                while (resultSet.next()) {
+                    result.add(slotSummary(resultSet));
+                }
+                return result;
+            }
+        }
+    }
+
+    /**
      * 插入或更新单个槽位物品记录。
      *
-     * @param item 槽位物品记录
+     * @param item 槽位物品记录，{@code itemData} 必须非空（防止摘要记录误写清空物品数据）
      * @throws SQLException 写入失败时抛出
      */
     @Override
     public void upsertSlot(SlotItemRecord item) throws SQLException {
+        if (item.itemData() == null || item.itemData().isBlank()) {
+            throw new IllegalArgumentException("upsertSlot 拒绝写入空 itemData（疑似摘要记录误写）: "
+                + item.ownerType() + '/' + item.ownerId() + '/' + item.warehouseId() + '#' + item.slot());
+        }
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(upsertSql(
                  "warehouse_slots",
                  List.of("owner_type", "owner_id", "warehouse_id", "slot"),
-                 List.of("item_hash", "category_id", "display_name", "material_id", "search_text", "pinyin", "initials", "item_data", "item_json", "amount", "created_at", "updated_at")
+                 List.of("item_hash", "category_id", "display_name", "material_id", "search_text", "pinyin", "initials", "item_data", "item_json", "amount", "created_at", "updated_at", "lore_text")
              ))) {
             statement.setString(1, item.ownerType());
             statement.setString(2, item.ownerId());
@@ -255,7 +284,87 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             statement.setLong(14, item.amount());
             statement.setLong(15, item.createdAt());
             statement.setLong(16, item.updatedAt());
+            statement.setString(17, item.loreText());
             statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void updateSlotAmount(String ownerType, String ownerId, String warehouseId, int slot, long amount, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE warehouse_slots SET amount = ?, updated_at = ? WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND slot = ?"
+             )) {
+            statement.setLong(1, amount);
+            statement.setLong(2, updatedAt);
+            statement.setString(3, ownerType);
+            statement.setString(4, ownerId);
+            statement.setString(5, warehouseId);
+            statement.setInt(6, slot);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void updateSlotCategory(String ownerType, String ownerId, String warehouseId, int slot, String categoryId, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE warehouse_slots SET category_id = ?, updated_at = ? WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND slot = ?"
+             )) {
+            statement.setString(1, categoryId);
+            statement.setLong(2, updatedAt);
+            statement.setString(3, ownerType);
+            statement.setString(4, ownerId);
+            statement.setString(5, warehouseId);
+            statement.setInt(6, slot);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void updateSlotLore(String ownerType, String ownerId, String warehouseId, int slot, String loreText, long updatedAt) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "UPDATE warehouse_slots SET lore_text = ? WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ? AND slot = ?"
+             )) {
+            statement.setString(1, loreText == null ? "" : loreText);
+            statement.setString(2, ownerType);
+            statement.setString(3, ownerId);
+            statement.setString(4, warehouseId);
+            statement.setInt(5, slot);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public long countSlots(String ownerType, String ownerId, String warehouseId) throws SQLException {
+        return aggregateSlots("COUNT(*)", ownerType, ownerId, warehouseId, null);
+    }
+
+    @Override
+    public long sumAmount(String ownerType, String ownerId, String warehouseId) throws SQLException {
+        return aggregateSlots("COALESCE(SUM(amount), 0)", ownerType, ownerId, warehouseId, null);
+    }
+
+    @Override
+    public long sumAmountByCategory(String ownerType, String ownerId, String warehouseId, String categoryId) throws SQLException {
+        return aggregateSlots("COALESCE(SUM(amount), 0)", ownerType, ownerId, warehouseId, categoryId);
+    }
+
+    private long aggregateSlots(String aggregate, String ownerType, String ownerId, String warehouseId, String categoryId) throws SQLException {
+        String sql = "SELECT " + aggregate + " FROM warehouse_slots WHERE owner_type = ? AND owner_id = ? AND warehouse_id = ?"
+            + (categoryId == null ? "" : " AND category_id = ?");
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, ownerType);
+            statement.setString(2, ownerId);
+            statement.setString(3, warehouseId);
+            if (categoryId != null) {
+                statement.setString(4, categoryId);
+            }
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getLong(1) : 0L;
+            }
         }
     }
 
@@ -1375,6 +1484,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         } catch (SQLException ignored) {
             // Column already exists.
         }
+        try (Statement statement = connection.createStatement()) {
+            // 展示用 lore 冗余列：旧行保持 NULL，读取时惰性反序列化回填
+            statement.execute("ALTER TABLE warehouse_slots ADD COLUMN lore_text TEXT NULL");
+        } catch (SQLException ignored) {
+            // Column already exists.
+        }
     }
 
     private void createTables(Connection connection) throws SQLException {
@@ -1406,6 +1521,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     initials TEXT NOT NULL,
                     item_data LONGTEXT NOT NULL,
                     item_json LONGTEXT NOT NULL,
+                    lore_text TEXT NULL,
                     amount BIGINT NOT NULL,
                     created_at BIGINT NOT NULL,
                     updated_at BIGINT NOT NULL,
@@ -1503,7 +1619,31 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             resultSet.getString("item_json"),
             resultSet.getLong("amount"),
             resultSet.getLong("created_at"),
-            resultSet.getLong("updated_at")
+            resultSet.getLong("updated_at"),
+            resultSet.getString("lore_text")
+        );
+    }
+
+    /** 摘要记录映射：itemData 置空串（严禁回传 upsertSlot）。 */
+    private SlotItemRecord slotSummary(ResultSet resultSet) throws SQLException {
+        return new SlotItemRecord(
+            resultSet.getString("owner_type"),
+            resultSet.getString("owner_id"),
+            resultSet.getString("warehouse_id"),
+            resultSet.getInt("slot"),
+            resultSet.getString("item_hash"),
+            resultSet.getString("category_id"),
+            resultSet.getString("display_name"),
+            resultSet.getString("material_id"),
+            resultSet.getString("search_text"),
+            resultSet.getString("pinyin"),
+            resultSet.getString("initials"),
+            "",
+            resultSet.getString("item_json"),
+            resultSet.getLong("amount"),
+            resultSet.getLong("created_at"),
+            resultSet.getLong("updated_at"),
+            resultSet.getString("lore_text")
         );
     }
 

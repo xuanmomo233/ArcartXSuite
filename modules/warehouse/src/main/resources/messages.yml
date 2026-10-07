@@ -24,6 +24,7 @@ help:
   delete: "&7{0} delete <玩家> <仓库ID> confirm&f - 删除玩家仓库"
   password: "&7{0} password <玩家> clear&f - 已移除，请使用 /axs password"
   bank: "&7{0} bank <玩家> <货币ID> <set|add|take> <金额>&f - 管理银行"
+  export: "&7{0} export <玩家> <仓库ID> <槽位>&f - 导出槽位物品原始数据"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -51,6 +52,11 @@ admin:
     confirm: "&e请确认删除 /axs warehouse delete <玩家> <仓库ID> confirm"
   bank:
     usage: "&e用法: /axs warehouse bank <玩家> <货币ID> <set|add|take> <金额>"
+  export:
+    usage: "&e用法: /axs warehouse export <玩家> <仓库ID> <槽位>"
+    invalid-slot: "&e槽位必须是非负整数: {0}"
+    success: "&a已导出槽位数据到: &f{0}"
+    failed: "&c导出槽位数据失败: {0}"
 
   warehouse-deleted: "已删除玩家 {0} 的仓库 {1}。"
   delete-failed: "删除仓库失败: {0}"
@@ -116,6 +122,12 @@ player:
   all-items-blocked: "背包内物品均禁止存入仓库。"
   deposit-none: "没有成功存入物品，仓库可能已满。"
   item-not-depositable: "该物品无法存入仓库。"
+  item-too-large: "&c该物品数据过大（约 {0}），无法存入仓库。"
+  item-locked: "&e该物品已锁定，无法存入仓库。可在仓库界面解锁后再存。"
+  item-lock-on: "&a已锁定该物品，锁定期间无法存入仓库。"
+  item-lock-off: "&e已解锁该物品，可正常存入仓库。"
+  item-lock-unsupported: "&e该物品不支持锁定。"
+  all-items-locked: "&e背包内所有物品均已锁定，未存入任何物品。"
   shared-read-only: "当前共享仓库只读或正在被他人编辑。"
   warehouse-full: "仓库已满或该物品已达到聚合上限。"
   secondary-required-withdraw: "取出物品前请先解锁二级密码。"
