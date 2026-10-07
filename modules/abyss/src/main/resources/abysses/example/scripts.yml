@@ -16,6 +16,9 @@ world-init:
   # ═══ 迷宫布局：3 层 × 7 房（24×24 房间 + 8 宽走廊互连成图） ═══
   # 拓扑=真实邻接：走进走廊即入房（combat 房进门自动锁门开波）；
   # Boss 门洞初始封死，肃清 ≥1 个战斗房后由 fN_gate 段开启。
+  # 区域模板：/axs abyss region pos1|pos2|save 圈选后可在此调用——
+  #   paste_region <名> <x,y,z>       默认跳过 AIR（结构嵌入地形）
+  #   paste_region <名> <x,y,z> full  连空气一起覆盖（挖空腔体）
   # ── 苔痕前哨 ──
   # f1_start 入口营地
   - "fillblocks 0,60,0 23,75,23 MOSSY_STONE_BRICKS"

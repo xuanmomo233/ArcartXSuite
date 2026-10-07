@@ -59,6 +59,11 @@ usage:
   admin-tp: "{prefix}&e用法: /axs abyss tp <地牢>（传送到该地牢运行中实例）"
   admin-unknown: "{prefix}&e未知子命令，输入 /{label} abyss help"
   admin-error: "{prefix}&c[abyss] 执行出错: {error}"
+  region: "{prefix}&e用法: /axs abyss region pos1|pos2|sel|save <地牢> <名>|list <地牢>|info <地牢> <名>|remove <地牢> <名>"
+  region-save: "{prefix}&e用法: /axs abyss region save <地牢> <名>"
+  region-list: "{prefix}&e用法: /axs abyss region list <地牢>"
+  region-info: "{prefix}&e用法: /axs abyss region info <地牢> <名>"
+  region-remove: "{prefix}&e用法: /axs abyss region remove <地牢> <名>"
 
 party:
   created: "{prefix}&a队伍已创建"
@@ -227,6 +232,7 @@ admin-help:
   tp: "{prefix}&7/{label} abyss tp <地牢>&f - 传送到运行中实例"
   reload: "{prefix}&7/{label} abyss reload&f - 重载地牢模板"
   design: "{prefix}&7/{label} abyss design <地牢>|save [world]|exit&f - 副本设计模式"
+  region: "{prefix}&7/{label} abyss region pos1|pos2|sel|save|list|info|remove&f - 区域模板管理"
 
 admin-status:
   title: "{prefix}&6Abyss 状态"
@@ -261,3 +267,16 @@ admin-action:
   no-instance: "{prefix}&c无运行中实例"
   only-player: "{prefix}&c仅玩家可执行"
   player-not-in-dungeon: "{prefix}&c你不在副本中"
+
+region:
+  unavailable: "{prefix}&c区域模板库未就绪"
+  marked: "{prefix}&a已标记 {pos}: &f{x},{y},{z}"
+  sel: "{prefix}&e当前选区 &f{world}&e: ({x1},{y1},{z1}) → ({x2},{y2},{z2})"
+  sel-empty: "{prefix}&c尚未完成选区——先 pos1 / pos2 标两个角"
+  saved: "{prefix}&a区域模板 &f{name} &a已存到 &f{dungeon}/regions/ &7（{size}）"
+  save-failed: "{prefix}&c保存失败: {error}"
+  list: "{prefix}&6{dungeon} 区域模板: &f{names}"
+  list-empty: "{prefix}&7{dungeon} 还没有区域模板（pos1|pos2 圈选后 save）"
+  info: "{prefix}&e{name}: 尺寸 {size} &7体积 {volume} 块 &7材质 {palette} 种"
+  removed: "{prefix}&a已删除区域模板 {name}"
+  not-found: "{prefix}&c区域模板不存在: {name}（region list 查看已存）"

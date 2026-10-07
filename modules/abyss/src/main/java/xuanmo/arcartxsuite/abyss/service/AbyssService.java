@@ -144,6 +144,7 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.buff.BuffManager buffManager;
     private xuanmo.arcartxsuite.abyss.design.DesignManager designManager;
     private xuanmo.arcartxsuite.abyss.design.DesignListener designListener;
+    private xuanmo.arcartxsuite.abyss.region.RegionLibrary regionLibrary;
     private xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge;
     private xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge;
     private xuanmo.arcartxsuite.abyss.integration.DungeonExternalInstaller externalInstaller;
@@ -349,6 +350,9 @@ public final class AbyssService {
             plugin, scheduler, logger);
         buffManager.setCallback(new BuffCallbackImpl());
 
+        // 8.12) 区域模板库（服主圈选世界区域存为模板，paste_region 铺进副本世界）
+        regionLibrary = new xuanmo.arcartxsuite.abyss.region.RegionLibrary(logger);
+
         // 8.11) 设计模式（在实例内可视化编辑地牢配置）
         designManager = new xuanmo.arcartxsuite.abyss.design.DesignManager(
             logger, (p, m) -> p.sendMessage(m));
@@ -472,6 +476,12 @@ public final class AbyssService {
         if (entranceManager != null) {
             entranceManager.rebuild(instances.getAllTemplates());
         }
+        // 区域模板缓存失效：重载后文件可能已更新
+        if (regionLibrary != null) {
+            for (AbyssTemplate t : instances.getAllTemplates()) {
+                regionLibrary.evict(t.id());
+            }
+        }
         // 外部配套文件部署（external/ → Chemdah/questgps 目录；缺席即跳过）
         if (externalInstaller == null && moduleDataFolder != null) {
             externalInstaller = new xuanmo.arcartxsuite.abyss.integration.DungeonExternalInstaller(
@@ -559,6 +569,10 @@ public final class AbyssService {
     }
     public @Nullable xuanmo.arcartxsuite.abyss.buff.BuffManager buffs() {
         return buffManager;
+    }
+    /** 区域模板库（paste_region / /axs abyss region 共用）。 */
+    public xuanmo.arcartxsuite.abyss.region.RegionLibrary regions() {
+        return regionLibrary;
     }
     /** WaypointBridge 由模块创建后注入（start 之前调用）。 */
     public void setWaypointBridge(

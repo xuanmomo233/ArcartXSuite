@@ -24,7 +24,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private static final List<String> ACTIONS = List.of(
         "help", "status", "reload", "list", "info", "enter", "leave",
         "force_complete", "force_fail", "cancel", "stamina", "cooldown", "tp",
-        "puzzle", "design");
+        "puzzle", "design", "region");
 
     private final AbyssService service;
     private final java.util.logging.Logger logger;
@@ -66,6 +66,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "tp" -> cmdTp(sender, args);
                 case "puzzle" -> cmdPuzzle(sender, args);
                 case "design" -> cmdDesign(sender, args);
+                case "region" -> cmdRegion(sender, args);
                 default -> sender.sendMessage(service.msg("usage.admin-unknown", "label", label));
             }
         } catch (Exception e) {
@@ -83,6 +84,8 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
         String action = args[1].toLowerCase(Locale.ROOT);
         if (args.length == 3) {
             return switch (action) {
+                case "region" -> filter(
+                    List.of("pos1", "pos2", "sel", "save", "list", "info", "remove"), args[2]);
                 case "design" -> {
                     List<String> c = new ArrayList<>(
                         service.instances().getAllTemplates().stream()
@@ -105,11 +108,28 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "cooldown" -> filter(List.of("clear", "check"), args[3]);
                 case "puzzle" -> filter(
                     List.of("state", "reset", "solve", "fail", "prompt"), args[3]);
+                case "region" -> switch (args[2].toLowerCase(Locale.ROOT)) {
+                    case "save", "list", "info", "remove" ->
+                        filter(service.instances().getAllTemplates().stream()
+                            .map(xuanmo.arcartxsuite.abyss.template.AbyssTemplate::id)
+                            .toList(), args[3]);
+                    default -> List.of();
+                };
                 default -> List.of();
             };
         }
-        if (args.length == 5 && "stamina".equals(action)) {
-            return filter(List.of("1", "10", "50"), args[4]);
+        if (args.length == 5) {
+            if ("stamina".equals(action)) {
+                return filter(List.of("1", "10", "50"), args[4]);
+            }
+            if ("region".equals(action)) {
+                var tpl = service.instances().getTemplate(args[3]);
+                if (tpl != null && service.regions() != null
+                    && ("info".equalsIgnoreCase(args[2])
+                        || "remove".equalsIgnoreCase(args[2]))) {
+                    return filter(service.regions().list(tpl), args[4]);
+                }
+            }
         }
         return List.of();
     }
@@ -117,7 +137,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage(service.msg("admin-help.title"));
         for (String k : List.of("status", "list", "info", "enter", "leave", "force",
-                "cancel", "stamina", "cooldown", "tp", "reload", "design")) {
+                "cancel", "stamina", "cooldown", "tp", "reload", "design", "region")) {
             sender.sendMessage(service.msg("admin-help." + k, "label", label));
         }
     }
@@ -435,6 +455,133 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                         "reason", r.reason() != null ? r.reason() : "?"));
                 }
             }
+        }
+    }
+
+    /**
+     * 区域模板管理：
+     *   /axs abyss region pos1|pos2         → 标记脚下为选区角点
+     *   /axs abyss region sel               → 查看当前选区
+     *   /axs abyss region save &lt;地牢&gt; &lt;名&gt; → 快照选区存为 地牢/regions/&lt;名&gt;.yml
+     *   /axs abyss region list &lt;地牢&gt;         → 列出模板
+     *   /axs abyss region info &lt;地牢&gt; &lt;名&gt; → 尺寸/调色板
+     *   /axs abyss region remove &lt;地牢&gt; &lt;名&gt;→ 删除
+     * 脚本调用：world-init 内 paste_region &lt;名&gt; &lt;x,y,z&gt; [full]
+     */
+    private void cmdRegion(CommandSender sender, String[] args) {
+        var lib = service.regions();
+        if (lib == null) {
+            sender.sendMessage(service.msg("region.unavailable"));
+            return;
+        }
+        String sub = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "";
+        switch (sub) {
+            case "pos1", "pos2" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(service.msg("admin-action.only-player"));
+                    return;
+                }
+                var sel = lib.mark(p, "pos1".equals(sub) ? 1 : 2);
+                sender.sendMessage(service.msg("region.marked",
+                    "pos", sub, "x", String.valueOf(
+                        "pos1".equals(sub) ? sel.x1() : sel.x2()),
+                    "y", String.valueOf(
+                        "pos1".equals(sub) ? sel.y1() : sel.y2()),
+                    "z", String.valueOf(
+                        "pos1".equals(sub) ? sel.z1() : sel.z2())));
+            }
+            case "sel" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(service.msg("admin-action.only-player"));
+                    return;
+                }
+                var sel = lib.selection(p.getUniqueId());
+                sender.sendMessage(sel != null && sel.complete()
+                    ? service.msg("region.sel",
+                        "world", sel.world(),
+                        "x1", String.valueOf(sel.x1()), "y1", String.valueOf(sel.y1()),
+                        "z1", String.valueOf(sel.z1()), "x2", String.valueOf(sel.x2()),
+                        "y2", String.valueOf(sel.y2()), "z2", String.valueOf(sel.z2()))
+                    : service.msg("region.sel-empty"));
+            }
+            case "save" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(service.msg("admin-action.only-player"));
+                    return;
+                }
+                if (args.length < 5) {
+                    sender.sendMessage(service.msg("usage.region-save"));
+                    return;
+                }
+                var tpl = service.instances().getTemplate(args[3]);
+                if (tpl == null) {
+                    sender.sendMessage(service.msg("admin-action.dungeon-not-found",
+                        "dungeon", args[3]));
+                    return;
+                }
+                String err = lib.save(tpl, args[4], p);
+                if (err != null) {
+                    sender.sendMessage(service.msg("region.save-failed", "error", err));
+                    return;
+                }
+                var rt = lib.load(tpl, args[4]);
+                sender.sendMessage(service.msg("region.saved",
+                    "name", args[4], "dungeon", tpl.id(),
+                    "size", rt != null
+                        ? rt.width() + "×" + rt.height() + "×" + rt.depth() : "?"));
+            }
+            case "list" -> {
+                if (args.length < 4) {
+                    sender.sendMessage(service.msg("usage.region-list"));
+                    return;
+                }
+                var tpl = service.instances().getTemplate(args[3]);
+                if (tpl == null) {
+                    sender.sendMessage(service.msg("admin-action.dungeon-not-found",
+                        "dungeon", args[3]));
+                    return;
+                }
+                var names = lib.list(tpl);
+                sender.sendMessage(names.isEmpty()
+                    ? service.msg("region.list-empty", "dungeon", tpl.id())
+                    : service.msg("region.list",
+                        "dungeon", tpl.id(), "names", String.join(", ", names)));
+            }
+            case "info" -> {
+                if (args.length < 5) {
+                    sender.sendMessage(service.msg("usage.region-info"));
+                    return;
+                }
+                var tpl = service.instances().getTemplate(args[3]);
+                if (tpl == null) {
+                    sender.sendMessage(service.msg("admin-action.dungeon-not-found",
+                        "dungeon", args[3]));
+                    return;
+                }
+                var rt = lib.load(tpl, args[4]);
+                sender.sendMessage(rt == null
+                    ? service.msg("region.not-found", "name", args[4])
+                    : service.msg("region.info", "name", args[4],
+                        "size", rt.width() + "×" + rt.height() + "×" + rt.depth(),
+                        "volume", String.valueOf(rt.volume()),
+                        "palette", String.valueOf(rt.paletteSize())));
+            }
+            case "remove" -> {
+                if (args.length < 5) {
+                    sender.sendMessage(service.msg("usage.region-remove"));
+                    return;
+                }
+                var tpl = service.instances().getTemplate(args[3]);
+                if (tpl == null) {
+                    sender.sendMessage(service.msg("admin-action.dungeon-not-found",
+                        "dungeon", args[3]));
+                    return;
+                }
+                sender.sendMessage(lib.remove(tpl, args[4])
+                    ? service.msg("region.removed", "name", args[4])
+                    : service.msg("region.not-found", "name", args[4]));
+            }
+            default -> sender.sendMessage(service.msg("usage.region"));
         }
     }
 

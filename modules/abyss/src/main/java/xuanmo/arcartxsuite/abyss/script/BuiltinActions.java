@@ -551,6 +551,28 @@ final class BuiltinActions {
                     for (int z = z1; z <= z2; z++)
                         a.getWorld().getBlockAt(x, y, z).setType(mat, false);
         });
+        reg.register("paste_region", (ctx, args, s) -> {
+            // paste_region <模板名> <x,y,z> [full]：铺放服主圈选的区域模板
+            // （/axs abyss region pos1|pos2|save 管理，存于 地牢/regions/<名>.yml）。
+            // 默认跳过 AIR——结构嵌入已有地形；full = 连空气一起覆盖（挖空腔体）。
+            String[] parts = splitFirst(args, 2);
+            if (parts.length < 2) return;
+            var lib = service.get().regions();
+            var world = ctx.getInstance().getWorld();
+            Location loc = parseLoc(ctx, parts[1]);
+            if (lib == null || world == null || loc == null) return;
+            var tpl = lib.load(ctx.getInstance().getTemplate(), ctx.replace(parts[0]));
+            if (tpl == null) {
+                runner.logger().warning("[abyss] paste_region 模板不存在: " + parts[0]);
+                return;
+            }
+            boolean withAir = parts.length > 2
+                && "full".equalsIgnoreCase(rest(parts, 2).trim());
+            int placed = tpl.paste(world,
+                loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), withAir);
+            runner.logger().fine("[abyss] paste_region " + parts[0]
+                + " → " + placed + " 块（实例 " + ctx.getInstance().getInstanceId() + "）");
+        });
 
         // ═══ NPC ═══
         reg.register("spawn_npc", (ctx, args, s) ->
