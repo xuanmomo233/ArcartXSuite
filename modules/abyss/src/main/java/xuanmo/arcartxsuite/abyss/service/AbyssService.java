@@ -984,6 +984,20 @@ public final class AbyssService {
             return;
         }
 
+        // 先异步预载副本包围盒内全部区块，再跑 world-init——否则 fillblocks 逐块
+        // setType 会在主线程同步触发未生成区块的 initialize_light（看门狗级卡顿）
+        preloadInstanceChunks(instance, world).whenComplete((v, err) -> runOnMain(() -> {
+            if (err != null) {
+                logger.warning("[abyss] 区块预载未完成（继续初始化）: " + err.getMessage());
+            }
+            if (instance.isFinished()) return;
+            continueWorldReady(instance, world, spawn, players);
+        }));
+    }
+
+    /** 区块就绪后的进图主流程：world-init → 落点兜底 → 传送+扣费 → 全员进图判定。 */
+    private void continueWorldReady(AbyssInstance instance, World world,
+                                    Location spawn, List<Player> players) {
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
         runLifecycleScript(instance, "world_init", null);
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
@@ -1028,6 +1042,165 @@ public final class AbyssService {
         // 若已全员进图直接 prepare
         if (instance.allEntered()) {
             prepare(instance);
+        }
+    }
+
+    /**
+     * 异步预载副本包围盒内全部区块（Paper {@code getChunkAtAsync}）。
+     * 未预载时 world-init 的 fillblocks 逐块 setType 会在主线程同步触发区块生成与
+     * initialize_light——几万块填充直接把主线程卡死（看门狗连续 dump）。
+     * 包围盒 = 全部房间 region/exit/spawn/门盒（region 模式含 origin 偏移）
+     * + 层 spawn + NPC 坐标；pool 模式按 direction/room-spacing 估算锚点带。
+     * 外扩 1 区块余量；超出 2048 区块告警并截断（防配置笔误全图预载）。
+     */
+    private java.util.concurrent.CompletableFuture<Void> preloadInstanceChunks(
+            AbyssInstance instance, World world) {
+        AbyssTemplate t = instance.getTemplate();
+        int[] bbox = {Integer.MAX_VALUE, Integer.MAX_VALUE,
+            Integer.MIN_VALUE, Integer.MIN_VALUE}; // minX, minZ, maxX, maxZ
+        xuanmo.arcartxsuite.abyss.template.FloorConfig fc = t.floors();
+        if (fc != null) {
+            for (xuanmo.arcartxsuite.abyss.template.FloorConfig.Floor floor : fc.floors()) {
+                growVec(bbox, floor.spawn());
+                if (floor.source()
+                        == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.REGION) {
+                    for (String ref : floor.roomRefs()) growRoom(bbox, fc, ref);
+                    if (floor.bossRoom() != null) growRoom(bbox, fc, floor.bossRoom());
+                } else {
+                    // pool：锚点从原点起沿 direction 按 room-spacing 排布，横向留一间房余量
+                    int n = floor.roomCount() <= 0 ? floor.pool().size()
+                        : Math.min(floor.roomCount(), floor.pool().size());
+                    if (floor.bossRoom() != null) n++;
+                    int spacing = Math.max(64, fc.defaults().roomSpacing());
+                    if (n > 0) {
+                        if ("z".equals(floor.direction())) {
+                            growBBox(bbox, -spacing, -spacing, spacing, (n + 1) * spacing);
+                        } else {
+                            growBBox(bbox, -spacing, -spacing, (n + 1) * spacing, spacing);
+                        }
+                    }
+                }
+            }
+        }
+        if (t.npcs() != null) {
+            for (var npc : t.npcs().npcs().values()) growVec(bbox, npc.location());
+        }
+        if (bbox[0] == Integer.MAX_VALUE) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+        int cx1 = (bbox[0] >> 4) - 1, cx2 = (bbox[2] >> 4) + 1;
+        int cz1 = (bbox[1] >> 4) - 1, cz2 = (bbox[3] >> 4) + 1;
+        long total = (long) (cx2 - cx1 + 1) * (cz2 - cz1 + 1);
+        if (total > 2048) {
+            logger.warning("[abyss] 副本区块预载范围过大(" + total + " 区块)，截断到 2048");
+            double shrink = Math.sqrt(2048.0 / total);
+            int midX = (cx1 + cx2) / 2, midZ = (cz1 + cz2) / 2;
+            int hx = (int) ((cx2 - cx1) * shrink / 2), hz = (int) ((cz2 - cz1) * shrink / 2);
+            cx1 = midX - hx; cx2 = midX + hx; cz1 = midZ - hz; cz2 = midZ + hz;
+        }
+        java.util.List<int[]> coords = new java.util.ArrayList<>();
+        for (int cx = cx1; cx <= cx2; cx++) {
+            for (int cz = cz1; cz <= cz2; cz++) {
+                coords.add(new int[] {cx, cz});
+            }
+        }
+        // Paper：getChunkAtAsync 并发走区块管线（生成本就在工作线程）
+        if (GET_CHUNK_ASYNC != null) {
+            java.util.List<java.util.concurrent.CompletableFuture<?>> fs =
+                new java.util.ArrayList<>(coords.size());
+            for (int[] c : coords) {
+                try {
+                    fs.add((java.util.concurrent.CompletableFuture<?>)
+                        GET_CHUNK_ASYNC.invoke(world, c[0], c[1]));
+                } catch (Throwable ex) {
+                    logger.fine("[abyss] 异步区块加载失败 " + c[0] + "," + c[1]
+                        + ": " + ex.getMessage());
+                }
+            }
+            return java.util.concurrent.CompletableFuture.allOf(
+                fs.toArray(new java.util.concurrent.CompletableFuture[0]));
+        }
+        // Spigot 退化：主线程每 tick 批载 16 块，摊薄生成+光照成本
+        java.util.concurrent.CompletableFuture<Void> done =
+            new java.util.concurrent.CompletableFuture<>();
+        java.util.Iterator<int[]> it = coords.iterator();
+        xuanmo.arcartxsuite.api.scheduler.ScheduledTask[] holder =
+            new xuanmo.arcartxsuite.api.scheduler.ScheduledTask[1];
+        holder[0] = scheduler.scheduleAtFixedRate(plugin, () -> {
+            int n = 16;
+            while (n-- > 0 && it.hasNext()) {
+                int[] c = it.next();
+                try {
+                    world.getChunkAt(c[0], c[1]);
+                } catch (Throwable ignored) { }
+            }
+            if (!it.hasNext()) {
+                holder[0].cancel();
+                done.complete(null);
+            }
+        }, 1L, 1L);
+        return done;
+    }
+
+    /** Paper {@code World#getChunkAtAsync(int,int)} 反射句柄；Spigot 缺席为 null。 */
+    private static final java.lang.reflect.Method GET_CHUNK_ASYNC = findChunkAsync();
+
+    private static java.lang.reflect.Method findChunkAsync() {
+        try {
+            return World.class.getMethod("getChunkAtAsync", int.class, int.class);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private void growRoom(int[] bbox,
+                          xuanmo.arcartxsuite.abyss.template.FloorConfig fc, String ref) {
+        var tpl = fc.rooms().get(ref);
+        if (tpl == null) return;
+        int[] o = parseVec3(tpl.origin());
+        for (String c : tpl.region()) growVecOffset(bbox, c, o);
+        if (tpl.exit() != null) {
+            for (String c : tpl.exit()) growVecOffset(bbox, c, o);
+        }
+        growVecOffset(bbox, tpl.spawn(), o);
+        for (var d : tpl.doors()) {
+            for (String c : d.region()) growVecOffset(bbox, c, o);
+        }
+    }
+
+    private static void growVec(int[] bbox, @Nullable String coord) {
+        growVecOffset(bbox, coord, null);
+    }
+
+    private static void growVecOffset(int[] bbox, @Nullable String coord, int[] origin) {
+        int[] v = parseVec3(coord);
+        if (v == null) return;
+        int x = v[0] + (origin != null ? origin[0] : 0);
+        int z = v[2] + (origin != null ? origin[2] : 0);
+        if (x < bbox[0]) bbox[0] = x;
+        if (z < bbox[1]) bbox[1] = z;
+        if (x > bbox[2]) bbox[2] = x;
+        if (z > bbox[3]) bbox[3] = z;
+    }
+
+    private static void growBBox(int[] bbox, int minX, int minZ, int maxX, int maxZ) {
+        if (minX < bbox[0]) bbox[0] = minX;
+        if (minZ < bbox[1]) bbox[1] = minZ;
+        if (maxX > bbox[2]) bbox[2] = maxX;
+        if (maxZ > bbox[3]) bbox[3] = maxZ;
+    }
+
+    /** 解析 "x,y,z[,yaw,pitch]" 坐标串；非法返回 null。 */
+    private static int[] parseVec3(@Nullable String coord) {
+        if (coord == null) return null;
+        String[] v = coord.split(",");
+        if (v.length < 3) return null;
+        try {
+            return new int[] {(int) Double.parseDouble(v[0].trim()),
+                (int) Double.parseDouble(v[1].trim()),
+                (int) Double.parseDouble(v[2].trim())};
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 
