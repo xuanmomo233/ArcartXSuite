@@ -365,7 +365,8 @@ public record AbyssModuleConfiguration(
         String buffId,
         String designId,
         String designPickId,
-        String designEditId
+        String designEditId,
+        String shopId
     ) {
         static UiSection load(ConfigurationSection s) {
             if (s == null) {
@@ -373,7 +374,8 @@ public record AbyssModuleConfiguration(
                     "abyss_browser", "abyss_confirm", "abyss_lobby",
                     "abyss_party", "abyss_chest", "abyss_stats",
                     "abyss_leaderboard", "abyss_hud", "abyss_input", "abyss_buff",
-                    "abyss_design", "abyss_design_pick", "abyss_design_edit");
+                    "abyss_design", "abyss_design_pick", "abyss_design_edit",
+                    "abyss_shop");
             }
             return new UiSection(
                 s.getBoolean("register-on-enable", true),
@@ -390,7 +392,8 @@ public record AbyssModuleConfiguration(
                 s.getString("buff-id", "abyss_buff"),
                 s.getString("design-id", "abyss_design"),
                 s.getString("design-pick-id", "abyss_design_pick"),
-                s.getString("design-edit-id", "abyss_design_edit")
+                s.getString("design-edit-id", "abyss_design_edit"),
+                s.getString("shop-id", "abyss_shop")
             );
         }
     }

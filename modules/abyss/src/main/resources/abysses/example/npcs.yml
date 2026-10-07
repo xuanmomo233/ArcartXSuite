@@ -20,13 +20,11 @@ guide:
   once: false
 
 merchant:
-  name: "&6旅行商人·老陈"
-  type: WANDERING_TRADER
+  name: "&6神秘商人·老陈"
+  # 不用村民/行商类——原版交互会弹出交易 GUI 盖住商店 UI；女巫无交易界面且契合"神秘商人"
+  type: WITCH
   location: "211,61,38,180,0"      # f2_shop 台座后（z0+5=37 台座，商人 z38 面北）
   look-at-player: true
-  dialogs:
-    - "&6客人，随便看看。台座上的货都标着价。"
-    - "&7金块治伤、红石壮力、钻石换苹果——金币够就行。"
   click-script:
-    - "message @trigger &7右键台座购买：金块=治疗8金 红石=力量12金 钻石=金苹果15金"
+    - "open_shop_ui @trigger caravan"   # 开商店 UI（shops.yml）
   once: false

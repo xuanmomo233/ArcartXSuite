@@ -604,6 +604,12 @@ final class BuiltinActions {
             String chest = ctx.replace(rest(parts, 1));
             forEach(ctx, parts[0], p -> service.get().openChest(p, chest, ctx.getInstance()));
         });
+        reg.register("open_shop_ui", (ctx, args, s) -> {
+            // open_shop_ui <sel> <shopId>：打开 shops.yml 商店 UI
+            String[] parts = splitFirst(args, 1);
+            String shop = ctx.replace(rest(parts, 1));
+            forEach(ctx, parts[0], p -> service.get().openShop(p, shop, ctx.getInstance()));
+        });
         reg.register("give_money", (ctx, args, s) -> {
             String[] parts = splitFirst(args, 1);
             double amount = parseDouble(rest(parts, 1), 0);

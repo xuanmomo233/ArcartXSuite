@@ -75,6 +75,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     private String designUi() { return axsUiId(service.config().ui().designId()); }
     private String designPickUi() { return axsUiId(service.config().ui().designPickId()); }
     private String designEditUi() { return axsUiId(service.config().ui().designEditId()); }
+    private String shopUi() { return axsUiId(service.config().ui().shopId()); }
 
     private String token(Player p) {
         String t = Long.toHexString(random.nextLong());
@@ -548,6 +549,82 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         packetBridge.sendPacket(player, chestUi(), "init", payload);
         packetBridge.openUiUnsafe(player, chestUi());
+    }
+
+    // ═══ 副本商店 ═══
+
+    /**
+     * 打开商店 UI（shops.yml 定义）。商品行含 iconJson/name/price/desc；
+     * 货币读实例变量 currencyVar（缺省 coins）下发供 UI 余额展示/可购置灰。
+     */
+    public void openShop(Player player,
+                         xuanmo.arcartxsuite.abyss.template.ShopConfig.Shop shop,
+                         AbyssInstance instance) {
+        if (!available()) return;
+        int coins = varInt(instance, shop.currencyVar());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        payload.put("action_token", token(player));
+        payload.put("shopId", shop.id());
+        payload.put("shopTitle", shop.title());
+        payload.put("coins", coins);
+        Map<String, Object> rows = new LinkedHashMap<>();
+        int i = 0;
+        for (var g : shop.goods()) {
+            if (i >= 8) break; // UI 固定 8 行
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", g.id());
+            row.put("name", g.name());
+            row.put("price", g.price());
+            org.bukkit.Material mat = org.bukkit.Material.matchMaterial(
+                g.icon().contains(":") ? g.icon().substring(g.icon().indexOf(':') + 1) : g.icon());
+            row.put("iconJson", mat != null
+                ? itemJsonOf(new org.bukkit.inventory.ItemStack(mat)) : "");
+            List<String> d = g.desc();
+            row.put("desc0", d.size() > 0 ? d.get(0) : "");
+            row.put("desc1", d.size() > 1 ? d.get(1) : "");
+            rows.put(Integer.toString(i++), row);
+        }
+        payload.put("goodsCount", i);
+        payload.put("goods", rows);
+        packetBridge.sendPacket(player, shopUi(), "init", payload);
+        packetBridge.openUiUnsafe(player, shopUi());
+    }
+
+    /**
+     * shop_buy 回包：shopId + 商品索引 + token。
+     * 校验副本内身份 → 价格 → 扣货币变量 → 跑商品脚本 → 推 update 刷新余额。
+     */
+    private void buyShop(Player player, String shopId, int index) {
+        AbyssInstance inst = service.instances().getInstance(player);
+        if (inst == null || inst.isFinished()) return;
+        var shop = inst.getTemplate().shops().shop(shopId);
+        if (shop == null || index < 0 || index >= shop.goods().size()) return;
+        var g = shop.goods().get(index);
+        int coins = varInt(inst, shop.currencyVar());
+        if (coins < g.price()) {
+            player.sendMessage(color("&c金币不足（需要 &e" + g.price() + "&c，当前 &e" + coins + "&c）"));
+            return;
+        }
+        inst.getVariables().put(shop.currencyVar(), coins - g.price());
+        // 商品脚本（@trigger=购买者）：发放/治疗/buff 全走脚本行
+        service.runScript(inst, g.script(),
+            xuanmo.arcartxsuite.abyss.script.ScriptContext.of(inst, player));
+        player.sendMessage(color("&a购得 &f" + g.name() + " &8（&e-" + g.price() + " 金&8）"));
+        // 余额回推（UI 端 coin 文本/可购态刷新）
+        Map<String, Object> upd = new LinkedHashMap<>();
+        upd.put("coins", varInt(inst, shop.currencyVar()));
+        packetBridge.sendPacket(player, shopUi(), "update", upd);
+    }
+
+    private static int varInt(AbyssInstance inst, String var) {
+        Object o = inst.getVariables().get(var);
+        if (o instanceof Number n) return n.intValue();
+        try { return Integer.parseInt(String.valueOf(o)); } catch (Exception e) { return 0; }
+    }
+
+    private static String color(String s) {
+        return org.bukkit.ChatColor.translateAlternateColorCodes('&', s);
     }
 
     /**
@@ -1135,6 +1212,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             case "chest_claim_one" -> {
                 if (checkToken(player, data, 2)) {
                     claimChest(player, parseInt(data.get(1), -1));
+                }
+                return true;
+            }
+            case "shop_buy" -> {
+                // shop_buy <shopId> <goodsIndex> <token>
+                if (checkToken(player, data, 3)) {
+                    buyShop(player, data.size() > 1 ? data.get(1) : "",
+                        parseInt(data.size() > 2 ? data.get(2) : "-1", -1));
                 }
                 return true;
             }

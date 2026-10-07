@@ -148,6 +148,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         registerModuleUi("ui/abyss_design.yml", axsUiId(ui.designId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_design_pick.yml", axsUiId(ui.designPickId()), ui.registerOnEnable());
         registerModuleUi("ui/abyss_design_edit.yml", axsUiId(ui.designEditId()), ui.registerOnEnable());
+        registerModuleUi("ui/abyss_shop.yml", axsUiId(ui.shopId()), ui.registerOnEnable());
     }
 
     /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */

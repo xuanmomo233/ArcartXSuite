@@ -1,0 +1,57 @@
+# shops.yml — 副本内商店（金币结算；open_shop_ui @sel <shop> 打开）
+# 商品 script 行在服务端以购买者身份执行（@trigger=买家），可用全部模块动作。
+
+shops:
+  # f2_shop 矿道商队——旅行商人·老陈
+  caravan:
+    title: "旅行商队"
+    currency-var: coins            # 结算用副本金币变量（击杀掉落累计）
+    goods:
+      - id: heal
+        name: "&a治疗药剂"
+        icon: "material:SPLASH_POTION"
+        desc: ["&7恢复 12 点生命", "&75 秒再生"]
+        price: 8
+        script:
+          - "heal @trigger 12"
+          - "apply_potion @trigger REGENERATION 1 5"
+          - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
+      - id: power
+        name: "&c力量药剂"
+        icon: "material:BLAZE_POWDER"
+        desc: ["&7力量提升（随机 I/II/III 档）", "&7持续 1-3 分钟"]
+        price: 12
+        script:
+          - "run_script shop_power_t1"
+          - "run_script shop_power_t2"
+          - "run_script shop_power_t3"
+          - "sound @trigger ENTITY_ZOMBIE_VILLAGER_CURE 1 1.4"
+      - id: apple
+        name: "&6金苹果"
+        icon: "material:GOLDEN_APPLE"
+        desc: ["&7吸收+再生 · 保命神器"]
+        price: 15
+        script:
+          - "give_item @trigger material:GOLDEN_APPLE:1"
+          - "sound @trigger ENTITY_ITEM_PICKUP 1 1.2"
+      - id: torch_bundle
+        name: "&e火把×8"
+        icon: "material:TORCH"
+        desc: ["&7照亮迷宫死角"]
+        price: 4
+        script:
+          - "give_item @trigger material:TORCH:8"
+      - id: ender_pearl
+        name: "&d末影珍珠×2"
+        icon: "material:ENDER_PEARL"
+        desc: ["&7脱战/穿位 —— 被怪围住时救命"]
+        price: 10
+        script:
+          - "give_item @trigger material:ENDER_PEARL:2"
+      - id: totem
+        name: "&6不死图腾"
+        icon: "material:TOTEM_OF_UNDYING"
+        desc: ["&7免死一次 —— Boss 房的保险"]
+        price: 30
+        script:
+          - "give_item @trigger material:TOTEM_OF_UNDYING:1"

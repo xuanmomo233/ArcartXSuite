@@ -1733,6 +1733,10 @@ public final class AbyssService {
         void pushPartyUpdate(Party party);
         void openStats(Player player, AbyssInstance instance);
         void openLeaderboard(Player player, String dungeonId);
+        /** 副本商店 UI（shops.yml；实例变量结算）。 */
+        void openShop(Player player,
+                      xuanmo.arcartxsuite.abyss.template.ShopConfig.Shop shop,
+                      AbyssInstance instance);
         /** UI 包处理；返回 true 表示已消费。 */
         boolean handlePacket(Player player, String packetId, List<String> data);
     }
@@ -1744,6 +1748,17 @@ public final class AbyssService {
             return;
         }
         chestUiHandler.open(player, chest, instance);
+    }
+
+    /** 打开副本商店（shops.yml；open_shop_ui 动作入口）。 */
+    public void openShop(Player player, String shopId, AbyssInstance instance) {
+        var shop = instance.getTemplate().shops().shop(shopId);
+        if (shop == null) {
+            logger.warning("[abyss] 商店不存在: " + shopId);
+            return;
+        }
+        UiServiceFacade ui = uiFacade;
+        if (ui != null) ui.openShop(player, shop, instance);
     }
 
     /** 统一物品发放（宝箱 UI/脚本/奖励链共用入口）。 */

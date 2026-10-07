@@ -1,0 +1,223 @@
+# AXS 资源说明
+# 用途: Abyss 副本商店 —— shops.yml 商品列表 + 金币购买
+# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+# 包字段: init → packetId/action_token/shopId/shopTitle/coins/goodsCount/goods{key->{id,name,price,iconJson,desc0,desc1}}
+#         update → coins（购买后余额回推）
+ui:
+  isHud: false
+  defaultOpen: false
+  background: false
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
+      var.shopId = packet['shopId']
+      var.shopTitle = packet['shopTitle']
+      var.coins = packet['coins']
+      var.goodsCount = packet['goodsCount']
+      var.goodsRows = packet['goods']
+    update: |-
+      var.coins = packet['coins']
+      val.金币数.texts = '&e' + var.coins.round() + ' 金币'
+  action:
+    load: |-
+      var.packetId = 'abyss'
+      var.actionToken = ''
+      var.shopId = ''
+      var.shopTitle = '商店'
+      var.coins = 0
+      var.goodsCount = 0
+      var.goodsRows = {}
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.accent = '226,196,132,255'
+      var.accentDim = '150,128,90,180'
+      var.rowBg = '30,24,18,235'
+      var.rowBgHover = '48,38,26,245'
+      var.poor = '90,82,70,200'
+    open: |-
+      Sound.self('minecraft:entity.villager.trade', 0.9, 10)
+controls:
+  全屏磨砂:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:30;16,12,30,210
+      through: true
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      商店面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 620
+          height: 560
+        children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;26,20,14,240
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 2
+                color: var.accentDim
+          标题标线:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 26
+              width: 24
+              height: 3
+              normal: var.accent
+              through: true
+          标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 40
+              texts: "'&f' + var.shopTitle"
+              fontSize: 48
+              limit: 14
+              through: true
+          金币数:
+            type: Text
+            val: 金币数
+            attribute:
+              point: ~top_center
+              y: 92
+              texts: "'&e' + var.coins.round() + ' 金币'"
+              fontSize: 36
+              through: true
+          商品列表底:
+            type: Texture
+            attribute:
+              point: ~top_center
+              y: 140
+              width: 560
+              height: 340
+              normal: ~18,14,10,235
+              shape: ~round_rect
+              radius: 12
+              through: true
+          商品列表:
+            type: VStack
+            val: goods_rows
+            attribute:
+              point: ~top_center
+              y: 152
+              width: 536
+              spaceBetween: 10
+            children:
+              商品行:
+                type: Canvas
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.goodsRows[self.entryKey]
+                  afford: "self.entry != none && self.entry['price'] <= var.coins"
+                  visible: self.entry != none
+                  width: 536
+                  height: 76
+                action:
+                  clickLeft: |-
+                    if(self.entry != none){
+                      Packet.send(var.packetId, 'shop_buy', var.shopId, self.entryKey, var.actionToken)
+                      Sound.self('minecraft:ui.button.click', 1.4, 10)
+                    }
+                children:
+                  行底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "self.parent.afford ? var.rowBg : var.poor"
+                      hover: "self.parent.afford ? var.rowBgHover : var.poor"
+                      shape: ~round_rect
+                      radius: 10
+                      through: true
+                    effect:
+                      stroke:
+                        width: 1
+                        color: var.accentDim
+                  商品图标:
+                    type: Slot
+                    attribute:
+                      slotType: ~Icon
+                      x: 14
+                      y: 14
+                      width: 48
+                      height: 48
+                      itemScale: 0.85
+                      normal: ~0,0,0,0
+                      through: true
+                      seticon: "self.setItemIcon(self.parent.entry['iconJson'] != none && self.parent.entry['iconJson'] != '' ? self.parent.entry['iconJson'] : var.air)"
+                  商品名:
+                    type: Text
+                    attribute:
+                      x: 78
+                      y: 10
+                      texts: "'&f' + self.parent.entry['name']"
+                      fontSize: 40
+                      limit: 16
+                      through: true
+                  商品描述:
+                    type: Text
+                    attribute:
+                      x: 78
+                      y: 48
+                      texts: "'&7' + self.parent.entry['desc0'] + (self.parent.entry['desc1'] != '' ? '  ' + self.parent.entry['desc1'] : '')"
+                      fontSize: 30
+                      limit: 30
+                      through: true
+                  价格:
+                    type: Text
+                    attribute:
+                      point: ~middle_right
+                      x: -24
+                      texts: "self.parent.afford ? '&e' + self.parent.entry['price'].round() + ' 金' : '&c' + self.parent.entry['price'].round() + ' 金'"
+                      fontSize: 40
+                      through: true
+          提示:
+            type: Text
+            attribute:
+              point: ~bottom_center
+              y: -52
+              texts: ~&7左键商品购买 · 金币由击杀副本魔物掉落
+              fontSize: 30
+              through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -18
+              y: 18
+              width: 36
+              height: 36
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~150,58,58,235
+                  hover: ~190,75,75,245
+                  shape: ~circle
+                  through: true
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f✕
+                  fontSize: 36
+                  through: true
