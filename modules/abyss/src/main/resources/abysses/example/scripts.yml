@@ -114,7 +114,7 @@ world-init:
   - "fillblocks 85,61,53 86,63,54 CHISELED_STONE_BRICKS"
   - "fillblocks 73,60,41 77,60,45 GOLD_BLOCK"
   - "fillblocks 74,60,42 76,60,44 GOLD_BLOCK"
-  - "setblock 75,62,43 CHEST"
+  - "setblock 75,61,43 CHEST"
   - "fillblocks 68,60,36 69,60,37 EMERALD_BLOCK"
   - "fillblocks 82,60,50 83,60,51 EMERALD_BLOCK"
   # f1_combat_c 深渊前哨
@@ -451,7 +451,7 @@ world-init:
   - "fillblocks 485,61,53 486,63,54 OBSIDIAN"
   - "fillblocks 473,60,41 477,60,45 GOLD_BLOCK"
   - "fillblocks 474,60,42 476,60,44 GOLD_BLOCK"
-  - "setblock 475,62,43 CHEST"
+  - "setblock 475,61,43 CHEST"
   - "fillblocks 468,60,36 469,60,37 EMERALD_BLOCK"
   - "fillblocks 482,60,50 483,60,51 EMERALD_BLOCK"
   # f3_elite 精英卫队
@@ -659,15 +659,15 @@ f3_gate:
 # ═══ 商店力量药剂档位（init 时 random shop_power_lvl 1..3，购买时按档位给药） ═══
 shop_power_t1:
   - "if_var shop_power_lvl == 1"
-  - "apply_potion @trigger STRENGTH 1 180"
+  - "apply_potion @trigger STRENGTH 180 1"
   - "message @trigger &c力量 I &7生效 3 分钟"
 shop_power_t2:
   - "if_var shop_power_lvl == 2"
-  - "apply_potion @trigger STRENGTH 2 120"
+  - "apply_potion @trigger STRENGTH 120 2"
   - "message @trigger &c力量 II &7生效 2 分钟"
 shop_power_t3:
   - "if_var shop_power_lvl == 3"
-  - "apply_potion @trigger STRENGTH 3 60"
+  - "apply_potion @trigger STRENGTH 60 3"
   - "message @trigger &c&l力量 III &7生效 1 分钟"
 
 # ═══ 生命周期 ═══
@@ -685,8 +685,10 @@ start:
 
 guide_guide:
   - "guide_clear guide"
-  - "message @all &7右键 艾琳 可交谈并接取讨伐委托"
   - "guide_point f1_east 24,62,11 2 &e穿过东廊·踏入第一场战斗"
+  - "if_var guide_talked != 1"
+  - "setvar guide_talked 1"
+  - "message @all &7已记录向导指引——穿过东廊，肃清战斗房解锁 Boss 之门"
 
 complete:
   - "message @all &a&l通关！深渊领主已陨落！"

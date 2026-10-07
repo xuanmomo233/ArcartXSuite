@@ -35,7 +35,7 @@ shop_heal:
   script:
     - "addvar coins -8"
     - "heal @trigger 12"
-    - "apply_potion @trigger REGENERATION 1 5"
+    - "apply_potion @trigger REGENERATION 5 2"
     - "message @trigger &a✚ 治疗完成，继续深入吧"
     - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
 
@@ -87,7 +87,7 @@ lever_4:
 # ═══ 战利品宝箱 ═══
 abyss_chest:
   type: RIGHT_CLICK_BLOCK
-  location: "75,62,43"
+  location: "75,61,43"
   required-block: CHEST
   once: true
   script:
@@ -96,9 +96,9 @@ abyss_chest:
 
 abyss_chest3:
   type: RIGHT_CLICK_BLOCK
-  location: "475,62,43"
+  location: "475,61,43"
   required-block: CHEST
   once: true
   script:
-    - "open_chest_ui @trigger abyss_chest"
+    - "open_chest_ui @trigger abyss_chest_t3"   # 终层独立奖池（rewards.yml）
     - "sound @trigger BLOCK_CHEST_OPEN 1 1"

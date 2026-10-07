@@ -129,7 +129,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     }
 
     /**
-     * 将 uiSpec() 中声明的 9 个 UI 文件注册到 ArcartX 引擎。
+     * 将 uiSpec() 中声明的 UI 文件注册到 ArcartX 引擎。
      * 配置 id 统一规范化为 AXS: 前缀（与 UiService 的 runtimeId 一致）。
      */
     private void registerAbyssUis() {

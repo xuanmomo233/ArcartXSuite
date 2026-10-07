@@ -1,4 +1,4 @@
-# ═══ 增益选择池（元气骑士式三选一天赋/祝福）═══
+﻿# ═══ 增益选择池（元气骑士式三选一天赋/祝福）═══
 # buff_offer <池id> 触发：层间 Boss 清完、祭坛供奉后发起。
 # candidates=3 → 面板三选一；timeout-auto: random → 超时随机兜底。
 pools:
@@ -40,7 +40,7 @@ pools:
         desc:
           - "护甲与韧性提升"
         effects:
-          - "apply_potion @trigger RESISTANCE 0 9999"
+          - "apply_potion @trigger RESISTANCE 9999 1"
           - "message @trigger &d✦ &b守护之肤 &7已生效"
       - id: altar_gold
         name: "&6献金回馈"
@@ -81,7 +81,7 @@ pools:
         desc:
           - "移动速度提升"
         effects:
-          - "apply_potion @trigger SPEED 1 9999"
+          - "apply_potion @trigger SPEED 9999 1"
           - "message @trigger &d✦ &b疾风 &7已生效"
       - id: thick_blood
         name: "&a厚血"
@@ -104,7 +104,7 @@ pools:
           - "（写入实例变量供脚本做分支）"
         effects:
           - "setvar buff_ember_mark 1"
-          - "apply_potion @trigger FIRE_RESISTANCE 0 9999"
+          - "apply_potion @trigger FIRE_RESISTANCE 9999 1"
           - "message @trigger &d✦ &6余烬烙印 &7已烙下"
 
   # 第 2 层 Boss 后·三选一天赋（更激进的取舍）
@@ -125,7 +125,7 @@ pools:
           - "攻速与力量大幅提升"
           - "代价：防御力下降"
         effects:
-          - "apply_potion @trigger STRENGTH 1 9999"
+          - "apply_potion @trigger STRENGTH 9999 1"
           - "apply_attribute @trigger armor -4 flat"
           - "message @trigger &d✦ &4狂战 &7已生效——以攻为守！"
       - id: iron_faith
@@ -137,7 +137,7 @@ pools:
           - "护甲 +6，获得抗性"
         effects:
           - "apply_attribute @trigger armor 6 flat"
-          - "apply_potion @trigger RESISTANCE 0 9999"
+          - "apply_potion @trigger RESISTANCE 9999 1"
           - "message @trigger &d✦ &7铁壁 &7已生效"
       - id: swift_reload
         name: "&b迅捷"
@@ -147,8 +147,8 @@ pools:
         desc:
           - "速度 II，身法如风"
         effects:
-          - "apply_potion @trigger SPEED 2 9999"
-          - "apply_potion @trigger JUMP_BOOST 1 9999"
+          - "apply_potion @trigger SPEED 9999 2"
+          - "apply_potion @trigger JUMP_BOOST 9999 1"
           - "message @trigger &d✦ &b迅捷 &7已生效"
       - id: gold_lust
         name: "&6掘金"

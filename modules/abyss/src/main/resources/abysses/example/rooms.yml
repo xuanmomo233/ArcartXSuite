@@ -73,6 +73,7 @@ rooms:
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
       - "title @all 10 30 10 &c遭遇战！|&7肃清房间以解除封锁"
+      - "guide_clear f1_east"   # 东廊指引已到达
     on-lock:
       - "sound @all BLOCK_IRON_DOOR_CLOSE 1 0.6"
       - "random f1_combat_a_pack 1 2"

@@ -6,7 +6,8 @@
 
 guide:
   name: "&e向导·艾琳"
-  type: VILLAGER
+  # 不用村民类——Adyeshach 缺席降级为真实体时，村民右键弹原版交易 GUI；女巫无交易界面
+  type: WITCH
   location: "11,61,11,90,0"        # f1_start 房中心，面向入口
   look-at-player: true
   dialogs:                        # 无 Chemdah 会话时的聊天栏兜底
@@ -17,6 +18,7 @@ guide:
   dialog-interval: 40
   click-script:
     - "quest_step slayer"          # 未接取→接 Chemdah 委托；已完成→领奖励
+    - "run_script guide_guide"     # 指路：从"找向导"切到"穿过东廊"
   once: false
 
 merchant:

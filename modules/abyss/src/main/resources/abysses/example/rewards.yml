@@ -30,7 +30,7 @@ rewards:
 
 # 宝箱奖励（open_chest_ui <名>）
 chest-rewards:
-  # f3_treasure 战利品宝箱
+  # f1_chest 战利品宝箱
   abyss_chest:
     title: "战利品宝箱"
     rows: 3
@@ -43,6 +43,22 @@ chest-rewards:
         weight: 20
       - item: "material:NETHERITE_SCRAP:1"
         weight: 5
+
+  # f3_chest 深渊战利品之厅（终层更丰厚）
+  abyss_chest_t3:
+    title: "深渊战利品"
+    rows: 3
+    options:
+      - item: "material:DIAMOND:4"
+        weight: 40
+      - item: "material:GOLDEN_APPLE:2"
+        weight: 25
+      - item: "material:NETHERITE_SCRAP:2"
+        weight: 15
+      - item: "material:TOTEM_OF_UNDYING:1"
+        weight: 10
+      - item: "material:EMERALD:8"
+        weight: 30
 
   # 通关宝箱（complete 段统一弹）
   final_chest:

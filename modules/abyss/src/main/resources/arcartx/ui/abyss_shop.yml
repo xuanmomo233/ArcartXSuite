@@ -60,7 +60,7 @@ controls:
         attribute:
           point: ~middle_center
           width: 620
-          height: 560
+          height: 640
         children:
           面板背景:
             type: Texture
@@ -106,7 +106,7 @@ controls:
               point: ~top_center
               y: 140
               width: 560
-              height: 340
+              height: 440
               normal: ~18,14,10,235
               shape: ~round_rect
               radius: 12
@@ -118,7 +118,7 @@ controls:
               point: ~top_center
               y: 152
               width: 536
-              spaceBetween: 10
+              spaceBetween: 8
             children:
               商品行:
                 type: Canvas
@@ -128,7 +128,7 @@ controls:
                   afford: "self.entry != none && self.entry['price'] <= var.coins"
                   visible: self.entry != none
                   width: 536
-                  height: 76
+                  height: 64
                 action:
                   clickLeft: |-
                     if(self.entry != none){
@@ -153,10 +153,10 @@ controls:
                     type: Slot
                     attribute:
                       slotType: ~Icon
-                      x: 14
-                      y: 14
-                      width: 48
-                      height: 48
+                      x: 12
+                      y: 12
+                      width: 40
+                      height: 40
                       itemScale: 0.85
                       normal: ~0,0,0,0
                       through: true
@@ -164,19 +164,19 @@ controls:
                   商品名:
                     type: Text
                     attribute:
-                      x: 78
-                      y: 10
+                      x: 64
+                      y: 6
                       texts: "'&f' + self.parent.entry['name']"
-                      fontSize: 40
+                      fontSize: 38
                       limit: 16
                       through: true
                   商品描述:
                     type: Text
                     attribute:
-                      x: 78
-                      y: 48
+                      x: 64
+                      y: 40
                       texts: "'&7' + self.parent.entry['desc0'] + (self.parent.entry['desc1'] != '' ? '  ' + self.parent.entry['desc1'] : '')"
-                      fontSize: 30
+                      fontSize: 28
                       limit: 30
                       through: true
                   价格:

@@ -14,7 +14,7 @@ shops:
         price: 8
         script:
           - "heal @trigger 12"
-          - "apply_potion @trigger REGENERATION 1 5"
+          - "apply_potion @trigger REGENERATION 5 2"
           - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
       - id: power
         name: "&c力量药剂"

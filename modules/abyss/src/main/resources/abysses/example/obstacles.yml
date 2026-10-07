@@ -1,10 +1,16 @@
-# 障碍物：f3 Boss 走廊的灼热陷阱地带（x457..462, z9..14——王座门前必经之路）
+# 障碍物：f3 Boss 走廊的灼热陷阱地带（x456..463, z9..14——走廊横截面全覆盖）
 # auto-create 在副本开始（world-init 建房之后）自动铺设；
 # trigger-mode ENTER = 玩家进入障碍区触发脚本（带冷却）。
 
 soul_trap:
-  # 灵魂沙减速带 x457..458 + 岩浆块 x459..462（覆盖走廊横截面）
+  # 灵魂沙减速带 x456..458 + 岩浆块 x459..463
   blocks:
+    - "456,60,9,SOUL_SAND"
+    - "456,60,10,SOUL_SAND"
+    - "456,60,11,SOUL_SAND"
+    - "456,60,12,SOUL_SAND"
+    - "456,60,13,SOUL_SAND"
+    - "456,60,14,SOUL_SAND"
     - "457,60,9,SOUL_SAND"
     - "457,60,10,SOUL_SAND"
     - "457,60,11,SOUL_SAND"
@@ -41,6 +47,12 @@ soul_trap:
     - "462,60,12,MAGMA_BLOCK"
     - "462,60,13,MAGMA_BLOCK"
     - "462,60,14,MAGMA_BLOCK"
+    - "463,60,9,MAGMA_BLOCK"
+    - "463,60,10,MAGMA_BLOCK"
+    - "463,60,11,MAGMA_BLOCK"
+    - "463,60,12,MAGMA_BLOCK"
+    - "463,60,13,MAGMA_BLOCK"
+    - "463,60,14,MAGMA_BLOCK"
   auto-create: true
   trigger-mode: ENTER
   trigger-cooldown: 6
