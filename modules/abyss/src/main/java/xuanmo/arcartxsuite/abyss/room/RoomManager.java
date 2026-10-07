@@ -87,6 +87,8 @@ public final class RoomManager {
         final Set<UUID> enrolled = ConcurrentHashMap.newKeySet();
         volatile long clearedAt;
         volatile boolean advanceFired;
+        /** 出口踩入防抖（传送落点可能压在出口盒上，连发会来回弹）。 */
+        volatile long lastExitAt;
 
         RoomRuntime(String id, RoomTemplate tpl, int floorIndex, int roomIndex) {
             this.id = id;
@@ -102,6 +104,8 @@ public final class RoomManager {
         public final int index;
         public final List<RoomRuntime> rooms = new ArrayList<>();
         public volatile boolean cleared;
+        /** 层底虚空判据：物化时取 min(房盒底)-8（MIN_VALUE=未物化，永不触发）。 */
+        volatile int voidY = Integer.MIN_VALUE;
         FloorRuntime(Floor floor, int index) { this.floor = floor; this.index = index; }
     }
 
@@ -110,6 +114,8 @@ public final class RoomManager {
         public final List<FloorRuntime> floors = new ArrayList<>();
         public volatile int currentFloor;
         public volatile int currentRoom;
+        /** 玩家 → 当前所在房（迷宫模式任意遍历/回退，不再线性前进）。 */
+        public final Map<UUID, RoomRuntime> roomOf = new ConcurrentHashMap<>();
         InstanceRuntime() { }
     }
 
@@ -224,6 +230,15 @@ public final class RoomManager {
             fi++;
         }
 
+        // 每层虚空判据：min(房盒底) - 8（走廊等房外区域掉下去也能拉回）
+        for (FloorRuntime fr : rt.floors) {
+            int min = Integer.MAX_VALUE;
+            for (RoomRuntime room : fr.rooms) {
+                if (room.boxMin != null) min = Math.min(min, room.boxMin.getBlockY());
+            }
+            if (min != Integer.MAX_VALUE) fr.voidY = min - 8;
+        }
+
         if (callback != null && !rt.floors.isEmpty()) {
             callback.setVar(instance, "floor", 1);
             callback.setVar(instance, "floors_total", rt.floors.size());
@@ -319,20 +334,26 @@ public final class RoomManager {
 
     // ═══ tick：进房检测 / 拉回 / 出口推进 ═══
 
-    /** proximityTick 周期调用（1s）。 */
+    /**
+     * proximityTick 周期调用（1s）。
+     * <p>迷宫支持：遍历当前层<b>全部</b>房间做进出检测——玩家可回退/走支线，
+     * 不再假设房间按链序访问；玩家→所在房记入 {@code rt.roomOf}。</p>
+     */
     public void tick(AbyssInstance instance) {
         InstanceRuntime rt = states.get(instance.getInstanceId());
         if (rt == null || instance.isFinished()
             || instance.getStatus() != AbyssStatus.ACTIVE) return;
         if (rt.currentFloor >= rt.floors.size()) return;
         FloorRuntime fr = rt.floors.get(rt.currentFloor);
+        long now = System.currentTimeMillis();
 
         for (Player p : instance.getPlayers()) {
             if (instance.isPlayerCurrentlyDead(p)) continue;
-            for (int ri = rt.currentRoom; ri < fr.rooms.size(); ri++) {
-                RoomRuntime room = fr.rooms.get(ri);
+            RoomRuntime cur = null;
+            for (RoomRuntime room : fr.rooms) {
                 if (room.boxMin == null) continue;
                 if (inBox(p.getLocation(), room.boxMin, room.boxMax)) {
+                    cur = room;
                     if (room.inside.add(p.getUniqueId())) {
                         onEnterRoom(instance, rt, fr, room, p);
                     }
@@ -340,44 +361,38 @@ public final class RoomManager {
                     room.inside.remove(p.getUniqueId());
                 }
             }
-        }
+            RoomRuntime prev = rt.roomOf.get(p.getUniqueId());
+            if (cur != null) rt.roomOf.put(p.getUniqueId(), cur);
+            else rt.roomOf.remove(p.getUniqueId());
 
-        RoomRuntime cur = currentRoom(instance);
-        if (cur == null) return;
-
-        // 边界拉回：FIGHTING 房逃逸兜底。
-        // 用 enrolled（进过房即登记）而非 inside——inside 每 tick 随进出增删，
-        // 离开盒子的玩家同一 tick 已被 remove，永不可能满足 inside&&!inBox。
-        if (cur.state == RoomState.FIGHTING
-            && instance.getTemplate().floors().defaults().borderPullback()) {
-            for (Player p : instance.getPlayers()) {
-                if (instance.isPlayerCurrentlyDead(p)) continue;
-                if (cur.enrolled.contains(p.getUniqueId()) && cur.boxMin != null
-                    && !inBox(p.getLocation(), cur.boxMin, cur.boxMax)) {
-                    p.teleport(cur.spawn);
-                }
+            // 出口推进（portal）：所在房已清 + exit 激活 + 玩家进入（防抖防落点压在盒上连发）
+            if (cur != null && cur.state == RoomState.CLEARED && cur.exitMin != null
+                && now - cur.lastExitAt > 1500
+                && inBox(p.getLocation(), cur.exitMin, cur.exitMax)) {
+                cur.lastExitAt = now;
+                advance(instance, rt, fr, cur);
+                return;
             }
-        }
-        // 虚空防护：掉到当前房底部以下 → 拉回（pool 虚空世界/region 摔坑通用）。
-        // 旁观玩家同样拉回——旁观态在虚空里会持续坠落且本检查跳过死亡玩家会让他们无限漂失
-        if (cur.boxMin != null) {
-            double floorY = cur.boxMin.getY() - 8;
-            for (Player p : instance.getPlayers()) {
-                if (p.getWorld().equals(cur.boxMin.getWorld())
-                    && p.getLocation().getY() < floorY) {
-                    p.teleport(cur.spawn);
-                }
+
+            // 虚空防护：不在任何房内（走廊虚空洞）且低于层底 → 拉回上次所在房/首房
+            if (cur == null && p.getWorld().equals(instance.getWorld())
+                && p.getLocation().getY() < fr.voidY) {
+                RoomRuntime fb = prev != null ? prev
+                    : (!fr.rooms.isEmpty() ? fr.rooms.get(0) : null);
+                if (fb != null) p.teleport(fb.spawn);
             }
         }
 
-        // 出口推进（portal）：当前房已清 + exit 激活 + 玩家进入
-        if (cur.state == RoomState.CLEARED && cur.exitMin != null && !cur.advanceFired) {
-            for (Player p : instance.getPlayers()) {
-                if (instance.isPlayerCurrentlyDead(p)) continue;
-                if (inBox(p.getLocation(), cur.exitMin, cur.exitMax)) {
-                    cur.advanceFired = true;
-                    advance(instance, rt, fr, cur);
-                    return;
+        // 边界拉回：每个 FIGHTING 房独立处理（迷宫/链式通用——进过房的出盒即拉回）。
+        if (instance.getTemplate().floors().defaults().borderPullback()) {
+            for (RoomRuntime room : fr.rooms) {
+                if (room.state != RoomState.FIGHTING || room.boxMin == null) continue;
+                for (Player p : instance.getPlayers()) {
+                    if (instance.isPlayerCurrentlyDead(p)) continue;
+                    if (room.enrolled.contains(p.getUniqueId())
+                        && !inBox(p.getLocation(), room.boxMin, room.boxMax)) {
+                        p.teleport(room.spawn);
+                    }
                 }
             }
         }
@@ -389,7 +404,8 @@ public final class RoomManager {
         // enrolled 进过房即登记：兼作 FIGHTING 拉回基准与「首次进房」判据——
         // inside 集合随进出增删，靠它判首次会让 on-enter 在重进时刷屏
         boolean firstEnter = room.enrolled.add(p.getUniqueId());
-        if (room.floorIndex == rt.currentFloor && room.roomIndex > rt.currentRoom) {
+        // 迷宫模式 currentRoom 语义=玩家当前所在房（可回退，不再单调前进）
+        if (room.floorIndex == rt.currentFloor) {
             rt.currentRoom = room.roomIndex;
             if (callback != null) callback.setVar(instance, "room", room.roomIndex + 1);
         }
@@ -461,11 +477,16 @@ public final class RoomManager {
                 "floor", room.floorIndex + 1,
                 "room", room.tpl.id(),
                 "room_index", room.roomIndex));
-            callback.broadcast(instance,
-                callback.msg("dungeon.room-clear", "room", room.tpl.id()));
+            // 安全房/功能房进房即"肃清"——不对无怪组房播报（迷宫里遍历经停会刷屏）
+            if (!room.groupNames.isEmpty()) {
+                callback.broadcast(instance,
+                    callback.msg("dungeon.room-clear", "room", room.tpl.id()));
+            }
         }
 
-        boolean isLastRoom = room.roomIndex >= fr.rooms.size() - 1;
+        // 终点房判定：配了 boss-room 就以它为终点（迷宫图顺序不再代表进度），
+        // 没配退回链尾语义（线性副本兼容）
+        boolean isLastRoom = isTerminal(fr, room);
         if (!isLastRoom) {
             if (fr.floor.advance() == FloorConfig.Advance.AUTO) {
                 room.advanceFired = true;
@@ -504,10 +525,17 @@ public final class RoomManager {
      *
      * @param cleared 刚清完的那个房（推进基准；可能落后/领先 currentRoom，以它为准）
      */
+    /** 终点房：boss-room 显式指定优先，否则链尾房（线性兼容）。 */
+    private boolean isTerminal(FloorRuntime fr, RoomRuntime room) {
+        return fr.floor.bossRoom() != null
+            ? fr.floor.bossRoom().equals(room.tpl.id())
+            : room.roomIndex >= fr.rooms.size() - 1;
+    }
+
     private void advance(AbyssInstance instance, InstanceRuntime rt,
                          FloorRuntime fr, RoomRuntime cleared) {
         Location target;
-        if (cleared.roomIndex >= fr.rooms.size() - 1) {
+        if (isTerminal(fr, cleared)) {
             int nf = cleared.floorIndex + 1;
             if (nf >= rt.floors.size()) return;
             rt.currentFloor = nf;

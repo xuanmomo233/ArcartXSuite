@@ -221,11 +221,21 @@ public final class MonsterGroupManager {
             for (GroupRuntime dep : groups.values()) {
                 if (dep.state == GroupState.PENDING
                     && dep.group.spawnTiming() == MonsterConfig.SpawnTiming.TRIGGERED
-                    && dep.group.triggerAfter().contains(rt.group.name())) {
+                    && dep.group.triggerAfter().contains(rt.group.name())
+                    && allDepsCompleted(groups, dep.group)) {
                     queueTriggeredSpawn(instance, dep);
                 }
             }
         }
+    }
+
+    /** trigger-after 全前置已完成才算触发（任一先完成时提前排队会让波次越过休整）。 */
+    private boolean allDepsCompleted(Map<String, GroupRuntime> groups, MonsterGroup g) {
+        for (String depName : g.triggerAfter()) {
+            GroupRuntime dep = groups.get(depName);
+            if (dep == null || dep.state != GroupState.COMPLETED) return false;
+        }
+        return true;
     }
 
     /**

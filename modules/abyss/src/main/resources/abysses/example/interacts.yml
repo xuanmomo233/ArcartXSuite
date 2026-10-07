@@ -2,10 +2,10 @@
 # conditions 用 PAPI 条件（%axsabyss_var_<名>% 读副本实例变量）；
 # fail-message 在条件不满足时发给点击者。
 
-# ═══ 祭坛（f1_altar）：15 金币供奉 → 三选一祝福 ═══
+# ═══ 祭坛（f1_altar 神秘祭坛 / f3_shrine 灵魂祭坛）═══
 altar:
   type: RIGHT_CLICK_BLOCK
-  location: "91,61,11"
+  location: "11,61,43"
   required-block: ENCHANTING_TABLE
   conditions: ["%axsabyss_var_coins% >= 15"]
   fail-message: "&c祭坛沉默着……供奉需要 &e15 &c金币"
@@ -13,13 +13,22 @@ altar:
     - "addvar coins -15"
     - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
     - "buff_offer altar_pool"
-    - "guide_clear f1_altar_pt"
-    - "guide_point f1_e2 105,62,11 2 &e前往守层 Boss"
 
-# ═══ 商店台座（f2_shop）═══
+shrine3:
+  type: RIGHT_CLICK_BLOCK
+  location: "411,61,43"
+  required-block: ENCHANTING_TABLE
+  conditions: ["%axsabyss_var_coins% >= 15"]
+  fail-message: "&c祭坛沉默着……供奉需要 &e15 &c金币"
+  script:
+    - "addvar coins -15"
+    - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
+    - "buff_offer altar_pool"
+
+# ═══ 商店台座（f2_shop 矿道商队）═══
 shop_heal:
   type: RIGHT_CLICK_BLOCK
-  location: "247,61,2"
+  location: "207,61,37"
   required-block: GOLD_BLOCK
   conditions: ["%axsabyss_var_coins% >= 8"]
   fail-message: "&c治疗台座需要 &e8 &c金币"
@@ -30,10 +39,10 @@ shop_heal:
     - "message @trigger &a✚ 治疗完成，继续深入吧"
     - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
 
-# 力量台座：同价 12 金，档位由 shop_power_lvl 随机（I 3分钟/II 2分钟/III 1分钟）
+# 力量台座：同价 12 金，档位由 shop_power_lvl 随机（I/II/III）
 shop_power:
   type: RIGHT_CLICK_BLOCK
-  location: "251,61,2"
+  location: "211,61,37"
   required-block: REDSTONE_BLOCK
   conditions: ["%axsabyss_var_coins% >= 12"]
   fail-message: "&c力量台座需要 &e12 &c金币"
@@ -46,7 +55,7 @@ shop_power:
 
 shop_apple:
   type: RIGHT_CLICK_BLOCK
-  location: "255,61,2"
+  location: "215,61,37"
   required-block: DIAMOND_BLOCK
   conditions: ["%axsabyss_var_coins% >= 15"]
   fail-message: "&c金苹果需要 &e15 &c金币"
@@ -56,32 +65,40 @@ shop_apple:
     - "message @trigger &6✦ 入手 金苹果 ×1"
     - "sound @trigger ENTITY_ITEM_PICKUP 1 1.2"
 
-# ═══ 解谜拉杆（f2_puzzle）：顺序由 puzzles.yml lever_gate 判定 ═══
+# ═══ 解谜拉杆（f2_puzzle 尘封机关）═══
+# 颜色序 = 青(x279) → 红(x271) → 绿(x283) → 黄(x275)，拉杆头顶彩窗标识
 lever_1:
   type: RIGHT_CLICK_BLOCK
-  location: "285,62,7"
+  location: "271,62,39"
   required-block: LEVER
 lever_2:
   type: RIGHT_CLICK_BLOCK
-  location: "289,62,7"
+  location: "275,62,39"
   required-block: LEVER
 lever_3:
   type: RIGHT_CLICK_BLOCK
-  location: "293,62,7"
+  location: "279,62,39"
   required-block: LEVER
 lever_4:
   type: RIGHT_CLICK_BLOCK
-  location: "297,62,7"
+  location: "283,62,39"
   required-block: LEVER
 
-# ═══ 战利品宝箱（f3_treasure，金台顶端）═══
+# ═══ 战利品宝箱 ═══
 abyss_chest:
   type: RIGHT_CLICK_BLOCK
-  location: "451,62,11"
+  location: "75,62,43"
   required-block: CHEST
-  once: true                          # 每实例一次
+  once: true
   script:
     - "open_chest_ui @trigger abyss_chest"
     - "sound @trigger BLOCK_CHEST_OPEN 1 1"
-    - "guide_clear f3_chest_pt"
-    - "guide_point f3_next 465,62,11 2 &e整备完成·前往王座"
+
+abyss_chest3:
+  type: RIGHT_CLICK_BLOCK
+  location: "475,62,43"
+  required-block: CHEST
+  once: true
+  script:
+    - "open_chest_ui @trigger abyss_chest"
+    - "sound @trigger BLOCK_CHEST_OPEN 1 1"

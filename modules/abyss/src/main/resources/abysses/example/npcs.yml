@@ -7,11 +7,11 @@
 guide:
   name: "&e向导·艾琳"
   type: VILLAGER
-  location: "11,61,11,90,0"        # f1_start 房中心，面向入口(+x→-x 看西边=yaw90)
+  location: "11,61,11,90,0"        # f1_start 房中心，面向入口
   look-at-player: true
   dialogs:                        # 无 Chemdah 会话时的聊天栏兜底
     - "&e欢迎来到元气试炼之地！"
-    - "&7地牢共三层：战斗房肃清 → 祭坛/商店补给 → 守层 Boss。"
+    - "&7三层迷宫：走廊自由探索，战斗房肃清后通往 Boss 的门才会开。"
     - "&7击杀魔物掉金币，祭坛和商队都收这个。"
     - "&a需要委托的话，我可以给你登记讨伐任务。"
   dialog-interval: 40
@@ -22,7 +22,7 @@ guide:
 merchant:
   name: "&6旅行商人·老陈"
   type: WANDERING_TRADER
-  location: "251,61,5,0,0"         # f2_shop 台座南侧柜台后，面南(+z=yaw0)迎客
+  location: "211,61,38,180,0"      # f2_shop 台座后（z0+5=37 台座，商人 z38 面北）
   look-at-player: true
   dialogs:
     - "&6客人，随便看看。台座上的货都标着价。"

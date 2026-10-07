@@ -1,59 +1,62 @@
-# floors.yml — 元气试炼之地 · 三层链（region 模式）
-# 房间建筑全部由 scripts.yml world-init 搭建，无需 schematic。
-# 推进：房清完 → 踩出口凹室金块地标（portal）→ 下一房；层末清完 → 下层入口。
+# floors.yml — 元气试炼之地 · 迷宫三层链（region 模式，格子 pitch=32）
+# 拓扑：每层 3×3 网格取 7 房，走廊真实互连成图（可回退/走支线）。
+# boss-room 即终点房：清完 → 层清 → 下一层；最后一层清完 → 通关。
+# Boss 房门由 world-init 封死，肃清 ≥1 战斗房后脚本开（boss-unlock 语义在
+# 各战斗房 on-clear 的 fN_cleared 计数 + fN_gate 段实现）。
 
 defaults:
   lock-material: BARRIER        # 锁门填充材质（锁=填塞，清完还原）
   border-pullback: true         # 战斗房锁门期间离开区域 → 拉回房中心
-  room-spacing: 200             # pool 模式用（本示例全 region）
+  room-spacing: 200
   paste-y: 64
   advance-timeout: 90           # portal 兜底秒数（超时不踩出口自动推进，0=关）
 
 floors:
-  # ── 第 1 层 · 苔痕前哨 ─────────────────────────────────────
+  # ── &a第 1 层 · 苔痕前哨 ──
   - id: f1
     name: "&a第 1 层 · 苔痕前哨"
     source: region
-    spawn: "2,61,11,270,0"        # 本层入口 = 起始房站位
-    rooms: [f1_start, f1_combat_a, f1_altar, f1_boss]
+    spawn: "3,61,11,270,0"
+    rooms: [f1_start, f1_combat_a, f1_altar, f1_combat_b, f1_boss, f1_chest, f1_combat_c]
+    boss-room: f1_boss
     advance: portal
     advance-timeout: 90
     on-enter:
-      - "title @all 10 40 10 &a第 1 层|&7苔痕前哨"
+      - "title @all 10 40 10 &a第 1 层|&7苔痕前哨 · 迷宫"
       - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
     on-clear:
-      - "title @all 10 40 10 &a第 1 层肃清|&e领取你的天赋祝福"
-      - "buff_offer f1_blessing"           # 层间三选一天赋（元气核心节奏）
+      - "title @all 10 40 10 &a第 1 层 肃清|&e领取你的天赋祝福"
+      - "buff_offer f1_blessing"
       - "wait 6"
-      - "message @all &7前方通往 &6第 2 层 · 熔岩矿道"
-
-  # ── 第 2 层 · 熔岩矿道 ─────────────────────────────────────
+      - "message @all &7迷宫更深处：&6下一层" 
+  # ── &6第 2 层 · 熔岩矿道 ──
   - id: f2
     name: "&6第 2 层 · 熔岩矿道"
     source: region
-    spawn: "202,61,11,270,0"
-    rooms: [f2_combat_a, f2_shop, f2_puzzle, f2_boss]
+    spawn: "203,61,11,270,0"
+    rooms: [f2_entry, f2_combat_a, f2_shop, f2_combat_b, f2_puzzle, f2_combat_c, f2_boss]
+    boss-room: f2_boss
     advance: portal
     advance-timeout: 90
     on-enter:
-      - "title @all 10 40 10 &6第 2 层|&7熔岩矿道"
+      - "title @all 10 40 10 &6第 2 层|&7熔岩矿道 · 迷宫"
       - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
     on-clear:
-      - "title @all 10 40 10 &6第 2 层肃清|&e领取你的天赋祝福"
+      - "title @all 10 40 10 &6第 2 层 肃清|&e领取你的天赋祝福"
       - "buff_offer f2_blessing"
       - "wait 6"
-      - "message @all &7深渊的气息扑面而来——&4第 3 层 · 深渊王座"
-
-  # ── 第 3 层 · 深渊王座 ─────────────────────────────────────
+      - "message @all &7迷宫更深处：&6下一层" 
+  # ── &4第 3 层 · 深渊王座 ──
   - id: f3
     name: "&4第 3 层 · 深渊王座"
     source: region
-    spawn: "402,61,11,270,0"
-    rooms: [f3_corridor, f3_treasure, f3_final]
+    spawn: "403,61,11,270,0"
+    rooms: [f3_entry, f3_combat_a, f3_shrine, f3_combat_b, f3_chest, f3_elite, f3_final]
+    boss-room: f3_final
     advance: portal
     advance-timeout: 90
     on-enter:
-      - "title @all 10 40 10 &4第 3 层|&7深渊王座"
-      - "sound @all ENTITY_WITHER_SPAWN 0.5 0.8"
-      - "message @all &7王座就在前方。整备好补给，一击制胜。"
-    # 层末 f3_final 清完 → 自动通关（complete 生命周期段）
+      - "title @all 10 40 10 &4第 3 层|&7深渊王座 · 决战"
+      - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
+    on-clear:
+      - "title @all 10 40 10 &4&l深渊领主击破|&e试炼完成" 
