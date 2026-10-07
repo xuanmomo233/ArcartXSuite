@@ -383,16 +383,17 @@ public final class RoomManager {
         }
     }
 
-    /** 玩家首次进入房间。 */
+    /** 玩家首次进入房间（文档语义=首次；离开再进不重复播 on-enter）。 */
     private void onEnterRoom(AbyssInstance instance, InstanceRuntime rt,
                              FloorRuntime fr, RoomRuntime room, Player p) {
-        // 进过房即登记（FIGHTING 拉回判定基准；非战斗房登记无副作用）
-        room.enrolled.add(p.getUniqueId());
+        // enrolled 进过房即登记：兼作 FIGHTING 拉回基准与「首次进房」判据——
+        // inside 集合随进出增删，靠它判首次会让 on-enter 在重进时刷屏
+        boolean firstEnter = room.enrolled.add(p.getUniqueId());
         if (room.floorIndex == rt.currentFloor && room.roomIndex > rt.currentRoom) {
             rt.currentRoom = room.roomIndex;
             if (callback != null) callback.setVar(instance, "room", room.roomIndex + 1);
         }
-        if (callback != null) {
+        if (firstEnter && callback != null) {
             callback.publishEvent("axs.abyss.room_enter", p, Map.of(
                 "dungeon", instance.getTemplate().id(),
                 "instance", instance.getInstanceId().toString(),

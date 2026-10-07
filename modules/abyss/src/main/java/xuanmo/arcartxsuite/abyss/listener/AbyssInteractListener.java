@@ -34,6 +34,8 @@ public final class AbyssInteractListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
     public void onInteract(PlayerInteractEvent event) {
+        // 右键类交互主副手各发一次（PHYSICAL 踩踏无手），只认主手防双触发
+        if (event.getHand() != null && event.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null) {
@@ -91,6 +93,8 @@ public final class AbyssInteractListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityInteract(PlayerInteractEntityEvent event) {
+        // 主副手各触发一次是 Bukkit 实体交互的经典行为——只认主手，否则对话/脚本双跑
+        if (event.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
         Player player = event.getPlayer();
         AbyssInstance instance = service.instances().getInstance(player);
         if (instance == null || instance.getStatus() != AbyssStatus.ACTIVE) return;

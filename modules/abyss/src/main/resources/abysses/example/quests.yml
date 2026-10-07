@@ -10,8 +10,10 @@ slayer:
   # navigation.enabled=false（副本内坐标是动态世界，导航由 abyss guide_point 承担），
   # 故关闭自动追踪；进度展示走 Chemdah addon.track.scoreboard。
   auto-track: false
+  # on-accept 不再发"已接取"消息——questgps 通知 + Chemdah agent tell 已各播一遍，
+  # 这里再加一条就是三层刷屏。钩子保留位：要加副本内动作（指路/音效）写在下面。
   on-accept:
-    - "message @trigger &a已接取委托：讨伐深渊魔物 &7（进度见任务面板/记分板）"
+    - "sound @trigger ENTITY_EXPERIENCE_ORB_PICKUP 1 1.2"
   on-complete:                       # Chemdah 完成 → EventBus 路由到此发奖
     - "grant_reward @trigger quest_pack"
     - "message @trigger &6委托达成！奖励已发放"

@@ -205,10 +205,17 @@ public final class DungeonNpcManager {
         return true;
     }
 
+    /** 同玩家同 NPC 的点击防抖：Adyeshach/实体事件可能一帧内双发（主副手/重复路由）。 */
+    private final Map<String, Long> lastClick = new ConcurrentHashMap<>();
+
     /** 统一点击处理：once 判定 → 会话/降级对话 → click-script。 */
     private void fireClick(AbyssInstance instance, Player player, String npcName) {
         DungeonNpc npc = instance.getTemplate().npcs().npcs().get(npcName);
         if (npc == null) return;
+        String clickKey = instance.getInstanceId() + ":" + npcName + ":" + player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Long last = lastClick.put(clickKey, now);
+        if (last != null && now - last < 500L) return; // 同一次物理点击的重复事件
         if (npc.once() && instance.isTriggered("npc:" + npcName + ":" + player.getUniqueId())) {
             return;
         }
@@ -276,8 +283,8 @@ public final class DungeonNpcManager {
 
     public void cleanup(AbyssInstance instance) {
         Map<String, Object> map = spawned.remove(instance.getInstanceId());
-        if (map == null) return;
-        map.values().forEach(this::removeHandle);
+        if (map != null) map.values().forEach(this::removeHandle);
+        lastClick.keySet().removeIf(k -> k.startsWith(instance.getInstanceId() + ":"));
     }
 
     public void shutdown() {
