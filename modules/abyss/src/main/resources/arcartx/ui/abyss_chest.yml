@@ -51,7 +51,7 @@ ui:
       var.dirty = false
     open: |-
       Sound.self('minecraft:block.chest.open', 0.9, 10)
-    // 控件就绪后统一应用物品图标（脏标记只执行一次）
+    # 控件就绪后统一应用物品图标（脏标记只执行一次）
     tick: |-
       if(var.dirty){
         var.dirty = false

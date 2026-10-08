@@ -78,6 +78,7 @@ ui:
       var.cardBg = '38,30,58,255'
       var.cardBgHover = '52,40,76,255'
       var.green = '120,200,140,255'
+      var.air = '{"id":"minecraft:air","Count":1b}'
       self.actions['resize']()
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -183,6 +184,8 @@ ui:
           }
         }
       }
+      // 目标副本图标：seticon 不随 var 自动重算，数据刷新后手动触发
+      val.副本图标.seticon()
     # 在线玩家列表重建（邀请副面板）
     refreshOnline: |-
       在线数 = var.onlineCount.round()
@@ -482,6 +485,7 @@ controls:
               through: true
           副本图标:
             type: Slot
+            val: 副本图标
             attribute:
               x: "var.rightX + 26"
               y: 322
@@ -489,7 +493,7 @@ controls:
               height: 72
               iconSize: 56
               normal: var.cardBg
-              seticon: var.dungeon['iconJson']
+              seticon: "self.setItemIcon(var.hasDungeon && var.dungeon != none && var.dungeon['iconJson'] != none && var.dungeon['iconJson'] != '' ? var.dungeon['iconJson'] : var.air)"
               seticonscale: 1.0
               visible: var.hasDungeon
             children:

@@ -34,22 +34,7 @@ ui:
       for(key in var.cards.keys()){
         var.iconJsons[key] = var.cards[key]['iconJson']
       }
-      // 卡片 copy（引用字典 + 轮次名 + 数量变化才重建）
-      卡片目标数 = var.count.round()
-      if(val.卡片区.childrenCount() - 1 != 卡片目标数 - 1){
-        for(key in var.卡片引用.keys()){
-          var.卡片引用[key].remove()
-        }
-        var.卡片引用 = {}
-        var.轮次 = (var.轮次 + 1).round()
-        模板 = val.卡片区.get(0)
-        模板.entryKey = 0.round()
-        for(i in range(1, 卡片目标数 - 1)){
-          e = 模板.copy('卡片_' + var.轮次 + '_' + i.round())
-          e.entryKey = i.round()
-          var.卡片引用[i.round()] = e
-        }
-      }
+      var.dirty = true
   action:
     load: |-
       var.packetId = 'abyss'
@@ -63,8 +48,36 @@ ui:
       var.卡片引用 = {}
       var.轮次 = 0
       var.accent = '186,140,232,255'
+      var.dirty = false
     open: |-
       Sound.self('minecraft:block.note_block.pling', 0.8, 10)
+    tick: |-
+      if(var.dirty){
+        var.dirty = false
+        // 卡片 copy（引用字典 + 轮次名 + 数量变化才重建）
+        卡片目标数 = var.count.round()
+        if(val.卡片区.childrenCount() - 1 != 卡片目标数 - 1){
+          for(key in var.卡片引用.keys()){
+            var.卡片引用[key].remove()
+          }
+          var.卡片引用 = {}
+          var.轮次 = (var.轮次 + 1).round()
+          模板 = val.卡片区.get(0)
+          模板.entryKey = 0.round()
+          for(i in range(1, 卡片目标数 - 1)){
+            e = 模板.copy('卡片_' + var.轮次 + '_' + i.round())
+            e.entryKey = i.round()
+            var.卡片引用[i.round()] = e
+          }
+        }
+        // seticon 不随 var/entry 自动重算，需逐卡片手动触发
+        if(卡片目标数 > 0){
+          val.卡片区.get(0)['图标槽'].seticon()
+          for(i in range(1, 卡片目标数 - 1)){
+            var.卡片引用[i.round()]['图标槽'].seticon()
+          }
+        }
+      }
     seconds: |-
       if(var.timeout > 0 && var.remain > 0) {
         var.remain = var.remain - 1

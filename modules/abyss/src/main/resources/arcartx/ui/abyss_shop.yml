@@ -21,6 +21,7 @@ ui:
       var.coins = packet['coins']
       var.goodsCount = packet['goodsCount']
       var.goodsRows = packet['goods']
+      var.dirty = true
     update: |-
       var.coins = packet['coins']
       val.金币数.texts = '&e' + var.coins.round() + ' 金币'
@@ -39,8 +40,40 @@ ui:
       var.rowBg = '30,24,18,235'
       var.rowBgHover = '48,38,26,245'
       var.poor = '90,82,70,200'
+      var.dirty = false
+      var.商品引用 = {}
+      var.商品轮次 = 0
     open: |-
       Sound.self('minecraft:entity.villager.trade', 0.9, 10)
+    tick: |-
+      if(var.dirty){
+        var.dirty = false
+        // 重建商品行：模板在索引0，按轮次命名防冲突
+        目标数 = var.goodsCount.round()
+        if(val.goods_rows.childrenCount() - 1 != 目标数 - 1){
+          for(key in var.商品引用.keys()){
+            var.商品引用[key].remove()
+          }
+          var.商品引用 = {}
+          var.商品轮次 = (var.商品轮次 + 1).round()
+          模板 = val.goods_rows.get(0)
+          模板.entryKey = 0.round()
+          if(目标数 > 1){
+            for(i in range(1, 目标数 - 1)){
+              c = 模板.copy('商品行_' + var.商品轮次 + '_' + i.round())
+              c.entryKey = i.round()
+              var.商品引用[i.round()] = c
+            }
+          }
+        }
+        // seticon 不随 var/entry 自动重算，需逐行手动触发
+        if(目标数 > 0){
+          val.goods_rows.get(0)['商品图标'].seticon()
+          for(i in range(1, 目标数 - 1)){
+            var.商品引用[i.round()]['商品图标'].seticon()
+          }
+        }
+      }
 controls:
   全屏磨砂:
     type: Texture
