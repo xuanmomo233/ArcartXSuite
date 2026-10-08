@@ -95,6 +95,18 @@ public final class SchematicWorldService {
                                            int x, int z, BiomeGrid biome) {
             return createChunkData(world); // 全空气
         }
+
+        /**
+         * 固定出生点。虚空世界没有任何可站立方块，原版 setInitialSpawn 会沿螺旋
+         * 逐候选点 getChunk 阻塞（每个都现场跑 initialize_light），createWorld 阶段
+         * 卡死主线程十几秒。返回非 null 后 CraftBukkit 直接写入出生点并跳过全部扫描；
+         * 玩家实际落点仍由楼层 spawn 传送决定，这里只是堵住世界的 spawn 记录。
+         */
+        @Override
+        public @Nullable org.bukkit.Location getFixedSpawnLocation(World world,
+                                                                   java.util.Random random) {
+            return new org.bukkit.Location(world, 0, 64, 0);
+        }
     }
 
     /** schematic 会话（WE EditSession 生命周期占位；回收由世界卸载统一完成）。 */
