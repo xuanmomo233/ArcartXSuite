@@ -482,7 +482,7 @@ public final class PropService implements Listener {
             if (!auto) {
                 player.sendMessage(render(languageConfiguration.coolDown(), itemName, cooldown));
                 if (useMode == PropUseMode.KEY) {
-                    handle.syncSlotCacheToClient();
+                    resyncSlotCacheEntry(handle, slotId);
                 }
             }
             return false;
@@ -493,14 +493,14 @@ public final class PropService implements Listener {
         }
         if (useMode == PropUseMode.KEY && !definition.key()) {
             player.sendMessage(render(languageConfiguration.noKey(), itemName, 0L));
-            handle.syncSlotCacheToClient();
+            resyncSlotCacheEntry(handle, slotId);
             return false;
         }
         if (!definition.permission().isBlank() && !player.hasPermission(definition.permission())) {
             if (!auto) {
                 player.sendMessage(render(languageConfiguration.noPermission(), itemName, 0L));
                 if (useMode == PropUseMode.KEY) {
-                    handle.syncSlotCacheToClient();
+                    resyncSlotCacheEntry(handle, slotId);
                 }
             }
             return false;
@@ -511,7 +511,7 @@ public final class PropService implements Listener {
                 if (!auto) {
                     player.sendMessage(renderCondition(languageConfiguration.conditionNotMet(), itemName, failedCondition.raw()));
                     if (useMode == PropUseMode.KEY) {
-                        handle.syncSlotCacheToClient();
+                        resyncSlotCacheEntry(handle, slotId);
                     }
                 }
                 return false;
@@ -532,7 +532,6 @@ public final class PropService implements Listener {
             } else if (resolved.changed()) {
                 handle.setSlotItemStack(slotId, itemStack);
             }
-            handle.syncSlotCacheToClient();
         }
 
         executeEffects(player, definition);
@@ -719,7 +718,17 @@ public final class PropService implements Listener {
                 handle.setSlotItemStack(slotId, resolved.itemStack());
             }
         }
-        handle.syncSlotCacheToClient();
+    }
+
+    /** 仅回推该槽位的服务端缓存值；全量槽位同步的包量与槽位总数成正比（ExtraBackpack 可注入上千槽位）。 */
+    private void resyncSlotCacheEntry(PropPlayerHandle handle, String slotId) {
+        if (slotId == null) {
+            return;
+        }
+        ItemStack current = handle.getSlotItemStack(slotId);
+        if (current != null) {
+            handle.setSlotItemStack(slotId, current);
+        }
     }
 
     private PropDefinition resolveDefinition(String propId) {

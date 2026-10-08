@@ -33,6 +33,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import priv.seventeen.artist.arcartx.ArcartX;
 import priv.seventeen.artist.arcartx.core.config.slot.SlotElement;
+import priv.seventeen.artist.arcartx.database.DatabaseManager;
+import priv.seventeen.artist.arcartx.database.slot.SlotDatabase;
 import priv.seventeen.artist.arcartx.event.client.ClientExtraSlotClickEvent;
 import priv.seventeen.artist.arcartx.event.player.PlayerExtraSlotUpdateEvent;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -554,9 +556,17 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         try {
             for (int i = 0; i < category.maxSlots(); i++) {
                 ItemStack stack = i < grid.length ? grid[i] : null;
-                handle.setSlotItemStack(
-                    slotId(category.id(), i),
-                    stack == null || stack.getType().isAir() ? new ItemStack(Material.AIR) : stack);
+                ItemStack next = stack == null || stack.getType().isAir() ? new ItemStack(Material.AIR) : stack;
+                // 与 ArcartX 槽位缓存中的现值做增量对比，只推变化的格子
+                ItemStack cached = handle.getSlotItemStack(slotId(category.id(), i));
+                boolean cachedEmpty = cached == null || cached.getType().isAir();
+                if (cachedEmpty && next.getType().isAir()) {
+                    continue;
+                }
+                if (cached != null && next.equals(cached)) {
+                    continue;
+                }
+                handle.setSlotItemStack(slotId(category.id(), i), next);
             }
         } finally {
             slotSyncSuppressed.remove(uuid);
@@ -639,6 +649,53 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             actionTokens.remove(uuid);
         }
         playerLocks.remove(uuid);
+        purgePersistedSlotRows(event.getPlayer());
+    }
+
+    /**
+     * 视图槽位（axs_eb_*）只是仓库内容的投影，不需要跨登录持久化。
+     * 向 ArcartX 槽位库写入空串：加载端 {@code deserializeItemStack("")} 返回 null，
+     * 下次进服时这些槽位不会进入 slotCache，也就不会被初始化序列全量回放。
+     * 只处理库中已存在的行，不为未使用过本功能的玩家产生新行。
+     */
+    private void purgePersistedSlotRows(Player player) {
+        DatabaseManager databaseManager = ArcartX.INSTANCE.getDatabaseManager();
+        SlotDatabase slotDatabase = databaseManager == null ? null : databaseManager.getSlotDatabase();
+        if (slotDatabase == null) {
+            return;
+        }
+        List<String> ids = new ArrayList<>();
+        for (ExtraBackpackCategory category : categories()) {
+            for (int i = 0; i < category.maxSlots(); i++) {
+                ids.add(slotId(category.id(), i));
+            }
+        }
+        if (ids.isEmpty()) {
+            return;
+        }
+        UUID uuid = player.getUniqueId();
+        String name = player.getName();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                int purged = 0;
+                for (int i = 0; i < ids.size(); i += 500) {
+                    // SQLite IN 子句变量数有上限，分批查询
+                    List<String> chunk = ids.subList(i, Math.min(i + 500, ids.size()));
+                    for (Map.Entry<String, String> row : slotDatabase.loadPlayerSlotDataRaw(uuid, chunk).entrySet()) {
+                        if (row.getValue() == null || row.getValue().isEmpty()) {
+                            continue;
+                        }
+                        slotDatabase.setSlotDataJson(uuid, row.getKey(), "");
+                        purged++;
+                    }
+                }
+                if (purged > 0) {
+                    logger.info("已清除 " + name + " 的 " + purged + " 个持久化扩展背包槽位");
+                }
+            } catch (Throwable throwable) {
+                logger.warning("清除 ArcartX 持久化槽位失败(" + name + "): " + throwable.getMessage());
+            }
+        });
     }
 
     private String matchCategory(ItemStack stack) {
