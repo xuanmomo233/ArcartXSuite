@@ -139,8 +139,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("partyText", party != null
             ? party.size() + " 人小队" : "未组队");
 
-        packetBridge.sendPacket(player, browserUi(), "init", payload);
         packetBridge.openUiUnsafe(player, browserUi());
+        packetBridge.sendPacket(player, browserUi(), "init", payload);
     }
 
     @Override
@@ -163,8 +163,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("moneyCost", req.moneyCost());
         payload.put("cooldown", req.cooldownSeconds());
         payload.put("timeLimit", template.timeLimitSeconds());
-        packetBridge.sendPacket(player, confirmUi(), "init", payload);
         packetBridge.openUiUnsafe(player, confirmUi());
+        packetBridge.sendPacket(player, confirmUi(), "init", payload);
     }
 
     @Override
@@ -176,8 +176,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             return;
         }
         Map<String, Object> payload = partyRoomPayload(player, true);
-        packetBridge.sendPacket(player, partyUi(), "init", payload);
         packetBridge.openUiUnsafe(player, partyUi());
+        packetBridge.sendPacket(player, partyUi(), "init", payload);
     }
 
     @Override
@@ -190,8 +190,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("hasParty", service.party().partyOf(player) != null);
         payload.put("allowInvite", service.party().inviteAllowed(player.getUniqueId()));
         putLobbyData(payload, player, "", "");
-        packetBridge.sendPacket(player, lobbyUi(), "init", payload);
         packetBridge.openUiUnsafe(player, lobbyUi());
+        packetBridge.sendPacket(player, lobbyUi(), "init", payload);
     }
 
     /**
@@ -215,8 +215,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         payload.put("masked", puzzle.masked() ? "1" : "0");
         payload.put("attemptsText", attemptsLeft < 0 ? ""
             : service.msg("puzzle.attempts-left", "left", String.valueOf(attemptsLeft)));
-        packetBridge.sendPacket(player, inputUi(), "init", payload);
         packetBridge.openUiUnsafe(player, inputUi());
+        packetBridge.sendPacket(player, inputUi(), "init", payload);
     }
 
     /**
@@ -270,8 +270,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("count", i);
         payload.put("cards", rows);
-        packetBridge.sendPacket(player, buffUi(), "init", payload);
         packetBridge.openUiUnsafe(player, buffUi());
+        packetBridge.sendPacket(player, buffUi(), "init", payload);
     }
 
     /** 组装大厅列表数据（供 init / lobby_list 推送复用）。 */
@@ -488,8 +488,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             }
         }
         payload.put("statRows", rows);
-        packetBridge.sendPacket(player, statsUi(), "init", payload);
         packetBridge.openUiUnsafe(player, statsUi());
+        packetBridge.sendPacket(player, statsUi(), "init", payload);
     }
 
     @Override
@@ -518,8 +518,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             rows.put(Integer.toString(i++), r);
         }
         payload.put("boardRows", rows);
-        packetBridge.sendPacket(player, leaderboardUi(), "init", payload);
         packetBridge.openUiUnsafe(player, leaderboardUi());
+        packetBridge.sendPacket(player, leaderboardUi(), "init", payload);
     }
 
     // ═══ ChestUiHandler ═══
@@ -547,8 +547,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (int i = 0; i < items.size(); i++) {
             payload.put("itemJson" + i, itemJsonOf(items.get(i)));
         }
-        packetBridge.sendPacket(player, chestUi(), "init", payload);
         packetBridge.openUiUnsafe(player, chestUi());
+        packetBridge.sendPacket(player, chestUi(), "init", payload);
     }
 
     // ═══ 副本商店 ═══
@@ -587,8 +587,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("goodsCount", i);
         payload.put("goods", rows);
-        packetBridge.sendPacket(player, shopUi(), "init", payload);
         packetBridge.openUiUnsafe(player, shopUi());
+        packetBridge.sendPacket(player, shopUi(), "init", payload);
     }
 
     /**
@@ -651,8 +651,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                                xuanmo.arcartxsuite.abyss.design.DesignSession s) {
         if (!available()) return;
         Map<String, Object> payload = designMainPayload(player, s, true);
-        packetBridge.sendPacket(player, designUi(), "init", payload);
         packetBridge.openUiUnsafe(player, designUi());
+        packetBridge.sendPacket(player, designUi(), "init", payload);
     }
 
     /** 主面板数据刷新（节点切换/对象变动后推 update）。 */
@@ -728,8 +728,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         payload.put("kindRows", kinds);
         payload.put("kindCount", i);
-        packetBridge.sendPacket(player, designPickUi(), "init", payload);
         packetBridge.openUiUnsafe(player, designPickUi());
+        packetBridge.sendPacket(player, designPickUi(), "init", payload);
     }
 
     /** 编辑面板：字段表单 + 脚本行组。 */
@@ -741,8 +741,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         var obj = s.get(objKey);
         if (dm == null || obj == null) return;
         Map<String, Object> payload = designEditPayload(dm, s, obj, true, player);
-        packetBridge.sendPacket(player, designEditUi(), "init", payload);
         packetBridge.openUiUnsafe(player, designEditUi());
+        packetBridge.sendPacket(player, designEditUi(), "init", payload);
     }
 
     /** 编辑面板数据刷新。 */

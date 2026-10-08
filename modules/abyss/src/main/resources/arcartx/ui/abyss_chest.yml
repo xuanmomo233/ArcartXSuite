@@ -27,16 +27,9 @@ ui:
       var.itemJson6 = packet['itemJson6']
       var.itemJson7 = packet['itemJson7']
       var.itemJson8 = packet['itemJson8']
-      // 数据就绪后显式触发各槽位 seticon（属性不随 var 自动重算）
-      val.槽位0.seticon()
-      val.槽位1.seticon()
-      val.槽位2.seticon()
-      val.槽位3.seticon()
-      val.槽位4.seticon()
-      val.槽位5.seticon()
-      val.槽位6.seticon()
-      val.槽位7.seticon()
-      val.槽位8.seticon()
+      // 预发包经缓存 replay 时控件可能尚未就绪（文档约定：预发包只适合初始化数据），
+      // 控件操作统一延迟到 tick 由 var.dirty 驱动——槽位 seticon 属性表达式不变。
+      var.dirty = true
   action:
     load: |-
       var.packetId = 'abyss'
@@ -55,8 +48,23 @@ ui:
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.accent = '226,196,132,255'
       var.accentDim = '150,128,90,180'
+      var.dirty = false
     open: |-
       Sound.self('minecraft:block.chest.open', 0.9, 10)
+    // 控件就绪后统一应用物品图标（脏标记只执行一次）
+    tick: |-
+      if(var.dirty){
+        var.dirty = false
+        val.槽位0.seticon()
+        val.槽位1.seticon()
+        val.槽位2.seticon()
+        val.槽位3.seticon()
+        val.槽位4.seticon()
+        val.槽位5.seticon()
+        val.槽位6.seticon()
+        val.槽位7.seticon()
+        val.槽位8.seticon()
+      }
 controls:
   全屏磨砂:
     type: Texture
