@@ -1,4 +1,5 @@
-# 交互点：祭坛供奉 / 商店台座 / 解谜拉杆 / 战利品宝箱
+# 交互点：祭坛供奉 / 解谜拉杆 / 战利品宝箱
+# （商店由 merchant NPC 右键开 abyss_shop UI，不再用方块台座）
 # conditions 用 PAPI 条件（%axsabyss_var_<名>% 读副本实例变量）；
 # fail-message 在条件不满足时发给点击者。
 
@@ -24,46 +25,6 @@ shrine3:
     - "addvar coins -15"
     - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
     - "buff_offer altar_pool"
-
-# ═══ 商店台座（f2_shop 矿道商队）═══
-shop_heal:
-  type: RIGHT_CLICK_BLOCK
-  location: "207,61,37"
-  required-block: GOLD_BLOCK
-  conditions: ["%axsabyss_var_coins% >= 8"]
-  fail-message: "&c治疗台座需要 &e8 &c金币"
-  script:
-    - "addvar coins -8"
-    - "heal @trigger 12"
-    - "apply_potion @trigger REGENERATION 5 2"
-    - "message @trigger &a✚ 治疗完成，继续深入吧"
-    - "sound @trigger ENTITY_PLAYER_LEVELUP 1 1.6"
-
-# 力量台座：同价 12 金，档位由 shop_power_lvl 随机（I/II/III）
-shop_power:
-  type: RIGHT_CLICK_BLOCK
-  location: "211,61,37"
-  required-block: REDSTONE_BLOCK
-  conditions: ["%axsabyss_var_coins% >= 12"]
-  fail-message: "&c力量台座需要 &e12 &c金币"
-  script:
-    - "addvar coins -12"
-    - "run_script shop_power_t1"
-    - "run_script shop_power_t2"
-    - "run_script shop_power_t3"
-    - "sound @trigger ENTITY_ZOMBIE_VILLAGER_CURE 1 1.4"
-
-shop_apple:
-  type: RIGHT_CLICK_BLOCK
-  location: "215,61,37"
-  required-block: DIAMOND_BLOCK
-  conditions: ["%axsabyss_var_coins% >= 15"]
-  fail-message: "&c金苹果需要 &e15 &c金币"
-  script:
-    - "addvar coins -15"
-    - "give_item @trigger material:GOLDEN_APPLE:1"
-    - "message @trigger &6✦ 入手 金苹果 ×1"
-    - "sound @trigger ENTITY_ITEM_PICKUP 1 1.2"
 
 # ═══ 解谜拉杆（f2_puzzle 尘封机关）═══
 # 颜色序 = 青(x279) → 红(x271) → 绿(x283) → 黄(x275)，拉杆头顶彩窗标识

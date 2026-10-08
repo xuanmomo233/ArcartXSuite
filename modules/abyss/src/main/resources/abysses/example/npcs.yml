@@ -24,6 +24,8 @@ guide:
 merchant:
   name: "&6神秘商人·老陈"
   # 不用村民/行商类——原版交互会弹出交易 GUI 盖住商店 UI；女巫无交易界面且契合"神秘商人"
+  # 右键 = 直接开 abyss_shop 购物 UI（shops.yml caravan 店）；不绑 Chemdah 会话
+  # （绑定会话会让对话 UI 与商店 UI 同弹——卖货 NPC 不需要先寒暄再点进商店）
   type: WITCH
   location: "211,61,38,180,0"      # f2_shop 台座后（z0+5=37 台座，商人 z38 面北）
   look-at-player: true
