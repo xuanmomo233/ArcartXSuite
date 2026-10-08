@@ -299,6 +299,7 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
         mappings.put("arcartx/ui/abyss_design.yml", "ui/abyss_design.yml");
         mappings.put("arcartx/ui/abyss_design_pick.yml", "ui/abyss_design_pick.yml");
         mappings.put("arcartx/ui/abyss_design_edit.yml", "ui/abyss_design_edit.yml");
+        mappings.put("arcartx/ui/abyss_shop.yml", "ui/abyss_shop.yml");
         boolean overwrite = configuration != null
             && configuration.ui() != null && configuration.ui().overwriteUiFiles();
         return new xuanmo.arcartxsuite.api.ModuleUiSpec(mappings, overwrite);
