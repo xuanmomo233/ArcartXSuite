@@ -75,7 +75,9 @@ public final class DungeonNpcManager {
     /** 注册 Adyeshach 右键交互路由（service.start 调用一次，可重入）。 */
     public void initInteractHandler() {
         AdyeshachNpcBridgeAPI bridge = npcBridge;
-        if (interactRegistered || bridge == null || !bridge.isAvailable()) return;
+        if (interactRegistered || bridge == null) return;
+        // Adyeshach 可能晚于 abyss 装载：每次实例启动时重试初始化（成功即幂等短路）
+        if (!bridge.isAvailable() && !bridge.initialize()) return;
         interactRegistered = bridge.registerInteractHandler(this::onAdyeshachInteract);
     }
 
@@ -115,6 +117,8 @@ public final class DungeonNpcManager {
 
         Object handle = null;
         AdyeshachNpcBridgeAPI bridge = npcBridge;
+        // 桥晚可用（Adyeshach 后装载）时懒激活，保证 spawn_npc 脚本路径同样生效
+        if (bridge != null && !bridge.isAvailable()) bridge.initialize();
         if (bridge != null && bridge.isAvailable()) {
             try {
                 handle = bridge.spawnPublicTemporaryNpc(npc.type(), loc, npcName, npc.displayName());

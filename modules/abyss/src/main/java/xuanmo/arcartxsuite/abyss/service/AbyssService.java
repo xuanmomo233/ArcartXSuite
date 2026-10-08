@@ -267,6 +267,11 @@ public final class AbyssService {
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
         npcs = new DungeonNpcManager(plugin, scheduler, logger);
+        // 桥实例由 createAdyeshachNpcBridge() 新建，available 需显式 initialize() 激活
+        // （questgps 同款约定）；Adyeshach 未装载时返回 false，NPC 走实体兜底
+        if (npcBridge != null && !npcBridge.initialize()) {
+            logger.fine("[abyss] Adyeshach 不可用或初始化失败，副本 NPC 使用实体兜底");
+        }
         npcs.setNpcBridge(npcBridge);
         npcs.setCallbacks((inst, e) -> runScript(inst, e.config().clickScript(),
             ScriptContext.withVars(inst, e.player(), Map.of("npc", e.npcName()))),
@@ -407,6 +412,10 @@ public final class AbyssService {
         if (roomManager != null) roomManager.shutdown();
         if (guideService != null) guideService.shutdown();
         if (npcs != null) npcs.shutdown();
+        // 释放 Adyeshach 桥（反注册 interact/visible 监听器、清空管理器引用），防重载后指向死服务
+        if (npcBridge != null) {
+            try { npcBridge.shutdown(); } catch (Throwable ignored) { }
+        }
         // 退订 questgps 完成事件
         if (questCompletedSubId != null && eventBusProvider != null) {
             try {
