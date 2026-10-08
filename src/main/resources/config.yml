@@ -890,7 +890,7 @@ modules:
     enabled: true
     # Tooltip 物品提示数据采集
     # 功能：接收客户端 Forge mod（ArcartX-Suite-Tooltips）发送的 AXS_TOOLTIP_DATA 网络包，缓存物品 tooltip 文本行与结构化数据，并通过 TooltipDataCapable 能力供其他模块（如 Chat 聊天物品预览）查询；支持将 tooltip 文本注入物品 NBT Lore。
-    # 枪械浏览：客户端悬停 TACZ 配件按 Shift 打开"支持枪械"界面——gun-list.mode=ax 走服务端 AX UI（ui/gun_list.yml），mod 走客户端本地界面；模式经 axstooltip:gunui 通道推送。
+    # 枪械浏览：客户端悬停 TACZ 配件按"查看支持枪械"键（默认 Shift，可改键）打开界面——gun-list.mode=ax 走服务端 AX UI（ui/gun_list.yml），mod 走客户端本地界面；模式经 axstooltip:gunui 通道推送。
     # 前置：需客户端安装 ArcartX-Suite-Tooltips，否则服务端无法获取 tooltip 数据、枪械浏览不可用。
     # 配置文件：ArcartXTooltip.yml（gun-list.mode）；管理命令 /axs tooltip（status 查看缓存与模式、push <玩家> 手动重推模式）。
 
