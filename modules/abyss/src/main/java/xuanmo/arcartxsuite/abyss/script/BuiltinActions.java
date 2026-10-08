@@ -303,6 +303,9 @@ final class BuiltinActions {
             String rhs = ctx.replace(parts[2]);
             double a = parseDouble(lhs, Double.NaN);
             double b = parseDouble(rhs, Double.NaN);
+            // 未设置变量按计数器语义视为 0（"if_var flag == 0" 首开闸门写法依赖此语义：
+            // 否则 unset 走字符串分支 "".equals("0")=false，首次永远拦截——鸡生蛋死锁）
+            if (cur == null && !Double.isNaN(b)) a = 0;
             boolean numeric = !Double.isNaN(a) && !Double.isNaN(b);
             boolean ok = switch (parts[1]) {
                 case "==" -> numeric ? a == b : lhs.equals(rhs);

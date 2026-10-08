@@ -9,6 +9,8 @@
 # 随机化原语：
 #   random <var> <min> <max>  写均匀随机整数到实例变量
 #   if_var <var> <op> <值>    变量不满足则终止本段（不依赖玩家，world-init 可用）
+#                           ※ 未设置的变量在数值比较下按 0 处理——
+#                             "if_var flag == 0" 首开闸门、"if_var n >= 1" 计数门均可直接用
 #   分支写法：run_script 开独立会话 → 段首 if_var 门控，未匹配只自杀该段。
 
 
