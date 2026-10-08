@@ -1,6 +1,7 @@
 ﻿# AXS 资源说明
-# 用途: Abyss 副本内 HUD —— 副本名/波次/存活/剩余时间条/任务追踪
+# 用途: Abyss 副本内 HUD —— 副本名/波次/存活/剩余时间条/引导提示
 # 由服务端在进本时打开、出本关闭；每秒 update 包刷新。
+# 任务展示不在此渲染——委托给 QuestGPS guide HUD（含实时进度）与 Chemdah scoreboard。
 ui:
   isHud: true
   defaultOpen: false
@@ -9,7 +10,7 @@ ui:
   packetHandler:
     # packetHandler: update
     # 包字段: dungeonName/status/groupTotal/groupDone/activeGroup/aliveMobs
-    #         alivePlayers/totalPlayers/timeText/timeRatio/questRows{idx:{name,status}}
+    #         alivePlayers/totalPlayers/timeText/timeRatio/guideText
     update: |-
       var.dungeonName = packet['dungeonName']
       var.status = packet['status']
@@ -21,11 +22,7 @@ ui:
       var.totalPlayers = packet['totalPlayers']
       var.timeText = packet['timeText']
       var.timeRatio = packet['timeRatio']
-      var.questRows = packet['questRows']
       var.guideText = packet['guideText']
-      var.quest0 = var.questRows != none ? var.questRows[0.round()] : none
-      var.quest1 = var.questRows != none ? var.questRows[1.round()] : none
-      var.quest2 = var.questRows != none ? var.questRows[2.round()] : none
   action:
     load: |-
       var.dungeonName = ''
@@ -38,10 +35,6 @@ ui:
       var.totalPlayers = 0
       var.timeText = ''
       var.timeRatio = 1.0
-      var.questRows = {}
-      var.quest0 = none
-      var.quest1 = none
-      var.quest2 = none
       var.guideText = ''
       var.accent = '186,140,232,255'
       // 视口换算：Adaptive(1920x1080) 等比缩放后，贴边面板需要 offX 补偿
@@ -69,7 +62,7 @@ controls:
         attribute:
           point: ~top_right
           x: "-24 + var.offX"
-          y: 96
+          y: 496
           width: 320
           height: 224
           through: true
@@ -154,7 +147,7 @@ controls:
         type: Canvas
         attribute:
           point: ~top_center
-          y: 150
+          y: 550
           width: 520
           height: 56
           visible: "var.guideText != '' && var.guideText != none"
@@ -189,67 +182,5 @@ controls:
               fontSize: 36
               limit: 20
               through: true
-      任务面板:
-        type: Canvas
-        attribute:
-          point: ~top_right
-          x: "-24 + var.offX"
-          y: 336
-          width: 320
-          height: 160
-          visible: var.quest0 != none
-          through: true
-        children:
-          任务背景:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~20,14,36,150
-              shape: ~round_rect
-              radius: 12
-              through: true
-            effect:
-              stroke:
-                width: 2
-                color: ~96,80,140,120
-          任务标线:
-            type: Texture
-            attribute:
-              x: 16
-              y: 16
-              width: 18
-              height: 3
-              normal: var.accent
-              through: true
-          任务标题:
-            type: Text
-            attribute:
-              x: 42
-              y: 6
-              texts: ~&f任务
-              fontSize: 36
-              through: true
-          任务0:
-            type: Text
-            attribute:
-              x: 16
-              y: 48
-              texts: "var.quest0 != none ? '&7- ' + var.quest0['name'] + (var.quest0['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
-              fontSize: 36
-              through: true
-          任务1:
-            type: Text
-            attribute:
-              x: 16
-              y: 86
-              texts: "var.quest1 != none ? '&7- ' + var.quest1['name'] + (var.quest1['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
-              fontSize: 36
-              through: true
-          任务2:
-            type: Text
-            attribute:
-              x: 16
-              y: 124
-              texts: "var.quest2 != none ? '&7- ' + var.quest2['name'] + (var.quest2['status'] == 'COMPLETED' ? ' &a✓' : ' &e…') : ''"
-              fontSize: 36
-              through: true
+      # 任务面板已移除：副本委托的进度/状态由 QuestGPS guide HUD 与
+      # Chemdah scoreboard 呈现，abyss 不再自绘任务区。

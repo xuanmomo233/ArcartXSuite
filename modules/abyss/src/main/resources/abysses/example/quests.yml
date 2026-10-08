@@ -6,10 +6,10 @@ slayer:
   chemdah-id: "sk_slayer"            # Chemdah 任务模板 id（QuestGPS 呈现层同名）
   name: "讨伐深渊魔物"
   description: "深入地牢，击杀 15 只魔物并击败深渊领主"
-  # quest_track 只对「有导航点」的任务有效——questgps overlay 里本任务
-  # navigation.enabled=false（副本内坐标是动态世界，导航由 abyss guide_point 承担），
-  # 故关闭自动追踪；进度展示走 Chemdah addon.track.scoreboard。
-  auto-track: false
+  # 接取后自动加入 QuestGPS 追踪：guide HUD 立即出卡显示名称/进度/当前目标。
+  # navigation.enabled=false 只关导航点（副本世界是动态坐标，路标由 abyss
+  # guide_point 承担），不影响 HUD 卡片与进度文本。
+  auto-track: true
   # on-accept 不再发"已接取"消息——questgps 通知 + Chemdah agent tell 已各播一遍，
   # 这里再加一条就是三层刷屏。钩子保留位：要加副本内动作（指路/音效）写在下面。
   on-accept:

@@ -882,17 +882,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         p.put("timeText", limit > 0 ? AbyssService.formatTime(remain) : "∞");
         p.put("timeRatio", limit > 0
             ? Math.max(0.0, Math.min(1.0, (double) remain / limit)) : 1.0);
-        // 任务行
-        Map<String, Object> quests = new LinkedHashMap<>();
-        int qi = 0;
-        for (var e : service.quests().statusMap(instance, player).entrySet()) {
-            var q = instance.getTemplate().quests().quests().get(e.getKey());
-            if (q == null) continue;
-            quests.put(Integer.toString(qi++), Map.of(
-                "name", q.name(), "status", e.getValue().name()));
-        }
-        p.put("questRows", quests);
         // 引导目标行（guide_point 动作驱动；无目标=空串隐藏）
+        // 任务进度不下发：由 QuestGPS guide HUD / Chemdah scoreboard 呈现
         var gs = service.guide();
         p.put("guideText", gs != null ? gs.guideText(instance) : "");
         packetBridge.sendPacket(player, hudUi(), "update", p);

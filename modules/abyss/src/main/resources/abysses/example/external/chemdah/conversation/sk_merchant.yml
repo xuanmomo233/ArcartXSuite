@@ -1,6 +1,9 @@
 # Chemdah 会话：旅行商人·老陈（绑定 Adyeshach npcId = "merchant"）
 # 部署：plugins/Chemdah/core/conversation/sk_merchant.yml（abyss 启动/重载时自动部署）
-
+__option__:
+  theme: 'ArcartXConversation'
+  title: '{name}'
+  
 sk_merchant:
   npc id: 'adyeshach merchant'
   npc:
