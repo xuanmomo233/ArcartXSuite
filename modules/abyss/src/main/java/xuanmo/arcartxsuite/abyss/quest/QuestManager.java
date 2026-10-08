@@ -90,8 +90,11 @@ public final class QuestManager {
                 finishAccept(instance, player, runner, q);
             } else if (attempt < 8) {
                 verifyAccepted(instance, player, runner, q, attempt + 1);
+            } else if (plugin != null) {
+                // 复查超时仍未 ACTIVE → questgps 已自行提示失败原因，此处留诊断痕迹
+                plugin.getLogger().fine("[abyss] 任务接取复查超时仍未 ACTIVE: " + q.chemdahId()
+                    + " 玩家=" + player.getName());
             }
-            // 复查超时仍未 ACTIVE → questgps 已自行提示失败原因，静默收尾
         }, attempt == 0 ? 15L : 5L));
     }
 
@@ -157,6 +160,12 @@ public final class QuestManager {
     public String resolveChemdahId(AbyssInstance instance, String questId) {
         QuestConfig.Quest q = find(instance, questId);
         return q != null ? q.chemdahId() : questId;
+    }
+
+    /** 任务是否配置了接取后自动追踪（auto-track）。 */
+    public boolean autoTrackEnabled(AbyssInstance instance, String questId) {
+        QuestConfig.Quest q = find(instance, questId);
+        return q != null && q.autoTrack();
     }
 
     /** 该玩家是否已领取完成奖励。 */

@@ -391,6 +391,43 @@ public final class QuestGpsNavigationService {
     }
 
     /**
+     * 判断任务追踪能否建立追踪态（与 {@link #trackQuest} 的实际成功条件一致）。
+     * <p>
+     * 与 {@link #hasQuestPoint} 的区别：本方法判断"能否追踪"，而非"有无坐标点"。
+     * Chemdah 追踪在线时（chemdah/hybrid 模式），{@code trackQuest} 允许无坐标点
+     * 激活——追踪态照样建立，HUD 卡片照常显示（仅隐藏导航行）；overlay 独存模式
+     * 下无坐标点则激活必然失败，此时才要求 overlay 点真实存在。
+     *
+     * @param player             玩家
+     * @param questId            任务 ID
+     * @param prioritizedTaskIds 优先解析的子任务 ID 列表
+     * @return 调用 {@code trackQuest} 可建立追踪态时返回 {@code true}
+     */
+    public boolean questTrackable(Player player, String questId, List<String> prioritizedTaskIds) {
+        if (!runtimeReady() || player == null || !player.isOnline()) {
+            return false;
+        }
+        if (chemdahNavigationEnabled()) {
+            return true;
+        }
+        return hasOverlayQuestPoint(questId, prioritizedTaskIds);
+    }
+
+    /**
+     * 判断子任务追踪能否建立追踪态（与 {@link #trackTask} 的实际成功条件一致）。
+     * 语义同 {@link #questTrackable}。
+     */
+    public boolean taskTrackable(Player player, String questId, String taskId) {
+        if (!runtimeReady() || player == null || !player.isOnline()) {
+            return false;
+        }
+        if (chemdahNavigationEnabled()) {
+            return true;
+        }
+        return hasOverlayTaskPoint(questId, taskId);
+    }
+
+    /**
      * 判断指定任务是否存在可用的导航坐标点（不检查玩家在线状态）。
      *
      * @param questId            任务 ID

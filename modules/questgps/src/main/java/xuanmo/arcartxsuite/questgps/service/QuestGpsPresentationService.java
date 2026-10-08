@@ -90,7 +90,7 @@ public final class QuestGpsPresentationService {
                     canAccept,
                     page == QuestGpsPage.ACTIVE && definition.allowAbandon(),
                     page == QuestGpsPage.ACTIVE
-                        && navigationService.hasQuestPoint(questPlayer, template.getId(), prioritizedTaskIds(taskDescriptors)),
+                        && navigationService.questTrackable(questPlayer, template.getId(), prioritizedTaskIds(taskDescriptors)),
                     definition.sortOrder()
                 )
             );
@@ -128,7 +128,7 @@ public final class QuestGpsPresentationService {
                     descriptionText,
                     metadataReader.taskStatusText(profile, task, completed, page == QuestGpsPage.AVAILABLE),
                     completed,
-                    page == QuestGpsPage.ACTIVE && navigationService.hasTaskPoint(questPlayer, template.getId(), task.getId()),
+                    page == QuestGpsPage.ACTIVE && navigationService.taskTrackable(questPlayer, template.getId(), task.getId()),
                     taskSortOrder(definition, task.getId())
                 )
             );

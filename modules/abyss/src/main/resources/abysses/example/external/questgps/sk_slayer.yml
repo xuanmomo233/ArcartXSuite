@@ -6,7 +6,7 @@ sk_slayer:
   enabled: true
   sort-order: 50
   allow-abandon: true                   # 副本委托允许放弃重接
-  category: side                        # discovery=overlay 时必填；chemdah 模式读 meta.type
+  # 分类读 Chemdah meta.type（category.source=chemdah），此处不写 overlay category
   navigation:
     enabled: false                      # 副本内导航由 abyss guide_point 承担
   hooks:

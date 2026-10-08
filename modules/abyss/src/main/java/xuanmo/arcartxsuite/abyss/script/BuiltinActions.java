@@ -734,7 +734,15 @@ final class BuiltinActions {
                         t.sendMessage(color("&7该任务已完成"));
                     }
                 }
-                default -> t.sendMessage(color("&e任务进行中，目标尚未达成"));
+                default -> {
+                    t.sendMessage(color("&e任务进行中，目标尚未达成"));
+                    // Chemdah 任务跨实例持久——带着已接任务重进副本时补发追踪，
+                    // 否则追踪态丢失后 questgps HUD 不再出现
+                    if (qm.autoTrackEnabled(ctx.getInstance(), qid)) {
+                        var l = service.get().links();
+                        if (l != null) l.questTrack(t, qm.resolveChemdahId(ctx.getInstance(), qid), null);
+                    }
+                }
             }
         });
         reg.register("quest_status", (ctx, args, s) -> {
