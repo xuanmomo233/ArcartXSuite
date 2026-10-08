@@ -33,6 +33,30 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     private AbyssService service;
     private AbyssPlayerCommand playerCommand;
 
+    /**
+     * UI 登记表：相对 UI 路径 → 配置中的 UI id。
+     * uiSpec() 与 registerAbyssUis() 共用此单一来源，新增 UI 只需在此加一行。
+     */
+    private record UiEntry(String relativePath,
+                           java.util.function.Function<AbyssModuleConfiguration.UiSection, String> idRef) {}
+
+    private static final List<UiEntry> UI_ENTRIES = List.of(
+        new UiEntry("ui/abyss_browser.yml", AbyssModuleConfiguration.UiSection::browserId),
+        new UiEntry("ui/abyss_confirm.yml", AbyssModuleConfiguration.UiSection::confirmId),
+        new UiEntry("ui/abyss_lobby.yml", AbyssModuleConfiguration.UiSection::lobbyId),
+        new UiEntry("ui/abyss_party.yml", AbyssModuleConfiguration.UiSection::partyId),
+        new UiEntry("ui/abyss_chest.yml", AbyssModuleConfiguration.UiSection::chestId),
+        new UiEntry("ui/abyss_stats.yml", AbyssModuleConfiguration.UiSection::statsId),
+        new UiEntry("ui/abyss_leaderboard.yml", AbyssModuleConfiguration.UiSection::leaderboardId),
+        new UiEntry("ui/abyss_hud.yml", AbyssModuleConfiguration.UiSection::hudId),
+        new UiEntry("ui/abyss_input.yml", AbyssModuleConfiguration.UiSection::inputId),
+        new UiEntry("ui/abyss_buff.yml", AbyssModuleConfiguration.UiSection::buffId),
+        new UiEntry("ui/abyss_design.yml", AbyssModuleConfiguration.UiSection::designId),
+        new UiEntry("ui/abyss_design_pick.yml", AbyssModuleConfiguration.UiSection::designPickId),
+        new UiEntry("ui/abyss_design_edit.yml", AbyssModuleConfiguration.UiSection::designEditId),
+        new UiEntry("ui/abyss_shop.yml", AbyssModuleConfiguration.UiSection::shopId)
+    );
+
     @Override
     public xuanmo.arcartxsuite.api.ModuleDescriptor descriptor() {
         return xuanmo.arcartxsuite.api.ModuleDescriptor.builder("abyss")
@@ -135,20 +159,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     private void registerAbyssUis() {
         AbyssModuleConfiguration.UiSection ui = configuration.ui();
         if (ui == null) return;
-        registerModuleUi("ui/abyss_browser.yml", axsUiId(ui.browserId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_confirm.yml", axsUiId(ui.confirmId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_lobby.yml", axsUiId(ui.lobbyId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_party.yml", axsUiId(ui.partyId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_chest.yml", axsUiId(ui.chestId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_stats.yml", axsUiId(ui.statsId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_leaderboard.yml", axsUiId(ui.leaderboardId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_hud.yml", axsUiId(ui.hudId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_input.yml", axsUiId(ui.inputId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_buff.yml", axsUiId(ui.buffId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_design.yml", axsUiId(ui.designId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_design_pick.yml", axsUiId(ui.designPickId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_design_edit.yml", axsUiId(ui.designEditId()), ui.registerOnEnable());
-        registerModuleUi("ui/abyss_shop.yml", axsUiId(ui.shopId()), ui.registerOnEnable());
+        for (UiEntry entry : UI_ENTRIES) {
+            registerModuleUi(entry.relativePath(), axsUiId(entry.idRef().apply(ui)), ui.registerOnEnable());
+        }
     }
 
     /** 规范化 UI id：缺省补 AXS: 前缀，已带前缀则原样返回。 */
@@ -286,20 +299,9 @@ public final class AbyssModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected @NotNull xuanmo.arcartxsuite.api.ModuleUiSpec uiSpec() {
         Map<String, String> mappings = new java.util.LinkedHashMap<>();
-        mappings.put("arcartx/ui/abyss_browser.yml", "ui/abyss_browser.yml");
-        mappings.put("arcartx/ui/abyss_confirm.yml", "ui/abyss_confirm.yml");
-        mappings.put("arcartx/ui/abyss_lobby.yml", "ui/abyss_lobby.yml");
-        mappings.put("arcartx/ui/abyss_party.yml", "ui/abyss_party.yml");
-        mappings.put("arcartx/ui/abyss_chest.yml", "ui/abyss_chest.yml");
-        mappings.put("arcartx/ui/abyss_stats.yml", "ui/abyss_stats.yml");
-        mappings.put("arcartx/ui/abyss_leaderboard.yml", "ui/abyss_leaderboard.yml");
-        mappings.put("arcartx/ui/abyss_hud.yml", "ui/abyss_hud.yml");
-        mappings.put("arcartx/ui/abyss_input.yml", "ui/abyss_input.yml");
-        mappings.put("arcartx/ui/abyss_buff.yml", "ui/abyss_buff.yml");
-        mappings.put("arcartx/ui/abyss_design.yml", "ui/abyss_design.yml");
-        mappings.put("arcartx/ui/abyss_design_pick.yml", "ui/abyss_design_pick.yml");
-        mappings.put("arcartx/ui/abyss_design_edit.yml", "ui/abyss_design_edit.yml");
-        mappings.put("arcartx/ui/abyss_shop.yml", "ui/abyss_shop.yml");
+        for (UiEntry entry : UI_ENTRIES) {
+            mappings.put("arcartx/" + entry.relativePath(), entry.relativePath());
+        }
         boolean overwrite = configuration != null
             && configuration.ui() != null && configuration.ui().overwriteUiFiles();
         return new xuanmo.arcartxsuite.api.ModuleUiSpec(mappings, overwrite);
