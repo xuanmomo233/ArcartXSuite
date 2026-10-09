@@ -23,7 +23,8 @@ world-init:
   #   paste_region <名> <x,y,z> full  连空气一起覆盖（挖空腔体）
   # ── 苔痕前哨 ──
   # f1_start 入口营地
-  - "fillblocks 0,60,0 23,75,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 0,60,0 23,74,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 0,75,0 23,75,23 BARRIER"
   - "fillblocks 1,61,1 22,74,22 AIR"
   - "fillblocks 1,60,1 22,60,22 POLISHED_ANDESITE"
   - "fillblocks 2,60,2 21,60,21 MOSSY_COBBLESTONE"
@@ -39,7 +40,8 @@ world-init:
   - "fillblocks 4,61,1 6,63,1 BOOKSHELF"
   - "fillblocks 17,61,1 19,63,1 BOOKSHELF"
   # f1_combat_a 苔痕战场
-  - "fillblocks 32,60,0 55,75,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,60,0 55,74,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,75,0 55,75,23 BARRIER"
   - "fillblocks 33,61,1 54,74,22 AIR"
   - "fillblocks 33,60,1 54,60,22 POLISHED_ANDESITE"
   - "fillblocks 34,60,2 53,60,21 MOSSY_COBBLESTONE"
@@ -54,7 +56,8 @@ world-init:
   - "fillblocks 38,61,16 39,62,17 MOSSY_COBBLESTONE"
   - "fillblocks 48,61,6 49,62,7 MOSSY_COBBLESTONE"
   # f1_altar 神秘祭坛
-  - "fillblocks 0,60,32 23,75,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 0,60,32 23,74,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 0,75,32 23,75,55 BARRIER"
   - "fillblocks 1,61,33 22,74,54 AIR"
   - "fillblocks 1,60,33 22,60,54 POLISHED_ANDESITE"
   - "fillblocks 2,60,34 21,60,53 MOSSY_COBBLESTONE"
@@ -74,7 +77,8 @@ world-init:
   - "fillblocks 1,61,36 1,64,40 BOOKSHELF"
   - "fillblocks 1,61,47 1,64,51 BOOKSHELF"
   # f1_combat_b 藤蔓回廊
-  - "fillblocks 32,60,32 55,75,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,60,32 55,74,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,75,32 55,75,55 BARRIER"
   - "fillblocks 33,61,33 54,74,54 AIR"
   - "fillblocks 33,60,33 54,60,54 POLISHED_ANDESITE"
   - "fillblocks 34,60,34 53,60,53 MOSSY_COBBLESTONE"
@@ -89,7 +93,8 @@ world-init:
   - "fillblocks 38,61,48 39,62,49 MOSSY_COBBLESTONE"
   - "fillblocks 48,61,38 49,62,39 MOSSY_COBBLESTONE"
   # f1_boss 守层 Boss
-  - "fillblocks 64,60,0 87,75,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 64,60,0 87,74,23 MOSSY_STONE_BRICKS"
+  - "fillblocks 64,75,0 87,75,23 BARRIER"
   - "fillblocks 65,61,1 86,74,22 AIR"
   - "fillblocks 65,60,1 86,60,22 POLISHED_ANDESITE"
   - "fillblocks 66,60,2 85,60,21 MOSSY_COBBLESTONE"
@@ -107,7 +112,8 @@ world-init:
   - "fillblocks 82,61,18 83,66,19 CHISELED_STONE_BRICKS"
   - "fillblocks 74,60,2 77,60,5 GOLD_BLOCK"
   # f1_chest 战利品室
-  - "fillblocks 64,60,32 87,75,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 64,60,32 87,74,55 MOSSY_STONE_BRICKS"
+  - "fillblocks 64,75,32 87,75,55 BARRIER"
   - "fillblocks 65,61,33 86,74,54 AIR"
   - "fillblocks 65,60,33 86,60,54 POLISHED_ANDESITE"
   - "fillblocks 66,60,34 85,60,53 MOSSY_COBBLESTONE"
@@ -123,7 +129,8 @@ world-init:
   - "fillblocks 68,60,36 69,60,37 EMERALD_BLOCK"
   - "fillblocks 82,60,50 83,60,51 EMERALD_BLOCK"
   # f1_combat_c 深渊前哨
-  - "fillblocks 32,60,64 55,75,87 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,60,64 55,74,87 MOSSY_STONE_BRICKS"
+  - "fillblocks 32,75,64 55,75,87 BARRIER"
   - "fillblocks 33,61,65 54,74,86 AIR"
   - "fillblocks 33,60,65 54,60,86 POLISHED_ANDESITE"
   - "fillblocks 34,60,66 53,60,85 MOSSY_COBBLESTONE"
@@ -138,7 +145,8 @@ world-init:
   - "fillblocks 38,61,80 39,62,81 MOSSY_COBBLESTONE"
   - "fillblocks 48,61,70 49,62,71 MOSSY_COBBLESTONE"
   # 走廊 f1_start ↔ f1_combat_a
-  - "fillblocks 24,60,8 31,66,15 MOSSY_STONE_BRICKS"
+  - "fillblocks 24,60,8 31,65,15 MOSSY_STONE_BRICKS"
+  - "fillblocks 24,66,8 31,66,15 BARRIER"
   - "fillblocks 24,61,9 31,65,14 AIR"
   - "fillblocks 24,60,9 31,60,14 POLISHED_ANDESITE"
   - "setblock 27,65,12 GLOWSTONE"
@@ -146,7 +154,8 @@ world-init:
   - "fillblocks 23,61,9 23,64,14 AIR"
   - "fillblocks 32,61,9 32,64,14 AIR"
   # 走廊 f1_start ↔ f1_altar
-  - "fillblocks 8,60,24 15,66,31 MOSSY_STONE_BRICKS"
+  - "fillblocks 8,60,24 15,65,31 MOSSY_STONE_BRICKS"
+  - "fillblocks 8,66,24 15,66,31 BARRIER"
   - "fillblocks 9,61,24 14,65,31 AIR"
   - "fillblocks 9,60,24 14,60,31 POLISHED_ANDESITE"
   - "setblock 12,65,27 GLOWSTONE"
@@ -154,7 +163,8 @@ world-init:
   - "fillblocks 9,61,23 14,64,23 AIR"
   - "fillblocks 9,61,32 14,64,32 AIR"
   # 走廊 f1_combat_a ↔ f1_combat_b
-  - "fillblocks 40,60,24 47,66,31 MOSSY_STONE_BRICKS"
+  - "fillblocks 40,60,24 47,65,31 MOSSY_STONE_BRICKS"
+  - "fillblocks 40,66,24 47,66,31 BARRIER"
   - "fillblocks 41,61,24 46,65,31 AIR"
   - "fillblocks 41,60,24 46,60,31 POLISHED_ANDESITE"
   - "setblock 44,65,27 GLOWSTONE"
@@ -162,7 +172,8 @@ world-init:
   - "fillblocks 41,61,23 46,64,23 AIR"
   - "fillblocks 41,61,32 46,64,32 AIR"
   # 走廊 f1_altar ↔ f1_combat_b
-  - "fillblocks 24,60,40 31,66,47 MOSSY_STONE_BRICKS"
+  - "fillblocks 24,60,40 31,65,47 MOSSY_STONE_BRICKS"
+  - "fillblocks 24,66,40 31,66,47 BARRIER"
   - "fillblocks 24,61,41 31,65,46 AIR"
   - "fillblocks 24,60,41 31,60,46 POLISHED_ANDESITE"
   - "setblock 27,65,44 GLOWSTONE"
@@ -170,7 +181,8 @@ world-init:
   - "fillblocks 23,61,41 23,64,46 AIR"
   - "fillblocks 32,61,41 32,64,46 AIR"
   # 走廊 f1_combat_a ↔ f1_boss
-  - "fillblocks 56,60,8 63,66,15 MOSSY_STONE_BRICKS"
+  - "fillblocks 56,60,8 63,65,15 MOSSY_STONE_BRICKS"
+  - "fillblocks 56,66,8 63,66,15 BARRIER"
   - "fillblocks 56,61,9 63,65,14 AIR"
   - "fillblocks 56,60,9 63,60,14 POLISHED_ANDESITE"
   - "setblock 59,65,12 GLOWSTONE"
@@ -178,7 +190,8 @@ world-init:
   - "fillblocks 55,61,9 55,64,14 AIR"
   - "fillblocks 64,61,9 64,64,14 AIR"
   # 走廊 f1_combat_b ↔ f1_chest
-  - "fillblocks 56,60,40 63,66,47 MOSSY_STONE_BRICKS"
+  - "fillblocks 56,60,40 63,65,47 MOSSY_STONE_BRICKS"
+  - "fillblocks 56,66,40 63,66,47 BARRIER"
   - "fillblocks 56,61,41 63,65,46 AIR"
   - "fillblocks 56,60,41 63,60,46 POLISHED_ANDESITE"
   - "setblock 59,65,44 GLOWSTONE"
@@ -186,7 +199,8 @@ world-init:
   - "fillblocks 55,61,41 55,64,46 AIR"
   - "fillblocks 64,61,41 64,64,46 AIR"
   # 走廊 f1_combat_b ↔ f1_combat_c
-  - "fillblocks 40,60,56 47,66,63 MOSSY_STONE_BRICKS"
+  - "fillblocks 40,60,56 47,65,63 MOSSY_STONE_BRICKS"
+  - "fillblocks 40,66,56 47,66,63 BARRIER"
   - "fillblocks 41,61,56 46,65,63 AIR"
   - "fillblocks 41,60,56 46,60,63 POLISHED_ANDESITE"
   - "setblock 44,65,59 GLOWSTONE"
@@ -197,7 +211,8 @@ world-init:
   - "fillblocks 64,61,9 64,64,14 MOSSY_STONE_BRICKS"
   # ── 熔岩矿道 ──
   # f2_entry 矿道入口
-  - "fillblocks 200,60,0 223,75,23 DEEPSLATE_BRICKS"
+  - "fillblocks 200,60,0 223,74,23 DEEPSLATE_BRICKS"
+  - "fillblocks 200,75,0 223,75,23 BARRIER"
   - "fillblocks 201,61,1 222,74,22 AIR"
   - "fillblocks 201,60,1 222,60,22 POLISHED_DEEPSLATE"
   - "fillblocks 202,60,2 221,60,21 CRACKED_DEEPSLATE_BRICKS"
@@ -213,7 +228,8 @@ world-init:
   - "fillblocks 204,61,1 206,63,1 BOOKSHELF"
   - "fillblocks 217,61,1 219,63,1 BOOKSHELF"
   # f2_combat_a 矿道守卫
-  - "fillblocks 232,60,0 255,75,23 DEEPSLATE_BRICKS"
+  - "fillblocks 232,60,0 255,74,23 DEEPSLATE_BRICKS"
+  - "fillblocks 232,75,0 255,75,23 BARRIER"
   - "fillblocks 233,61,1 254,74,22 AIR"
   - "fillblocks 233,60,1 254,60,22 POLISHED_DEEPSLATE"
   - "fillblocks 234,60,2 253,60,21 CRACKED_DEEPSLATE_BRICKS"
@@ -228,7 +244,8 @@ world-init:
   - "fillblocks 238,61,16 239,62,17 COBBLED_DEEPSLATE"
   - "fillblocks 248,61,6 249,62,7 COBBLED_DEEPSLATE"
   # f2_shop 旅行商队
-  - "fillblocks 200,60,32 223,75,55 DEEPSLATE_BRICKS"
+  - "fillblocks 200,60,32 223,74,55 DEEPSLATE_BRICKS"
+  - "fillblocks 200,75,32 223,75,55 BARRIER"
   - "fillblocks 201,61,33 222,74,54 AIR"
   - "fillblocks 201,60,33 222,60,54 POLISHED_DEEPSLATE"
   - "fillblocks 202,60,34 221,60,53 CRACKED_DEEPSLATE_BRICKS"
@@ -246,7 +263,8 @@ world-init:
   - "fillblocks 219,61,34 220,62,34 BARREL"
   - "fillblocks 206,61,39 216,61,39 GREEN_CARPET"
   # f2_combat_b 熔岩回廊
-  - "fillblocks 232,60,32 255,75,55 DEEPSLATE_BRICKS"
+  - "fillblocks 232,60,32 255,74,55 DEEPSLATE_BRICKS"
+  - "fillblocks 232,75,32 255,75,55 BARRIER"
   - "fillblocks 233,61,33 254,74,54 AIR"
   - "fillblocks 233,60,33 254,60,54 POLISHED_DEEPSLATE"
   - "fillblocks 234,60,34 253,60,53 CRACKED_DEEPSLATE_BRICKS"
@@ -261,7 +279,8 @@ world-init:
   - "fillblocks 238,61,48 239,62,49 COBBLED_DEEPSLATE"
   - "fillblocks 248,61,38 249,62,39 COBBLED_DEEPSLATE"
   # f2_puzzle 尘封机关
-  - "fillblocks 264,60,32 287,75,55 DEEPSLATE_BRICKS"
+  - "fillblocks 264,60,32 287,74,55 DEEPSLATE_BRICKS"
+  - "fillblocks 264,75,32 287,75,55 BARRIER"
   - "fillblocks 265,61,33 286,74,54 AIR"
   - "fillblocks 265,60,33 286,60,54 POLISHED_DEEPSLATE"
   - "fillblocks 266,60,34 285,60,53 CRACKED_DEEPSLATE_BRICKS"
@@ -286,7 +305,8 @@ world-init:
   - "setblock 283,64,39 LIME_STAINED_GLASS"
   - "fillblocks 273,60,50 277,60,52 CRACKED_DEEPSLATE_BRICKS"
   # f2_combat_c 深窟伏兵
-  - "fillblocks 232,60,64 255,75,87 DEEPSLATE_BRICKS"
+  - "fillblocks 232,60,64 255,74,87 DEEPSLATE_BRICKS"
+  - "fillblocks 232,75,64 255,75,87 BARRIER"
   - "fillblocks 233,61,65 254,74,86 AIR"
   - "fillblocks 233,60,65 254,60,86 POLISHED_DEEPSLATE"
   - "fillblocks 234,60,66 253,60,85 CRACKED_DEEPSLATE_BRICKS"
@@ -301,7 +321,8 @@ world-init:
   - "fillblocks 238,61,80 239,62,81 COBBLED_DEEPSLATE"
   - "fillblocks 248,61,70 249,62,71 COBBLED_DEEPSLATE"
   # f2_boss 守层 Boss
-  - "fillblocks 264,60,64 287,75,87 DEEPSLATE_BRICKS"
+  - "fillblocks 264,60,64 287,74,87 DEEPSLATE_BRICKS"
+  - "fillblocks 264,75,64 287,75,87 BARRIER"
   - "fillblocks 265,61,65 286,74,86 AIR"
   - "fillblocks 265,60,65 286,60,86 POLISHED_DEEPSLATE"
   - "fillblocks 266,60,66 285,60,85 CRACKED_DEEPSLATE_BRICKS"
@@ -319,7 +340,8 @@ world-init:
   - "fillblocks 282,61,82 283,66,83 BLACKSTONE"
   - "fillblocks 274,60,66 277,60,69 GOLD_BLOCK"
   # 走廊 f2_entry ↔ f2_combat_a
-  - "fillblocks 224,60,8 231,66,15 DEEPSLATE_BRICKS"
+  - "fillblocks 224,60,8 231,65,15 DEEPSLATE_BRICKS"
+  - "fillblocks 224,66,8 231,66,15 BARRIER"
   - "fillblocks 224,61,9 231,65,14 AIR"
   - "fillblocks 224,60,9 231,60,14 POLISHED_DEEPSLATE"
   - "setblock 227,65,12 SHROOMLIGHT"
@@ -327,7 +349,8 @@ world-init:
   - "fillblocks 223,61,9 223,64,14 AIR"
   - "fillblocks 232,61,9 232,64,14 AIR"
   # 走廊 f2_entry ↔ f2_shop
-  - "fillblocks 208,60,24 215,66,31 DEEPSLATE_BRICKS"
+  - "fillblocks 208,60,24 215,65,31 DEEPSLATE_BRICKS"
+  - "fillblocks 208,66,24 215,66,31 BARRIER"
   - "fillblocks 209,61,24 214,65,31 AIR"
   - "fillblocks 209,60,24 214,60,31 POLISHED_DEEPSLATE"
   - "setblock 212,65,27 SHROOMLIGHT"
@@ -335,7 +358,8 @@ world-init:
   - "fillblocks 209,61,23 214,64,23 AIR"
   - "fillblocks 209,61,32 214,64,32 AIR"
   # 走廊 f2_combat_a ↔ f2_combat_b
-  - "fillblocks 240,60,24 247,66,31 DEEPSLATE_BRICKS"
+  - "fillblocks 240,60,24 247,65,31 DEEPSLATE_BRICKS"
+  - "fillblocks 240,66,24 247,66,31 BARRIER"
   - "fillblocks 241,61,24 246,65,31 AIR"
   - "fillblocks 241,60,24 246,60,31 POLISHED_DEEPSLATE"
   - "setblock 244,65,27 SHROOMLIGHT"
@@ -343,7 +367,8 @@ world-init:
   - "fillblocks 241,61,23 246,64,23 AIR"
   - "fillblocks 241,61,32 246,64,32 AIR"
   # 走廊 f2_shop ↔ f2_combat_b
-  - "fillblocks 224,60,40 231,66,47 DEEPSLATE_BRICKS"
+  - "fillblocks 224,60,40 231,65,47 DEEPSLATE_BRICKS"
+  - "fillblocks 224,66,40 231,66,47 BARRIER"
   - "fillblocks 224,61,41 231,65,46 AIR"
   - "fillblocks 224,60,41 231,60,46 POLISHED_DEEPSLATE"
   - "setblock 227,65,44 SHROOMLIGHT"
@@ -351,7 +376,8 @@ world-init:
   - "fillblocks 223,61,41 223,64,46 AIR"
   - "fillblocks 232,61,41 232,64,46 AIR"
   # 走廊 f2_combat_b ↔ f2_puzzle
-  - "fillblocks 256,60,40 263,66,47 DEEPSLATE_BRICKS"
+  - "fillblocks 256,60,40 263,65,47 DEEPSLATE_BRICKS"
+  - "fillblocks 256,66,40 263,66,47 BARRIER"
   - "fillblocks 256,61,41 263,65,46 AIR"
   - "fillblocks 256,60,41 263,60,46 POLISHED_DEEPSLATE"
   - "setblock 259,65,44 SHROOMLIGHT"
@@ -359,7 +385,8 @@ world-init:
   - "fillblocks 255,61,41 255,64,46 AIR"
   - "fillblocks 264,61,41 264,64,46 AIR"
   # 走廊 f2_combat_b ↔ f2_combat_c
-  - "fillblocks 240,60,56 247,66,63 DEEPSLATE_BRICKS"
+  - "fillblocks 240,60,56 247,65,63 DEEPSLATE_BRICKS"
+  - "fillblocks 240,66,56 247,66,63 BARRIER"
   - "fillblocks 241,61,56 246,65,63 AIR"
   - "fillblocks 241,60,56 246,60,63 POLISHED_DEEPSLATE"
   - "setblock 244,65,59 SHROOMLIGHT"
@@ -367,7 +394,8 @@ world-init:
   - "fillblocks 241,61,55 246,64,55 AIR"
   - "fillblocks 241,61,64 246,64,64 AIR"
   # 走廊 f2_combat_c ↔ f2_boss
-  - "fillblocks 256,60,72 263,66,79 DEEPSLATE_BRICKS"
+  - "fillblocks 256,60,72 263,65,79 DEEPSLATE_BRICKS"
+  - "fillblocks 256,66,72 263,66,79 BARRIER"
   - "fillblocks 256,61,73 263,65,78 AIR"
   - "fillblocks 256,60,73 263,60,78 POLISHED_DEEPSLATE"
   - "setblock 259,65,76 SHROOMLIGHT"
@@ -378,7 +406,8 @@ world-init:
   - "fillblocks 264,61,73 264,64,78 DEEPSLATE_BRICKS"
   # ── 深渊王座 ──
   # f3_entry 深渊入口
-  - "fillblocks 400,60,0 423,75,23 NETHER_BRICKS"
+  - "fillblocks 400,60,0 423,74,23 NETHER_BRICKS"
+  - "fillblocks 400,75,0 423,75,23 BARRIER"
   - "fillblocks 401,61,1 422,74,22 AIR"
   - "fillblocks 401,60,1 422,60,22 BLACKSTONE"
   - "fillblocks 402,60,2 421,60,21 CRYING_OBSIDIAN"
@@ -394,7 +423,8 @@ world-init:
   - "fillblocks 404,61,1 406,63,1 BOOKSHELF"
   - "fillblocks 417,61,1 419,63,1 BOOKSHELF"
   # f3_combat_a 凋零卫队
-  - "fillblocks 432,60,0 455,75,23 NETHER_BRICKS"
+  - "fillblocks 432,60,0 455,74,23 NETHER_BRICKS"
+  - "fillblocks 432,75,0 455,75,23 BARRIER"
   - "fillblocks 433,61,1 454,74,22 AIR"
   - "fillblocks 433,60,1 454,60,22 BLACKSTONE"
   - "fillblocks 434,60,2 453,60,21 CRYING_OBSIDIAN"
@@ -409,7 +439,8 @@ world-init:
   - "fillblocks 438,61,16 439,62,17 CRYING_OBSIDIAN"
   - "fillblocks 448,61,6 449,62,7 CRYING_OBSIDIAN"
   # f3_shrine 灵魂祭坛
-  - "fillblocks 400,60,32 423,75,55 NETHER_BRICKS"
+  - "fillblocks 400,60,32 423,74,55 NETHER_BRICKS"
+  - "fillblocks 400,75,32 423,75,55 BARRIER"
   - "fillblocks 401,61,33 422,74,54 AIR"
   - "fillblocks 401,60,33 422,60,54 BLACKSTONE"
   - "fillblocks 402,60,34 421,60,53 CRYING_OBSIDIAN"
@@ -429,7 +460,8 @@ world-init:
   - "fillblocks 401,61,36 401,64,40 BOOKSHELF"
   - "fillblocks 401,61,47 401,64,51 BOOKSHELF"
   # f3_combat_b 王座回廊
-  - "fillblocks 432,60,32 455,75,55 NETHER_BRICKS"
+  - "fillblocks 432,60,32 455,74,55 NETHER_BRICKS"
+  - "fillblocks 432,75,32 455,75,55 BARRIER"
   - "fillblocks 433,61,33 454,74,54 AIR"
   - "fillblocks 433,60,33 454,60,54 BLACKSTONE"
   - "fillblocks 434,60,34 453,60,53 CRYING_OBSIDIAN"
@@ -444,7 +476,8 @@ world-init:
   - "fillblocks 438,61,48 439,62,49 CRYING_OBSIDIAN"
   - "fillblocks 448,61,38 449,62,39 CRYING_OBSIDIAN"
   # f3_chest 战利品之厅
-  - "fillblocks 464,60,32 487,75,55 NETHER_BRICKS"
+  - "fillblocks 464,60,32 487,74,55 NETHER_BRICKS"
+  - "fillblocks 464,75,32 487,75,55 BARRIER"
   - "fillblocks 465,61,33 486,74,54 AIR"
   - "fillblocks 465,60,33 486,60,54 BLACKSTONE"
   - "fillblocks 466,60,34 485,60,53 CRYING_OBSIDIAN"
@@ -460,7 +493,8 @@ world-init:
   - "fillblocks 468,60,36 469,60,37 EMERALD_BLOCK"
   - "fillblocks 482,60,50 483,60,51 EMERALD_BLOCK"
   # f3_elite 精英卫队
-  - "fillblocks 432,60,64 455,75,87 NETHER_BRICKS"
+  - "fillblocks 432,60,64 455,74,87 NETHER_BRICKS"
+  - "fillblocks 432,75,64 455,75,87 BARRIER"
   - "fillblocks 433,61,65 454,74,86 AIR"
   - "fillblocks 433,60,65 454,60,86 BLACKSTONE"
   - "fillblocks 434,60,66 453,60,85 CRYING_OBSIDIAN"
@@ -476,7 +510,8 @@ world-init:
   - "fillblocks 436,73,74 436,74,74 CHAIN"
   - "fillblocks 451,73,76 451,74,76 CHAIN"
   # f3_final 深渊王座
-  - "fillblocks 464,60,0 487,75,23 NETHER_BRICKS"
+  - "fillblocks 464,60,0 487,74,23 NETHER_BRICKS"
+  - "fillblocks 464,75,0 487,75,23 BARRIER"
   - "fillblocks 465,61,1 486,74,22 AIR"
   - "fillblocks 465,60,1 486,60,22 BLACKSTONE"
   - "fillblocks 466,60,2 485,60,21 CRYING_OBSIDIAN"
@@ -494,7 +529,8 @@ world-init:
   - "fillblocks 482,61,18 483,66,19 OBSIDIAN"
   - "fillblocks 474,60,2 477,60,5 GOLD_BLOCK"
   # 走廊 f3_entry ↔ f3_shrine
-  - "fillblocks 408,60,24 415,66,31 NETHER_BRICKS"
+  - "fillblocks 408,60,24 415,65,31 NETHER_BRICKS"
+  - "fillblocks 408,66,24 415,66,31 BARRIER"
   - "fillblocks 409,61,24 414,65,31 AIR"
   - "fillblocks 409,60,24 414,60,31 BLACKSTONE"
   - "setblock 412,65,27 PEARLESCENT_FROGLIGHT"
@@ -502,7 +538,8 @@ world-init:
   - "fillblocks 409,61,23 414,64,23 AIR"
   - "fillblocks 409,61,32 414,64,32 AIR"
   # 走廊 f3_shrine ↔ f3_combat_b
-  - "fillblocks 424,60,40 431,66,47 NETHER_BRICKS"
+  - "fillblocks 424,60,40 431,65,47 NETHER_BRICKS"
+  - "fillblocks 424,66,40 431,66,47 BARRIER"
   - "fillblocks 424,61,41 431,65,46 AIR"
   - "fillblocks 424,60,41 431,60,46 BLACKSTONE"
   - "setblock 427,65,44 PEARLESCENT_FROGLIGHT"
@@ -510,7 +547,8 @@ world-init:
   - "fillblocks 423,61,41 423,64,46 AIR"
   - "fillblocks 432,61,41 432,64,46 AIR"
   # 走廊 f3_combat_b ↔ f3_combat_a
-  - "fillblocks 440,60,24 447,66,31 NETHER_BRICKS"
+  - "fillblocks 440,60,24 447,65,31 NETHER_BRICKS"
+  - "fillblocks 440,66,24 447,66,31 BARRIER"
   - "fillblocks 441,61,24 446,65,31 AIR"
   - "fillblocks 441,60,24 446,60,31 BLACKSTONE"
   - "setblock 444,65,27 PEARLESCENT_FROGLIGHT"
@@ -518,7 +556,8 @@ world-init:
   - "fillblocks 441,61,23 446,64,23 AIR"
   - "fillblocks 441,61,32 446,64,32 AIR"
   # 走廊 f3_combat_a ↔ f3_entry
-  - "fillblocks 424,60,8 431,66,15 NETHER_BRICKS"
+  - "fillblocks 424,60,8 431,65,15 NETHER_BRICKS"
+  - "fillblocks 424,66,8 431,66,15 BARRIER"
   - "fillblocks 424,61,9 431,65,14 AIR"
   - "fillblocks 424,60,9 431,60,14 BLACKSTONE"
   - "setblock 427,65,12 PEARLESCENT_FROGLIGHT"
@@ -526,7 +565,8 @@ world-init:
   - "fillblocks 423,61,9 423,64,14 AIR"
   - "fillblocks 432,61,9 432,64,14 AIR"
   # 走廊 f3_combat_a ↔ f3_final
-  - "fillblocks 456,60,8 463,66,15 NETHER_BRICKS"
+  - "fillblocks 456,60,8 463,65,15 NETHER_BRICKS"
+  - "fillblocks 456,66,8 463,66,15 BARRIER"
   - "fillblocks 456,61,9 463,65,14 AIR"
   - "fillblocks 456,60,9 463,60,14 BLACKSTONE"
   - "setblock 459,65,12 PEARLESCENT_FROGLIGHT"
@@ -534,7 +574,8 @@ world-init:
   - "fillblocks 455,61,9 455,64,14 AIR"
   - "fillblocks 464,61,9 464,64,14 AIR"
   # 走廊 f3_combat_b ↔ f3_chest
-  - "fillblocks 456,60,40 463,66,47 NETHER_BRICKS"
+  - "fillblocks 456,60,40 463,65,47 NETHER_BRICKS"
+  - "fillblocks 456,66,40 463,66,47 BARRIER"
   - "fillblocks 456,61,41 463,65,46 AIR"
   - "fillblocks 456,60,41 463,60,46 BLACKSTONE"
   - "setblock 459,65,44 PEARLESCENT_FROGLIGHT"
@@ -542,7 +583,8 @@ world-init:
   - "fillblocks 455,61,41 455,64,46 AIR"
   - "fillblocks 464,61,41 464,64,46 AIR"
   # 走廊 f3_combat_b ↔ f3_elite
-  - "fillblocks 440,60,56 447,66,63 NETHER_BRICKS"
+  - "fillblocks 440,60,56 447,65,63 NETHER_BRICKS"
+  - "fillblocks 440,66,56 447,66,63 BARRIER"
   - "fillblocks 441,61,56 446,65,63 AIR"
   - "fillblocks 441,60,56 446,60,63 BLACKSTONE"
   - "setblock 444,65,59 PEARLESCENT_FROGLIGHT"
