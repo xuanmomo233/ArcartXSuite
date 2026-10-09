@@ -41,13 +41,10 @@ public final class PlanPainter {
             GenSpec spec = floor.gen() != null ? floor.gen() : fc.defaults().gen();
             GenSpec.Palette pal = GenSpec.paletteOf(
                 floor.palette() != null ? floor.palette() : spec.palette());
-            // 1. 房壳
+            // 1. 洞穴本体（大 CA 洞窟：地板+壳环+屏障盖）——先铺，洞室门框后盖
+            if (fp.cave != null) writes += paintRoom(world, fp.cave, pal);
+            // 2. 洞室（外凸团块：地板+壳环+屏障盖；门框格也在 wall 集里一并落）
             for (RoomPlan r : fp.rooms.values()) writes += paintRoom(world, r, pal);
-            // 2. 走廊（含穿墙开洞——廊格覆盖壳体即成门）
-            Set<Long> occupied = footprintOf(fp);
-            for (FloorPlan.Corridor c : fp.corridors) {
-                writes += paintCorridor(world, c, pal, spec, occupied);
-            }
             // 3. 封门（Boss 房门再填回壳体材质）
             for (RoomPlan r : fp.rooms.values()) {
                 for (RoomPlan.DoorPlan d : r.doors) {
@@ -67,14 +64,7 @@ public final class PlanPainter {
             + (System.currentTimeMillis() - t0) + "ms");
     }
 
-    /** 全房内空列集合（走廊侧壁避让用）。 */
-    private static Set<Long> footprintOf(FloorPlan fp) {
-        Set<Long> all = new HashSet<>();
-        for (RoomPlan r : fp.rooms.values()) all.addAll(r.floor);
-        return all;
-    }
-
-    // ═══ 房壳 ═══
+    // ═══ 房壳/洞壳 ═══
 
     private int paintRoom(World w, RoomPlan r, GenSpec.Palette pal) {
         int n = 0;
@@ -91,48 +81,6 @@ public final class PlanPainter {
                 set(w, x, y, z, pal.shell()); n++;
             }
             set(w, x, r.ceilY, z, Material.BARRIER); n++;
-        }
-        return n;
-    }
-
-    // ═══ 走廊 ═══
-
-    private int paintCorridor(World w, FloorPlan.Corridor c,
-                              GenSpec.Palette pal, GenSpec spec, Set<Long> occupied) {
-        int n = 0;
-        int top = spec.floorY() + 5;         // 廊内空高 5（61..65）
-        int cap = top + 1;                   // 盖 66
-        Set<Long> cells = new HashSet<>();
-        for (RoomPlan.Pos p : c.cells) {
-            long pk = RoomPlan.pack(p.x(), p.z());
-            cells.add(pk);
-            if (occupied.contains(pk)) continue;      // 房内空域：不铺廊盖（房内不能出悬空屏障）
-            set(w, p.x(), spec.floorY(), p.z(), pal.floor()); n++;
-            set(w, p.x(), cap, p.z(), Material.BARRIER); n++;
-            // 廊内空（壳体贯穿段清出通道——穿墙成门洞）
-            for (int y = spec.floorY() + 1; y <= top; y++) {
-                set(w, p.x(), y, p.z(), Material.AIR); n++;
-            }
-        }
-        // 侧壁：与廊相邻的非廊非房内空格 → 墙柱 + 盖
-        for (long pk : cells) {
-            int x = (int) (pk >> 32), z = (int) (long) pk;
-            for (int[] dd : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
-                long k = RoomPlan.pack(x + dd[0], z + dd[1]);
-                if (cells.contains(k) || occupied.contains(k)) continue;
-                for (int y = spec.floorY(); y <= top; y++) {
-                    if (!w.getBlockAt(x + dd[0], y, z + dd[1]).getType().isAir()) continue;
-                    set(w, x + dd[0], y, z + dd[1], pal.corrWall()); n++;
-                }
-                if (w.getBlockAt(x + dd[0], cap, z + dd[1]).getType().isAir()) {
-                    set(w, x + dd[0], cap, z + dd[1], Material.BARRIER); n++;
-                }
-            }
-        }
-        // 廊中灯：每 8 格一盏贴盖灯
-        for (int i = 0; i < c.cells.size(); i += 8) {
-            RoomPlan.Pos p = c.cells.get(i);
-            set(w, p.x(), top, p.z(), pal.light()); n++;
         }
         return n;
     }
@@ -242,25 +190,6 @@ public final class PlanPainter {
                 n += scatterBlocks(w, r, rng, 4, 6, pal.pillar(), fy, 5);
             }
             default -> { }
-        }
-        n += ceilingLights(w, r, pal);
-        return n;
-    }
-
-    /** 顶盖下两条正交灯带（有机房贴内空顶层）。 */
-    private int ceilingLights(World w, RoomPlan r, GenSpec.Palette pal) {
-        int n = 0;
-        int ly = r.ceilY - 1;
-        int cx = (r.minX + r.maxX) / 2, cz = (r.minZ + r.maxZ) / 2;
-        for (int dx = -4; dx <= 4; dx++) {
-            if (r.floor.contains(RoomPlan.pack(cx + dx, cz))) {
-                set(w, cx + dx, ly, cz, pal.light()); n++;
-            }
-        }
-        for (int dz = -4; dz <= 4; dz++) {
-            if (r.floor.contains(RoomPlan.pack(cx, cz + dz))) {
-                set(w, cx, ly, cz + dz, pal.light()); n++;
-            }
         }
         return n;
     }

@@ -29,6 +29,8 @@ public final class FloorPlan {
     }
 
     public final int floorIndex;
+    /** 洞窟群模式的洞穴本体（floor=洞域列、wall=外围壳环、ceilY=洞顶盖层）。 */
+    public @Nullable RoomPlan cave;
     /** ref → 房计划（含本次抽到/未抽到的取舍结果：只含实际生成的房）。 */
     public final Map<String, RoomPlan> rooms = new LinkedHashMap<>();
     public final List<Corridor> corridors = new ArrayList<>();

@@ -22,18 +22,19 @@ import xuanmo.arcartxsuite.abyss.template.FloorConfig.RoomTemplate;
 import xuanmo.arcartxsuite.abyss.template.FloorConfig.RoomType;
 
 /**
- * 有机迷宫生成器：洞穴化房间 + 随机拓扑 + 蜿蜒走廊。
+ * 洞窟群迷宫生成器：一张 CA 大洞穴网络 + 洞壁上凸出的洞室房间。
  * <p>
  * 仅做纯数学规划（不触碰世界）——{@link #plan} 产出的 {@link GeneratedLayout}
  * 由 {@link PlanPainter} 统一写块。生成顺序：
  * <ol>
+ *   <li>洞穴本体：CA 一次成型（边墙封死→多轮平滑→取最大连通域）——
+ *       蜿蜒隧道与天然洞厅天然互连，它就是迷宫本体，不再需要"走廊"概念</li>
  *   <li>牌组：保底 rooms + optional-rooms 概率增删 + boss-room 兜底必在</li>
- *   <li>布点：网格洗牌分配 + 格内抖动（entry 压角、boss 取最远离格）</li>
- *   <li>形状：每房元胞自动机洞穴——随机半径 → 平滑 → 取含中心最大连通域</li>
- *   <li>拓扑：Prim 随机最小生成树保底连通 + 近邻环边（extra-edges）</li>
- *   <li>走廊：门洞对门洞的折线（随机折向/折点），洞穿墙体即门</li>
+ *   <li>洞室：每房在洞穴边缘选一个外凸点，CA 团块向洞外膨胀；
+ *       团块与洞域的重叠弧收窄成 ~{@code corridor-width} 宽门洞——
+ *       门是被刻意"切"出来的开口，永不出现被墙堵死的门位</li>
  *   <li>锚点：按 feature 产出 center/spawn/altar/chest/merchant/lever_n/exit 等</li>
- *   <li>障碍区：Boss 入口走廊分带产出 soul/magma 命名区</li>
+ *   <li>障碍区：Boss 门洞外的洞域带产出 soul/magma 命名区</li>
  * </ol>
  */
 public final class OrganicGenerator {
@@ -43,6 +44,9 @@ public final class OrganicGenerator {
     public OrganicGenerator(java.util.logging.Logger logger) {
         this.logger = logger;
     }
+
+    /** 洞穴内空净高（洞盖在 floorY+CAVE_H）。 */
+    private static final int CAVE_H = 7;
 
     // ═══ 入口 ═══
 
@@ -66,7 +70,7 @@ public final class OrganicGenerator {
             Floor floor = fc.floors().get(fi);
             if (floor.source() != FloorConfig.Source.GEN) continue;
             GenSpec fs = floor.gen() != null ? floor.gen() : spec;
-            FloorPlan fp = planFloor(instance, world, floor, fi, fs, rng, fc);
+            FloorPlan fp = planFloor(world, floor, fi, fs, rng, fc);
             layout.putFloor(fp, world);
         }
         return layout;
@@ -74,20 +78,31 @@ public final class OrganicGenerator {
 
     // ═══ 层生成 ═══
 
-    private FloorPlan planFloor(AbyssInstance instance, World world, Floor floor,
-                                int fi, GenSpec spec, Random rng, FloorConfig fc) {
+    private FloorPlan planFloor(World world, Floor floor, int fi,
+                                GenSpec spec, Random rng, FloorConfig fc) {
         FloorPlan fp = new FloorPlan(fi);
         int spacing = fc.defaults().roomSpacing();
-        int bandX0 = fi * spacing;
-        // 生成带：bandX0+8 .. bandX0+168，z 8..152（pitch 56 网格约 3×3 变体）
-        int bandW = Math.min(160, spacing - 40);
-        int bandH = 144;
-        int bandZ0 = 8;
+        // 洞穴栅格：层带 fi*200+8 起，宽≤176 高 148（洞室外凸余量含在带内）
+        int W = Math.min(176, spacing - 24), H = 148;
+        int bx = fi * spacing + 8, bz = 4;
 
-        // ── 1. 牌组：保底 + 增删 + boss ──
+        // ── 1. 大洞穴网络 ──
+        Set<Long> cave = cavern(bx, bz, W, H, spec, rng);
+        if (cave.isEmpty()) {
+            logger.warning("[abyss] gen 层 " + floor.id() + " 洞穴生成失败——层为空");
+            return fp;
+        }
+        RoomPlan caveRoom = new RoomPlan("cave", RoomType.SAFE,
+            spec.floorY(), spec.floorY() + CAVE_H);
+        caveRoom.floor.addAll(cave);
+        caveRoom.wall.addAll(ring(cave, 2));
+        boundsOf(caveRoom);
+        fp.cave = caveRoom;
+        fp.growBounds(caveRoom);
+
+        // ── 2. 牌组：保底 + 增删 + boss 兜底 ──
         List<String> deck = new ArrayList<>(floor.roomRefs());
-        Map<String, Double> opt = floor.optionalRooms();
-        for (Map.Entry<String, Double> e : opt.entrySet()) {
+        for (Map.Entry<String, Double> e : floor.optionalRooms().entrySet()) {
             if (!deck.contains(e.getKey()) && rng.nextDouble() < e.getValue()) {
                 deck.add(e.getKey());
             }
@@ -97,220 +112,362 @@ public final class OrganicGenerator {
         }
         List<String> active = new ArrayList<>();
         for (String ref : deck) {
-            RoomTemplate tpl = fc.rooms().get(ref);
-            if (tpl == null) {
+            if (fc.rooms().get(ref) == null) {
                 logger.warning("[abyss] gen 牌组引用缺失房间 " + ref + "（层 " + floor.id() + "）");
                 continue;
             }
             active.add(ref);
         }
-        int n = active.size();
-        if (n == 0) return fp;
+        if (active.isEmpty()) return fp;
 
-        // ── 2. 自由布点：拒绝采样 + 最小间距（bbox 半径和 + 廊道间隙）──
-        // entry 压西南带、bss 取最远候选；普通房全随机。
         String entryRef = featureOf(fc, active, "entry", active.get(0));
         String bossRef = floor.bossRoom();
-        Map<String, RoomPlan> placed = new LinkedHashMap<>();
-        Map<String, double[]> centers = new HashMap<>();
         Map<String, Integer> radii = new HashMap<>();
         for (String ref : active) {
             int[] rad = radiusOf(fc.rooms().get(ref), spec);
             radii.put(ref, rad[0] + (rad[1] > rad[0]
                 ? rng.nextInt(rad[1] - rad[0] + 1) : 0));
         }
-        // 放置顺序：entry → boss → 其余洗牌
-        List<String> placementOrder = new ArrayList<>(active);
-        placementOrder.remove(entryRef);
-        if (bossRef != null) placementOrder.remove(bossRef);
-        Collections.shuffle(placementOrder, rng);
-        List<String> seq = new ArrayList<>();
-        seq.add(entryRef);
-        if (bossRef != null) seq.add(bossRef);
-        seq.addAll(placementOrder);
+        // 放置顺序：entry → 其余洗牌 → boss（boss 要拿入口门洞做 BFS 最远离点）
+        List<String> order = new ArrayList<>(active);
+        order.remove(entryRef);
+        if (bossRef != null) order.remove(bossRef);
+        Collections.shuffle(order, rng);
 
-        int ex0 = bandX0 + 8, ex1 = bandX0 + bandW, ez0 = bandZ0, ez1 = bandZ0 + bandH;
-        for (String ref : seq) {
-            int R = radii.get(ref) + 4;     // bbox 半径（含壳体余量）
-            double[] pos = null;
-            int tries = ref.equals(entryRef) || ref.equals(bossRef) ? 240 : 120;
-            double bestScore = -1;
-            for (int t = 0; t < tries && pos == null; t++) {
-                double cx, cz;
-                if (ref.equals(entryRef)) {
-                    // 入口房压西南角（band 左下 1/3 区）
-                    cx = ex0 + R + rng.nextDouble() * ((ex1 - ex0) / 3.0 - R);
-                    cz = ez1 - (ez1 - ez0) / 3.0 + rng.nextDouble() * ((ez1 - ez0) / 3.0 - R);
-                } else if (ref.equals(bossRef)) {
-                    // Boss 房候选点取"离入口最远"
-                    double[] e = centers.get(entryRef);
-                    cx = ex0 + R + rng.nextDouble() * (ex1 - ex0 - 2 * R);
-                    cz = ez0 + R + rng.nextDouble() * (ez1 - ez0 - 2 * R);
-                    if (e != null) {
-                        double d = Math.hypot(cx - e[0], cz - e[1]);
-                        if (d < (ex1 - ex0) * 0.45) continue;   // 保底远距离
-                        if (d < bestScore && rng.nextDouble() < 0.7) continue;
-                        bestScore = Math.max(bestScore, d);
-                    }
-                } else {
-                    cx = ex0 + R + rng.nextDouble() * (ex1 - ex0 - 2 * R);
-                    cz = ez0 + R + rng.nextDouble() * (ez1 - ez0 - 2 * R);
-                }
-                // 最小间距：两房 bbox 半径和 + 廊道缓冲 8
-                boolean ok = true;
-                for (Map.Entry<String, double[]> o : centers.entrySet()) {
-                    double need = (R + radii.get(o.getKey()) + 4) + 8.0;
-                    if (Math.hypot(cx - o.getValue()[0], cz - o.getValue()[1]) < need) {
-                        ok = false; break;
-                    }
-                }
-                if (ok) pos = new double[]{cx, cz};
+        // ── 3. 洞室外凸 ──
+        List<Long> edge = edgeCells(cave);
+        if (edge.isEmpty()) {
+            logger.warning("[abyss] gen 层 " + floor.id() + " 洞穴无边缘——洞室无处安放");
+            return fp;
+        }
+        Map<String, RoomPlan> placed = new LinkedHashMap<>();
+        int[] caveCentroid = centroid(cave);
+        // 入口：洞穴西南象限边缘
+        placeChamber(world, fp, floor, fc, spec, rng, cave, edge, placed, radii,
+            entryRef, pickBy(e -> px(e) < caveCentroid[0] && pz(e) > caveCentroid[1], edge),
+            null, bx, bx + W, bz, bz + H);
+        RoomPlan entry = placed.get(entryRef);
+        // 其余房：随机边缘点，洞口彼此尽量错开
+        for (String ref : order) {
+            placeChamber(world, fp, floor, fc, spec, rng, cave, edge, placed, radii,
+                ref, null, entry, bx, bx + W, bz, bz + H);
+        }
+        // Boss：沿洞穴 BFS 距入口门最远的边缘带
+        if (bossRef != null && !placed.containsKey(bossRef)) {
+            Map<Long, Integer> dist = bfsFrom(entry, cave);
+            List<Long> farEdge = new ArrayList<>();
+            int maxD = 0;
+            for (long pk : edge) {
+                int d = dist.getOrDefault(pk, 0);
+                maxD = Math.max(maxD, d);
             }
-            if (pos == null) {
-                // 兜底 1：缩半径随机重试
-                R = radii.get(ref) * 3 / 4 + 3;
-                for (int t = 0; t < 120 && pos == null; t++) {
-                    double cx = ex0 + R + rng.nextDouble() * (ex1 - ex0 - 2 * R);
-                    double cz = ez0 + R + rng.nextDouble() * (ez1 - ez0 - 2 * R);
-                    boolean ok = true;
-                    for (Map.Entry<String, double[]> o : centers.entrySet()) {
-                        double need = (R + radii.get(o.getKey()) + 4) + 6.0;
-                        if (Math.hypot(cx - o.getValue()[0], cz - o.getValue()[1]) < need) {
-                            ok = false; break;
-                        }
-                    }
-                    if (ok) pos = new double[]{cx, cz};
-                }
+            for (long pk : edge) {
+                if (dist.getOrDefault(pk, 0) >= maxD * 0.6) farEdge.add(pk);
             }
-            if (pos == null) {
-                // 兜底 2（保底房不可丢）：全带网格扫描，间距放宽到 3
-                R = Math.max(10, radii.get(ref) / 2) + 4;
-                for (int gx = ex0 + R; gx <= ex1 - R && pos == null; gx += 4) {
-                    for (int gz = ez0 + R; gz <= ez1 - R && pos == null; gz += 4) {
-                        boolean ok = true;
-                        for (Map.Entry<String, double[]> o : centers.entrySet()) {
-                            double need = (R + radii.get(o.getKey()) + 4) + 3.0;
-                            if (Math.hypot(gx - o.getValue()[0], gz - o.getValue()[1]) < need) {
-                                ok = false; break;
-                            }
-                        }
-                        if (ok) pos = new double[]{gx, gz};
-                    }
-                }
-            }
-            if (pos == null) {
-                logger.warning("[abyss] gen 层 " + floor.id() + " 房 " + ref
-                    + " 无处安放——已跳过");
-                continue;
-            }
-            centers.put(ref, pos);
-            RoomTemplate tpl = fc.rooms().get(ref);
-            int height = isTall(tpl, spec) ? spec.tallHeight() : spec.baseHeight();
-            RoomPlan rp = new RoomPlan(ref, tpl.type(),
-                spec.floorY(), spec.floorY() + height + 1);
-            carved(rp, (int) Math.round(pos[0]), (int) Math.round(pos[1]),
-                Math.min(radii.get(ref), R - 4), spec, rng);   // 兜底缩径生效
-            placed.put(ref, rp);
-            fp.rooms.put(ref, rp);
-            fp.growBounds(rp);
+            placeChamber(world, fp, floor, fc, spec, rng, cave, farEdge, placed, radii,
+                bossRef, null, entry, bx, bx + W, bz, bz + H);
         }
 
-        // ── 3. 拓扑：Prim 随机生成树 + 近邻环边 ──
-        List<String[]> edges = spanningEdges(centers, rng);
-        // 环边去重：键统一排序（生成树边是 {已连通,候选} 无序，反向对会漏判）
-        Set<String> linked = new HashSet<>();
-        for (String[] e : edges) {
-            linked.add(e[0].compareTo(e[1]) <= 0 ? e[0] + "|" + e[1]
-                : e[1] + "|" + e[0]);
-        }
-        for (String a : centers.keySet()) {
-            for (String b : centers.keySet()) {
-                if (a.compareTo(b) >= 0 || linked.contains(a + "|" + b)) continue;
-                double d = dist(centers.get(a), centers.get(b));
-                if (d < spec.cellPitch() * 1.4 && rng.nextDouble() < spec.extraEdges()) {
-                    edges.add(new String[]{a, b});
-                }
-            }
-        }
-
-        // ── 4. 走廊 + 门洞（先建全部廊道，再统一探测门洞：穿第三房壳也正确登记）──
-        for (String[] e : edges) {
-            buildCorridor(fp, placed.get(e[0]), placed.get(e[1]), spec, rng, world);
-        }
-        assignDoors(fp);
-
-        // ── 5. 房内锚点/刷怪点/装饰规划 ──
+        // ── 4. 房内锚点/刷怪点/装饰规划 ──
         for (RoomPlan rp : fp.rooms.values()) {
-            RoomTemplate tpl = fc.rooms().get(rp.ref);
-            furnishPlan(rp, tpl, spec, rng, world);
+            furnishPlan(rp, fc.rooms().get(rp.ref), spec, rng, world);
         }
 
-        // ── 6. Boss 封门 + 入口走廊障碍区 ──
+        // ── 5. Boss 封门 + 门洞外洞域障碍带 ──
         if (bossRef != null && placed.containsKey(bossRef)) {
             RoomPlan boss = placed.get(bossRef);
             for (RoomPlan.DoorPlan d : boss.doors) d.sealed = true;
-            // Boss 入口廊障碍带：取首条连 boss 的走廊
-            for (FloorPlan.Corridor c : fp.corridors) {
-                if (!c.a.equals(bossRef) && !c.b.equals(bossRef)) continue;
-                // 用有序路径取靠 boss 端的尾段（前半魂沙后半岩浆）——
-                // cells 是 Set 序不能用来定位
-                List<RoomPlan.Pos> soul = new ArrayList<>();
-                List<RoomPlan.Pos> magma = new ArrayList<>();
-                boolean bossIsB = c.b.equals(bossRef);
-                int plen = c.path.size();
-                int from = bossIsB ? Math.max(0, plen - 12) : 0;
-                int to = bossIsB ? plen : Math.min(plen, 12);
-                int half = from + (to - from) / 2;
-                for (int i = from; i < to; i++) {
-                    int[] p = c.path.get(i);
-                    List<RoomPlan.Pos> tgt = i < half ? soul : magma;
-                    // 路径左右各扩 1 格覆盖廊宽；跳过房内空域（陷阱只在走廊段）
-                    for (int dx = -1; dx <= 1; dx++) {
-                        for (int dz = -1; dz <= 1; dz++) {
-                            long pk = RoomPlan.pack(p[0] + dx, p[1] + dz);
-                            boolean inRoom = false;
-                            for (RoomPlan r : fp.rooms.values()) {
-                                if (r.floor.contains(pk)) { inRoom = true; break; }
-                            }
-                            if (!inRoom) {
-                                tgt.add(new RoomPlan.Pos(p[0] + dx,
-                                    spec.floorY(), p[1] + dz));
-                            }
-                        }
+            // 洞域内贴近 Boss 门的一段 = 陷阱带（前半魂沙后半岩浆）
+            if (!boss.doors.isEmpty()) {
+                int[] dc = doorCentroid(boss.doors.get(0));
+                List<RoomPlan.Pos> near = new ArrayList<>();
+                for (long pk : cave) {
+                    int x = (int) (pk >> 32), z = (int) (long) pk;
+                    double d = Math.hypot(x - dc[0], z - dc[1]);
+                    if (d >= 3 && d <= 15) {
+                        near.add(new RoomPlan.Pos(x, spec.floorY(), z));
                     }
                 }
-                fp.zones.put(floor.id() + ".boss_corridor_soul", soul);
-                fp.zones.put(floor.id() + ".boss_corridor_magma", magma);
-                break;
+                near.sort((a, b) -> Double.compare(
+                    Math.hypot(a.x() - dc[0], a.z() - dc[1]),
+                    Math.hypot(b.x() - dc[0], b.z() - dc[1])));
+                int half = near.size() / 2;
+                fp.zones.put(floor.id() + ".boss_corridor_soul",
+                    near.subList(0, half));
+                fp.zones.put(floor.id() + ".boss_corridor_magma",
+                    near.subList(half, near.size()));
             }
         }
 
         // 层入口点 = entry 房 spawn 锚点
-        RoomPlan entry = fp.rooms.get(entryRef);
         if (entry != null) fp.entrySpawn = entry.anchor("spawn");
         return fp;
     }
 
-    // ═══ 形状：CA 洞穴 ═══
+    // ═══ 洞穴本体 ═══
 
-    /** 雕出洞穴 footprint + 壳体环。中心强制留空。 */
-    private void carved(RoomPlan rp, int cx, int cz, int rad, GenSpec spec, Random rng) {
-        int R = rad + 4;   // 掩码半幅（含壳体余量）
-        int n = 2 * R + 1;
+    /**
+     * CA 大洞穴：边墙封底的噪声场 → {@code smooth+1} 轮平滑 → 最大连通域。
+     * 返回世界坐标列集（floorY 层地面）。
+     */
+    private Set<Long> cavern(int bx, int bz, int W, int H, GenSpec spec, Random rng) {
+        boolean[][] m = new boolean[W][H];
+        double fill = Math.min(0.52, spec.caFill() + 0.04);
+        for (int x = 0; x < W; x++) {
+            for (int z = 0; z < H; z++) {
+                // 边缘两圈强制实心（洞不贴生成带边——洞壁外还有洞室要凸出）
+                m[x][z] = x >= 2 && z >= 2 && x < W - 2 && z < H - 2
+                    && rng.nextDouble() < fill;
+            }
+        }
+        int rounds = spec.caSmooth() + 1;
+        for (int r = 0; r < rounds; r++) {
+            boolean[][] nx = new boolean[W][H];
+            for (int x = 0; x < W; x++) {
+                for (int z = 0; z < H; z++) {
+                    int s = 0;
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            int ax = x + dx, az = z + dz;
+                            if (ax < 0 || az < 0 || ax >= W || az >= H || !m[ax][az]) s++;
+                        }
+                    }
+                    nx[x][z] = s >= 5;
+                }
+            }
+            m = nx;
+        }
+        // 最大连通域
+        Set<Long> best = new HashSet<>();
+        boolean[][] seen = new boolean[W][H];
+        for (int sx = 0; sx < W; sx++) {
+            for (int sz = 0; sz < H; sz++) {
+                if (!m[sx][sz] || seen[sx][sz]) continue;
+                Set<Long> comp = new HashSet<>();
+                Deque<int[]> q = new ArrayDeque<>();
+                q.add(new int[]{sx, sz});
+                seen[sx][sz] = true;
+                while (!q.isEmpty()) {
+                    int[] c = q.poll();
+                    comp.add(RoomPlan.pack(bx + c[0], bz + c[1]));
+                    for (int[] dd : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                        int ax = c[0] + dd[0], az = c[1] + dd[1];
+                        if (ax < 0 || az < 0 || ax >= W || az >= H
+                            || seen[ax][az] || !m[ax][az]) continue;
+                        seen[ax][az] = true;
+                        q.add(new int[]{ax, az});
+                    }
+                }
+                if (comp.size() > best.size()) best = comp;
+            }
+        }
+        return best;
+    }
+
+    /** 洞域边界列集：有非洞邻居的洞格（洞室就从这些位置向外凸）。 */
+    private static List<Long> edgeCells(Set<Long> cave) {
+        List<Long> out = new ArrayList<>();
+        for (long pk : cave) {
+            int x = (int) (pk >> 32), z = (int) (long) pk;
+            for (int[] dd : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                if (!cave.contains(RoomPlan.pack(x + dd[0], z + dd[1]))) {
+                    out.add(pk);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    // ═══ 洞室外凸 ═══
+
+    /**
+     * 在候选边缘点集里给 {@code ref} 房找一个外凸位：
+     * 房心 = 边缘点沿外推方向 R+3，CA 团块与洞域的重叠弧即天然开口，
+     * 收窄成门洞格集后写进 RoomPlan。
+     *
+     * @param cand  候选边缘列（null=全部边缘随机）
+     * @param entry 入口房（非 entry/boss 的房用它算洞口间距，防扎堆）
+     */
+    private void placeChamber(World world, FloorPlan fp, Floor floor, FloorConfig fc,
+                              GenSpec spec, Random rng, Set<Long> cave,
+                              List<Long> cand, Map<String, RoomPlan> placed,
+                              Map<String, Integer> radii, String ref,
+                              @Nullable List<Long> forced, @Nullable RoomPlan entry,
+                              int bx0, int bx1, int bz0, int bz1) {
+        if (ref == null) return;
+        RoomTemplate tpl = fc.rooms().get(ref);
+        int R = radii.getOrDefault(ref, spec.radiusMin());
+        int doorW = Math.max(3, spec.corridorWidth());
+        List<Long> pool = forced != null ? forced : cand;
+        int tries = 240;    // 边缘点采样很轻，统一多给尝试次数
+
+        for (int t = 0; t < tries; t++) {
+            long e = pool.get(rng.nextInt(pool.size()));
+            int ex = px(e), ez = pz(e);
+            // 8 个方向各算一次，取"外凸度 + 开口宽度"综合最好的方向
+            int[] bestDir = null;
+            Set<Long> bestBlob = null;
+            Set<Long> bestIface = null;
+            int bestScore = -1;
+            for (int[] d : DIRS8) {
+                int cx = ex + d[0] * (R + 3), cz = ez + d[1] * (R + 3);
+                if (cx - R - 3 < bx0 || cx + R + 3 > bx1
+                    || cz - R - 3 < bz0 || cz + R + 3 > bz1) continue;
+                Set<Long> blob = blobMask(cx, cz, R, rng);
+                // 与他房地板/壳体不重叠
+                if (collides(blob, placed)) continue;
+                Set<Long> iface = iface(blob, cave);
+                // 开口理想宽度 5~12 格：过窄=死胡同感，过宽=不是房间是豁口
+                int score = Math.min(iface.size(), 12) - Math.abs(iface.size() - 8);
+                // 外凸度：房内独有格占比越高越好
+                long own = blob.stream().filter(p -> !cave.contains(p)).count();
+                score += (int) (own * 4 / Math.max(1, blob.size()));
+                // 洞口间距：与已放房的门洞拉开（防门口挤作一团）
+                if (entry != null) {
+                    int[] ec = doorCentroid(entry.doors.isEmpty() ? null : entry.doors.get(0));
+                    if (ec != null) {
+                        double dd = Math.hypot(cx - ec[0], cz - ec[1]);
+                        score += (int) Math.min(dd / 4, 8);
+                    }
+                }
+                if (score > bestScore) {
+                    bestScore = score; bestDir = d; bestBlob = blob; bestIface = iface;
+                }
+            }
+            if (bestBlob == null || bestIface.size() < 2) continue;
+
+            // ── 物化该候选 ──
+            Set<Long> door = pickDoor(bestIface, doorW, rng);
+            Set<Long> frame = new HashSet<>(bestIface);
+            frame.removeAll(door);
+
+            RoomPlan rp = new RoomPlan(ref, tpl.type(),
+                spec.floorY(),
+                spec.floorY() + (isTall(tpl, spec) ? spec.tallHeight() : spec.baseHeight()) + 1);
+            // 房本体 = 团块独有格 + 门洞格；被切走的 frame 洞侧格不进房
+            for (long pk : bestBlob) {
+                if (!cave.contains(pk) || door.contains(pk)) rp.floor.add(pk);
+            }
+            rp.floor.removeAll(frame);
+            // 壳环 = 房外扩 2 圈，挖掉洞域（洞自己管自己的壳）与门洞，补回 frame
+            Set<Long> wall = ring(rp.floor, 2);
+            wall.removeAll(cave);
+            wall.removeAll(rp.floor);
+            wall.addAll(frame);
+            rp.wall.addAll(wall);
+            boundsOf(rp);
+            // 门洞格集（锁门填 y+1..+4）
+            RoomPlan.DoorPlan dp = new RoomPlan.DoorPlan("cave");
+            for (long pk : door) {
+                int x = px(pk), z = pz(pk);
+                for (int y = spec.floorY() + 1; y <= spec.floorY() + 4; y++) {
+                    dp.cells.add(new RoomPlan.Pos(x, y, z));
+                }
+            }
+            if (!dp.cells.isEmpty()) rp.doors.add(dp);
+            placed.put(ref, rp);
+            fp.rooms.put(ref, rp);
+            fp.growBounds(rp);
+            return;
+        }
+        logger.warning("[abyss] gen 层 " + floor.id() + " 房 " + ref
+            + " 洞室无处安放——已跳过");
+    }
+
+    /** 房与已放房的地板/壳体是否重叠。 */
+    private static boolean collides(Set<Long> blob, Map<String, RoomPlan> placed) {
+        for (RoomPlan o : placed.values()) {
+            for (long pk : blob) {
+                if (o.floor.contains(pk) || o.wall.contains(pk)) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 房↔洞接触界面（8 邻域）：
+     * 团块独有格里贴洞的 + 洞里贴团块的 + 团块∩洞的重叠格。
+     * 全部封口、只留门洞段——斜向缝隙也一并堵死。
+     */
+    private static Set<Long> iface(Set<Long> blob, Set<Long> cave) {
+        Set<Long> out = new HashSet<>();
+        for (long pk : blob) {
+            boolean touch = false;
+            int x = px(pk), z = pz(pk);
+            for (int[] d : DIRS8) {
+                if (cave.contains(RoomPlan.pack(x + d[0], z + d[1]))) {
+                    touch = true; break;
+                }
+            }
+            if (touch || cave.contains(pk)) out.add(pk);
+        }
+        for (long pk : cave) {
+            int x = px(pk), z = pz(pk);
+            for (int[] d : DIRS8) {
+                if (blob.contains(RoomPlan.pack(x + d[0], z + d[1]))) {
+                    out.add(pk); break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** 界面里挑 ~w 个围绕质心的连续格作门洞（接口不足 w 时全给）。 */
+    private static Set<Long> pickDoor(Set<Long> iface, int w, Random rng) {
+        if (iface.size() <= w) return new HashSet<>(iface);
+        // 质心
+        double cx = 0, cz = 0;
+        for (long pk : iface) { cx += px(pk); cz += pz(pk); }
+        cx /= iface.size(); cz /= iface.size();
+        List<Long> sorted = new ArrayList<>(iface);
+        double fcx = cx, fcz = cz;
+        sorted.sort((a, b) -> Double.compare(
+            Math.hypot(px(a) - fcx, pz(a) - fcz),
+            Math.hypot(px(b) - fcx, pz(b) - fcz)));
+        // 从最近格种子向界面内 8 邻域扩展到 w 格
+        Set<Long> door = new HashSet<>();
+        Deque<Long> q = new ArrayDeque<>();
+        q.add(sorted.get(0));
+        while (!q.isEmpty() && door.size() < w) {
+            long pk = q.poll();
+            if (!iface.contains(pk) || door.contains(pk)) continue;
+            door.add(pk);
+            int x = px(pk), z = pz(pk);
+            for (int[] d : DIRS8) q.add(RoomPlan.pack(x + d[0], z + d[1]));
+        }
+        return door;
+    }
+
+    // ═══ 几何小件 ═══
+
+    private static final int[][] DIRS8 =
+        {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+
+    private static int px(long pk) { return (int) (pk >> 32); }
+    private static int pz(long pk) { return (int) pk; }
+
+    private interface Pick { boolean ok(long pk); }
+    private static List<Long> pickBy(Pick f, List<Long> in) {
+        List<Long> out = new ArrayList<>();
+        for (long pk : in) if (f.ok(pk)) out.add(pk);
+        return out.isEmpty() ? in : out;
+    }
+
+    /** CA 小团块：噪声场 → 平滑 → 含中心最大连通域 → 半径截断。 */
+    private Set<Long> blobMask(int cx, int cz, int rad, Random rng) {
+        int R = rad + 4, n = R * 2 + 1;
         boolean[][] m = new boolean[n][n];
         for (int x = 0; x < n; x++) {
             for (int z = 0; z < n; z++) {
+                double p = 0.55;
                 double d = Math.hypot(x - R, z - R);
-                // 边界概率随距衰减——越远越不可能成洞
-                double p = spec.caFill() - Math.max(0, d - rad * 0.55) * 0.09;
-                m[x][z] = d <= rad + 2 && rng.nextDouble() < p;
+                if (d > R - 3) p -= (d - (R - 3)) * 0.25;
+                if (Math.abs(x - R) <= 2 && Math.abs(z - R) <= 2) p = 0.95;
+                m[x][z] = rng.nextDouble() < p;
             }
         }
-        // 中心 5×5 强制成洞（锚点保底落点）
-        for (int x = R - 2; x <= R + 2; x++)
-            for (int z = R - 2; z <= R + 2; z++) m[x][z] = true;
-
-        for (int it = 0; it < spec.caSmooth(); it++) {
+        for (int r = 0; r < 4; r++) {
             boolean[][] nx = new boolean[n][n];
             for (int x = 0; x < n; x++) {
                 for (int z = 0; z < n; z++) {
@@ -325,13 +482,11 @@ public final class OrganicGenerator {
                     nx[x][z] = s >= 5 || (m[x][z] && s >= 4);
                 }
             }
-            // 中心保护区不被平滑掉
             for (int x = R - 2; x <= R + 2; x++)
                 for (int z = R - 2; z <= R + 2; z++) nx[x][z] = true;
             m = nx;
         }
-
-        // 含中心的最大连通域
+        // 含中心最大连通域
         boolean[][] seen = new boolean[n][n];
         Deque<int[]> q = new ArrayDeque<>();
         q.add(new int[]{R, R});
@@ -345,182 +500,79 @@ public final class OrganicGenerator {
                 q.add(new int[]{ax, az});
             }
         }
-        // footprint = 连通域；wall = 与洞相邻的壳体环（2 层厚保证隔绝不漏光）
-        Set<Long> cav = new HashSet<>();
-        for (int x = 0; x < n; x++)
-            for (int z = 0; z < n; z++)
-                if (seen[x][z]) cav.add(RoomPlan.pack(cx + x - R, cz + z - R));
-        Set<Long> ring = new HashSet<>();
-        for (int t = 0; t < 2; t++) {
-            Set<Long> expand = new HashSet<>(cav);
-            expand.addAll(ring);
-            for (long pk : expand) {
-                int x = (int) (pk >> 32), z = (int) (long) pk;
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        long k = RoomPlan.pack(x + dx, z + dz);
-                        if (!cav.contains(k)) ring.add(k);
-                    }
+        Set<Long> out = new HashSet<>();
+        for (int x = 0; x < n; x++) {
+            for (int z = 0; z < n; z++) {
+                if (seen[x][z] && Math.hypot(x - R, z - R) <= rad + 2) {
+                    out.add(RoomPlan.pack(cx + x - R, cz + z - R));
                 }
             }
-            ring.removeAll(cav);
         }
-        rp.floor.addAll(cav);
-        rp.wall.addAll(ring);
-        // bbox = 环外扩
+        return out;
+    }
+
+    /** 列集外扩 t 圈（Chebyshev）。 */
+    private static Set<Long> ring(Set<Long> base, int t) {
+        Set<Long> out = new HashSet<>();
+        for (long pk : base) {
+            int x = px(pk), z = pz(pk);
+            for (int dx = -t; dx <= t; dx++) {
+                for (int dz = -t; dz <= t; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != t) continue;
+                    long k = RoomPlan.pack(x + dx, z + dz);
+                    if (!base.contains(k)) out.add(k);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static void boundsOf(RoomPlan rp) {
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-        for (long pk : ring) {
-            int x = (int) (pk >> 32), z = (int) (long) pk;
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-            minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+        for (long pk : rp.wall.isEmpty() ? rp.floor : rp.wall) {
+            minX = Math.min(minX, px(pk)); maxX = Math.max(maxX, px(pk));
+            minZ = Math.min(minZ, pz(pk)); maxZ = Math.max(maxZ, pz(pk));
         }
         rp.minX = minX; rp.maxX = maxX; rp.minZ = minZ; rp.maxZ = maxZ;
     }
 
-    // ═══ 拓扑 ═══
-
-    /** Prim 随机生成树：权重 = 距离 × 抖动，保证全图连通且不撞设计意图。 */
-    private List<String[]> spanningEdges(Map<String, double[]> centers, Random rng) {
-        List<String[]> edges = new ArrayList<>();
-        if (centers.size() < 2) return edges;
-        Set<String> in = new HashSet<>();
-        List<String> rest = new ArrayList<>(centers.keySet());
-        in.add(rest.remove(0));
-        while (!rest.isEmpty()) {
-            String bestA = null, bestB = null;
-            double bestW = Double.MAX_VALUE;
-            for (String a : in) {
-                for (String b : rest) {
-                    double w = dist(centers.get(a), centers.get(b))
-                        * (0.6 + rng.nextDouble() * 0.8);
-                    if (w < bestW) { bestW = w; bestA = a; bestB = b; }
-                }
-            }
-            edges.add(new String[]{bestA, bestB});
-            in.add(bestB);
-            rest.remove(bestB);
-        }
-        return edges;
+    private static int[] centroid(Set<Long> cells) {
+        long sx = 0, sz = 0;
+        for (long pk : cells) { sx += px(pk); sz += pz(pk); }
+        return new int[]{(int) (sx / cells.size()), (int) (sz / cells.size())};
     }
 
-    private static double dist(double[] a, double[] b) {
-        return Math.hypot(a[0] - b[0], a[1] - b[1]);
+    private static @Nullable int[] doorCentroid(@Nullable RoomPlan.DoorPlan d) {
+        if (d == null || d.cells.isEmpty()) return null;
+        long sx = 0, sz = 0;
+        for (RoomPlan.Pos p : d.cells) { sx += p.x(); sz += p.z(); }
+        return new int[]{(int) (sx / d.cells.size()), (int) (sz / d.cells.size())};
     }
 
-    // ═══ 走廊 ═══
-
-    /**
-     * A↔B 走廊：各取朝向对方的壳体点为门位，其间折线连通。
-     * 廊道列（5 宽）落盘进 {@code corridor.cells}（y=floorY 的地面层），
-     * 穿越壳体的环格记入双方 DoorPlan（锁门格集）。
-     */
-    private void buildCorridor(FloorPlan fp, RoomPlan a, RoomPlan b,
-                               GenSpec spec, Random rng, World world) {
-        int[] pa = wallPointToward(a, centerOf(b));
-        int[] pb = wallPointToward(b, centerOf(a));
-        if (pa == null || pb == null) {
-            logger.warning("[abyss] 走廊无门位: " + a.ref + "↔" + b.ref);
-            return;
+    /** 从入口房的全部门洞格出发在洞域上 BFS（洞穴内最短路径距离）。 */
+    private static Map<Long, Integer> bfsFrom(@Nullable RoomPlan entry, Set<Long> cave) {
+        Map<Long, Integer> dist = new HashMap<>();
+        if (entry == null || entry.doors.isEmpty()) return dist;
+        Deque<Long> q = new ArrayDeque<>();
+        for (RoomPlan.Pos p : entry.doors.get(0).cells) {
+            long pk = RoomPlan.pack(p.x(), p.z());
+            if (cave.contains(pk)) { dist.put(pk, 0); q.add(pk); }
         }
-        FloorPlan.Corridor corr = new FloorPlan.Corridor(a.ref, b.ref);
-        int w = Math.max(3, spec.corridorWidth() | 1);   // 奇数宽
-        int half = w / 2;
-
-        // 折线：pa → bend → pb（随机先 x 还是先 z，带折点抖动）
-        List<int[]> path = new ArrayList<>();
-        boolean xFirst = rng.nextBoolean();
-        int bx = xFirst ? pb[0] : pa[0];
-        int bz = xFirst ? pa[1] : pb[1];
-        // 折点在直交点上再抖一段，让走廊有弯
-        if (xFirst) bz += rng.nextInt(9) - 4; else bx += rng.nextInt(9) - 4;
-        lineCells(path, pa[0], pa[1], bx, bz);
-        lineCells(path, bx, bz, pb[0], pb[1]);
-
-        // 折线 → 带宽列集（Chebyshev 扩 w/2，斜角收窄防肥）
-        Set<Long> band = new HashSet<>();
-        for (int[] c : path) {
-            for (int dx = -half; dx <= half; dx++) {
-                for (int dz = -half; dz <= half; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) > half) continue;   // 斜角收窄
-                    band.add(RoomPlan.pack(c[0] + dx, c[1] + dz));
+        while (!q.isEmpty()) {
+            long pk = q.poll();
+            int d = dist.get(pk);
+            int x = px(pk), z = pz(pk);
+            for (int[] dd : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                long nk = RoomPlan.pack(x + dd[0], z + dd[1]);
+                if (cave.contains(nk) && !dist.containsKey(nk)) {
+                    dist.put(nk, d + 1);
+                    q.add(nk);
                 }
             }
         }
-        corr.band = band;
-        corr.path.addAll(path);
-        for (long pk : band) {
-            int x = (int) (pk >> 32), z = (int) (long) pk;
-            corr.cells.add(new RoomPlan.Pos(x, spec.floorY(), z));
-        }
-        // 中点取折线路径中位（cells 是 Set 序，不能取 cells[size/2]）
-        if (!path.isEmpty()) {
-            int[] mc = path.get(path.size() / 2);
-            corr.mid = new RoomPlan.Pos(mc[0], spec.floorY(), mc[1]);
-        }
-        fp.corridors.add(corr);
+        return dist;
     }
-
-    /**
-     * 门洞后处理：每条廊带 × 每间房，壳体环 ∩ 廊带的列 → 门洞格集。
-     * <p>不限制在走廊声明连接的两房——廊道若穿过第三房壳体同样开门，
-     * 保证锁门填充能封住任何真实开口（否则穿出洞会被当成无门可锁的破绽）。</p>
-     */
-    private void assignDoors(FloorPlan fp) {
-        for (FloorPlan.Corridor c : fp.corridors) {
-            for (RoomPlan r : fp.rooms.values()) {
-                // 穿第三房壳体时 linkedRoom 记走廊键（两端房都不对）
-                String linked = r.ref.equals(c.a) ? c.b
-                    : (r.ref.equals(c.b) ? c.a : "corr." + c.key());
-                RoomPlan.DoorPlan d = new RoomPlan.DoorPlan(linked);
-                for (long pk : r.wall) {
-                    if (!c.band.contains(pk)) continue;
-                    int x = (int) (pk >> 32), z = (int) (long) pk;
-                    for (int y = r.floorY + 1; y <= r.floorY + 4; y++) {
-                        d.cells.add(new RoomPlan.Pos(x, y, z));
-                    }
-                }
-                if (!d.cells.isEmpty()) r.doors.add(d);
-            }
-        }
-    }
-
-    /** 找 wall 环上朝 target 方向最外的壳体列。 */
-    private @Nullable int[] wallPointToward(RoomPlan r, double[] target) {
-        double cx = (r.minX + r.maxX) / 2.0, cz = (r.minZ + r.maxZ) / 2.0;
-        double dx = target[0] - cx, dz = target[1] - cz;
-        double len = Math.hypot(dx, dz);
-        if (len < 1e-6) { dx = 1; dz = 0; len = 1; }
-        dx /= len; dz /= len;
-        int[] best = null;
-        double bestP = -Double.MAX_VALUE;
-        for (long pk : r.wall) {
-            int x = (int) (pk >> 32), z = (int) (long) pk;
-            double p = (x - cx) * dx + (z - cz) * dz;
-            if (p > bestP) { bestP = p; best = new int[]{x, z}; }
-        }
-        return best;
-    }
-
-    private static double[] centerOf(RoomPlan r) {
-        return new double[]{(r.minX + r.maxX) / 2.0, (r.minZ + r.maxZ) / 2.0};
-    }
-
-    /** 直线步进（Bresenham 近似）。 */
-    private static void lineCells(List<int[]> out, int x0, int z0, int x1, int z1) {
-        int dx = Math.abs(x1 - x0), dz = Math.abs(z1 - z0);
-        int sx = x0 < x1 ? 1 : -1, sz = z0 < z1 ? 1 : -1;
-        int err = dx - dz, x = x0, z = z0;
-        while (true) {
-            out.add(new int[]{x, z});
-            if (x == x1 && z == z1) break;
-            int e2 = 2 * err;
-            if (e2 > -dz) { err -= dz; x += sx; }
-            if (e2 < dx) { err += dx; z += sz; }
-        }
-    }
-
-
 
     // ═══ 房内布置 ═══
 
@@ -535,7 +587,7 @@ public final class OrganicGenerator {
         rp.anchors.put("center", new Location(w, cc[0] + 0.5, fy + 1, cc[1] + 0.5));
         // spawn：靠首个门洞的内侧格，面向中心
         rp.anchors.put("spawn", spawnOf(rp, w));
-        // 刷怪点：8 个洞内随机格（最小间距 4）
+        // 刷怪点：10 个洞内随机格（最小间距 4）
         rp.mobSpots.addAll(scatter(rp, 10, 4, rng, w));
 
         switch (feature) {
@@ -562,7 +614,7 @@ public final class OrganicGenerator {
                 }
             }
             case "boss" -> {
-                // 出口传送区：房内离首个门最远一侧的平台（4×4）
+                // 出口传送区：房内离门最远一侧的平台（4×4）
                 int[] far = farthestFloorFromDoors(rp);
                 Location c = new Location(w, far[0], fy + 1, far[1]);
                 rp.exitMin = new Location(w, far[0] - 1, fy + 1, far[1] - 1);
@@ -603,7 +655,7 @@ public final class OrganicGenerator {
         List<Location> out = new ArrayList<>();
         for (int t = 0; t < n * 40 && out.size() < n && !cells.isEmpty(); t++) {
             long pk = cells.get(rng.nextInt(cells.size()));
-            int x = (int) (pk >> 32), z = (int) (long) pk;
+            int x = px(pk), z = pz(pk);
             boolean ok = true;
             for (Location l : out) {
                 if (Math.abs(l.getBlockX() - x) + Math.abs(l.getBlockZ() - z) < gap) {
@@ -618,10 +670,9 @@ public final class OrganicGenerator {
     /** 最长"内空格(x,z) 且北侧(x,z-1)是墙"的横向连续段——返回 {起点x, z, 长度}。 */
     private int[] longestNorthWallRun(RoomPlan rp) {
         int bestX = 0, bestZ = 0, bestLen = 0;
-        // 按 z 分组扫描：floor 列里找 (x,z-1)∈wall 的最长连续 x 段
         Map<Integer, List<Integer>> byZ = new HashMap<>();
         for (long pk : rp.floor) {
-            int x = (int) (pk >> 32), z = (int) (long) pk;
+            int x = px(pk), z = pz(pk);
             if (rp.wall.contains(RoomPlan.pack(x, z - 1))) {
                 byZ.computeIfAbsent(z, k -> new ArrayList<>()).add(x);
             }
@@ -653,12 +704,12 @@ public final class OrganicGenerator {
     private int[] nearestFloor(RoomPlan rp, int x, int z) {
         long best = -1; int bd = Integer.MAX_VALUE;
         for (long pk : rp.floor) {
-            int cx = (int) (pk >> 32), cz = (int) (long) pk;
+            int cx = px(pk), cz = pz(pk);
             int d = Math.abs(cx - x) + Math.abs(cz - z);
             if (d < bd) { bd = d; best = pk; }
         }
         if (best == -1) return new int[]{x, z};
-        return new int[]{(int) (best >> 32), (int) best};
+        return new int[]{px(best), pz(best)};
     }
 
     /** 离全部门洞最远的洞内格（出口平台位）。 */
@@ -668,16 +719,15 @@ public final class OrganicGenerator {
             for (RoomPlan.Pos p : d.cells) dc.add(RoomPlan.pack(p.x(), p.z()));
         long best = -1; int bd = -1;
         for (long pk : rp.floor) {
-            int cx = (int) (pk >> 32), cz = (int) (long) pk;
+            int cx = px(pk), cz = pz(pk);
             int d = Integer.MAX_VALUE;
             for (long dp : dc) {
-                int dx = (int) (dp >> 32), dz = (int) (long) dp;
-                d = Math.min(d, Math.abs(cx - dx) + Math.abs(cz - dz));
+                d = Math.min(d, Math.abs(cx - px(dp)) + Math.abs(cz - pz(dp)));
             }
             if (d > bd) { bd = d; best = pk; }
         }
         if (best == -1) return new int[]{(rp.minX + rp.maxX) / 2, (rp.minZ + rp.maxZ) / 2};
-        return new int[]{(int) (best >> 32), (int) best};
+        return new int[]{px(best), pz(best)};
     }
 
     // ═══ 配置辅助 ═══
@@ -708,9 +758,5 @@ public final class OrganicGenerator {
             case SHOP -> "shop";
             default -> "plain";
         };
-    }
-
-    private static double jitter(Random rng, double range) {
-        return range > 0 ? (rng.nextDouble() * 2 - 1) * range : 0;
     }
 }
