@@ -22,6 +22,7 @@ public final class FloorPlan {
         public final String a, b;                 // 两房 ref
         public final List<RoomPlan.Pos> cells = new ArrayList<>();  // 廊内地面格
         public java.util.Set<Long> band;          // 带宽列集（门洞探测用）
+        public final java.util.List<int[]> path = new java.util.ArrayList<>(); // 有序折线路径
         public RoomPlan.Pos mid;                  // 中点
         Corridor(String a, String b) { this.a = a; this.b = b; }
         public String key() { return a.compareTo(b) <= 0 ? a + "-" + b : b + "-" + a; }

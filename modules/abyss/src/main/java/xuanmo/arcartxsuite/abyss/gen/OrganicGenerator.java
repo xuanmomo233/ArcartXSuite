@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.abyss.gen;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -218,8 +217,12 @@ public final class OrganicGenerator {
 
         // ── 3. 拓扑：Prim 随机生成树 + 近邻环边 ──
         List<String[]> edges = spanningEdges(centers, rng);
+        // 环边去重：键统一排序（生成树边是 {已连通,候选} 无序，反向对会漏判）
         Set<String> linked = new HashSet<>();
-        for (String[] e : edges) linked.add(e[0] + "|" + e[1]);
+        for (String[] e : edges) {
+            linked.add(e[0].compareTo(e[1]) <= 0 ? e[0] + "|" + e[1]
+                : e[1] + "|" + e[0]);
+        }
         for (String a : centers.keySet()) {
             for (String b : centers.keySet()) {
                 if (a.compareTo(b) >= 0 || linked.contains(a + "|" + b)) continue;
@@ -243,18 +246,38 @@ public final class OrganicGenerator {
         }
 
         // ── 6. Boss 封门 + 入口走廊障碍区 ──
-        if (bossRef != null) {
+        if (bossRef != null && placed.containsKey(bossRef)) {
             RoomPlan boss = placed.get(bossRef);
             for (RoomPlan.DoorPlan d : boss.doors) d.sealed = true;
             // Boss 入口廊障碍带：取首条连 boss 的走廊
             for (FloorPlan.Corridor c : fp.corridors) {
                 if (!c.a.equals(bossRef) && !c.b.equals(bossRef)) continue;
+                // 用有序路径取靠 boss 端的尾段（前半魂沙后半岩浆）——
+                // cells 是 Set 序不能用来定位
                 List<RoomPlan.Pos> soul = new ArrayList<>();
                 List<RoomPlan.Pos> magma = new ArrayList<>();
-                int half = c.cells.size() / 2;
-                for (int i = 0; i < c.cells.size(); i++) {
-                    RoomPlan.Pos cell = c.cells.get(i);
-                    (i < half ? soul : magma).add(cell);
+                boolean bossIsB = c.b.equals(bossRef);
+                int plen = c.path.size();
+                int from = bossIsB ? Math.max(0, plen - 12) : 0;
+                int to = bossIsB ? plen : Math.min(plen, 12);
+                int half = from + (to - from) / 2;
+                for (int i = from; i < to; i++) {
+                    int[] p = c.path.get(i);
+                    List<RoomPlan.Pos> tgt = i < half ? soul : magma;
+                    // 路径左右各扩 1 格覆盖廊宽；跳过房内空域（陷阱只在走廊段）
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            long pk = RoomPlan.pack(p[0] + dx, p[1] + dz);
+                            boolean inRoom = false;
+                            for (RoomPlan r : fp.rooms.values()) {
+                                if (r.floor.contains(pk)) { inRoom = true; break; }
+                            }
+                            if (!inRoom) {
+                                tgt.add(new RoomPlan.Pos(p[0] + dx,
+                                    spec.floorY(), p[1] + dz));
+                            }
+                        }
+                    }
                 }
                 fp.zones.put(floor.id() + ".boss_corridor_soul", soul);
                 fp.zones.put(floor.id() + ".boss_corridor_magma", magma);
@@ -425,6 +448,7 @@ public final class OrganicGenerator {
             }
         }
         corr.band = band;
+        corr.path.addAll(path);
         for (long pk : band) {
             int x = (int) (pk >> 32), z = (int) (long) pk;
             corr.cells.add(new RoomPlan.Pos(x, spec.floorY(), z));
@@ -522,8 +546,10 @@ public final class OrganicGenerator {
             case "chest" -> rp.anchors.put("chest",
                 new Location(w, cc[0], fy + 1, cc[1]));
             case "shop" -> {
-                rp.anchors.put("merchant", new Location(w, cc[0], fy + 1, cc[1] + 3));
-                rp.anchors.put("counter", new Location(w, cc[0] - 4, fy + 1, cc[1]));
+                int[] m = nearestFloor(rp, cc[0], cc[1] + 3);
+                int[] ct = nearestFloor(rp, cc[0] - 4, cc[1]);
+                rp.anchors.put("merchant", new Location(w, m[0], fy + 1, m[1], 0f, 0f));
+                rp.anchors.put("counter", new Location(w, ct[0], fy + 1, ct[1]));
             }
             case "puzzle" -> {
                 // 拉杆挂内墙：找最长"内空列 + 北侧是墙"的横向墙段，沿段挂 4 杆
@@ -545,9 +571,10 @@ public final class OrganicGenerator {
                 rp.anchors.put("boss", rp.anchors.get("center"));
             }
             case "entry" -> {
-                // 向导 NPC：spawn 旁 3 格，面向 spawn
+                // 向导 NPC：spawn 旁 3 格（吸附洞内），面向 spawn
                 Location sp = rp.anchors.get("spawn");
-                Location g = sp.clone().add(2, 0, 2);
+                int[] gp = nearestFloor(rp, sp.getBlockX() + 2, sp.getBlockZ() + 2);
+                Location g = new Location(w, gp[0] + 0.5, fy + 1, gp[1] + 0.5);
                 g.setYaw(yawToward(g, sp));
                 rp.anchors.put("guide", g);
             }
