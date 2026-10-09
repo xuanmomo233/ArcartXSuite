@@ -1000,6 +1000,12 @@ public final class AbyssService {
         worldIndex.put(world.getName(), instance.getInstanceId());
         broadcast(instance, msg("dungeon.world-ready"));
 
+        // GEN 层：出生点解析前先算布局（anchor: 引用此刻须可用）；写块挪到区块预载后
+        if (hasGenFloors(instance.getTemplate())) {
+            instance.setLayout(new xuanmo.arcartxsuite.abyss.gen.OrganicGenerator(logger)
+                .plan(instance, world));
+        }
+
         Location spawn = spawnLocation(instance);
         if (spawn == null) {
             broadcast(instance, msg("error.enter-failed", "reason", "出生点无效"));
@@ -1021,6 +1027,12 @@ public final class AbyssService {
     /** 区块就绪后的进图主流程：world-init → 落点兜底 → 传送+扣费 → 全员进图判定。 */
     private void continueWorldReady(AbyssInstance instance, World world,
                                     Location spawn, List<Player> players) {
+        // GEN 布局写块在 world-init 前（chunk 已预载）——脚本仍可在其上叠加修饰
+        var genLayout = instance.getLayout();
+        if (genLayout != null) {
+            new xuanmo.arcartxsuite.abyss.gen.PlanPainter(logger)
+                .paint(world, genLayout, instance.getTemplate().floors());
+        }
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
         runLifecycleScript(instance, "world_init", null);
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
@@ -1076,6 +1088,12 @@ public final class AbyssService {
      * + 层 spawn + NPC 坐标；pool 模式按 direction/room-spacing 估算锚点带。
      * 外扩 1 区块余量；超出 2048 区块告警并截断（防配置笔误全图预载）。
      */
+    private static boolean hasGenFloors(AbyssTemplate t) {
+        var fc = t.floors();
+        return fc != null && fc.floors().stream().anyMatch(
+            f -> f.source() == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.GEN);
+    }
+
     private java.util.concurrent.CompletableFuture<Void> preloadInstanceChunks(
             AbyssInstance instance, World world) {
         AbyssTemplate t = instance.getTemplate();
@@ -1083,9 +1101,21 @@ public final class AbyssService {
             Integer.MIN_VALUE, Integer.MIN_VALUE}; // minX, minZ, maxX, maxZ
         xuanmo.arcartxsuite.abyss.template.FloorConfig fc = t.floors();
         if (fc != null) {
+            int fi = 0;
             for (xuanmo.arcartxsuite.abyss.template.FloorConfig.Floor floor : fc.floors()) {
                 growVec(bbox, floor.spawn());
                 if (floor.source()
+                        == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.GEN) {
+                    var gfl = instance.getLayout() != null
+                        ? instance.getLayout().floor(fi) : null;
+                    if (gfl != null) {
+                        growBBox(bbox, gfl.minX - 16, gfl.minZ - 16,
+                            gfl.maxX + 16, gfl.maxZ + 16);
+                    } else {
+                        int spacing = Math.max(64, fc.defaults().roomSpacing());
+                        growBBox(bbox, fi * spacing, 0, fi * spacing + 180, 170);
+                    }
+                } else if (floor.source()
                         == xuanmo.arcartxsuite.abyss.template.FloorConfig.Source.REGION) {
                     for (String ref : floor.roomRefs()) growRoom(bbox, fc, ref);
                     if (floor.bossRoom() != null) growRoom(bbox, fc, floor.bossRoom());
@@ -1103,6 +1133,7 @@ public final class AbyssService {
                         }
                     }
                 }
+                fi++;
             }
         }
         if (t.npcs() != null) {
@@ -1636,10 +1667,21 @@ public final class AbyssService {
         return parseLocation(instance, instance.getTemplate().spawn());
     }
 
-    /** "x,y,z[,yaw,pitch]" → 实例世界 Location。 */
+    /**
+     * "x,y,z[,yaw,pitch]" → 实例世界 Location。
+     * <p>gen 模式扩展：{@code anchor:<房ref>.<锚点名>} / {@code anchor:corr.<a>-<b>}
+     * 解析生成布局锚点；未生成/无锚点返回 null（可选房缺席时调用方自然跳过）。</p>
+     */
     public @Nullable Location parseLocation(AbyssInstance instance, String locStr) {
         if (locStr == null || locStr.isBlank()) return null;
-        String[] v = locStr.split(",");
+        String s = locStr.trim();
+        if (s.startsWith("anchor:")) {
+            var layout = instance.getLayout();
+            if (layout == null) return null;
+            Location l = layout.anchor(s.substring(7).trim());
+            return l != null ? l.clone() : null;
+        }
+        String[] v = s.split(",");
         if (v.length < 3 || instance.getWorld() == null) return null;
         try {
             double x = Double.parseDouble(v[0].trim());
@@ -1838,6 +1880,7 @@ public final class AbyssService {
         npcs.cleanup(instance);
         worldIndex.remove(instance.getWorld() != null ? instance.getWorld().getName() : "");
         worldPool.releaseWorld(instance.getInstanceId());
+        instance.setLayout(null);          // 释放生成布局（挂着世界引用）
         instance.clearRuntime();
         instances.destroyInstance(instance);
     }

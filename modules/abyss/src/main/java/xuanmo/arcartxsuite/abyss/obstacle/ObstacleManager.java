@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.abyss.obstacle;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +30,8 @@ public final class ObstacleManager {
     public static final class ObstacleRuntime {
         final Obstacle config;
         final Map<Location, Material> originalBlocks = new ConcurrentHashMap<>();
+        /** zone 模式物化出的方块位（触发判定用）。 */
+        final List<Location> zoneCells = new java.util.ArrayList<>();
         final Map<UUID, Long> triggerCooldowns = new ConcurrentHashMap<>();
         boolean onceDone;
         ObstacleRuntime(Obstacle c) { this.config = c; }
@@ -70,6 +73,25 @@ public final class ObstacleManager {
         ObstacleRuntime rt = map.computeIfAbsent(name, k -> new ObstacleRuntime(o));
         Function<String, Location> parse = locParser != null ? locParser.apply(instance) : null;
         if (parse == null) return false;
+        // zone 模式：生成器产出的命名障碍区（gen 副本）；找不到区（可选廊缺席）→ 静默跳过
+        if (o.zone() != null) {
+            Material zm = o.zoneMaterial() != null
+                ? Material.matchMaterial(o.zoneMaterial().toUpperCase()) : null;
+            var layout = instance.getLayout();
+            var cells = layout != null ? layout.zone(o.zone()) : null;
+            if (cells == null || zm == null || instance.getWorld() == null) {
+                logger.fine("[abyss] 障碍 " + name + " zone=" + o.zone() + " 未生成——跳过");
+                return false;
+            }
+            for (var p : cells) {
+                Block block = instance.getWorld().getBlockAt(p.x(), p.y(), p.z());
+                rt.originalBlocks.putIfAbsent(block.getLocation(), block.getType());
+                block.setType(zm, false);
+                rt.zoneCells.add(block.getLocation());
+            }
+            fire(instance, new TriggerEvent(name, "on_create", o.onCreate(), null));
+            return true;
+        }
         for (String b : o.blocks()) {
             String[] v = b.split(",");
             if (v.length < 4) continue;
@@ -114,7 +136,7 @@ public final class ObstacleManager {
             Obstacle o = rt.config;
             if (o.triggerMode() == ObstacleConfig.TriggerMode.NONE) continue;
             for (Player p : instance.getPlayers()) {
-                boolean inside = isInside(p, o, parse);
+                boolean inside = isInside(p, o, rt, parse);
                 long now = System.currentTimeMillis();
                 boolean shouldFire = switch (o.triggerMode()) {
                     case ENTER -> inside && !rt.triggerCooldowns.containsKey(p.getUniqueId());
@@ -156,9 +178,16 @@ public final class ObstacleManager {
         }
     }
 
-    private boolean isInside(Player p, Obstacle o,
+    private boolean isInside(Player p, Obstacle o, ObstacleRuntime rt,
                              Function<String, Location> parse) {
         Location pl = p.getLocation();
+        // zone 模式：直接遍历物化点位
+        if (!rt.zoneCells.isEmpty()) {
+            for (Location c : rt.zoneCells) {
+                if (c.getWorld() == pl.getWorld() && c.distanceSquared(pl) < 2.56) return true;
+            }
+            return false;
+        }
         // 玩家中心/脚下与任一障碍块距离 < 1.6 视为"在障碍内"
         for (String b : o.blocks()) {
             String[] v = b.split(",");

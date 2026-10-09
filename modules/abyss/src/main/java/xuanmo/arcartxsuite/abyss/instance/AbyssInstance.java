@@ -63,6 +63,8 @@ public final class AbyssInstance {
     private final Map<UUID, Integer> killCounts = new ConcurrentHashMap<>();
     /** 阻止重复 all_death 触发。 */
     private volatile boolean teamWipeHandled;
+    /** 程序化生成布局（floors source=gen 时非空）：anchor/zone/房几何以此为准。 */
+    private volatile xuanmo.arcartxsuite.abyss.gen.GeneratedLayout layout;
 
     public AbyssInstance(UUID instanceId, AbyssTemplate template,
                          @Nullable xuanmo.arcartxsuite.abyss.party.Party party) {
@@ -186,6 +188,10 @@ public final class AbyssInstance {
         }
         return n;
     }
+
+    /** 生成布局（gen 模式）：锚点/障碍区/房几何解析源。 */
+    public @Nullable xuanmo.arcartxsuite.abyss.gen.GeneratedLayout getLayout() { return layout; }
+    public void setLayout(xuanmo.arcartxsuite.abyss.gen.GeneratedLayout l) { this.layout = l; }
 
     public boolean isTeamWipeHandled() { return teamWipeHandled; }
     public boolean markTeamWipeHandled() {

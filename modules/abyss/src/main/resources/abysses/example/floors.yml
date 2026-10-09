@@ -1,23 +1,40 @@
-# floors.yml — 元气试炼之地 · 迷宫三层链（region 模式，格子 pitch=56）
-# 拓扑：每层 3×3 网格取 7 房，走廊真实互连成图（可回退/走支线）。
-# boss-room 即终点房：清完 → 层清 → 下一层；最后一层清完 → 通关。
-# Boss 房门由 world-init 封死，肃清 ≥1 战斗房后脚本开（boss-unlock 语义在
-# 各战斗房 on-clear 的 fN_cleared 计数 + fN_gate 段实现）。
+# floors.yml — 元气试炼之地 · 程序化迷宫三层（source: gen）
+# 每次进本由生成器现场生成：CA 洞穴房 + 洗牌布点 + 随机拓扑 + 折线走廊，
+# 支线房按 optional-rooms 概率增删——同一副本，次次地形不同。
+# boss-room 即终点房：清完 → 层清 → 踩出口金垫推进下一层；末层清完 → 通关。
+# Boss 房门初始封死，肃清 ≥1 战斗房后由 fN_gate 段 room_open 开启。
 
 defaults:
   lock-material: BARRIER        # 锁门填充材质（锁=填塞，清完还原）
-  border-pullback: true         # 战斗房锁门期间离开区域 → 拉回房中心
-  room-spacing: 200
+  border-pullback: true         # 战斗房锁门期间离开区域 → 拉回房内
+  room-spacing: 200             # 层间 x 向间隔（第 N 层生成带起点 = N*spacing）
   paste-y: 64
-  advance-timeout: 90           # portal 兜底秒数（超时不踩出口自动推进，0=关）
+  advance-timeout: 90
+  gen:                          # 生成器全局参数（层可用 floors[].gen 覆写）
+    cell-pitch: 64              # 布点格距（中心距 ≥ 此值）
+    room-radius: [12, 17]       # 洞穴半径区间（内空直径≈2r）
+    corridor-width: 5           # 走廊内空宽（奇数居中）
+    extra-edges: 0.4            # 最小生成树外环边概率（环路越多越像迷宫）
+    ca-fill: 0.46               # 元胞自动机初始填充率
+    ca-smooth: 4                # CA 平滑迭代
+    floor-y: 60                 # 地板层
+    base-height: 14             # 普通房净高
+    tall-height: 22             # 挑高房净高（rooms.gen.tall）
+    palette: moss               # 默认调色板：moss|deepslate|nether|sandstone|ice
+    seed: 0                     # 0=每实例随机；固定值=调试复现
 
 floors:
   # ── &a第 1 层 · 苔痕前哨 ──
   - id: f1
     name: "&a第 1 层 · 苔痕前哨"
-    source: region
-    spawn: "5,61,19,270,0"
-    rooms: [f1_start, f1_combat_a, f1_altar, f1_combat_b, f1_boss, f1_chest, f1_combat_c]
+    source: gen
+    palette: moss
+    spawn: "anchor:f1_start.spawn"
+    rooms: [f1_start, f1_combat_a, f1_combat_b]        # 保底牌组（主链）
+    optional-rooms:                                    # 支线增删
+      f1_altar: 0.75
+      f1_chest: 0.75
+      f1_combat_c: 0.8
     boss-room: f1_boss
     advance: portal
     advance-timeout: 90
@@ -28,13 +45,17 @@ floors:
       - "title @all 10 40 10 &a第 1 层 肃清|&e领取你的天赋祝福"
       - "buff_offer f1_blessing"
       - "wait 6"
-      - "message @all &7迷宫更深处：&6下一层" 
+      - "message @all &7迷宫更深处：&6下一层"
   # ── &6第 2 层 · 熔岩矿道 ──
   - id: f2
     name: "&6第 2 层 · 熔岩矿道"
-    source: region
-    spawn: "205,61,19,270,0"
-    rooms: [f2_entry, f2_combat_a, f2_shop, f2_combat_b, f2_puzzle, f2_combat_c, f2_boss]
+    source: gen
+    palette: deepslate
+    spawn: "anchor:f2_entry.spawn"
+    rooms: [f2_entry, f2_combat_a, f2_shop, f2_combat_b]
+    optional-rooms:
+      f2_puzzle: 0.8
+      f2_combat_c: 0.8
     boss-room: f2_boss
     advance: portal
     advance-timeout: 90
@@ -45,13 +66,18 @@ floors:
       - "title @all 10 40 10 &6第 2 层 肃清|&e领取你的天赋祝福"
       - "buff_offer f2_blessing"
       - "wait 6"
-      - "message @all &7迷宫更深处：&6下一层" 
+      - "message @all &7迷宫更深处：&6下一层"
   # ── &4第 3 层 · 深渊王座 ──
   - id: f3
     name: "&4第 3 层 · 深渊王座"
-    source: region
-    spawn: "405,61,19,270,0"
-    rooms: [f3_entry, f3_combat_a, f3_shrine, f3_combat_b, f3_chest, f3_elite, f3_final]
+    source: gen
+    palette: nether
+    spawn: "anchor:f3_entry.spawn"
+    rooms: [f3_entry, f3_combat_a, f3_combat_b]
+    optional-rooms:
+      f3_shrine: 0.7
+      f3_chest: 0.7
+      f3_elite: 0.8
     boss-room: f3_final
     advance: portal
     advance-timeout: 90
@@ -59,4 +85,5 @@ floors:
       - "title @all 10 40 10 &4第 3 层|&7深渊王座 · 决战"
       - "sound @all BLOCK_PORTAL_TRAVEL 0.4 1.2"
     on-clear:
-      - "title @all 10 40 10 &4&l深渊领主击破|&e试炼完成" 
+      - "title @all 10 60 10 &4&l深渊领主已陨落|&e元气试炼之地 · 通关"
+      - "sound @all UI_TOAST_CHALLENGE_COMPLETE 1 1"

@@ -339,10 +339,19 @@ final class BuiltinActions {
         });
 
         // ═══ 怪物组 ═══
-        reg.register("spawn_group", (ctx, args, s) ->
-            service.get().mobGroups().spawnGroup(ctx.getInstance(), ctx.replace(args), ctx.getTrigger()));
-        reg.register("kill_group", (ctx, args, s) ->
-            service.get().mobGroups().killGroup(ctx.getInstance(), ctx.replace(args)));
+        reg.register("spawn_group", (ctx, args, s) -> {
+            // spawn_group <组名>：组名允许 <房ref>:<组>——gen 房序随机时脚本不写死运行时 id
+            String gn = ctx.replace(args);
+            var rm = service.get().roomManager();
+            if (rm != null) gn = rm.resolveGroupName(ctx.getInstance(), gn);
+            service.get().mobGroups().spawnGroup(ctx.getInstance(), gn, ctx.getTrigger());
+        });
+        reg.register("kill_group", (ctx, args, s) -> {
+            String gn = ctx.replace(args);
+            var rm = service.get().roomManager();
+            if (rm != null) gn = rm.resolveGroupName(ctx.getInstance(), gn);
+            service.get().mobGroups().killGroup(ctx.getInstance(), gn);
+        });
         reg.register("remove_group", (ctx, args, s) ->
             service.get().mobGroups().removeGroup(ctx.getInstance(), ctx.replace(args)));
         reg.register("group_alive_count", (ctx, args, s) -> {
@@ -430,6 +439,12 @@ final class BuiltinActions {
             if (pm == null || parts.length < 2) return;
             ctx.setVariable(rest(parts, 1),
                 String.valueOf(pm.progress(ctx.getInstance(), ctx.replace(parts[0]))));
+        });
+
+        reg.register("room_open", (ctx, args, s) -> {
+            // room_open <房ref>：清掉生成器封死的房门（Boss 闸门）——gen 模式专用
+            var rm = service.get().roomManager();
+            if (rm != null) rm.openSealedDoor(ctx.getInstance(), ctx.replace(args.trim()));
         });
 
         // ═══ 副本内引导（路标/路径渲染）═══
@@ -982,7 +997,15 @@ final class BuiltinActions {
     }
 
     private static Location parseLoc(ScriptContext ctx, String s) {
-        String[] v = ctx.replace(s).split(",");
+        String raw = ctx.replace(s);
+        // anchor:<房ref>.<锚点名> / anchor:corr.<a>-<b> —— 生成布局锚点
+        if (raw.startsWith("anchor:")) {
+            var layout = ctx.getInstance().getLayout();
+            if (layout == null) return null;
+            Location l = layout.anchor(raw.substring(7).trim());
+            return l != null ? l.clone() : null;
+        }
+        String[] v = raw.split(",");
         if (v.length < 3 || ctx.getInstance().getWorld() == null) return null;
         double x = parseDouble(v[0], 0), y = parseDouble(v[1], 64), z = parseDouble(v[2], 0);
         float yaw = v.length > 3 ? (float) parseDouble(v[3], 0) : 0;

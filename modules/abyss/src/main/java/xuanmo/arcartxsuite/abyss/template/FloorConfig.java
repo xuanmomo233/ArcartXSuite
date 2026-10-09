@@ -84,7 +84,7 @@ public record FloorConfig(
     public static final FloorConfig EMPTY =
         new FloorConfig(Defaults.DEFAULT, List.of(), Map.of());
 
-    public enum Source { REGION, POOL }
+    public enum Source { REGION, POOL, GEN }
     public enum Advance { PORTAL, AUTO }
     public enum RoomType { COMBAT, SAFE, BOSS, SHOP }
 
@@ -95,9 +95,11 @@ public record FloorConfig(
         boolean borderPullback,
         int roomSpacing,
         int pasteY,
-        int advanceTimeout
+        int advanceTimeout,
+        xuanmo.arcartxsuite.abyss.gen.GenSpec gen
     ) {
-        public static final Defaults DEFAULT = new Defaults("BARRIER", true, 200, 64, 60);
+        public static final Defaults DEFAULT = new Defaults("BARRIER", true, 200, 64, 60,
+            xuanmo.arcartxsuite.abyss.gen.GenSpec.DEFAULT);
 
         static Defaults load(@Nullable ConfigurationSection s) {
             if (s == null) return DEFAULT;
@@ -106,7 +108,10 @@ public record FloorConfig(
                 s.getBoolean("border-pullback", s.getBoolean("border_pullback", true)),
                 s.getInt("room-spacing", s.getInt("room_spacing", 200)),
                 s.getInt("paste-y", s.getInt("paste_y", 64)),
-                s.getInt("advance-timeout", s.getInt("advance_timeout", 60))
+                s.getInt("advance-timeout", s.getInt("advance_timeout", 60)),
+                xuanmo.arcartxsuite.abyss.gen.GenSpec.load(
+                    s.getConfigurationSection("gen"),
+                    xuanmo.arcartxsuite.abyss.gen.GenSpec.DEFAULT)
             );
         }
     }
@@ -132,7 +137,10 @@ public record FloorConfig(
         Advance advance,
         int advanceTimeout,
         List<String> onEnter,
-        List<String> onClear
+        List<String> onClear,
+        Map<String, Double> optionalRooms,
+        @Nullable xuanmo.arcartxsuite.abyss.gen.GenSpec gen,
+        @Nullable String palette
     ) {
         static Floor load(int index, ConfigurationSection s, Defaults d) {
             Source source;
@@ -146,6 +154,12 @@ public record FloorConfig(
                 advance = Advance.valueOf(s.getString("advance", "portal").toUpperCase());
             } catch (IllegalArgumentException e) {
                 advance = Advance.PORTAL;
+            }
+            Map<String, Double> optional = new LinkedHashMap<>();
+            ConfigurationSection opt = s.getConfigurationSection("optional-rooms");
+            if (opt == null) opt = s.getConfigurationSection("optional_rooms");
+            if (opt != null) {
+                for (String k : opt.getKeys(false)) optional.put(k, opt.getDouble(k));
             }
             return new Floor(
                 s.getString("id", "floor_" + index),
@@ -162,7 +176,13 @@ public record FloorConfig(
                 s.getStringList("on-enter").isEmpty()
                     ? s.getStringList("on_enter") : s.getStringList("on-enter"),
                 s.getStringList("on-clear").isEmpty()
-                    ? s.getStringList("on_clear") : s.getStringList("on-clear")
+                    ? s.getStringList("on_clear") : s.getStringList("on-clear"),
+                optional,
+                s.getConfigurationSection("gen") != null
+                    ? xuanmo.arcartxsuite.abyss.gen.GenSpec.load(
+                        s.getConfigurationSection("gen"), d.gen())
+                    : null,
+                s.getString("palette", null)
             );
         }
     }
@@ -190,8 +210,35 @@ public record FloorConfig(
         int restSeconds,       // 波次休整兜底（-1=未配）：房内 TRIGGERED 组 delay<=0 时用
         List<String> onEnter,
         List<String> onLock,
-        List<String> onClear
+        List<String> onClear,
+        @Nullable RoomGen gen
     ) {
+        /** gen 模式的房间生成覆写：feature（装饰/锚点方案）、radius 半径区间、tall 挑高。 */
+        public record RoomGen(
+            @Nullable String feature,
+            @Nullable int[] radius,
+            boolean tall
+        ) {
+            static @Nullable RoomGen load(@Nullable ConfigurationSection s) {
+                if (s == null) return null;
+                int[] r = null;
+                var rl = s.getIntegerList("radius");
+                if (rl.size() >= 2) r = new int[]{rl.get(0), rl.get(1)};
+                else {
+                    String str = s.getString("radius", null);
+                    if (str != null && str.contains("..")) {
+                        String[] v = str.split("\\.\\.");
+                        try {
+                            r = new int[]{Integer.parseInt(v[0].trim()),
+                                Integer.parseInt(v[1].trim())};
+                        } catch (NumberFormatException ignored) { }
+                    }
+                }
+                return new RoomGen(s.getString("feature", null), r,
+                    s.getBoolean("tall", false));
+            }
+        }
+
         static RoomTemplate load(String id, ConfigurationSection s) {
             RoomType type;
             try {
@@ -234,7 +281,8 @@ public record FloorConfig(
                 s.getStringList("on-lock").isEmpty()
                     ? s.getStringList("on_lock") : s.getStringList("on-lock"),
                 s.getStringList("on-clear").isEmpty()
-                    ? s.getStringList("on_clear") : s.getStringList("on-clear")
+                    ? s.getStringList("on_clear") : s.getStringList("on-clear"),
+                RoomGen.load(s.getConfigurationSection("gen"))
             );
         }
     }

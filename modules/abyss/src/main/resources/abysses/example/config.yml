@@ -22,7 +22,7 @@ description:
 
 world:
   template: "void"          # void=虚空世界 / <maps目录名> / 本目录world/文件夹
-  spawn: "3,61,19,270,0"     # 第 1 层起始房内（world-init 会先建好房间再传送）
+  spawn: "anchor:f1_start.spawn"  # 第 1 层入口房生成锚点（世界生成先于传送解析）
   # 副本游戏规则覆盖（键=Bukkit GameRule 名，值=布尔或整数；默认已内置一套副本规则）
   # gamerules:
   #   keepInventory: true
