@@ -1031,7 +1031,8 @@ public final class AbyssService {
         var genLayout = instance.getLayout();
         if (genLayout != null) {
             new xuanmo.arcartxsuite.abyss.gen.PlanPainter(logger)
-                .paint(world, genLayout, instance.getTemplate().floors());
+                .paint(world, genLayout, instance.getTemplate().floors(),
+                    name -> regionLibrary.load(instance.getTemplate(), name));
         }
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
         runLifecycleScript(instance, "world_init", null);

@@ -1,6 +1,6 @@
-# floors.yml — 元气试炼之地 · 程序化迷宫三层（source: gen）
-# 每次进本由生成器现场生成：CA 洞穴房 + 洗牌布点 + 随机拓扑 + 折线走廊，
-# 支线房按 optional-rooms 概率增删——同一副本，次次地形不同。
+# floors.yml — 元气试炼之地 · 图块拼接迷宫三层（source: gen）
+# 每次进本由生成器现场拼接：5×5 网格随机长出连通多边形，每格一间 40×40 大房，
+# 相邻房共享墙切门洞（天然对齐），支线房按 optional-rooms 概率增删——次次地形不同。
 # boss-room 即终点房：清完 → 层清 → 踩出口金垫推进下一层；末层清完 → 通关。
 # Boss 房门初始封死，肃清 ≥1 战斗房后由 fN_gate 段 room_open 开启。
 
@@ -11,12 +11,10 @@ defaults:
   paste-y: 64
   advance-timeout: 90
   gen:                          # 生成器全局参数（层可用 floors[].gen 覆写）
-    cell-pitch: 64              # 布点格距（中心距 ≥ 此值）
-    room-radius: [12, 17]       # 洞穴半径区间（内空直径≈2r）
-    corridor-width: 5           # 走廊内空宽（奇数居中）
-    extra-edges: 0.4            # 最小生成树外环边概率（环路越多越像迷宫）
-    ca-fill: 0.46               # 元胞自动机初始填充率
-    ca-smooth: 4                # CA 平滑迭代
+    tile-size: 40               # 房间图块边长（含墙线；内空 38×38 宽阔战场）
+    grid: 5                     # 网格阶（5×5 格位随机长连通多边形）
+    door-half: 2                # 门洞半宽（开口 5 宽 × 4 高 × 2 深）
+    double-door: 0.25           # 共享墙切双门概率（视觉更通透）
     floor-y: 60                 # 地板层
     base-height: 14             # 普通房净高
     tall-height: 22             # 挑高房净高（rooms.gen.tall）

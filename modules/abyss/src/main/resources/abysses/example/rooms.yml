@@ -1,9 +1,9 @@
 # rooms.yml — 元气试炼之地 · 程序化迷宫房（gen 模式）
 #
 # source: gen 的层中，region/spawn/doors/exit 全部不写——由生成器每实例产出：
-#   洞穴形 footprint（CA 平滑）+ 随机布点 + 门洞 + 锚点 + 刷怪点。
-# gen.feature：entry|combat|altar|chest|shop|puzzle|elite|boss|plain（内饰+锚点方案）
-# gen.radius：洞穴半径区间；gen.tall：挑高（净高走 gen.tall-height）。
+#   40×40 图块房（内空 38×38）在 5×5 网格随机拼成连通多边形 + 共享墙门洞 + 锚点 + 刷怪点。
+# gen.feature：entry|combat|altar|chest|shop|puzzle|elite|boss|plain（内饰+锚点方案）；gen.prefab：手建 regions/<名>.yml 预制件覆盖程序化内饰
+# gen.tall：挑高（净高走 gen.tall-height）。
 # 怪组落点：location "auto"=洞内随机点 / "center"=房心 / "anchor:<名>"=房内锚点。
 # 波次：w1a/w1b MANUAL 由 on-lock 掷签选包；w2 TRIGGERED 等首波包全清后休整刷怪。
 # 可选房（floors.optional-rooms）没抽中时：其 interact/NPC/guide 锚点解析失败自动跳过。
@@ -16,7 +16,6 @@ rooms:
     type: safe
     gen:
       feature: entry
-      radius: [11, 14]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -26,7 +25,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -88,7 +86,6 @@ rooms:
     type: safe
     gen:
       feature: altar
-      radius: [11, 14]
       tall: true
     on-enter:
       - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
@@ -99,7 +96,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -160,7 +156,6 @@ rooms:
     type: boss
     gen:
       feature: boss
-      radius: [15, 19]
       tall: true
     groups:
       boss:
@@ -195,7 +190,6 @@ rooms:
     type: safe
     gen:
       feature: chest
-      radius: [10, 13]
     on-enter:
       - "title @all 10 30 10 &6战利品室|&7开启中央宝箱"
       - "heal @all 6"
@@ -205,7 +199,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [12, 16]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -267,7 +260,6 @@ rooms:
     type: safe
     gen:
       feature: entry
-      radius: [11, 14]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -277,7 +269,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -335,7 +326,6 @@ rooms:
     type: shop
     gen:
       feature: shop
-      radius: [11, 14]
     on-enter:
       - "title @all 10 30 10 &6旅行商队|&7金币兑换补给"
       - "message @all &7右键 &6神秘商人·老陈 &7打开货单——治疗/力量/补给样样有"
@@ -346,7 +336,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -404,7 +393,6 @@ rooms:
     type: safe
     gen:
       feature: puzzle
-      radius: [12, 16]
     on-enter:
       - "title @all 10 30 10 &b尘封机关|&7按彩窗颜色序扳动拉杆"
       - "message @all &7刻痕写着：&b青 → &c红 → &a绿 → &e黄 &7（拉杆头顶彩窗）"
@@ -415,7 +403,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [12, 16]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -473,7 +460,6 @@ rooms:
     type: boss
     gen:
       feature: boss
-      radius: [15, 19]
       tall: true
     groups:
       boss:
@@ -512,7 +498,6 @@ rooms:
     type: safe
     gen:
       feature: entry
-      radius: [11, 14]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -522,7 +507,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -580,7 +564,6 @@ rooms:
     type: safe
     gen:
       feature: altar
-      radius: [11, 14]
       tall: true
     on-enter:
       - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
@@ -591,7 +574,6 @@ rooms:
     type: combat
     gen:
       feature: combat
-      radius: [13, 17]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
@@ -649,7 +631,6 @@ rooms:
     type: safe
     gen:
       feature: chest
-      radius: [10, 13]
     on-enter:
       - "title @all 10 30 10 &6战利品室|&7开启中央宝箱"
       - "heal @all 6"
@@ -659,7 +640,6 @@ rooms:
     type: combat
     gen:
       feature: elite
-      radius: [13, 16]
     groups:
       w1:
         spawn-timing: AUTO_START
@@ -697,7 +677,6 @@ rooms:
     type: boss
     gen:
       feature: boss
-      radius: [15, 19]
       tall: true
     groups:
       boss:

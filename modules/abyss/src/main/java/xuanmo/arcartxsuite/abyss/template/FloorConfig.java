@@ -213,29 +213,17 @@ public record FloorConfig(
         List<String> onClear,
         @Nullable RoomGen gen
     ) {
-        /** gen 模式的房间生成覆写：feature（装饰/锚点方案）、radius 半径区间、tall 挑高。 */
+        /** gen 模式的房间生成覆写：feature（装饰/锚点方案）、tall 挑高、prefab 内饰预制件。 */
         public record RoomGen(
             @Nullable String feature,
-            @Nullable int[] radius,
-            boolean tall
+            boolean tall,
+            @Nullable String prefab
         ) {
             static @Nullable RoomGen load(@Nullable ConfigurationSection s) {
                 if (s == null) return null;
-                int[] r = null;
-                var rl = s.getIntegerList("radius");
-                if (rl.size() >= 2) r = new int[]{rl.get(0), rl.get(1)};
-                else {
-                    String str = s.getString("radius", null);
-                    if (str != null && str.contains("..")) {
-                        String[] v = str.split("\\.\\.");
-                        try {
-                            r = new int[]{Integer.parseInt(v[0].trim()),
-                                Integer.parseInt(v[1].trim())};
-                        } catch (NumberFormatException ignored) { }
-                    }
-                }
-                return new RoomGen(s.getString("feature", null), r,
-                    s.getBoolean("tall", false));
+                return new RoomGen(s.getString("feature", null),
+                    s.getBoolean("tall", false),
+                    s.getString("prefab", null));
             }
         }
 
