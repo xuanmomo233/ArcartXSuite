@@ -1,4 +1,4 @@
-# floors.yml — 元气试炼之地 · 迷宫三层链（region 模式，格子 pitch=32）
+# floors.yml — 元气试炼之地 · 迷宫三层链（region 模式，格子 pitch=56）
 # 拓扑：每层 3×3 网格取 7 房，走廊真实互连成图（可回退/走支线）。
 # boss-room 即终点房：清完 → 层清 → 下一层；最后一层清完 → 通关。
 # Boss 房门由 world-init 封死，肃清 ≥1 战斗房后脚本开（boss-unlock 语义在
@@ -16,7 +16,7 @@ floors:
   - id: f1
     name: "&a第 1 层 · 苔痕前哨"
     source: region
-    spawn: "3,61,11,270,0"
+    spawn: "5,61,19,270,0"
     rooms: [f1_start, f1_combat_a, f1_altar, f1_combat_b, f1_boss, f1_chest, f1_combat_c]
     boss-room: f1_boss
     advance: portal
@@ -33,7 +33,7 @@ floors:
   - id: f2
     name: "&6第 2 层 · 熔岩矿道"
     source: region
-    spawn: "203,61,11,270,0"
+    spawn: "205,61,19,270,0"
     rooms: [f2_entry, f2_combat_a, f2_shop, f2_combat_b, f2_puzzle, f2_combat_c, f2_boss]
     boss-room: f2_boss
     advance: portal
@@ -50,7 +50,7 @@ floors:
   - id: f3
     name: "&4第 3 层 · 深渊王座"
     source: region
-    spawn: "403,61,11,270,0"
+    spawn: "405,61,19,270,0"
     rooms: [f3_entry, f3_combat_a, f3_shrine, f3_combat_b, f3_chest, f3_elite, f3_final]
     boss-room: f3_final
     advance: portal
