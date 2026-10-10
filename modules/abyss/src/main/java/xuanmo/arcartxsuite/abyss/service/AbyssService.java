@@ -841,7 +841,9 @@ public final class AbyssService {
         if (spawn == null) spawn = world.getSpawnLocation();
         instance.saveOriginalLocation(player, player.getLocation());
         instance.savePlayerGameMode(player);
-        // 设计模式不跑脚本——虚空模板同样要落点兜底
+        // world_init 是传送前的造地形段——设计模式也要跑，否则脚本建图的副本是空虚空；
+        // init/start 等玩法脚本仍跳过（实例不激活玩法系统）
+        runLifecycleScript(instance, "world_init", null);
         ensureFooting(world, spawn);
         if (!teleportWithRetry(player, spawn, 3)) {
             player.sendMessage(msg("error.enter-failed", "reason", "传送失败"));
