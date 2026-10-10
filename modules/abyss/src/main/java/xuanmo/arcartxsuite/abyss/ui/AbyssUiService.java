@@ -43,8 +43,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
 
     /** 玩家 → 操作令牌（每次开界面轮换）。 */
     private final Map<UUID, String> tokens = new ConcurrentHashMap<>();
-    /** 玩家 → 待领取宝箱物品（UI 打开期间 roll 好的）。 */
-    private final Map<UUID, List<ItemStack>> pendingChests = new ConcurrentHashMap<>();
+    /** 玩家 → 待领取宝箱（roll 结果 + 所属实例/箱名；ESC 重开返回同批防刷奖）。 */
+    private record PendingChest(AbyssInstance instance, String chestName,
+                                String title, List<ItemStack> items) { }
+    private final Map<UUID, PendingChest> pendingChests = new ConcurrentHashMap<>();
+    /** 空槽位 JSON（9 槽常显，未 roll 到的槽位渲染空）。 */
+    private static final String AIR_ITEM_JSON = "{\"id\":\"minecraft:air\",\"Count\":1b}";
 
     public AbyssUiService(AbyssService service, @Nullable PacketBridgeAPI packetBridge,
                           @Nullable ItemBridgeAPI itemBridge, Logger logger) {
@@ -532,20 +536,44 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
                 Math.min(9, chest.rows() * 9 / 2));
             if (!items.isEmpty()) {
                 service.dispatchItems(player, items, "chest:" + chest.name());
+                instance.markTriggeredOnce(
+                    AbyssService.chestClaimKey(chest.name(), player.getUniqueId()));
             }
             return;
         }
-        List<ItemStack> items = service.rewards().rollChestOptions(chest,
-            Math.min(9, chest.rows() * 9)); // UI 固定 9 槽，多 roll 的看不见却会被领取
-        pendingChests.put(player.getUniqueId(), items);
+        UUID uid = player.getUniqueId();
+        PendingChest pending = pendingChests.get(uid);
+        List<ItemStack> items;
+        if (pending != null && pending.instance() == instance
+                && pending.chestName().equals(chest.name())) {
+            // 重开同一箱：返回原 roll（ESC 未领不重置，防反复开箱刷奖励）
+            items = pending.items();
+        } else {
+            if (pending != null) {
+                // 换箱：先把上个未领箱直接发放并标记，不吞奖励
+                flushPendingChest(player);
+            }
+            items = new ArrayList<>(service.rewards().rollChestOptions(chest,
+                Math.min(9, chest.rows() * 9))); // UI 固定 9 槽
+            pendingChests.put(uid, new PendingChest(instance, chest.name(),
+                chest.title(), items));
+        }
+        if (items.isEmpty()) {
+            // 空 roll：标记已领，不弹空 UI
+            pendingChests.remove(uid);
+            instance.markTriggeredOnce(
+                AbyssService.chestClaimKey(chest.name(), uid));
+            return;
+        }
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CHANNEL);
         payload.put("action_token", token(player));
         payload.put("chestTitle", chest.title());
         payload.put("itemCount", items.size());
-        for (int i = 0; i < items.size(); i++) {
-            payload.put("itemJson" + i, itemJsonOf(items.get(i)));
+        for (int i = 0; i < 9; i++) {
+            payload.put("itemJson" + i,
+                i < items.size() ? itemJsonOf(items.get(i)) : AIR_ITEM_JSON);
         }
         packetBridge.openUiUnsafe(player, chestUi());
         packetBridge.sendPacket(player, chestUi(), "init", payload);
@@ -1485,10 +1513,13 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
     }
 
     private void claimChest(Player player, int index) {
-        List<ItemStack> items = pendingChests.get(player.getUniqueId());
-        if (items == null) return;
+        PendingChest pc = pendingChests.get(player.getUniqueId());
+        if (pc == null) return;
+        List<ItemStack> items = pc.items();
         if (index < 0) {
             pendingChests.remove(player.getUniqueId());
+            pc.instance().markTriggeredOnce(
+                AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
             if (!items.isEmpty()) {
                 service.dispatchItems(player, items, "chest");
             }
@@ -1500,18 +1531,39 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
             if (it != null) {
                 service.dispatchItems(player, List.of(it), "chest");
             }
-            if (items.isEmpty() && available()) {
+            if (items.isEmpty()) {
                 pendingChests.remove(player.getUniqueId());
-                packetBridge.closeUiUnsafe(player, chestUi());
+                pc.instance().markTriggeredOnce(
+                    AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
+                if (available()) packetBridge.closeUiUnsafe(player, chestUi());
+            } else if (available()) {
+                // 回推剩余物品：已领槽位从 UI 上清掉
+                pushChestUpdate(player, pc);
             }
         }
     }
 
-    /** 玩家掉线/关 UI 未领取：全部发放（不丢奖励）。 */
+    /** 单格领取后重发 init：剩余物品前移，空出的尾部槽位填空气 JSON。 */
+    private void pushChestUpdate(Player player, PendingChest pc) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CHANNEL);
+        payload.put("action_token", token(player));
+        payload.put("chestTitle", pc.title());
+        payload.put("itemCount", pc.items().size());
+        for (int i = 0; i < 9; i++) {
+            payload.put("itemJson" + i,
+                i < pc.items().size() ? itemJsonOf(pc.items().get(i)) : AIR_ITEM_JSON);
+        }
+        packetBridge.sendPacket(player, chestUi(), "init", payload);
+    }
+
+    /** 玩家掉线/关 UI 未领取：全部发放（不丢奖励）并标记已领。 */
     public void flushPendingChest(Player player) {
-        List<ItemStack> items = pendingChests.remove(player.getUniqueId());
-        if (items != null && !items.isEmpty()) {
-            service.dispatchItems(player, items, "chest:auto");
+        PendingChest pc = pendingChests.remove(player.getUniqueId());
+        if (pc != null && !pc.items().isEmpty()) {
+            service.dispatchItems(player, pc.items(), "chest:auto");
+            pc.instance().markTriggeredOnce(
+                AbyssService.chestClaimKey(pc.chestName(), player.getUniqueId()));
         }
     }
 

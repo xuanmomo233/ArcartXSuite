@@ -1770,7 +1770,19 @@ public final class AbyssService {
             logger.warning("[abyss] 宝箱不存在: " + chestName);
             return;
         }
+        if (instance.isTriggered(chestClaimKey(chestName, player.getUniqueId()))) {
+            player.sendMessage(msg("chest.claimed"));
+            return;
+        }
         chestUiHandler.open(player, chest, instance);
+    }
+
+    /**
+     * 宝箱"已领取"标记键（实例触发标记，随实例销毁自动失效）。
+     * 每玩家每箱一次：UI 领取/兜底发放/离场自动发放在各自发放点打标。
+     */
+    public static String chestClaimKey(String chestName, UUID playerId) {
+        return "chest_claimed:" + chestName + ":" + playerId;
     }
 
     /** 打开副本商店（shops.yml；open_shop_ui 动作入口）。 */
@@ -1801,6 +1813,7 @@ public final class AbyssService {
             itemRewardDispatcher.dispatchItems(player, items,
                 ItemRewardDispatcher.DispatchOptions.builder("abyss")
                     .sourceDetail("chest:" + chest.name()).build());
+            instance.markTriggeredOnce(chestClaimKey(chest.name(), player.getUniqueId()));
         }
     }
 

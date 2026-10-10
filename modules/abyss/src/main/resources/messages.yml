@@ -120,6 +120,9 @@ dungeon:
   floor-enter: "{prefix}&6进入 &e{floor}"
   module-locked: "{prefix}&c进入条件未满足：需先完成前置主线任务"
 
+chest:
+  claimed: "{prefix}&e你已经领取过这个宝箱了"
+
 puzzle:
   ui-unavailable: "{prefix}&c输入面板不可用（ArcartX 未接入）"
   attempts-left: "&7剩余尝试次数: &e{left}"
