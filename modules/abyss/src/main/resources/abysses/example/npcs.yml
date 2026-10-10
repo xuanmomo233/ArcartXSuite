@@ -8,7 +8,7 @@ guide:
   name: "&e向导·艾琳"
   # 不用村民类——Adyeshach 缺席降级为真实体时，村民右键弹原版交易 GUI；女巫无交易界面
   type: WITCH
-  location: "anchor:f1_start.guide"  # 生成锚点：向导位（面入口）
+  location: "19,61,19,90,0"        # f1_start 房中心，面向入口
   look-at-player: true
   dialogs:                        # 无 Chemdah 会话时的聊天栏兜底
     - "&e欢迎来到元气试炼之地！"
@@ -27,7 +27,7 @@ merchant:
   # 右键 = 直接开 abyss_shop 购物 UI（shops.yml caravan 店）；不绑 Chemdah 会话
   # （绑定会话会让对话 UI 与商店 UI 同弹——卖货 NPC 不需要先寒暄再点进商店）
   type: WITCH
-  location: "anchor:f2_shop.merchant"  # 生成锚点：柜台后
+  location: "219,61,66,180,0"      # f2_shop 柜台后（陈列台 z0+8，商人 z0+10 面北）
   look-at-player: true
   click-script:
     - "open_shop_ui @trigger caravan"   # 开商店 UI（shops.yml）

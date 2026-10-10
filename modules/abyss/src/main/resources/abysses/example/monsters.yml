@@ -8,7 +8,7 @@ flank_pack:
   spawn-timing: MANUAL            # 只被 spawn_group 动作拉起
   monsters:
     - mob-id: vanilla:zombie
-      location: "anchor:f1_combat_a.center"  # 锚点引用（gen 模式）
+      location: "20,61,19"        # f1_start 房（演示用坐标）
       amount: 3
   on-end:
     - "message @all &7增援已被肃清"

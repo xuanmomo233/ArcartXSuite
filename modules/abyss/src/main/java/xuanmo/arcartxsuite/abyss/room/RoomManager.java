@@ -89,8 +89,6 @@ public final class RoomManager {
         volatile boolean advanceFired;
         /** 出口踩入防抖（传送落点可能压在出口盒上，连发会来回弹）。 */
         volatile long lastExitAt;
-        /** gen 模式：封门格集（Boss 房门），room_open 脚本动作清成 AIR。 */
-        final List<Block> sealedBlocks = new ArrayList<>();
 
         RoomRuntime(String id, RoomTemplate tpl, int floorIndex, int roomIndex) {
             this.id = id;
@@ -191,21 +189,7 @@ public final class RoomManager {
         for (Floor floor : fc.floors()) {
             FloorRuntime fr = new FloorRuntime(floor, fi);
             rt.floors.add(fr);
-            // GEN 层：房链 = 生成计划（含增删结果）；region/pool 照旧
-            xuanmo.arcartxsuite.abyss.gen.FloorPlan gplan = null;
-            List<String> chain;
-            if (floor.source() == FloorConfig.Source.GEN) {
-                var layout = instance.getLayout();
-                gplan = layout != null ? layout.floor(fi) : null;
-                if (gplan == null) {
-                    throw new IllegalStateException(
-                        "[abyss] gen 层无生成布局: " + floor.id() + "（地牢 "
-                            + instance.getTemplate().id() + "）");
-                }
-                chain = new ArrayList<>(gplan.rooms.keySet());
-            } else {
-                chain = resolveChain(floor);
-            }
+            List<String> chain = resolveChain(floor);
             int ri = 0;
             int anchorX = 0, anchorZ = 0;
             for (String ref : chain) {
@@ -219,7 +203,7 @@ public final class RoomManager {
                 RoomRuntime room = new RoomRuntime(roomId, tpl, fi, ri);
                 fr.rooms.add(room);
 
-                int ox = 0, oy = 0, oz = 0;
+                int ox, oy, oz;
                 if (floor.source() == FloorConfig.Source.POOL) {
                     ox = "z".equals(floor.direction()) ? 0 : anchorX;
                     oz = "z".equals(floor.direction()) ? anchorZ : 0;
@@ -240,11 +224,7 @@ public final class RoomManager {
                     int[] o = parseVec(tpl.origin(), 0, 0, 0);
                     ox = o[0]; oy = o[1]; oz = o[2];
                 }
-                if (floor.source() == FloorConfig.Source.GEN) {
-                    materializeGenerated(instance, world, room, tpl, gplan.rooms.get(ref));
-                } else {
-                    materializeRoom(instance, world, room, tpl, ox, oy, oz);
-                }
+                materializeRoom(instance, world, room, tpl, ox, oy, oz);
                 ri++;
             }
             fi++;
@@ -344,124 +324,6 @@ public final class RoomManager {
             room.groupNames.add(runtimeName);
             groupToRoom.put(groupKey(instance, runtimeName), room);
         }
-    }
-
-    /**
-     * 物化生成房：几何来自 {@link RoomPlan}（bbox/门格/锚点/刷怪点），
-     * 房间模板的 region/spawn/doors/exit 字段在 gen 模式下被忽略。
-     * <p>怪物落点解析：{@code auto}=洞内随机点；{@code anchor:<名>}=房内锚点；
-     * {@code center}=房心；字面量=世界绝对坐标（gen 房勿用）。</p>
-     */
-    private void materializeGenerated(AbyssInstance instance, World world,
-                                      RoomRuntime room, RoomTemplate tpl,
-                                      @Nullable xuanmo.arcartxsuite.abyss.gen.RoomPlan rp) {
-        if (rp == null) {
-            logger.warning("[abyss] gen 房 " + tpl.id() + " 本次未被生成——跳过物化");
-            return;
-        }
-        room.boxMin = new Location(world, rp.minX, rp.floorY, rp.minZ);
-        room.boxMax = new Location(world, rp.maxX, rp.ceilY, rp.maxZ);
-        Location sp = rp.anchor("spawn");
-        room.spawn = sp != null ? sp : rp.center(world);
-        room.exitMin = rp.exitMin;
-        room.exitMax = rp.exitMax;
-        String defMat = instance.getTemplate().floors().defaults().lockMaterial();
-        for (xuanmo.arcartxsuite.abyss.gen.RoomPlan.DoorPlan d : rp.doors) {
-            DoorRuntime dr = new DoorRuntime(defMat);
-            for (xuanmo.arcartxsuite.abyss.gen.RoomPlan.Pos p : d.cells) {
-                Block b = world.getBlockAt(p.x(), p.y(), p.z());
-                dr.blocks.add(b);
-                if (d.sealed) room.sealedBlocks.add(b);
-            }
-            room.doors.add(dr);
-        }
-        for (Map.Entry<String, MonsterGroup> e : tpl.groups().entrySet()) {
-            MonsterGroup g = e.getValue();
-            String runtimeName = room.id + ":" + e.getKey();
-            List<MonsterSpawn> shifted = new ArrayList<>();
-            for (MonsterSpawn ms : g.monsters()) {
-                shifted.add(new MonsterSpawn(ms.mobId(),
-                    genLoc(ms.location(), rp, world), ms.amount(), ms.level()));
-            }
-            List<String> deps = new ArrayList<>();
-            for (String dep : g.triggerAfter()) {
-                deps.add(dep.contains(":") ? dep : room.id + ":" + dep);
-            }
-            SpawnTiming timing = g.spawnTiming();
-            room.groupDelays.put(runtimeName, g.delaySeconds());
-            int rest = g.restSeconds() >= 0 ? g.restSeconds() : tpl.restSeconds();
-            mobGroups.registerRuntimeGroup(instance, new MonsterGroup(
-                runtimeName, false, timing, g.delaySeconds(), rest, deps, shifted,
-                g.completeWhenAliveBelow(), g.onPrespawn(),
-                g.onStart(), g.onEnd(), g.plans()));
-            room.groupNames.add(runtimeName);
-            groupToRoom.put(groupKey(instance, runtimeName), room);
-        }
-    }
-
-    /** gen 房怪组落点解析：auto/center/anchor:<名> → 生成点位。 */
-    private String genLoc(String loc, xuanmo.arcartxsuite.abyss.gen.RoomPlan rp, World w) {
-        if (loc == null || loc.isBlank() || "auto".equalsIgnoreCase(loc.trim())) {
-            if (!rp.mobSpots.isEmpty()) {
-                Location p = rp.mobSpots.get(
-                    java.util.concurrent.ThreadLocalRandom.current().nextInt(rp.mobSpots.size()));
-                return fmtLoc(p);
-            }
-            Location c = rp.center(w);
-            return fmtLoc(c);
-        }
-        String s = loc.trim();
-        if ("center".equalsIgnoreCase(s)) return fmtLoc(rp.center(w));
-        if (s.startsWith("anchor:")) {
-            Location l = rp.anchor(s.substring(7).trim());
-            return fmtLoc(l != null ? l : rp.center(w));
-        }
-        return loc;   // 字面量原样（gen 模式下应为绝对坐标，不建议用）
-    }
-
-    private static String fmtLoc(Location l) {
-        return l.getBlockX() + "," + l.getBlockY() + "," + l.getBlockZ();
-    }
-
-    /**
-     * 组名解析：{@code <房ref>:<组名>} → 该房本次实例的运行时组名。
-     * <p>gen 模式房序是洗牌结果，脚本写不了 f0_rN_ref——允许直接写 ref；
-     * 前缀已含运行时 id（f0_r1_...）时原样返回（region/pool 兼容）。</p>
-     */
-    public String resolveGroupName(AbyssInstance instance, String name) {
-        if (name == null) return null;
-        int colon = name.indexOf(':');
-        if (colon <= 0) return name;
-        InstanceRuntime rt = states.get(instance.getInstanceId());
-        if (rt == null) return name;
-        String prefix = name.substring(0, colon);
-        for (FloorRuntime fr : rt.floors) {
-            for (RoomRuntime r : fr.rooms) {
-                if (r.tpl.id().equals(prefix)) {
-                    return r.id + name.substring(colon);
-                }
-            }
-        }
-        return name;
-    }
-
-    /** room_open 脚本：清掉 gen 封门（Boss 房门）。 */
-    public boolean openSealedDoor(AbyssInstance instance, String roomRef) {
-        InstanceRuntime rt = states.get(instance.getInstanceId());
-        if (rt == null) return false;
-        for (FloorRuntime fr : rt.floors) {
-            for (RoomRuntime r : fr.rooms) {
-                if (r.id.equals(roomRef) || r.tpl.id().equals(roomRef)) {
-                    if (r.sealedBlocks.isEmpty()) return false;
-                    for (Block b : r.sealedBlocks) {
-                        b.setType(Material.AIR, false);
-                    }
-                    r.sealedBlocks.clear();
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private @Nullable File resolveSchematic(AbyssInstance instance, RoomTemplate tpl) {
@@ -721,16 +583,10 @@ public final class RoomManager {
         }, timeout));
     }
 
-    /** 层入口站位：floor.spawn（绝对/anchor:）→ 缺省首房 spawn。 */
+    /** 层入口站位：floor.spawn（绝对）→ 缺省首房 spawn。 */
     private @Nullable Location floorSpawn(FloorRuntime fr, AbyssInstance instance) {
         if (fr.floor.spawn() != null && instance.getWorld() != null) {
-            String raw = fr.floor.spawn().trim();
-            if (raw.startsWith("anchor:")) {
-                var layout = instance.getLayout();
-                Location l = layout != null ? layout.anchor(raw.substring(7)) : null;
-                if (l != null) return l.clone();
-            }
-            String[] v = raw.split(",");
+            String[] v = fr.floor.spawn().split(",");
             if (v.length >= 3) {
                 try {
                     return new Location(instance.getWorld(),

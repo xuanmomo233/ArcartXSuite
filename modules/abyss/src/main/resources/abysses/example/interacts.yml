@@ -1,14 +1,13 @@
-# 交互点：祭坛供奉 / 解谜拉杆 / 战利品宝箱（gen 模式锚点定位）
-# location: "anchor:<房ref>.<锚点名>"——生成器产出的命名点位；
-# 可选房未抽中时锚点解析失败，该交互点自动失效（不报错乱触）。
-# conditions 用 PAPI 条件（%axsabyss_var_<名>% 读副本实例变量）。
+# 交互点：祭坛供奉 / 解谜拉杆 / 战利品宝箱
+# （商店由 merchant NPC 右键开 abyss_shop UI，不再用方块台座）
+# conditions 用 PAPI 条件（%axsabyss_var_<名>% 读副本实例变量）；
+# fail-message 在条件不满足时发给点击者。
 
 # ═══ 祭坛（f1_altar 神秘祭坛 / f3_shrine 灵魂祭坛）═══
 altar:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f1_altar.altar"
+  location: "19,61,75"
   required-block: ENCHANTING_TABLE
-  once: true
   conditions: ["%axsabyss_var_coins% >= 15"]
   fail-message: "&c祭坛沉默着……供奉需要 &e15 &c金币"
   script:
@@ -18,9 +17,8 @@ altar:
 
 shrine3:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f3_shrine.altar"
+  location: "419,61,75"
   required-block: ENCHANTING_TABLE
-  once: true
   conditions: ["%axsabyss_var_coins% >= 15"]
   fail-message: "&c祭坛沉默着……供奉需要 &e15 &c金币"
   script:
@@ -28,29 +26,29 @@ shrine3:
     - "sound @trigger BLOCK_ENCHANTMENT_TABLE_USE 1 0.8"
     - "buff_offer altar_pool"
 
-# ═══ 解谜拉杆（f2_puzzle 尘封机关：找最长内墙段，4 杆挂北墙面南）═══
-# 颜色序 = 青(lever_3) → 红(lever_1) → 绿(lever_4) → 黄(lever_2)，头顶彩窗标识
+# ═══ 解谜拉杆（f2_puzzle 尘封机关）═══
+# 颜色序 = 青(x338) → 红(x324) → 绿(x345) → 黄(x331)，拉杆头顶彩窗标识
 lever_1:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f2_puzzle.lever_1"
+  location: "324,62,68"
   required-block: LEVER
 lever_2:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f2_puzzle.lever_2"
+  location: "331,62,68"
   required-block: LEVER
 lever_3:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f2_puzzle.lever_3"
+  location: "338,62,68"
   required-block: LEVER
 lever_4:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f2_puzzle.lever_4"
+  location: "345,62,68"
   required-block: LEVER
 
 # ═══ 战利品宝箱 ═══
 abyss_chest:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f1_chest.chest"
+  location: "131,61,75"
   required-block: CHEST
   once: true
   script:
@@ -59,7 +57,7 @@ abyss_chest:
 
 abyss_chest3:
   type: RIGHT_CLICK_BLOCK
-  location: "anchor:f3_chest.chest"
+  location: "531,61,75"
   required-block: CHEST
   once: true
   script:

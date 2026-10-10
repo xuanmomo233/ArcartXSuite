@@ -1,12 +1,9 @@
-# rooms.yml — 元气试炼之地 · 程序化迷宫房（gen 模式）
+# rooms.yml — 元气试炼之地 · 迷宫房（region 模式，origin=0,0,0 绝对坐标）
 #
-# source: gen 的层中，region/spawn/doors/exit 全部不写——由生成器每实例产出：
-#   40×40 图块房（内空 38×38）在 5×5 网格随机拼成连通多边形 + 共享墙门洞 + 锚点 + 刷怪点。
-# gen.feature：entry|combat|altar|chest|shop|puzzle|elite|boss|plain（内饰+锚点方案）；gen.prefab：手建 regions/<名>.yml 预制件覆盖程序化内饰
-# gen.tall：挑高（净高走 gen.tall-height）。
-# 怪组落点：location "auto"=洞内随机点 / "center"=房心 / "anchor:<名>"=房内锚点。
-# 波次：w1a/w1b MANUAL 由 on-lock 掷签选包；w2 TRIGGERED 等首波包全清后休整刷怪。
-# 可选房（floors.optional-rooms）没抽中时：其 interact/NPC/guide 锚点解析失败自动跳过。
+# 迷宫语义：房间经走廊物理互连，玩家自由遍历/回退；doors 列该房全部走廊洞口，
+# combat/boss 进房即锁全部洞口；exit 仅在 boss 房（推进金垫）配置。
+# 波次：w1a/w1b MANUAL 由 on-lock 掷签选包（未选包 kill_group 跳过分母），
+#        w2 TRIGGERED 等首波包全清（trigger-after 全前置语义）后休整刷怪。
 
 rooms:
   # ═══════════ &a第 1 层 · 苔痕前哨 ═══════════
@@ -14,8 +11,11 @@ rooms:
   # 入口营地
   f1_start:
     type: safe
-    gen:
-      feature: entry
+    region: ["0,60,0", "39,75,39"]
+    spawn: "5,61,19,270,0"
+    doors:
+      - region: ["39,61,17", "39,64,22"]
+      - region: ["17,61,39", "22,64,39"]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -23,32 +23,36 @@ rooms:
   # 苔痕战场
   f1_combat_a:
     type: combat
-    gen:
-      feature: combat
+    region: ["56,60,0", "95,75,39"]
+    spawn: "61,61,19,270,0"
+    doors:
+      - region: ["56,61,17", "56,64,22"]
+      - region: ["73,61,39", "78,64,39"]
+      - region: ["95,61,17", "95,64,22"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "75,61,12"
             amount: 2
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,19"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "83,61,19"
             amount: 1
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "75,61,12"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "66,61,19"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "83,61,19"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -58,13 +62,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,19"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "83,61,19"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "75,61,27"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -84,9 +88,11 @@ rooms:
   # 神秘祭坛
   f1_altar:
     type: safe
-    gen:
-      feature: altar
-      tall: true
+    region: ["0,60,56", "39,83,95"]
+    spawn: "5,61,75,270,0"
+    doors:
+      - region: ["17,61,56", "22,64,56"]
+      - region: ["39,61,73", "39,64,78"]
     on-enter:
       - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
       - "message @all &7当前金币：&e{var:coins} &7（击杀掉落，全队共享）"
@@ -94,32 +100,37 @@ rooms:
   # 藤蔓回廊
   f1_combat_b:
     type: combat
-    gen:
-      feature: combat
+    region: ["56,60,56", "95,75,95"]
+    spawn: "61,61,75,270,0"
+    doors:
+      - region: ["73,61,56", "78,64,56"]
+      - region: ["56,61,73", "56,64,78"]
+      - region: ["95,61,73", "95,64,78"]
+      - region: ["73,61,95", "78,64,95"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "75,61,68"
             amount: 2
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,75"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "83,61,75"
             amount: 1
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "75,61,68"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "66,61,75"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "83,61,75"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -129,13 +140,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,75"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "83,61,75"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "75,61,83"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -154,18 +165,20 @@ rooms:
   # 守层 Boss
   f1_boss:
     type: boss
-    gen:
-      feature: boss
-      tall: true
+    region: ["112,60,0", "151,83,39"]
+    spawn: "117,61,19,270,0"
+    exit: ["129,61,3", "134,64,8"]
+    doors:
+      - region: ["112,61,17", "112,64,22"]
     groups:
       boss:
         spawn-timing: AUTO_START
         monsters:
           - mob-id: vanilla:ravager
-            location: "auto"
+            location: "131,61,12"
             amount: 1
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "122,61,19"
             amount: 2
       reinforce:
         spawn-timing: DELAYED   # 锁门后短压（Boss 战中段增援）
@@ -175,7 +188,7 @@ rooms:
           - "sound @all ENTITY_WITHER_AMBIENT 0.6 0.7"
         monsters:
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "139,61,19"
             amount: 2
     on-enter:
       - "title @all 10 40 10 &4&l守层 Boss|&c背水一战"
@@ -188,8 +201,10 @@ rooms:
   # 战利品室
   f1_chest:
     type: safe
-    gen:
-      feature: chest
+    region: ["112,60,56", "151,75,95"]
+    spawn: "117,61,75,270,0"
+    doors:
+      - region: ["112,61,73", "112,64,78"]
     on-enter:
       - "title @all 10 30 10 &6战利品室|&7开启中央宝箱"
       - "heal @all 6"
@@ -197,32 +212,34 @@ rooms:
   # 深渊前哨
   f1_combat_c:
     type: combat
-    gen:
-      feature: combat
+    region: ["56,60,112", "95,75,151"]
+    spawn: "61,61,131,270,0"
+    doors:
+      - region: ["73,61,112", "78,64,112"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "75,61,124"
             amount: 2
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,131"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "83,61,131"
             amount: 1
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "75,61,124"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "66,61,131"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "83,61,131"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -232,13 +249,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "66,61,131"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "83,61,131"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "75,61,139"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -258,8 +275,11 @@ rooms:
   # 矿道入口
   f2_entry:
     type: safe
-    gen:
-      feature: entry
+    region: ["200,60,0", "239,75,39"]
+    spawn: "205,61,19,270,0"
+    doors:
+      - region: ["239,61,17", "239,64,22"]
+      - region: ["217,61,39", "222,64,39"]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -267,29 +287,32 @@ rooms:
   # 矿道守卫
   f2_combat_a:
     type: combat
-    gen:
-      feature: combat
+    region: ["256,60,0", "295,75,39"]
+    spawn: "261,61,19,270,0"
+    doors:
+      - region: ["256,61,17", "256,64,22"]
+      - region: ["273,61,39", "278,64,39"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "275,61,12"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "266,61,19"
             amount: 2
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "275,61,12"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,19"
             amount: 1
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "283,61,19"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -299,13 +322,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,19"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "283,61,19"
             amount: 2
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "275,61,27"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -324,8 +347,11 @@ rooms:
   # 旅行商队
   f2_shop:
     type: shop
-    gen:
-      feature: shop
+    region: ["200,60,56", "239,75,95"]
+    spawn: "205,61,75,270,0"
+    doors:
+      - region: ["217,61,56", "222,64,56"]
+      - region: ["239,61,73", "239,64,78"]
     on-enter:
       - "title @all 10 30 10 &6旅行商队|&7金币兑换补给"
       - "message @all &7右键 &6神秘商人·老陈 &7打开货单——治疗/力量/补给样样有"
@@ -334,29 +360,34 @@ rooms:
   # 熔岩回廊
   f2_combat_b:
     type: combat
-    gen:
-      feature: combat
+    region: ["256,60,56", "295,75,95"]
+    spawn: "261,61,75,270,0"
+    doors:
+      - region: ["273,61,56", "278,64,56"]
+      - region: ["256,61,73", "256,64,78"]
+      - region: ["295,61,73", "295,64,78"]
+      - region: ["273,61,95", "278,64,95"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "275,61,68"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "266,61,75"
             amount: 2
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "275,61,68"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,75"
             amount: 1
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "283,61,75"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -366,13 +397,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,75"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "283,61,75"
             amount: 2
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "275,61,83"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -391,8 +422,10 @@ rooms:
   # 尘封机关
   f2_puzzle:
     type: safe
-    gen:
-      feature: puzzle
+    region: ["312,60,56", "351,75,95"]
+    spawn: "317,61,75,270,0"
+    doors:
+      - region: ["312,61,73", "312,64,78"]
     on-enter:
       - "title @all 10 30 10 &b尘封机关|&7按彩窗颜色序扳动拉杆"
       - "message @all &7刻痕写着：&b青 → &c红 → &a绿 → &e黄 &7（拉杆头顶彩窗）"
@@ -401,29 +434,32 @@ rooms:
   # 深窟伏兵
   f2_combat_c:
     type: combat
-    gen:
-      feature: combat
+    region: ["256,60,112", "295,75,151"]
+    spawn: "261,61,131,270,0"
+    doors:
+      - region: ["273,61,112", "278,64,112"]
+      - region: ["295,61,129", "295,64,134"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:zombie
-            location: "auto"
+            location: "275,61,124"
             amount: 2
           - mob-id: vanilla:skeleton
-            location: "auto"
+            location: "266,61,131"
             amount: 2
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "275,61,124"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,131"
             amount: 1
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "283,61,131"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -433,13 +469,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "266,61,131"
             amount: 2
           - mob-id: vanilla:spider
-            location: "auto"
+            location: "283,61,131"
             amount: 2
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "275,61,139"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -458,18 +494,20 @@ rooms:
   # 守层 Boss
   f2_boss:
     type: boss
-    gen:
-      feature: boss
-      tall: true
+    region: ["312,60,112", "351,83,151"]
+    spawn: "317,61,131,270,0"
+    exit: ["329,61,115", "334,64,120"]
+    doors:
+      - region: ["312,61,129", "312,64,134"]
     groups:
       boss:
         spawn-timing: AUTO_START
         monsters:
           - mob-id: vanilla:evoker
-            location: "auto"
+            location: "331,61,124"
             amount: 1
           - mob-id: vanilla:vindicator
-            location: "auto"
+            location: "322,61,131"
             amount: 2
       reinforce:
         spawn-timing: DELAYED   # 锁门后短压（Boss 战中段增援）
@@ -479,10 +517,10 @@ rooms:
           - "sound @all ENTITY_WITHER_AMBIENT 0.6 0.7"
         monsters:
           - mob-id: vanilla:vindicator
-            location: "auto"
+            location: "339,61,131"
             amount: 2
           - mob-id: vanilla:witch
-            location: "auto"
+            location: "331,61,139"
             amount: 1
     on-enter:
       - "title @all 10 40 10 &4&l守层 Boss|&c背水一战"
@@ -496,8 +534,11 @@ rooms:
   # 深渊入口
   f3_entry:
     type: safe
-    gen:
-      feature: entry
+    region: ["400,60,0", "439,75,39"]
+    spawn: "405,61,19,270,0"
+    doors:
+      - region: ["417,61,39", "422,64,39"]
+      - region: ["439,61,17", "439,64,22"]
     on-enter:
       - "message @all &e跟 &6向导·艾琳 &e交谈——接取委托、了解地牢"
       - "sound @all ENTITY_VILLAGER_YES 1 1"
@@ -505,29 +546,33 @@ rooms:
   # 凋零卫队
   f3_combat_a:
     type: combat
-    gen:
-      feature: combat
+    region: ["456,60,0", "495,75,39"]
+    spawn: "461,61,19,270,0"
+    doors:
+      - region: ["473,61,39", "478,64,39"]
+      - region: ["456,61,17", "456,64,22"]
+      - region: ["495,61,17", "495,64,22"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "475,61,12"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "466,61,19"
             amount: 2
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "475,61,12"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "466,61,19"
             amount: 2
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "483,61,19"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -537,13 +582,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "466,61,19"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "483,61,19"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "475,61,27"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -562,9 +607,11 @@ rooms:
   # 灵魂祭坛
   f3_shrine:
     type: safe
-    gen:
-      feature: altar
-      tall: true
+    region: ["400,60,56", "439,83,95"]
+    spawn: "405,61,75,270,0"
+    doors:
+      - region: ["417,61,56", "422,64,56"]
+      - region: ["439,61,73", "439,64,78"]
     on-enter:
       - "title @all 10 30 10 &d神秘祭坛|&7供奉 15 金币，换取祝福"
       - "message @all &7当前金币：&e{var:coins} &7（击杀掉落，全队共享）"
@@ -572,29 +619,34 @@ rooms:
   # 王座回廊
   f3_combat_b:
     type: combat
-    gen:
-      feature: combat
+    region: ["456,60,56", "495,75,95"]
+    spawn: "461,61,75,270,0"
+    doors:
+      - region: ["456,61,73", "456,64,78"]
+      - region: ["473,61,56", "478,64,56"]
+      - region: ["495,61,73", "495,64,78"]
+      - region: ["473,61,95", "478,64,95"]
     groups:
       w1a:  # 首波包A
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "475,61,68"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "466,61,75"
             amount: 2
       w1b:  # 首波包B
         spawn-timing: MANUAL
         monsters:
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "475,61,68"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "466,61,75"
             amount: 2
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "483,61,75"
             amount: 1
       w2:
         spawn-timing: TRIGGERED
@@ -604,13 +656,13 @@ rooms:
           - "sound @all ENTITY_RAVAGER_ROAR 0.6 0.8"
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "466,61,75"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "483,61,75"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "475,61,83"
             amount: 1
     wave-rest: 3          # 波次休整秒（改版后更紧凑）
     on-enter:
@@ -629,8 +681,10 @@ rooms:
   # 战利品之厅
   f3_chest:
     type: safe
-    gen:
-      feature: chest
+    region: ["512,60,56", "551,75,95"]
+    spawn: "517,61,75,270,0"
+    doors:
+      - region: ["512,61,73", "512,64,78"]
     on-enter:
       - "title @all 10 30 10 &6战利品室|&7开启中央宝箱"
       - "heal @all 6"
@@ -638,17 +692,19 @@ rooms:
   # 精英卫队
   f3_elite:
     type: combat
-    gen:
-      feature: elite
+    region: ["456,60,112", "495,75,151"]
+    spawn: "461,61,131,270,0"
+    doors:
+      - region: ["473,61,112", "478,64,112"]
     groups:
       w1:
         spawn-timing: AUTO_START
         monsters:
           - mob-id: vanilla:piglin_brute
-            location: "auto"
+            location: "475,61,124"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "466,61,131"
             amount: 2
       w2:
         spawn-timing: TRIGGERED
@@ -657,10 +713,10 @@ rooms:
           - "title @all 5 30 10 &c精英增援 &43 秒后来袭！"
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "483,61,131"
             amount: 2
           - mob-id: vanilla:creeper
-            location: "auto"
+            location: "475,61,139"
             amount: 2
     wave-rest: 3
     on-enter:
@@ -675,15 +731,16 @@ rooms:
   # 深渊王座
   f3_final:
     type: boss
-    gen:
-      feature: boss
-      tall: true
+    region: ["512,60,0", "551,83,39"]
+    spawn: "517,61,19,270,0"
+    doors:
+      - region: ["512,61,17", "512,64,22"]
     groups:
       boss:
         spawn-timing: AUTO_START
         monsters:
           - mob-id: vanilla:wither
-            location: "auto"
+            location: "531,61,12"
             amount: 1
       reinforce:
         spawn-timing: DELAYED   # 锁门后短压（Boss 战中段增援）
@@ -693,10 +750,10 @@ rooms:
           - "sound @all ENTITY_WITHER_AMBIENT 0.6 0.7"
         monsters:
           - mob-id: vanilla:wither_skeleton
-            location: "auto"
+            location: "522,61,19"
             amount: 2
           - mob-id: vanilla:blaze
-            location: "auto"
+            location: "539,61,19"
             amount: 1
     on-enter:
       - "title @all 10 40 10 &4&l守层 Boss|&c背水一战"

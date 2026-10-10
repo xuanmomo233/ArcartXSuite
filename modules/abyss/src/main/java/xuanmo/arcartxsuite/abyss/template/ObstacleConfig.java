@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * obstacles.yml 解析：障碍物（动态方块 + 触发器）。
@@ -29,15 +28,9 @@ public record ObstacleConfig(
 
     public enum TriggerMode { NONE, ENTER, LEAVE, PERSIST }
 
-    /**
-     * @param zone         生成器产出的命名障碍区名（gen 模式；非空则 blocks 忽略）
-     * @param zoneMaterial zone 填充材质
-     */
     public record Obstacle(
         String name,
         List<String> blocks,
-        @Nullable String zone,
-        @Nullable String zoneMaterial,
         boolean autoCreate,
         TriggerMode triggerMode,
         List<String> triggerScript,
@@ -57,8 +50,6 @@ public record ObstacleConfig(
             return new Obstacle(
                 name,
                 s.getStringList("blocks"),
-                s.getString("zone", null),
-                s.getString("zone-material", s.getString("zone_material", null)),
                 s.getBoolean("auto-create", s.getBoolean("auto_create", true)),
                 mode,
                 s.getStringList("trigger-script").isEmpty()
