@@ -517,6 +517,16 @@ def main():
             main = [b"Manifest-Version: 1.0"] + [
                 l for l in main if not l.lower().startswith(b"manifest-version:")
             ]
+        # Paper 1.20.5+ PluginRemapper 会将 legacy 插件 jar 的全部 .class 重写到
+        #   plugins/.paper-remapped/ 副本，插件 CodeSource 指向副本，导致 native 层
+        #   BOOTSTRAP.MF 明文类哈希校验失败（code=-3），保护层无法注入。
+        # 声明 paperweight-mappings-namespace: mojang 可让 Paper 按插件粒度跳过
+        #   remap（"Plugin is already Mojang mapped" → 直接使用原始 jar），
+        #   不影响同服其它插件的 remap。本插件不使用 NMS 版本化内部类，
+        #   声明 mojang 命名空间语义成立。
+        ns_key = b"paperweight-mappings-namespace:"
+        if not any(l.lower().startswith(ns_key) for l in main):
+            main.append(b"paperweight-mappings-namespace: mojang")
         return b"".join(l + b"\r\n" for l in main) + b"\r\n"
 
     raw_manifest = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
