@@ -382,6 +382,8 @@ final class DefaultModuleContext implements ModuleContext {
             command.setExecutor(executor);
             command.setTabCompleter(executor);
             registeredCommandNames.add(commandName);
+            // 若该命令的名字空间变体此前因 Paper 1.21+ 冲突整理被移除，恢复注册
+            xuanmo.arcartxsuite.util.CommandLabelDeduper.restoreNamespaced(plugin, command);
             logger.fine("命令 '" + commandName + "' 已绑定到 " + executor.getClass().getSimpleName());
             return;
         }
@@ -462,6 +464,8 @@ final class DefaultModuleContext implements ModuleContext {
                 command.setTabCompleter(null);
             }
         }
+        // 解绑后命令回到未启用状态：重新执行冲突整理，把被占名字让回对方
+        xuanmo.arcartxsuite.util.CommandLabelDeduper.schedule(plugin, logger);
         registeredCommandNames.clear();
     }
 
