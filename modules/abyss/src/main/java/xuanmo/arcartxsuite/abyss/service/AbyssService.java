@@ -561,6 +561,12 @@ public final class AbyssService {
     public QuestManager quests() { return quests; }
     public InstanceTaskScheduler instanceTasks() { return instanceTasks; }
     public ScriptRunner scripts() { return scriptRunner; }
+    /** ARIA/JS 动作执行器（宿主 ScriptConditionEvaluator 同时实现 ScriptActionExecutor）。 */
+    public xuanmo.arcartxsuite.api.condition.ScriptActionExecutor scriptActions() {
+        return scriptConditionEvaluator instanceof
+            xuanmo.arcartxsuite.api.condition.ScriptActionExecutor ex
+            ? ex : xuanmo.arcartxsuite.api.condition.ScriptActionExecutor.noop();
+    }
     public AbyssModuleConfiguration config() { return config; }
     public AbyssModule module() { return module; }
     public AbyssAdminCommand adminCommand() { return adminCommand; }

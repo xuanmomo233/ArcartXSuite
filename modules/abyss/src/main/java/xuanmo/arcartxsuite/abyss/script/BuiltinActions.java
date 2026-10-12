@@ -642,6 +642,30 @@ final class BuiltinActions {
                 service.get().giveMoney(p, amount));
         });
 
+        // ═══ 脚本桥（宿主 JS/ARIA 执行器；sel 写 - 表示无玩家上下文跑一次）═══
+        reg.register("js", (ctx, args, s) -> {
+            String[] parts = splitFirst(args, 1);
+            String code = ctx.replace(rest(parts, 1));
+            var exec = service.get().scriptActions();
+            var kind = xuanmo.arcartxsuite.api.condition.ScriptActionKind.JS;
+            if ("-".equals(parts[0])) {
+                exec.execute(ctx.getTrigger(), kind, code);
+                return;
+            }
+            forEach(ctx, parts[0], p -> exec.execute(p, kind, code));
+        });
+        reg.register("aria", (ctx, args, s) -> {
+            String[] parts = splitFirst(args, 1);
+            String code = ctx.replace(rest(parts, 1));
+            var exec = service.get().scriptActions();
+            var kind = xuanmo.arcartxsuite.api.condition.ScriptActionKind.ARIA;
+            if ("-".equals(parts[0])) {
+                exec.execute(ctx.getTrigger(), kind, code);
+                return;
+            }
+            forEach(ctx, parts[0], p -> exec.execute(p, kind, code));
+        });
+
         // ═══ 世界 ═══
         reg.register("time", (ctx, args, s) -> {
             if (ctx.getInstance().getWorld() != null) {
