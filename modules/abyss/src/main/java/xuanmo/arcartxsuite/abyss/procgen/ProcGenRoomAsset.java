@@ -58,7 +58,13 @@ public record ProcGenRoomAsset(
 
     public enum RoomKind { START, COMBAT, ELITE, BOSS, SHOP, TREASURE, EVENT, REST }
 
-    /** 房内相对坐标 + 外部引用 id（宝箱/NPC/交互点）。 */
+    /**
+     * 房内相对坐标 + 外部引用 id。
+     * chests/npcs/interacts 三段均用它——锚点只声明"房间内哪一格有东西"，
+     * 具体放什么方块/实体完全由构件几何决定（箱类奖励不必放箱子方块、
+     * 增益祭坛不必放附魔台）；interacts 段可引用任意完整交互定义
+     * （方块点击/实体点击/条件/消耗品），chests/npcs 只是常用项的快捷写法。
+     */
     public record PlacedRef(int x, int y, int z, String ref) { }
 
     /** 房内怪物点。 */

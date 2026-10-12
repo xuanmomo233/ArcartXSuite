@@ -163,6 +163,8 @@ public final class ProcGenManager {
             RoomRuntime rr = st.rooms.get(i);
             var asset = rr.placed.asset;
             // 宝箱交互（RIGHT_CLICK_BLOCK → procgen_chest 动作判 encore/开箱）
+            // 锚点只认坐标不认方块：构件该位置放箱/桶/装饰块都行；
+            // 要实体交互走 interacts: 段 + RIGHT_CLICK_ENTITY 完整定义
             int ci = 0;
             for (var c : asset.chests()) {
                 int[] p = rr.placed.toWorld(c.x(), c.y(), c.z());
