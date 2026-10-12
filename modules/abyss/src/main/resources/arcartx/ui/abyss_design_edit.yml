@@ -1,5 +1,5 @@
 # AXS 资源说明
-# 用途: Abyss 设计模式对象编辑面板（范式版·数据驱动）——标量字段 + 脚本/列表行
+# 用途: Abyss 远征制图台对象工作页——左侧参数校准，右侧脚本序列
 # 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
 #
 # 通讯协议:
@@ -75,24 +75,24 @@ ui:
       }
       // ── 各组行重建（模板组走 get(0)，副本走引用字典）──
       for(gi in range(0, 组目标数 - 1)){
-        gObj = var.groupRows['' + gi]
+        gObj = var.groupRows[gi.round()]
         gCtl = gi == 0 ? val.组容器.get(0) : var.组引用[gi.round()]
         行目标数 = gObj['lineCount'].round()
         if(gCtl != none){
-          if(var.行引用['' + gi] == none){
-            var.行引用['' + gi] = {}
+          if(var.行引用[gi.round()] == none){
+            var.行引用[gi.round()] = {}
           }
-          for(key in var.行引用['' + gi].keys()){
-            var.行引用['' + gi][key].remove()
+          for(key in var.行引用[gi.round()].keys()){
+            var.行引用[gi.round()][key].remove()
           }
-          var.行引用['' + gi] = {}
+          var.行引用[gi.round()] = {}
           行容器 = gCtl.get(2)
           行模板 = 行容器.get(0)
           行模板.entryKey = 0.round()
           for(li in range(1, 行目标数 - 1)){
             le = 行模板.copy('行_' + var.轮次 + '_' + gi.round() + '_' + li.round())
             le.entryKey = li.round()
-            var.行引用['' + gi][li.round()] = le
+            var.行引用[gi.round()][li.round()] = le
           }
         }
       }
@@ -141,24 +141,24 @@ ui:
       }
       // ── 各组行重建（模板组走 get(0)，副本走引用字典）──
       for(gi in range(0, 组目标数 - 1)){
-        gObj = var.groupRows['' + gi]
+        gObj = var.groupRows[gi.round()]
         gCtl = gi == 0 ? val.组容器.get(0) : var.组引用[gi.round()]
         行目标数 = gObj['lineCount'].round()
         if(gCtl != none){
-          if(var.行引用['' + gi] == none){
-            var.行引用['' + gi] = {}
+          if(var.行引用[gi.round()] == none){
+            var.行引用[gi.round()] = {}
           }
-          for(key in var.行引用['' + gi].keys()){
-            var.行引用['' + gi][key].remove()
+          for(key in var.行引用[gi.round()].keys()){
+            var.行引用[gi.round()][key].remove()
           }
-          var.行引用['' + gi] = {}
+          var.行引用[gi.round()] = {}
           行容器 = gCtl.get(2)
           行模板 = 行容器.get(0)
           行模板.entryKey = 0.round()
           for(li in range(1, 行目标数 - 1)){
             le = 行模板.copy('行_' + var.轮次 + '_' + gi.round() + '_' + li.round())
             le.entryKey = li.round()
-            var.行引用['' + gi][li.round()] = le
+            var.行引用[gi.round()][li.round()] = le
           }
         }
       }
@@ -193,7 +193,7 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:30;10,8,20,235
+      normal: ~Frosted:24;8,9,10,238
       through: true
   自适应全局布局:
     type: Adaptive
@@ -209,17 +209,17 @@ controls:
           point: ~top_left
           x: "-var.offX"
           width: "var.viewW"
-          height: 84
-          normal: ~Frosted:28;14,11,26,240
+          height: 108
+          normal: ~15,17,18,250
           through: true
       返回钮:
         type: Canvas
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 20
-          width: 130
-          height: 44
+          y: 27
+          width: 150
+          height: 52
         action:
           clickLeft: "Packet.send(var.packetId, 'design_back', var.actionToken)"
         children:
@@ -227,7 +227,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~56,50,74,235
+              normal: ~48,54,52,245
               shape: ~round_rect
               radius: 9
               through: true
@@ -239,61 +239,72 @@ controls:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&f‹ 返回
+              texts: ~&f‹  路线图
               fontSize: 36
               through: true
       标题:
         type: Text
         attribute:
           point: ~top_left
-          x: "196 - var.offX"
-          y: 16
-          texts: "var.icon + ' &f' + var.kindLabel + ' &8· &f' + var.objId"
-          fontSize: 48
+          x: "224 - var.offX"
+          y: 14
+          texts: "'&6对象校准  &8/  ' + var.icon + ' &f' + var.objId"
+          fontSize: 54
+          limit: 30
           through: true
       摘要:
         type: Text
         attribute:
           point: ~top_left
-          x: "198 - var.offX"
-          y: 62
-          texts: "'&8' + var.summary"
-          fontSize: 32
+          x: "226 - var.offX"
+          y: 72
+          texts: "'&7' + var.kindLabel + '  &8/  &7' + var.summary"
+          fontSize: 36
+          limit: 70
           through: true
       未保存标:
         type: Text
         attribute:
           point: ~top_right
-          x: "-60 - var.offX"
+          x: "-60 + var.offX"
           y: 30
-          texts: ~&e● 未保存
-          fontSize: 32
+          texts: ~&c● 未归档
+          fontSize: 36
           visible: var.dirty
           through: true
-      # ═══ 左栏：属性字段 ═══
+      # ═══ 左栏：参数校准台 ═══
       左栏底:
         type: Texture
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 100
+          y: 130
           width: "var.colW"
-          height: "var.viewH - 124"
-          normal: ~18,14,30,242
+          height: "var.viewH - 154"
+          normal: ~17,19,20,246
           shape: ~round_rect
           radius: 14
           through: true
         effect:
           stroke:
             width: 1
-            color: ~255,255,255,50
+            color: ~108,91,73,170
       左栏题:
         type: Text
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 118
-          texts: ~&8属性字段
+          y: 150
+          texts: ~&6I  /  参数与标定
+          fontSize: 48
+          through: true
+      左栏说明:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "74 - var.offX"
+          y: 204
+          texts: ~&7编辑基础数值 · 坐标 / 区域需在世界中重新标记
           fontSize: 36
           through: true
       改名壳:
@@ -301,56 +312,66 @@ controls:
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 160
+          y: 252
           width: "var.colW - 40"
-          height: 48
+          height: 54
         children:
           改名标:
             type: Text
             attribute:
               point: ~middle_left
-              texts: ~&8ID
-              fontSize: 32
+              texts: ~&6ID
+              fontSize: 36
               through: true
           框:
             type: Canvas
             attribute:
               point: ~middle_left
-              x: 56
-              width: "var.colW - 96"
-              height: 42
+              x: 64
+              width: "var.colW - 104"
+              height: 48
             children:
               底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,11,26,240
+                  normal: ~11,13,14,250
                   shape: ~round_rect
                   radius: 7
                   through: true
               输入框:
                 type: TextBox
                 attribute:
-                  x: 10
-                  y: 5
-                  width: "var.colW - 116"
-                  height: 32
+                  x: 12
+                  y: 7
+                  width: "var.colW - 128"
+                  height: 34
                   length: 48
-                  fontSize: 32
-                  emptyText: ~&8新 id（回车应用）
+                  fontSize: 36
+                  emptyText: ~&7输入新标识并回车应用
                 action:
                   enter: "Packet.send(var.packetId, 'design_rename', var.objKey, self.getContent(), var.actionToken); self.setContent('')"
+      左滑轨:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "24 - var.offX + var.colW"
+          y: 322
+          width: 8
+          height: "var.viewH - 368"
+          normal: ~44,46,42,245
+          through: true
       左滑块:
         type: Texture
         val: 左滑块
         attribute:
-          point: ~top_right
-          x: "-68 - var.offX"
-          y: 222
+          point: ~top_left
+          x: "24 - var.offX + var.colW"
+          y: 322
           width: 8
-          height: 80
-          normal: "186,140,232,255"
-          maxDragY: "var.viewH - 414"
+          height: 96
+          normal: ~194,139,65,255
+          maxDragY: "var.viewH - 464"
           shape: ~round_rect
           radius: 4
       左滚动:
@@ -358,9 +379,9 @@ controls:
         attribute:
           point: ~top_left
           x: "72 - var.offX"
-          y: 216
-          width: "var.colW - 40"
-          height: "var.viewH - 334"
+          y: 316
+          width: "var.colW - 56"
+          height: "var.viewH - 362"
           moveY: "self.parent['左滑块'].getDragYRatio()"
         action:
           wheel: |-
@@ -375,14 +396,14 @@ controls:
             type: VStack
             val: 字段容器
             attribute:
-              width: "var.colW - 40"
-              spaceBetween: 8
+              width: "var.colW - 56"
+              spaceBetween: 12
             children:
               字段行:
                 type: Canvas
                 attribute:
-                  width: "var.colW - 40"
-                  height: 52
+                  width: "var.colW - 56"
+                  height: 72
                   entryKey: 0.round()
                   entry: "var.fieldRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -394,50 +415,50 @@ controls:
                       y: 2
                       width: "self.parent.width - 4"
                       height: "self.parent.height - 4"
-                      normal: ~26,22,44,215
+                      normal: ~28,31,30,240
                       shape: ~round_rect
                       radius: 8
                       through: true
                     effect:
                       stroke:
                         width: 1
-                        color: "self.parent.isHovered() ? '245,205,130,150' : '255,255,255,35'"
+                        color: "self.parent.isHovered() ? '208,149,73,220' : '94,91,77,125'"
                   标签:
                     type: Text
                     attribute:
                       point: ~middle_left
-                      x: 16
-                      texts: "'&7' + self.parent.entry['label']"
-                      fontSize: 32
-                      limit: 9
+                      x: 22
+                      texts: "'&f' + self.parent.entry['label']"
+                      fontSize: 36
+                      limit: 11
                       through: true
                   # ── TEXT/NUMBER：输入框，emptyText 显示当前值 ──
                   输入壳:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -14
-                      width: "var.colW - 300"
-                      height: 38
+                      x: -18
+                      width: "var.colW - 320"
+                      height: 48
                       visible: "self.parent.entry['editor'] == 'TEXT' || self.parent.entry['editor'] == 'NUMBER'"
                     children:
                       框底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~14,11,26,240
+                          normal: ~11,13,14,250
                           shape: ~round_rect
                           radius: 7
                           through: true
                       输入框:
                         type: TextBox
                         attribute:
-                          x: 10
-                          y: 5
-                          width: "var.colW - 320"
-                          height: 32
+                          x: 12
+                          y: 8
+                          width: "var.colW - 344"
+                          height: 34
                           length: 96
-                          fontSize: 32
+                          fontSize: 36
                           emptyText: "'&f' + self.parent.parent.entry['valueZh'] + ' &8(回车修改)'"
                         action:
                           enter: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.parent.entry['name'], self.getContent(), var.actionToken); self.setContent('')"
@@ -446,9 +467,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -14
-                      width: 110
-                      height: 36
+                      x: -18
+                      width: 130
+                      height: 48
                       visible: "self.parent.entry['editor'] == 'TOGGLE'"
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_set', var.objKey, self.parent.entry['name'], self.parent.entry['value'] == 'true' ? 'false' : 'true', var.actionToken)"
@@ -457,7 +478,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: "self.parent.entry['value'] == 'true' ? '70,160,100,235' : '70,62,90,235'"
+                          normal: "self.parent.parent.entry['value'] == 'true' ? '104,84,45,245' : '54,57,53,245'"
                           shape: ~round_rect
                           radius: 8
                           through: true
@@ -470,16 +491,16 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "self.parent.parent.entry['valueZh']"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                   # ── CYCLE：循环钮 ──
                   循环钮:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -14
-                      width: "var.colW - 300"
-                      height: 38
+                      x: -18
+                      width: "var.colW - 320"
+                      height: 48
                       visible: "self.parent.entry['editor'] == 'CYCLE'"
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_cycle', var.objKey, self.parent.entry['name'], var.actionToken)"
@@ -488,7 +509,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~14,11,26,240
+                          normal: ~11,13,14,250
                           shape: ~round_rect
                           radius: 7
                           through: true
@@ -502,7 +523,7 @@ controls:
                           point: ~middle_left
                           x: 12
                           texts: "'&e' + self.parent.parent.entry['valueZh'] + '  &8▸'"
-                          fontSize: 32
+                          fontSize: 36
                           limit: 24
                           through: true
                   # ── COORD/REGION：值 + 重标 ──
@@ -510,9 +531,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~middle_right
-                      x: -14
-                      width: "var.colW - 300"
-                      height: 38
+                      x: -18
+                      width: "var.colW - 320"
+                      height: 48
                       visible: "self.parent.entry['editor'] == 'COORD' || self.parent.entry['editor'] == 'REGION'"
                     action:
                       clickLeft: "Packet.send(var.packetId, 'design_remark', var.objKey, self.parent.entry['name'], var.actionToken)"
@@ -521,7 +542,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~14,11,26,240
+                          normal: ~11,13,14,250
                           shape: ~round_rect
                           radius: 7
                           through: true
@@ -534,47 +555,66 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 12
-                          texts: "'&b' + self.parent.parent.entry['value'] + '  &8[点我重标]'"
-                          fontSize: 32
+                          texts: "'&6' + self.parent.parent.entry['value'] + '  &7[重新标记]'"
+                          fontSize: 36
                           limit: 22
                           through: true
-      # ═══ 右栏：脚本·列表 ═══
+      # ═══ 右栏：事件脚本序列 ═══
       右栏底:
         type: Texture
         attribute:
           point: ~top_left
           x: "108 - var.offX + var.colW"
-          y: 100
+          y: 130
           width: "var.colW"
-          height: "var.viewH - 124"
-          normal: ~18,14,30,242
+          height: "var.viewH - 154"
+          normal: ~17,19,20,246
           shape: ~round_rect
           radius: 14
           through: true
         effect:
           stroke:
             width: 1
-            color: ~255,255,255,50
+            color: ~108,91,73,170
       右栏题:
         type: Text
         attribute:
           point: ~top_left
           x: "132 - var.offX + var.colW"
-          y: 118
-          texts: ~&8脚本 · 列表
+          y: 150
+          texts: ~&6II  /  事件序列
+          fontSize: 48
+          through: true
+      右栏说明:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "134 - var.offX + var.colW"
+          y: 204
+          texts: ~&7按顺序编排脚本行 · 点击「改」载入原行
           fontSize: 36
+          through: true
+      右滑轨:
+        type: Texture
+        attribute:
+          point: ~top_right
+          x: "-68 + var.offX"
+          y: 258
+          width: 8
+          height: "var.viewH - 304"
+          normal: ~44,46,42,245
           through: true
       右滑块:
         type: Texture
         val: 右滑块
         attribute:
           point: ~top_right
-          x: "-68 - var.offX"
-          y: 158
+          x: "-68 + var.offX"
+          y: 258
           width: 8
-          height: 80
-          normal: "186,140,232,255"
-          maxDragY: "var.viewH - 370"
+          height: 96
+          normal: ~194,139,65,255
+          maxDragY: "var.viewH - 400"
           shape: ~round_rect
           radius: 4
       右滚动:
@@ -582,9 +622,9 @@ controls:
         attribute:
           point: ~top_left
           x: "132 - var.offX + var.colW"
-          y: 152
-          width: "var.colW - 40"
-          height: "var.viewH - 270"
+          y: 252
+          width: "var.colW - 56"
+          height: "var.viewH - 298"
           moveY: "self.parent['右滑块'].getDragYRatio()"
         action:
           wheel: |-
@@ -599,14 +639,14 @@ controls:
             type: VStack
             val: 组容器
             attribute:
-              width: "var.colW - 40"
-              spaceBetween: 12
+              width: "var.colW - 56"
+              spaceBetween: 18
             children:
               组卡:
                 type: Canvas
                 attribute:
-                  width: "var.colW - 40"
-                  height: "self.entry['lineCount'] * 50 + 140"
+                  width: "var.colW - 56"
+                  height: "self.entry['lineCount'] * 62 + 172"
                   entryKey: 0.round()
                   entry: "var.groupRows[self.entryKey]"
                   visible: "self.entry != none"
@@ -615,7 +655,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~26,22,44,215
+                      normal: ~28,31,30,240
                       shape: ~round_rect
                       radius: 10
                       through: true
@@ -623,25 +663,25 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 16
-                      y: 12
-                      texts: "'&d' + self.parent.entry['label'] + ' &8· ' + self.parent.entry['lineCount'] + ' 行'"
-                      fontSize: 32
+                      x: 22
+                      y: 18
+                      texts: "'&6' + self.parent.entry['label'] + '  &7/  ' + self.parent.entry['lineCount'] + ' 行'"
+                      fontSize: 48
                       through: true
                   行容器:
                     type: VStack
                     attribute:
                       point: ~top_left
-                      x: 12
-                      y: 56
-                      width: "var.colW - 80"
-                      spaceBetween: 6
+                      x: 18
+                      y: 86
+                      width: "var.colW - 96"
+                      spaceBetween: 8
                     children:
                       行:
                         type: Canvas
                         attribute:
-                          width: "var.colW - 80"
-                          height: 44
+                          width: "var.colW - 96"
+                          height: 54
                           entryKey: 0.round()
                           entry: "self.parent.parent.entry['lines'][self.entryKey]"
                           visible: "self.entry != none"
@@ -653,7 +693,7 @@ controls:
                               y: 1
                               width: "self.parent.width - 2"
                               height: "self.parent.height - 2"
-                              normal: ~14,11,26,225
+                              normal: ~11,13,14,245
                               shape: ~round_rect
                               radius: 6
                               through: true
@@ -661,14 +701,22 @@ controls:
                               stroke:
                                 width: 1
                                 color: "self.parent.isHovered() ? '245,205,130,180' : '255,255,255,30'"
+                          行号:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 12
+                              texts: "'&6' + (self.parent.entryKey + 1).round()"
+                              fontSize: 36
+                              through: true
                           文:
                             type: Text
                             attribute:
                               point: ~middle_left
-                              x: 10
+                              x: 48
                               texts: "'&f' + self.parent.entry"
-                              fontSize: 32
-                              limit: 26
+                              fontSize: 36
+                              limit: 23
                               through: true
                           改钮:
                             type: Canvas
@@ -684,7 +732,7 @@ controls:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~60,72,110,235
+                                  normal: ~63,66,58,245
                                   shape: ~round_rect
                                   radius: 6
                                   through: true
@@ -693,7 +741,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   texts: ~改
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
                           删钮:
                             type: Canvas
@@ -709,7 +757,7 @@ controls:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: "200,80,88,225"
+                                  normal: ~128,49,38,245
                                   shape: ~round_rect
                                   radius: 6
                                   through: true
@@ -717,43 +765,43 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: ~✕
-                                  fontSize: 32
+                                  texts: ~删
+                                  fontSize: 36
                                   through: true
                   追加框:
                     type: Canvas
                     attribute:
                       point: ~bottom_left
-                      x: 12
-                      y: -12
-                      width: "var.colW - 80"
-                      height: 48
+                      x: 18
+                      y: -18
+                      width: "var.colW - 96"
+                      height: 52
                     children:
                       框:
                         type: Canvas
                         attribute:
                           point: ~middle_left
-                          width: "var.colW - 190"
-                          height: 44
+                          width: "var.colW - 214"
+                          height: 48
                         children:
                           底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: ~14,11,26,240
+                              normal: ~11,13,14,250
                               shape: ~round_rect
                               radius: 7
                               through: true
                           输入框:
                             type: TextBox
                             attribute:
-                              x: 10
-                              y: 6
-                              width: "var.colW - 210"
-                              height: 32
+                              x: 12
+                              y: 8
+                              width: "var.colW - 238"
+                              height: 34
                               length: 200
-                              fontSize: 32
-                              emptyText: ~&8追加新行·回车提交（点行「改」改为编辑该行）
+                              fontSize: 36
+                              emptyText: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? '&6编辑已载入行 · 回车替换' : '&7新行 · 回车追加'"
                             action:
                               enter: "var.editField == self.parent.parent.parent.entry['field'] && var.editI >= 0 ? Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.parent.parent.entry['field'], var.editI, self.getContent(), var.actionToken) : Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.parent.parent.entry['field'], self.getContent(), var.actionToken); var.editI = -1; var.editField = ''; self.setContent('')"
                       加钮:
@@ -761,7 +809,7 @@ controls:
                         attribute:
                           point: ~middle_right
                           width: 80
-                          height: 44
+                          height: 48
                         action:
                           clickLeft: "var.editField == self.parent.parent.entry['field'] && var.editI >= 0 ? Packet.send(var.packetId, 'design_line_set', var.objKey, self.parent.parent.entry['field'], var.editI, self.parent['框']['输入框'].getContent(), var.actionToken) : Packet.send(var.packetId, 'design_line_add', var.objKey, self.parent.parent.entry['field'], self.parent['框']['输入框'].getContent(), var.actionToken); var.editI = -1; var.editField = ''; self.parent['框']['输入框'].setContent('')"
                         children:
@@ -769,7 +817,7 @@ controls:
                             type: Texture
                             attribute:
                               point: ~stretch_all
-                              normal: "186,140,232,240"
+                              normal: ~192,139,68,245
                               shape: ~round_rect
                               radius: 7
                               through: true
@@ -783,10 +831,10 @@ controls:
       空组提示:
         type: Text
         attribute:
-          point: ~middle_center
-          x: "var.colW * 1.5 - 852"
-          y: 40
-          texts: ~&8此对象无脚本/列表字段
+          point: ~top_left
+          x: "156 - var.offX + var.colW"
+          y: 298
+          texts: ~&7此对象无需事件序列 · 在左侧完成参数校准
           fontSize: 36
           visible: "var.groupCount == 0"
           through: true

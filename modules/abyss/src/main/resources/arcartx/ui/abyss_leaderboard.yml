@@ -1,6 +1,5 @@
-﻿# AXS 资源说明
-# 用途: Abyss 地牢排行榜 —— 最佳通关时间榜（前 10）
-# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+# AXS 资源说明
+# 用途: Abyss 最佳通关时间档案（前十）。
 ui:
   isHud: false
   defaultOpen: false
@@ -11,8 +10,6 @@ ui:
   screenScale: true
   show: true
   packetHandler:
-    # packetHandler: init
-    # 包字段: packetId/action_token/dungeonName/boardRows{idx:{rank,name,time,completions}}
     init: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
@@ -44,286 +41,78 @@ ui:
       var.b7 = none
       var.b8 = none
       var.b9 = none
-      var.accent = '226,196,132,255'
-      var.accentDim = '150,128,90,180'
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
-  全屏磨砂:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      normal: ~Frosted:30;16,12,30,210
-      through: true
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~middle_center
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      排行面板:
+      全幅台面:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 620
-          height: 640
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
         children:
-          面板背景:
+          黑曜石幕:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;24,19,40,240
-              shape: ~round_rect
-              radius: 16
-            effect:
-              stroke:
-                width: 2
-                color: var.accentDim
-          标题标线:
+              normal: ~Frosted:22;11,14,16,250
+          装订红线:
             type: Texture
             attribute:
-              point: ~top_center
-              y: 26
-              width: 26
-              height: 3
-              normal: var.accent
+              x: 72
+              y: 72
+              width: 6
+              height: "var.viewH - 144"
+              normal: ~129,55,42,255
               through: true
-          标题:
+          档案眉:
             type: Text
             attribute:
-              point: ~top_center
-              y: 42
-              texts: "'&f排行榜  &7-  &f' + var.dungeonName"
-              fontSize: 54
-              through: true
-          表头底:
-            type: Texture
-            attribute:
-              x: 30
-              y: 112
-              width: 560
-              height: 42
-              normal: ~82,64,32,220
-              shape: ~round_rect
-              radius: 8
-              through: true
-          表头:
-            type: Text
-            attribute:
-              x: 48
-              y: 120
-              texts: ~&f名次        玩家                    最佳时间        通关次数
+              x: 110
+              y: 64
+              texts: ~&6ABYSS / EXPEDITION ARCHIVE                                      RECORD  /  01—10
               fontSize: 36
               through: true
-          行底0:
-            type: Texture
-            attribute:
-              x: 30
-              y: 160
-              width: 560
-              height: 44
-              normal: "var.b0 != none ? '82,64,32,170' : '38,30,58,160'"
-              shape: ~round_rect
-              radius: 6
-              visible: var.b0 != none
-              through: true
-          行0:
+          主标题:
             type: Text
             attribute:
-              x: 48
-              y: 168
-              texts: "var.b0 != none ? '&6#1    &f' + var.b0['name'] + '    &e' + var.b0['time'] + '    &7' + var.b0['completions'].round() + '次' : ''"
-              fontSize: 36
+              x: 106
+              y: 118
+              texts: ~&f通关纪录
+              fontSize: 81
               through: true
-          行底1:
-            type: Texture
-            attribute:
-              x: 30
-              y: 206
-              width: 560
-              height: 44
-              normal: "var.b1 != none ? '64,64,72,170' : '30,24,48,160'"
-              shape: ~round_rect
-              radius: 6
-              visible: var.b1 != none
-              through: true
-          行1:
+          副标题:
             type: Text
             attribute:
-              x: 48
-              y: 214
-              texts: "var.b1 != none ? '&7#2    &f' + var.b1['name'] + '    &e' + var.b1['time'] + '    &7' + var.b1['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底2:
-            type: Texture
-            attribute:
-              x: 30
-              y: 252
-              width: 560
-              height: 44
-              normal: "var.b2 != none ? '74,52,36,170' : '38,30,58,160'"
-              shape: ~round_rect
-              radius: 6
-              visible: var.b2 != none
-              through: true
-          行2:
-            type: Text
-            attribute:
-              x: 48
-              y: 260
-              texts: "var.b2 != none ? '&8#3    &f' + var.b2['name'] + '    &e' + var.b2['time'] + '    &7' + var.b2['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底3:
-            type: Texture
-            attribute:
-              x: 30
-              y: 298
-              width: 560
-              height: 44
-              normal: ~30,24,48,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b3 != none
-              through: true
-          行3:
-            type: Text
-            attribute:
-              x: 48
-              y: 306
-              texts: "var.b3 != none ? '&f#4    &f' + var.b3['name'] + '    &e' + var.b3['time'] + '    &7' + var.b3['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底4:
-            type: Texture
-            attribute:
-              x: 30
-              y: 344
-              width: 560
-              height: 44
-              normal: ~38,30,58,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b4 != none
-              through: true
-          行4:
-            type: Text
-            attribute:
-              x: 48
-              y: 352
-              texts: "var.b4 != none ? '&f#5    &f' + var.b4['name'] + '    &e' + var.b4['time'] + '    &7' + var.b4['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底5:
-            type: Texture
-            attribute:
-              x: 30
-              y: 390
-              width: 560
-              height: 44
-              normal: ~30,24,48,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b5 != none
-              through: true
-          行5:
-            type: Text
-            attribute:
-              x: 48
-              y: 398
-              texts: "var.b5 != none ? '&f#6    &f' + var.b5['name'] + '    &e' + var.b5['time'] + '    &7' + var.b5['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底6:
-            type: Texture
-            attribute:
-              x: 30
-              y: 436
-              width: 560
-              height: 44
-              normal: ~38,30,58,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b6 != none
-              through: true
-          行6:
-            type: Text
-            attribute:
-              x: 48
-              y: 444
-              texts: "var.b6 != none ? '&f#7    &f' + var.b6['name'] + '    &e' + var.b6['time'] + '    &7' + var.b6['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底7:
-            type: Texture
-            attribute:
-              x: 30
-              y: 482
-              width: 560
-              height: 44
-              normal: ~30,24,48,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b7 != none
-              through: true
-          行7:
-            type: Text
-            attribute:
-              x: 48
-              y: 490
-              texts: "var.b7 != none ? '&f#8    &f' + var.b7['name'] + '    &e' + var.b7['time'] + '    &7' + var.b7['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底8:
-            type: Texture
-            attribute:
-              x: 30
-              y: 528
-              width: 560
-              height: 44
-              normal: ~38,30,58,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b8 != none
-              through: true
-          行8:
-            type: Text
-            attribute:
-              x: 48
-              y: 536
-              texts: "var.b8 != none ? '&f#9    &f' + var.b8['name'] + '    &e' + var.b8['time'] + '    &7' + var.b8['completions'].round() + '次' : ''"
-              fontSize: 36
-              through: true
-          行底9:
-            type: Texture
-            attribute:
-              x: 30
-              y: 574
-              width: 560
-              height: 44
-              normal: ~30,24,48,160
-              shape: ~round_rect
-              radius: 6
-              visible: var.b9 != none
-              through: true
-          行9:
-            type: Text
-            attribute:
-              x: 48
-              y: 582
-              texts: "var.b9 != none ? '&f#10   &f' + var.b9['name'] + '    &e' + var.b9['time'] + '    &7' + var.b9['completions'].round() + '次' : ''"
-              fontSize: 36
+              x: 110
+              y: 207
+              texts: "'&7目标地点  /  &6' + var.dungeonName"
+              fontSize: 48
+              limit: 32
               through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -18
-              y: 18
-              width: 36
-              height: 36
+              x: -72
+              y: 70
+              width: 124
+              height: 48
             action:
               clickLeft: "Screen.close()"
             children:
@@ -331,14 +120,561 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~150,58,58,235
-                  hover: ~190,75,75,245
-                  shape: ~circle
+                  normal: ~63,35,32,255
+                  hover: ~133,56,42,255
                   through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~174,85,60,255
               关闭字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f✕
+                  texts: ~&f关闭档案
                   fontSize: 36
                   through: true
+          冠军板:
+            type: Canvas
+            attribute:
+              x: 110
+              y: 310
+              width: 550
+              height: 230
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~37,32,27,255
+                  through: true
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~212,157,70,255
+              冠军侧条:
+                type: Texture
+                attribute:
+                  width: 8
+                  height: 230
+                  normal: ~224,165,71,255
+                  through: true
+              徽标:
+                type: Text
+                attribute:
+                  x: 26
+                  y: 18
+                  texts: ~&6I  /  最快记录
+                  fontSize: 48
+                  through: true
+              玩家:
+                type: Text
+                attribute:
+                  x: 26
+                  y: 83
+                  texts: "var.b0 != none ? '&f' + var.b0['name'] : '&8尚无纪录'"
+                  fontSize: 72
+                  limit: 16
+                  through: true
+              时间:
+                type: Text
+                attribute:
+                  x: 26
+                  y: 172
+                  texts: "var.b0 != none ? '&6' + var.b0['time'] + '  &7/  完成 ' + var.b0['completions'].round() + ' 次' : '&7等待首位探险者'"
+                  fontSize: 36
+                  through: true
+          亚军板:
+            type: Canvas
+            attribute:
+              x: 680
+              y: 310
+              width: 520
+              height: 230
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~28,32,33,255
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~118,129,130,255
+              徽标:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 18
+                  texts: ~&7II  /  次席
+                  fontSize: 48
+                  through: true
+              玩家:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 83
+                  texts: "var.b1 != none ? '&f' + var.b1['name'] : '&8暂无纪录'"
+                  fontSize: 64
+                  limit: 16
+                  through: true
+              时间:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 172
+                  texts: "var.b1 != none ? '&7' + var.b1['time'] + '  /  完成 ' + var.b1['completions'].round() + ' 次' : '&8—'"
+                  fontSize: 36
+                  through: true
+          季军板:
+            type: Canvas
+            attribute:
+              x: 1220
+              y: 310
+              width: "var.viewW - 1330"
+              height: 230
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~38,29,25,255
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~151,92,60,255
+              徽标:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 18
+                  texts: ~&6III  /  第三席
+                  fontSize: 48
+                  through: true
+              玩家:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 83
+                  texts: "var.b2 != none ? '&f' + var.b2['name'] : '&8暂无纪录'"
+                  fontSize: 64
+                  limit: 16
+                  through: true
+              时间:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 172
+                  texts: "var.b2 != none ? '&6' + var.b2['time'] + '  /  完成 ' + var.b2['completions'].round() + ' 次' : '&8—'"
+                  fontSize: 36
+                  through: true
+          后续标题:
+            type: Text
+            attribute:
+              x: 110
+              y: 573
+              texts: ~&6档案索引  /  其余席位
+              fontSize: 48
+              through: true
+          栏头:
+            type: Canvas
+            attribute:
+              x: 110
+              y: 625
+              width: "var.viewW - 220"
+              height: 48
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~79,52,35,255
+                  through: true
+              位次:
+                type: Text
+                attribute:
+                  x: 22
+                  y: 5
+                  texts: ~&6序号
+                  fontSize: 36
+                  through: true
+              人员:
+                type: Text
+                attribute:
+                  x: 170
+                  y: 5
+                  texts: ~&6探险者
+                  fontSize: 36
+                  through: true
+              最速:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -390
+                  y: 5
+                  texts: ~&6最佳时间
+                  fontSize: 36
+                  through: true
+              次数:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -88
+                  y: 5
+                  texts: ~&6完成次数
+                  fontSize: 36
+                  through: true
+          后续列表:
+            type: VStack
+            attribute:
+              x: 110
+              y: 679
+              width: "var.viewW - 220"
+              spaceBetween: 5
+            children:
+              第四席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b3 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~27,31,32,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 04
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b3['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b3['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b3['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第五席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b4 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~35,35,34,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 05
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b4['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b4['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b4['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第六席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b5 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~27,31,32,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 06
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b5['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b5['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b5['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第七席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b6 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~35,35,34,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 07
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b6['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b6['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b6['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第八席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b7 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~27,31,32,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 08
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b7['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b7['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b7['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第九席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b8 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~35,35,34,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 09
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b8['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b8['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b8['completions'].round()"
+                      fontSize: 36
+                      through: true
+              第十席:
+                type: Canvas
+                attribute:
+                  width: "var.viewW - 220"
+                  height: 43
+                  visible: var.b9 != none
+                children:
+                  底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~27,31,32,255
+                      through: true
+                  位次:
+                    type: Text
+                    attribute:
+                      x: 22
+                      y: 4
+                      texts: ~&6 10
+                      fontSize: 36
+                      through: true
+                  玩家:
+                    type: Text
+                    attribute:
+                      x: 170
+                      y: 4
+                      texts: "'&f' + var.b9['name']"
+                      fontSize: 36
+                      limit: 20
+                      through: true
+                  时间:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -390
+                      y: 4
+                      texts: "'&e' + var.b9['time']"
+                      fontSize: 36
+                      through: true
+                  次数:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -88
+                      y: 4
+                      texts: "'&7' + var.b9['completions'].round()"
+                      fontSize: 36
+                      through: true
+          脚注:
+            type: Text
+            attribute:
+              x: 110
+              y: "var.viewH - 48"
+              texts: ~&8记录按最佳通关时间排序  /  未上榜的席位保持空白
+              fontSize: 36
+              through: true

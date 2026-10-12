@@ -1,8 +1,8 @@
 # AXS 资源说明
-# 用途: Regions 玩家区域查看菜单，支持当前区域/我的区域/区域详情。
-# 前置依赖: ArcartX；Regions 模块启用后自动注册。
+# 用途: Regions 玩家测绘板：当前位置、权属登记、两点选区与区域详情。
 # 打开方式: /axs regions menu
-# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_REGIONS_MENU', ...) 发送操作指令。
+# 协议: AXS_REGIONS_MENU；页面与区域选择由服务端控制。
+# 设计: 玩家端野外测绘记录；奶油纸底、网格绿测量线、地籍红权属印记。
 
 ui:
   background: true
@@ -11,37 +11,30 @@ ui:
   show: true
   through: false
   screenScale: true
+  action:
+    load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.boardW = var.viewW - 436
+      var.currentFlagRowRefs = {}
+      var.claimRowRefs = {}
+      var.ownerRowRefs = {}
+      var.memberRowRefs = {}
+      var.detailFlagRowRefs = {}
+      var.rowGeneration = 0
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.boardW = var.viewW - 436
   packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - page: 当前页面 (current/my/detail)
-    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
-    #   - currentRegion: 当前所在区域名称
-    #   - currentWorld: 当前世界名称
-    #   - currentPriority: 当前区域优先级
-    #   - currentOwners: 当前区域所有者列表
-    #   - currentMembers: 当前区域成员列表
-    #   - currentFlags: 当前区域标志列表
-    #   - myRegions: 玩家拥有的区域列表
-    #   - myRegionCount: 玩家拥有的区域数量
-    #   - selWorld: 选区所在世界
-    #   - pos1Set: 选区点1是否设置 (true/false)
-    #   - pos2Set: 选区点2是否设置 (true/false)
-    #   - pos1: 选区点1坐标文本
-    #   - pos2: 选区点2坐标文本
-    #   - selComplete: 选区是否完成 (true/false)
-    #   - selVolume: 选区体积
-    #   - maxVolume: 最大选区体积
-    #   - regionId: 详情查看的区域 ID
-    #   - regionWorld: 详情区域所在世界
-    #   - regionPriority: 详情区域优先级
-    #   - regionMin: 详情区域最小坐标
-    #   - regionMax: 详情区域最大坐标
-    #   - regionVolume: 详情区域体积 (方块数)
-    #   - regionParent: 详情区域父区域
-    #   - flags: 详情区域标志列表
-    #   - owners: 详情区域所有者列表
-    #   - members: 详情区域成员列表
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']
@@ -103,228 +96,275 @@ ui:
           var.detailFlagList.add(var.flags[key])
         }
       }
+      // 行数随档案变化；保存 copy 返回值，数量不变时复用，避免固定池截断。
+      var.rowGeneration = (var.rowGeneration + 1).round()
+      count = var.curFlagList.length > 0 ? var.curFlagList.length : 1
+      if(val.cur_flag_data.childrenCount() != count){
+        for(key in var.currentFlagRowRefs.keys()){
+          var.currentFlagRowRefs[key].remove()
+        }
+        var.currentFlagRowRefs = {}
+        template = val.cur_flag_data.get(0)
+        for(i in range(1, count - 1)){
+          row = template.copy('标志行_' + var.rowGeneration + '_' + i.round())
+          row.entryKey = i.round()
+          var.currentFlagRowRefs[i.round()] = row
+        }
+      }
+      count = var.myRegionList.length > 0 ? var.myRegionList.length : 1
+      if(val.my_region_data.childrenCount() != count){
+        for(key in var.claimRowRefs.keys()){
+          var.claimRowRefs[key].remove()
+        }
+        var.claimRowRefs = {}
+        template = val.my_region_data.get(0)
+        for(i in range(1, count - 1)){
+          row = template.copy('我的区域行_' + var.rowGeneration + '_' + i.round())
+          row.entryKey = i.round()
+          var.claimRowRefs[i.round()] = row
+        }
+      }
+      count = var.ownerList.length > 0 ? var.ownerList.length : 1
+      if(val.owner_data.childrenCount() != count){
+        for(key in var.ownerRowRefs.keys()){
+          var.ownerRowRefs[key].remove()
+        }
+        var.ownerRowRefs = {}
+        template = val.owner_data.get(0)
+        for(i in range(1, count - 1)){
+          row = template.copy('所有者项目_' + var.rowGeneration + '_' + i.round())
+          row.entryKey = i.round()
+          var.ownerRowRefs[i.round()] = row
+        }
+      }
+      count = var.memberList.length > 0 ? var.memberList.length : 1
+      if(val.member_data.childrenCount() != count){
+        for(key in var.memberRowRefs.keys()){
+          var.memberRowRefs[key].remove()
+        }
+        var.memberRowRefs = {}
+        template = val.member_data.get(0)
+        for(i in range(1, count - 1)){
+          row = template.copy('成员项目_' + var.rowGeneration + '_' + i.round())
+          row.entryKey = i.round()
+          var.memberRowRefs[i.round()] = row
+        }
+      }
+      count = var.detailFlagList.length > 0 ? var.detailFlagList.length : 1
+      if(val.detail_flag_data.childrenCount() != count){
+        for(key in var.detailFlagRowRefs.keys()){
+          var.detailFlagRowRefs[key].remove()
+        }
+        var.detailFlagRowRefs = {}
+        template = val.detail_flag_data.get(0)
+        for(i in range(1, count - 1)){
+          row = template.copy('详情标志行_' + var.rowGeneration + '_' + i.round())
+          row.entryKey = i.round()
+          var.detailFlagRowRefs[i.round()] = row
+        }
+      }
 
 controls:
+  测绘纸底:
+    type: Texture
+    attribute: {point: ~stretch_all, normal: "~235,232,217,255"}
   自适应全局布局:
     type: Adaptive
-    attribute:
-      point: ~middle_center
-      width: 1920
-      height: 1080
+    attribute: {point: ~top_center, width: 1920, height: 1080}
     children:
       主面板:
-        type: Texture
-        attribute:
-          point: ~middle_center
-          width: 860
-          height: 580
-          normal: ~25,25,30,240
-          shape: ~round_rect
-          radius: 14
-        effect:
-          stroke:
-            width: 2
-            color: ~80,200,140,180
-          shadow:
-            xOffset: 0
-            yOffset: 4
-            blur: 12
-            color: ~0,0,0,100
+        type: Canvas
+        attribute: {x: "-var.offX", y: 0, width: "var.viewW", height: "var.viewH"}
         children:
-          # ═══ 标题栏 ═══
           标题栏:
-            type: Texture
-            attribute:
-              x: 0
-              y: 0
-              width: 860
-              height: 56
-              normal: ~30,40,35,255
-              shape: ~round_rect
-              radius: 14
+            type: Canvas
+            attribute: {x: 48, y: 28, width: "var.viewW - 96", height: 100}
             children:
+              标题色标:
+                type: Texture
+                attribute: {x: 0, y: 8, width: 8, height: 84, normal: "~86,111,95,255", through: true}
               标题文字:
                 type: Text
-                attribute:
-                  x: 24
-                  y: 8
-                  fontSize: 38
-                  texts: "~&a区域信息"
-
-          # ═══ 左侧导航 ═══
-          导航栏:
+                attribute: {x: 28, y: 0, fontSize: 72, texts: "~&0领地测绘手册", through: true}
+              标题索引:
+                type: Text
+                attribute: {x: 30, y: 64, fontSize: 36, texts: "~&8FIELD SURVEY / REGIONS   ·   当前位置、权属与两点测量", through: true}
+              玩家页标记:
+                type: Text
+                attribute: {point: ~top_right, x: -228, y: 16, fontSize: 36, texts: "var.page == 'selection' ? '&2测量中 / FIELD' : '&2权属查询 / FIELD'", through: true}
+              关闭按钮:
+                type: Canvas
+                attribute: {point: ~top_right, x: 0, y: 10, width: 180, height: 60}
+                action:
+                  click: Screen.close()
+                children:
+                  关闭底:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: "~220,223,205,255", hover: "~208,215,194,255", through: true}
+                  关闭字:
+                    type: Text
+                    attribute: {point: ~middle_center, fontSize: 36, texts: "~&0关闭 / ESC", through: true}
+          标题基线:
             type: Texture
-            attribute:
-              x: 0
-              y: 56
-              width: 150
-              height: 524
-              normal: ~30,30,38,255
+            attribute: {x: 48, y: 134, width: "var.viewW - 96", height: 2, normal: "~86,111,95,255", through: true}
+          导航栏:
+            type: Canvas
+            attribute: {x: 48, y: 152, width: 268, height: "var.viewH - 188"}
             children:
+              导航纸底:
+                type: Texture
+                attribute: {point: ~stretch_all, normal: "~223,227,209,255", through: true}
+              导航册脊:
+                type: Texture
+                attribute: {x: 0, y: 0, width: 6, height: "var.viewH - 188", normal: "~86,111,95,255", through: true}
+              导航索引:
+                type: Text
+                attribute: {x: 18, y: 20, fontSize: 36, texts: "~&2B / 野外笔记", through: true}
               导航当前区域入口:
                 type: Canvas
-                attribute:
-                  x: 10
-                  y: 16
-                  width: 130
-                  height: 40
+                attribute: {x: 18, y: 76, width: 232, height: 72}
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'current')
                 children:
                   导航当前区域背景:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'current' ? '40,160,100,200' : (self.isHovered() ? '60,70,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
+                    attribute: {point: ~stretch_all, normal: "var.page == 'current' ? '52,80,64,255' : '238,240,224,255'", hover: "var.page == 'current' ? '70,104,80,255' : '198,214,190,255'", through: true}
                   导航当前区域文字:
                     type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 130
-                      through: true
-                      fontSize: 28
-                      texts: "~&f当前"
-
+                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "var.page == 'current' ? '&f01  当前位置' : '&001  当前位置'", through: true}
               导航我的区域入口:
                 type: Canvas
-                attribute:
-                  x: 10
-                  y: 66
-                  width: 130
-                  height: 40
+                attribute: {x: 18, y: 162, width: 232, height: 72}
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'my')
                 children:
                   导航我的区域背景:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'my' || var.page == 'detail' ? '40,160,100,200' : (self.isHovered() ? '60,70,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
+                    attribute: {point: ~stretch_all, normal: "(var.page == 'my' || var.page == 'detail') ? '52,80,64,255' : '238,240,224,255'", hover: "(var.page == 'my' || var.page == 'detail') ? '70,104,80,255' : '198,214,190,255'", through: true}
                   导航我的区域文字:
                     type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 130
-                      through: true
-                      fontSize: 28
-                      texts: "~&f我的"
-
+                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "(var.page == 'my' || var.page == 'detail') ? '&f02  我的领地' : '&002  我的领地'", through: true}
               导航选区入口:
                 type: Canvas
-                attribute:
-                  x: 10
-                  y: 116
-                  width: 130
-                  height: 40
+                attribute: {x: 18, y: 248, width: 232, height: 72}
                 action:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'selection')
                 children:
                   导航选区背景:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.page == 'selection' ? '40,160,100,200' : (self.isHovered() ? '60,70,80,210' : '45,45,55,180')"
-                      shape: ~round_rect
-                      radius: 8
+                    attribute: {point: ~stretch_all, normal: "var.page == 'selection' ? '52,80,64,255' : '238,240,224,255'", hover: "var.page == 'selection' ? '70,104,80,255' : '198,214,190,255'", through: true}
                   导航选区文字:
                     type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 130
-                      through: true
-                      fontSize: 28
-                      texts: "~&f选区"
-
-          # ═══ 内容区 ═══
+                    attribute: {point: ~middle_left, x: 16, fontSize: 36, texts: "var.page == 'selection' ? '&f03  两点测量' : '&003  两点测量'", through: true}
+              目录说明:
+                type: Text
+                attribute:
+                  x: 18
+                  y: 362
+                  fontSize: 36
+                  texts: ["~&2查询顺序 / 01—03", "~&0确认当前位置", "~&0翻阅权属档案", "~&0记录两点测量"]
+                  through: true
+              导航分线:
+                type: Texture
+                attribute: {x: 18, y: 530, width: 232, height: 2, normal: "~151,169,142,255", through: true}
+              坐标图例:
+                type: Text
+                attribute:
+                  x: 18
+                  y: 554
+                  fontSize: 36
+                  texts: ["~&4P1 / 左键起点", "~&2P2 / 右键终点", "~&8坐标顺序 X · Y · Z", "~&8使用木斧选点"]
+                  through: true
+              玩家标记:
+                type: Text
+                attribute: {point: ~bottom_left, x: 18, y: -22, fontSize: 36, texts: "~&8FIELD NOTES / 查询", through: true}
           内容区:
-            type: Texture
-            attribute:
-              x: 150
-              y: 56
-              width: 710
-              height: 524
-              normal: ~20,20,25,100
+            type: Canvas
+            attribute: {x: 340, y: 152, width: "var.viewW - 388", height: "var.viewH - 188"}
             children:
-              # ─── 当前区域 ───
+              内容纸底:
+                type: Texture
+                attribute: {point: ~stretch_all, normal: "~247,244,232,255", through: true}
+              纸张左刻度:
+                type: Texture
+                attribute: {x: 12, y: 24, width: 2, height: "var.viewH - 236", normal: "~204,211,192,255", through: true}
+              纸张右刻度:
+                type: Texture
+                attribute: {point: ~top_right, x: -12, y: 24, width: 2, height: "var.viewH - 236", normal: "~204,211,192,255", through: true}
               当前区域布局:
                 type: Canvas
-                attribute:
-                  x: 20
-                  y: 16
-                  width: 670
-                  height: 490
-                  visible: "var.page == 'current'"
+                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'current'"}
                 children:
                   当前区域标题:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 0
-                      fontSize: 36
-                      texts: "~&a当前所在区域"
-                  当前区域名称文字:
+                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&0当前位置 / 区域快照", through: true}
+                  当前卷号:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 50
-                      fontSize: 28
-                      texts: "~&7区域: {var.currentRegion != none ? '&f' + var.currentRegion : '&8无 (荒野)'}"
-                  当前区域世界文字:
+                    attribute: {point: ~top_right, x: -16, y: 8, fontSize: 36, texts: "~&2B—01  /  现场查询", through: true}
+                  当前说明:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 86
-                      fontSize: 28
-                      texts: "~&7世界: &f{var.currentWorld}"
-                  当前区域优先级文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 122
-                      fontSize: 28
-                      texts: "~&7优先级: &f{var.currentPriority}"
-                  当前区域成员文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 158
-                      fontSize: 28
-                      texts: "~&7所有者: &b{var.currentOwners}  &7成员: &b{var.currentMembers}"
+                    attribute: {x: 0, y: 54, fontSize: 36, texts: "~&8当前位置的有效保护宗地  /  有重叠时显示最高优先级；规则只显示已设置项。", through: true}
+                  当前分规:
+                    type: Texture
+                    attribute: {x: 0, y: 98, width: "var.boardW", height: 2, normal: "~189,202,179,255", through: true}
+                  当前地块卡:
+                    type: Canvas
+                    attribute: {x: 0, y: 112, width: 450, height: "var.viewH - 388"}
+                    children:
+                      当前卡底:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~224,232,211,255", through: true}
+                      当前卡左刻度:
+                        type: Texture
+                        attribute: {x: 0, y: 0, width: 5, height: "var.viewH - 388", normal: "~86,111,95,255", through: true}
+                      当前卡红线:
+                        type: Texture
+                        attribute: {x: 24, y: 24, width: 54, height: 4, normal: "~153,66,54,255", through: true}
+                      当前卡编号:
+                        type: Text
+                        attribute: {x: 24, y: 44, fontSize: 36, texts: "~&2有效宗地 / PARCEL", through: true}
+                      当前区域名称文字:
+                        type: Text
+                        attribute: {x: 24, y: 88, fontSize: 54, texts: "(var.currentRegion != none && var.currentRegion != '') ? '&0' + var.currentRegion : '&8荒野 / 无区域'", limit: 402, through: true}
+                      当前区域世界文字:
+                        type: Text
+                        attribute: {x: 24, y: 174, fontSize: 36, texts: "~&8世界 / &0{var.currentWorld}", limit: 402, through: true}
+                      当前区域优先级文字:
+                        type: Text
+                        attribute: {x: 24, y: 224, fontSize: 36, texts: "~&8优先级 / &0{var.currentPriority}", through: true}
+                      当前权属分线:
+                        type: Texture
+                        attribute: {x: 24, y: 284, width: 402, height: 2, normal: "~151,169,142,255", through: true}
+                      当前区域成员文字:
+                        type: Text
+                        attribute: {x: 24, y: 312, fontSize: 36, texts: "~&8所有者 &0{var.currentOwners} 人   &8成员 &0{var.currentMembers} 人", limit: 402, through: true}
+                      当前卡提示:
+                        type: Text
+                        attribute:
+                          x: 24
+                          y: 392
+                          fontSize: 36
+                          texts: ["~&8当前位置没有边界坐标？", "~&8打开「我的领地」选择区域", "~&8即可查看完整边界与权属。"]
+                          through: true
+                      荒野说明:
+                        type: Text
+                        attribute: {x: 24, y: 540, fontSize: 36, texts: "~&8此处没有已登记区域。", visible: "var.currentRegion == ''", through: true}
                   当前标志文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 210
-                      fontSize: 30
-                      texts: "~&e标志:"
+                    attribute: {x: 480, y: 112, fontSize: 48, texts: "~&0区域规则   &8{var.curFlagList.length.round()} 项 / 只读", through: true}
+                  当前标志滑轨:
+                    type: Texture
+                    attribute: {x: "var.boardW - 12", y: 172, width: 12, height: "var.viewH - 448", normal: "~213,222,202,255", through: true}
                   当前标志滑块:
                     type: Texture
                     val: 当前标志滑块
-                    attribute:
-                      x: 664
-                      y: 246
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 190
+                    attribute: {x: "var.boardW - 12", y: 172, width: 12, height: 88, maxDragY: "var.viewH - 536", normal: "~86,111,95,255", hover: "~153,66,54,255"}
                   当前标志滚动栏:
                     type: Scroll
-                    attribute:
-                      x: 0
-                      y: 246
-                      width: 670
-                      height: 240
-                      moveY: "self.parent['当前标志滑块'].getDragYRatio()"
+                    attribute: {x: 480, y: 172, width: "var.boardW - 508", height: "var.viewH - 448", moveY: "self.parent['当前标志滑块'].getDragYRatio()"}
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -337,90 +377,77 @@ controls:
                       cur_flags_list:
                         val: cur_flag_data
                         type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 670
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 40)){
-                              row = self['标志行'].copy('标志行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                        attribute: {width: "var.boardW - 508", spaceBetween: 8}
                         children:
                           标志行:
-                            type: Texture
-                            attribute:
-                              entryKey: 0.round()
-                              entry: "var.curFlagList != null ? var.curFlagList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 650
-                              height: 36
-                              normal: ~38,38,48,160
-                              shape: ~round_rect
-                              radius: 4
+                            type: Canvas
+                            attribute: {entryKey: 0.round(), entry: "var.curFlagList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 508", height: 110}
                             children:
+                              标志行底:
+                                type: Texture
+                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
+                              标志状态线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~177,183,168,255", through: true}
+                              标志允许线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~86,111,95,255", visible: "self.parent.entry['state'] == 'allow'", through: true}
+                              标志拒绝线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~153,66,54,255", visible: "self.parent.entry['state'] == 'deny'", through: true}
                               标志名称文字:
                                 type: Text
-                                attribute:
-                                  x: 12
-                                  y: 6
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&b{self.parent.entry['name']}"
+                                attribute: {x: 18, y: 14, fontSize: 36, texts: "~&0{self.parent.entry['name']}", limit: "self.parent.width - 160", through: true}
                               标志描述文字:
                                 type: Text
-                                attribute:
-                                  x: 200
-                                  y: 7
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['desc']}"
+                                attribute: {x: 18, y: 60, fontSize: 36, texts: "~&8{self.parent.entry['desc']}", limit: "self.parent.width - 160", through: true}
                               标志状态文字:
                                 type: Text
-                                attribute:
-                                  x: 560
-                                  y: 7
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
-
-              # ─── 我的区域列表 ───
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&8未设置", visible: "self.parent.entry['state'] != 'allow' && self.parent.entry['state'] != 'deny'", through: true}
+                              标志允许状态:
+                                type: Text
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&2允许", visible: "self.parent.entry['state'] == 'allow'", through: true}
+                              标志拒绝状态:
+                                type: Text
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&4拒绝", visible: "self.parent.entry['state'] == 'deny'", through: true}
+                  当前规则空状态:
+                    type: Text
+                    attribute: {x: 504, y: 218, fontSize: 36, texts: "~&8没有已设置的区域标志；这不等于全部允许。", visible: "var.curFlagList.length == 0", through: true}
+                  当前页脚:
+                    type: Text
+                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&2允许   &4拒绝   &8未设置 / 以服务端保护判定为准   |   滚轮或拖动滑条", through: true}
               我的区域布局:
                 type: Canvas
-                attribute:
-                  x: 20
-                  y: 16
-                  width: 670
-                  height: 490
-                  visible: "var.page == 'my'"
+                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'my'"}
                 children:
                   我的区域标题:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 0
-                      fontSize: 36
-                      texts: "~&a我的区域 &7({var.myRegionCount})"
+                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&0我的领地 / 权属登记", through: true}
+                  权属卷号:
+                    type: Text
+                    attribute: {point: ~top_right, x: -16, y: 8, fontSize: 36, texts: "~&2B—02  /  {var.myRegionCount} 宗权属", through: true}
+                  我的区域说明:
+                    type: Text
+                    attribute: {x: 0, y: 56, fontSize: 36, texts: "~&8你的区域索引  /  红标代表所有者，绿标代表成员；点击宗地可核对界址。", through: true}
+                  权属表头底:
+                    type: Texture
+                    attribute: {x: 0, y: 116, width: "var.boardW - 28", height: 44, normal: "~219,225,205,255", through: true}
+                  权属表头:
+                    type: Text
+                    attribute: {x: 20, y: 124, fontSize: 36, texts: "~&8区域编号 / 所在世界", through: true}
+                  身份表头:
+                    type: Text
+                    attribute: {x: "var.boardW - 330", y: 124, fontSize: 36, texts: "~&8你的身份 / 查看", through: true}
+                  我的区域滑轨:
+                    type: Texture
+                    attribute: {x: "var.boardW - 12", y: 176, width: 12, height: "var.viewH - 452", normal: "~213,222,202,255", through: true}
                   我的区域滑块:
                     type: Texture
                     val: 我的区域滑块
-                    attribute:
-                      x: 664
-                      y: 50
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 380
+                    attribute: {x: "var.boardW - 12", y: 176, width: 12, height: 88, maxDragY: "var.viewH - 540", normal: "~86,111,95,255", hover: "~153,66,54,255"}
                   我的区域滚动栏:
                     type: Scroll
-                    attribute:
-                      x: 0
-                      y: 50
-                      width: 670
-                      height: 430
-                      moveY: "self.parent['我的区域滑块'].getDragYRatio()"
+                    attribute: {x: 0, y: 176, width: "var.boardW - 28", height: "var.viewH - 452", moveY: "self.parent['我的区域滑块'].getDragYRatio()"}
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -433,228 +460,241 @@ controls:
                       my_list:
                         val: my_region_data
                         type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 670
-                          spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(1, 40)){
-                              row = self['我的区域行'].copy('我的区域行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                        attribute: {width: "var.boardW - 28", spaceBetween: 12}
                         children:
                           我的区域行:
-                            type: Texture
-                            attribute:
-                              entryKey: 0.round()
-                              entry: "var.myRegionList != null ? var.myRegionList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 650
-                              height: 50
-                              normal: "self.isHovered() ? '55,55,68,210' : '40,40,50,180'"
-                              shape: ~round_rect
-                              radius: 6
+                            type: Canvas
+                            attribute: {entryKey: 0.round(), entry: "var.myRegionList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 28", height: 114}
                             action:
                               click: |-
                                 Packet.send(var.packetId, 'select_region', self.entry['id'])
                             children:
+                              我的区域行底:
+                                type: Texture
+                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", hover: "~216,228,202,255", through: true}
+                              权属标记:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 114, normal: "self.parent.entry['isOwner'] == 'true' ? '153,66,54,255' : '86,111,95,255'", through: true}
                               我的区域编号文字:
                                 type: Text
-                                attribute:
-                                  x: 16
-                                  y: 12
-                                  through: true
-                                  fontSize: 28
-                                  texts: "~&f{self.parent.entry['id']}"
+                                attribute: {x: 24, y: 18, fontSize: 48, texts: "~&0{self.parent.entry['id']}", limit: "self.parent.width - 380", through: true}
                               我的区域世界文字:
                                 type: Text
-                                attribute:
-                                  x: 300
-                                  y: 14
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['world']}"
+                                attribute: {x: 24, y: 68, fontSize: 36, texts: "~&8世界 / {self.parent.entry['world']}", limit: "self.parent.width - 380", through: true}
                               我的区域身份文字:
                                 type: Text
-                                attribute:
-                                  x: 520
-                                  y: 14
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~{self.parent.entry['isOwner'] == 'true' ? '&6所有者' : '&b成员'}"
-
-              # ─── 选区会话 ───
+                                attribute: {x: "self.parent.width - 300", y: 38, fontSize: 36, texts: "self.parent.entry['isOwner'] == 'true' ? '&4所有者' : '&2成员'", through: true}
+                              查看区域文字:
+                                type: Text
+                                attribute: {point: ~middle_right, x: -24, fontSize: 36, texts: "~&2查看 >", through: true}
+                  我的领地空状态:
+                    type: Text
+                    attribute: {x: 24, y: 228, fontSize: 48, texts: "~&8你还没有拥有或加入任何区域。", visible: "var.myRegionCount == '0'", through: true}
+                  我的领地空提示:
+                    type: Text
+                    attribute: {x: 24, y: 294, fontSize: 36, texts: "~&8可以先在「两点测量」查看选区；区域登记由管理员完成。", visible: "var.myRegionCount == '0'", through: true}
+                  我的区域页脚:
+                    type: Text
+                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&4红标 / 所有者   &2绿标 / 成员   &8|   详情为只读档案", through: true}
               选区布局:
                 type: Canvas
-                attribute:
-                  x: 20
-                  y: 16
-                  width: 670
-                  height: 490
-                  visible: "var.page == 'selection'"
+                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'selection'"}
                 children:
                   选区标题:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 0
-                      fontSize: 36
-                      texts: "~&a选区会话"
+                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&0两点测量 / 选区会话", through: true}
+                  测量卷号:
+                    type: Text
+                    attribute: {point: ~top_right, x: -16, y: 8, fontSize: 36, texts: "~&2B—03  /  木斧测量", through: true}
                   选区世界文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 50
-                      fontSize: 28
-                      texts: "~&7世界: &f{var.selWorld}"
-                  选区点1标签:
+                    attribute: {x: 0, y: 58, fontSize: 36, texts: "~&8测量世界 / &0{var.selWorld}", limit: "var.boardW - 300", through: true}
+                  选区进度文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 100
-                      fontSize: 28
-                      texts: "~&c点 1: &f{var.pos1Set == 'true' ? var.pos1 : '&8未设置'}"
-                  选区点2标签:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 140
-                      fontSize: 28
-                      texts: "~&a点 2: &f{var.pos2Set == 'true' ? var.pos2 : '&8未设置'}"
-                  选区完成文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 190
-                      fontSize: 28
-                      texts: "~&7状态: {var.selComplete == 'true' ? '&a已完成' : '&c未完成'}  &7体积: &f{var.selVolume} &7/ &f{var.maxVolume}"
+                    attribute: {point: ~top_right, x: -16, y: 58, fontSize: 36, texts: "var.selComplete == 'true' ? '&2两点就绪 / 可核对体积' : '&4等待选点 / 尚未完成'", through: true}
+                  测量分规:
+                    type: Texture
+                    attribute: {x: 0, y: 108, width: "var.boardW", height: 2, normal: "~189,202,179,255", through: true}
+                  点1测量卡:
+                    type: Canvas
+                    attribute: {x: 0, y: 126, width: "(var.boardW - 24) / 2", height: 250}
+                    children:
+                      点1卡底:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~239,225,211,255", through: true}
+                      点1顶标:
+                        type: Texture
+                        attribute: {x: 0, y: 0, width: "self.parent.width", height: 4, normal: "~153,66,54,255", through: true}
+                      点1网格横:
+                        type: Texture
+                        attribute: {x: 24, y: 114, width: "self.parent.width - 48", height: 1, normal: "~212,204,187,255", through: true}
+                      点1网格纵:
+                        type: Texture
+                        attribute: {x: "self.parent.width - 134", y: 20, width: 1, height: 204, normal: "~212,204,187,255", through: true}
+                      点1编号:
+                        type: Text
+                        attribute: {x: 24, y: 26, fontSize: 48, texts: "~&4P1 / 起点", through: true}
+                      点1轴标签:
+                        type: Text
+                        attribute: {x: 24, y: 88, fontSize: 36, texts: "var.pos1Set == 'true' ? '&4已记录 / X · Y · Z' : '&8待记录 / X · Y · Z'", through: true}
+                      选区点1标签:
+                        type: Text
+                        attribute: {x: 24, y: 128, fontSize: 64, texts: "var.pos1Set == 'true' ? '&0' + var.pos1 : '&8未设置'", limit: "self.parent.width - 48", through: true}
+                      点1操作提示:
+                        type: Text
+                        attribute: {x: 24, y: 210, fontSize: 36, texts: "~&4木斧左键 / 设置起点", through: true}
+                  点2测量卡:
+                    type: Canvas
+                    attribute: {x: "(var.boardW + 24) / 2", y: 126, width: "(var.boardW - 24) / 2", height: 250}
+                    children:
+                      点2卡底:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~222,230,210,255", through: true}
+                      点2顶标:
+                        type: Texture
+                        attribute: {x: 0, y: 0, width: "self.parent.width", height: 4, normal: "~86,111,95,255", through: true}
+                      点2网格横:
+                        type: Texture
+                        attribute: {x: 24, y: 114, width: "self.parent.width - 48", height: 1, normal: "~197,210,187,255", through: true}
+                      点2网格纵:
+                        type: Texture
+                        attribute: {x: "self.parent.width - 134", y: 20, width: 1, height: 204, normal: "~197,210,187,255", through: true}
+                      点2编号:
+                        type: Text
+                        attribute: {x: 24, y: 26, fontSize: 48, texts: "~&2P2 / 终点", through: true}
+                      点2轴标签:
+                        type: Text
+                        attribute: {x: 24, y: 88, fontSize: 36, texts: "var.pos2Set == 'true' ? '&2已记录 / X · Y · Z' : '&8待记录 / X · Y · Z'", through: true}
+                      选区点2标签:
+                        type: Text
+                        attribute: {x: 24, y: 128, fontSize: 64, texts: "var.pos2Set == 'true' ? '&0' + var.pos2 : '&8未设置'", limit: "self.parent.width - 48", through: true}
+                      点2操作提示:
+                        type: Text
+                        attribute: {x: 24, y: 210, fontSize: 36, texts: "~&2木斧右键 / 设置终点", through: true}
+                  测量结果栏:
+                    type: Canvas
+                    attribute: {x: 0, y: 400, width: "var.boardW", height: 110}
+                    children:
+                      结果底:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~232,235,216,255", through: true}
+                      结果左标:
+                        type: Texture
+                        attribute: {x: 0, y: 0, width: 5, height: 110, normal: "var.selComplete == 'true' ? '86,111,95,255' : '153,66,54,255'", through: true}
+                      选区完成文字:
+                        type: Text
+                        attribute: {x: 24, y: 22, fontSize: 48, texts: "var.selComplete == 'true' ? '&2两点已完成' : '&4等待设置两点'", through: true}
+                      体积数值:
+                        type: Text
+                        attribute: {x: "var.boardW / 2 + 24", y: 16, fontSize: 48, texts: "~&0{var.selVolume} &8/ {var.maxVolume} 方块", limit: "var.boardW / 2 - 48", through: true}
+                      体积标签:
+                        type: Text
+                        attribute: {x: "var.boardW / 2 + 24", y: 68, fontSize: 36, texts: "~&8当前体积 / 选区上限", through: true}
+                      体积超限提示:
+                        type: Text
+                        attribute: {x: 24, y: 72, fontSize: 36, texts: "~&4体积超出上限，请重新选点。", visible: "type.toNumber(var.selVolume) > type.toNumber(var.maxVolume) && type.toNumber(var.maxVolume) > 0", through: true}
                   选区提示文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 240
-                      fontSize: 26
-                      texts: "~&7手持选区工具(木斧)左键设点1，右键设点2。"
-                  清除选区按钮:
-                    type: Canvas
-                    attribute:
-                      x: 0
-                      y: 290
-                      width: 160
-                      height: 44
-                    action:
-                      click: |-
-                        Packet.send(var.packetId, 'clear_selection', var.actionToken)
-                    children:
-                      清除选区背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '200,80,80,230' : '180,60,60,200'"
-                          shape: ~round_rect
-                          radius: 8
-                      清除选区文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 160
-                          through: true
-                          fontSize: 28
-                          texts: "~&f清除选区"
+                    attribute: {x: 0, y: 550, fontSize: 36, texts: "~&8操作顺序：手持木斧，左键设置点 1，右键设置点 2；完成后点击刷新核对坐标。", through: true}
+                  测量后续提示:
+                    type: Text
+                    attribute: {x: 0, y: 606, fontSize: 36, texts: "~&8此页只管理选区。选区不会自动登记为区域；清除后两点与体积都会重置。", through: true}
                   刷新选区按钮:
                     type: Canvas
-                    attribute:
-                      x: 180
-                      y: 290
-                      width: 160
-                      height: 44
+                    attribute: {x: 0, y: 690, width: 232, height: 68}
                     action:
                       click: |-
                         Packet.send(var.packetId, 'query_selection')
                     children:
                       刷新选区背景:
                         type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '80,140,220,230' : '60,120,200,200'"
-                          shape: ~round_rect
-                          radius: 8
+                        attribute: {point: ~stretch_all, normal: "~52,80,64,255", hover: "~70,104,80,255", through: true}
                       刷新选区文字:
                         type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 160
-                          through: true
-                          fontSize: 28
-                          texts: "~&f刷新"
-
-              # ─── 区域详情 ───
+                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&f刷新测量结果", through: true}
+                  清除选区按钮:
+                    type: Canvas
+                    attribute: {x: 256, y: 690, width: 232, height: 68, enable: "var.actionToken != none && var.actionToken != ''"}
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'clear_selection', var.actionToken)
+                    children:
+                      清除选区背景:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~153,66,54,255", hover: "~181,79,64,255", through: true}
+                      清除选区文字:
+                        type: Text
+                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&f清除两点选区", through: true}
+                  测量页脚:
+                    type: Text
+                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&8坐标按 X / Y / Z 排列   |   选点后刷新以查看最新会话", through: true}
               区域详情布局:
                 type: Canvas
-                attribute:
-                  x: 20
-                  y: 16
-                  width: 670
-                  height: 490
-                  visible: "var.page == 'detail'"
+                attribute: {x: 24, y: 24, width: "var.boardW", height: "var.viewH - 236", visible: "var.page == 'detail'"}
                 children:
                   详情标题:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 0
-                      fontSize: 36
-                      texts: "~&a区域: &f{var.regionId}"
+                    attribute: {x: 0, y: 0, fontSize: 54, texts: "~&2B—04 &0区域档案 / {var.regionId}", limit: "var.boardW - 300", through: true}
+                  返回按钮:
+                    type: Canvas
+                    attribute: {x: "var.boardW - 180", y: 0, width: 180, height: 56}
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'navigate', 'my')
+                    children:
+                      返回按钮背景:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~220,225,205,255", hover: "~205,216,195,255", through: true}
+                      返回按钮文字:
+                        type: Text
+                        attribute: {point: ~middle_center, fontSize: 36, texts: "~&0返回我的领地", through: true}
                   详情世界文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 48
-                      fontSize: 28
-                      texts: "~&7世界: &f{var.regionWorld}  &7优先级: &f{var.regionPriority}"
-                  详情边界文字:
-                    type: Text
-                    attribute:
-                      x: 0
-                      y: 82
-                      fontSize: 28
-                      texts: "~&7范围: &f{var.regionMin} ~ {var.regionMax}"
+                    attribute: {x: 0, y: 60, fontSize: 36, texts: "~&8所在世界 &0{var.regionWorld}   &8优先级 &0{var.regionPriority}   &2/ 只读界址档案", limit: "var.boardW", through: true}
+                  详情分规:
+                    type: Texture
+                    attribute: {x: 0, y: 100, width: "var.boardW", height: 2, normal: "~189,202,179,255", through: true}
+                  详情测量卡:
+                    type: Canvas
+                    attribute: {x: 0, y: 112, width: "var.boardW", height: 116}
+                    children:
+                      详情测量底:
+                        type: Texture
+                        attribute: {point: ~stretch_all, normal: "~222,230,210,255", through: true}
+                      详情坐标顶规:
+                        type: Texture
+                        attribute: {x: 0, y: 0, width: "var.boardW", height: 4, normal: "~86,111,95,255", through: true}
+                      详情坐标分线:
+                        type: Texture
+                        attribute: {x: "var.boardW / 2", y: 18, width: 2, height: 80, normal: "~151,169,142,255", through: true}
+                      详情最小标签:
+                        type: Text
+                        attribute: {x: 24, y: 12, fontSize: 36, texts: "~&4MIN / 最小坐标 / X · Y · Z", through: true}
+                      详情边界文字:
+                        type: Text
+                        attribute: {x: 24, y: 54, fontSize: 48, texts: "~&0{var.regionMin}", limit: "var.boardW / 2 - 48", through: true}
+                      详情最大标签:
+                        type: Text
+                        attribute: {x: "var.boardW / 2 + 24", y: 12, fontSize: 36, texts: "~&2MAX / 最大坐标 / X · Y · Z", through: true}
+                      详情最大文字:
+                        type: Text
+                        attribute: {x: "var.boardW / 2 + 24", y: 54, fontSize: 48, texts: "~&0{var.regionMax}", limit: "var.boardW / 2 - 48", through: true}
                   详情体积文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 116
-                      fontSize: 28
-                      texts: "~&7体积: &f{var.regionVolume} 方块  &7父区域: &f{var.regionParent != none ? var.regionParent : '无'}"
+                    attribute: {x: 0, y: 252, fontSize: 36, texts: "~&8体积 &0{var.regionVolume} 方块   &8父区域 &0{var.regionParent != none && var.regionParent != '' ? var.regionParent : '无'}", limit: "var.boardW", through: true}
                   所有者文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 162
-                      fontSize: 28
-                      texts: "~&6所有者:"
+                    attribute: {x: 0, y: 314, fontSize: 48, texts: "~&0所有者", through: true}
+                  所有者滑轨:
+                    type: Texture
+                    attribute: {x: 438, y: 370, width: 12, height: 156, normal: "~213,222,202,255", through: true}
                   所有者滑块:
                     type: Texture
                     val: 所有者滑块
-                    attribute:
-                      x: 294
-                      y: 194
-                      width: 6
-                      height: 20
-                      normal: ~120,120,120,200
-                      maxDragY: 80
+                    attribute: {x: 438, y: 370, width: 12, height: 48, maxDragY: 108, normal: "~86,111,95,255", hover: "~153,66,54,255"}
                   所有者滚动栏:
                     type: Scroll
-                    attribute:
-                      x: 0
-                      y: 194
-                      width: 300
-                      height: 100
-                      moveY: "self.parent['所有者滑块'].getDragYRatio()"
+                    attribute: {x: 0, y: 370, width: 422, height: 156, moveY: "self.parent['所有者滑块'].getDragYRatio()"}
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -667,53 +707,27 @@ controls:
                       owners_list:
                         val: owner_data
                         type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 300
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 20)){
-                              row = self['所有者项目'].copy('所有者项目' + i.round)
-                              row.entryKey = i.round()
-                            }
+                        attribute: {width: 422, spaceBetween: 12}
                         children:
                           所有者项目:
                             type: Text
-                            attribute:
-                              entryKey: 0.round()
-                              entry: "var.ownerList != null ? var.ownerList[self.entryKey] : none"
-                              visible: self.entry != none
-                              x: 8
-                              y: 2
-                              fontSize: 26
-                              texts: "~&f{self.entry}"
+                            attribute: {entryKey: 0.round(), entry: "var.ownerList.get(self.entryKey)", visible: self.entry != none, x: 12, fontSize: 36, texts: "~&4{self.entry}", limit: 398, through: true}
+                  所有者空状态:
+                    type: Text
+                    attribute: {x: 12, y: 386, fontSize: 36, texts: "~&8暂无所有者记录", visible: "var.ownerList.length == 0", through: true}
                   成员文字:
                     type: Text
-                    attribute:
-                      x: 340
-                      y: 162
-                      fontSize: 28
-                      texts: "~&b成员:"
+                    attribute: {x: 0, y: 550, fontSize: 48, texts: "~&0成员", through: true}
+                  成员滑轨:
+                    type: Texture
+                    attribute: {x: 438, y: 606, width: 12, height: "var.viewH - 882", normal: "~213,222,202,255", through: true}
                   成员滑块:
                     type: Texture
                     val: 成员滑块
-                    attribute:
-                      x: 634
-                      y: 194
-                      width: 6
-                      height: 20
-                      normal: ~120,120,120,200
-                      maxDragY: 80
+                    attribute: {x: 438, y: 606, width: 12, height: 48, maxDragY: "var.viewH - 930", normal: "~86,111,95,255", hover: "~153,66,54,255"}
                   成员滚动栏:
                     type: Scroll
-                    attribute:
-                      x: 340
-                      y: 194
-                      width: 300
-                      height: 100
-                      moveY: "self.parent['成员滑块'].getDragYRatio()"
+                    attribute: {x: 0, y: 606, width: 422, height: "var.viewH - 882", moveY: "self.parent['成员滑块'].getDragYRatio()"}
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -726,53 +740,27 @@ controls:
                       members_list:
                         val: member_data
                         type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 300
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 20)){
-                              row = self['成员项目'].copy('成员项目' + i.round)
-                              row.entryKey = i.round()
-                            }
+                        attribute: {width: 422, spaceBetween: 12}
                         children:
                           成员项目:
                             type: Text
-                            attribute:
-                              entryKey: 0.round()
-                              entry: "var.memberList != null ? var.memberList[self.entryKey] : none"
-                              visible: self.entry != none
-                              x: 8
-                              y: 2
-                              fontSize: 26
-                              texts: "~&f{self.entry}"
+                            attribute: {entryKey: 0.round(), entry: "var.memberList.get(self.entryKey)", visible: self.entry != none, x: 12, fontSize: 36, texts: "~&2{self.entry}", limit: 398, through: true}
+                  成员空状态:
+                    type: Text
+                    attribute: {x: 12, y: 622, fontSize: 36, texts: "~&8暂无成员记录", visible: "var.memberList.length == 0", through: true}
                   详情标志文字:
                     type: Text
-                    attribute:
-                      x: 0
-                      y: 310
-                      fontSize: 28
-                      texts: "~&e标志:"
+                    attribute: {x: 480, y: 314, fontSize: 48, texts: "~&0保护规则   &8{var.detailFlagList.length.round()} 项 / 只读", through: true}
+                  详情标志滑轨:
+                    type: Texture
+                    attribute: {x: "var.boardW - 12", y: 370, width: 12, height: "var.viewH - 646", normal: "~213,222,202,255", through: true}
                   详情标志滑块:
                     type: Texture
                     val: 详情标志滑块
-                    attribute:
-                      x: 664
-                      y: 342
-                      width: 6
-                      height: 30
-                      normal: ~120,120,120,200
-                      maxDragY: 110
+                    attribute: {x: "var.boardW - 12", y: 370, width: 12, height: 72, maxDragY: "var.viewH - 718", normal: "~86,111,95,255", hover: "~153,66,54,255"}
                   详情标志滚动栏:
                     type: Scroll
-                    attribute:
-                      x: 0
-                      y: 342
-                      width: 670
-                      height: 140
-                      moveY: "self.parent['详情标志滑块'].getDragYRatio()"
+                    attribute: {x: 480, y: 370, width: "var.boardW - 508", height: "var.viewH - 646", moveY: "self.parent['详情标志滑块'].getDragYRatio()"}
                     action:
                       wheel: |-
                         if(self.moveY >= 0 && self.wheelValue > 0){
@@ -785,78 +773,42 @@ controls:
                       detail_flags_list:
                         val: detail_flag_data
                         type: VStack
-                        attribute:
-                          x: 0
-                          y: 0
-                          width: 670
-                          spaceBetween: 4
-                        action:
-                          create: |-
-                            for(i in range(1, 40)){
-                              row = self['详情标志行'].copy('详情标志行' + i.round)
-                              row.entryKey = i.round()
-                            }
+                        attribute: {width: "var.boardW - 508", spaceBetween: 8}
                         children:
                           详情标志行:
-                            type: Texture
-                            attribute:
-                              entryKey: 0.round()
-                              entry: "var.detailFlagList != null ? var.detailFlagList[self.entryKey] : none"
-                              visible: self.entry != none
-                              width: 650
-                              height: 32
-                              normal: ~38,38,48,160
-                              shape: ~round_rect
-                              radius: 4
+                            type: Canvas
+                            attribute: {entryKey: 0.round(), entry: "var.detailFlagList.get(self.entryKey)", visible: self.entry != none, width: "var.boardW - 508", height: 110}
                             children:
+                              详情标志行底:
+                                type: Texture
+                                attribute: {point: ~stretch_all, normal: "~235,236,221,255", through: true}
+                              详情状态线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~177,183,168,255", through: true}
+                              详情允许线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~86,111,95,255", visible: "self.parent.entry['state'] == 'allow'", through: true}
+                              详情拒绝线:
+                                type: Texture
+                                attribute: {x: 0, y: 0, width: 4, height: 110, normal: "~153,66,54,255", visible: "self.parent.entry['state'] == 'deny'", through: true}
                               详情标志名称文字:
                                 type: Text
-                                attribute:
-                                  x: 12
-                                  y: 5
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&b{self.parent.entry['name']}"
+                                attribute: {x: 18, y: 14, fontSize: 36, texts: "~&0{self.parent.entry['name']}", limit: "self.parent.width - 160", through: true}
                               详情标志描述文字:
                                 type: Text
-                                attribute:
-                                  x: 200
-                                  y: 6
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~&7{self.parent.entry['desc']}"
+                                attribute: {x: 18, y: 60, fontSize: 36, texts: "~&8{self.parent.entry['desc']}", limit: "self.parent.width - 160", through: true}
                               详情标志状态文字:
                                 type: Text
-                                attribute:
-                                  x: 560
-                                  y: 6
-                                  through: true
-                                  fontSize: 26
-                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
-                  返回按钮:
-                    type: Canvas
-                    attribute:
-                      x: 560
-                      y: 0
-                      width: 100
-                      height: 36
-                    action:
-                      click: |-
-                        Packet.send(var.packetId, 'navigate', 'my')
-                    children:
-                      返回按钮背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.isHovered() ? '80,80,95,230' : '60,60,70,200'"
-                          shape: ~round_rect
-                          radius: 8
-                      返回按钮文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 100
-                          through: true
-                          fontSize: 26
-                          texts: "~&f← 返回"
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&8未设置", visible: "self.parent.entry['state'] != 'allow' && self.parent.entry['state'] != 'deny'", through: true}
+                              详情允许状态:
+                                type: Text
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&2允许", visible: "self.parent.entry['state'] == 'allow'", through: true}
+                              详情拒绝状态:
+                                type: Text
+                                attribute: {point: ~middle_right, x: -18, fontSize: 36, texts: "~&4拒绝", visible: "self.parent.entry['state'] == 'deny'", through: true}
+                  详情规则空状态:
+                    type: Text
+                    attribute: {x: 504, y: 412, fontSize: 36, texts: "~&8没有已设置的标志；保护判定以服务端为准。", visible: "var.detailFlagList.length == 0", through: true}
+                  详情页脚:
+                    type: Text
+                    attribute: {point: ~bottom_left, x: 0, y: -4, fontSize: 36, texts: "~&8权属与规则只读   |   所有者、成员与规则分别滚动   |   坐标 X / Y / Z", through: true}

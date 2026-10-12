@@ -1,11 +1,7 @@
-# AXS 资源说明
-# 用途: EntityTracker 排行榜奖励管理主界面，展示奖励配置列表、手动发放和调度状态。
-# 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
-# 打开方式: /axs entitytracker rewards manage
-# 重载命令: /axs entitytracker reload
-# 数据交互: packetHandler 接收 config-list / scheduler-status / result 三种服务端推送；
-#             客户端通过 Packet.send('AXS_ENTITY_TRACKER_REWARD', ...) 发送操作指令。
-
+# EntityTracker / reward operations ledger
+# /axs entitytracker rewards manage | /axs entitytracker reload
+# Existing packet names, List/each bindings, token position and action signatures retained.
+# Fixed ledger header + one layout child per Scroll. No invented reward icons or assets.
 ui:
   background: true
   escClose: true
@@ -13,6 +9,23 @@ ui:
   show: true
   through: false
   screenScale: true
+  action:
+    load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.ledgerW = var.viewW - 160
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.ledgerW = var.viewW - 160
   packetHandler:
     config-list: |-
       var.rewardType = packet['rewardType']
@@ -21,6 +34,7 @@ ui:
       var.actionToken = packet['action_token']
       var.view = 'list'
       var.resultMsg = none
+      if(val.列表滑块 != none){ val.列表滑块.setDragYRatio(0) }
     scheduler-status: |-
       var.weeklyEnabled = packet['weeklyEnabled']
       var.monthlyEnabled = packet['monthlyEnabled']
@@ -31,217 +45,335 @@ ui:
       var.view = 'status'
     result: |-
       var.resultMsg = packet['message']
-
 controls:
+  全屏底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~Frosted:18;12,18,24,245
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
       根面板:
-        type: Texture
+        type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1200
-          height: 720
-          normal: ~30,30,35,235
-          shape: ~round_rect
-          radius: 16
-        effect:
-          stroke:
-            width: 2
-            color: ~80,200,160,180
-          shadow:
-            xOffset: 0
-            yOffset: 4
-            blur: 12
-            color: ~0,0,0,120
+          x: "48 - var.offX"
+          y: 32
+          width: "var.viewW - 96"
+          height: "var.viewH - 64"
         children:
-          # 标题栏
-          标题栏:
+          面板底:
             type: Texture
             attribute:
-              x: 0
-              y: 0
-              width: 1200
-              height: 72
-              normal: ~40,40,50,255
+              point: ~stretch_all
+              normal: ~22,30,38,250
               shape: ~round_rect
-              radius: 16
-            children:
-              标题文字:
-                type: Text
-                attribute:
-                  x: 28
-                  y: 14
-                  fontSize: 42
-                  texts: "~&6排行榜奖励管理"
-              周奖励按钮:
-                type: Canvas
-                attribute:
-                  x: 520
-                  y: 12
-                  width: 120
-                  height: 48
-                action:
-                  click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
-                children:
-                  周奖励背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~50,180,80,200
-                      shape: ~round_rect
-                      radius: 8
-                  周奖励文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 120
-                      texts: ~&f周奖励
-                      fontSize: 28
-                      through: true
-              月奖励按钮:
-                type: Canvas
-                attribute:
-                  x: 654
-                  y: 12
-                  width: 120
-                  height: 48
-                action:
-                  click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
-                children:
-                  月奖励背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~200,160,50,200
-                      shape: ~round_rect
-                      radius: 8
-                  月奖励文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 120
-                      texts: ~&f月奖励
-                      fontSize: 28
-                      through: true
-              调度状态按钮:
-                type: Canvas
-                attribute:
-                  x: 788
-                  y: 12
-                  width: 140
-                  height: 48
-                action:
-                  click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
-                children:
-                  调度状态背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~60,130,200,200
-                      shape: ~round_rect
-                      radius: 8
-                  调度状态文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 140
-                      texts: ~&f调度状态
-                      fontSize: 28
-                      through: true
-              发放历史按钮:
-                type: Canvas
-                attribute:
-                  x: 942
-                  y: 12
-                  width: 120
-                  height: 48
-                action:
-                  click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
-                children:
-                  发放历史背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~130,100,200,200
-                      shape: ~round_rect
-                      radius: 8
-                  发放历史文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 120
-                      texts: ~&f发放历史
-                      fontSize: 28
-                      through: true
-              手动发放按钮:
-                type: Canvas
-                attribute:
-                  x: 1076
-                  y: 12
-                  width: 110
-                  height: 48
-                action:
-                  click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.actionToken, var.rewardType)
-                children:
-                  手动发放背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~200,80,50,200
-                      shape: ~round_rect
-                      radius: 8
-                  手动发放文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 110
-                      texts: ~&f手动发放
-                      fontSize: 28
-                      through: true
-          # 结果提示
-          结果提示:
+              radius: 8
+          模块标记:
             type: Text
             attribute:
-              x: 28
-              y: 684
-              fontSize: 26
-              texts: "~&e{var.resultMsg}"
-
-          # 配置列表区域
+              x: 32
+              y: 22
+              texts: ~&bENTITY TRACKER &7/ REWARD OPERATIONS
+              fontSize: 36
+              through: true
+          标题文字:
+            type: Text
+            attribute:
+              x: 32
+              y: 54
+              texts: ~&f排行榜奖励管理
+              fontSize: 64
+              through: true
+          页面说明:
+            type: Text
+            attribute:
+              x: 32
+              y: 104
+              texts: ~&7检查周期配置与调度，再执行奖励发放。
+              fontSize: 36
+              through: true
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 32
+              width: 164
+              height: 56
+            action:
+              clickLeft: Screen.close()
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~37,48,60,255
+                  hover: ~115,45,55,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f关闭 / ESC
+                  fontSize: 36
+                  through: true
+          周奖励按钮:
+            type: Canvas
+            attribute:
+              x: 32
+              y: 158
+              width: 220
+              height: 64
+            action:
+              click: |-
+                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
+            children:
+              周奖励背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.view == 'list' && var.rewardType == 'weekly' ? '38,88,99,255' : '32,43,54,255'"
+                  hover: ~44,102,114,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              周奖励信号:
+                type: Texture
+                attribute:
+                  point: ~bottom_left
+                  width: 220
+                  height: 3
+                  normal: ~69,211,224,255
+                  visible: "var.view == 'list' && var.rewardType == 'weekly'"
+                  through: true
+              周奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f01 / 周奖励
+                  fontSize: 48
+                  through: true
+          月奖励按钮:
+            type: Canvas
+            attribute:
+              x: 264
+              y: 158
+              width: 220
+              height: 64
+            action:
+              click: |-
+                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
+            children:
+              月奖励背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.view == 'list' && var.rewardType == 'monthly' ? '38,88,99,255' : '32,43,54,255'"
+                  hover: ~44,102,114,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              月奖励信号:
+                type: Texture
+                attribute:
+                  point: ~bottom_left
+                  width: 220
+                  height: 3
+                  normal: ~69,211,224,255
+                  visible: "var.view == 'list' && var.rewardType == 'monthly'"
+                  through: true
+              月奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f02 / 月奖励
+                  fontSize: 48
+                  through: true
+          调度状态按钮:
+            type: Canvas
+            attribute:
+              x: 496
+              y: 158
+              width: 240
+              height: 64
+            action:
+              click: |-
+                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
+            children:
+              调度状态背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.view == 'status' ? '38,88,99,255' : '32,43,54,255'"
+                  hover: ~44,102,114,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              调度状态信号:
+                type: Texture
+                attribute:
+                  point: ~bottom_left
+                  width: 240
+                  height: 3
+                  normal: ~69,211,224,255
+                  visible: "var.view == 'status'"
+                  through: true
+              调度状态文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f03 / 调度状态
+                  fontSize: 48
+                  through: true
+          发放历史按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 158
+              width: 260
+              height: 64
+            action:
+              click: |-
+                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
+            children:
+              发放历史背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~32,43,54,255
+                  hover: ~44,102,114,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              发放历史文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&b发放历史 >
+                  fontSize: 48
+                  through: true
+          清单标题:
+            type: Text
+            attribute:
+              x: 32
+              y: 250
+              texts: "var.view == 'status' ? '&f自动发放 / 调度检查' : '&f奖励配置 / 当前周期'"
+              fontSize: 48
+              through: true
+          配置计数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 254
+              texts: "'&7配置条目 &b' + var.total"
+              fontSize: 36
+              visible: "var.view == 'list'"
+              through: true
+          列表表头:
+            type: Canvas
+            attribute:
+              x: 32
+              y: 300
+              width: var.ledgerW
+              height: 48
+              visible: "var.view == 'list' || var.view == none"
+            children:
+              表头底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~34,47,59,255
+                  through: true
+              类型列:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 12
+                  texts: ~&7首领 / 排行类型
+                  fontSize: 36
+                  through: true
+              范围列:
+                type: Text
+                attribute:
+                  x: 320
+                  y: 12
+                  texts: ~&7名次范围
+                  fontSize: 36
+                  through: true
+              名称列:
+                type: Text
+                attribute:
+                  x: 510
+                  y: 12
+                  texts: ~&7奖励名称
+                  fontSize: 36
+                  through: true
+              奖励列:
+                type: Text
+                attribute:
+                  x: 810
+                  y: 12
+                  texts: ~&7奖励内容 / 悬停阅读
+                  fontSize: 36
+                  through: true
+              状态列:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -220
+                  y: 12
+                  texts: ~&7状态
+                  fontSize: 36
+                  through: true
+              操作列:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -68
+                  y: 12
+                  texts: ~&7操作
+                  fontSize: 36
+                  through: true
+          列表滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -32
+              y: 360
+              width: 10
+              height: "var.viewH - 520"
+              normal: ~44,57,66,255
+              visible: "var.view == 'list'"
           列表滑块:
             type: Texture
             val: 列表滑块
             attribute:
-              x: 1174
-              y: 84
-              width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 538
+              point: ~top_right
+              x: -32
+              y: 360
+              width: 10
+              height: 88
+              normal: ~69,211,224,255
+              hover: ~142,239,245,255
+              maxDragY: "var.viewH - 608"
+              visible: "var.view == 'list'"
           列表滚动区:
             type: Scroll
             attribute:
-              x: 20
-              y: 84
-              width: 1160
-              height: 588
-              visible: |-
-                var.view == 'list' || var.view == none
+              x: 32
+              y: 360
+              width: "var.ledgerW - 28"
+              height: "var.viewH - 520"
+              visible: "var.view == 'list' || var.view == none"
               moveY: "self.parent['列表滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -252,195 +384,303 @@ controls:
                   self.parent['列表滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              列表表头:
-                type: Texture
+              清单布局:
+                type: VStack
                 attribute:
-                  x: 0
-                  y: 0
-                  width: 1160
-                  height: 44
-                  normal: ~50,50,60,200
-                  shape: ~round_rect
-                  radius: 6
+                  width: "var.ledgerW - 28"
                 children:
-                  类型列:
-                    type: Text
+                  列表内容:
+                    type: VGrid
                     attribute:
-                      x: 16
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b排行类型"
-                  范围列:
-                    type: Text
-                    attribute:
-                      x: 240
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b名次范围"
-                  名称列:
-                    type: Text
-                    attribute:
-                      x: 420
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b奖励名称"
-                  奖励列:
-                    type: Text
-                    attribute:
-                      x: 680
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b奖励内容"
-                  状态列:
-                    type: Text
-                    attribute:
-                      x: 960
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b状态"
-                  操作列:
-                    type: Text
-                    attribute:
-                      x: 1080
-                      y: 8
-                      fontSize: 28
-                      texts: "~&b操作"
-              列表内容:
-                type: VGrid
-                attribute:
-                  x: 0
-                  y: 50
-                  width: 1160
-                  eachHeight: 52
-                  dataList: var.configs
-                children:
-                  行背景:
-                    type: Texture
-                    attribute:
-                      width: 1160
-                      height: 48
-                      normal: ~45,45,55,180
-                      shape: ~round_rect
-                      radius: 6
+                      width: "var.ledgerW - 28"
+                      eachHeight: 100
+                      dataList: var.configs
                     children:
-                      类型单元格:
-                        type: Text
-                        attribute:
-                          x: 16
-                          y: 10
-                          fontSize: 26
-                          texts: "~&f{each.rankingTypeDisplay}"
-                      范围单元格:
-                        type: Text
-                        attribute:
-                          x: 240
-                          y: 10
-                          fontSize: 26
-                          texts: "~&7第{each.rankStart}-{each.rankEnd}名"
-                      名称单元格:
-                        type: Text
-                        attribute:
-                          x: 420
-                          y: 10
-                          fontSize: 26
-                          texts: "~&e{each.rewardName}"
-                      奖励单元格:
-                        type: Text
-                        attribute:
-                          x: 680
-                          y: 10
-                          fontSize: 24
-                          texts: "~&a{each.rewardPreview}"
-                      状态单元格:
-                        type: Text
-                        attribute:
-                          x: 960
-                          y: 10
-                          fontSize: 26
-                          texts: "~{each.statusIcon}"
-                      切换按钮:
+                      行背景:
                         type: Canvas
                         attribute:
-                          x: 1060
-                          y: 6
-                          width: 80
-                          height: 36
-                        action:
-                          click: |-
-                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', var.actionToken, each.id)
+                          width: "var.ledgerW - 28"
+                          height: 96
                         children:
-                          切换背景:
+                          行底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
+                              normal: ~27,37,47,255
                               through: true
-                              normal: ~60,130,200,180
-                              shape: ~round_rect
-                              radius: 6
-                          切换文字:
+                          行分隔:
+                            type: Texture
+                            attribute:
+                              point: ~bottom_left
+                              width: "self.parent.width"
+                              height: 1
+                              normal: ~52,69,81,255
+                              through: true
+                          首领单元格:
                             type: Text
                             attribute:
-                              point: ~middle_center
-                              width: 80
-                              texts: ~&f切换
-                              fontSize: 24
+                              x: 20
+                              y: 18
+                              texts: ~&f{each.bossId}
+                              limit: 280
+                              fontSize: 36
                               through: true
-          # 调度状态区域
-          状态区:
-            type: Texture
+                          类型单元格:
+                            type: Text
+                            attribute:
+                              x: 20
+                              y: 52
+                              texts: ~&7{each.rankingTypeDisplay}
+                              fontSize: 36
+                              through: true
+                          范围单元格:
+                            type: Text
+                            attribute:
+                              x: 320
+                              y: 32
+                              texts: ~&b#{each.rankStart} &7- &b#{each.rankEnd}
+                              fontSize: 48
+                              through: true
+                          名称窗口:
+                            type: Scroll
+                            attribute:
+                              x: 510
+                              y: 22
+                              width: 280
+                              height: 54
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              enter: self.scrollAnim = Lerp(0, 1, 4000)
+                              leave: self.scrollAnim = none
+                            children:
+                              名称布局:
+                                type: HStack
+                                attribute:
+                                  height: 54
+                                children:
+                                  名称单元格:
+                                    type: Text
+                                    attribute:
+                                      texts: ~&f{each.rewardName}
+                                      fontSize: 48
+                                      through: true
+                          奖励窗口:
+                            type: Scroll
+                            attribute:
+                              x: 810
+                              y: 24
+                              width: "var.ledgerW - 1168"
+                              height: 54
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              enter: self.scrollAnim = Lerp(0, 1, 5000)
+                              leave: self.scrollAnim = none
+                            children:
+                              奖励布局:
+                                type: HStack
+                                attribute:
+                                  height: 54
+                                children:
+                                  奖励单元格:
+                                    type: Text
+                                    attribute:
+                                      texts: ~&7{each.rewardPreview}
+                                      fontSize: 36
+                                      through: true
+                          状态单元格:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -192
+                              y: 34
+                              texts: ~{each.statusIcon}
+                              fontSize: 36
+                              through: true
+                          切换按钮:
+                            type: Canvas
+                            attribute:
+                              point: ~top_right
+                              x: -12
+                              y: 20
+                              width: 148
+                              height: 56
+                              enable: "var.actionToken != none && var.actionToken != ''"
+                            action:
+                              click: |-
+                                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', var.actionToken, each.id)
+                            children:
+                              切换背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  normal: ~37,66,77,255
+                                  hover: ~44,102,114,255
+                                  through: true
+                                  shape: ~round_rect
+                                  radius: 4
+                              切换文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  texts: ~&b切换状态
+                                  fontSize: 36
+                                  through: true
+          清单空态:
+            type: Canvas
             attribute:
-              x: 20
-              y: 84
-              width: 1160
-              height: 588
-              visible: |-
-                var.view == 'status'
-              normal: ~40,40,50,180
-              shape: ~round_rect
-              radius: 12
+              x: 32
+              y: 392
+              width: var.ledgerW
+              height: 160
+              visible: "var.view != 'status' && (var.configs == none || var.total == '0' || var.total == 0)"
             children:
-              状态标题:
+              空态标题:
                 type: Text
                 attribute:
-                  x: 40
-                  y: 20
+                  point: ~top_center
+                  y: 28
+                  texts: "var.configs == none ? '&b选择周奖励或月奖励以读取配置' : '&f当前周期暂无奖励配置'"
+                  fontSize: 48
+                  through: true
+              空态说明:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 82
+                  texts: ~&7配置由服务端提供；无条目时不可手动发放。
                   fontSize: 36
-                  texts: "~&6调度器状态"
-              周奖励状态:
+                  through: true
+          状态区:
+            type: Canvas
+            attribute:
+              x: 32
+              y: 300
+              width: var.ledgerW
+              height: "var.viewH - 460"
+              visible: "var.view == 'status'"
+            children:
+              周调度卡:
+                type: Canvas
+                attribute:
+                  width: "(var.ledgerW - 24) / 2"
+                  height: 320
+                children:
+                  周卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~28,40,51,255
+                      through: true
+                  周信号:
+                    type: Texture
+                    attribute:
+                      width: "self.parent.width"
+                      height: 3
+                      normal: "var.weeklyRunning == 'true' ? '69,211,224,255' : '239,79,89,255'"
+                      through: true
+                  周奖励状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 32
+                      texts: ~&f周奖励任务
+                      fontSize: 54
+                      through: true
+                  周运行状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 100
+                      texts: "var.weeklyRunning == 'true' ? '&b运行中' : '&c已停止'"
+                      fontSize: 48
+                      through: true
+                  周启用状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 158
+                      texts: "var.weeklyEnabled == 'true' ? '&7任务开关 / &b启用' : '&7任务开关 / &c停用'"
+                      fontSize: 36
+                      through: true
+                  周奖励下次:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 218
+                      texts: ~&7下次执行 / &f{var.nextWeekly}
+                      fontSize: 36
+                      limit: "self.parent.width - 56"
+                      through: true
+              月调度卡:
+                type: Canvas
+                attribute:
+                  point: ~top_right
+                  width: "(var.ledgerW - 24) / 2"
+                  height: 320
+                children:
+                  月卡底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~28,40,51,255
+                      through: true
+                  月信号:
+                    type: Texture
+                    attribute:
+                      width: "self.parent.width"
+                      height: 3
+                      normal: "var.monthlyRunning == 'true' ? '69,211,224,255' : '239,79,89,255'"
+                      through: true
+                  月奖励状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 32
+                      texts: ~&f月奖励任务
+                      fontSize: 54
+                      through: true
+                  月运行状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 100
+                      texts: "var.monthlyRunning == 'true' ? '&b运行中' : '&c已停止'"
+                      fontSize: 48
+                      through: true
+                  月启用状态:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 158
+                      texts: "var.monthlyEnabled == 'true' ? '&7任务开关 / &b启用' : '&7任务开关 / &c停用'"
+                      fontSize: 36
+                      through: true
+                  月奖励下次:
+                    type: Text
+                    attribute:
+                      x: 28
+                      y: 218
+                      texts: ~&7下次执行 / &f{var.nextMonthly}
+                      fontSize: 36
+                      limit: "self.parent.width - 56"
+                      through: true
+              调度说明:
                 type: Text
                 attribute:
-                  x: 40
-                  y: 80
-                  fontSize: 30
-                  texts: "~&a周奖励任务: {var.weeklyRunning ? '&a运行中' : '&c已停止'}"
-              周奖励下次:
-                type: Text
-                attribute:
-                  x: 40
-                  y: 130
-                  fontSize: 28
-                  texts: "~&7下次周奖励: &f{var.nextWeekly}"
-              月奖励状态:
-                type: Text
-                attribute:
-                  x: 40
-                  y: 200
-                  fontSize: 30
-                  texts: "~&e月奖励任务: {var.monthlyRunning ? '&a运行中' : '&c已停止'}"
-              月奖励下次:
-                type: Text
-                attribute:
-                  x: 40
-                  y: 250
-                  fontSize: 28
-                  texts: "~&7下次月奖励: &f{var.nextMonthly}"
+                  x: 0
+                  y: 350
+                  texts: ~&7状态来自服务端；手动发放前请返回对应周期核对配置。
+                  fontSize: 36
+                  through: true
               返回列表按钮:
                 type: Canvas
                 attribute:
-                  x: 40
-                  y: 340
-                  width: 140
-                  height: 48
+                  x: 0
+                  y: 408
+                  width: 260
+                  height: 64
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', var.rewardType)
@@ -449,15 +689,78 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
+                      normal: ~37,66,77,255
+                      hover: ~44,102,114,255
                       through: true
-                      normal: ~60,130,200,200
                       shape: ~round_rect
-                      radius: 8
+                      radius: 4
                   返回列表文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 140
-                      texts: ~&f← 返回列表
-                      fontSize: 28
+                      texts: ~&b< 返回配置清单
+                      fontSize: 48
                       through: true
+          结果栏:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 32
+              y: -88
+              width: var.ledgerW
+              height: 56
+            children:
+              结果底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~17,25,33,255
+                  through: true
+              结果提示:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: "var.resultMsg != none ? var.resultMsg : '&7操作回执 / 等待操作'"
+                  limit: "var.ledgerW - 40"
+                  fontSize: 36
+                  through: true
+          操作说明:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 32
+              y: -38
+              texts: "var.view == 'status' ? '&7调度检查 / 只读状态' : '&7滚轮或拖动青色滑块浏览 / 切换作用于该首领的当前周期奖励'"
+              fontSize: 36
+              through: true
+          手动发放按钮:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -32
+              y: -20
+              width: 300
+              height: 56
+              visible: "var.view == 'list'"
+              enable: "var.actionToken != none && var.actionToken != '' && type.toNumber(var.total) > 0"
+            action:
+              click: |-
+                Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.actionToken, var.rewardType)
+            children:
+              手动发放背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "self.parent.enable ? '145,47,59,255' : '54,48,54,255'"
+                  hover: ~198,61,75,255
+                  through: true
+                  shape: ~round_rect
+                  radius: 4
+              手动发放文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "var.rewardType == 'monthly' ? '&f手动发放 / 月奖励' : '&f手动发放 / 周奖励'"
+                  fontSize: 36
+                  through: true

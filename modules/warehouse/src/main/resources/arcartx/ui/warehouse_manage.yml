@@ -1,7 +1,6 @@
-# AXS Warehouse Manage - 重构版
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航(含仓库列表) + 内容区(设置区+成员区)
-# 配色: 银灰金库 深底浅字 — 抬升面44,50,58 选中160,170,180 描边100,110,120 输入/网格底36,42,50
-# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息/输入/提示) — 全部标准档位
+# Warehouse / workshop console: ironwood settings cards and a separate access register.
+# Choose a vault first; configure automation, identity and capacity; administer shared access.
+# Destructive actions stay visually isolated; member-row parent chains remain unchanged.
 
 ui:
   isHud: false
@@ -124,8 +123,8 @@ ui:
         }
         if(var.maxManageCount > 1){
           for(序号 in range(1, var.maxManageCount - 1)){
-            if(val.共享列表['项'] != none) {
-              项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.共享列表.get(0) != none) {
+              项 = val.共享列表.get(0).copy('共享项_' + var.刷新轮次.round() + '_' + 序号.round())
               项.entryKey = 序号.round()
             }
           }
@@ -139,8 +138,8 @@ ui:
         }
         if(var.maxMemberCount > 1){
           for(序号 in range(1, var.maxMemberCount - 1)){
-            if(val.成员列表['项'] != none) {
-              项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
+            if(val.成员列表.get(0) != none) {
+              项 = val.成员列表.get(0).copy('成员项_' + var.刷新轮次.round() + '_' + 序号.round())
               项.entryKey = 序号.round()
             }
           }
@@ -253,7 +252,7 @@ controls:
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;20,24,28,110
+      normal: ~Frosted:18;17,14,12,195
   # 自适配布局：宽高 = 设计分辨率(1920x1080)，顶部锚点使顶栏紧贴屏幕顶部
   自适应全局布局:
     type: Adaptive
@@ -275,13 +274,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~38,31,27,250
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~100,110,120,220
+              normal: ~112,83,64,235
           标题色块:
             type: Texture
             attribute:
@@ -289,7 +288,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~180,190,200,255
+              normal: ~190,122,79,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -297,23 +296,26 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: "~&f仓库管理"
-              fontSize: 48
+              texts: "~&f库房管控  &6/  设置授权"
+              fontSize: 54
+              through: true
           标题竖线:
             type: Texture
             attribute:
               point: ~middle_left
-              x: 268
+              x: 402
               width: 1
               height: 30
-              normal: ~100,110,120,220
+              normal: ~112,83,64,235
           当前仓库:
             type: Text
             attribute:
               point: ~middle_left
-              x: 288
-              texts: "'&f' + var.warehouseName + (var.ownerType == 'shared' ? '  &b共享仓库' : '  &a个人仓库') + (var.readOnly ? '  &c只读' : '') + (!var.hasPassword ? '  &e未设置密码' : (var.unlocked ? '  &a已解锁' : '  &e未解锁'))"
+              x: 430
+              texts: "'&7当前库房  /  &f' + var.warehouseName + (var.ownerType == 'shared' ? '  &6共享' : '  &6个人') + (var.readOnly ? '  &c只读' : '') + (!var.hasPassword ? '  &e未设置密码' : (var.unlocked ? '  &a已解锁' : '  &e未解锁'))"
               fontSize: 36
+              limit: "var.viewW - 590"
+              through: true
           关闭按钮:
             type: Canvas
             attribute:
@@ -332,13 +334,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~44,50,58,245
+                  normal: ~56,43,36,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
               关闭文字:
                 type: Text
                 attribute:
@@ -361,13 +363,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~38,31,27,250
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
-                color: ~100,110,120,220
+                color: ~112,83,64,235
           导航仓库:
             type: Canvas
             attribute:
@@ -385,20 +387,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~44,50,58,245
+                  normal: ~56,43,36,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
               仓库文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f仓库"
+                  texts: "~&f  01  储物台"
                   fontSize: 36
                   through: true
           导航银行:
@@ -418,20 +420,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~44,50,58,245
+                  normal: ~56,43,36,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
               银行文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&f银行"
+                  texts: "~&f  02  资金账本"
                   fontSize: 36
                   through: true
           导航管理:
@@ -447,13 +449,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~180,190,200,255
+                  normal: ~190,122,79,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,255
+                    color: ~226,179,124,255
               管理高亮条:
                 type: Texture
                 attribute:
@@ -461,7 +463,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~180,190,200,255
+                  normal: ~190,122,79,255
                   shape: ~round_rect
                   radius: 2
               管理文字:
@@ -469,8 +471,9 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "~&0管理"
+                  texts: "~&f  03  库房管控"
                   fontSize: 36
+                  through: true
           导航分隔线:
             type: Texture
             attribute:
@@ -479,14 +482,14 @@ controls:
               y: 232
               width: 264
               height: 2
-              normal: ~100,110,120,220
+              normal: ~112,83,64,235
           仓库列表标题:
             type: Text
             attribute:
               point: ~top_left
               x: 20
               y: 250
-              texts: "~&f仓库列表"
+              texts: "~&f库房索引  &6/  SELECT"
               fontSize: 36
           新建名:
             type: Canvas
@@ -501,13 +504,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~36,42,50,225
+                  normal: ~27,23,21,245
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                    color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
               输入框:
                 type: TextBox
                 attribute:
@@ -540,18 +543,18 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~160,170,180,235
+                  normal: ~165,102,68,245
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '220,230,240,255' : '160,170,180,255'"
+                    color: "self.isHovered() ? '241,208,157,255' : '190,120,78,255'"
               创建字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&0新建"
+                  texts: "~&f新建"
                   fontSize: 36
                   through: true
           创建费用:
@@ -570,13 +573,13 @@ controls:
               y: 396
               width: 10
               height: "var.viewH - 590"
-              normal: ~40,44,52,225
+              normal: ~53,40,33,245
               shape: ~round_rect
               radius: 5
             effect:
               stroke:
                 width: 2
-                color: ~255,255,255,230
+                color: ~224,194,152,230
           仓库滑块:
             type: Texture
             val: 仓库滑块
@@ -586,7 +589,7 @@ controls:
               y: 396
               width: 10
               height: 50
-              normal: ~180,190,200,255
+              normal: ~190,122,79,255
               maxDragY: "var.viewH - 640"
               shape: ~round_rect
               radius: 5
@@ -636,21 +639,24 @@ controls:
                       项背景:
                         type: Texture
                         attribute:
-                          point: ~stretch_all
+                          point: ~middle_center
+                          width: "self.parent.width - 6"
+                          height: "self.parent.height"
                           through: true
-                          normal: "var.manageWarehouseSelected[self.parent.entryKey] ? '64,72,82,225' : '44,50,58,245'"
+                          normal: "var.manageWarehouseSelected[self.parent.entryKey] ? '105,66,47,250' : '56,43,36,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.manageWarehouseSelected[self.parent.entryKey] ? '255,255,255,255' : '100,110,120,220')"
+                            color: "self.isHovered() ? '241,208,157,255' : (var.manageWarehouseSelected[self.parent.entryKey] ? '226,179,124,255' : '112,83,64,235')"
                       项文字:
                         type: Text
                         attribute:
                           point: ~middle_center
                           texts: "'&f' + self.parent.entry['name']"
                           fontSize: 36
+                          limit: 226
                           through: true
           导航提示:
             type: Text
@@ -658,7 +664,7 @@ controls:
               point: ~bottom_left
               x: 20
               y: -20
-              texts: "~&fESC 关闭界面"
+              texts: "~&7先选库房  /  ESC 关闭"
               fontSize: 36
 
       # ── 内容区（设置区 + 成员区）──────────────────────────
@@ -675,13 +681,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~38,31,27,250
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
-                color: ~100,110,120,220
+                color: ~112,83,64,235
 
           # ── 设置区（左半）──────────────────────────────────
           设置区:
@@ -697,28 +703,77 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~36,42,50,225
+                  normal: ~27,23,21,245
                   shape: ~round_rect
                   radius: 14
                 effect:
                   stroke:
                     width: 3
-                    color: ~100,110,120,220
+                    color: ~112,83,64,235
+              拾取分区底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 56
+                  width: "var.halfW - 44"
+                  height: 108
+                  normal: ~44,34,29,255
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              名称分区底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 180
+                  width: "var.halfW - 44"
+                  height: 132
+                  normal: ~44,34,29,255
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              扩充分区底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 330
+                  width: "var.halfW - 44"
+                  height: 308
+                  normal: ~44,34,29,255
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              风险分区底:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 660
+                  width: "var.halfW - 44"
+                  height: 148
+                  visible: "var.ownerType == 'shared'"
+                  normal: ~61,35,29,255
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
               设置标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 20
-                  texts: "~&f仓库设置"
-                  fontSize: 36
+                  texts: "~&f01  库房设置"
+                  fontSize: 48
               拾取标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 64
-                  texts: "~&f自动拾取"
+                  texts: "~&f自动化  &6/  入库偏好"
                   fontSize: 36
               拾取关闭提示:
                 type: Text
@@ -756,18 +811,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickup ? '64,72,82,225' : '44,50,58,245'"
+                          normal: "var.autoPickup ? '105,66,47,250' : '56,43,36,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickup ? '255,255,255,255' : '100,110,120,220')"
+                            color: "self.isHovered() ? '241,208,157,255' : (var.autoPickup ? '226,179,124,255' : '112,83,64,235')"
                       自动入库字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickup ? '&a自动入库' : '&7自动入库'"
+                          texts: "var.autoPickup ? '&f自动入库 &e开' : '&7自动入库 关'"
                           fontSize: 36
                           through: true
                   怪物战利品:
@@ -787,18 +842,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickupMythic ? '64,72,82,225' : '44,50,58,245'"
+                          normal: "var.autoPickupMythic ? '105,66,47,250' : '56,43,36,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickupMythic ? '255,255,255,255' : '100,110,120,220')"
+                            color: "self.isHovered() ? '241,208,157,255' : (var.autoPickupMythic ? '226,179,124,255' : '112,83,64,235')"
                       怪物战利品字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickupMythic ? '&a怪物战利品' : '&7怪物战利品'"
+                          texts: "var.autoPickupMythic ? '&f战利品 &e开' : '&7战利品 关'"
                           fontSize: 36
                           through: true
                   入库通知:
@@ -817,18 +872,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autoPickupNotify ? '64,72,82,225' : '44,50,58,245'"
+                          normal: "var.autoPickupNotify ? '105,66,47,250' : '56,43,36,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '220,230,240,255' : (var.autoPickupNotify ? '255,255,255,255' : '100,110,120,220')"
+                            color: "self.isHovered() ? '241,208,157,255' : (var.autoPickupNotify ? '226,179,124,255' : '112,83,64,235')"
                       入库通知字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.autoPickupNotify ? '&a入库通知' : '&7入库通知'"
+                          texts: "var.autoPickupNotify ? '&f入库通知 &e开' : '&7入库通知 关'"
                           fontSize: 36
                           through: true
               分隔一:
@@ -839,14 +894,14 @@ controls:
                   y: 172
                   width: "var.halfW - 60"
                   height: 2
-                  normal: ~100,110,120,220
+                  normal: ~112,83,64,235
               名称标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 184
-                  texts: "~&f名称与展示"
+                  texts: "~&f标识  &6/  名称与展示"
                   fontSize: 36
               名称提示:
                 type: Text
@@ -854,8 +909,9 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 220
-                  texts: "var.ownerType != none ? ('&e当前名称 ' + var.warehouseName) : '&e请先在左侧选择一个仓库'"
+                  texts: "var.ownerType != none ? ('&7当前名称  /  &f' + var.warehouseName) : '&7请先在左侧选择一个库房'"
                   fontSize: 36
+                  limit: "var.halfW - 60"
               新名称:
                 type: Canvas
                 attribute:
@@ -869,13 +925,13 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,42,50,225
+                      normal: ~27,23,21,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   输入框:
                     type: TextBox
                     attribute:
@@ -912,13 +968,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   改名字:
                     type: Text
                     attribute:
@@ -949,13 +1005,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.showcaseEnabled ? '64,72,82,225' : '44,50,58,245'"
+                      normal: "var.showcaseEnabled ? '105,66,47,250' : '56,43,36,255'"
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : (var.showcaseEnabled ? '255,255,255,255' : '100,110,120,220')"
+                        color: "self.isHovered() ? '241,208,157,255' : (var.showcaseEnabled ? '226,179,124,255' : '112,83,64,235')"
                   展示字:
                     type: Text
                     attribute:
@@ -971,14 +1027,14 @@ controls:
                   y: 320
                   width: "var.halfW - 60"
                   height: 2
-                  normal: ~100,110,120,220
+                  normal: ~112,83,64,235
               扩充标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 332
-                  texts: "~&f仓库扩充"
+                  texts: "~&f容量  &6/  解锁与扩充"
                   fontSize: 36
               容量信息:
                 type: Text
@@ -1017,13 +1073,13 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,42,50,225
+                      normal: ~27,23,21,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   输入框:
                     type: TextBox
                     attribute:
@@ -1061,13 +1117,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   解锁字:
                     type: Text
                     attribute:
@@ -1095,13 +1151,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   锁定字:
                     type: Text
                     attribute:
@@ -1129,13 +1185,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   扩充字:
                     type: Text
                     attribute:
@@ -1157,13 +1213,13 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,42,50,225
+                      normal: ~27,23,21,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   数量框:
                     type: TextBox
                     attribute:
@@ -1198,13 +1254,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   购买字:
                     type: Text
                     attribute:
@@ -1216,41 +1272,46 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 264
-                  y: 546
+                  x: 20
+                  y: 594
+                  limit: "var.halfW - 60"
                   texts: "var.ownerType == 'personal' && var.canUpgrade ? '&7单价 &e' + var.slotPriceText + ' &7× &f' + var.buyAmount + ' &7格 = &a' + (var.slotPriceAmount * type.toNumber(var.buyAmount == '' ? '0' : var.buyAmount)).toInt() + ' ' + var.slotCurrencyName : ''"
-                  fontSize: 30
+                  fontSize: 36
               分隔三:
                 type: Texture
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 600
+                  y: 644
+                  visible: "var.ownerType == 'shared'"
                   width: "var.halfW - 60"
                   height: 2
-                  normal: ~100,110,120,220
+                  normal: ~112,83,64,235
               删除标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 612
-                  texts: "~&f删除共享仓库"
+                  y: 668
+                  visible: "var.ownerType == 'shared'"
+                  texts: "~&c危险操作  &7/  删除共享库房"
                   fontSize: 36
               删除提示:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 648
-                  texts: "var.ownerType == 'shared' ? (var.deleteConfirm ? '&c输入二级密码后点击确认删除' : '&e点击删除后需要二级密码确认') : '&e请先在左侧选择一个共享仓库'"
+                  y: 708
+                  visible: "var.ownerType == 'shared'"
+                  texts: "var.deleteConfirm ? '&c输入二级密码后点击确认删除' : '&7删除需要二级密码再次确认'"
                   fontSize: 36
               删除密码:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   x: 20
-                  y: 684
+                  y: 748
+                  visible: "var.ownerType == 'shared'"
                   width: 300
                   height: 48
                 children:
@@ -1258,13 +1319,13 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,42,50,225
+                      normal: ~27,23,21,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   输入框:
                     type: TextBox
                     attribute:
@@ -1283,7 +1344,7 @@ controls:
                 attribute:
                   point: ~top_left
                   x: 328
-                  y: 684
+                  y: 748
                   width: 200
                   height: 48
                   visible: "var.ownerType == 'shared'"
@@ -1302,13 +1363,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: "var.deleteConfirm ? '116,48,38,255' : '73,43,35,255'"
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : (var.deleteConfirm ? '235,100,100,240' : '100,110,120,220')"
+                        color: "self.isHovered() ? '241,208,157,255' : (var.deleteConfirm ? '235,100,100,240' : '112,83,64,235')"
                   删除字:
                     type: Text
                     attribute:
@@ -1322,7 +1383,7 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.halfW + 4"
+              x: "var.halfW + 24"
               y: 20
               width: "var.halfW - 20"
               height: "var.viewH - 184"
@@ -1331,27 +1392,37 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~36,42,50,225
+                  normal: ~27,23,21,245
                   shape: ~round_rect
                   radius: 14
                 effect:
                   stroke:
                     width: 3
-                    color: ~100,110,120,220
+                    color: ~112,83,64,235
               成员标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 20
-                  texts: "~&f成员管理"
-                  fontSize: 36
+                  texts: "var.ownerType == 'shared' ? '&f02  成员权限' : '&f02  个人库房'"
+                  fontSize: 48
+              个人库房说明:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  visible: "var.ownerType != 'shared'"
+                  texts: "~&f个人库房无需分配成员\n&7在左侧配置拾取、名称和容量\n&7需要协作时，可从索引新建共享库房"
+                  fontSize: 48
+                  limit: "var.halfW - 80"
+                  through: true
               邀请说明:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 56
+                  visible: "var.ownerType == 'shared'"
                   texts: "!var.hasPassword ? '&e需先设置二级密码才能邀请' : (var.unlocked ? '&e输入名称后点击邀请' : '&e需先解锁二级密码才能邀请')"
                   fontSize: 36
               成员名:
@@ -1360,6 +1431,7 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 92
+                  visible: "var.ownerType == 'shared'"
                   width: "(var.halfW - 68) / 2"
                   height: 48
                 children:
@@ -1367,13 +1439,13 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~36,42,50,225
+                      normal: ~27,23,21,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   输入框:
                     type: TextBox
                     attribute:
@@ -1393,6 +1465,7 @@ controls:
                   point: ~top_left
                   x: "20 + (var.halfW - 68) / 2 + 8"
                   y: 92
+                  visible: "var.ownerType == 'shared'"
                   width: "(var.halfW - 68) / 2"
                   height: 48
                   enable: "!var.actionBusy && var.actionToken != ''"
@@ -1406,18 +1479,18 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~160,170,180,235
+                      normal: ~165,102,68,245
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '160,170,180,255'"
+                        color: "self.isHovered() ? '241,208,157,255' : '190,120,78,255'"
                   邀请字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&0邀请成员"
+                      texts: "~&f邀请成员"
                       fontSize: 36
                       through: true
               成员分隔:
@@ -1426,16 +1499,18 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 148
+                  visible: "var.ownerType == 'shared'"
                   width: "var.halfW - 60"
                   height: 2
-                  normal: ~100,110,120,220
+                  normal: ~112,83,64,235
               成员列表标题:
                 type: Text
                 attribute:
                   point: ~top_left
                   x: 20
                   y: 160
-                  texts: "~&f当前成员 &7(点击身份切换权限)"
+                  visible: "var.ownerType == 'shared'"
+                  texts: "~&f授权名册  &7/  点击身份切换权限"
                   fontSize: 36
               成员列表底:
                 type: Texture
@@ -1443,30 +1518,32 @@ controls:
                   point: ~top_left
                   x: 20
                   y: 192
+                  visible: "var.ownerType == 'shared'"
                   width: "var.halfW - 60"
                   height: "var.viewH - 460"
-                  normal: ~36,42,50,225
+                  normal: ~27,23,21,245
                   shape: ~round_rect
                   radius: 14
                 effect:
                   stroke:
                     width: 3
-                    color: ~100,110,120,220
+                    color: ~112,83,64,235
               成员滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
                   x: -28
                   y: 208
+                  visible: "var.ownerType == 'shared'"
                   width: 10
                   height: "var.viewH - 506"
-                  normal: ~40,44,52,225
+                  normal: ~53,40,33,245
                   shape: ~round_rect
                   radius: 5
                 effect:
                   stroke:
                     width: 2
-                    color: ~255,255,255,230
+                    color: ~224,194,152,230
               成员滑块:
                 type: Texture
                 val: 成员滑块
@@ -1474,9 +1551,10 @@ controls:
                   point: ~top_right
                   x: -28
                   y: 208
+                  visible: "var.ownerType == 'shared'"
                   width: 10
                   height: 50
-                  normal: ~180,190,200,255
+                  normal: ~190,122,79,255
                   maxDragY: "var.viewH - 556"
                   shape: ~round_rect
                   radius: 5
@@ -1486,6 +1564,7 @@ controls:
                   point: ~top_left
                   x: 36
                   y: 208
+                  visible: "var.ownerType == 'shared'"
                   width: "var.halfW - 96"
                   height: "var.viewH - 506"
                   moveY: "self.parent['成员滑块'].getDragYRatio()"
@@ -1520,15 +1599,17 @@ controls:
                           项背景:
                             type: Texture
                             attribute:
-                              point: ~stretch_all
+                              point: ~middle_center
+                              width: "self.parent.width - 6"
+                              height: "self.parent.height"
                               through: true
-                              normal: ~44,50,58,245
+                              normal: "var.memberName == var.sharedMemberNames[self.parent.entryKey] ? '105,66,47,250' : '56,43,36,255'"
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.isHovered() ? '220,230,240,255' : (var.memberName == var.sharedMemberNames[self.parent.entryKey] ? '255,255,255,255' : '100,110,120,220')"
+                                color: "self.isHovered() ? '241,208,157,255' : (var.memberName == var.sharedMemberNames[self.parent.entryKey] ? '226,179,124,255' : '112,83,64,235')"
                           成员名文字:
                             type: Text
                             attribute:
@@ -1536,6 +1617,7 @@ controls:
                               x: 16
                               texts: "'&f' + var.sharedMemberNames[self.parent.entryKey]"
                               fontSize: 36
+                              limit: "var.halfW - 290"
                               through: true
                           身份切换:
                             type: Canvas
@@ -1557,13 +1639,13 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~44,50,58,245
+                                  normal: ~56,43,36,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                                    color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                               身份文字:
                                 type: Text
                                 attribute:
@@ -1589,13 +1671,13 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~44,50,58,245
+                                  normal: ~56,43,36,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
                                   stroke:
                                     width: 2
-                                    color: "self.isHovered() ? '235,100,100,255' : '100,110,120,220'"
+                                    color: "self.isHovered() ? '235,100,100,255' : '112,83,64,235'"
                               移除文字:
                                 type: Text
                                 attribute:
@@ -1609,6 +1691,7 @@ controls:
                   point: ~bottom_left
                   x: 20
                   y: -24
+                  visible: "var.ownerType == 'shared'"
                   width: "var.halfW - 60"
                   height: 48
                   enable: "!var.actionBusy && var.actionToken != '' && var.unlocked && var.hasPassword"
@@ -1622,17 +1705,18 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~44,50,58,245
+                      normal: ~56,43,36,255
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
                         width: 3
-                        color: "self.isHovered() ? '220,230,240,255' : '100,110,120,220'"
+                        color: "self.isHovered() ? '241,208,157,255' : '112,83,64,235'"
                   转让字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.memberName != none ? '&f将所有权转让给 ' + var.memberName : '&e请先选中一个成员'"
+                      texts: "var.memberName != none ? '&c转让所有权  /  &f' + var.memberName : '&7在名册中选中成员后转让所有权'"
                       fontSize: 36
+                      limit: "var.halfW - 92"
                       through: true

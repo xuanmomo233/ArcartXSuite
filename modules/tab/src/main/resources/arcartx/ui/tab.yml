@@ -1,49 +1,57 @@
-# 文件用途: 基础版在线玩家列表 TAB HUD（按住 TAB 键显示，松开隐藏）。
-# 对应 Tab 定义: tabs/online-tab.yml（ui-id: "tab"，packet-handler: "tab"）。
-# 消费 list 形态 pack（字符串列表），每个元素为一名玩家的渲染文本。
-# 布局: 顶部居中毛玻璃背景 + 多列 VGrid 玩家行 + 底部 PING/TPS 信息栏。
+# tab / tabs/online-tab.yml / packet-handler: tab
+# Compact text roster with live PING/TPS telemetry above the list.
+# Server-rendered strings are kept intact in clipped name lanes, including title prefixes.
+# Eight rows per column, three visible columns; LEFT/RIGHT reaches every remaining column.
 ui:
-  isHud: true  # 是否为 HUD（无界面容器，直接渲染到屏幕）
+  isHud: true
   hide:
-  - player_list  # 隐藏原版 player_list 控件
-  escClose: false  # 按 ESC 不关闭（HUD 常驻）
-  defaultOpen: true  # 模块加载时默认打开此 HUD
+  - player_list
+  escClose: false
+  defaultOpen: true
   action:
     load: |-
       var.TAB刷新轮次 = 0
       var.TAB在线人数 = 0
+      var.单列数量 = 1
+      var.第一列人数 = 0
       var.TAB显示 = false
-    # UI 加载时初始化变量
-    # 按下 TAB 键: 请求服务端刷新并计算列数
+      var.TAB名称位移 = 0
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
         var.单列数量 = math.ceil(var.TAB在线人数 / val.TAB遍历.row)
-        var.第一列人数 = math.min(var.TAB在线人数, 15)
+        var.第一列人数 = math.min(var.TAB在线人数, 8)
         var.TAB显示 = true
+        var.TAB名称位移 = 0
+        val.TAB横向滑块.setDragXRatio(0)
       }
-    # 松开 TAB 键: 隐藏列表
+      if(var.TAB显示 && self.currentKeyPress() == "RIGHT"){
+        val.TAB横向滑块.setDragXRatio(math.min(1, val.TAB横向滑块.getDragXRatio() + 1 / math.max(1, var.单列数量 - 3)))
+      }
+      if(var.TAB显示 && self.currentKeyPress() == "LEFT"){
+        val.TAB横向滑块.setDragXRatio(math.max(0, val.TAB横向滑块.getDragXRatio() - 1 / math.max(1, var.单列数量 - 3)))
+      }
+      if(var.TAB显示 && self.currentKeyPress() == "DOWN"){
+        var.TAB名称位移 = math.min(1, var.TAB名称位移 + 0.25)
+      }
+      if(var.TAB显示 && self.currentKeyPress() == "UP"){
+        var.TAB名称位移 = math.max(0, var.TAB名称位移 - 0.25)
+      }
     keyRelease: |-
       if(self.currentKeyReleased() == "TAB"){
         var.TAB显示 = false
       }
   packetHandler:
-    # packetHandler: tab
-    # 接收服务端推送的在线玩家列表（list 形态 pack，每元素为一名玩家的渲染字符串）。
-    # 包字段:
-    #   - packet: 在线玩家文本列表（由 tabs/online-tab.yml 的 pack 渲染后逐玩家生成）
-    #     示例元素: "%axstitle_tab_adventure_prefix%Alice%axstitle_tab_adventure_suffix%20"
-    # 处理逻辑: 清空旧玩家行 → 遍历 packet 逐条复制 player 模板并填充文本 → 重算列数
+    # Original list payload, text writes, copy sentinel and refresh generation retained.
     tab: |-
       i = 0
       var.TAB刷新轮次 = var.TAB刷新轮次 + 1
       while(val.TAB遍历2.childrenCount() > 1){
         val.TAB遍历2.get(1).remove()
       }
-      //此处的写法有点赘余，但这是为了防止报错写的伪判断,以及绕过ax的控件的复制删除BUG
       while(i < packet.size()){
         if(val.player != none){
-          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round())       
+          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i.round())
           TAB['player_text'].texts = packet.get(i)
           TAB.visible = true
         }
@@ -51,126 +59,280 @@ ui:
       }
       var.TAB在线人数 = packet.size()
       var.单列数量 = math.ceil(var.TAB在线人数 / val.TAB遍历.row)
-      var.第一列人数 = math.min(var.TAB在线人数, 15)
-# ============ 控件定义 ============
+      var.第一列人数 = math.min(var.TAB在线人数, 8)
 controls:
-  自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
-    type: adaptive
+  自适应全局布局:
+    type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
-      TAB背景:  # 毛玻璃半透明背景面板，宽度随列数动态变化
-        type: texture
+      TAB背景:
+        type: Canvas
         attribute:
           point: ~top_center
-          width: 50 + 252 * var.单列数量  # 宽度 = 基础宽度 + 每列宽度 * 列数
-          height: 70 + 27 * var.第一列人数 + self['信息排列布局'].childrenCount() * 27 / self.about_y  # 高度随人数和信息栏动态调整
-          y: 40
-          normal: ~Frosted:30;0,0,0,255  # 毛玻璃材质，30 模糊度，黑色不透明
-          visible: var.TAB显示  # 仅按住 TAB 时显示
-          shape: ~round_rect
-          radius: 20
-          about_y: "var.单列数量 == none ? 3 : (var.单列数量 < 4 || var.单列数量 > 5 ? var.单列数量 : 3)"  # 信息栏折行系数
-        effect:
-          stroke:  # 描边
-            width: 3
-            color: ~0,0,0,255
+          y: 24
+          width: "24 + 392 * math.min(3, math.max(1, var.单列数量))"
+          height: "252 + 44 * math.max(1, var.第一列人数)"
+          visible: var.TAB显示
+          through: true
         children:
-          在线玩家:  # 标题文字"在线玩家："
-            type: text
+          名册底:
+            type: Texture
             attribute:
-              y: 23
-              x: 26
-              fontSize: 33
-              texts: "'&a在线玩家：'"
-              lineSpace: 8
-          信息排列布局:  # 底部信息栏（PING / TPS），水平排列
-            type: HGrid
+              point: ~stretch_all
+              normal: ~12,24,44,164
+              shape: ~round_rect
+              radius: 8
+              through: true
+          名册规则线:
+            type: Texture
             attribute:
-              y: 70 + 27 * var.第一列人数 - 10
-              x: 26
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              column: var.单列数量
+              width: "self.parent.width"
+              height: 3
+              normal: ~35,159,214,230
+              through: true
+          在线玩家:
+            type: Text
+            attribute:
+              x: 24
+              y: 16
+              fontSize: 48
+              texts: ~&f在线玩家
+              through: true
+          在线人数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 24
+              texts: "'&b' + var.TAB在线人数.round() + ' &7人'"
+              fontSize: 36
+              through: true
+          # A stable two-cell telemetry strip replaces the old count-dependent footer wrapping.
+          信息排列布局:
+            type: HStack
+            attribute:
+              x: 24
+              y: 76
+              height: 44
+              spaceBetween: 16
             children:
-              PING:  # 玩家延迟显示
+              PING:
                 type: Canvas
                 attribute:
-                  width: 200
-                  height: 25
+                  width: "(self.parent.parent.width - 64) / 2"
+                  height: 44
+                  through: true
                 children:
-                  文本:
-                    type: text
+                  底:
+                    type: Texture
                     attribute:
-                      fontSize: 33
-                      texts: "~&f玩家延迟：{server.player_ping}"
-                      lineSpace: 8
-              TPS:  # 服务器 TPS 显示
+                      point: ~stretch_all
+                      normal: ~21,37,57,130
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 10
+                      texts: ~&7PING
+                      fontSize: 36
+                      through: true
+                  文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_right
+                      x: -10
+                      fontSize: 36
+                      texts: ~&f{server.player_ping}
+                      through: true
+              TPS:
                 type: Canvas
                 attribute:
-                  width: 200
-                  height: 25
+                  width: "(self.parent.parent.width - 64) / 2"
+                  height: 44
+                  through: true
                 children:
-                  文本:
-                    type: text
+                  底:
+                    type: Texture
                     attribute:
-                      fontSize: 33
-                      texts: "~&f服务器TPS：{server.server_tps_1}"
-                      lineSpace: 8
-          TAB遍历:  # 玩家行占位网格（VGrid），创建时预复制 118 个 TAB 模板
-            type: VGrid
+                      point: ~stretch_all
+                      normal: ~21,37,57,130
+                      through: true
+                  标签:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 10
+                      texts: ~&7TPS
+                      fontSize: 36
+                      through: true
+                  文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_right
+                      x: -10
+                      fontSize: 36
+                      texts: ~&f{server.server_tps_1}
+                      through: true
+          # Keep TAB遍历/TAB aliases, now as useful column headings rather than 120 placeholders.
+          TAB遍历:
+            type: HStack
             val: TAB遍历
             attribute:
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              row: 15  # 每列最多 15 行
-              y: 44
-              x: 26
+              x: 24
+              y: 132
+              height: 36
+              spaceBetween: 24
+              row: 8
             action:
-              # 创建时预生成 118 个占位行（对应最大在线人数），按 ID 控制可见性
               create: |-
-                for(i in range(1, 119)){
-                  TAB = self['TAB'].copy('TAB' + i.round())
-                  TAB.ID = i.round()
+                for(i in range(1, 2)){
+                  header = self['TAB'].copy('TAB' + i.round())
+                  header.ID = i.round()
                 }
             children:
-              TAB:  # 单个玩家行模板（灰色圆角背景），按 ID 和在线人数控制可见
-                type: texture
+              TAB:
+                type: Canvas
                 val: TAB
                 attribute:
-                  point: ~top_center
-                  #在这里调整width适应文本长度###################################
-                  width: 250
-                  height: 25
-                  shape: ~round_rect
-                  radius: 10
+                  width: 368
+                  height: 36
                   ID: 0.round()
-                  normal: ~95,95,95,255
-                  visible: var.TAB显示 && self.ID < var.TAB在线人数  # 仅显示在线人数范围内的行
-          TAB遍历2:  # 玩家文本渲染网格，packetHandler 动态复制 player 模板填充文本
-            type: VGrid
-            val: TAB遍历2
-            attribute:
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              row: 15
-              y: 44
-              x: 26
-            children:
-              player:  # 玩家行文本模板（Canvas），packetHandler 复制后填充 player_text
-                type: Canvas
-                val: player
-                attribute:
-                  width: 250
-                  height: 25
-                  x: 4
-                  y: 4
-                  visible: false  # 默认隐藏，packetHandler 中设为 true
+                  visible: "self.ID < math.min(3, math.max(1, var.单列数量))"
+                  through: true
                 children:
-                  player_text:  # 玩家名称等渲染文本
-                    type: text
+                  栏目:
+                    type: Text
                     attribute:
-                      fontSize: 33
-                      texts: "~none"
+                      texts: ~&7玩家 / 称号
+                      fontSize: 36
+                      through: true
+          玩家滚动区:
+            type: Scroll
+            attribute:
+              x: 24
+              y: 176
+              width: "392 * math.min(3, math.max(1, var.单列数量)) - 24"
+              height: "44 * math.max(1, var.第一列人数)"
+              moveX: val.TAB横向滑块.getDragXRatio()
+            action:
+              wheel: |-
+                val.TAB横向滑块.setDragXRatio(math.max(0, math.min(1, self.moveX - self.wheelValue / math.max(1, var.单列数量 - 3))))
+            children:
+              玩家画布:
+                type: Canvas
+                attribute:
+                  width: "392 * math.max(1, var.单列数量) - 24"
+                  height: "44 * math.max(1, var.第一列人数)"
+                  through: true
+                children:
+                  TAB遍历2:
+                    type: VGrid
+                    val: TAB遍历2
+                    attribute:
+                      spaceBetweenY: 4
+                      spaceBetweenX: 24
+                      row: 8
+                    children:
+                      player:
+                        type: Canvas
+                        val: player
+                        attribute:
+                          width: 368
+                          height: 40
+                          visible: false
+                          through: true
+                        children:
+                          行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~21,37,57,164
+                              through: true
+                          行标尺:
+                            type: Texture
+                            attribute:
+                              width: 2
+                              height: 40
+                              normal: ~137,167,187,190
+                              through: true
+                          # Explicit custom texts preserves TAB['player_text'].texts assignment.
+                          # The inner Text is clipped to its lane and reveals overflow on hover.
+                          player_text:
+                            type: Scroll
+                            attribute:
+                              x: 12
+                              y: 2
+                              width: 344
+                              height: 36
+                              texts: ~none
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : var.TAB名称位移"
+                            action:
+                              enter: "self.scrollAnim = Lerp(0, 1, 3000)"
+                              leave: "self.scrollAnim = none"
+                            children:
+                              玩家文本布局:
+                                type: HStack
+                                attribute:
+                                  height: 36
+                                children:
+                                  玩家文本:
+                                    type: Text
+                                    attribute:
+                                      fontSize: 36
+                                      texts: self.parent.parent.texts
+                                      through: true
+          空名册:
+            type: Text
+            attribute:
+              x: 36
+              y: 180
+              texts: "var.TAB刷新轮次 == 0 ? '&7正在同步名册' : '&7暂无在线条目'"
+              fontSize: 36
+              visible: var.TAB在线人数 == 0
+              through: true
+          横向滑轨:
+            type: Texture
+            attribute:
+              x: 24
+              y: "188 + 44 * math.max(1, var.第一列人数)"
+              width: "self.parent.width - 48"
+              height: 6
+              normal: ~92,121,145,170
+              visible: var.单列数量 > 3
+              through: true
+          横向滑块:
+            type: Texture
+            val: TAB横向滑块
+            attribute:
+              x: 24
+              y: "188 + 44 * math.max(1, var.第一列人数)"
+              width: 120
+              height: 6
+              maxDragX: "self.parent.width - 168"
+              normal: ~35,159,214,230
+              hover: ~188,210,224,230
+              visible: var.单列数量 > 3
+          浏览提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -16
+              texts: "var.单列数量 > 3 ? '&bLEFT / RIGHT &7分栏浏览' : '&7UP / DOWN 浏览长名'"
+              fontSize: 36
+              through: true
+          收起提示:
+            type: Text
+            attribute:
+              point: ~bottom_right
+              x: -24
+              y: -16
+              texts: "var.单列数量 > 3 ? '&7UP / DOWN 浏览长名' : '&7PING 单位 ms / 服务 TPS'"
+              fontSize: 36
+              visible: var.单列数量 > 1
+              through: true

@@ -1,4 +1,5 @@
 # AXS pickup_hud; version=6; maxVisible=4; ttlMs=3000
+# 战利品野外工具组 / 拾取回执：四条短签，沿用名称颜色，三秒后自动收起。
 ui:
   isHud: true
   defaultOpen: false
@@ -8,10 +9,6 @@ ui:
   show: true
   level: 10
   packetHandler:
-    # packetHandler: pick
-    # 包字段:
-    #   - amount: 拾取的物品数量
-    #   - itemJson: 拾取物品的 JSON 序列化数据（用于显示图标）
     pick: |-
       var.now = Time.currentTime()
       var.entry4Visible = var.entry3Visible
@@ -51,6 +48,19 @@ ui:
       var.entry2IconDirty = false
       var.entry3IconDirty = false
       var.entry4IconDirty = false
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
     tick: |-
       var.now = Time.currentTime()
       if(var.entry1Visible && (var.now - var.entry1CreatedAt) >= var.entryTtlMs){
@@ -89,184 +99,200 @@ ui:
         }
         var.entry4IconDirty = false
       }
-
-
 controls:
   自适应全局布局:
     type: Adaptive
-    attribute:
-      point: ~stretch_all
-      width: 1920
-      height: 1080
+    attribute: {point: ~top_center, width: 1920, height: 1080, through: true}
     children:
-      拾取纵向布局:
-        type: VStack
+      回执区域:
+        type: Canvas
         attribute:
-          point: ~bottom_right
-          x: -300
-          y: -120
-          spaceBetween: 8
+          point: ~top_left
+          x: "var.viewW - var.offX - 476"
+          y: "var.viewH - 448"
+          width: 428
+          height: 312
+          visible: 'var.entry1Visible || var.entry2Visible || var.entry3Visible || var.entry4Visible'
+          through: true
         children:
-          拾取条目1:
+          回执标题:
             type: Canvas
-            attribute:
-              width: self['文字'].width + 80
-              height: 60
-              visible: var.entry1Visible
+            attribute: {point: ~top_left, width: 428, height: 44, through: true}
             children:
-              背景:
+              标题皮革:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~Frosted:30;95,95,95,220
-                  shape: ~round_rect
-                  radius: 16
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              图标:
-                val: pickup_slot_1
-                type: Slot
-                attribute:
-                  point: ~middle_left
-                  x: 10
-                  y: 0
-                  width: 40
-                  height: 40
-                  slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
-                  itemScale: 0.85
-                  visible: var.entry1ItemJson != none
-              文字:
+                attribute: {point: ~stretch_all, normal: '~38,43,34,224', shape: ~round_rect, radius: 4, through: true}
+              标题:
                 type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 60
-                  y: 0
-                  texts: "val.pickup_slot_1.getSlotItemStack().getName() + ' &fx' + var.entry1Amount.round()"
-                  fontSize: 36
-          拾取条目2:
-            type: Canvas
-            attribute:
-              width: self['文字'].width + 80
-              height: 60
-              visible: var.entry2Visible
+                attribute: {point: ~middle_left, x: 14, texts: '~&e已拾取', fontSize: 36, through: true}
+              时效:
+                type: Text
+                attribute: {point: ~middle_right, x: -14, texts: '~&7最新在上', fontSize: 36, through: true}
+          拾取纵向布局:
+            type: VStack
+            attribute: {point: ~top_left, y: 52, width: 428, spaceBetween: 6, through: true}
             children:
-              背景:
-                type: Texture
+              拾取条目1:
+                type: Canvas
                 attribute:
-                  point: ~stretch_all
-                  normal: ~Frosted:30;95,95,95,220
-                  shape: ~round_rect
-                  radius: 16
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              图标:
-                val: pickup_slot_2
-                type: Slot
+                  width: 428
+                  height: 60
+                  visible: var.entry1Visible
+                  lifeRatio: '(var.now - var.entry1CreatedAt) / var.entryTtlMs'
+                  through: true
+                children:
+                  背景:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: '~43,52,39,238', shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 1, color: '~148,164,113,255'}
+                  入袋色签:
+                    type: Texture
+                    attribute: {point: ~middle_left, width: 4, height: 36, normal: '~149,184,112,255', through: true}
+                  图标:
+                    val: pickup_slot_1
+                    type: Slot
+                    attribute: {point: ~middle_left, x: 14, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.85, visible: 'var.entry1ItemJson != none', through: true}
+                  名称窗口:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 64, width: 246, height: 36, moveX: 'self.parent.lifeRatio > 0.2 ? (self.parent.lifeRatio - 0.2) / 0.8 : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          文字:
+                            type: Text
+                            attribute: {texts: "'&f' + val.pickup_slot_1.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  数量:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&a+' + var.entry1Amount.round()", fontSize: 36, through: true}
+                  收起轨:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: 400, height: 2, normal: '~77,85,59,255', through: true}
+                  收起进度:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: '(self.parent.lifeRatio < 1 ? 1 - self.parent.lifeRatio : 0) * 400', height: 2, normal: '~186,173,117,255', through: true}
+              拾取条目2:
+                type: Canvas
                 attribute:
-                  point: ~middle_left
-                  x: 10
-                  y: 0
-                  width: 40
-                  height: 40
-                  slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
-                  itemScale: 0.85
-                  visible: var.entry2ItemJson != none
-              文字:
-                type: Text
+                  width: 428
+                  height: 60
+                  visible: var.entry2Visible
+                  lifeRatio: '(var.now - var.entry2CreatedAt) / var.entryTtlMs'
+                  through: true
+                children:
+                  背景:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: '~38,43,34,228', shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 1, color: '~126,119,87,255'}
+                  入袋色签:
+                    type: Texture
+                    attribute: {point: ~middle_left, width: 4, height: 36, normal: '~124,157,99,255', through: true}
+                  图标:
+                    val: pickup_slot_2
+                    type: Slot
+                    attribute: {point: ~middle_left, x: 14, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.85, visible: 'var.entry2ItemJson != none', through: true}
+                  名称窗口:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 64, width: 246, height: 36, moveX: 'self.parent.lifeRatio > 0.2 ? (self.parent.lifeRatio - 0.2) / 0.8 : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          文字:
+                            type: Text
+                            attribute: {texts: "'&f' + val.pickup_slot_2.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  数量:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&a+' + var.entry2Amount.round()", fontSize: 36, through: true}
+                  收起轨:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: 400, height: 2, normal: '~77,85,59,255', through: true}
+                  收起进度:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: '(self.parent.lifeRatio < 1 ? 1 - self.parent.lifeRatio : 0) * 400', height: 2, normal: '~186,173,117,255', through: true}
+              拾取条目3:
+                type: Canvas
                 attribute:
-                  point: ~middle_left
-                  x: 60
-                  y: 0
-                  texts: "val.pickup_slot_2.getSlotItemStack().getName() + ' &fx' + var.entry2Amount.round()"
-                  fontSize: 36
-
-          拾取条目3:
-            type: Canvas
-            attribute:
-              width: self['文字'].width + 80
-              height: 60
-              visible: var.entry3Visible
-            children:
-              背景:
-                type: Texture
+                  width: 428
+                  height: 60
+                  visible: var.entry3Visible
+                  lifeRatio: '(var.now - var.entry3CreatedAt) / var.entryTtlMs'
+                  through: true
+                children:
+                  背景:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: '~38,43,34,228', shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 1, color: '~126,119,87,255'}
+                  入袋色签:
+                    type: Texture
+                    attribute: {point: ~middle_left, width: 4, height: 36, normal: '~124,157,99,255', through: true}
+                  图标:
+                    val: pickup_slot_3
+                    type: Slot
+                    attribute: {point: ~middle_left, x: 14, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.85, visible: 'var.entry3ItemJson != none', through: true}
+                  名称窗口:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 64, width: 246, height: 36, moveX: 'self.parent.lifeRatio > 0.2 ? (self.parent.lifeRatio - 0.2) / 0.8 : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          文字:
+                            type: Text
+                            attribute: {texts: "'&f' + val.pickup_slot_3.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  数量:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&a+' + var.entry3Amount.round()", fontSize: 36, through: true}
+                  收起轨:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: 400, height: 2, normal: '~77,85,59,255', through: true}
+                  收起进度:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: '(self.parent.lifeRatio < 1 ? 1 - self.parent.lifeRatio : 0) * 400', height: 2, normal: '~186,173,117,255', through: true}
+              拾取条目4:
+                type: Canvas
                 attribute:
-                  point: ~stretch_all
-                  normal: ~Frosted:30;95,95,95,220
-                  shape: ~round_rect
-                  radius: 16
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              图标:
-                val: pickup_slot_3
-                type: Slot
-                attribute:
-                  point: ~middle_left
-                  x: 10
-                  y: 0
-                  width: 40
-                  height: 40
-                  slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
-                  itemScale: 0.85
-                  visible: var.entry3ItemJson != none
-              文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 60
-                  y: 0
-                  texts: "val.pickup_slot_3.getSlotItemStack().getName() + ' &fx' + var.entry3Amount.round()"
-                  fontSize: 36
-
-          拾取条目4:
-            type: Canvas
-            attribute:
-              width: self['文字'].width + 80
-              height: 60
-              visible: var.entry4Visible
-            children:
-              背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~Frosted:30;95,95,95,220
-                  shape: ~round_rect
-                  radius: 16
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              图标:
-                val: pickup_slot_4
-                type: Slot
-                attribute:
-                  point: ~middle_left
-                  x: 10
-                  y: 0
-                  width: 40
-                  height: 40
-                  slotType: ~Icon
-                  normal: ~0,0,0,0
-                  hover: ~0,0,0,0
-                  itemScale: 0.85
-                  visible: var.entry4ItemJson != none
-              文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 60
-                  y: 0
-                  texts: "val.pickup_slot_4.getSlotItemStack().getName() + ' &fx' + var.entry4Amount.round()"
-                  fontSize: 36
-
+                  width: 428
+                  height: 60
+                  visible: var.entry4Visible
+                  lifeRatio: '(var.now - var.entry4CreatedAt) / var.entryTtlMs'
+                  through: true
+                children:
+                  背景:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: '~38,43,34,228', shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 1, color: '~126,119,87,255'}
+                  入袋色签:
+                    type: Texture
+                    attribute: {point: ~middle_left, width: 4, height: 36, normal: '~124,157,99,255', through: true}
+                  图标:
+                    val: pickup_slot_4
+                    type: Slot
+                    attribute: {point: ~middle_left, x: 14, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.85, visible: 'var.entry4ItemJson != none', through: true}
+                  名称窗口:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 64, width: 246, height: 36, moveX: 'self.parent.lifeRatio > 0.2 ? (self.parent.lifeRatio - 0.2) / 0.8 : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          文字:
+                            type: Text
+                            attribute: {texts: "'&f' + val.pickup_slot_4.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  数量:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&a+' + var.entry4Amount.round()", fontSize: 36, through: true}
+                  收起轨:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: 400, height: 2, normal: '~77,85,59,255', through: true}
+                  收起进度:
+                    type: Texture
+                    attribute: {point: ~bottom_left, x: 14, y: -3, width: '(self.parent.lifeRatio < 1 ? 1 - self.parent.lifeRatio : 0) * 400', height: 2, normal: '~186,173,117,255', through: true}

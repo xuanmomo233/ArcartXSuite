@@ -34,19 +34,26 @@ ui:
       var.currentClickable = packet['clickable']
       var.lastRevision = packet['revision']
       var.textWidth = packet['textWidth']
-      var.textX = Display.width()
+      var.textX = var.viewW - var.offX
       if(!var.displayVisible){
         var.currentText = none
       }
   action:
     load: |-
       var.textWidth = 0
-      var.textX = Display.width()
       var.scrollSpeed = 1.5
+      self.actions['resize']()
+      var.textX = var.viewW - var.offX
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
     tick: |-
       if(var.displayVisible && var.currentText != none){
         var.textX = var.textX - var.scrollSpeed
-        if(var.textX < 0 - var.textWidth){
+        if(var.textX < 0 - var.offX - var.textWidth){
           var.displayVisible = false
           var.currentText = none
         }
@@ -56,38 +63,94 @@ controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
       公告背景:
         type: Texture
         attribute:
-          point: ~horizontal_stretch_top
-          x: 0
-          y: 84
-          height: 72
-          normal: ~Frosted:30;95,95,95,220
+          point: ~top_left
+          x: "-var.offX"
+          y: 24
+          width: "var.viewW"
+          height: 104
+          normal: ~16,21,30,164
+          through: true
           visible: var.displayVisible && var.currentText != none
-      公告点击区:
-        type: Canvas
+      公告顶线:
+        type: Texture
         attribute:
-          point: ~top_center
-          x: 0
-          y: 84
-          width: Display.width()
-          height: 72
-          through: false
+          point: ~top_left
+          x: "-var.offX"
+          y: 24
+          width: "var.viewW"
+          height: 2
+          normal: ~226,188,123,215
+          through: true
+          visible: var.displayVisible && var.currentText != none
+      播报标记:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "34 - var.offX"
+          y: 38
+          width: 5
+          height: 23
+          normal: ~234,197,138,245
+          through: true
+          visible: var.displayVisible && var.currentText != none
+      播报标签:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "56 - var.offX"
+          y: 32
+          texts: ~&e正在播报  &7/  ANNOUNCEMENT
+          fontSize: 36
+          through: true
+          visible: var.displayVisible && var.currentText != none
+      点击提示:
+        type: Text
+        attribute:
+          point: ~top_right
+          x: "var.offX - 36"
+          y: 32
+          texts: ~&7点击查看
+          fontSize: 36
+          through: true
           visible: var.displayVisible && var.currentClickable && var.currentText != none
-        action:
-          clickLeft: |-
-            Packet.send("AXS_announcer_click", var.currentEntryId)
+      公告分隔线:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "30 - var.offX"
+          y: 69
+          width: "var.viewW - 60"
+          height: 1
+          normal: ~218,192,145,105
+          through: true
+          visible: var.displayVisible && var.currentText != none
       公告文字:
         type: Text
         attribute:
           point: ~top_left
           x: var.textX
-          y: 95
-          texts: "'&f' + var.currentText"
-          fontSize: 100
+          y: 73
+          texts: "'&e' + var.currentText"
+          fontSize: 54
+          through: true
           visible: var.displayVisible && var.currentText != none
+      公告点击区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          y: 24
+          width: "var.viewW"
+          height: 104
+          through: false
+          visible: var.displayVisible && var.currentClickable && var.currentText != none
+        action:
+          clickLeft: |-
+            Packet.send("AXS_announcer_click", var.currentEntryId)

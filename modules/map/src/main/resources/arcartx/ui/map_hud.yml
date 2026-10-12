@@ -250,74 +250,137 @@ controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
+      through: true
     children:
-      # 小地图装饰边框：由 UI 负责渲染装饰，mod 只画地形。
+      # 随身制图仪：保留 mod 锚点、尺寸、形状与四角位置，装饰不覆盖地形。
       地图边框范围布局:
         type: Canvas
         attribute:
           point: ~top_left
-          # 注意: 边框越厚的地图，x、y、width、height也需要做相应调整
-          strokewidth: 4
-          x: "var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT' ? 28 - self.strokewidth : var.viewW - 28 - var.hudSizeDesign - self.strokewidth"
-          y: "var.hudPosition == 'BOTTOM_LEFT' || var.hudPosition == 'BOTTOM_RIGHT' ? var.viewH - 70 - var.hudSizeDesign - self.strokewidth : 22 - self.strokewidth"
-          width: var.hudSizeDesign + 2 * self.strokewidth
-          height: var.hudSizeDesign + 2 * self.strokewidth
+          strokewidth: 2
+          x: "((var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT') ? 28 - self.strokewidth : var.viewW - 28 - var.hudSizeDesign - self.strokewidth) - (var.viewW - 1920) / 2"
+          y: "(var.hudPosition == 'BOTTOM_LEFT' || var.hudPosition == 'BOTTOM_RIGHT') ? var.viewH - 70 - var.hudSizeDesign - self.strokewidth : 22 - self.strokewidth"
+          width: "var.hudSizeDesign + 2 * self.strokewidth"
+          height: "var.hudSizeDesign + 2 * self.strokewidth"
           through: true
+          visible: "var.visible && var.mapRenderer != none"
         children:
           小地图圆形边框:
             type: Texture
             attribute:
               point: ~stretch_all
-              # 注意:此处normal需要使用100px的纯透明贴图，搭配effect.stroke的描边效果才能显示地图边框
-              # normal支持任何贴图来装饰地图，使用贴图时请删除下方的effect.stroke的描边效果
+              # 透明 PNG 是 mod 地形上方的有效描边载体，不使用 alpha=0 颜色。
               normal: ~map/alpha.png
               shape: ~circle
-              # mapRenderer != none 守卫：没装 ArcartX-Suite-Map mod 的玩家（服务端照常发包）
-              # 不会画出悬空边框
-              visible: var.visible && var.hudShape == 'CIRCLE' && var.mapRenderer != none
+              visible: "var.visible && var.hudShape == 'CIRCLE' && var.mapRenderer != none"
               through: true
             effect:
               stroke:
                 width: self.parent.strokewidth
-                # 可以通过调整颜色来调整地图边框描边
-                color: ~255,255,255,255
+                color: ~57,81,85,255
           小地图方形边框:
             type: Texture
             attribute:
               point: ~stretch_all
-              # 此处为 方形小地图 显示的边框
               normal: ~map/alpha.png
-              visible: var.visible && var.hudShape != 'CIRCLE' && var.mapRenderer != none
+              visible: "var.visible && var.hudShape != 'CIRCLE' && var.mapRenderer != none"
               through: true
             effect:
               stroke:
                 width: self.parent.strokewidth
-                # 可以通过调整颜色来调整地图边框描边
-                color: ~255,255,255,255
-          小地图世界名:
-            type: Text
+                color: ~57,81,85,255
+          圆形羊皮纸内线:
+            type: Texture
             attribute:
-              x: self.parent.width / 2
-              y: self.parent.height + 10
-              # 世界名由服务端按玩家当前世界下发（配置 display-name 或 MV 去色 alias），
-              # 不再走 %multiverse-core_alias% PAPI——没装 MV 也能显示配置名
-              texts: "var.worldName == none ? '' : '' + var.worldName"
-              fontSize: 36
-              visible: var.visible && var.mapRenderer != none
+              point: ~top_left
+              x: 2
+              y: 2
+              width: "self.parent.width - 4"
+              height: "self.parent.height - 4"
+              normal: ~map/alpha.png
+              shape: ~circle
+              visible: "var.hudShape == 'CIRCLE'"
               through: true
-              center: true
-          小地图坐标:
-            type: Text
+            effect:
+              stroke:
+                width: 1
+                color: ~216,200,161,255
+          方形羊皮纸内线:
+            type: Texture
             attribute:
-              x: self.parent.width / 2
-              y: self.parent.height + 30
-              # 此处为 ArcartX 提供的客户端aria函数工具
-              texts: "'&eX&f: ' + Player.getPosX().round(2) + ' &eY&f: ' + Player.getPosY().round(2) + ' &eZ&f: ' + Player.getPosZ().round(2)"
-              fontSize: 36
-              visible: var.visible && var.mapRenderer != none
+              point: ~top_left
+              x: 2
+              y: 2
+              width: "self.parent.width - 4"
+              height: "self.parent.height - 4"
+              normal: ~map/alpha.png
+              visible: "var.hudShape != 'CIRCLE'"
               through: true
-              center: true
+            effect:
+              stroke:
+                width: 1
+                color: ~216,200,161,255
+          地图信息纸签:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "(var.hudPosition == 'TOP_LEFT' || var.hudPosition == 'BOTTOM_LEFT') ? 0 : self.parent.width - 360"
+              y: "self.parent.height + 8"
+              width: 360
+              height: 44
+              through: true
+            children:
+              信息纸签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~238,228,201,230
+                  shape: ~round_rect
+                  radius: 3
+                  through: true
+              矿物蓝识别线:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 0
+                  width: 3
+                  height: 32
+                  normal: ~57,111,132,255
+                  through: true
+              小地图世界名:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 4
+                  width: 336
+                  height: 20
+                  through: true
+                children:
+                  世界纸签布局:
+                    type: HStack
+                    attribute:
+                      height: 20
+                      through: true
+                    children:
+                      世界纸签文字:
+                        type: Text
+                        attribute:
+                          # 服务端配置世界名，裁切长名称而不扩大 HUD。
+                          texts: "'&3图册 &0' + var.worldName"
+                          fontSize: 36
+                          through: true
+              小地图坐标:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 12
+                  y: 24
+                  # 地理芯片只显示整数坐标，避免 HUD 横向扩张。
+                  texts: "'&8X &0' + Player.getPosX().round() + '   &8Y &0' + Player.getPosY().round() + '   &8Z &0' + Player.getPosZ().round()"
+                  fontSize: 36
+                  through: true
 

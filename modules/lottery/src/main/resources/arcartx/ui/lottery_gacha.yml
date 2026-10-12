@@ -1,6 +1,6 @@
 # 文件用途: 原神祈愿风格抽奖界面（AXS:lottery_gacha）的客户端 UI 配置。
 # 本文件只负责渲染与交互回传，抽奖概率、保底、消耗与积分兑换全部由服务端处理。
-# 界面结构: 单一 Adaptive 根 -> 主面板（卡池导航 + UP 展示 + 资源栏 + 保底进度 + 操作栏）
+# 界面结构: Adaptive 全视口 -> 梅紫典藏剧场（卡池导航 + 主角舞台 + 奖品/保底轨 + 价格确认台）
 #           + 单抽/十连结果层 + 历史/详情/兑换三个弹层（全部与结果层同级，不再嵌套在结果层里面）。
 # 抽奖流程为「包驱动」: 点击只发请求并进入等待态，result / batch_result 到达后才展示结果；
 # 若服务端只回 update（消耗不足等失败情形），等待态会被自动解除。
@@ -390,6 +390,19 @@ ui:
       var.resultPending = false // 本次祈愿是否已收到结果包
       var.actionBusy = false
       var.actionBusySeconds = 0
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
     # open 事件: 每次打开界面复位所有层
     open: |-
       val.主面板.visible = true
@@ -406,7 +419,7 @@ controls:
   自适应根:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
     children:
@@ -414,17 +427,23 @@ controls:
       背景遮罩:
         type: Texture
         attribute:
-          point: ~stretch_all
-          normal: ~0,0,0,190
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
+          through: true
+          normal: ~Frosted:24;28,16,30,230
 
       # 主面板: 顶栏资源 + 卡池导航 + 主视觉 + 保底进度 + 操作栏
       主面板:
         type: Canvas
         val: 主面板
         attribute:
-          point: ~middle_center
-          width: 1760
-          height: 940
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 32
+          width: "var.viewW - 96"
+          height: "var.viewH - 64"
         children:
           # ── 面板底: 浅色雾面底 + 双层浅金描边 ─────────────────
           面板外光:
@@ -445,13 +464,14 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~26,30,44,244
+              normal: ~36,23,39,244
+              through: true
               shape: ~round_rect
               radius: 22
             effect:
               gradient:
-                color1: ~38,46,72,255
-                color2: ~30,40,64,255
+                color1: ~56,33,52,255
+                color2: ~36,23,39,255
                 type: 0
                 angleDeg: 90
               stroke:
@@ -461,9 +481,9 @@ controls:
             type: Texture
             attribute:
               point: ~middle_center
-              width: 1744
-              height: 924
-              normal: ~26,30,44,244
+              width: "self.parent.width - 16"
+              height: "self.parent.height - 16"
+              normal: ~36,23,39,244
               shape: ~round_rect
               radius: 18
               through: true
@@ -492,6 +512,7 @@ controls:
             type: Canvas
             attribute:
               point: ~horizontal_stretch_top
+              width: "self.parent.width"
               height: 92
             children:
               顶栏底:
@@ -580,14 +601,14 @@ controls:
                   point: ~middle_left
                   x: 86
                   texts:
-                    - ~&f祈愿
-                  fontSize: 38
+                    - ~&e典藏剧场
+                  fontSize: 36
                   through: true
               标题竖线:
                 type: Texture
                 attribute:
                   point: ~middle_left
-                  x: 162
+                  x: 284
                   width: 2
                   height: 34
                   normal: ~180,220,255,60
@@ -596,9 +617,9 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_left
-                  x: 178
-                  texts: "'&7' + var.poolName"
-                  fontSize: 28
+                  x: 308
+                  texts: "'&f' + var.poolName"
+                  fontSize: 36
                   limit: 20
                   through: true
               资源栏:
@@ -689,7 +710,7 @@ controls:
                           x: 62
                           y: -13
                           texts: "var.resourceRows[self.entryKey] != none ? '&7' + var.resourceRows[self.entryKey]['displayName'] : '&7———'"
-                          fontSize: 26
+                          fontSize: 36
                           limit: 8
                           through: true
                       余额:
@@ -700,7 +721,7 @@ controls:
                           x: 62
                           y: 13
                           texts: "var.resourceRows[self.entryKey] != none && var.resourceRows[self.entryKey]['owned'] != none && var.resourceRows[self.entryKey]['owned'] >= 0 ? '&f' + var.resourceRows[self.entryKey]['owned'].round() : '&7—'"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
 
           # ── 卡池导航 ──────────────────────────────────────
@@ -708,10 +729,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 18
-              y: 104
+              x: 24
+              y: 116
               width: 236
-              height: 696
+              height: "self.parent.height - 336"
             children:
               导航底:
                 type: Texture
@@ -759,8 +780,8 @@ controls:
                         attribute:
                           entryKey: 0.round()
                           point: ~stretch_all
-                          normal: "var.currentPoolIndex != none && self.entryKey == var.currentPoolIndex ? '38,48,74,235' : '26,32,50,238'"
-                          hover: ~48,58,88,245
+                          normal: "var.currentPoolIndex != none && self.entryKey == var.currentPoolIndex ? '80,45,71,235' : '38,25,41,238'"
+                          hover: ~94,55,85,245
                           shape: ~round_rect
                           radius: 12
                           enable: "!var.actionBusy && var.actionToken != ''"
@@ -776,7 +797,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~26,32,50,238
+                          normal: ~38,25,41,238
                           shape: ~round_rect
                           radius: 12
                           through: true
@@ -807,14 +828,14 @@ controls:
                           y: 10
                           width: 176
                           height: 70
-                          normal: "var.currentPoolIndex != none && self.entryKey == var.currentPoolIndex ? '44,84,148,245' : '28,34,54,230'"
+                          normal: "var.currentPoolIndex != none && self.entryKey == var.currentPoolIndex ? '96,53,80,245' : '44,27,45,230'"
                           shape: ~round_rect
                           radius: 10
                           through: true
                         effect:
                           gradient:
-                            color1: ~72,108,158,255
-                            color2: ~32,44,70,235
+                            color1: ~92,52,79,255
+                            color2: ~48,29,46,235
                             type: 0
                             angleDeg: 120
                           stroke:
@@ -839,7 +860,7 @@ controls:
                           point: ~bottom_center
                           y: -12
                           texts: "var.poolList[self.entryKey] != none ? (self.entryKey == var.currentPoolIndex ? '&e' : '&7') + var.poolList[self.entryKey] : '&8———'"
-                          fontSize: 26
+                          fontSize: 36
                           limit: 8
                           through: true
 
@@ -848,10 +869,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 270
-              y: 104
-              width: 976
-              height: 696
+              x: 284
+              y: 116
+              width: "self.parent.width - 872"
+              height: "self.parent.height - 336"
             children:
               主区外框:
                 type: Texture
@@ -865,15 +886,16 @@ controls:
                 type: Texture
                 attribute:
                   point: ~middle_center
-                  width: 964
-                  height: 684
-                  normal: ~32,54,90,246
+                  width: "self.parent.width - 12"
+                  height: "self.parent.height - 12"
+                  through: true
+                  normal: ~54,30,50,250
                   shape: ~round_rect
                   radius: 18
                 effect:
                   gradient:
-                    color1: ~90,140,200,255
-                    color2: ~34,52,82,255
+                    color1: ~95,51,78,255
+                    color2: ~36,23,39,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -985,7 +1007,8 @@ controls:
                   x: 66
                   y: 34
                   texts: "'&f' + var.poolName"
-                  fontSize: 72
+                  limit: 18
+                  fontSize: 64
                   through: false
                   visible: "var.poolName != none && var.poolName != ''"
               卡池名称空态:
@@ -1006,7 +1029,7 @@ controls:
                   y: 124
                   width: 300
                   height: 3
-                  normal: ~150,196,255,200
+                  normal: ~201,169,110,200
                   shape: ~round_rect
                   radius: 2
                   through: true
@@ -1018,7 +1041,7 @@ controls:
                   y: 124
                   width: 46
                   height: 3
-                  normal: ~150,196,255,90
+                  normal: ~201,169,110,90
                   shape: ~round_rect
                   radius: 2
                   through: true
@@ -1029,24 +1052,24 @@ controls:
                   x: 66
                   y: 150
                   texts:
-                    - ~&e获取概率提升！
-                  fontSize: 38
+                    - ~&e本期主角 / UP 概率提升
+                  fontSize: 36
                   through: true
 
               保证条:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 62
-                  y: 208
-                  width: 420
+                  x: 48
+                  y: 202
+                  width: "self.parent.width - 96"
                   height: 50
                 children:
                   条底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~26,32,50,238
+                      normal: ~38,25,41,238
                       shape: ~round_rect
                       radius: 8
                       through: true
@@ -1061,7 +1084,7 @@ controls:
                       x: 14
                       width: 20
                       height: 20
-                      normal: ~150,196,255,120
+                      normal: ~201,169,110,120
                       shape: ~round_rect
                       radius: 6
                       through: true
@@ -1082,28 +1105,26 @@ controls:
                       point: ~middle_left
                       x: 46
                       texts: "'&f' + var.guaranteeDesc"
-                      fontSize: 28
+                      fontSize: 36
                       limit: 26
                       through: true
 
               卡池描述:
                 type: Canvas
                 attribute:
-                  point: ~top_left
-                  x: 66
-                  y: 500
-                  width: 300
-                  height: 120
+                  point: ~bottom_left
+                  x: 48
+                  y: -28
+                  width: "self.parent.width - 96"
+                  height: 72
                 children:
                   描述正文:
                     type: Text
                     attribute:
                       point: ~top_left
-                      width: 300
                       texts: "var.poolDescription"
                       fontSize: 36
-                      lineSpace: 36
-                      limit: 120
+                      limit: 48
                       through: true
                       visible: "var.poolDescription != none && var.poolDescription.size() > 0"
                   描述空态1:
@@ -1150,34 +1171,56 @@ controls:
               UP展示区:
                 type: Canvas
                 attribute:
-                  point: ~middle_right
-                  x: -36
-                  y: -24
-                  width: 440
-                  height: 560
+                  point: ~top_center
+                  y: 260
+                  width: "self.parent.width - 96"
+                  height: 300
                   visible: "var.upItemName != ''"
                 children:
+                  舞台绒幕:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~36,23,39,250
+                      shape: ~round_rect
+                      radius: 12
+                      through: true
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~181,145,86,230
+                  舞台台座:
+                    type: Texture
+                    attribute:
+                      point: ~top_center
+                      y: 196
+                      width: "self.parent.width - 80"
+                      height: 10
+                      normal: ~181,145,86,255
+                      shape: ~round_rect
+                      radius: 4
+                      through: true
                   UP物品槽:
                     type: Slot
                     val: UP物品槽
                     attribute:
                       point: ~top_center
-                      y: 150
+                      y: 28
                       slotType: ~Icon
-                      width: 160
-                      height: 160
+                      width: 144
+                      height: 144
                       normal: ~0,0,0,0
-                      itemScale: 1.45
+                      itemScale: 1.1
                       through: true
                       seticon: "self.setItemIcon(var.upItemIcon)"
                   UP角标:
                     type: Canvas
                     attribute:
                       point: ~top_center
-                      x: 130
-                      y: 60
-                      width: 62
-                      height: 32
+                      x: 160
+                      y: 24
+                      width: 80
+                      height: 44
                     children:
                       UP角标背景:
                         type: Texture
@@ -1196,22 +1239,23 @@ controls:
                         attribute:
                           point: ~middle_center
                           texts: "~&fUP !"
-                          fontSize: 26
+                          fontSize: 36
                           through: true
                   UP物品名:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 370
+                      y: 208
                       texts: "'&f' + var.upItemName"
-                      fontSize: 52
+                      limit: 22
+                      fontSize: 54
                       through: true
                   UP星级:
                     type: HStack
                     attribute:
                       point: ~top_center
-                      y: 400
-                      height: 52
+                      y: 248
+                      height: 36
                       spaceBetween: 4
                     children:
                       星1:
@@ -1248,9 +1292,9 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 430
+                      y: 280
                       texts: "'&f' + var.upItemDesc"
-                      fontSize: 32
+                      fontSize: 36
                       limit: 40
                       through: true
 
@@ -1259,10 +1303,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -18
-              y: 104
-              width: 476
-              height: 380
+              x: -24
+              y: 116
+              width: 540
+              height: 400
             children:
               保底外框:
                 type: Texture
@@ -1276,15 +1320,16 @@ controls:
                 type: Texture
                 attribute:
                   point: ~middle_center
-                  width: 464
-                  height: 380
-                  normal: ~28,46,78,246
+                  width: 528
+                  height: 388
+                  through: true
+                  normal: ~48,29,46,246
                   shape: ~round_rect
                   radius: 18
                 effect:
                   gradient:
-                    color1: ~74,118,176,255
-                    color2: ~30,46,72,255
+                    color1: ~83,47,73,255
+                    color2: ~41,26,43,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -1298,7 +1343,7 @@ controls:
                   y: 24
                   width: 12
                   height: 12
-                  normal: ~168,212,255,235
+                  normal: ~221,189,131,235
                   shape: ~round_rect
                   radius: 4
                   through: true
@@ -1309,7 +1354,7 @@ controls:
                   x: 58
                   y: 16
                   texts:
-                    - ~&f保底进度
+                    - ~&e保底进度 / 揭晓轨
                   fontSize: 54
                   through: true
               保底标题金线:
@@ -1335,7 +1380,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~38,46,72,238
+                      normal: ~56,33,52,238
                       shape: ~round_rect
                       radius: 12
                       through: true
@@ -1362,7 +1407,7 @@ controls:
                       y: -18
                       texts:
                         - ~&6★★★★★ &7累计未出
-                      fontSize: 30
+                      fontSize: 36
                       through: true
                   数值:
                     type: Text
@@ -1371,7 +1416,7 @@ controls:
                       x: 26
                       y: 18
                       texts: "'&f' + (var.pity5 != none ? var.pity5 : 0).round() + (var.pity5Limit != none && var.pity5Limit > 0 ? ' &7/ ' + var.pity5Limit.round() : '') + ' &7抽'"
-                      fontSize: 40
+                      fontSize: 48
                       through: true
                   进度槽:
                     type: Texture
@@ -1380,7 +1425,7 @@ controls:
                       x: -22
                       width: 168
                       height: 16
-                      normal: ~26,32,50,255
+                      normal: ~38,25,41,255
                       shape: ~round_rect
                       radius: 8
                       through: true
@@ -1428,7 +1473,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~38,46,72,238
+                      normal: ~56,33,52,238
                       shape: ~round_rect
                       radius: 12
                       through: true
@@ -1455,7 +1500,7 @@ controls:
                       y: -18
                       texts:
                         - ~&5★★★★ &7累计未出
-                      fontSize: 30
+                      fontSize: 36
                       through: true
                   数值:
                     type: Text
@@ -1464,7 +1509,7 @@ controls:
                       x: 26
                       y: 18
                       texts: "'&f' + (var.pity4 != none ? var.pity4 : 0).round() + (var.pity4Limit != none && var.pity4Limit > 0 ? ' &7/ ' + var.pity4Limit.round() : '') + ' &7抽'"
-                      fontSize: 40
+                      fontSize: 48
                       through: true
                   进度槽:
                     type: Texture
@@ -1473,7 +1518,7 @@ controls:
                       x: -22
                       width: 168
                       height: 16
-                      normal: ~26,32,50,255
+                      normal: ~38,25,41,255
                       shape: ~round_rect
                       radius: 8
                       through: true
@@ -1516,7 +1561,7 @@ controls:
                   y: 308
                   width: 424
                   height: 1
-                  normal: ~150,196,255,45
+                  normal: ~201,169,110,45
                   through: true
               保底说明:
                 type: Text
@@ -1524,10 +1569,9 @@ controls:
                   point: ~top_left
                   x: 26
                   y: 328
-                  width: 424
                   texts: "var.guaranteedStatusText != '' ? var.guaranteedStatusText : (var.guaranteedUnknownText != '' ? var.guaranteedUnknownText : '&7———')"
-                  fontSize: 34
-                  lineSpace: 32
+                  limit: 28
+                  fontSize: 36
                   through: true
 
           # current pool info
@@ -1535,10 +1579,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_right
-              x: -18
-              y: 500
-              width: 476
-              height: 300
+              x: -24
+              y: 540
+              width: 540
+              height: "self.parent.height - 760"
             children:
               信息外框:
                 type: Texture
@@ -1552,9 +1596,10 @@ controls:
                 type: Texture
                 attribute:
                   point: ~middle_center
-                  width: 464
-                  height: 300
-                  normal: ~28,46,78,246
+                  width: 528
+                  height: "self.parent.height - 12"
+                  through: true
+                  normal: ~48,29,46,246
                   shape: ~round_rect
                   radius: 18
                 effect:
@@ -1569,7 +1614,7 @@ controls:
                   y: 30
                   width: 12
                   height: 12
-                  normal: ~168,212,255,235
+                  normal: ~221,189,131,235
                   shape: ~round_rect
                   radius: 4
                   through: true
@@ -1579,7 +1624,7 @@ controls:
                   point: ~top_left
                   x: 58
                   y: 20
-                  texts: ~&f本期卡池信息
+                  texts: ~&e奖品与场次
                   fontSize: 54
                   through: true
               信息分隔1:
@@ -1590,7 +1635,7 @@ controls:
                   y: 72
                   width: 424
                   height: 1
-                  normal: ~150,196,255,45
+                  normal: ~201,169,110,45
                   through: true
               卡池信息UP物品:
                 type: Text
@@ -1654,7 +1699,8 @@ controls:
             type: Canvas
             attribute:
               point: ~horizontal_stretch_bottom
-              height: 120
+              width: "self.parent.width"
+              height: 196
             children:
               操作栏背景:
                 type: Texture
@@ -1687,6 +1733,15 @@ controls:
                   shape: ~round_rect
                   radius: 2
                   through: true
+              价格确认说明:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -36
+                  y: 12
+                  texts: ~&7核对图标与价格 · 点击即确认消耗
+                  fontSize: 36
+                  through: true
               次级按钮组:
                 type: HStack
                 attribute:
@@ -1708,8 +1763,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~40,48,74,240
-                          hover: ~62,78,120,245
+                          normal: ~57,35,55,240
+                          hover: ~89,54,81,245
                           shape: ~round_rect
                           radius: 26
                         effect:
@@ -1720,9 +1775,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 210
                           texts: "~&f积分兑换"
-                          fontSize: 34
+                          fontSize: 36
                           through: true
                   详情按钮:
                     type: Canvas
@@ -1737,8 +1791,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~40,48,74,240
-                          hover: ~62,78,120,245
+                          normal: ~57,35,55,240
+                          hover: ~89,54,81,245
                           shape: ~round_rect
                           radius: 26
                         effect:
@@ -1749,9 +1803,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 210
                           texts: "~&f概率详情"
-                          fontSize: 34
+                          fontSize: 36
                           through: true
                   记录按钮:
                     type: Canvas
@@ -1766,8 +1819,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~40,48,74,240
-                          hover: ~62,78,120,245
+                          normal: ~57,35,55,240
+                          hover: ~89,54,81,245
                           shape: ~round_rect
                           radius: 26
                         effect:
@@ -1778,9 +1831,8 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          width: 210
                           texts: "~&f祈愿记录"
-                          fontSize: 34
+                          fontSize: 36
                           through: true
 
               祈愿一次:
@@ -1788,15 +1840,16 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -392
+                  y: 16
                   width: 340
-                  height: 84
+                  height: 132
                 children:
                   按钮底:
                     type: Texture
                     attribute:
                       point: ~middle_center
                       width: 328
-                      height: 72
+                      height: 128
                       normal: ~236,206,140,255
                       hover: ~250,226,168,255
                       shape: ~round_rect
@@ -1835,7 +1888,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 310
-                      height: 56
+                      height: 112
                       normal: ~236,206,140,255
                       shape: ~round_rect
                       radius: 28
@@ -1844,12 +1897,21 @@ controls:
                       stroke:
                         width: 1
                         color: ~255,255,255,220
+                  确认单抽标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 22
+                      texts: ~&0确认抽取 ×1
+                      fontSize: 48
+                      through: true
                   单抽消耗区:
                     type: HStack
                     val: 单抽消耗区
                     attribute:
-                      point: ~middle_center
-                      spaceBetween: 8
+                      point: ~bottom_center
+                      y: -24
+                      spaceBetween: 4
                       height: 34
                       through: true
                     action:
@@ -1867,7 +1929,8 @@ controls:
                         attribute:
                           texts:
                             - ~&0祈愿 1 次
-                          fontSize: 64
+                          visible: false
+                          fontSize: 48
                           through: true
                       消耗条目0:
                         type: Canvas
@@ -1903,8 +1966,9 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -36
+                  y: 16
                   width: 340
-                  height: 84
+                  height: 132
                   visible: "var.tenAvailable != false"
                 children:
                   按钮底:
@@ -1912,7 +1976,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 328
-                      height: 72
+                      height: 128
                       normal: ~236,206,140,255
                       hover: ~250,226,168,255
                       shape: ~round_rect
@@ -1950,7 +2014,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 310
-                      height: 56
+                      height: 112
                       normal: ~236,206,140,255
                       shape: ~round_rect
                       radius: 28
@@ -1959,12 +2023,21 @@ controls:
                       stroke:
                         width: 1
                         color: ~255,255,255,220
+                  确认十连标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 22
+                      texts: ~&0确认抽取 ×10
+                      fontSize: 48
+                      through: true
                   十连消耗区:
                     type: HStack
                     val: 十连消耗区
                     attribute:
-                      point: ~middle_center
-                      spaceBetween: 8
+                      point: ~bottom_center
+                      y: -24
+                      spaceBetween: 4
                       height: 34
                       through: true
                     action:
@@ -1982,7 +2055,8 @@ controls:
                         attribute:
                           texts:
                             - ~&0祈愿 10 次
-                          fontSize: 64
+                          visible: false
+                          fontSize: 48
                           through: true
                       消耗条目0:
                         type: Canvas
@@ -2029,7 +2103,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~38,46,72,238
+                  normal: ~56,33,52,238
                   hover: ~198,86,92,245
                   shape: ~circle
                 effect:
@@ -2040,9 +2114,8 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 52
                   texts: "~&f✕"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
 
       # 等待层: 发出请求后到结果包到达之间的过场
@@ -2050,7 +2123,10 @@ controls:
         type: Canvas
         val: 等待层
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           等待背景:
@@ -2064,7 +2140,7 @@ controls:
               point: ~middle_center
               texts:
                 - ~&6祈愿中…
-              fontSize: 66
+              fontSize: 64
           等待副文本:
             type: Text
             attribute:
@@ -2072,14 +2148,17 @@ controls:
               y: 60
               texts:
                 - ~&8正在等待服务端结果
-              fontSize: 34
+              fontSize: 36
 
       # 单抽结果层: 展示 result 包中的第 1 个结果
       单抽结果层:
         type: Canvas
         val: 单抽结果层
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           结果背景:
@@ -2093,7 +2172,7 @@ controls:
               point: ~top_center
               y: 90
               texts: "var.guaranteed == true ? '&6本次触发保底' : (var.fatePointTriggered == true ? '&6本次触发命运点' : '')"
-              fontSize: 44
+              fontSize: 48
           单抽结果卡片:
             type: Canvas
             val: 单抽结果卡片
@@ -2107,13 +2186,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~26,30,44,244
+                  normal: ~36,23,39,244
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~38,46,72,255
-                    color2: ~30,40,64,255
+                    color1: ~56,33,52,255
+                    color2: ~36,23,39,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -2125,7 +2204,7 @@ controls:
                   point: ~middle_center
                   width: 406
                   height: 466
-                  normal: ~26,30,44,244
+                  normal: ~36,23,39,244
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -2158,7 +2237,7 @@ controls:
                   point: ~bottom_center
                   y: -110
                   texts: "var.resultItemNames[1.round()] != none ? '&f' + var.resultItemNames[1.round()] : ''"
-                  fontSize: 52
+                  fontSize: 54
               星级文本:
                 type: Text
                 attribute:
@@ -2173,7 +2252,7 @@ controls:
                   y: -24
                   texts:
                     - ~&6UP 物品
-                  fontSize: 32
+                  fontSize: 36
                   visible: "var.resultItemUps[1.round()] == true"
           继续按钮:
             type: Canvas
@@ -2193,8 +2272,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
+                  normal: ~57,35,55,240
+                  hover: ~89,54,81,245
                   shape: ~round_rect
                   radius: 26
                 effect:
@@ -2205,9 +2284,8 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
                   texts: "~&f继续"
-                  fontSize: 38
+                  fontSize: 36
                   through: true
           再抽一次:
             type: Canvas
@@ -2246,16 +2324,18 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
                   texts: "~&0再抽一次"
-                  fontSize: 38
+                  fontSize: 36
                   through: true
       # 十连结果层: 展示 batch_result 包的全部结果，5 列两行
       十连结果层:
         type: Canvas
         val: 十连结果层
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           十连背景:
@@ -2269,7 +2349,7 @@ controls:
               point: ~top_center
               y: 70
               texts: "'&6本次共获得 ' + var.resultCount.round() + ' 件物品'"
-              fontSize: 52
+              fontSize: 54
           十连保底提示:
             type: Text
             attribute:
@@ -2313,13 +2393,13 @@ controls:
                     attribute:
                       entryKey: 0.round()
                       point: ~stretch_all
-                      normal: ~26,30,44,244
+                      normal: ~36,23,39,244
                       shape: ~round_rect
                       radius: 8
                     effect:
                       gradient:
-                        color1: ~38,46,72,255
-                        color2: ~30,40,64,255
+                        color1: ~56,33,52,255
+                        color2: ~36,23,39,255
                         type: 0
                         angleDeg: 90
                       stroke:
@@ -2331,7 +2411,7 @@ controls:
                       point: ~middle_center
                       width: 226
                       height: 286
-                      normal: ~26,30,44,244
+                      normal: ~36,23,39,244
                       shape: ~round_rect
                       radius: 10
                       through: true
@@ -2366,7 +2446,7 @@ controls:
                       point: ~bottom_center
                       y: -74
                       texts: "var.resultItemNames[self.entryKey] != none ? '&f' + var.resultItemNames[self.entryKey] : ''"
-                      fontSize: 34
+                      fontSize: 36
                   星级文本:
                     type: Text
                     attribute:
@@ -2374,7 +2454,7 @@ controls:
                       point: ~bottom_center
                       y: -40
                       texts: "var.resultItemStars[self.entryKey] != none ? '&6' + var.resultItemStars[self.entryKey].round() + ' 星' : ''"
-                      fontSize: 32
+                      fontSize: 36
                   UP标记:
                     type: Text
                     attribute:
@@ -2383,7 +2463,7 @@ controls:
                       y: -10
                       texts:
                         - ~&6UP
-                      fontSize: 32
+                      fontSize: 36
                       visible: "var.resultItemUps[self.entryKey] == true"
           十连继续按钮:
             type: Canvas
@@ -2403,8 +2483,8 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~40,48,74,240
-                  hover: ~62,78,120,245
+                  normal: ~57,35,55,240
+                  hover: ~89,54,81,245
                   shape: ~round_rect
                   radius: 26
                 effect:
@@ -2415,9 +2495,8 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
                   texts: "~&f继续"
-                  fontSize: 38
+                  fontSize: 36
                   through: true
           十连再抽一次:
             type: Canvas
@@ -2457,16 +2536,18 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 200
                   texts: "~&0再来十连"
-                  fontSize: 38
+                  fontSize: 36
                   through: true
       # 历史面板: history 包的祈愿记录，使用服务端格式化的 timeText 与 summary
       历史面板:
         type: Canvas
         val: 历史面板
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           遮罩:
@@ -2485,13 +2566,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~24,30,48,255
-                    color2: ~16,22,36,255
+                    color1: ~48,29,46,255
+                    color2: ~29,20,33,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -2503,7 +2584,7 @@ controls:
                   point: ~middle_center
                   width: 946
                   height: 706
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -2515,7 +2596,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
@@ -2529,7 +2610,7 @@ controls:
                   x: 24
                   y: 20
                   texts: "'&f祈愿记录 · ' + var.historyPoolName"
-                  fontSize: 52
+                  fontSize: 54
               记录条数:
                 type: Text
                 attribute:
@@ -2537,7 +2618,7 @@ controls:
                   x: 24
                   y: 66
                   texts: "'&7共 ' + var.historyCount.round() + ' 条记录'"
-                  fontSize: 32
+                  fontSize: 36
               顶部分界线:
                 type: Texture
                 attribute:
@@ -2601,10 +2682,10 @@ controls:
                     }
                 children:
                   历史列表:
-                    type: VGrid
+                    type: HGrid
                     val: 历史列表
                     attribute:
-                      row: 100
+                      column: 1
                       spaceBetweenY: 12
                     children:
                       历史行0:
@@ -2644,7 +2725,7 @@ controls:
                               point: ~middle_left
                               x: 68
                               texts: "var.historyRows[self.entryKey] != none ? '&7' + var.historyRows[self.entryKey]['timeText'] : ''"
-                              fontSize: 32
+                              fontSize: 36
                           摘要:
                             type: Text
                             attribute:
@@ -2676,8 +2757,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
+                      normal: ~57,35,55,240
+                      hover: ~89,54,81,245
                       shape: ~round_rect
                       radius: 26
                     effect:
@@ -2688,7 +2769,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 200
                       texts: "~&f关闭"
                       fontSize: 36
                       through: true
@@ -2697,7 +2777,10 @@ controls:
         type: Canvas
         val: 详情面板
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           遮罩:
@@ -2716,13 +2799,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~24,30,48,255
-                    color2: ~16,22,36,255
+                    color1: ~48,29,46,255
+                    color2: ~29,20,33,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -2734,7 +2817,7 @@ controls:
                   point: ~middle_center
                   width: 946
                   height: 706
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -2746,7 +2829,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
@@ -2760,7 +2843,7 @@ controls:
                   x: 24
                   y: 20
                   texts: "'&f概率详情 · ' + var.detailPoolName"
-                  fontSize: 52
+                  fontSize: 54
               概率说明:
                 type: Text
                 attribute:
@@ -2768,7 +2851,7 @@ controls:
                   x: 24
                   y: 68
                   texts: "'&75 星基础概率 &6' + ((var.detailBase5Rate != none ? var.detailBase5Rate : 0) * 100).round(1) + '% &7· 4 星基础概率 &5' + ((var.detailBase4Rate != none ? var.detailBase4Rate : 0) * 100).round(1) + '%'"
-                  fontSize: 34
+                  fontSize: 36
               保底说明:
                 type: Text
                 attribute:
@@ -2776,7 +2859,7 @@ controls:
                   x: 24
                   y: 102
                   texts: "'&75 星保底 ' + (var.detailPity5 != none ? var.detailPity5.round() : 0) + ' 抽 · 4 星保底 ' + (var.detailPity4 != none ? var.detailPity4.round() : 0) + ' 抽 · UP 概率 ' + ((var.detailUpRate != none ? var.detailUpRate : 0) * 100).round(1) + '%'"
-                  fontSize: 34
+                  fontSize: 36
               物品列表头:
                 type: Text
                 attribute:
@@ -2784,7 +2867,7 @@ controls:
                   x: 92
                   y: 140
                   texts: "~&e物品名称"
-                  fontSize: 28
+                  fontSize: 36
               稀有度列表头:
                 type: Text
                 attribute:
@@ -2792,7 +2875,7 @@ controls:
                   x: 564
                   y: 140
                   texts: "~&e稀有度"
-                  fontSize: 28
+                  fontSize: 36
               概率列表头:
                 type: Text
                 attribute:
@@ -2800,7 +2883,7 @@ controls:
                   x: 764
                   y: 140
                   texts: "~&e概率"
-                  fontSize: 28
+                  fontSize: 36
               顶部分界线:
                 type: Texture
                 attribute:
@@ -2864,10 +2947,10 @@ controls:
                     }
                 children:
                   详情列表:
-                    type: VGrid
+                    type: HGrid
                     val: 详情列表
                     attribute:
-                      row: 60
+                      column: 1
                       spaceBetweenY: 12
                     children:
                       详情行0:
@@ -2907,7 +2990,7 @@ controls:
                               point: ~middle_left
                               x: 68
                               texts: "var.detailRows[self.entryKey] != none ? '&f' + var.detailRows[self.entryKey]['name'] : ''"
-                              fontSize: 34
+                              fontSize: 36
                           稀有度:
                             type: Text
                             attribute:
@@ -2915,7 +2998,7 @@ controls:
                               point: ~middle_left
                               x: 540
                               texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['rarity'] : ''"
-                              fontSize: 34
+                              fontSize: 36
                           概率:
                             type: Text
                             attribute:
@@ -2923,7 +3006,7 @@ controls:
                               point: ~middle_left
                               x: 740
                               texts: "var.detailRows[self.entryKey] != none ? '&7' + var.detailRows[self.entryKey]['probability'] : ''"
-                              fontSize: 34
+                              fontSize: 36
               详情空态:
                 type: Text
                 attribute:
@@ -2947,8 +3030,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
+                      normal: ~57,35,55,240
+                      hover: ~89,54,81,245
                       shape: ~round_rect
                       radius: 26
                     effect:
@@ -2959,7 +3042,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 200
                       texts: "~&f关闭"
                       fontSize: 36
                       through: true
@@ -2968,7 +3050,10 @@ controls:
         type: Canvas
         val: 兑换面板
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           遮罩:
@@ -2987,13 +3072,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~24,30,48,255
-                    color2: ~16,22,36,255
+                    color1: ~48,29,46,255
+                    color2: ~29,20,33,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -3005,7 +3090,7 @@ controls:
                   point: ~middle_center
                   width: 946
                   height: 706
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -3017,7 +3102,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
@@ -3032,7 +3117,7 @@ controls:
                   y: 20
                   texts:
                     - ~&f积分兑换
-                  fontSize: 52
+                  fontSize: 54
               顶部分界线:
                 type: Texture
                 attribute:
@@ -3103,7 +3188,7 @@ controls:
                           x: 60
                           y: -12
                           texts: "var.pointBalanceRows[self.entryKey] != none ? '&7' + var.pointBalanceRows[self.entryKey]['displayName'] : ''"
-                          fontSize: 32
+                          fontSize: 36
                       余额:
                         type: Text
                         attribute:
@@ -3165,10 +3250,10 @@ controls:
                     }
                 children:
                   兑换列表:
-                    type: VGrid
+                    type: HGrid
                     val: 兑换列表
                     attribute:
-                      row: 20
+                      column: 1
                       spaceBetweenY: 12
                     children:
                       兑换行0:
@@ -3209,7 +3294,7 @@ controls:
                               x: 68
                               y: -12
                               texts: "var.exchangeRows[self.entryKey] != none ? '&f' + var.exchangeRows[self.entryKey]['name'] : ''"
-                              fontSize: 28
+                              fontSize: 36
                               limit: 16
                               through: true
                           消耗文本:
@@ -3220,7 +3305,7 @@ controls:
                               x: 68
                               y: 12
                               texts: "var.exchangeRows[self.entryKey] != none ? '&7消耗 &6' + var.exchangeRows[self.entryKey]['costRows'][0]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][0]['amount'].round() + (var.exchangeRows[self.entryKey]['costRows'][1] != none ? ' &7+ &6' + var.exchangeRows[self.entryKey]['costRows'][1]['displayName'] + ' x' + var.exchangeRows[self.entryKey]['costRows'][1]['amount'].round() : '') : ''"
-                              fontSize: 26
+                              fontSize: 36
                               through: true
                           限购文本:
                             type: Text
@@ -3229,7 +3314,7 @@ controls:
                               point: ~middle_right
                               x: -140
                               texts: "var.exchangeRows[self.entryKey] != none ? (var.exchangeRows[self.entryKey]['limit'] == 0 ? '&7不限购' : '&7剩余 ' + var.exchangeRows[self.entryKey]['remaining'].round() + '/' + var.exchangeRows[self.entryKey]['limit'].round()) : ''"
-                              fontSize: 26
+                              fontSize: 36
                               through: true
                           兑换按钮:
                             type: Texture
@@ -3239,13 +3324,13 @@ controls:
                               x: -12
                               width: 110
                               height: 44
-                              normal: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '226,196,132,255' : '28,34,54,230'}"
-                              hover: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '255,246,214,255' : '28,34,54,230'}"
+                              normal: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '226,196,132,255' : '44,27,45,230'}"
+                              hover: "{var.exchangeRows[self.entryKey] != none && var.exchangeRows[self.entryKey]['canExchange'] == true ? '255,246,214,255' : '44,27,45,230'}"
                               shape: ~round_rect
                               radius: 22
                               texts: "var.exchangeRows[self.entryKey]['canExchange'] == true ? '&0兑换' : '&7已达上限'"
                               center: true
-                              fontSize: 28
+                              fontSize: 36
                               enable: "!var.actionBusy && var.actionToken != ''"
                             effect:
                               stroke:
@@ -3280,8 +3365,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
+                      normal: ~57,35,55,240
+                      hover: ~89,54,81,245
                       shape: ~round_rect
                       radius: 26
                     effect:
@@ -3292,7 +3377,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 200
                       texts: "~&f关闭"
                       fontSize: 36
                       through: true
@@ -3301,7 +3385,10 @@ controls:
         type: Canvas
         val: 资源不足提示
         attribute:
-          point: ~stretch_all
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
           visible: false
         children:
           遮罩:
@@ -3320,13 +3407,13 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~14,18,30,250
+                  normal: ~32,21,34,250
                   shape: ~round_rect
                   radius: 12
                 effect:
                   gradient:
-                    color1: ~24,30,48,255
-                    color2: ~16,22,36,255
+                    color1: ~48,29,46,255
+                    color2: ~29,20,33,255
                     type: 0
                     angleDeg: 90
                   stroke:
@@ -3339,7 +3426,7 @@ controls:
                   y: 40
                   texts:
                     - ~&c&l资源不足
-                  fontSize: 56
+                  fontSize: 54
               提示内容:
                 type: Text
                 attribute:
@@ -3364,8 +3451,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
+                      normal: ~57,35,55,240
+                      hover: ~89,54,81,245
                       shape: ~round_rect
                       radius: 26
                     effect:
@@ -3376,7 +3463,6 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 200
                       texts: "~&f知道了"
                       fontSize: 36
                       through: true

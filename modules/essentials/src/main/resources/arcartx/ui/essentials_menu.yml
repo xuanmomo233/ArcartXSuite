@@ -3,10 +3,9 @@
 # 前置依赖: ArcartX；Essentials 模块启用后自动注册。
 # 打开方式: /axs essentials menu
 # 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_ESS_MENU', ...) 发送操作指令。
-# 布局: 弹窗式居中面板（Adaptive + middle_center）= 标题栏 + 左导航 + 内容区
-# 视觉规范:
-#   面板玻璃 Frosted:30;255,255,255,100  卡片 62,66,74,210  描边 255,255,255,230
-#   强调色（蓝青）80,180,255  成功 124,196,142  危险 235,100,100
+# 布局: 全屏 1920x1080 Adaptive 生活手册 = 欢迎标题 + 横向章节 + 功能工作区
+# 视觉规范: 海蓝封面 / 粉笔白纸面 / 深色正文；首页是欢迎枢纽，操作页强调目的地与状态。
+# Java List 用 entryKey + get 绑定与引用字典复制，避免无数据模板与 Observer/List 限制。
 
 ui:
   isHud: false
@@ -54,41 +53,102 @@ ui:
       var.onlinePlayers = packet['onlinePlayers']
       var.replantEnabled = packet['replantEnabled']
       var.autotoolEnabled = packet['autotoolEnabled']
+      var.rowGeneration = (var.rowGeneration + 1).round()
+      if(val.home_data.childrenCount() != math.max(1, var.homes.size())){
+        for(key in var.homeRows.keys()){ var.homeRows[key].remove() }
+        var.homeRows = {}
+        row = val.home_data.get(0)
+        for(i in range(1, var.homes.size() - 1)){
+          copy = row.copy('home_' + var.rowGeneration + '_' + i.round())
+          copy.entryKey = i.round()
+          var.homeRows[i.round()] = copy
+        }
+      }
+      if(val.warp_data.childrenCount() != math.max(1, var.warps.size())){
+        for(key in var.warpRows.keys()){ var.warpRows[key].remove() }
+        var.warpRows = {}
+        row = val.warp_data.get(0)
+        for(i in range(1, var.warps.size() - 1)){
+          copy = row.copy('warp_' + var.rowGeneration + '_' + i.round())
+          copy.entryKey = i.round()
+          var.warpRows[i.round()] = copy
+        }
+      }
+      if(val.tpa_data.childrenCount() != math.max(1, var.onlinePlayers.size())){
+        for(key in var.tpaRows.keys()){ var.tpaRows[key].remove() }
+        var.tpaRows = {}
+        row = val.tpa_data.get(0)
+        for(i in range(1, var.onlinePlayers.size() - 1)){
+          copy = row.copy('tpa_' + var.rowGeneration + '_' + i.round())
+          copy.entryKey = i.round()
+          var.tpaRows[i.round()] = copy
+        }
+      }
   action:
     load: |-
-          var.flySpeed = '0'
-          var.homeCount = '0'
-          var.location = ''
-          var.packetId = 'AXS_ESS_MENU'
-          var.playerName = ''
-          var.walkSpeed = '0'
-          var.warpCount = '0'
+      var.homes = {}
+      var.warps = {}
+      var.onlinePlayers = {}
+      var.actionToken = ''
+      var.flySpeed = '0'
+      var.homeCount = '0'
+      var.packetId = 'AXS_ESS_MENU'
+      var.walkSpeed = '0'
+      var.warpCount = '0'
+      var.homeRows = {}
+      var.warpRows = {}
+      var.tpaRows = {}
+      var.rowGeneration = 0
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.hubW = var.viewW - 208
+      var.tabW = (var.viewW - 224) / 5
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.hubW = var.viewW - 208
+      var.tabW = (var.viewW - 224) / 5
     open: |-
       Packet.send(var.packetId, 'refresh', 'home')
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 controls:
+  手册封面:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      normal: ~16,49,69,255
   # 自适配布局：宽高 = 设计分辨率 1920x1080，窗口分辨率变化时按比例缩放子控件
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~middle_center
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      # 主面板（弹窗居中）
+      # 主面板：随视口延伸的手册纸面
       主面板:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 960
-          height: 640
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 40
+          width: "var.viewW - 96"
+          height: "var.viewH - 80"
         children:
           面板底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~239,241,233,255
               shape: ~round_rect
               radius: 14
             effect:
@@ -102,14 +162,14 @@ controls:
               point: ~top_left
               x: 0
               y: 0
-              width: 960
-              height: 72
+              width: "self.parent.width"
+              height: 96
             children:
               标题栏底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,100
+                  normal: ~22,64,86,255
                   shape: ~round_rect
                   radius: 14
               标题栏底线:
@@ -117,7 +177,7 @@ controls:
                 attribute:
                   point: ~horizontal_stretch_bottom
                   height: 1
-                  normal: ~62,66,74,210
+                  normal: ~224,233,231,255
               标题色块:
                 type: Texture
                 attribute:
@@ -133,30 +193,30 @@ controls:
                 attribute:
                   point: ~middle_left
                   x: 44
-                  texts: "~&f玩家工具"
+                  texts: "~&fESS / 生活手册"
                   fontSize: 48
               标题竖线:
                 type: Texture
                 attribute:
                   point: ~middle_left
-                  x: 224
+                  x: 404
                   width: 1
                   height: 26
-                  normal: ~62,66,74,210
+                  normal: ~224,233,231,255
               标题玩家:
                 type: Text
                 attribute:
                   point: ~middle_left
-                  x: 244
-                  texts: "'&7' + var.playerName"
+                  x: 432
+                  texts: "'&f' + var.playerName + '  &7/  日常工具与目的地'"
                   fontSize: 36
               关闭按钮:
                 type: Canvas
                 attribute:
                   point: ~middle_right
                   x: -24
-                  width: 36
-                  height: 36
+                  width: 104
+                  height: 48
                 action:
                   clickLeft: |-
                     Screen.close()
@@ -166,7 +226,8 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~62,66,74,210
+                      normal: ~29,111,147,255
+                      hover: ~36,128,160,255
                       shape: ~round_rect
                       radius: 9
                     effect:
@@ -177,7 +238,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "~&f✕"
+                      texts: "~&f关闭"
                       fontSize: 36
                       through: true
 
@@ -186,31 +247,31 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 72
-              width: 180
-              height: 568
+              x: 32
+              y: 112
+              width: "var.viewW - 160"
+              height: 76
             children:
               导航底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;255,255,255,80
+                  normal: ~224,231,228,255
               导航底线:
                 type: Texture
                 attribute:
-                  point: ~vertical_stretch_right
-                  width: 1
-                  normal: ~62,66,74,210
+                  point: ~horizontal_stretch_bottom
+                  height: 2
+                  normal: ~184,205,210,255
               # 首页
               导航首页:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 12
-                  y: 16
-                  width: 156
-                  height: 52
+                  x: 8
+                  y: 8
+                  width: "var.tabW"
+                  height: 60
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'navigate', 'home')
@@ -220,20 +281,20 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.page == 'home' ? '80,180,255,210' : '62,66,74,180'"
+                      normal: "var.page == 'home' ? '29,111,147,255' : '224,231,228,255'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       ripple:
                       stroke:
                         width: 2
-                        color: "var.page == 'home' ? '80,180,255,230' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                        color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
                   首页文字:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 20
-                      texts: "var.page == 'home' ? '&0首页' : '&f首页'"
+                      texts: "var.page == 'home' ? '&f01 / 欢迎' : '&801 / 欢迎'"
                       fontSize: 36
                       through: true
               # 家列表
@@ -241,10 +302,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 12
-                  y: 76
-                  width: 156
-                  height: 52
+                  x: "var.tabW + 20"
+                  y: 8
+                  width: "var.tabW"
+                  height: 60
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'navigate', 'homes')
@@ -254,20 +315,20 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.page == 'homes' ? '80,180,255,210' : '62,66,74,180'"
+                      normal: "var.page == 'homes' ? '29,111,147,255' : '224,231,228,255'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       ripple:
                       stroke:
                         width: 2
-                        color: "var.page == 'homes' ? '80,180,255,230' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                        color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
                   家列表文字:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 20
-                      texts: "var.page == 'homes' ? '&0家' : '&f家'"
+                      texts: "var.page == 'homes' ? '&f02 / 我的家' : '&802 / 我的家'"
                       fontSize: 36
                       through: true
               # 传送点
@@ -275,10 +336,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 12
-                  y: 136
-                  width: 156
-                  height: 52
+                  x: "var.tabW * 2 + 32"
+                  y: 8
+                  width: "var.tabW"
+                  height: 60
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'navigate', 'warps')
@@ -288,20 +349,20 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.page == 'warps' ? '80,180,255,210' : '62,66,74,180'"
+                      normal: "var.page == 'warps' ? '29,111,147,255' : '224,231,228,255'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       ripple:
                       stroke:
                         width: 2
-                        color: "var.page == 'warps' ? '80,180,255,230' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                        color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
                   传送点文字:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 20
-                      texts: "var.page == 'warps' ? '&0传送点' : '&f传送点'"
+                      texts: "var.page == 'warps' ? '&f03 / 公共传送点' : '&803 / 公共传送点'"
                       fontSize: 36
                       through: true
               # 传送请求
@@ -309,10 +370,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 12
-                  y: 196
-                  width: 156
-                  height: 52
+                  x: "var.tabW * 3 + 44"
+                  y: 8
+                  width: "var.tabW"
+                  height: 60
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'navigate', 'tpa')
@@ -322,20 +383,20 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.page == 'tpa' ? '80,180,255,210' : '62,66,74,180'"
+                      normal: "var.page == 'tpa' ? '29,111,147,255' : '224,231,228,255'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       ripple:
                       stroke:
                         width: 2
-                        color: "var.page == 'tpa' ? '80,180,255,230' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                        color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
                   传送请求文字:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 20
-                      texts: "var.page == 'tpa' ? '&0传送' : '&f传送'"
+                      texts: "var.page == 'tpa' ? '&f04 / 与朋友同行' : '&804 / 与朋友同行'"
                       fontSize: 36
                       through: true
               # 设置
@@ -343,10 +404,10 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 12
-                  y: 256
-                  width: 156
-                  height: 52
+                  x: "var.tabW * 4 + 56"
+                  y: 8
+                  width: "var.tabW"
+                  height: 60
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'navigate', 'settings')
@@ -356,40 +417,41 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.page == 'settings' ? '80,180,255,210' : '62,66,74,180'"
+                      normal: "var.page == 'settings' ? '29,111,147,255' : '224,231,228,255'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       ripple:
                       stroke:
                         width: 2
-                        color: "var.page == 'settings' ? '80,180,255,230' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                        color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
                   设置文字:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 20
-                      texts: "var.page == 'settings' ? '&0设置' : '&f设置'"
+                      texts: "var.page == 'settings' ? '&f05 / 日常工具' : '&805 / 日常工具'"
                       fontSize: 36
                       through: true
               导航提示:
                 type: Text
                 attribute:
                   point: ~bottom_left
-                  x: 16
-                  y: -16
-                  texts: "~&7ESC 关闭"
+                  x: 8
+                  y: "var.viewH - 292"
+                  texts: "~&8ESSENTIALS / ESC 关闭手册"
                   fontSize: 36
+                  through: true
 
           # ── 右侧内容区 ───────────────────────────────────
           内容区:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 180
-              y: 72
-              width: 780
-              height: 568
+              x: 32
+              y: 216
+              width: "var.viewW - 160"
+              height: "var.viewH - 336"
             children:
               # ─── 首页视图 ───
               首页布局:
@@ -398,8 +460,8 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 24
-                  width: 732
-                  height: 520
+                  width: "var.hubW"
+                  height: "var.viewH - 384"
                   visible: |-
                     var.page == 'home'
                 children:
@@ -409,76 +471,165 @@ controls:
                       point: ~top_left
                       x: 0
                       y: 0
-                      texts: "~&f玩家状态"
-                      fontSize: 48
+                      texts: "'&0你好，' + var.playerName"
+                      fontSize: 72
+                  欢迎说明:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 76
+                      texts: "~&8欢迎回来。看看当前状态，或从上方章节选择今天的目的地。"
+                      fontSize: 36
+                      through: true
+                  出行指南:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "var.hubW * 0.66"
+                      y: 124
+                      width: "var.hubW * 0.34"
+                      height: 444
+                    children:
+                      指南底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~22,64,86,255
+                          shape: ~round_rect
+                          radius: 12
+                      指南标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 28
+                          y: 28
+                          texts: "~&f今天，去哪里？"
+                          fontSize: 54
+                          through: true
+                      指南家数量:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 28
+                          y: 104
+                          texts: "'&b' + var.homeCount + ' &f个家 / 私人落脚点'"
+                          fontSize: 36
+                          through: true
+                      指南传送点数量:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 28
+                          y: 160
+                          texts: "'&b' + var.warpCount + ' &f个公共传送点'"
+                          fontSize: 36
+                          through: true
+                      指南内容:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 28
+                          y: 244
+                          texts:
+                            - "~&7回家 / 保存或返回家位置"
+                            - "~&7同行 / 向在线朋友发起请求"
+                            - "~&7工具 / 补种、切换、整理"
+                          fontSize: 36
+                          through: true
                   # 状态卡片
                   状态卡片:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 60
-                      width: 732
-                      height: 380
+                      y: 124
+                      width: "var.hubW * 0.62"
+                      height: 444
                     children:
                       状态卡底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~62,66,74,180
+                          normal: ~224,233,231,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 2
                             color: ~255,255,255,180
+                      状态卡标题:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 32
+                          y: 24
+                          texts: "~&3此刻的你"
+                          fontSize: 48
+                          through: true
                       状态飞行:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 32
-                          y: 32
-                          texts: "'&7飞行 &f' + (var.isFlying == 'true' ? '&a开启' : '&c关闭')"
+                          y: 112
+                          texts: "'&8飞行  ' + (var.isFlying == 'true' ? '&3开启' : '&8关闭')"
                           fontSize: 36
                       状态无敌:
                         type: Text
                         attribute:
                           point: ~top_left
-                          x: 32
-                          y: 80
-                          texts: "'&7无敌 &f' + (var.isGod == 'true' ? '&a开启' : '&c关闭')"
+                          x: "self.parent.width / 2"
+                          y: 112
+                          texts: "'&8无敌  ' + (var.isGod == 'true' ? '&3开启' : '&8关闭')"
                           fontSize: 36
                       状态闲置:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 32
-                          y: 128
-                          texts: "'&7挂机 &f' + (var.isAfk == 'true' ? '&e是' : '&a否')"
+                          y: 176
+                          texts: "'&8挂机  ' + (var.isAfk == 'true' ? '&6是' : '&3否')"
                           fontSize: 36
                       状态速度:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 32
-                          y: 176
-                          texts: "'&7飞行速度 &f' + var.flySpeed + '  &7行走速度 &f' + var.walkSpeed"
+                          y: 240
+                          texts: "'&8飞行速度 &0' + var.flySpeed + '    &8行走速度 &0' + var.walkSpeed"
                           fontSize: 36
                       状态位置:
-                        type: Text
+                        type: Scroll
                         attribute:
                           point: ~top_left
                           x: 32
-                          y: 224
-                          texts: "'&7位置 &f' + var.location"
-                          fontSize: 36
+                          y: 304
+                          width: "self.parent.width - 64"
+                          height: 40
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: "self.scrollAnim = Lerp(0, 1, 2200)"
+                          leave: "self.scrollAnim = none"
+                        children:
+                          位置横排:
+                            type: HStack
+                            attribute:
+                              height: 40
+                            children:
+                              位置文字:
+                                type: Text
+                                attribute:
+                                  texts: "'&8位置  &0' + var.location"
+                                  fontSize: 36
+                                  through: true
                       状态统计:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 32
-                          y: 272
-                          texts: "'&7家数量 &b' + var.homeCount + '  &7传送点 &b' + var.warpCount"
+                          y: 372
+                          texts: "'&8已保存 &3' + var.homeCount + ' &8个家    /    公共站点 &3' + var.warpCount"
                           fontSize: 36
 
               # ─── 家列表视图 ───
@@ -488,8 +639,8 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 24
-                  width: 732
-                  height: 520
+                  width: "var.hubW"
+                  height: "var.viewH - 384"
                   visible: |-
                     var.page == 'homes'
                 children:
@@ -499,7 +650,7 @@ controls:
                       point: ~top_left
                       x: 0
                       y: 0
-                      texts: "~&f我的家"
+                      texts: "~&0我的家 / 私人落脚点"
                       fontSize: 48
                   设置家按钮:
                     type: Canvas
@@ -507,8 +658,9 @@ controls:
                       point: ~top_right
                       x: 0
                       y: -2
-                      width: 130
-                      height: 44
+                      width: 192
+                      height: 56
+                      enable: "var.actionToken != none && var.actionToken != ''"
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'set_home', var.actionToken, 'home')
@@ -518,8 +670,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~50,140,80,210
-                          hover: ~70,170,100,230
+                          normal: ~29,111,147,255
+                          hover: ~36,128,160,255
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -534,25 +686,54 @@ controls:
                           texts: "~&f设置家"
                           fontSize: 36
                           through: true
+                  家列表说明:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 60
+                      texts: "~&8设置家将当前位置保存为 home；同名会更新位置。"
+                      fontSize: 36
+                      through: true
+                  家空状态:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 164
+                      visible: "var.homeCount == '0'"
+                      texts: "~&8还没有保存家。点击右上方设置家，留下第一个落脚点。"
+                      fontSize: 36
+                      through: true
+                  家滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      y: 120
+                      width: 12
+                      height: "var.viewH - 504"
+                      normal: ~194,211,213,255
+                      shape: ~round_rect
+                      radius: 6
                   家滑块:
                     type: Texture
                     val: 家滑块
                     attribute:
                       point: ~top_right
-                      x: -6
-                      y: 60
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 410
+                      x: 0
+                      y: 120
+                      width: 12
+                      height: 72
+                      normal: ~29,111,147,255
+                      maxDragY: "var.viewH - 576"
+                      shape: ~round_rect
+                      radius: 6
                   家滚动栏:
                     type: Scroll
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 60
-                      width: 726
-                      height: 460
+                      y: 120
+                      width: "var.hubW - 24"
+                      height: "var.viewH - 504"
                       moveY: "self.parent['家滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -569,22 +750,23 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          width: 726
+                          width: "var.hubW - 24"
                           spaceBetween: 8
                         children:
                           家项目:
                             type: Canvas
                             attribute:
-                              entry: var.homes[self.key]
+                              entryKey: 0.round()
+                              entry: "self.entryKey < var.homes.size() ? var.homes.get(self.entryKey) : none"
                               visible: self.entry != none
-                              width: 720
-                              height: 60
+                              width: "var.hubW - 32"
+                              height: 96
                             children:
                               家项目底:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~62,66,74,210
+                                  normal: ~224,233,231,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
@@ -594,26 +776,45 @@ controls:
                               家项目名称:
                                 type: Text
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 20
-                                  texts: "'&b' + self.parent.entry['name']"
+                                  y: 16
+                                  texts: "'&3' + self.parent.entry['name']"
                                   fontSize: 36
                                   through: true
                               家项目坐标:
-                                type: Text
+                                type: Scroll
                                 attribute:
-                                  point: ~middle_left
-                                  x: 200
-                                  texts: "'&7' + self.parent.entry['world'] + ' ' + self.parent.entry['coords']"
-                                  fontSize: 36
-                                  through: true
+                                  point: ~top_left
+                                  x: 20
+                                  y: 56
+                                  width: "var.hubW - 260"
+                                  height: 40
+                                  scrollAnim: none
+                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                                action:
+                                  enter: "self.scrollAnim = Lerp(0, 1, 2200)"
+                                  leave: "self.scrollAnim = none"
+                                children:
+                                  家位置横排:
+                                    type: HStack
+                                    attribute:
+                                      height: 40
+                                    children:
+                                      家位置文字:
+                                        type: Text
+                                        attribute:
+                                          texts: "'&8' + self.parent.parent.parent.entry['world'] + ' / ' + self.parent.parent.parent.entry['coords']"
+                                          fontSize: 36
+                                          through: true
                               传送家按钮:
                                 type: Canvas
                                 attribute:
                                   point: ~middle_right
                                   x: -106
                                   width: 80
-                                  height: 40
+                                  height: 48
+                                  enable: "var.actionToken != none && var.actionToken != ''"
                                 action:
                                   clickLeft: |-
                                     Packet.send(var.packetId, 'teleport_home', var.actionToken, self.parent.entry['name'])
@@ -623,8 +824,8 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: ~60,140,200,210
-                                      hover: ~80,170,230,230
+                                      normal: ~29,111,147,255
+                                      hover: ~36,128,160,255
                                       shape: ~round_rect
                                       radius: 8
                                     effect:
@@ -632,20 +833,21 @@ controls:
                                       stroke:
                                         width: 2
                                         color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
-                                    传送家文字:
-                                      type: Text
-                                      attribute:
-                                        point: ~middle_center
-                                        texts: "~&f传送"
-                                        fontSize: 36
-                                        through: true
+                                  传送家文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      texts: "~&f传送"
+                                      fontSize: 36
+                                      through: true
                               删除家按钮:
                                 type: Canvas
                                 attribute:
                                   point: ~middle_right
                                   x: -16
                                   width: 80
-                                  height: 40
+                                  height: 48
+                                  enable: "var.actionToken != none && var.actionToken != ''"
                                 action:
                                   clickLeft: |-
                                     Packet.send(var.packetId, 'delete_home', var.actionToken, self.parent.entry['name'])
@@ -679,8 +881,8 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 24
-                  width: 732
-                  height: 520
+                  width: "var.hubW"
+                  height: "var.viewH - 384"
                   visible: |-
                     var.page == 'warps'
                 children:
@@ -690,27 +892,56 @@ controls:
                       point: ~top_left
                       x: 0
                       y: 0
-                      texts: "~&f传送点列表"
+                      texts: "~&0公共传送点"
                       fontSize: 48
+                  公共传送点说明:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 60
+                      texts: "~&8服务器共享的目的地。找到站点后，点击右侧传送。"
+                      fontSize: 36
+                      through: true
+                  传送点空状态:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 164
+                      visible: "var.warpCount == '0'"
+                      texts: "~&8暂时没有公共传送点，请等待管理员添加。"
+                      fontSize: 36
+                      through: true
+                  传送点滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      y: 120
+                      width: 12
+                      height: "var.viewH - 504"
+                      normal: ~194,211,213,255
+                      shape: ~round_rect
+                      radius: 6
                   传送点滑块:
                     type: Texture
                     val: 传送点滑块
                     attribute:
                       point: ~top_right
-                      x: -6
-                      y: 60
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 410
+                      x: 0
+                      y: 120
+                      width: 12
+                      height: 72
+                      normal: ~29,111,147,255
+                      maxDragY: "var.viewH - 576"
+                      shape: ~round_rect
+                      radius: 6
                   传送点滚动栏:
                     type: Scroll
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 60
-                      width: 726
-                      height: 460
+                      y: 120
+                      width: "var.hubW - 24"
+                      height: "var.viewH - 504"
                       moveY: "self.parent['传送点滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -727,22 +958,23 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          width: 726
+                          width: "var.hubW - 24"
                           spaceBetween: 8
                         children:
                           传送点项目:
                             type: Canvas
                             attribute:
-                              entry: var.warps[self.key]
+                              entryKey: 0.round()
+                              entry: "self.entryKey < var.warps.size() ? var.warps.get(self.entryKey) : none"
                               visible: self.entry != none
-                              width: 720
+                              width: "var.hubW - 32"
                               height: 56
                             children:
                               传送点项目底:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~62,66,74,210
+                                  normal: ~224,233,231,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
@@ -754,7 +986,7 @@ controls:
                                 attribute:
                                   point: ~middle_left
                                   x: 20
-                                  texts: "'&e' + self.parent.entry"
+                                  texts: "'&3' + self.parent.entry"
                                   fontSize: 36
                                   through: true
                               传送点传送按钮:
@@ -762,8 +994,9 @@ controls:
                                 attribute:
                                   point: ~middle_right
                                   x: -16
-                                  width: 90
-                                  height: 40
+                                  width: 120
+                                  height: 48
+                                  enable: "var.actionToken != none && var.actionToken != ''"
                                 action:
                                   clickLeft: |-
                                     Packet.send(var.packetId, 'teleport_warp', var.actionToken, self.parent.entry)
@@ -773,8 +1006,8 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: ~60,140,200,210
-                                      hover: ~80,170,230,230
+                                      normal: ~29,111,147,255
+                                      hover: ~36,128,160,255
                                       shape: ~round_rect
                                       radius: 8
                                     effect:
@@ -797,8 +1030,8 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 24
-                  width: 732
-                  height: 520
+                  width: "var.hubW"
+                  height: "var.viewH - 384"
                   visible: |-
                     var.page == 'tpa'
                 children:
@@ -808,24 +1041,25 @@ controls:
                       point: ~top_left
                       x: 0
                       y: 0
-                      texts: "~&f传送请求"
+                      texts: "~&0与朋友同行"
                       fontSize: 48
                   传送请求提示:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 52
-                      texts: "~&7点击玩家名发送传送请求"
+                      y: 60
+                      texts: "~&8点击玩家行发送请求；右上方处理最近收到的请求。"
                       fontSize: 36
                   接受传送请求按钮:
                     type: Canvas
                     attribute:
                       point: ~top_right
-                      x: -106
+                      x: -184
                       y: -2
-                      width: 90
-                      height: 44
+                      width: 168
+                      height: 56
+                      enable: "var.actionToken != none && var.actionToken != ''"
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'accept_tpa', var.actionToken)
@@ -835,8 +1069,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~50,140,80,210
-                          hover: ~70,170,100,230
+                          normal: ~29,111,147,255
+                          hover: ~36,128,160,255
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -848,7 +1082,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f接受"
+                          texts: "~&f接受请求"
                           fontSize: 36
                           through: true
                   拒绝传送请求按钮:
@@ -857,8 +1091,9 @@ controls:
                       point: ~top_right
                       x: 0
                       y: -2
-                      width: 90
-                      height: 44
+                      width: 168
+                      height: 56
+                      enable: "var.actionToken != none && var.actionToken != ''"
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'deny_tpa', var.actionToken)
@@ -881,28 +1116,49 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f拒绝"
+                          texts: "~&f拒绝请求"
                           fontSize: 36
                           through: true
+                  同行空状态:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 164
+                      visible: "var.onlinePlayers.size() == 0"
+                      texts: "~&8当前没有其他在线玩家，朋友上线后再来看看。"
+                      fontSize: 36
+                      through: true
+                  玩家滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      y: 120
+                      width: 12
+                      height: "var.viewH - 504"
+                      normal: ~194,211,213,255
+                      shape: ~round_rect
+                      radius: 6
                   玩家滑块:
                     type: Texture
                     val: 玩家滑块
                     attribute:
                       point: ~top_right
-                      x: -6
-                      y: 100
-                      width: 6
-                      height: 50
-                      normal: ~120,120,120,200
-                      maxDragY: 370
+                      x: 0
+                      y: 120
+                      width: 12
+                      height: 72
+                      normal: ~29,111,147,255
+                      maxDragY: "var.viewH - 576"
+                      shape: ~round_rect
+                      radius: 6
                   传送请求滚动栏:
                     type: Scroll
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 100
-                      width: 726
-                      height: 420
+                      y: 120
+                      width: "var.hubW - 24"
+                      height: "var.viewH - 504"
                       moveY: "self.parent['玩家滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -919,16 +1175,18 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          width: 726
+                          width: "var.hubW - 24"
                           spaceBetween: 8
                         children:
                           传送请求玩家项目:
                             type: Canvas
                             attribute:
-                              entry: var.onlinePlayers[self.key]
+                              entryKey: 0.round()
+                              entry: "self.entryKey < var.onlinePlayers.size() ? var.onlinePlayers.get(self.entryKey) : none"
                               visible: self.entry != none
-                              width: 720
-                              height: 52
+                              width: "var.hubW - 32"
+                              height: 72
+                              enable: "var.actionToken != none && var.actionToken != ''"
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'send_tpa', var.actionToken, self.entry)
@@ -937,8 +1195,9 @@ controls:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
-                                  normal: ~62,66,74,210
-                                  hover: ~80,90,110,230
+                                  through: true
+                                  normal: ~224,233,231,255
+                                  hover: ~207,225,227,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
@@ -951,7 +1210,15 @@ controls:
                                 attribute:
                                   point: ~middle_left
                                   x: 20
-                                  texts: "'&f' + self.parent.entry"
+                                  texts: "'&0' + self.parent.entry"
+                                  fontSize: 36
+                                  through: true
+                              请求动作提示:
+                                type: Text
+                                attribute:
+                                  point: ~middle_right
+                                  x: -20
+                                  texts: "~&3发送请求 >"
                                   fontSize: 36
                                   through: true
 
@@ -962,8 +1229,8 @@ controls:
                   point: ~top_left
                   x: 24
                   y: 24
-                  width: 732
-                  height: 520
+                  width: "var.hubW"
+                  height: "var.viewH - 384"
                   visible: |-
                     var.page == 'settings'
                 children:
@@ -973,17 +1240,25 @@ controls:
                       point: ~top_left
                       x: 0
                       y: 0
-                      texts: "~&f个人设置"
+                      texts: "~&0日常工具 / 少一点重复操作"
                       fontSize: 48
+                  工具页说明:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      y: 60
+                      texts: "~&8深蓝表示辅助已开启；开关状态以服务器回传为准。"
+                      fontSize: 36
+                      through: true
                   # 自动补种
                   切换补种按钮:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 0
-                      y: 64
-                      width: 360
-                      height: 56
+                      y: 124
+                      width: "(var.hubW - 48) / 3"
+                      height: 264
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'toggle_replant', var.actionToken)
@@ -993,21 +1268,33 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.replantEnabled == 'true' ? '50,120,70,210' : '62,66,74,210'"
-                          hover: "var.replantEnabled == 'true' ? '70,150,90,230' : '80,90,110,230'"
+                          normal: "var.replantEnabled == 'true' ? '29,111,147,255' : '224,233,231,255'"
+                          hover: "var.replantEnabled == 'true' ? '36,128,160,255' : '207,225,227,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           ripple:
                           stroke:
                             width: 2
-                            color: "var.replantEnabled == 'true' ? '124,196,142,255' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                            color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
+                      补种说明:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 112
+                          texts:
+                            - "var.replantEnabled == 'true' ? '&f收获时自动补种。' : '&8收获时自动补种。'"
+                            - "var.replantEnabled == 'true' ? '&f点击卡片关闭辅助。' : '&8点击卡片开启辅助。'"
+                          fontSize: 36
+                          through: true
                       补种文字:
                         type: Text
                         attribute:
-                          point: ~middle_left
+                          point: ~top_left
                           x: 24
-                          texts: "'&f自动补种: ' + (var.replantEnabled == 'true' ? '&a开启' : '&c关闭')"
+                          y: 28
+                          texts: "var.replantEnabled == 'true' ? '&f自动补种 / 开启' : '&0自动补种 / 关闭'"
                           fontSize: 36
                           through: true
                   # 自动工具
@@ -1015,10 +1302,10 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_left
-                      x: 0
-                      y: 132
-                      width: 360
-                      height: 56
+                      x: "(var.hubW - 48) / 3 + 24"
+                      y: 124
+                      width: "(var.hubW - 48) / 3"
+                      height: 264
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'toggle_autotool', var.actionToken)
@@ -1028,21 +1315,33 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.autotoolEnabled == 'true' ? '50,120,70,210' : '62,66,74,210'"
-                          hover: "var.autotoolEnabled == 'true' ? '70,150,90,230' : '80,90,110,230'"
+                          normal: "var.autotoolEnabled == 'true' ? '29,111,147,255' : '224,233,231,255'"
+                          hover: "var.autotoolEnabled == 'true' ? '36,128,160,255' : '207,225,227,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           ripple:
                           stroke:
                             width: 2
-                            color: "var.autotoolEnabled == 'true' ? '124,196,142,255' : (self.isHovered() ? '120,200,255,255' : '255,255,255,180')"
+                            color: "self.parent.isHovered() ? '29,111,147,255' : '184,205,210,255'"
+                      自动工具说明:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 112
+                          texts:
+                            - "var.autotoolEnabled == 'true' ? '&f根据目标切换合适工具。' : '&8根据目标切换合适工具。'"
+                            - "var.autotoolEnabled == 'true' ? '&f点击卡片关闭辅助。' : '&8点击卡片开启辅助。'"
+                          fontSize: 36
+                          through: true
                       自动工具文字:
                         type: Text
                         attribute:
-                          point: ~middle_left
+                          point: ~top_left
                           x: 24
-                          texts: "'&f自动工具: ' + (var.autotoolEnabled == 'true' ? '&a开启' : '&c关闭')"
+                          y: 28
+                          texts: "var.autotoolEnabled == 'true' ? '&f自动工具 / 开启' : '&0自动工具 / 关闭'"
                           fontSize: 36
                           through: true
                   # 背包整理
@@ -1050,10 +1349,10 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_left
-                      x: 0
-                      y: 200
-                      width: 360
-                      height: 56
+                      x: "(var.hubW - 48) / 3 * 2 + 48"
+                      y: 124
+                      width: "(var.hubW - 48) / 3"
+                      height: 264
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'sort', var.actionToken)
@@ -1063,8 +1362,8 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~60,100,180,210
-                          hover: ~80,130,210,230
+                          normal: ~29,111,147,255
+                          hover: ~36,128,160,255
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -1072,11 +1371,23 @@ controls:
                           stroke:
                             width: 2
                             color: "self.isHovered() ? '120,200,255,255' : '255,255,255,180'"
+                      整理说明:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 24
+                          y: 112
+                          texts:
+                            - "~&f整理当前背包的物品。"
+                            - "~&f点击卡片立即执行一次。"
+                          fontSize: 36
+                          through: true
                       排序文字:
                         type: Text
                         attribute:
-                          point: ~middle_left
+                          point: ~top_left
                           x: 24
+                          y: 28
                           texts: "~&f背包整理"
                           fontSize: 36
                           through: true

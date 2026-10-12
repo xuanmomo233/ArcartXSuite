@@ -39,7 +39,7 @@ class MenuEscResourceTest {
         assertTrue(resize.contains("Screen.getWidth()"));
         assertTrue(resize.contains("Screen.getHeight()"));
         assertEquals("var.viewH", yaml.getString(PANEL + ".attribute.height"));
-        assertEquals(820, yaml.getInt(PANEL + ".attribute.width"));
+        assertEquals(956, yaml.getInt(PANEL + ".attribute.width"));
         assertTrue(yaml.getString(PANEL + ".attribute.x").contains("var.anim.get()"));
     }
 
@@ -150,9 +150,9 @@ class MenuEscResourceTest {
     }
 
     @Test
-    void usesOpaquePaperAndIconOnlyEntries() throws Exception {
+    void usesOpaqueSlateAndIconOnlyEntries() throws Exception {
         YamlConfiguration yaml = load();
-        assertEquals("~237,232,220,255", yaml.getString(PANEL + ".children.面板底.attribute.normal"));
+        assertEquals("~21,31,49,255", yaml.getString(PANEL + ".children.面板底.attribute.normal"));
         assertTrue(yaml.getStringList("ui.hide").containsAll(Set.of("纯色块HUD", "hotbar", "experience_bar", "scoreboard")));
         assertFalse(yaml.getString("ui.action.load").contains("iconShapes"));
         assertNull(yaml.getConfigurationSection("template"));

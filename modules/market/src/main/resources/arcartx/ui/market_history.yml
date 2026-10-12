@@ -1,7 +1,7 @@
 # AXS Market — 交易历史界面
 # 打开方式: /market history 或导航跳转
-# 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航) + 内容区(历史记录列表+分页)
-# 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
+# 布局: 交易账簿 — 市场导航 / 栏目表头 / 交易明细 / 固定分页
+# 配色: 暖象牙纸面 + 森林绿柜台 + 黄铜滚动标记
 # 数据交互: packetHandler update
 
 ui:
@@ -55,31 +55,30 @@ ui:
         }
       }
       if(var.maxRecordCount != oldMaxRecordCount){
-        while(val.记录列表.childrenCount() > 1){
-          val.记录列表.get(1).remove()
+        for(key in var.recordRefs.keys()){
+          var.recordRefs[key].remove()
         }
-        if(var.maxRecordCount > 1){
-          for(i in range(1, var.maxRecordCount - 1)){
-            key = i.round()
-            if(val.记录列表['记录卡片'] != none) {
-              e = val.记录列表['记录卡片'].copy('记录卡片' + key)
-              e.entryKey = key
-            }
-          }
+        var.recordRefs = {}
+        var.recordRound = (var.recordRound + 1).round()
+        template = val.记录列表.get(0)
+        for(i in range(1, var.maxRecordCount - 1)){
+          key = i.round()
+          e = template.copy('记录卡片_' + var.recordRound + '_' + key)
+          e.entryKey = key
+          var.recordRefs[key] = e
         }
       }
-      for(i in range(0, var.maxRecordCount - 1)){
-        key = i.round()
-        if(val.记录列表 != none){
-          e = val.记录列表.get(key)
-          if(e != none && e['物品图标'] != none){
-            e['物品图标'].seticon()
-          }
+      if(var.maxRecordCount > 0){
+        val.记录列表.get(0)['物品图标'].seticon()
+        for(key in var.recordRefs.keys()){
+          var.recordRefs[key]['物品图标'].seticon()
         }
       }
   action:
     load: |-
       var.packetId = 'AXS_MARKET'
+      var.recordRefs = {}
+      var.recordRound = 0
       var.page = 0
       var.totalPages = 1
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
@@ -109,7 +108,7 @@ controls:
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;20,28,42,110
+      normal: ~15,31,26,245
 
   自适应全局布局:
     type: Adaptive
@@ -130,13 +129,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~62,66,74,210
+              normal: ~35,76,63,210
           标题色块:
             type: Texture
             attribute:
@@ -144,7 +143,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~70,150,250,255
+              normal: ~110,144,116,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -152,22 +151,22 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: "~&f全球市场"
-              fontSize: 48
+              texts: "~&0全球市场"
+              fontSize: 64
           标题竖线:
             type: Texture
             attribute:
               point: ~middle_left
-              x: 232
+              x: 286
               width: 1
               height: 30
-              normal: ~62,66,74,210
+              normal: ~35,76,63,210
           副标题:
             type: Text
             attribute:
               point: ~middle_left
-              x: 252
-              texts: "~&7交易历史"
+              x: 310
+              texts: "~&8交易账簿 / 历史明细"
               fontSize: 36
           关闭按钮:
             type: Canvas
@@ -185,13 +184,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -213,7 +212,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
               shape: ~round_rect
               radius: 14
             effect:
@@ -237,14 +236,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               拍卖行文字:
                 type: Text
                 attribute:
@@ -270,14 +269,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               玩家商店文字:
                 type: Text
                 attribute:
@@ -303,14 +302,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               系统商店文字:
                 type: Text
                 attribute:
@@ -336,14 +335,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               回收文字:
                 type: Text
                 attribute:
@@ -366,7 +365,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~70,150,250,210
+                  normal: ~110,144,116,210
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -380,7 +379,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~70,150,250,255
+                  normal: ~110,144,116,255
                   shape: ~round_rect
                   radius: 2
                   through: true
@@ -409,14 +408,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               上架文字:
                 type: Text
                 attribute:
@@ -426,6 +425,37 @@ controls:
                   fontSize: 36
                   through: true
 
+      账簿导览:
+        type: Canvas
+        attribute:
+          x: "68 - var.offX"
+          y: 620
+          width: 260
+          height: 260
+        children:
+          标记:
+            type: Text
+            attribute:
+              texts: "~&0HISTORY / 账簿"
+              fontSize: 36
+              through: true
+          说明:
+            type: Text
+            attribute:
+              y: 56
+              texts:
+                - "~&8逐笔核对收支"
+                - "~&8金额 / 时间对齐"
+                - "~&8悬停查看长名称"
+              fontSize: 36
+              through: true
+          页提示:
+            type: Text
+            attribute:
+              y: 194
+              texts: "~&8滚轮浏览 / 底部翻页"
+              fontSize: 36
+              through: true
       内容区:
         type: Canvas
         attribute:
@@ -439,7 +469,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
               shape: ~round_rect
               radius: 14
             effect:
@@ -452,8 +482,54 @@ controls:
               point: ~top_left
               x: 24
               y: 24
-              texts: "~&f交易记录"
-              fontSize: 48
+              texts: "~&0交易账簿"
+              fontSize: 64
+          账簿说明:
+            type: Text
+            attribute:
+              x: 24
+              y: 96
+              texts: "~&8按时间核对收支、物品与交易对象"
+              fontSize: 36
+              through: true
+          栏目表头:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 132
+              width: "var.scrollW"
+              height: 48
+            children:
+              表头底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~35,76,63,255
+                  through: true
+              物品列:
+                type: Text
+                attribute:
+                  x: 104
+                  y: 8
+                  texts: "~&f物品 / 交易类型"
+                  fontSize: 36
+                  through: true
+              对象列:
+                type: Text
+                attribute:
+                  x: "var.scrollW * 0.48"
+                  y: 8
+                  texts: "~&f交易对象"
+                  fontSize: 36
+                  through: true
+              收支列:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -20
+                  texts: "~&f金额 / 时间"
+                  fontSize: 36
+                  through: true
           刷新按钮:
             type: Canvas
             attribute:
@@ -471,14 +547,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               刷新文字:
                 type: Text
                 attribute:
@@ -501,10 +577,11 @@ controls:
             attribute:
               point: ~top_right
               x: -18
-              y: 88
-              width: 8
-              height: "var.viewH - 348"
-              normal: ~42,50,66,225
+              y: 196
+              width: 10
+              height: "var.viewH - 440"
+              through: true
+              normal: ~24,50,40,225
               shape: ~round_rect
               radius: 4
             effect:
@@ -517,11 +594,11 @@ controls:
             attribute:
               point: ~top_right
               x: -18
-              y: 88
-              width: 8
-              height: 80
-              normal: ~140,200,255,255
-              maxDragY: "var.viewH - 428"
+              y: 196
+              width: 10
+              height: 96
+              normal: ~183,149,86,255
+              maxDragY: "var.viewH - 536"
               shape: ~round_rect
               radius: 4
           记录滚动:
@@ -530,9 +607,9 @@ controls:
             attribute:
               point: ~top_left
               x: 24
-              y: 88
+              y: 196
               width: "var.scrollW"
-              height: "var.viewH - 348"
+              height: "var.viewH - 440"
               moveY: "self.parent['记录滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -568,23 +645,23 @@ controls:
                           width: "var.scrollW - 6"
                           height: 120
                           through: true
-                          normal: ~42,50,66,210
+                          normal: ~24,50,40,210
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                            color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
                       物品图标:
                         type: Slot
                         attribute:
                           slotType: ~Icon
                           itemScale: 0.72
                           x: 15
-                          y: 12
+                          y: 22
                           width: 76
                           height: 76
-                          normal: ~36,42,54,220
+                          normal: ~45,65,48,220
                           shape: ~round_rect
                           radius: 10
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -596,26 +673,42 @@ controls:
                         type: Text
                         attribute:
                           x: 105
-                          y: 12
+                          y: 68
                           texts: "self.parent.entry['typeColor'] + self.parent.entry['typeText']"
                           fontSize: 36
                           through: true
                       物品名:
-                        type: Text
+                        type: Scroll
                         attribute:
                           x: 105
-                          y: 48
-                          texts: "'&f' + self.parent.entry['itemName']"
-                          fontSize: 32
-                          through: true
+                          y: 20
+                          width: "var.scrollW * 0.48 - 125"
+                          height: 48
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: "self.scrollAnim = Lerp(0, 1, 2200)"
+                          leave: "self.scrollAnim = none"
+                        children:
+                          名称布局:
+                            type: HStack
+                            attribute:
+                              height: 48
+                            children:
+                              名称:
+                                type: Text
+                                attribute:
+                                  texts: "'&f' + self.parent.parent.parent.entry['itemName']"
+                                  fontSize: 48
+                                  through: true
                       交易方:
                         type: Text
                         attribute:
-                          x: 105
-                          y: 82
+                          x: "var.scrollW * 0.48"
+                          y: 42
                           visible: "self.parent.entry != none && self.parent.entry['counterpart'] != ''"
                           texts: "'&7' + self.parent.entry['counterpart']"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                       金额:
                         type: Text
@@ -624,24 +717,24 @@ controls:
                           x: -15
                           y: 12
                           texts: "'&e' + self.parent.entry['amount']"
-                          fontSize: 36
+                          fontSize: 48
                           through: true
                       时间:
                         type: Text
                         attribute:
                           point: ~top_right
                           x: -15
-                          y: 56
+                          y: 72
                           texts: "'&7' + self.parent.entry['time']"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
           # ── 底部分页栏 ──────────────────────────────
           上一页:
             type: Canvas
             attribute:
-              point: ~top_left
+              point: ~bottom_left
               x: 24
-              y: "var.viewH - 248"
+              y: -24
               width: 130
               height: 48
               enable: "var.page > 0"
@@ -656,13 +749,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               上一页文字:
                 type: Text
                 attribute:
@@ -673,17 +766,17 @@ controls:
           页码:
             type: Text
             attribute:
-              point: ~middle_center
+              point: ~bottom_center
               x: 0
-              y: "var.viewH - 240"
-              texts: "'&f' + (var.page + 1).round() + ' / ' + var.totalPages.round()"
+              y: -34
+              texts: "'&0' + (var.page + 1).round() + ' / ' + var.totalPages.round()"
               fontSize: 36
           下一页:
             type: Canvas
             attribute:
-              point: ~top_right
+              point: ~bottom_right
               x: -24
-              y: "var.viewH - 248"
+              y: -24
               width: 130
               height: 48
               enable: "var.page < var.totalPages - 1"
@@ -698,13 +791,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               下一页文字:
                 type: Text
                 attribute:

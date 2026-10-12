@@ -1,24 +1,19 @@
-# AXS Market — 系统商店界面
-# 打开方式: /market shop 或导航跳转
-# 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航+商店列表) + 内容区(商品网格)
-# 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
-# 数据交互: packetHandler update
-
+# AXS Market — 供给目录与交易详情
 ui:
   isHud: false
   defaultOpen: false
   hide:
-    - hotbar
-    - experience_bar
-    - crosshair
-    - item_name
-    - jump_bar
-    - mount_health
-    - player_state
-    - player_health
-    - armor_level
-    - food_level
-    - air_level
+  - hotbar
+  - experience_bar
+  - crosshair
+  - item_name
+  - jump_bar
+  - mount_health
+  - player_state
+  - player_health
+  - armor_level
+  - food_level
+  - air_level
   through: false
   background: false
   escClose: true
@@ -29,99 +24,123 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    # packetHandler: update
-    # 接收服务端推送的商店数据
-    # 包字段:
-    #   - packetId: 数据包通信 ID
-    #   - shops: 商店列表字典（key=序号, value=商店对象含 id）
-    #   - shopTexts: 商店显示文本字典
-    #   - shopIconJson{key}: 各商店图标的 NBT JSON
-    #   - shopId: 当前选中的商店 ID
-    #   - shopName: 当前商店名称
-    #   - items: 商品列表字典（key=序号, value=商品对象含 key/name/price/stock/limitText）
-    #   - shopItemJson{key}: 各商品的 NBT JSON
-    #   - maxShopCount: 商店最大数量
-    #   - maxItemCount: 商品最大数量
-    #   - action_token: 操作令牌
     update: |-
-      var.itemJsons = {}
-      var.shopIconJsons = {}
-      oldMaxShopCount = var.maxShopCount
-      oldMaxItemCount = var.maxItemCount
+      oldShopId = var.shopId
+      oldShopCount = var.maxShopCount
+      oldItemCount = var.maxItemCount
       var.packetId = packet['packetId']
-      var.shops = packet['shops']
+      var.shops = packet['shops'] != none ? packet['shops'] : {}
       var.shopTexts = packet['shopTexts']
       var.shopId = packet['shopId']
       var.shopName = packet['shopName']
-      var.items = packet['items']
-      var.maxShopCount = packet['maxShopCount']
-      var.maxItemCount = packet['maxItemCount']
+      var.items = packet['items'] != none ? packet['items'] : {}
+      var.maxShopCount = var.shops.size()
+      var.maxItemCount = var.items.size()
       var.actionToken = packet['action_token']
       var.isAdmin = packet['isAdmin']
+      var.itemJsons = {}
+      var.shopIconJsons = {}
       for(key in var.shops.keys()){
         json = packet['shopIconJson' + key]
-        if(json != none && json != ''){
-          var.shopIconJsons[key] = json
-        } else {
-          var.shopIconJsons[key] = var.emptyItemJson
-        }
+        var.shopIconJsons[key] = json != none && json != '' ? json : var.emptyItemJson
       }
       for(key in var.items.keys()){
         json = packet['shopItemJson' + key]
-        if(json != none && json != ''){
-          var.itemJsons[key] = json
-        } else {
-          var.itemJsons[key] = var.emptyItemJson
-        }
+        var.itemJsons[key] = json != none && json != '' ? json : var.emptyItemJson
       }
-      if(var.maxShopCount != oldMaxShopCount){
-        while(val.商店列表.childrenCount() > 1){
-          val.商店列表.get(1).remove()
+      if(var.maxShopCount != oldShopCount){
+        for(key in var.shopRefs.keys()){
+          var.shopRefs[key].remove()
         }
+        var.shopRefs = {}
+        var.shopRound = var.shopRound + 1
         if(var.maxShopCount > 1){
+          template = val.商店列表.get(0)
           for(i in range(1, var.maxShopCount - 1)){
-            key = i.round()
-            if(val.商店列表['商店项'] != none) {
-              e = val.商店列表['商店项'].copy('商店项' + key)
-              e.entryKey = key
-            }
+            row = template.copy('商店项_' + var.shopRound.round() + '_' + i.round())
+            row.entryKey = i.round()
+            var.shopRefs[i.round()] = row
           }
         }
       }
-      if(var.maxItemCount != oldMaxItemCount){
-        while(val.商品列表.childrenCount() > 1){
-          val.商品列表.get(1).remove()
+      if(var.maxItemCount != oldItemCount){
+        for(key in var.itemRefs.keys()){
+          var.itemRefs[key].remove()
         }
+        var.itemRefs = {}
+        var.itemRound = var.itemRound + 1
         if(var.maxItemCount > 1){
+          template = val.商品列表.get(0)
           for(i in range(1, var.maxItemCount - 1)){
-            key = i.round()
-            if(val.商品列表['商品卡片'] != none) {
-              e = val.商品列表['商品卡片'].copy('商品卡片' + key)
-              e.entryKey = key
-            }
+            row = template.copy('商品卡片_' + var.itemRound.round() + '_' + i.round())
+            row.entryKey = i.round()
+            var.itemRefs[i.round()] = row
           }
         }
       }
-      for(i in range(0, var.maxShopCount - 1)){
-        key = i.round()
-        if(val.商店列表 != none){
-          e = val.商店列表.get(key)
-          if(e != none && e['商店图标'] != none){
-            e['商店图标'].seticon()
-          }
+      if(var.maxShopCount > 0){
+        val.商店列表.get(0)['商店图标'].seticon()
+        for(key in var.shopRefs.keys()){
+          var.shopRefs[key]['商店图标'].seticon()
         }
       }
-      for(i in range(0, var.maxItemCount - 1)){
-        key = i.round()
-        if(val.商品列表 != none){
-          e = val.商品列表.get(key)
-          if(e != none && e['商品图标'] != none){
-            e['商品图标'].seticon()
-          }
+      if(var.maxItemCount > 0){
+        val.商品列表.get(0)['商品图标'].seticon()
+        for(key in var.itemRefs.keys()){
+          var.itemRefs[key]['商品图标'].seticon()
         }
       }
+      if(oldShopId != var.shopId){
+        var.selectedItemId = none
+        val.商品滑块.setDragYRatio(0)
+      }
+      var.selectedKey = none
+      for(key in var.items.keys()){
+        entry = var.items[key]
+        if(entry['key'] == var.selectedItemId){
+          var.selectedKey = key
+        }
+      }
+      self.actions['refreshSelection']()
       var.actionBusy = false
+      var.actionBusySeconds = 0
   action:
+    load: |-
+      var.shopUi = self
+      var.packetId = 'AXS_MARKET'
+      var.actionToken = ''
+      var.shopId = ''
+      var.shopName = ''
+      var.shops = {}
+      var.shopTexts = {}
+      var.items = {}
+      var.itemJsons = {}
+      var.shopIconJsons = {}
+      var.shopRefs = {}
+      var.itemRefs = {}
+      var.maxShopCount = 0
+      var.maxItemCount = 0
+      var.shopRound = 0
+      var.itemRound = 0
+      var.selectedKey = none
+      var.selectedItemId = none
+      var.selectedItem = none
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.actionBusy = false
+      var.actionBusySeconds = 0
+      var.isAdmin = false
+      self.actions['resize']()
+    open: Packet.send(var.packetId, 'shop_list', '')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.galleryW = var.viewW - 828
+      var.scrollW = var.galleryW - 56
+      var.cardW = (var.scrollW - 20) / 2
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -132,45 +151,16 @@ ui:
       }else{
         var.actionBusySeconds = 0
       }
-    load: |-
-      var.actionToken = ''
-      var.packetId = 'AXS_MARKET'
-      var.shopId = ''
-      var.shopName = ''
-      var.shopTexts = {}
-      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.actionBusy = false
-      var.actionBusySeconds = 0
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
-      var.scrollW = var.contentW - 72
-      var.cardW = (var.scrollW - 32) / 3
-    open: |-
-      Packet.send(var.packetId, 'shop_list', '')
-    resize: |-
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
-      var.scrollW = var.contentW - 72
-      var.cardW = (var.scrollW - 32) / 3
-
+    refreshSelection: |-
+      var.selectedItem = var.items[var.selectedKey]
+      val.selected_icon.seticon()
 controls:
-  全屏玻璃底:
+  背景:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;20,28,42,110
-
+      normal: ~15,31,26,235
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -182,703 +172,807 @@ controls:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "-var.offX"
-          width: "var.viewW"
-          height: 96
+          x: -var.offX
+          y: 0
+          width: var.viewW
+          height: 104
         children:
-          顶栏底:
+          底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-          顶栏底线:
-            type: Texture
+              through: true
+              normal: ~242,237,223,255
+          品牌:
+            type: Text
             attribute:
-              point: ~horizontal_stretch_bottom
-              height: 1
-              normal: ~62,66,74,210
-          标题色块:
-            type: Texture
-            attribute:
-              point: ~middle_left
               x: 48
-              width: 6
-              height: 36
-              normal: ~70,150,250,255
-              shape: ~round_rect
-              radius: 3
-          标题:
+              y: 24
+              texts: ~&0全球市场
+              fontSize: 72
+              through: true
+          副题:
             type: Text
             attribute:
-              point: ~middle_left
-              x: 68
-              texts: "~&f全球市场"
-              fontSize: 48
-          标题竖线:
-            type: Texture
-            attribute:
-              point: ~middle_left
-              x: 232
-              width: 1
-              height: 30
-              normal: ~62,66,74,210
-          副标题:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 252
-              texts: "~&7系统商店"
+              x: 318
+              y: 46
+              texts: ~&8系统商店 / 官方供给
               fontSize: 36
+              through: true
           编辑商店按钮:
             type: Canvas
             attribute:
-              point: ~middle_right
-              x: -264
-              width: 200
-              height: 48
-              visible: "var.isAdmin == true"
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'shop_edit_ui_open', var.shopId)
+              point: ~top_left
+              x: var.viewW - 304
+              y: 24
+              width: 176
+              height: 56
+              visible: var.isAdmin == true
             children:
-              编辑商店底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~150,110,40,230
+                  normal: 'var.isAdmin == true && var.shopId != '''' ? ''35,76,63,255'' : ''77,77,72,180'''
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '255,220,140,255' : '255,255,255,230'"
-              编辑商店文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f编辑商店"
-                  fontSize: 32
+                  x: 0
+                  y: 0
+                  texts: ~&f编辑商店
+                  fontSize: 36
                   through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(var.isAdmin == true && var.shopId != ''){
+                  Packet.send(var.packetId, 'shop_edit_ui_open', var.shopId)
+                }
           关闭按钮:
             type: Canvas
             attribute:
-              point: ~middle_right
-              x: -48
-              width: 48
-              height: 48
-            action:
-              clickLeft: |-
-                Screen.close()
+              point: ~top_left
+              x: var.viewW - 112
+              y: 24
+              width: 64
+              height: 56
             children:
-              关闭背景:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              关闭文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f✕"
+                  x: 0
+                  y: 0
+                  texts: ~&f关闭
                   fontSize: 36
                   through: true
-
-      左侧导航:
+                  point: ~middle_center
+            action:
+              clickLeft: Screen.close()
+      功能导航:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "48 - var.offX"
-          y: 120
-          width: 300
-          height: "var.viewH - 144"
+          x: -var.offX
+          y: 104
+          width: var.viewW
+          height: 80
         children:
-          导航底:
+          底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          导航拍卖行:
+              through: true
+              normal: ~22,48,41,255
+          拍卖行:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 14
-              y: 18
-              width: 272
-              height: 58
+              x: 48
+              y: 12
+              width: 186
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~35,65,54,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f拍卖行
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'auction_ui_open')
+              clickLeft: Packet.send(var.packetId, 'auction_ui_open')
+          玩家商店:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 250
+              y: 12
+              width: 186
+              height: 52
             children:
-              拍卖行底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,65,54,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              拍卖行文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f拍卖行"
+                  x: 0
+                  y: 0
+                  texts: ~&f玩家商店
                   fontSize: 36
                   through: true
-          导航玩家商店:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 84
-              width: 272
-              height: 58
+                  point: ~middle_center
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'pshop_ui_open')
+              clickLeft: Packet.send(var.packetId, 'pshop_ui_open')
+          系统商店:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 452
+              y: 12
+              width: 186
+              height: 52
             children:
-              玩家商店底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~190,159,99,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              玩家商店文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f玩家商店"
+                  x: 0
+                  y: 0
+                  texts: ~&0系统商店
                   fontSize: 36
                   through: true
-          导航系统商店:
+                  point: ~middle_center
+          回收商店:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 14
-              y: 150
-              width: 272
-              height: 58
+              x: 654
+              y: 12
+              width: 186
+              height: 52
             children:
-              系统商店底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~70,150,250,210
+                  normal: ~35,65,54,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              系统商店高亮条:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 8
-                  width: 4
-                  height: 28
-                  normal: ~70,150,250,255
-                  shape: ~round_rect
-                  radius: 2
-                  through: true
-              系统商店文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&0系统商店"
+                  x: 0
+                  y: 0
+                  texts: ~&f回收商店
                   fontSize: 36
                   through: true
-          导航回收:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
+                  point: ~middle_center
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'recycle_ui_open')
-            children:
-              回收底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              回收文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f回收商店"
-                  fontSize: 36
-                  through: true
-          导航交易历史:
+              clickLeft: Packet.send(var.packetId, 'recycle_ui_open')
+          交易历史:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 14
-              y: 282
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'history_ui_open')
+              x: 856
+              y: 12
+              width: 186
+              height: 52
             children:
-              交易历史底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,65,54,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              交易历史文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f交易历史"
+                  x: 0
+                  y: 0
+                  texts: ~&f交易历史
                   fontSize: 36
                   through: true
-          导航上架:
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send(var.packetId, 'history_ui_open')
+          物品上架:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 14
-              y: 348
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'sell_ui_open')
+              x: 1058
+              y: 12
+              width: 186
+              height: 52
             children:
-              上架底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,65,54,255
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              上架文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f物品上架"
+                  x: 0
+                  y: 0
+                  texts: ~&f物品上架
                   fontSize: 36
                   through: true
-          导航分隔线:
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send(var.packetId, 'sell_ui_open')
+      商店目录:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 48 - var.offX
+          y: 216
+          width: 264
+          height: var.viewH - 264
+        children:
+          底:
             type: Texture
             attribute:
-              point: ~top_left
-              x: 14
-              y: 420
-              width: 272
-              height: 1
-              normal: ~62,66,74,210
+              point: ~stretch_all
               through: true
-          商店标题:
+              normal: ~22,48,41,252
+              shape: ~round_rect
+              radius: 12
+          标题:
             type: Text
             attribute:
-              point: ~top_left
-              x: 28
-              y: 440
-              texts: "~&f商店列表"
+              x: 24
+              y: 24
+              texts: ~&f商店目录
+              fontSize: 48
+              through: true
+          副题:
+            type: Text
+            attribute:
+              x: 24
+              y: 72
+              texts: ~&7选择一个供给站
               fontSize: 36
               through: true
           商店滑轨:
             type: Texture
             attribute:
               point: ~top_right
-              x: -10
-              y: 488
-              width: 8
-              height: "var.viewH - 652"
-              normal: ~42,50,66,225
-              shape: ~round_rect
-              radius: 4
-            effect:
-              stroke:
-                width: 2
-                color: ~255,255,255,230
+              x: -8
+              y: 128
+              width: 6
+              height: var.viewH - 420
+              normal: ~124,118,103,70
+              through: true
           商店滑块:
             type: Texture
             val: 商店滑块
             attribute:
               point: ~top_right
-              x: -10
-              y: 488
-              width: 8
-              height: 60
-              normal: ~140,200,255,255
-              maxDragY: "var.viewH - 712"
+              x: -8
+              y: 128
+              width: 6
+              height: 64
+              maxDragY: var.viewH - 420 - 64
+              normal: ~175,147,97,255
               shape: ~round_rect
-              radius: 4
+              radius: 3
           商店滚动:
             type: Scroll
             val: 商店滚动
             attribute:
               point: ~top_left
-              x: 20
-              y: 488
-              width: 260
-              height: "var.viewH - 652"
-              moveY: "self.parent['商店滑块'].getDragYRatio()"
+              x: 24
+              y: 128
+              width: 224
+              height: var.viewH - 420
+              moveY: val.商店滑块.getDragYRatio()
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['商店滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['商店滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+                ratio = self.moveY - self.wheelValue * 0.1
+                ratio = ratio < 0 ? 0 : ratio
+                ratio = ratio > 1 ? 1 : ratio
+                val.商店滑块.setDragYRatio(ratio)
             children:
               商店列表:
-                val: 商店列表
                 type: VStack
+                val: 商店列表
                 attribute:
-                  width: 254
-                  spaceBetween: 8
+                  width: 216
+                  spaceBetween: 12
                 children:
                   商店项:
                     type: Canvas
                     attribute:
+                      x: 0
+                      y: 0
+                      width: 216
+                      height: 72
                       entryKey: 0.round()
                       entry: var.shops[self.entryKey]
                       visible: self.entry != none
-                      width: 254
-                      height: 56
-                    action:
-                      clickLeft: |-
-                        Packet.send(var.packetId, 'shop_list', self.entry['id'])
                     children:
-                      商店项底:
+                      底:
                         type: Texture
                         attribute:
-                          point: ~top_left
-                          x: 3
-                          y: 0
-                          width: 248
-                          height: 56
+                          point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['id'] == var.shopId ? '70,150,250,210' : '62,66,74,210'"
+                          normal: 'self.parent.entry[''id''] == var.shopId ? ''53,87,65,255'' : ''27,49,41,255'''
                           shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 3
-                            color: "self.parent.entry != none && self.parent.entry['id'] == var.shopId ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                          radius: 8
                       商店图标:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          itemScale: 0.72
-                          x: 8
-                          y: 8
-                          width: 40
-                          height: 40
-                          normal: ~36,42,54,220
+                          itemScale: 0.8
+                          x: 12
+                          y: 12
+                          width: 48
+                          height: 48
+                          through: true
+                          normal: ~35,40,36,220
                           shape: ~round_rect
                           radius: 8
-                          seticon: "self.setItemIcon(var.shopIconJsons[self.parent.entryKey] != none ? var.shopIconJsons[self.parent.entryKey] : var.emptyItemJson)"
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
-                      商店项文字:
+                          seticon: self.setItemIcon(var.shopIconJsons[self.parent.entryKey])
+                      商店名称:
                         type: Text
                         attribute:
-                          point: ~middle_left
-                          x: 56
-                          texts: "self.parent.entry != none && self.parent.entry['id'] == var.shopId ? '&0' + var.shopTexts[self.parent.entryKey] : '&f' + var.shopTexts[self.parent.entryKey]"
-                          fontSize: 32
+                          x: 72
+                          y: 24
+                          texts: '''&f'' + var.shopTexts[self.parent.entryKey]'
+                          fontSize: 36
                           through: true
-
-      内容区:
+                          limit: 12
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none && !var.actionBusy){
+                          Packet.send(var.packetId, 'shop_list', self.entry['id'])
+                        }
+          空态:
+            type: Text
+            attribute:
+              x: 24
+              y: 140
+              texts: ~&7暂无商店
+              fontSize: 36
+              through: true
+              visible: var.maxShopCount == 0
+      商品画廊:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "372 - var.offX"
-          y: 120
-          width: "var.contentW"
-          height: "var.viewH - 144"
+          x: 336 - var.offX
+          y: 216
+          width: var.galleryW
+          height: var.viewH - 264
         children:
-          内容底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          商店名标题:
+          标题:
             type: Text
             attribute:
-              point: ~top_left
-              x: 24
-              y: 24
-              texts: "'&f' + var.shopName"
-              fontSize: 48
-          刷新按钮:
+              x: 0
+              y: 8
+              texts: 'var.shopName != '''' ? ''&f'' + var.shopName : ''&f商品目录'''
+              fontSize: 54
+              through: true
+              limit: 28
+          提示:
+            type: Text
+            attribute:
+              x: 0
+              y: 64
+              texts: '''&7'' + var.maxItemCount + '' 件商品 · 点击卡片查看'''
+              fontSize: 36
+              through: true
+          刷新:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -24
-              y: 24
-              width: 100
-              height: 48
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'shop_list', var.shopId)
+              point: ~top_left
+              x: var.galleryW - 112
+              y: 0
+              width: 112
+              height: 56
             children:
-              刷新底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: '!var.actionBusy ? ''35,76,63,255'' : ''77,77,72,180'''
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                 effect:
-                  ripple:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
-              刷新文字:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
-                  point: ~middle_center
-                  texts: "~&f刷新"
+                  x: 0
+                  y: 0
+                  texts: ~&f刷新
                   fontSize: 36
                   through: true
-          空商品提示:
-            type: Text
-            attribute:
-              point: ~middle_center
-              x: 0
-              y: -40
-              fontSize: 64
-              visible: "var.items == none || var.items.keys().length == 0"
-              texts: "~&8暂无商品"
-              through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send(var.packetId, 'shop_list', var.shopId)
+                }
           商品滑轨:
             type: Texture
             attribute:
               point: ~top_right
-              x: -18
-              y: 88
-              width: 8
-              height: "var.viewH - 256"
-              normal: ~42,50,66,225
-              shape: ~round_rect
-              radius: 4
-            effect:
-              stroke:
-                width: 2
-                color: ~255,255,255,230
+              x: -8
+              y: 120
+              width: 6
+              height: var.viewH - 408
+              normal: ~124,118,103,70
+              through: true
           商品滑块:
             type: Texture
             val: 商品滑块
             attribute:
               point: ~top_right
-              x: -18
-              y: 88
-              width: 8
-              height: 80
-              normal: ~140,200,255,255
-              maxDragY: "var.viewH - 336"
+              x: -8
+              y: 120
+              width: 6
+              height: 64
+              maxDragY: var.viewH - 408 - 64
+              normal: ~175,147,97,255
               shape: ~round_rect
-              radius: 4
+              radius: 3
           商品滚动:
             type: Scroll
             val: 商品滚动
             attribute:
               point: ~top_left
-              x: 24
-              y: 88
-              width: "var.scrollW"
-              height: "var.viewH - 256"
-              moveY: "self.parent['商品滑块'].getDragYRatio()"
+              x: 0
+              y: 120
+              width: var.scrollW
+              height: var.viewH - 408
+              moveY: val.商品滑块.getDragYRatio()
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['商品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['商品滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+                ratio = self.moveY - self.wheelValue * 0.1
+                ratio = ratio < 0 ? 0 : ratio
+                ratio = ratio > 1 ? 1 : ratio
+                val.商品滑块.setDragYRatio(ratio)
             children:
               商品列表:
-                val: 商品列表
                 type: HGrid
+                val: 商品列表
                 attribute:
-                  width: "var.scrollW"
-                  column: 3
-                  spaceBetweenX: 16
-                  spaceBetweenY: 16
+                  width: var.scrollW
+                  column: 2
+                  spaceBetweenX: 20
+                  spaceBetweenY: 20
                 children:
                   商品卡片:
                     type: Canvas
                     attribute:
+                      x: 0
+                      y: 0
+                      width: var.cardW
+                      height: 240
                       entryKey: 0.round()
                       entry: var.items[self.entryKey]
                       visible: self.entry != none
-                      width: "var.cardW"
-                      height: 220
                     children:
-                      卡片底:
+                      底:
                         type: Texture
                         attribute:
-                          point: ~top_left
-                          x: 3
-                          y: 0
-                          width: "var.cardW - 6"
-                          height: 220
+                          point: ~stretch_all
                           through: true
-                          normal: ~42,50,66,210
+                          normal: 'self.parent.entry[''key''] == var.selectedItemId ? ''216,206,175,255'' : ''242,237,223,255'''
                           shape: ~round_rect
-                          radius: 12
-                        effect:
-                          stroke:
-                            width: 3
-                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                          radius: 10
                       商品图标:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          itemScale: 0.72
-                          x: 15
-                          y: 12
+                          itemScale: 0.8
+                          x: 20
+                          y: 20
                           width: 96
                           height: 96
-                          normal: ~36,42,54,220
+                          through: true
+                          normal: ~35,40,36,220
                           shape: ~round_rect
-                          radius: 12
-                          seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                          radius: 8
+                          seticon: self.setItemIcon(var.itemJsons[self.parent.entryKey])
                       商品名称:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 16
-                          texts: "'&f' + self.parent.entry['name']"
-                          fontSize: 36
+                          x: 136
+                          y: 24
+                          texts: '''&0'' + self.parent.entry[''name'']'
+                          fontSize: 48
                           through: true
+                          limit: 16
                       价格:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 52
-                          texts: "'&e价格: &f' + self.parent.entry['price'] + ' &7' + self.parent.entry['currencyName']"
-                          fontSize: 32
+                          x: 136
+                          y: 78
+                          texts: '''&6'' + self.parent.entry[''price'']'
+                          fontSize: 54
                           through: true
+                          limit: 14
+                      货币:
+                        type: Text
+                        attribute:
+                          x: 136
+                          y: 128
+                          texts: '''&8'' + self.parent.entry[''currencyName'']'
+                          fontSize: 36
+                          through: true
+                          limit: 16
                       库存:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 88
-                          texts: "'&7库存: &f' + self.parent.entry['stock']"
-                          fontSize: 32
+                          x: 20
+                          y: 184
+                          texts: '''&8库存 '' + self.parent.entry[''stock'']'
+                          fontSize: 36
                           through: true
-                      限购:
+                          limit: 18
+                      选中提示:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 124
-                          visible: "self.parent.entry != none && self.parent.entry['limitText'] != ''"
-                          texts: "'&c' + self.parent.entry['limitText']"
-                          fontSize: 32
+                          x: 136
+                          y: 184
+                          texts: 'self.parent.entry[''key''] == var.selectedItemId ? ''&2已选中'' : ''&8查看交易详情'''
+                          fontSize: 36
                           through: true
-                      购买按钮:
-                        type: Canvas
-                        attribute:
-                          x: 15
-                          y: 168
-                          width: "var.cardW - 30"
-                          height: 40
-                          enable: "!var.actionBusy && var.actionToken != ''"
-                        action:
-                          clickLeft: |-
-                            var.actionBusy = true
-                            Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], '1', var.actionToken)
-                        children:
-                          购买底:
-                            type: Texture
-                            attribute:
-                              point: ~top_left
-                              x: 3
-                              y: 0
-                              width: "var.cardW - 36"
-                              height: 40
-                              through: true
-                              normal: ~80,200,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              ripple:
-                              stroke:
-                                width: 3
-                                color: "self.isHovered() ? '120,220,140,255' : '255,255,255,230'"
-                          购买文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              texts: "~&f购买"
-                              fontSize: 32
-                              through: true
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none && !var.actionBusy){
+                          var.selectedKey = self.entryKey
+                          var.selectedItemId = self.entry['key']
+                          var.shopUi.actions['refreshSelection']()
+                        }
+          空态:
+            type: Text
+            attribute:
+              x: 24
+              y: 180
+              texts: ~&7此商店暂无商品
+              fontSize: 48
+              through: true
+              visible: var.maxItemCount == 0
+      交易详情:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: var.viewW - var.offX - 468
+          y: 216
+          width: 420
+          height: var.viewH - 264
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~242,237,223,255
+              shape: ~round_rect
+              radius: 12
+          标题:
+            type: Text
+            attribute:
+              x: 28
+              y: 28
+              texts: ~&8交易详情
+              fontSize: 36
+              through: true
+          空态:
+            type: Text
+            attribute:
+              x: 28
+              y: 108
+              texts:
+              - ~&8先选一件商品
+              - ~&8在此核对价格与库存
+              fontSize: 36
+              through: true
+              visible: var.selectedItem == none
+          图标:
+            type: Slot
+            attribute:
+              slotType: ~Icon
+              itemScale: 0.8
+              x: 28
+              y: 96
+              width: 120
+              height: 120
+              through: true
+              normal: ~35,40,36,220
+              shape: ~round_rect
+              radius: 8
+              seticon: 'self.setItemIcon(var.itemJsons[var.selectedKey] != none ? var.itemJsons[var.selectedKey] : var.emptyItemJson)'
+              visible: var.selectedItem != none
+            val: selected_icon
+          选中详情:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 0
+              y: 240
+              width: 420
+              height: 440
+              visible: var.selectedItem != none
+            children:
+              名称:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 0
+                  texts: '''&0'' + var.selectedItem[''name'']'
+                  fontSize: 54
+                  through: true
+                  limit: 20
+              金额:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 64
+                  texts: '''&6'' + var.selectedItem[''price'']'
+                  fontSize: 72
+                  through: true
+                  limit: 14
+              货币:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 132
+                  texts: '''&8'' + var.selectedItem[''currencyName'']'
+                  fontSize: 36
+                  through: true
+                  limit: 24
+              库存:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 204
+                  texts: '''&8可用库存  &0'' + var.selectedItem[''stock'']'
+                  fontSize: 36
+                  through: true
+                  limit: 24
+              限购:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 256
+                  texts: '''&4'' + var.selectedItem[''limitText'']'
+                  fontSize: 36
+                  through: true
+                  limit: 24
+                  visible: var.selectedItem['limitText'] != ''
+              单位:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 324
+                  texts:
+                  - ~&8单次购买 1 件
+                  - ~&8价格与库存以服务端结算为准
+                  fontSize: 36
+                  through: true
+          购买:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 28
+              y: var.viewH - 364
+              width: 364
+              height: 64
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: '!var.actionBusy && var.selectedItem != none && var.actionToken != none && var.actionToken != '''' && var.selectedItem[''stock'']
+                    != ''0'' ? ''35,76,63,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f购买 1 件
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.selectedItem != none && var.actionToken != none && var.actionToken != '' && var.selectedItem['stock'] != '0'){
+                  var.actionBusy = true
+                  var.actionBusySeconds = 0
+                  Packet.send(var.packetId, 'shop_buy', var.shopId, var.selectedItem['key'], '1', var.actionToken)
+                }
+          等待:
+            type: Text
+            attribute:
+              x: 28
+              y: var.viewH - 284
+              texts: 'var.actionBusy ? ''&8正在等待交易结果…'' : ''&8请核对后再购买'''
+              fontSize: 36
+              through: true
+              limit: 24

@@ -1,8 +1,7 @@
-# AXS Mail 管理后台（翠绿信使重写版）
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
-# 布局: 左导航(收件箱/日志/写信/兑换码/管理) + 内容区(列表视图/编辑视图 切换)
-# 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
-# 逻辑: packetHandler 接收 preset-list/preset-detail/attachment-count/result；var.view 控制列表/编辑切换
+# 私人邮局 / 预设档案与派发工作台
+# 象牙信纸、酒红印章、深色墨迹；与收件箱和写信页面共享邮局色板。
+# 注册表 -> 信笺编辑 + 附件/规则副面板 -> 明确派发范围。
+# 业务包、输入引用和延迟 setContent/seticon 生命周期保持不变。
 
 ui:
   isHud: false
@@ -43,8 +42,8 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
-      // 编辑视图：主面板固定宽 780，副面板吃剩余宽度
+      var.contentW = var.viewW - 380
+      // 档案工作台：左侧工具栏 260，正文 780，右侧附件面板弹性扩展
       var.editMainW = 780
       var.editSubX = var.editMainW + 16
       var.editSubW = var.contentW - var.editSubX - 16
@@ -57,7 +56,7 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
+      var.contentW = var.viewW - 380
       var.editMainW = 780
       var.editSubX = var.editMainW + 16
       var.editSubW = var.contentW - var.editSubX - 16
@@ -144,7 +143,7 @@ ui:
         }
         if(var.editCurrencyList.size() > 0){
           row = val.货币附件滚动区['货币行模板']
-          row.entryKey = 0
+          row.entryKey = 0.round()
           entry = var.editCurrencyList['0']
           if(row['货币输入'] != none) {
             row['货币输入'].setContent(entry['currency'])
@@ -236,7 +235,7 @@ ui:
         }
         if(var.editCdkList.size() > 0){
           row = val.CDK滚动区['CDK行模板']
-          row.entryKey = 0
+          row.entryKey = 0.round()
           entry = var.editCdkList['0']
           row.cdkEnabled = entry['enabled']
           if(row['CDK码输入'] != none) {
@@ -307,11 +306,11 @@ ui:
       }
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, var.adminAttachmentSlots - 1)){
-          if(val.管理附件网格 != none) {
-            slot = val.管理附件网格.get(i.round())
+        if(val.管理附件网格 != none) {
+          slot = val.管理附件网格.get(i.round())
+          if(slot != none){
+            slot.seticon()
           }
-        if(slot != none){
-          slot.seticon()
         }
       }
     # packetHandler: result
@@ -323,16 +322,13 @@ ui:
         var.view = 'list'
       }
 
-# ─── 控件树 ────────────────────────────────────────────────────────
-# 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项) + 内容区(列表/编辑切换)
-# 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 描边60,64,82 强调80,180,120
-# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
+# ─── 邮局导航 / 档案工具 / 信笺工作台 ─────────────────────────────
 controls:
   全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:24;30,32,38,110
+      normal: ~32,23,25,240
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -353,13 +349,14 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~90,48,50,255
+              through: true
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~255,255,255,230
+              normal: ~151,138,112,150
           标题色块:
             type: Texture
             attribute:
@@ -367,7 +364,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~80,180,120,255
+              normal: ~175,147,97,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -375,14 +372,23 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: "~&f邮件管理"
-              fontSize: 48
+              texts: "~&f管理"
+              fontSize: 64
+              through: true
+          邮局副标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 300
+              texts: ~&f私人邮局 / 预设档案与派发
+              fontSize: 36
+              through: true
           关闭按钮:
             type: Canvas
             attribute:
               point: ~middle_right
               x: -48
-              width: 48
+              width: 96
               height: 48
             action:
               clickLeft: |-
@@ -404,205 +410,204 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,245
+                  normal: ~249,243,230,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                    width: 1
+                    color: "self.parent.isHovered() ? '175,147,97,255' : '151,138,112,150'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&f✕"
+                  texts: "~&0关闭"
                   fontSize: 36
                   through: true
 
-      # ── 左侧导航 ──────────────────────────────────────
-      左侧导航:
+      邮件导航:
         type: Canvas
         attribute:
           point: ~top_left
           x: "48 - var.offX"
-          y: 120
-          width: 300
-          height: "var.viewH - 144"
+          y: 124
+          width: "var.viewW - 96"
+          height: 60
         children:
-          导航底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
           导航收件箱:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 14
-              y: 18
-              width: 272
-              height: 58
+              x: 0
+              width: 160
+              height: 60
             action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'open')
+              clickLeft: Packet.send('AXS_MAIL', 'open')
             children:
-              收件箱底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  normal: ~90,48,50,255
+                  hover: ~119,65,64,255
                   through: true
-                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              收件箱文字:
+              字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f收件箱"
+                  point: ~middle_center
+                  texts: ~&f收件箱
                   fontSize: 36
                   through: true
           导航日志:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 14
-              y: 84
-              width: 272
-              height: 58
+              x: 176
+              width: 160
+              height: 60
             action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'logs')
+              clickLeft: Packet.send('AXS_MAIL', 'logs')
             children:
-              日志底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  normal: ~90,48,50,255
+                  hover: ~119,65,64,255
                   through: true
-                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              日志文字:
+              字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f日志"
+                  point: ~middle_center
+                  texts: ~&f日志
                   fontSize: 36
                   through: true
           导航写信:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 14
-              y: 150
-              width: 272
-              height: 58
+              x: 352
+              width: 160
+              height: 60
             action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'compose')
+              clickLeft: Packet.send('AXS_MAIL', 'compose')
             children:
-              写信底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  normal: ~90,48,50,255
+                  hover: ~119,65,64,255
                   through: true
-                  normal: ~36,38,48,245
                   shape: ~round_rect
                   radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              写信文字:
+              字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f写信"
+                  point: ~middle_center
+                  texts: ~&f写信
                   fontSize: 36
                   through: true
-          # 当前页：管理
           导航管理:
             type: Canvas
             attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
+              x: 528
+              width: 160
+              height: 60
               visible: "var.isAdmin == true"
             children:
-              管理底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~80,180,120,210
+                  normal: ~90,48,50,255
+                  through: true
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              管理高亮条:
+                    width: 1
+                    color: ~175,147,97,255
+              标记:
                 type: Texture
                 attribute:
                   point: ~middle_left
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~80,180,120,255
-                  shape: ~round_rect
-                  radius: 2
-              管理文字:
+                  normal: ~175,147,97,255
+                  through: true
+              字:
                 type: Text
                 attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&0管理"
+                  point: ~middle_center
+                  texts: ~&f管理
                   fontSize: 36
+                  through: true
+      页面说明:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 212
+          texts: ~&7先整理预设信笺，再选择收件范围派发；保存与派发是独立操作。
+          fontSize: 36
+          through: true
+      # ── 管理工作流：档案 -> 附件与领取规则 ───────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 264
+          width: 260
+          height: "var.viewH - 312"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~238,228,210,255
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 1
+                color: ~151,138,112,150
+          工具栏标题:
+            type: Text
+            attribute:
+              x: 20
+              y: 24
+              texts: ~&0档案工具
+              fontSize: 48
+              through: true
           导航分隔线:
             type: Texture
             attribute:
               point: ~top_left
-              x: 18
-              y: 298
-              width: 264
+              x: 20
+              y: 78
+              width: 220
               height: 2
-              normal: ~255,255,255,230
+              normal: ~151,138,112,150
           操作标题:
             type: Text
             attribute:
               point: ~top_left
               x: 20
-              y: 316
-              texts: "~&f快捷操作"
+              y: 238
+              texts: "~&8信笺配置"
               fontSize: 36
           刷新列表按钮:
             type: Canvas
             attribute:
               point: ~top_left
               x: 14
-              y: 362
-              width: 272
-              height: 48
+              y: 98
+              width: 232
+              height: 56
             action:
               clickLeft: |-
                 var.view = 'list'
@@ -613,20 +618,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.view == 'list' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.view == 'list' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.view == 'list' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.view == 'list' ? '175,147,97,255' : '151,138,112,150'"
               刷新列表文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.view == 'list' ? '&0刷新列表' : '&f刷新列表'"
+                  texts: "var.view == 'list' ? '&f刷新档案' : '&0返回档案'"
                   fontSize: 36
                   through: true
           新建预设按钮:
@@ -634,9 +639,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 422
-              width: 272
-              height: 48
+              y: 170
+              width: 232
+              height: 56
             action:
               clickLeft: |-
                 var.editId = none
@@ -695,20 +700,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.view == 'edit' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.view == 'edit' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.view == 'edit' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.view == 'edit' ? '175,147,97,255' : '151,138,112,150'"
               新建预设文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.view == 'edit' ? '&0新建预设' : '&f新建预设'"
+                  texts: "var.view == 'edit' ? '&f新建预设' : '&0新建预设'"
                   fontSize: 36
                   through: true
           # ── 编辑模式副面板入口（仅编辑视图显示） ────────
@@ -716,19 +721,19 @@ controls:
             type: Texture
             attribute:
               point: ~top_left
-              x: 18
-              y: 498
-              width: 264
+              x: 20
+              y: 284
+              width: 220
               height: 2
-              normal: ~255,255,255,230
+              normal: ~151,138,112,150
               visible: "var.view == 'edit'"
           编辑操作标题:
             type: Text
             attribute:
               point: ~top_left
               x: 20
-              y: 516
-              texts: "~&f编辑面板"
+              y: 314
+              texts: "~&0附件与规则"
               fontSize: 36
               visible: "var.view == 'edit'"
           货币附件入口:
@@ -736,9 +741,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 620
-              width: 272
-              height: 48
+              y: 428
+              width: 232
+              height: 52
               visible: "var.view == 'edit'"
             action:
               clickLeft: |-
@@ -750,7 +755,7 @@ controls:
                   }
                   if(var.editCurrencyList != none && var.editCurrencyList.size() > 0){
                     row = val.货币附件滚动区['货币行模板']
-                    row.entryKey = 0
+                    row.entryKey = 0.round()
                     entry = var.editCurrencyList['0']
                     if(row['货币输入'] != none) {
                       row['货币输入'].setContent(entry['currency'])
@@ -840,20 +845,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.subView == 'currency' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.subView == 'currency' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.subView == 'currency' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.subView == 'currency' ? '175,147,97,255' : '151,138,112,150'"
               货币附件入口文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.subView == 'currency' ? '&0货币附件' : '&f货币附件'"
+                  texts: "var.subView == 'currency' ? '&f货币附件' : '&0货币附件'"
                   fontSize: 36
                   through: true
           物品附件入口:
@@ -861,9 +866,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 562
-              width: 272
-              height: 48
+              y: 366
+              width: 232
+              height: 52
               visible: "var.view == 'edit'"
             action:
               clickLeft: |-
@@ -885,20 +890,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.subView == 'item' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.subView == 'item' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.subView == 'item' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.subView == 'item' ? '175,147,97,255' : '151,138,112,150'"
               物品附件入口文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.subView == 'item' ? '&0物品附件' : '&f物品附件'"
+                  texts: "var.subView == 'item' ? '&f物品附件' : '&0物品附件'"
                   fontSize: 36
                   through: true
           CDK入口:
@@ -906,9 +911,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 678
-              width: 272
-              height: 48
+              y: 490
+              width: 232
+              height: 52
               visible: "var.view == 'edit'"
             action:
               clickLeft: |-
@@ -920,7 +925,7 @@ controls:
                   }
                   if(var.editCdkList != none && var.editCdkList.size() > 0){
                     row = val.CDK滚动区['CDK行模板']
-                    row.entryKey = 0
+                    row.entryKey = 0.round()
                     entry = var.editCdkList['0']
                     row.cdkEnabled = entry['enabled']
                     if(row['CDK码输入'] != none) {
@@ -974,20 +979,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.subView == 'cdk' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.subView == 'cdk' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.subView == 'cdk' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.subView == 'cdk' ? '175,147,97,255' : '151,138,112,150'"
               CDK入口文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.subView == 'cdk' ? '&0CDK 兑换码' : '&fCDK 兑换码'"
+                  texts: "var.subView == 'cdk' ? '&fCDK兑换码' : '&0CDK兑换码'"
                   fontSize: 36
                   through: true
           领取命令入口:
@@ -995,9 +1000,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 736
-              width: 272
-              height: 48
+              y: 552
+              width: 232
+              height: 52
               visible: "var.view == 'edit'"
             action:
               clickLeft: |-
@@ -1011,20 +1016,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.subView == 'commands' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.subView == 'commands' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.subView == 'commands' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.subView == 'commands' ? '175,147,97,255' : '151,138,112,150'"
               领取命令入口文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.subView == 'commands' ? '&0领取命令' : '&f领取命令'"
+                  texts: "var.subView == 'commands' ? '&f领取命令' : '&0领取命令'"
                   fontSize: 36
                   through: true
           领取条件入口:
@@ -1032,9 +1037,9 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 794
-              width: 272
-              height: 48
+              y: 614
+              width: 232
+              height: 52
               visible: "var.view == 'edit'"
             action:
               clickLeft: |-
@@ -1048,20 +1053,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.subView == 'conditions' ? '80,180,120,230' : '36,38,48,245'"
+                  normal: "var.subView == 'conditions' ? '90,48,50,255' : '249,243,230,255'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
-                    width: 3
-                    color: "var.subView == 'conditions' ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
+                    width: 1
+                    color: "var.subView == 'conditions' ? '175,147,97,255' : '151,138,112,150'"
               领取条件入口文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
-                  texts: "var.subView == 'conditions' ? '&0领取条件' : '&f领取条件'"
+                  texts: "var.subView == 'conditions' ? '&f领取条件' : '&0领取条件'"
                   fontSize: 36
                   through: true
 
@@ -1070,28 +1075,30 @@ controls:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "372 - var.offX"
-          y: 120
+          x: "332 - var.offX"
+          y: 264
           width: "var.contentW"
-          height: "var.viewH - 144"
+          height: "var.viewH - 312"
         children:
           # 内容区大白毛玻璃底
           内容底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~238,228,210,255
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
-                width: 3
-                color: ~255,255,255,230
+                width: 1
+                color: ~151,138,112,150
           # ── 列表视图 ───────────────────────────────────
           列表视图:
             type: Canvas
             attribute:
               point: ~stretch_all
+              width: "self.parent.width"
+              height: "self.parent.height"
               visible: "var.view == 'list' || var.view == none"
             children:
               列表底:
@@ -1099,97 +1106,82 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,210
+                  normal: ~238,228,210,255
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              # 表头
+                    width: 1
+                    color: ~151,138,112,150
+              # 档案抬头：总量与操作说明，而不是拥挤的表格列名。
               表头:
                 type: Canvas
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: 12
-                  width: "var.contentW - 32"
-                  height: 40
+                  x: 24
+                  y: 24
+                  width: "var.contentW - 48"
+                  height: 116
                 children:
-                  表头底:
+                  档案标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&0预设信笺档案
+                      fontSize: 64
+                      through: true
+                  档案数量:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      y: 8
+                      texts: "'&8已登记 ' + var.total.round() + ' 份'"
+                      fontSize: 48
+                      through: true
+                  档案说明:
+                    type: Text
+                    attribute:
+                      y: 72
+                      texts: ~&8编辑内容 / 派发副本 / 删除预设    ·    长标题悬停展开
+                      fontSize: 36
+                      through: true
+                  档案横线:
                     type: Texture
                     attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,230
-                  编号列:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 14
-                      texts: "~&fID"
-                      fontSize: 36
-                  名称列:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 200
-                      texts: "~&f显示名"
-                      fontSize: 36
-                  主题列:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 440
-                      texts: "~&f标题"
-                      fontSize: 36
-                  启用列:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 700
-                      texts: "~&f启用"
-                      fontSize: 36
-                  操作列:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 820
-                      texts: "~&f操作"
-                      fontSize: 36
+                      point: ~horizontal_stretch_bottom
+                      height: 1
+                      normal: ~151,138,112,180
+                      through: true
               # 预设滑轨
               预设滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -12
-                  y: 64
-                  width: 10
-                  height: "var.viewH - 144 - 80"
-                  normal: ~40,44,52,225
+                  x: -14
+                  y: 168
+                  width: 6
+                  height: "self.parent.height - 248"
+                  normal: ~151,138,112,150
+                  through: true
                   shape: ~round_rect
                   radius: 5
                 effect:
                   stroke:
-                    width: 2
-                    color: ~120,220,160,230
+                    width: 1
+                    color: ~175,147,97,255
               # 预设滑块
               预设滑块:
                 type: Texture
                 val: 预设滑块
                 attribute:
                   point: ~top_right
-                  x: -12
-                  y: 64
-                  width: 10
-                  height: 50
-                  normal: ~80,180,120,230
-                  maxDragY: "var.viewH - 144 - 130"
+                  x: -14
+                  y: 168
+                  width: 6
+                  height: 64
+                  normal: ~175,147,97,255
+                  maxDragY: "self.parent.height - 312"
                   shape: ~round_rect
                   radius: 5
               # 预设列表
@@ -1197,10 +1189,10 @@ controls:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 16
-                  y: 64
-                  width: "var.contentW - 44"
-                  height: "var.viewH - 144 - 80"
+                  x: 24
+                  y: 168
+                  width: "var.contentW - 56"
+                  height: "self.parent.height - 248"
                   moveY: "self.parent['预设滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -1215,8 +1207,8 @@ controls:
                     val: preset_data
                     type: VStack
                     attribute:
-                      width: "self.parent.width - 24"
-                      spaceBetween: 6
+                      width: "self.parent.width - 8"
+                      spaceBetween: 16
                     children:
                       预设行:
                         type: Canvas
@@ -1224,7 +1216,7 @@ controls:
                           entryKey: 0.round()
                           entry: var.presets[self.entryKey]
                           width: "self.parent.width"
-                          height: 56
+                          height: 168
                           visible: "self.entry != none"
                         children:
                           行底:
@@ -1232,48 +1224,83 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~36,38,48,245
+                              normal: ~249,243,230,255
                               shape: ~round_rect
                               radius: 8
                             effect:
                               stroke:
-                                width: 2
-                                color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                                width: 1
+                                color: "self.parent.isHovered() ? '175,147,97,255' : '151,138,112,150'"
                           行编号:
                             type: Text
                             attribute:
-                              point: ~middle_left
-                              x: 14
-                              texts: "self.parent.entry['id']"
+                              point: ~top_left
+                              x: 20
+                              y: 76
+                              texts: "'&8ID / ' + self.parent.entry['id']"
                               fontSize: 36
+                              limit: 10
+                              through: true
                           行名称:
                             type: Text
                             attribute:
-                              point: ~middle_left
-                              x: 200
-                              texts: "self.parent.entry['displayName']"
-                              fontSize: 36
+                              point: ~top_left
+                              x: 20
+                              y: 18
+                              texts: "'&0' + self.parent.entry['displayName']"
+                              fontSize: 48
+                              limit: 22
+                              through: true
                           行主题:
+                            type: Scroll
+                            attribute:
+                              point: ~top_left
+                              x: 300
+                              y: 76
+                              width: "self.parent.width - 660"
+                              height: 52
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              enter: self.scrollAnim = Lerp(0, 1, 5000)
+                              leave: self.scrollAnim = none
+                            children:
+                              标题布局:
+                                type: HStack
+                                attribute:
+                                  height: 52
+                                children:
+                                  标题文本:
+                                    type: Text
+                                    attribute:
+                                      texts: "'&0标题 / ' + self.parent.parent.parent.entry['subject']"
+                                      fontSize: 36
+                                      through: true
+                          行附件摘要:
                             type: Text
                             attribute:
-                              point: ~middle_left
-                              x: 440
-                              texts: "self.parent.entry['subject']"
+                              x: 20
+                              y: 124
+                              texts: "'&8附件 ' + self.parent.entry['attachmentCount'].round() + '  /  领取命令 ' + self.parent.entry['commandCount'].round()"
                               fontSize: 36
+                              through: true
                           行启用:
                             type: Text
                             attribute:
-                              point: ~middle_left
-                              x: 700
-                              texts: "self.parent.entry['enabled'] ? '&a✔' : '&c✖'"
+                              point: ~bottom_right
+                              x: -20
+                              y: -24
+                              texts: "self.parent.entry['enabled'] ? '&8状态 / 已启用' : '&4状态 / 已停用'"
                               fontSize: 36
+                              through: true
                           编辑按钮:
                             type: Canvas
                             attribute:
-                              point: ~middle_left
-                              x: 820
-                              width: 72
-                              height: 36
+                              point: ~top_right
+                              x: -228
+                              y: 24
+                              width: 88
+                              height: 48
                             action:
                               clickLeft: |-
                                 Packet.send('AXS_MAIL', 'admin-preset-get', self.parent.entry['id'])
@@ -1283,27 +1310,28 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~36,38,48,245
+                                  normal: ~249,243,230,255
                                   shape: ~round_rect
                                   radius: 8
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                                    width: 1
+                                    color: "self.parent.isHovered() ? '175,147,97,255' : '151,138,112,150'"
                               编辑文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&f编辑"
+                                  texts: "~&0编辑"
                                   fontSize: 36
                                   through: true
                           发送按钮:
                             type: Canvas
                             attribute:
-                              point: ~middle_left
-                              x: 900
-                              width: 72
-                              height: 36
+                              point: ~top_right
+                              x: -124
+                              y: 24
+                              width: 88
+                              height: 48
                             action:
                               clickLeft: |-
                                 var.dispatchPresetId = self.parent.entry['id']
@@ -1314,27 +1342,28 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~80,180,120,230
+                                  normal: ~90,48,50,255
                                   shape: ~round_rect
                                   radius: 8
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: ~255,255,255,230
+                                    width: 1
+                                    color: ~151,138,112,150
                               发送文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&0派发"
+                                  texts: "~&f派发"
                                   fontSize: 36
                                   through: true
                           删除按钮:
                             type: Canvas
                             attribute:
-                              point: ~middle_left
-                              x: 980
-                              width: 72
-                              height: 36
+                              point: ~top_right
+                              x: -20
+                              y: 24
+                              width: 88
+                              height: 48
                             action:
                               clickLeft: |-
                                 Packet.send('AXS_MAIL', 'admin-preset-delete', self.parent.entry['id'])
@@ -1344,18 +1373,18 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~36,38,48,245
+                                  normal: ~249,243,230,255
                                   shape: ~round_rect
                                   radius: 8
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: "self.isHovered() ? '235,100,100,255' : '255,255,255,230'"
+                                    width: 1
+                                    color: "self.parent.isHovered() ? '235,100,100,255' : '151,138,112,150'"
                               删除文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&f删除"
+                                  texts: "~&0删除"
                                   fontSize: 36
                                   through: true
               # 空列表提示
@@ -1363,8 +1392,10 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&f暂无预设，点击左侧新建预设开始创建"
-                  fontSize: 36
+                  texts:
+                    - ~&0档案架尚未登记信笺
+                    - ~&8从左侧「新建预设」开始整理第一份模板
+                  fontSize: 48
                   visible: "var.presets == none || var.total == 0"
               # 结果提示
               结果提示:
@@ -1372,8 +1403,8 @@ controls:
                 attribute:
                   point: ~bottom_left
                   x: 16
-                  y: -8
-                  texts: "'&e' + var.resultMsg"
+                  y: -24
+                  texts: "'&4' + var.resultMsg"
                   fontSize: 36
 
           # ── 编辑视图（左主面板 + 右副面板） ────────────────
@@ -1381,6 +1412,8 @@ controls:
             type: Canvas
             attribute:
               point: ~stretch_all
+              width: "self.parent.width"
+              height: "self.parent.height"
               visible: "var.view == 'edit'"
             children:
               编辑底:
@@ -1388,14 +1421,52 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,210
+                  normal: ~238,228,210,255
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              # ══ 主面板（左边，固定宽 780，始终可见） ════════════
+                    width: 1
+                    color: ~151,138,112,150
+              编辑分栏线:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  x: 780
+                  y: 24
+                  width: 1
+                  height: "var.viewH - 360"
+                  normal: ~151,138,112,150
+                  through: true
+              配置引导:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: "var.editSubX"
+                  width: "var.editSubW"
+                  height: "var.viewH - 312"
+                  visible: "var.subView == ''"
+                children:
+                  引导标题:
+                    type: Text
+                    attribute:
+                      x: 32
+                      y: 40
+                      texts: ~&0完善这份信笺
+                      fontSize: 48
+                      through: true
+                  引导说明:
+                    type: Text
+                    attribute:
+                      x: 32
+                      y: 124
+                      texts:
+                        - ~&8从左侧选择物品或货币附件
+                        - ~&8按需配置兑换码、领取命令与条件
+                        - ~&8完成后保存，再回到档案选择派发范围
+                      fontSize: 36
+                      through: true
+              # ══ 信笺编辑主面板 ════════════════════════════════
               主面板:
                 type: Canvas
                 attribute:
@@ -1403,7 +1474,7 @@ controls:
                   x: 0
                   y: 0
                   width: "var.editMainW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                 children:
                   返回按钮:
                     type: Canvas
@@ -1412,7 +1483,7 @@ controls:
                       x: 16
                       y: 12
                       width: 100
-                      height: 40
+                      height: 52
                     action:
                       clickLeft: |-
                         var.view = 'list'
@@ -1424,56 +1495,58 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                            width: 1
+                            color: "self.parent.isHovered() ? '175,147,97,255' : '151,138,112,150'"
                       返回文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f返回"
+                          texts: "~&0返回"
                           fontSize: 36
                           through: true
                   编辑标题:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 130
-                      y: 14
-                      texts: "var.editFound ? '&f编辑预设: ' + var.editId : '&f新建预设'"
-                      fontSize: 36
+                      x: 140
+                      y: 18
+                      texts: "var.editFound ? '&0编辑信笺 / ' + var.editId : '&0新建预设信笺'"
+                      fontSize: 48
+                      limit: 13
+                      through: true
                   编号标签:
                     type: Text
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 72
-                      texts: "~&f预设 ID"
+                      y: 88
+                      texts: "~&8预设 ID"
                       fontSize: 36
                   输入编号框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 104
+                      y: 132
                       width: 300
-                      height: 40
+                      height: 52
                     children:
                       编号输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       编号输入框文本:
                         type: TextBox
                         val: 编辑编号框
@@ -1482,7 +1555,7 @@ controls:
                           y: 4
                           width: 280
                           height: 32
-                          fontSize: 49
+                          fontSize: 36
                           editable: "var.editFound != true"
                         action:
                           textChange: |-
@@ -1492,29 +1565,29 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 340
-                      y: 72
-                      texts: "~&f显示名"
+                      y: 88
+                      texts: "~&8档案显示名"
                       fontSize: 36
                   输入显示名框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 340
-                      y: 104
+                      y: 132
                       width: 300
-                      height: 40
+                      height: 52
                     children:
                       显示名输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       显示名输入框文本:
                         type: TextBox
                         val: 编辑显示名框
@@ -1523,7 +1596,7 @@ controls:
                           y: 4
                           width: 280
                           height: 32
-                          fontSize: 49
+                          fontSize: 36
                         action:
                           textChange: |-
                             var.editDisplayName = self.getContent()
@@ -1532,17 +1605,17 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 660
-                      y: 72
-                      texts: "~&f启用"
+                      y: 88
+                      texts: "~&8启用"
                       fontSize: 36
                   启用切换按钮:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 660
-                      y: 104
+                      y: 132
                       width: 72
-                      height: 40
+                      height: 52
                     action:
                       clickLeft: |-
                         var.editEnabled = !var.editEnabled
@@ -1552,18 +1625,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                          normal: "var.editEnabled ? '90,48,50,255' : '119,54,59,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: "var.editEnabled ? '80,180,120,230' : '235,100,100,230'"
+                            width: 1
+                            color: "var.editEnabled ? '90,48,50,255' : '119,54,59,255'"
                       启用文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.editEnabled ? '&0开' : '&f关'"
+                          texts: "var.editEnabled ? '&f开' : '&f关'"
                           fontSize: 36
                           through: true
                   主题标签:
@@ -1571,29 +1644,29 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 160
-                      texts: "~&f标题"
+                      y: 208
+                      texts: "~&8信件标题"
                       fontSize: 36
                   输入主题框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 192
+                      y: 248
                       width: 716
-                      height: 40
+                      height: 52
                     children:
                       主题输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       主题输入框文本:
                         type: TextBox
                         val: 编辑主题框
@@ -1602,7 +1675,7 @@ controls:
                           y: 4
                           width: 696
                           height: 32
-                          fontSize: 49
+                          fontSize: 36
                         action:
                           textChange: |-
                             var.editSubject = self.getContent()
@@ -1611,29 +1684,29 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 248
-                      texts: "~&f过期(天)"
+                      y: 324
+                      texts: "~&8邮件有效期（天）"
                       fontSize: 36
                   输入过期框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 280
+                      y: 364
                       width: 160
-                      height: 40
+                      height: 52
                     children:
                       过期输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       过期输入框文本:
                         type: TextBox
                         val: 编辑过期框
@@ -1642,7 +1715,7 @@ controls:
                           y: 4
                           width: 140
                           height: 32
-                          fontSize: 49
+                          fontSize: 36
                         action:
                           textChange: |-
                             var.editExpiresDays = self.getContent()
@@ -1651,29 +1724,29 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 336
-                      texts: "~&f正文"
+                      y: 440
+                      texts: "~&8信笺正文"
                       fontSize: 36
                   输入正文框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 368
+                      y: 480
                       width: 716
-                      height: "var.viewH - 144 - 368 - 80"
+                      height: "self.parent.height - 624"
                     children:
                       正文输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       正文输入框文本:
                         type: TextBox
                         val: 编辑正文框
@@ -1681,8 +1754,8 @@ controls:
                           x: 10
                           y: 6
                           width: 696
-                          height: "var.viewH - 144 - 368 - 92"
-                          fontSize: 49
+                          height: "self.parent.height - 16"
+                          fontSize: 36
                           allowNewLine: true
                         action:
                           textChange: |-
@@ -1786,19 +1859,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~80,180,120,230
+                          normal: ~90,48,50,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           ripple:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       保存文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0保存"
+                          texts: "~&f保存信笺"
                           fontSize: 36
                           through: true
                   取消按钮:
@@ -1820,19 +1893,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           ripple:
                           stroke:
-                            width: 3
-                            color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
+                            width: 1
+                            color: "self.parent.isHovered() ? '175,147,97,255' : '151,138,112,150'"
                       取消文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f取消"
+                          texts: "~&0取消"
                           fontSize: 36
                           through: true
                   编辑结果提示:
@@ -1840,8 +1913,8 @@ controls:
                     attribute:
                       point: ~bottom_left
                       x: 16
-                      y: -72
-                      texts: "'&e' + var.resultMsg"
+                      y: -96
+                      texts: "'&4' + var.resultMsg"
                       fontSize: 36
               # ══ 货币附件副面板（右边） ════════════════════════════
               货币附件副面板:
@@ -1851,7 +1924,7 @@ controls:
                   x: "var.editSubX"
                   y: 0
                   width: "var.editSubW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                   visible: "var.subView == 'currency'"
                 children:
                   副面板标题_货币:
@@ -1860,16 +1933,17 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 14
-                      texts: "~&f货币附件"
-                      fontSize: 36
+                      texts: "~&0货币附件"
+                      fontSize: 48
+                      through: true
                   货币附件滚动区:
                     type: Scroll
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 56
+                      y: 96
                       width: "var.editSubW - 44"
-                      height: "var.viewH - 144 - 120"
+                      height: "self.parent.height - 176"
                       moveY: "self.parent['货币附件滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -1893,42 +1967,42 @@ controls:
                               entryKey: 0.round()
                               isTemplate: true
                               width: "self.parent.width - 16"
-                              height: 500
+                              height: 520
                             children:
                               货币行底:
                                 type: Texture
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~36,38,48,245
+                                  normal: ~249,243,230,255
                                   shape: ~round_rect
                                   radius: 8
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: ~255,255,255,230
+                                    width: 1
+                                    color: ~151,138,112,150
                               货币种类标签:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 12
-                                  texts: "~&f货币种类"
+                                  texts: "~&0货币种类"
                                   fontSize: 36
                               货币输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 8
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 money"
                               货币输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 40
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               金额标签:
@@ -1936,23 +2010,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 54
-                                  texts: "~&f金额"
+                                  texts: "~&0金额"
                                   fontSize: 36
                               金额输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 50
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 100"
                               金额输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 82
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               描述标签:
@@ -1960,23 +2034,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 96
-                                  texts: "~&f描述"
+                                  texts: "~&0描述"
                                   fontSize: 36
                               描述输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 92
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7描述文字"
                               描述输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 124
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标配置标签:
@@ -1984,30 +2058,30 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 140
-                                  texts: "~&f图标配置（可选）"
+                                  texts: "~&0图标配置（可选）"
                                   fontSize: 36
                               图标材质标签:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 182
-                                  texts: "~&f材质名"
+                                  texts: "~&0材质名"
                                   fontSize: 36
                               图标材质输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 178
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 GOLD_INGOT"
                               图标材质输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 210
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标CMD标签:
@@ -2015,23 +2089,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 224
-                                  texts: "~&fCMD"
+                                  texts: "~&0CMD"
                                   fontSize: 36
                               图标CMD输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 220
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 0"
                               图标CMD输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 252
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标纹理标签:
@@ -2039,23 +2113,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 266
-                                  texts: "~&f纹理标识"
+                                  texts: "~&0纹理标识"
                                   fontSize: 36
                               图标纹理输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 262
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7纹理标识"
                               图标纹理输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 294
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标URL标签:
@@ -2063,23 +2137,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 308
-                                  texts: "~&f纹理URL"
+                                  texts: "~&0纹理URL"
                                   fontSize: 36
                               图标URL输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 304
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7纹理URL"
                               图标URL输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 336
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标名称标签:
@@ -2087,23 +2161,23 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 350
-                                  texts: "~&f图标名称"
+                                  texts: "~&0图标名称"
                                   fontSize: 36
                               图标名称输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 346
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7图标显示名称"
                               图标名称输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 378
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               图标描述标签:
@@ -2111,24 +2185,24 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 392
-                                  texts: "~&f图标描述"
+                                  texts: "~&0图标描述"
                                   fontSize: 36
                               图标描述输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 388
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 64
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7每行一条"
                                   allowNewLine: true
                               图标描述输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 452
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               货币删除按钮:
@@ -2148,7 +2222,7 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: ~235,100,100,230
+                                      normal: ~119,54,59,255
                                       shape: ~round_rect
                                       radius: 8
                                   货币删除文字:
@@ -2156,19 +2230,31 @@ controls:
                                     attribute:
                                       point: ~middle_center
                                       texts: "~&f删除此行"
-                                      fontSize: 32
+                                      fontSize: 36
                                       through: true
+                  货币附件滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: "var.editSubW - 26"
+                      y: 96
+                      width: 6
+                      height: "self.parent.height - 176"
+                      normal: ~151,138,112,150
+                      through: true
                   货币附件滑块:
                     type: Texture
                     val: 货币附件滑块
                     attribute:
                       point: ~top_left
                       x: "var.editSubW - 26"
-                      y: 56
+                      y: 96
                       width: 6
-                      height: 60
-                      normal: ~120,120,120,200
-                      maxDragY: 120
+                      height: 64
+                      normal: ~175,147,97,255
+                      maxDragY: "self.parent.height - 240"
+                      shape: ~round_rect
+                      radius: 3
                   添加货币按钮:
                     type: Canvas
                     attribute:
@@ -2176,7 +2262,7 @@ controls:
                       x: 16
                       y: -16
                       width: 120
-                      height: 40
+                      height: 52
                     action:
                       clickLeft: |-
                         idx = val.货币附件滚动区.childrenCount() - 1
@@ -2198,15 +2284,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~80,180,120,230
+                          normal: ~90,48,50,255
                           shape: ~round_rect
                           radius: 10
                       添加货币文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0+ 添加"
-                          fontSize: 32
+                          texts: "~&f+ 添加"
+                          fontSize: 36
                           through: true
               # ══ 物品附件副面板（右边） ════════════════════════════
               物品附件副面板:
@@ -2216,7 +2302,7 @@ controls:
                   x: "var.editSubX"
                   y: 0
                   width: "var.editSubW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                   visible: "var.subView == 'item'"
                 children:
                   副面板标题_物品:
@@ -2225,73 +2311,72 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 14
-                      texts: "~&f物品附件"
-                      fontSize: 36
+                      texts: "~&0附件工作台"
+                      fontSize: 48
+                      through: true
                   附件面板:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 8
-                      y: 56
+                      y: 96
                       width: "var.editSubW - 16"
-                      height: 290
+                      height: 320
                     children:
                       附件底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~36,38,48,210
+                          normal: ~238,228,210,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       附件标题:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 14
                           y: 12
-                          texts: "'&f物品附件 &b' + var.editItemCount + '&f/' + var.adminAttachmentSlots.round()"
+                          texts: "'&0物品附件 / ' + var.editItemCount + ' / ' + var.adminAttachmentSlots.round()"
                           fontSize: 36
                       附件提示:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 14
-                          y: 48
+                          y: 64
                           texts:
-                            - "~&f左键背包物品放入1个"
-                            - "~&f右键背包物品放入整组"
-                            - "~&f左键附件退回背包"
-                            - "~&f模板物品保存后不消耗"
+                            - "~&8背包左键：1 个；右键：整组"
+                            - "~&8附件左键退回；保存模板不消耗"
                           fontSize: 36
                       附件槽位网格:
                         type: HGrid
                         val: "管理附件网格"
                         attribute:
                           point: ~top_left
-                          x: "(self.parent.width - 624) / 2"
-                          y: 140
+                          x: "(self.parent.width - 552) / 2"
+                          y: 160
                           spaceBetweenX: 6
                           spaceBetweenY: 6
                           column: 9
                         action:
                           create: |-
                             for(i in range(1, var.adminAttachmentSlots - 1)){
-                              slot = self['管理槽位0'].copy('slot' + i)
+                              slot = self['管理槽位0'].copy('slot' + i.round())
                               slot.entryKey = i.round()
                             }
                         children:
                           管理槽位0:
                             type: Slot
                             attribute:
-                              width: 64
-                              height: 64
-                              normal: "~Frosted:0;36,38,48,245"
-                              hover: "~Frosted:0;60,64,82,245"
+                              width: 56
+                              height: 56
+                              normal: "~Frosted:0;249,243,230,255"
+                              hover: "~Frosted:0;232,220,197,255"
                               shape: ~round_rect
                               radius: 6
                               itemScale: 0.72
@@ -2306,43 +2391,43 @@ controls:
                                 }
                             effect:
                               stroke:
-                                width: 2
-                                color: ~255,255,255,230
+                                width: 1
+                                color: ~151,138,112,150
                   管理背包:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 8
-                      y: 358
+                      y: 432
                       width: "var.editSubW - 16"
-                      height: "var.viewH - 144 - 370"
+                      height: "self.parent.height - 448"
                     children:
                       背包底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~36,38,48,210
+                          normal: ~238,228,210,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       背包标题:
                         type: Text
                         attribute:
                           point: ~top_left
                           x: 14
                           y: 12
-                          texts: "~&f我的背包"
+                          texts: "~&0我的背包"
                           fontSize: 36
                       背包槽位网格:
                         type: HGrid
                         val: "管理背包网格"
                         attribute:
                           point: ~top_left
-                          x: "(self.parent.width - 624) / 2"
+                          x: "(self.parent.width - 552) / 2"
                           y: 56
                           spaceBetweenX: 6
                           spaceBetweenY: 6
@@ -2350,7 +2435,7 @@ controls:
                         action:
                           create: |-
                             for(i in range(1,35)){
-                              slot = self['背包槽位0'].copy('bp_slot' + i)
+                              slot = self['背包槽位0'].copy('bp_slot' + i.round())
                               slot.id = (9 + i).round()
                               slot.entryKey = (9 + i).round()
                             }
@@ -2358,10 +2443,10 @@ controls:
                           背包槽位0:
                             type: Slot
                             attribute:
-                              width: 64
-                              height: 64
-                              normal: "~Frosted:0;36,38,48,245"
-                              hover: "~Frosted:0;60,64,82,245"
+                              width: 56
+                              height: 56
+                              normal: "~Frosted:0;249,243,230,255"
+                              hover: "~Frosted:0;232,220,197,255"
                               shape: ~round_rect
                               radius: 6
                               itemScale: 0.72
@@ -2376,8 +2461,8 @@ controls:
                                 Packet.send('AXS_MAIL', 'admin-add-attachment', self.entryKey, 'all')
                             effect:
                               stroke:
-                                width: 2
-                                color: ~255,255,255,230
+                                width: 1
+                                color: ~151,138,112,150
               # ══ CDK 副面板（右边） ════════════════════════════════
               CDK副面板:
                 type: Canvas
@@ -2386,7 +2471,7 @@ controls:
                   x: "var.editSubX"
                   y: 0
                   width: "var.editSubW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                   visible: "var.subView == 'cdk'"
                 children:
                   副面板标题_CDK:
@@ -2395,16 +2480,17 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 14
-                      texts: "~&fCDK 兑换码"
-                      fontSize: 36
+                      texts: "~&0兑换码登记"
+                      fontSize: 48
+                      through: true
                   CDK滚动区:
                     type: Scroll
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 56
+                      y: 96
                       width: "var.editSubW - 44"
-                      height: "var.viewH - 144 - 120"
+                      height: "self.parent.height - 176"
                       moveY: "self.parent['CDK滑块'].getDragYRatio()"
                     action:
                       wheel: |-
@@ -2437,35 +2523,35 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~36,38,48,245
+                                  normal: ~249,243,230,255
                                   shape: ~round_rect
                                   radius: 8
                                 effect:
                                   stroke:
-                                    width: 2
-                                    color: ~255,255,255,230
+                                    width: 1
+                                    color: ~151,138,112,150
                               CDK码标签:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 12
-                                  texts: "~&fCDK码"
+                                  texts: "~&0CDK码"
                                   fontSize: 36
                               CDK码输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 8
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 STARTER2026"
                               CDK码输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 40
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               启用标签:
@@ -2473,15 +2559,15 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 54
-                                  texts: "~&f启用"
+                                  texts: "~&0启用"
                                   fontSize: 36
                               CDK启用按钮:
                                 type: Canvas
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 50
                                   width: 80
-                                  height: 32
+                                  height: 40
                                 action:
                                   clickLeft: |-
                                     self.parent.cdkEnabled = !(self.parent.cdkEnabled != false)
@@ -2491,38 +2577,38 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: "self.parent.parent.cdkEnabled != false ? '80,180,120,230' : '235,100,100,230'"
+                                      normal: "self.parent.parent.cdkEnabled != false ? '90,48,50,255' : '119,54,59,255'"
                                       shape: ~round_rect
                                       radius: 8
                                   CDK启用文字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
-                                      texts: "self.parent.parent.cdkEnabled != false ? '&0开' : '&f关'"
-                                      fontSize: 32
+                                      texts: "self.parent.parent.cdkEnabled != false ? '&f开' : '&f关'"
+                                      fontSize: 36
                                       through: true
                               最大领取标签:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 96
-                                  texts: "~&f最大领取"
+                                  texts: "~&0最大领取"
                                   fontSize: 36
                               最大领取输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 92
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7如 100"
                               最大领取输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 124
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               过期模式标签:
@@ -2530,15 +2616,15 @@ controls:
                                 attribute:
                                   x: 12
                                   y: 138
-                                  texts: "~&f过期模式"
+                                  texts: "~&0过期模式"
                                   fontSize: 36
                               过期模式按钮:
                                 type: Canvas
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 134
-                                  width: 100
-                                  height: 32
+                                  width: 144
+                                  height: 40
                                 action:
                                   clickLeft: |-
                                     self.parent.expireMode = self.parent.expireMode == 'absolute' ? 'relative' : 'absolute'
@@ -2549,38 +2635,38 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: "self.parent.parent.expireMode == 'absolute' ? '100,160,220,230' : '80,180,120,230'"
+                                      normal: "self.parent.parent.expireMode == 'absolute' ? '153,99,72,255' : '90,48,50,255'"
                                       shape: ~round_rect
                                       radius: 8
                                   过期模式文字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
-                                      texts: "self.parent.parent.expireMode == 'absolute' ? '&0绝对时间' : '&0相对时长'"
-                                      fontSize: 32
+                                      texts: "self.parent.parent.expireMode == 'absolute' ? '&f绝对时间' : '&f相对时长'"
+                                      fontSize: 36
                                       through: true
                               过期值标签:
                                 type: Text
                                 attribute:
                                   x: 12
                                   y: 180
-                                  texts: "~&f过期值"
+                                  texts: "~&0过期值"
                                   fontSize: 36
                               过期输入:
                                 type: TextBox
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 176
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 32
-                                  fontSize: 49
+                                  fontSize: 36
                                   emptyText: "~&7相对如 30d / 绝对如 2026-12-31T23:59:59Z"
                               过期输入_下划线:
                                 type: Texture
                                 attribute:
-                                  x: 140
+                                  x: 180
                                   y: 208
-                                  width: "self.parent.width - 156"
+                                  width: "self.parent.width - 196"
                                   height: 2
                                   normal: ~120,120,120,200
                               CDK删除按钮:
@@ -2600,7 +2686,7 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: ~235,100,100,230
+                                      normal: ~119,54,59,255
                                       shape: ~round_rect
                                       radius: 8
                                   CDK删除文字:
@@ -2608,19 +2694,31 @@ controls:
                                     attribute:
                                       point: ~middle_center
                                       texts: "~&f删除此行"
-                                      fontSize: 32
+                                      fontSize: 36
                                       through: true
+                  CDK滑轨:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: "var.editSubW - 26"
+                      y: 96
+                      width: 6
+                      height: "self.parent.height - 176"
+                      normal: ~151,138,112,150
+                      through: true
                   CDK滑块:
                     type: Texture
                     val: CDK滑块
                     attribute:
                       point: ~top_left
                       x: "var.editSubW - 26"
-                      y: 56
+                      y: 96
                       width: 6
-                      height: 60
-                      normal: ~120,120,120,200
-                      maxDragY: 120
+                      height: 64
+                      normal: ~175,147,97,255
+                      maxDragY: "self.parent.height - 240"
+                      shape: ~round_rect
+                      radius: 3
                   添加CDK按钮:
                     type: Canvas
                     attribute:
@@ -2628,7 +2726,7 @@ controls:
                       x: 16
                       y: -16
                       width: 120
-                      height: 40
+                      height: 52
                     action:
                       clickLeft: |-
                         idx = val.CDK滚动区.childrenCount() - 1
@@ -2646,15 +2744,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~80,180,120,230
+                          normal: ~90,48,50,255
                           shape: ~round_rect
                           radius: 10
                       添加CDK文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0+ 添加"
-                          fontSize: 32
+                          texts: "~&f+ 添加"
+                          fontSize: 36
                           through: true
               # ══ 领取命令副面板（右边） ════════════════════════════
               领取命令副面板:
@@ -2664,7 +2762,7 @@ controls:
                   x: "var.editSubX"
                   y: 0
                   width: "var.editSubW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                   visible: "var.subView == 'commands'"
                 children:
                   副面板标题_命令:
@@ -2673,28 +2771,37 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 14
-                      texts: "~&f领取命令 (每行一条)"
+                      texts: "~&0领取命令"
+                      fontSize: 48
+                      through: true
+                  命令格式提示:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 72
+                      texts: ~&8每行一条，领取时由服务端执行
                       fontSize: 36
+                      through: true
                   输入命令框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 56
+                      y: 128
                       width: "var.editSubW - 32"
-                      height: "var.viewH - 144 - 72"
+                      height: "self.parent.height - 160"
                     children:
                       命令输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       命令输入框文本:
                         type: TextBox
                         val: 编辑命令框
@@ -2702,8 +2809,8 @@ controls:
                           x: 10
                           y: 6
                           width: "var.editSubW - 52"
-                          height: "var.viewH - 144 - 84"
-                          fontSize: 49
+                          height: "self.parent.height - 16"
+                          fontSize: 36
                           allowNewLine: true
                         action:
                           textChange: |-
@@ -2716,7 +2823,7 @@ controls:
                   x: "var.editSubX"
                   y: 0
                   width: "var.editSubW"
-                  height: "var.viewH - 144"
+                  height: "var.viewH - 312"
                   visible: "var.subView == 'conditions'"
                 children:
                   副面板标题_条件:
@@ -2725,28 +2832,37 @@ controls:
                       point: ~top_left
                       x: 16
                       y: 14
-                      texts: "~&f领取条件 (每行一条, 格式: %placeholder% >= value)"
+                      texts: "~&0领取条件"
+                      fontSize: 48
+                      through: true
+                  条件格式提示:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 72
+                      texts: ~&8每行一条：%placeholder% >= value
                       fontSize: 36
+                      through: true
                   输入领取条件框:
                     type: Canvas
                     attribute:
                       point: ~top_left
                       x: 16
-                      y: 56
+                      y: 128
                       width: "var.editSubW - 32"
-                      height: "var.viewH - 144 - 72"
+                      height: "self.parent.height - 160"
                     children:
                       领取条件输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
-                          normal: ~36,38,48,245
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       领取条件输入框文本:
                         type: TextBox
                         val: 编辑领取条件框
@@ -2754,8 +2870,8 @@ controls:
                           x: 10
                           y: 6
                           width: "var.editSubW - 52"
-                          height: "var.viewH - 144 - 84"
-                          fontSize: 49
+                          height: "self.parent.height - 16"
+                          fontSize: 36
                           allowNewLine: true
                         action:
                           textChange: |-
@@ -2764,47 +2880,60 @@ controls:
           派发弹窗:
             type: Canvas
             attribute:
-              point: ~stretch_all
+              point: ~top_left
+              x: -332
+              y: -264
+              width: "var.viewW"
+              height: "var.viewH"
               visible: "var.showDispatchConfirm == true"
             children:
               派发遮罩:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~0,0,0,180
+                  normal: ~32,23,25,230
               派发面板:
                 type: Canvas
                 attribute:
                   point: ~middle_center
-                  width: 560
-                  height: 440
+                  width: 640
+                  height: 560
                 children:
                   派发面板底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~36,38,48,245
+                      normal: ~249,243,230,255
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: 3
-                        color: ~255,255,255,230
+                        width: 1
+                        color: ~151,138,112,150
                   派发标题:
                     type: Text
                     attribute:
                       point: ~top_center
                       y: 24
-                      texts: "~&f派发预设邮件"
-                      fontSize: 48
+                      texts: "~&0确认派发范围"
+                      fontSize: 64
                       through: true
                   预设ID显示:
                     type: Text
                     attribute:
                       point: ~top_center
                       y: 80
-                      texts: "'&7预设: ' + var.dispatchPresetId"
+                      texts: "'&8预设 / ' + var.dispatchPresetId"
+                      limit: 28
+                      fontSize: 36
+                      through: true
+                  派发提醒:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 132
+                      texts: ~&4请选择收件范围，派发将直接执行
                       fontSize: 36
                       through: true
                   # 在线玩家按钮
@@ -2812,9 +2941,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_center
-                      y: 140
-                      width: 400
-                      height: 48
+                      y: 196
+                      width: 480
+                      height: 56
                     action:
                       clickLeft: |-
                         var.showDispatchConfirm = false
@@ -2825,18 +2954,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~80,180,120,230
+                          normal: ~90,48,50,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       在线派发文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0发送给在线玩家"
+                          texts: "~&f派发给当前在线玩家"
                           fontSize: 36
                           through: true
                   # 全服玩家按钮
@@ -2844,9 +2973,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_center
-                      y: 200
-                      width: 400
-                      height: 48
+                      y: 276
+                      width: 480
+                      height: 56
                     action:
                       clickLeft: |-
                         var.showDispatchConfirm = false
@@ -2857,18 +2986,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~80,140,200,230
+                          normal: ~153,99,72,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       全服派发文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&0发送给全服玩家"
+                          texts: "~&f派发给全部已登记玩家"
                           fontSize: 36
                           through: true
                   # 指定玩家输入区
@@ -2876,29 +3005,29 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_center
-                      y: 260
-                      width: 400
-                      height: 48
+                      y: 364
+                      width: 480
+                      height: 56
                     children:
                       指定玩家输入底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~36,42,50,225
+                          normal: ~249,243,230,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       指定玩家输入框:
                         type: TextBox
                         attribute:
                           x: 10
                           y: 6
-                          width: 280
-                          height: 36
+                          width: 354
+                          height: 40
                           length: 32
                           emptyText: "~&7输入玩家名"
                           fontSize: 36
@@ -2909,10 +3038,11 @@ controls:
                         type: Canvas
                         attribute:
                           point: ~top_left
-                          x: 300
+                          x: 378
                           y: 6
                           width: 90
-                          height: 36
+                          height: 44
+                          enable: "var.dispatchTargetName != none && var.dispatchTargetName != ''"
                         action:
                           clickLeft: |-
                             if(var.dispatchTargetName != none && var.dispatchTargetName != ''){
@@ -2925,18 +3055,18 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~80,180,120,230
+                              normal: ~90,48,50,255
                               shape: ~round_rect
                               radius: 8
                             effect:
                               stroke:
-                                width: 2
-                                color: ~255,255,255,230
+                                width: 1
+                                color: ~151,138,112,150
                           指定玩家发送文字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              texts: "~&0发送"
+                              texts: "~&f发送"
                               fontSize: 36
                               through: true
                   # 取消按钮
@@ -2944,9 +3074,9 @@ controls:
                     type: Canvas
                     attribute:
                       point: ~top_center
-                      y: 340
+                      y: 468
                       width: 200
-                      height: 48
+                      height: 56
                     action:
                       clickLeft: |-
                         var.showDispatchConfirm = false
@@ -2956,17 +3086,17 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~60,60,60,230
+                          normal: ~90,48,50,255
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: 2
-                            color: ~255,255,255,230
+                            width: 1
+                            color: ~151,138,112,150
                       派发取消文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "~&f取消"
+                          texts: "~&f取消派发"
                           fontSize: 36
                           through: true

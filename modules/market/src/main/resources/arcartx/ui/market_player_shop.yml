@@ -1,7 +1,7 @@
 # AXS Market — 玩家商店浏览界面
 # 打开方式: /market pshop 或导航跳转
-# 布局: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏 + 左侧导航(页面导航+卖家列表) + 内容区(搜索+商品网格+分页)
-# 配色: 蓝色系 主色70,150,250 强调140,200,255 底42,50,66,210 描边255,255,255,230
+# 布局: 玩家柜台 — 卖家目录 / 商品检索 / 双列报价卡 / 固定分页
+# 配色: 暖象牙纸面 + 森林绿柜台 + 黄铜强调
 # 数据交互: packetHandler pshop_list / pshop_sellers
 
 ui:
@@ -65,26 +65,23 @@ ui:
         }
       }
       if(var.maxItemCount != oldMaxItemCount){
-        while(val.商品列表.childrenCount() > 1){
-          val.商品列表.get(1).remove()
+        for(key in var.listingRefs.keys()){
+          var.listingRefs[key].remove()
         }
-        if(var.maxItemCount > 1){
-          for(i in range(1, var.maxItemCount - 1)){
-            key = i.round()
-            if(val.商品列表['商品卡片'] != none) {
-              e = val.商品列表['商品卡片'].copy('商品卡片' + key)
-              e.entryKey = key
-            }
-          }
+        var.listingRefs = {}
+        var.listingRound = (var.listingRound + 1).round()
+        template = val.商品列表.get(0)
+        for(i in range(1, var.maxItemCount - 1)){
+          key = i.round()
+          e = template.copy('商品卡片_' + var.listingRound + '_' + key)
+          e.entryKey = key
+          var.listingRefs[key] = e
         }
       }
-      for(i in range(0, var.maxItemCount - 1)){
-        key = i.round()
-        if(val.商品列表 != none){
-          e = val.商品列表.get(key)
-          if(e != none && e['商品图标'] != none){
-            e['商品图标'].seticon()
-          }
+      if(var.maxItemCount > 0){
+        val.商品列表.get(0)['商品图标'].seticon()
+        for(key in var.listingRefs.keys()){
+          var.listingRefs[key]['商品图标'].seticon()
         }
       }
       var.actionBusy = false
@@ -133,6 +130,8 @@ ui:
       }
     load: |-
       var.actionToken = ''
+      var.listingRefs = {}
+      var.listingRound = 0
       var.keyword = ''
       var.packetId = 'AXS_MARKET'
       var.page = 0
@@ -151,7 +150,7 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.scrollW = var.contentW - 72
-      var.cardW = (var.scrollW - 32) / 3
+      var.cardW = (var.scrollW - 20) / 2
     open: |-
       Packet.send(var.packetId, 'pshop_list', '0', '', '')
       Packet.send(var.packetId, 'pshop_sellers', '0')
@@ -164,7 +163,7 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.scrollW = var.contentW - 72
-      var.cardW = (var.scrollW - 32) / 3
+      var.cardW = (var.scrollW - 20) / 2
 
 controls:
   全屏玻璃底:
@@ -172,7 +171,7 @@ controls:
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;20,28,42,110
+      normal: ~15,31,26,245
 
   自适应全局布局:
     type: Adaptive
@@ -194,13 +193,13 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
           顶栏底线:
             type: Texture
             attribute:
               point: ~horizontal_stretch_bottom
               height: 1
-              normal: ~62,66,74,210
+              normal: ~35,76,63,210
           标题色块:
             type: Texture
             attribute:
@@ -208,7 +207,7 @@ controls:
               x: 48
               width: 6
               height: 36
-              normal: ~70,150,250,255
+              normal: ~110,144,116,255
               shape: ~round_rect
               radius: 3
           标题:
@@ -216,22 +215,22 @@ controls:
             attribute:
               point: ~middle_left
               x: 68
-              texts: "~&f全球市场"
-              fontSize: 48
+              texts: "~&0全球市场"
+              fontSize: 64
           标题竖线:
             type: Texture
             attribute:
               point: ~middle_left
-              x: 232
+              x: 286
               width: 1
               height: 30
-              normal: ~62,66,74,210
+              normal: ~35,76,63,210
           副标题:
             type: Text
             attribute:
               point: ~middle_left
-              x: 252
-              texts: "~&7玩家商店"
+              x: 310
+              texts: "~&8玩家柜台 / 寻找好物"
               fontSize: 36
           关闭按钮:
             type: Canvas
@@ -249,13 +248,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               关闭文字:
                 type: Text
                 attribute:
@@ -278,7 +277,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
               shape: ~round_rect
               radius: 14
             effect:
@@ -302,14 +301,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               拍卖行文字:
                 type: Text
                 attribute:
@@ -332,7 +331,7 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~70,150,250,210
+                  normal: ~110,144,116,210
                   shape: ~round_rect
                   radius: 10
                 effect:
@@ -346,7 +345,7 @@ controls:
                   x: 8
                   width: 4
                   height: 28
-                  normal: ~70,150,250,255
+                  normal: ~110,144,116,255
                   shape: ~round_rect
                   radius: 2
                   through: true
@@ -375,14 +374,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               系统商店文字:
                 type: Text
                 attribute:
@@ -408,14 +407,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               回收文字:
                 type: Text
                 attribute:
@@ -441,14 +440,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               交易历史文字:
                 type: Text
                 attribute:
@@ -474,14 +473,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               上架文字:
                 type: Text
                 attribute:
@@ -498,7 +497,7 @@ controls:
               y: 420
               width: 272
               height: 1
-              normal: ~62,66,74,210
+              normal: ~35,76,63,210
               through: true
           全部卖家按钮:
             type: Canvas
@@ -518,20 +517,20 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.sellerUuid == '' ? '70,150,250,210' : '62,66,74,210'"
+                  normal: "var.sellerUuid == '' ? '110,144,116,210' : '35,76,63,210'"
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "var.sellerUuid == '' ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                    color: "var.sellerUuid == '' ? '255,255,255,255' : (self.isHovered() ? '183,149,86,255' : '255,255,255,230')"
               全部卖家文字:
                 type: Text
                 attribute:
                   point: ~middle_left
                   x: 28
                   texts: "var.sellerUuid == '' ? '&0全部卖家' : '&f全部卖家'"
-                  fontSize: 32
+                  fontSize: 36
                   through: true
           卖家标题:
             type: Text
@@ -539,7 +538,7 @@ controls:
               point: ~top_left
               x: 28
               y: 498
-              texts: "~&f卖家列表"
+              texts: "~&0卖家目录"
               fontSize: 36
               through: true
           卖家滑轨:
@@ -549,8 +548,9 @@ controls:
               x: -10
               y: 546
               width: 8
-              height: "var.viewH - 710"
-              normal: ~42,50,66,225
+              height: "var.viewH - 750"
+              through: true
+              normal: ~24,50,40,225
               shape: ~round_rect
               radius: 4
             effect:
@@ -566,8 +566,8 @@ controls:
               y: 546
               width: 8
               height: 60
-              normal: ~140,200,255,255
-              maxDragY: "var.viewH - 770"
+              normal: ~183,149,86,255
+              maxDragY: "var.viewH - 810"
               shape: ~round_rect
               radius: 4
           卖家滚动:
@@ -578,7 +578,7 @@ controls:
               x: 20
               y: 546
               width: 260
-              height: "var.viewH - 710"
+              height: "var.viewH - 750"
               moveY: "self.parent['卖家滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -618,13 +618,13 @@ controls:
                           width: 248
                           height: 48
                           through: true
-                          normal: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '70,150,250,210' : '62,66,74,210'"
+                          normal: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '110,144,116,210' : '35,76,63,210'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
                             width: 3
-                            color: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '255,255,255,255' : (self.isHovered() ? '140,200,255,255' : '255,255,255,230')"
+                            color: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '255,255,255,255' : (self.isHovered() ? '183,149,86,255' : '255,255,255,230')"
                       卖家项高亮条:
                         type: Texture
                         attribute:
@@ -632,7 +632,7 @@ controls:
                           x: 8
                           width: 4
                           height: 24
-                          normal: ~140,200,255,255
+                          normal: ~183,149,86,255
                           shape: ~round_rect
                           radius: 2
                           visible: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid"
@@ -643,9 +643,18 @@ controls:
                           point: ~middle_left
                           x: 28
                           texts: "self.parent.entry != none && self.parent.entry['uuid'] == var.sellerUuid ? '&0' + var.sellerTexts[self.parent.entryKey] : '&f' + var.sellerTexts[self.parent.entryKey]"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
 
+          目录页码:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 28
+              y: -24
+              texts: "'&8卖家目录 ' + var.sellerPageText"
+              fontSize: 36
+              through: true
       # ── 内容区 ──────────────────────────────────────
       内容区:
         type: Canvas
@@ -660,40 +669,56 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              normal: ~242,237,223,255
               shape: ~round_rect
               radius: 14
             effect:
               stroke:
                 width: 3
                 color: ~255,255,255,230
+          柜台标题:
+            type: Text
+            attribute:
+              x: 24
+              y: 24
+              texts: "~&0玩家柜台"
+              fontSize: 64
+              through: true
+          浏览范围:
+            type: Text
+            attribute:
+              x: 24
+              y: 96
+              texts: "var.sellerUuid == '' ? '&8浏览所有卖家的报价 · 搜索会返回全部卖家' : '&8正在浏览选中卖家的商品 · 左侧可切换卖家'"
+              fontSize: 36
+              through: true
           # ── 工具栏 ──────────────────────────────────
           搜索框:
             type: Canvas
             attribute:
               point: ~top_left
               x: 24
-              y: 24
-              width: 400
+              y: 140
+              width: 480
               height: 48
             children:
               搜索框底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~42,50,66,245
+                  normal: ~24,50,40,245
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               搜索框文本:
                 type: TextBox
                 attribute:
                   x: 12
                   y: 8
-                  width: 376
+                  width: 456
                   height: 32
                   length: 32
                   emptyText: "~&7搜索商品..."
@@ -708,8 +733,8 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 440
-              y: 24
+              x: 520
+              y: 140
               width: 100
               height: 48
             action:
@@ -722,14 +747,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~70,150,250,230
+                  normal: ~110,144,116,230
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               搜索按钮文字:
                 type: Text
                 attribute:
@@ -741,8 +766,8 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 556
-              y: 24
+              x: 636
+              y: 140
               width: 100
               height: 48
             action:
@@ -754,14 +779,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               刷新文字:
                 type: Text
                 attribute:
@@ -775,7 +800,7 @@ controls:
               point: ~top_right
               x: -24
               y: 24
-              width: 140
+              width: 176
               height: 48
             action:
               clickLeft: |-
@@ -786,14 +811,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~80,200,120,230
+                  normal: ~35,76,63,255
                   shape: ~round_rect
                   radius: 10
                 effect:
                   ripple:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '120,220,140,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               我要上架文字:
                 type: Text
                 attribute:
@@ -817,10 +842,11 @@ controls:
             attribute:
               point: ~top_right
               x: -18
-              y: 88
-              width: 8
-              height: "var.viewH - 348"
-              normal: ~42,50,66,225
+              y: 196
+              width: 10
+              height: "var.viewH - 440"
+              through: true
+              normal: ~24,50,40,225
               shape: ~round_rect
               radius: 4
             effect:
@@ -833,11 +859,11 @@ controls:
             attribute:
               point: ~top_right
               x: -18
-              y: 88
-              width: 8
-              height: 80
-              normal: ~140,200,255,255
-              maxDragY: "var.viewH - 428"
+              y: 196
+              width: 10
+              height: 96
+              normal: ~183,149,86,255
+              maxDragY: "var.viewH - 536"
               shape: ~round_rect
               radius: 4
           商品滚动:
@@ -846,9 +872,9 @@ controls:
             attribute:
               point: ~top_left
               x: 24
-              y: 88
+              y: 196
               width: "var.scrollW"
-              height: "var.viewH - 348"
+              height: "var.viewH - 440"
               moveY: "self.parent['商品滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -864,9 +890,9 @@ controls:
                 type: HGrid
                 attribute:
                   width: "var.scrollW"
-                  column: 3
-                  spaceBetweenX: 16
-                  spaceBetweenY: 16
+                  column: 2
+                  spaceBetweenX: 20
+                  spaceBetweenY: 20
                 children:
                   商品卡片:
                     type: Canvas
@@ -875,7 +901,7 @@ controls:
                       entry: var.listings[self.entryKey]
                       visible: self.entry != none
                       width: "var.cardW"
-                      height: 220
+                      height: 268
                     children:
                       卡片底:
                         type: Texture
@@ -884,15 +910,15 @@ controls:
                           x: 3
                           y: 0
                           width: "var.cardW - 6"
-                          height: 220
+                          height: 268
                           through: true
-                          normal: ~42,50,66,210
+                          normal: ~24,50,40,210
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                            color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
                       商品图标:
                         type: Slot
                         attribute:
@@ -902,7 +928,7 @@ controls:
                           y: 12
                           width: 96
                           height: 96
-                          normal: ~36,42,54,220
+                          normal: ~45,65,48,220
                           shape: ~round_rect
                           radius: 12
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -911,35 +937,51 @@ controls:
                             width: 2
                             color: ~255,255,255,230
                       商品名称:
-                        type: Text
+                        type: Scroll
                         attribute:
-                          x: 123
+                          x: 132
                           y: 16
-                          texts: "'&f' + self.parent.entry['itemDisplayName']"
-                          fontSize: 36
-                          through: true
+                          width: "var.cardW - 150"
+                          height: 48
+                          scrollAnim: none
+                          moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                        action:
+                          enter: "self.scrollAnim = Lerp(0, 1, 2400)"
+                          leave: "self.scrollAnim = none"
+                        children:
+                          名称布局:
+                            type: HStack
+                            attribute:
+                              height: 48
+                            children:
+                              商品名:
+                                type: Text
+                                attribute:
+                                  texts: "'&f' + self.parent.parent.parent.entry['itemDisplayName']"
+                                  fontSize: 48
+                                  through: true
                       卖家名:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 52
+                          x: 132
+                          y: 74
                           texts: "'&7卖家: &f' + self.parent.entry['sellerName']"
-                          fontSize: 32
+                          fontSize: 36
                           through: true
                       价格:
                         type: Text
                         attribute:
-                          x: 123
-                          y: 88
-                          texts: "'&e价格: &f' + self.parent.entry['price'].round() + ' &7' + self.parent.entry['currencyName']"
-                          fontSize: 32
+                          x: 18
+                          y: 128
+                          texts: "'&e' + self.parent.entry['price'].round() + ' &7' + self.parent.entry['currencyName']"
+                          fontSize: 48
                           through: true
                       留言:
                         type: Scroll
                         attribute:
-                          x: 123
-                          y: 124
-                          width: "var.cardW - 138"
+                          x: 18
+                          y: 178
+                          width: "var.cardW - 36"
                           height: 36
                           visible: "self.parent.entry != none && self.parent.entry['message'] != ''"
                           scrollAnim: none
@@ -961,13 +1003,13 @@ controls:
                                   x: 0
                                   y: 0
                                   texts: "'&7留言: &f' + self.parent.parent.parent.entry['message']"
-                                  fontSize: 32
+                                  fontSize: 36
                                   through: true
                       按钮组:
                         type: HStack
                         attribute:
                           x: 15
-                          y: 168
+                          y: 220
                           width: "var.cardW - 30"
                           height: 40
                           spaceBetween: 12
@@ -993,20 +1035,20 @@ controls:
                                   width: "var.cardW - 36"
                                   height: 40
                                   through: true
-                                  normal: ~80,200,120,230
+                                  normal: ~35,76,63,255
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
                                   ripple:
                                   stroke:
                                     width: 3
-                                    color: "self.isHovered() ? '120,220,140,255' : '255,255,255,230'"
+                                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
                               购买文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&f购买"
-                                  fontSize: 32
+                                  texts: "var.actionBusy ? '&7处理中...' : '&f购买整组'"
+                                  fontSize: 36
                                   through: true
                           下架按钮:
                             type: Canvas
@@ -1041,16 +1083,16 @@ controls:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: "~&f下架"
-                                  fontSize: 32
+                                  texts: "var.actionBusy ? '&7处理中...' : '&f下架我的商品'"
+                                  fontSize: 36
                                   through: true
           # ── 底部分页栏 ──────────────────────────────
           上一页:
             type: Canvas
             attribute:
-              point: ~top_left
+              point: ~bottom_left
               x: 24
-              y: "var.viewH - 248"
+              y: -24
               width: 130
               height: 48
               enable: "var.page > 0"
@@ -1065,13 +1107,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               上一页文字:
                 type: Text
                 attribute:
@@ -1082,17 +1124,17 @@ controls:
           页码:
             type: Text
             attribute:
-              point: ~middle_center
+              point: ~bottom_center
               x: 0
-              y: "var.viewH - 240"
-              texts: "'&f' + var.pageText"
+              y: -34
+              texts: "'&0' + var.pageText"
               fontSize: 36
           下一页:
             type: Canvas
             attribute:
-              point: ~top_right
+              point: ~bottom_right
               x: -24
-              y: "var.viewH - 248"
+              y: -24
               width: 130
               height: 48
               enable: "var.page < var.totalPages - 1"
@@ -1107,13 +1149,13 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~62,66,74,210
+                  normal: ~35,76,63,210
                   shape: ~round_rect
                   radius: 10
                 effect:
                   stroke:
                     width: 3
-                    color: "self.isHovered() ? '140,200,255,255' : '255,255,255,230'"
+                    color: "self.isHovered() ? '183,149,86,255' : '255,255,255,230'"
               下一页文字:
                 type: Text
                 attribute:

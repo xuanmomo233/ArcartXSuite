@@ -1,19 +1,11 @@
-# 掉落物拾取面板 HUD（扫描模式）
-# 显示玩家附近掉落物列表，支持滚轮切换选中项、点击拾取。
-# 由服务端通过 packetHandler 更新槽位数据，客户端回包通知服务端执行拾取。
+# 战利品野外工具组 / 附近清单：右侧羊皮纸目录，中心视野保持开放。
+# 色签沿用物品名称首个颜色码；不推断服务器未提供的稀有度等级。
 ui:
-  isHud: true  # HUD 模式，覆盖在游戏画面上
-  defaultOpen: false  # 不随启动自动打开
-  through: false  # 鼠标不穿透（需要捕获点击）
-  show: true  # 可见
+  isHud: true
+  defaultOpen: false
+  through: false
+  show: true
   packetHandler:
-    # packetHandler: update
-    # 包字段:
-    #   - count: 当前掉落物总数
-    #   - selectedIndex: 当前选中项索引
-    #   - item0Visible~item7Visible: 各槽位是否可见
-    #   - item0Amount~item7Amount: 各槽位物品堆叠数量
-    #   - item0ItemJson~item7ItemJson: 各槽位物品的 JSON 序列化数据
     update: |-
       var.count = packet['count']
       var.selectedIndex = packet['selectedIndex']
@@ -45,19 +37,12 @@ ui:
       var.item7Amount = packet['item7Amount']
       var.item7ItemJson = packet['item7ItemJson']
       var.dirty = true
-    # packetHandler: select
-    # 包字段:
-    #   - selectedIndex: 新的选中项索引
     select: |-
       var.selectedIndex = packet['selectedIndex']
-    # packetHandler: open_interact
-    # 包字段: 无（仅通知客户端打开交互菜单）
     open_interact: |-
       var.menuOpen = true
       var.actionToken = packet['action_token']
       Screen.open('AXS:loot_interact')
-    # packetHandler: menu_closed
-    # 包字段: 无（仅通知客户端交互菜单已关闭）
     menu_closed: |-
       var.menuOpen = false
   action:
@@ -73,6 +58,20 @@ ui:
       var.item7Amount = 0
       var.selectedIndex = 0
       var.dirty = false
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.nameColors = {'§0':'70,70,70,255', '§1':'70,90,166,255', '§2':'87,145,91,255', '§3':'70,156,156,255', '§4':'170,73,68,255', '§5':'158,99,183,255', '§6':'218,171,82,255', '§7':'161,169,155,255', '§8':'118,125,110,255', '§9':'112,145,222,255', '§a':'135,196,115,255', '§b':'129,206,203,255', '§c':'221,127,112,255', '§d':'206,150,217,255', '§e':'232,208,126,255', '§f':'230,223,204,255', '&0':'70,70,70,255', '&1':'70,90,166,255', '&2':'87,145,91,255', '&3':'70,156,156,255', '&4':'170,73,68,255', '&5':'158,99,183,255', '&6':'218,171,82,255', '&7':'161,169,155,255', '&8':'118,125,110,255', '&9':'112,145,222,255', '&a':'135,196,115,255', '&b':'129,206,203,255', '&c':'221,127,112,255', '&d':'206,150,217,255', '&e':'232,208,126,255', '&f':'230,223,204,255'}
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
     tick: |-
       if(var.dirty){
         if(var.item0ItemJson != none){
@@ -101,7 +100,6 @@ ui:
         }
         var.dirty = false
       }
-
     wheel: |-
       if(var.count > 0 && !var.menuOpen){
         if(self.wheelValue > 0){
@@ -119,369 +117,420 @@ ui:
           Packet.send('pickup', 'scroll_down')
         }
       }
-
 controls:
   自适应全局布局:
     type: Adaptive
-    attribute:
-      point: ~stretch_all
-      width: 1920
-      height: 1080
-    action:
-      click: |-
-        if(var.count > 0 && !var.menuOpen){
-          Packet.send('pickup', 'pick', var.actionToken)
-        }
+    attribute: {point: ~top_center, width: 1920, height: 1080, through: true}
     children:
       拾取面板:
         type: Canvas
         attribute:
-          point: ~middle_center
-          x: 160
-          y: 0
-          width: 280
-          height: 420
+          point: ~top_left
+          x: "var.viewW - var.offX - 508"
+          y: "(var.viewH - self.height) / 2"
+          width: 460
+          height: "(var.count > 8 ? 8 : var.count) * 62 + 220"
           visible: var.count > 0
-          through: true
+        # 原选中拾取回包仅限清单范围，不让全屏 Adaptive 拦截世界点击。
+        action:
+          click: |-
+            if(var.count > 0 && !var.menuOpen){
+              Packet.send('pickup', 'pick', var.actionToken)
+            }
         children:
-          按键提示:
+          羊皮纸底:
+            type: Texture
+            attribute: {point: ~stretch_all, normal: '~220,205,168,246', shape: ~round_rect, radius: 6, through: true}
+            effect:
+              stroke: {width: 2, color: '~107,93,64,255'}
+          装订线:
+            type: Texture
+            attribute: {point: ~top_left, x: 8, y: 8, width: 2, height: 'self.parent.height - 16', normal: '~174,149,98,255', through: true}
+          清单页眉:
+            type: Texture
+            attribute: {point: ~top_left, x: 14, y: 8, width: 432, height: 100, normal: '~38,43,34,255', shape: ~round_rect, radius: 4, through: true}
+          清单标题:
             type: Text
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 10
-              fontSize: 22
-              #这里是提示文本，随便怎么写
-              texts: "~"
-              through: true
+            attribute: {point: ~top_left, x: 28, y: 12, texts: '~&f附近战利品', fontSize: 48, through: true}
+          数量:
+            type: Text
+            attribute: {point: ~top_right, x: -28, y: 20, texts: "'&e' + var.count.round() + ' &7组'", fontSize: 36, through: true}
+          模式:
+            type: Text
+            attribute: {point: ~top_left, x: 28, y: 64, texts: "var.menuOpen ? '&a光标 / 点击拾取' : '&7滚轮选择 / 交互键'", fontSize: 36, through: true}
           拾取列表:
             type: VStack
-            attribute:
-              point: ~top_left
-              x: 10
-              y: 38
-              width: 260
-              spaceBetween: 4
-              through: true
+            attribute: {point: ~top_left, x: 16, y: 118, width: 428, spaceBetween: 6, through: true}
             children:
               物品条目0:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item0Visible
-                  through: true
+                  scrollAnim: none
+                  itemName: "val.loot_slot_0.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_0', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景0:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 0 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_0', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 0 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 0 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签0:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标0:
                     val: loot_slot_0
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称0:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_0.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号0:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item0Visible && val.loot_slot_0.getSlotItemStack() != null ? (var.item0Amount > 1 ? val.loot_slot_0.getSlotItemStack().getName() + ' &7x' + var.item0Amount.round() : val.loot_slot_0.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 0 ? '&e>' : '&701'", fontSize: 36, through: true}
+                  堆叠0:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item0Amount.round()", fontSize: 36, through: true}
               物品条目1:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item1Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_1.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_1', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景1:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 1 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_1', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 1 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 1 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签1:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标1:
                     val: loot_slot_1
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称1:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_1.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号1:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item1Visible && val.loot_slot_1.getSlotItemStack() != null ? (var.item1Amount > 1 ? val.loot_slot_1.getSlotItemStack().getName() + ' &7x' + var.item1Amount.round() : val.loot_slot_1.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 1 ? '&e>' : '&702'", fontSize: 36, through: true}
+                  堆叠1:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item1Amount.round()", fontSize: 36, through: true}
               物品条目2:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item2Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_2.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_2', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景2:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 2 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_2', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 2 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 2 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签2:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标2:
                     val: loot_slot_2
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称2:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_2.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号2:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item2Visible && val.loot_slot_2.getSlotItemStack() != null ? (var.item2Amount > 1 ? val.loot_slot_2.getSlotItemStack().getName() + ' &7x' + var.item2Amount.round() : val.loot_slot_2.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 2 ? '&e>' : '&703'", fontSize: 36, through: true}
+                  堆叠2:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item2Amount.round()", fontSize: 36, through: true}
               物品条目3:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item3Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_3.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_3', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景3:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 3 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_3', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 3 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 3 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签3:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标3:
                     val: loot_slot_3
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称3:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_3.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号3:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item3Visible && val.loot_slot_3.getSlotItemStack() != null ? (var.item3Amount > 1 ? val.loot_slot_3.getSlotItemStack().getName() + ' &7x' + var.item3Amount.round() : val.loot_slot_3.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 3 ? '&e>' : '&704'", fontSize: 36, through: true}
+                  堆叠3:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item3Amount.round()", fontSize: 36, through: true}
               物品条目4:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item4Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_4.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_4', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景4:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 4 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_4', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 4 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 4 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签4:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标4:
                     val: loot_slot_4
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称4:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_4.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号4:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item4Visible && val.loot_slot_4.getSlotItemStack() != null ? (var.item4Amount > 1 ? val.loot_slot_4.getSlotItemStack().getName() + ' &7x' + var.item4Amount.round() : val.loot_slot_4.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 4 ? '&e>' : '&705'", fontSize: 36, through: true}
+                  堆叠4:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item4Amount.round()", fontSize: 36, through: true}
               物品条目5:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item5Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_5.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_5', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景5:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 5 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_5', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 5 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 5 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签5:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标5:
                     val: loot_slot_5
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称5:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_5.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号5:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item5Visible && val.loot_slot_5.getSlotItemStack() != null ? (var.item5Amount > 1 ? val.loot_slot_5.getSlotItemStack().getName() + ' &7x' + var.item5Amount.round() : val.loot_slot_5.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 5 ? '&e>' : '&706'", fontSize: 36, through: true}
+                  堆叠5:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item5Amount.round()", fontSize: 36, through: true}
               物品条目6:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item6Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_6.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_6', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景6:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 6 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_6', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 6 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 6 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签6:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标6:
                     val: loot_slot_6
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称6:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_6.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号6:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item6Visible && val.loot_slot_6.getSlotItemStack() != null ? (var.item6Amount > 1 ? val.loot_slot_6.getSlotItemStack().getName() + ' &7x' + var.item6Amount.round() : val.loot_slot_6.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 6 ? '&e>' : '&707'", fontSize: 36, through: true}
+                  堆叠6:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item6Amount.round()", fontSize: 36, through: true}
               物品条目7:
                 type: Canvas
                 attribute:
-                  width: 260
-                  height: 42
+                  width: 428
+                  height: 56
                   visible: var.item7Visible
+                  scrollAnim: none
+                  itemName: "val.loot_slot_7.getSlotItemStack().getName()"
+                  nameCode: "self.itemName.length() >= 2 ? self.itemName.substring(0, 2).toLowerCase() : 'uncolored'"
+                  markColor: "var.nameColors[self.nameCode] != none ? var.nameColors[self.nameCode] : '161,169,155,255'"
+                action:
+                  clickLeft: |-
+                    Packet.send('pickup', 'pick_7', var.actionToken)
+                  enter: "self.scrollAnim = Lerp(0, 1, 2600)"
+                  leave: "self.scrollAnim = none"
                 children:
                   背景7:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.selectedIndex == 7 ? '60,140,220,160' : '40,40,50,120'"
-                      shape: ~round_rect
-                      radius: 8
-                    action:
-                      clickLeft: |-
-                        Packet.send('pickup', 'pick_7', var.actionToken)
+                    attribute: {point: ~stretch_all, normal: "var.selectedIndex == 7 ? '66,70,43,255' : '43,48,39,244'", shape: ~round_rect, radius: 4, through: true}
+                    effect:
+                      stroke: {width: 'var.selectedIndex == 7 ? 2 : 1', color: "self.parent.isHovered() ? '235,210,143,255' : '133,122,87,255'"}
+                  色签7:
+                    type: Texture
+                    attribute: {point: ~middle_left, x: 4, width: 4, height: 36, normal: 'self.parent.markColor', through: true}
                   图标7:
                     val: loot_slot_7
                     type: Slot
-                    attribute:
-                      point: ~middle_left
-                      x: 6
-                      y: 0
-                      width: 32
-                      height: 32
-                      slotType: ~Icon
-                      normal: ~0,0,0,0
-                      hover: ~0,0,0,0
-                      itemScale: 0.8
-                      through: true
+                    attribute: {point: ~middle_left, x: 44, width: 38, height: 38, slotType: ~Icon, normal: '~0,0,0,0', hover: '~0,0,0,0', itemScale: 0.8, through: true}
                   名称7:
+                    type: Scroll
+                    attribute: {point: ~middle_left, x: 94, width: 220, height: 36, moveX: 'self.parent.scrollAnim != none ? self.parent.scrollAnim.get() : 0', through: true}
+                    children:
+                      名称布局:
+                        type: HStack
+                        attribute: {height: 36, through: true}
+                        children:
+                          物品名称:
+                            type: Text
+                            attribute: {texts: "'&f' + val.loot_slot_7.getSlotItemStack().getName()", fontSize: 36, through: true}
+                  序号7:
                     type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 44
-                      y: 0
-                      fontSize: 28
-                      texts: "var.item7Visible && val.loot_slot_7.getSlotItemStack() != null ? (var.item7Amount > 1 ? val.loot_slot_7.getSlotItemStack().getName() + ' &7x' + var.item7Amount.round() : val.loot_slot_7.getSlotItemStack().getName()) : ''"
-                      through: true
+                    attribute: {point: ~middle_left, x: 12, texts: "var.selectedIndex == 7 ? '&e>' : '&708'", fontSize: 36, through: true}
+                  堆叠7:
+                    type: Text
+                    attribute: {point: ~middle_right, x: -14, texts: "'&ex' + var.item7Amount.round()", fontSize: 36, through: true}
+          页脚分隔:
+            type: Texture
+            attribute: {point: ~bottom_left, x: 22, y: -86, width: 416, height: 1, normal: '~154,133,85,255', through: true}
+          选中位置:
+            type: Text
+            attribute: {point: ~bottom_left, x: 24, y: -48, texts: "'&0' + (var.selectedIndex + 1).round() + '/' + var.count.round() + ' 选中'", fontSize: 36, through: true}
+          拾取提示:
+            type: Text
+            attribute: {point: ~bottom_right, x: -24, y: -48, texts: "var.menuOpen ? '&0点击拾取' : '&0交互键'", fontSize: 36, through: true}
+          色签说明:
+            type: Text
+            attribute: {point: ~bottom_left, x: 24, y: -8, texts: '~&8色签 = 物品名色', fontSize: 36, through: true}

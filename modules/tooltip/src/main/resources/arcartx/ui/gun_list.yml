@@ -1,9 +1,5 @@
-# TACZ 配件"支持枪械"浏览界面（ax 模式）
-# 客户端 mod 悬停配件按 Shift → AXS_GUN_LIST["open"] → 服务端 openUi 本界面。
-# 枪数据不走包：open 触发器直接调客户端全局函数 axstooltip.* 获取
-# （持有优先排序，前 ownedCount 项绿框标记为已持有）。
-# 交互: 滚轮/←→键/按钮翻页，悬停图标顶部显示枪名，ESC/✕关闭。
-#
+# TACZ 配件支持枪械目录。数据由客户端 axstooltip 提供，持有枪械排在前面。
+# 60 个条目一页；滚轮、方向键或页脚按钮翻页，悬停读取名称，ESC / 关闭按钮退出。
 ui:
   escClose: true
   background: false
@@ -19,13 +15,32 @@ ui:
       var.iconJsons = {}
       var.ownedFlags = {}
       var.hoverName = none
+      var.hoverOwned = none
       var.dirty = false
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.catalogW = var.viewW - 464
+      var.cellPitch = (var.catalogW - 72) / 10
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.catalogW = var.viewW - 464
+      var.cellPitch = (var.catalogW - 72) / 10
+      var.dirty = true
     open: |-
       var.guns = axstooltip.getTaczGuns()
       var.ownedCount = axstooltip.getTaczOwnedCount()
       var.page = 0
       var.dirty = true
-    # 翻页/重建统一走 dirty 标记：tick 中先按引用删旧格子再按当前页 copy
+    # 引用保留到下一次重建，避免从容器中回查动态副本。
     tick: |-
       if(var.dirty){
         for(key in var.格子引用.keys()){
@@ -43,8 +58,8 @@ ui:
             gi = i.round()
             idx = (start + gi).round()
             mb = 模板.copy('gun_' + var.轮次 + '_' + gi)
-            mb.x = (gi % 10) * 84
-            mb.y = math.floor(gi / 10) * 84
+            mb.x = (gi % 10) * var.cellPitch + 2
+            mb.y = math.floor(gi / 10) * 80
             mb.entryKey = idx
             var.iconJsons[idx] = var.guns.get(start + gi)
             var.ownedFlags[idx] = (start + gi) < var.ownedCount
@@ -54,11 +69,12 @@ ui:
           }
         }
         var.hoverName = none
+        var.hoverOwned = none
         var.dirty = false
       }
     wheel: |-
       pages = math.ceil(var.guns.size() / 60)
-      # wheelValue < 0 = 向上滚（前一页），> 0 = 向下滚（后一页）
+      # 向上滚前一页，向下滚后一页。
       if(self.wheelValue < 0 && var.page > 0){
         var.page = var.page - 1
         var.dirty = true
@@ -69,7 +85,7 @@ ui:
       }
     keyPress: |-
       pages = math.ceil(var.guns.size() / 60)
-      # 263=LEFT 262=RIGHT（GLFW）；ESC 由 Menu 的 escClose 处理
+      # GLFW: 263 左，262 右；ESC 由 escClose 处理。
       if(self.currentKeyPress == 263 && var.page > 0){
         var.page = var.page - 1
         var.dirty = true
@@ -79,93 +95,401 @@ ui:
         var.dirty = true
       }
 controls:
-  遮罩:
-    type: Adaptive
+  全屏暗化:
+    type: Texture
     attribute:
       point: ~stretch_all
+      normal: ~9,13,16,205
+      through: true
+  目录视口:
+    type: Adaptive
+    attribute:
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      # 全屏暗化（Menu 已关 vanilla 背景遮罩，自己画）
-      暗化:
-        type: Texture
-        attribute:
-          point: ~stretch_all
-          normal: ~0,0,0,160
-          through: true
-      # 960×720 面板：标题/统计/悬停名(36-48 档位字号) → 10×6 网格(72 格/84 距) → 底部翻页行
-      面板:
+      顶栏:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 960
-          height: 720
+          point: ~top_left
+          x: "-var.offX"
+          y: 0
+          width: "var.viewW"
+          height: 148
         children:
-          背景:
+          顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~20,20,26,235
-              shape: ~round_rect
-              radius: 12
+              normal: ~24,31,34,250
+              through: true
+          顶栏铜线:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              width: "self.parent.width"
+              height: 3
+              normal: ~168,136,82,255
+              through: true
+          档案编号:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 48
+              y: 14
+              fontSize: 36
+              texts: ~&6TACZ  /  ATTACHMENT COMPATIBILITY
+              through: true
+          主标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 48
+              y: 56
+              fontSize: 72
+              texts: ~&f枪械兼容目录
+              through: true
+          标题注释:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 425
+              y: 99
+              fontSize: 36
+              texts: ~&7按持有情况排序  /  悬停读取枪械名称
+              through: true
+          关闭:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -48
+              y: 34
+              width: 66
+              height: 66
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              关闭底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "self.parent.isHovered() ? '104,67,54,255' : '50,47,44,255'"
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~180,145,91,255
+              关闭字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&fX
+                  fontSize: 48
+                  through: true
+      档案侧栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 176
+          width: 344
+          height: "var.viewH - 216"
+        children:
+          侧栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~29,37,40,248
               through: true
             effect:
               stroke:
                 width: 2
-                color: ~90,90,110,255
-          标题:
+                color: ~95,104,103,235
+          侧栏眉题:
             type: Text
             attribute:
-              point: ~top_center
-              y: 14
-              fontSize: 48
-              through: true
-              texts: ~§b支持枪械
-          统计:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 68
+              point: ~top_left
+              x: 26
+              y: 26
               fontSize: 36
+              texts: ~&6FILE  /  01
               through: true
-              texts: "var.guns.size() == 0 ? none : '§7已持有 ' + var.ownedCount.round() + ' / 共 ' + var.guns.size().round() + ' 把'"
-          悬停名称:
+          侧栏标题:
             type: Text
             attribute:
-              point: ~top_center
-              y: 110
-              fontSize: 36
+              point: ~top_left
+              x: 26
+              y: 76
+              fontSize: 54
+              texts: ~&f兼容概况
               through: true
-              texts: "var.hoverName == none ? '§7悬停图标查看名称' : var.hoverName"
+          分割一:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 153
+              width: 292
+              height: 2
+              normal: ~115,118,108,255
+              through: true
+          总数标签:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 180
+              fontSize: 36
+              texts: ~&7支持型号  /  TOTAL
+              through: true
+          总数:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 222
+              fontSize: 100
+              texts: "'&f' + var.guns.size().round()"
+              through: true
+          持有标签:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 344
+              fontSize: 36
+              texts: ~&7已持有  /  OWNED
+              through: true
+          持有数:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 386
+              fontSize: 81
+              texts: "'&6' + var.ownedCount.round()"
+              through: true
+          分割二:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 495
+              width: 292
+              height: 2
+              normal: ~115,118,108,255
+              through: true
+          索引标签:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 26
+              y: 524
+              fontSize: 36
+              texts: ~&6识别规则
+              through: true
+          标识样本:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 586
+              width: 28
+              height: 28
+              normal: ~174,139,83,255
+              through: true
+          标识注释:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 72
+              y: 580
+              fontSize: 36
+              texts: ~&f黄铜框  /  已持有
+              through: true
+          未持有样本:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 28
+              y: 646
+              width: 28
+              height: 28
+              normal: ~91,106,108,255
+              through: true
+          未持有注释:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 72
+              y: 640
+              fontSize: 36
+              texts: ~&f钢灰框  /  未持有
+              through: true
+          操作提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 26
+              y: -72
+              fontSize: 36
+              texts: ~&7滚轮 / 左右键切换页码
+              through: true
+      目录主体:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "416 - var.offX"
+          y: 176
+          width: "var.catalogW"
+          height: "var.viewH - 216"
+        children:
+          主体底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~25,32,35,250
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~95,104,103,235
+          章编号:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 20
+              fontSize: 36
+              texts: ~&6CATALOGUE  /  02
+              through: true
+          章标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 60
+              fontSize: 54
+              texts: ~&f适配型号
+              through: true
+          当前区间:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -38
+              y: 69
+              fontSize: 36
+              texts: "var.guns.size() == 0 ? '&7无记录' : '&7第 ' + (var.page + 1).round() + ' 页  /  共 ' + math.max(1, math.ceil(var.guns.size() / 60)).round() + ' 页'"
+              through: true
+          名称带:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 124
+              width: "self.parent.width - 72"
+              height: 64
+            children:
+              名称带底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,54,54,255
+                  through: true
+              名称带色条:
+                type: Texture
+                attribute:
+                  point: ~top_left
+                  width: 5
+                  height: 64
+                  normal: ~177,144,88,255
+                  through: true
+              悬停名称:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 22
+                  fontSize: 48
+                  texts: "var.hoverName == none ? '&7悬停枪械图标以查看名称' : var.hoverName"
+                  visible: "var.guns.size() > 0"
+                  through: true
+              无数据提示:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 22
+                  fontSize: 48
+                  texts: ~&7暂无支持枪械数据
+                  visible: "var.guns.size() == 0"
+                  through: true
+              悬停状态:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -22
+                  fontSize: 36
+                  texts: "var.hoverOwned ? '&6已持有' : '&7未持有'"
+                  visible: "var.hoverName != none"
+                  through: true
+          网格标签:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 208
+              fontSize: 36
+              texts: ~&7型号矩阵  /  10 x 6
+              through: true
+          顶部横线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 258
+              width: "self.parent.width - 72"
+              height: 2
+              normal: ~88,97,94,255
+              through: true
           网格:
             type: Canvas
             val: grid
             attribute:
               point: ~top_left
-              x: 66
-              y: 144
-              width: 828
-              height: 492
+              x: 36
+              y: 278
+              width: "self.parent.width - 72"
+              height: 470
             children:
               枪格模板:
                 type: Canvas
                 attribute:
-                  width: 72
-                  height: 72
+                  entryKey: 0.round()
+                  width: "var.cellPitch - 14"
+                  height: 70
                   visible: false
                 children:
                   底纹:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~40,40,50,255
-                      shape: ~round_rect
-                      radius: 8
+                      normal: "self.parent.isHovered() ? '53,63,64,255' : '35,44,47,255'"
                       through: true
                     effect:
                       stroke:
                         width: 2
-                        color: "var.ownedFlags[self.parent.entryKey] ? '60,255,120,255' : '0,0,0,0'"
+                        color: "var.ownedFlags[self.parent.entryKey] ? '174,139,83,255' : '91,106,108,255'"
+                  持有铭牌:
+                    type: Texture
+                    attribute:
+                      point: ~top_left
+                      x: 8
+                      y: 7
+                      width: 19
+                      height: 4
+                      normal: ~182,148,87,255
+                      visible: "var.ownedFlags[self.parent.entryKey]"
+                      through: true
                   图标:
                     type: Slot
                     attribute:
@@ -180,42 +504,78 @@ controls:
                       enter: |-
                         if(self.getSlotItemStack() != none){
                           var.hoverName = self.getSlotItemStack().getName()
+                          var.hoverOwned = var.ownedFlags[self.parent.entryKey]
                         }
                       leave: |-
                         var.hoverName = none
-          上一页:
+                        var.hoverOwned = none
+          空目录:
             type: Text
             attribute:
+              point: ~top_center
+              y: 482
+              fontSize: 54
+              texts: ~&7此配件没有可展示的枪械
+              visible: "var.guns.size() == 0"
+              through: true
+          页脚分界:
+            type: Texture
+            attribute:
               point: ~bottom_left
-              x: 20
-              y: -46
-              fontSize: 36
-              visible: "var.page > 0"
-              texts: ~§f< 上一页
+              x: 36
+              y: -101
+              width: "self.parent.width - 72"
+              height: 2
+              normal: ~88,97,94,255
+              through: true
+          上一页:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 36
+              y: -22
+              width: 185
+              height: 60
             action:
               clickLeft: |-
                 if(var.page > 0){
                   var.page = var.page - 1
                   var.dirty = true
                 }
+            children:
+              上页底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.page > 0 ? '66,61,49,255' : '38,44,46,255'"
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: "var.page > 0 ? '176,141,85,255' : '83,91,90,255'"
+              上页字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 36
+                  texts: "var.page > 0 ? '&f< 上一页' : '&7< 上一页'"
+                  through: true
           页码:
             type: Text
             attribute:
               point: ~bottom_center
-              y: -46
-              fontSize: 36
+              y: -35
+              fontSize: 48
+              texts: "'&6' + (var.page + 1).round() + ' &7/ &f' + math.max(1, math.ceil(var.guns.size() / 60)).round()"
               through: true
-              texts:
-                - "~{(var.page + 1).round() + ' / ' + math.max(1, math.ceil(var.guns.size() / 60)).round()}"
           下一页:
-            type: Text
+            type: Canvas
             attribute:
               point: ~bottom_right
-              x: -20
-              y: -46
-              fontSize: 36
-              visible: "var.page < (math.ceil(var.guns.size() / 60) - 1)"
-              texts: ~§f下一页 >
+              x: -36
+              y: -22
+              width: 185
+              height: 60
             action:
               clickLeft: |-
                 pages = math.ceil(var.guns.size() / 60)
@@ -223,15 +583,21 @@ controls:
                   var.page = var.page + 1
                   var.dirty = true
                 }
-          关闭:
-            type: Text
-            attribute:
-              point: ~top_right
-              x: -14
-              y: 10
-              fontSize: 36
-              texts:
-                - '§c✕'
-            action:
-              clickLeft: |-
-                Screen.close()
+            children:
+              下页底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: "var.page < math.ceil(var.guns.size() / 60) - 1 ? '66,61,49,255' : '38,44,46,255'"
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: "var.page < math.ceil(var.guns.size() / 60) - 1 ? '176,141,85,255' : '83,91,90,255'"
+              下页字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 36
+                  texts: "var.page < math.ceil(var.guns.size() / 60) - 1 ? '&f下一页 >' : '&7下一页 >'"
+                  through: true

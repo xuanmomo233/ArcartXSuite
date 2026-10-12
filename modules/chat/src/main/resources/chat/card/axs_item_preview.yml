@@ -1,32 +1,48 @@
 # ArcartXSuite Chat — 物品预览卡片模板
-# 玩家在聊天中使用 [item] 时，通过此卡片展示物品
-# 悬浮卡片中的物品槽位即可触发 ArcartX Tooltip
-# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
+# 玩家使用 [item] 展示物品；两个 Slot 的 Icon 绑定与 create 生命周期保持不变
+# 发送者独立标题行；物品图标/名称同行，提示始终位于两者实际底边之下
 root_control:
   type: card
   attribute:
-    width: "Math.max(val.sender_label.width, val.item_name_label.width) + 140 < 300 ? 300 : Math.max(val.sender_label.width, val.item_name_label.width) + 140"
-    height: "Math.max(100, val.item_name_label.y + val.item_name_label.height + 20)"
+    width: "Math.max(360, Math.max(Math.max(val.sender_label.x + val.sender_label.width, val.item_name_label.x + val.item_name_label.width), val.tooltip_hint.x + val.tooltip_hint.width) + 24)"
+    height: "Math.max(160, val.tooltip_hint.y + val.tooltip_hint.height + 24)"
   children:
     background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~25,25,35,200
+        normal: ~19,35,42,242
         shape: ~round_rect
-        radius: 12
+        radius: 14
+        through: true
       effect:
         stroke:
           width: 2
-          color: ~255,255,255,120
+          color: ~88,166,174,230
+    slot_frame:
+      type: Texture
+      attribute:
+        x: 20
+        y: "val.item_slot.y - 4"
+        width: 88
+        height: 88
+        normal: ~32,66,75,255
+        shape: ~round_rect
+        radius: 14
+        through: true
+      effect:
+        stroke:
+          width: 2
+          color: ~119,205,202,230
     item_slot:
       type: Slot
+      val: item_slot
       attribute:
         width: 80
         height: 80
-        x: 10
-        y: 10
+        x: 24
+        y: "val.sender_label.y + val.sender_label.height + 24"
         slotType: ~Icon
         itemScale: 0.8
       action:
@@ -38,6 +54,8 @@ root_control:
         width: "self.parent.width"
         height: "self.parent.height"
         slotType: ~Icon
+        # alpha 只影响槽位背景；零图标缩放保留整卡 Tooltip 命中区，避免重复绘制物品
+        itemScale: 0
         alpha: 0.001
       action:
         create: |-
@@ -46,17 +64,35 @@ root_control:
       type: Text
       val: sender_label
       attribute:
-        fontSize: 64
-        x: 100
-        y: 15
+        fontSize: 48
+        x: 24
+        y: 20
         texts: "self.parent.data['senderDisplayName'] + ' §7展示了一件物品'"
         through: true
     item_name_label:
       type: Text
       val: item_name_label
       attribute:
-        fontSize: 64
-        x: 100
-        y: 60
+        fontSize: 54
+        x: 124
+        y: "val.item_slot.y + Math.max(0, (val.item_slot.height - val.item_name_label.height) / 2)"
         texts: "'§b' + self.parent.data['itemName']"
+        through: true
+    hint_rule:
+      type: Texture
+      attribute:
+        x: 24
+        y: "Math.max(val.item_slot.y + val.item_slot.height, val.item_name_label.y + val.item_name_label.height) + 16"
+        width: "self.parent.width - 48"
+        height: 2
+        normal: ~53,98,108,255
+        through: true
+    tooltip_hint:
+      type: Text
+      val: tooltip_hint
+      attribute:
+        x: 24
+        y: "Math.max(val.item_slot.y + val.item_slot.height, val.item_name_label.y + val.item_name_label.height) + 32"
+        fontSize: 36
+        texts: "'§7悬停卡片 §b查看物品详情'"
         through: true

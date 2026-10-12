@@ -1,23 +1,12 @@
-# 文件用途: 挂机奖励 HUD 界面配置
-# 定义玩家在挂机区域时屏幕上显示的 HUD 面板，展示当前挂机区域、时长、下次奖励倒计时、
-# 区域人数、本次收益与累计挂机时长等信息。
+# AXS AFKReward — 休憩状态条
 ui:
-  id: AXS:afk_reward_hud  # UI 唯一标识符
-  isHud: true              # 是否为 HUD（无交互的纯显示界面）
-  defaultOpen: true        # 是否默认开启（玩家进入区域自动显示）
-  level: 20                # UI 渲染层级（数值越大越靠前）
-  through: true            # 是否允许点击穿透（不拦截鼠标操作）
-  show: true               # 是否显示此 HUD
+  id: AXS:afk_reward_hud
+  isHud: true
+  defaultOpen: true
+  level: 20
+  through: true
+  show: true
   packetHandler:
-    # packetHandler: update
-    # 包字段:
-    #   - area: 挂机区域名称
-    #   - time: 当前挂机时长（已格式化的文本）
-    #   - next: 距离下次发放奖励的剩余秒数
-    #   - players: 当前区域挂机人数
-    #   - session_rewards: 本次挂机已获得奖励的次数
-    #   - session_time: 本次挂机累计时长（已格式化的文本）
-    #   - visible: HUD 是否可见（布尔值）
     update: |-
       var.area = packet['area']
       var.time = packet['time']
@@ -25,72 +14,94 @@ ui:
       var.players = packet['players']
       var.session_rewards = packet['session_rewards']
       var.session_time = packet['session_time']
-      var.visible = packet['visible']
-
-# 控件定义区
+      var.visible = packet['visible'] == true || packet['visible'] == 'true' == true || packet['visible'] == 'true'
+  screenScale: true
+  action:
+    load: |-
+      var.visible = false
+      var.area = ''
+      var.time = ''
+      var.next = '0'
+      var.players = '0'
+      var.session_rewards = '0'
+      var.session_time = ''
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
 controls:
-  背景:  # 背景面板（圆角矩形纹理）
-    type: Texture
+  自适应全局布局:
+    type: Adaptive
     attribute:
-      x: 10                # X 坐标
-      y: 10                # Y 坐标
-      width: 200           # 面板宽度
-      height: 150          # 面板高度
-      normal: ~30,30,40,200  # 背景色 RGBA（深蓝半透明）
-      shape: ~round_rect   # 形状：圆角矩形
-      radius: 8            # 圆角半径
-      visible: var.visible  # 可见性绑定到变量
-    effect:
-      stroke:  # 描边效果
-        width: 2            # 描边宽度
-        color: ~80,180,255,180  # 描边颜色 RGBA（浅蓝半透明）
+      point: ~top_center
+      width: 1920
+      height: 1080
     children:
-      标题:  # 标题文本：显示当前挂机区域名称
-        type: Text
+      休憩状态:
+        type: Canvas
         attribute:
-          x: 100
-          y: 10
-          center: true      # 文本水平居中
-          fontSize: 36      # 字号
-          texts: "~&b挂机区域: &f{var.area}"
+          point: ~top_right
+          x: var.offX - 32
+          y: 132
+          width: 480
+          height: 224
           visible: var.visible
-      时间:  # 当前挂机时长
-        type: Text
-        attribute:
-          x: 10
-          y: 40
-          fontSize: 22
-          texts: "~&7当前挂机: &f{var.time}"
-          visible: var.visible
-      下次奖励:  # 距离下次发放奖励的倒计时（秒）
-        type: Text
-        attribute:
-          x: 10
-          y: 62
-          fontSize: 22
-          texts: "~&7下次奖励: &f{var.next}秒"
-          visible: var.visible
-      人数:  # 当前区域挂机人数
-        type: Text
-        attribute:
-          x: 10
-          y: 84
-          fontSize: 22
-          texts: "~&7区域人数: &f{var.players}"
-          visible: var.visible
-      本次收益:  # 本次挂机已获得奖励的次数
-        type: Text
-        attribute:
-          x: 10
-          y: 106
-          fontSize: 22
-          texts: "~&7本次收益: &f{var.session_rewards} 次"
-          visible: var.visible
-      本次时长:  # 本次挂机累计时长
-        type: Text
-        attribute:
-          x: 10
-          y: 128
-          fontSize: 22
-          texts: "~&7累计挂机: &f{var.session_time}"
-          visible: var.visible
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~30,49,39,225
+              shape: ~round_rect
+              radius: 12
+          色带:
+            type: Texture
+            attribute:
+              point: ~top_left
+              through: true
+              normal: ~158,178,114,255
+              x: 0
+              y: 24
+              width: 4
+              height: 176
+          区域:
+            type: Text
+            attribute:
+              x: 24
+              y: 20
+              texts: '''&f'' + var.area'
+              fontSize: 54
+              through: true
+              limit: 22
+          倒计时:
+            type: Text
+            attribute:
+              x: 24
+              y: 68
+              texts: '''&a'' + var.next + '' &7秒后发放奖励'''
+              fontSize: 54
+              through: true
+              limit: 24
+          收益:
+            type: Text
+            attribute:
+              x: 24
+              y: 120
+              texts: '''&f已获 '' + var.session_rewards + '' 次  &7·  区域 '' + var.players + '' 人'''
+              fontSize: 36
+              through: true
+              limit: 30
+          时长:
+            type: Text
+            attribute:
+              x: 24
+              y: 164
+              texts: '''&7本轮 '' + var.time + ''  累计 '' + var.session_time'
+              fontSize: 36
+              through: true
+              limit: 38

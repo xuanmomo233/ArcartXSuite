@@ -5,6 +5,7 @@
 # 关联文件: ArcartXMap.yml、ui/map_hud.yml
 # 重载命令: /axs map reload
 #
+# 制图桌视觉：羊皮纸浮层、等高线墨色、矿物蓝选中态；地形保持全屏。
 # 大地图渲染由 ArcartX-Suite-Map 客户端 mod 完全接管：
 #   - UI 的 tick 每帧调用 mapRenderer.setRegion() 传地图渲染区屏幕坐标
 #   - mod 在 Screen.render RETURN 往该区域渲染地形、玩家箭头、标记点
@@ -531,10 +532,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 0
-              y: 0
-              width: "var.viewW"
-              height: 96
+              x: 24
+              y: 18
+              width: "var.viewW - 48"
+              height: 78
               mapCapture: true
             children:
               顶栏底:
@@ -542,45 +543,85 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: ~238,228,201,250
+                  shape: ~round_rect
+                  radius: 6
                 effect:
                   stroke:
-                    width: 4
-                    color: ~255,255,255,255
+                    width: 2
+                    color: ~57,81,85,255
               标题色块:
                 type: Texture
                 attribute:
                   point: ~middle_left
-                  x: 36
-                  width: 6
-                  height: 44
-                  normal: ~232,180,90,255
+                  x: 22
+                  width: 4
+                  height: 36
+                  normal: ~57,111,132,255
                   shape: ~round_rect
                   radius: 3
               地图菜单标题:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~middle_left
-                  x: 60
-                  texts: "'&f地图总览 &8/ &f' + var.selectedWorldName"
-                  fontSize: 36
+                  point: ~top_left
+                  x: 42
+                  y: 15
+                  width: 620
+                  height: 48
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停查看完整世界名
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 3500)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  地图标题布局:
+                    type: HStack
+                    attribute:
+                      height: 48
+                    children:
+                      地图标题文字:
+                        type: Text
+                        attribute:
+                          texts: "'&0地图集 &8/ &0' + var.selectedWorldName"
+                          fontSize: 48
+                          through: true
               追踪文字:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~middle_center
-                  x: -260
-                  texts: "'&b' + var.trackingText"
-                  fontSize: 36
+                  point: ~top_left
+                  x: 720
+                  y: 25
+                  width: "self.parent.width - 1160"
+                  height: 32
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停查看完整导航信息
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 4000)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  导航文字布局:
+                    type: HStack
+                    attribute:
+                      height: 32
+                    children:
+                      导航文字内容:
+                        type: Text
+                        attribute:
+                          texts: "'&3导航 &8/ &0' + var.trackingText"
+                          fontSize: 36
+                          through: true
               # ─── 设置入口（展开居中模态副面板：小地图外观 + 实体显示） ───
               设置按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f地图设置
+                  tip: ~&0地图设置
                   point: ~top_right
-                  x: -340
-                  y: 26
-                  width: 108
-                  height: 44
+                  x: -284
+                  y: 15
+                  width: 112
+                  height: 48
                   enable: "var.mapRenderer != none"
                 action:
                   clickLeft: |-
@@ -591,30 +632,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.showHudSettings ? '74,144,226,255' : '52,56,64,255'"
-                      hover: "var.showHudSettings ? '94,164,246,255' : '72,76,84,255'"
+                      normal: "var.showHudSettings ? '132,182,193,255' : '225,214,187,255'"
+                      hover: "var.showHudSettings ? '157,201,208,255' : '243,232,204,255'"
                       shape: ~round_rect
                       radius: 12
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   设置按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f设置
+                      texts: ~&0设置
                       fontSize: 36
                       through: true
               关闭按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f关闭地图
+                  tip: ~&0关闭地图
                   point: ~top_right
-                  x: -68
-                  y: 26
-                  width: 44
-                  height: 44
+                  x: -20
+                  y: 15
+                  width: 112
+                  height: 48
                 action:
                   clickLeft: |-
                     Screen.close()
@@ -624,24 +665,78 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~220,80,80,255
-                      hover: ~240,100,100,255
+                      normal: ~207,153,135,255
+                      hover: ~230,183,157,255
                       shape: ~round_rect
                       radius: 12
                   关闭按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f✕
+                      texts: ~&0关闭 ESC
                       fontSize: 36
                       through: true
+          地图操作指引:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 108
+              width: 530
+              height: 40
+              through: true
+              visible: "!var.worldListOpen && !var.browsePanelOpen"
+            children:
+              指引纸签:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~238,228,201,235
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              指引文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 16
+                  texts: ~&8拖动平移 / 滚轮缩放 / 点击地形放置标记
+                  fontSize: 36
+                  through: true
+          落点测量纸签:
+            type: Canvas
+            attribute:
+              point: ~bottom_right
+              x: -24
+              y: -90
+              width: 360
+              height: 58
+              visible: "var.pinCreateX != none && var.pinCreateZ != none"
+              through: true
+            children:
+              测量纸签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~238,228,201,245
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              测量文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 16
+                  texts: "'&3落点 &8X &0' + var.pinCreateX + ' &8Z &0' + var.pinCreateZ"
+                  fontSize: 36
+                  through: true
           # ─── 地图已全屏渲染（mod 在 UI 下层绘制），此处只留加载提示 ───
           地图加载提示:
             type: Text
             attribute:
               point: ~middle_center
-              texts: ~&f地图加载中...
-              fontSize: 36
+              texts: ~&f地图渲染器未就绪 / 需要 Map 客户端 mod
+              fontSize: 48
               through: true
               visible: "var.mapRenderer == none"
           # ─── 锚点详情面板（只有解锁/传送/导航）───
@@ -649,10 +744,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.viewW - 448"
-              y: "(var.viewH - 400) / 2"
-              width: 420
-              height: 400
+              x: "var.viewW - 484"
+              y: 132
+              width: 460
+              height: 540
               visible: "var.detailSelectedType == 'anchor'"
               mapCapture: true
             children:
@@ -661,88 +756,171 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: "~238,228,201,250"
                   shape: ~round_rect
                   radius: 20
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               锚点类型图标:
                 type: Text
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 28
-                  texts: "var.detailRemote == true ? '&b☁' : '&6◎'"
-                  fontSize: 100
+                  texts: "var.detailRemote == true ? '&3锚点 / 跨服目的地' : '&3锚点 / 旅行目的地'"
+                  fontSize: 36
                   through: true
               锚点详情标题:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 76
-                  texts: "var.detailTitle"
-                  fontSize: 38
+                  width: 404
+                  height: 44
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读完整名称
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 3500)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  标题布局:
+                    type: HStack
+                    attribute:
+                      height: 44
+                    children:
+                      标题文字:
+                        type: Text
+                        attribute:
+                          texts: "'&0' + var.detailTitle"
+                          fontSize: 48
+                          through: true
               # 远程锚点徽标：来源服务器名
               锚点远程徽标:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 108
-                  texts: "'&b☁ 跨服 &7· &f' + var.detailServerName"
-                  fontSize: 32
+                  point: ~top_left
+                  x: 28
+                  y: 126
+                  texts: "'&3跨服 &8/ &0' + var.detailServerName"
+                  fontSize: 36
                   visible: "var.detailRemote == true"
                   through: true
               锚点位置信息:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: "var.detailRemote == true ? 140 : 112"
-                  texts: "'&f' + var.detailLocation"
+                  point: ~top_left
+                  x: 28
+                  y: "var.detailRemote == true ? 156 : 136"
+                  texts: "'&0' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
               锚点详情描述:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 28
+                  y: 206
+                  width: 386
+                  height: 120
+                  moveY: "self.parent['笔记滑块'].getDragYRatio()"
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读长句 / 滚轮或拖动滑块纵读
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 5000)"
+                  leave: "self.scrollAnim = none"
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  笔记布局:
+                    type: VStack
+                    attribute:
+                      width: 386
+                    children:
+                      笔记文字:
+                        type: Text
+                        attribute:
+                          texts: "var.detailDescription != none && var.detailDescription != '' ? '&0' + var.detailDescription : '&8暂无描述'"
+                          fontSize: 36
+                          through: true
+              笔记滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 120
+                  normal: ~171,159,129,255
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              笔记滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 36
+                  maxDragY: 84
+                  normal: ~57,111,132,255
+                  shape: ~round_rect
+                  radius: 4
+              笔记阅读提示:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: "var.detailRemote == true ? 172 : 142"
-                  texts: "var.detailDescription"
-                  fontSize: 48
+                  point: ~top_left
+                  x: 28
+                  y: 180
+                  texts: ~&8笔记 / 悬停横读 / 滚轮纵读
+                  fontSize: 36
+                  through: true
               锚点解锁费用:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  x: -105
-                  y: 200
-                  texts: "'&f解锁: &f' + var.detailUnlockCostText"
-                  fontSize: 48
+                  point: ~top_left
+                  x: 28
+                  y: 348
+                  texts: "'&8解锁费用 / &0' + var.detailUnlockCostText"
+                  fontSize: 36
                   visible: "var.detailRemote != true"
               锚点传送费用:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  x: 105
-                  y: 200
-                  texts: "'&f传送: &f' + var.detailTeleportCostText"
-                  fontSize: 48
+                  point: ~top_left
+                  x: 28
+                  y: 382
+                  texts: "'&8传送费用 / &0' + var.detailTeleportCostText"
+                  fontSize: 36
               锚点解锁距离:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 250
-                  texts: "'&f' + var.detailUnlockRangeText"
-                  fontSize: 48
+                  point: ~top_left
+                  x: 28
+                  y: 416
+                  texts: "'&8' + var.detailUnlockRangeText"
+                  fontSize: 36
                   visible: "var.detailUnlockRangeText != none && var.detailUnlockRangeText != ''"
               锚点解锁按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f解锁锚点
+                  tip: ~&0解锁锚点
                   point: ~top_left
-                  x: 24
-                  y: 300
-                  width: 110
-                  height: 44
+                  x: 28
+                  y: 468
+                  width: 126
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != none && var.detailUnlockInRange"
                   # 远程锚点不可在本服解锁（解锁/费用均由目标服权威）
                   visible: "var.detailRemote != true"
@@ -758,30 +936,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanUnlock && var.detailUnlockInRange ? '82,196,26,255' : '60,60,66,255'"
-                      hover: "var.detailCanUnlock && var.detailUnlockInRange ? '102,216,46,255' : '60,60,66,255'"
+                      normal: "var.detailCanUnlock && var.detailUnlockInRange ? '161,183,146,255' : '191,186,166,255'"
+                      hover: "var.detailCanUnlock && var.detailUnlockInRange ? '187,205,172,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   锚点解锁按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f解锁
+                      texts: "var.detailUnlocked ? '&8已解锁' : '&0解锁'"
                       fontSize: 36
                       through: true
               锚点传送按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f传送到锚点
+                  tip: ~&0传送到锚点
                   point: ~top_left
-                  x: 146
-                  y: 300
-                  width: 110
-                  height: 44
+                  x: 166
+                  y: 468
+                  width: 126
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
@@ -804,30 +982,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanTeleport ? '74,144,226,255' : '60,60,66,255'"
-                      hover: "var.detailCanTeleport ? '94,164,246,255' : '60,60,66,255'"
+                      normal: "var.detailCanTeleport ? '132,182,193,255' : '191,186,166,255'"
+                      hover: "var.detailCanTeleport ? '157,201,208,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   锚点传送按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f传送
+                      texts: ~&0传送
                       fontSize: 36
                       through: true
               锚点导航按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f导航到锚点
+                  tip: ~&0导航到锚点
                   point: ~top_left
-                  x: 268
-                  y: 300
-                  width: 110
-                  height: 44
+                  x: 304
+                  y: 468
+                  width: 126
+                  height: 48
                   # 远程锚点不支持本服导航（追踪信标无法跨服渲染）
                   visible: "var.detailRemote != true"
                 action:
@@ -852,19 +1030,19 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackAnchor ? '236,180,24,255' : '60,60,66,255')"
-                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackAnchor ? '246,200,44,255' : '60,60,66,255')"
+                      normal: "(var.detailNavigated || var.detailCanTrackAnchor) ? '204,184,137,255' : '191,186,166,255'"
+                      hover: "(var.detailNavigated || var.detailCanTrackAnchor) ? '227,209,166,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   锚点导航按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
+                      texts: "var.detailNavigated ? '&0取消' : '&0导航'"
                       fontSize: 36
                       through: true
           # ─── 路径点详情面板（命名/修改描述/导航/删除/分享）───
@@ -872,10 +1050,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.viewW - 448"
-              y: "(var.viewH - 400) / 2"
-              width: 420
-              height: 400
+              x: "var.viewW - 484"
+              y: 132
+              width: 460
+              height: 540
               visible: "var.detailSelectedType == 'waypoint'"
               mapCapture: true
             children:
@@ -884,34 +1062,55 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: "~238,228,201,250"
                   shape: ~round_rect
                   radius: 20
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               路径点类型图标:
                 type: Text
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 28
-                  texts: ~&e⚑
-                  fontSize: 100
+                  texts: ~&3路径点 / 个人行程
+                  fontSize: 36
                   through: true
               路径点详情标题:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 76
-                  texts: "var.detailTitle"
-                  fontSize: 38
+                  width: 404
+                  height: 44
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读完整名称
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 3500)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  标题布局:
+                    type: HStack
+                    attribute:
+                      height: 44
+                    children:
+                      标题文字:
+                        type: Text
+                        attribute:
+                          texts: "'&0' + var.detailTitle"
+                          fontSize: 48
+                          through: true
               路径点位置信息:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 106
-                  texts: "'&f' + var.detailLocation"
+                  point: ~top_left
+                  x: 28
+                  y: 136
+                  texts: "'&8' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
@@ -919,29 +1118,87 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 30
-                  y: 140
-                  texts: ~&f描述
+                  x: 28
+                  y: 362
+                  texts: "var.detailNavigated ? '&3状态 / 正在追踪' : '&8状态 / 未追踪'"
                   fontSize: 36
                   through: true
               路径点描述内容:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 28
+                  y: 206
+                  width: 386
+                  height: 120
+                  moveY: "self.parent['笔记滑块'].getDragYRatio()"
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读长句 / 滚轮或拖动滑块纵读
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 5000)"
+                  leave: "self.scrollAnim = none"
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  笔记布局:
+                    type: VStack
+                    attribute:
+                      width: 386
+                    children:
+                      笔记文字:
+                        type: Text
+                        attribute:
+                          texts: "var.detailDescription != none && var.detailDescription != '' ? '&0' + var.detailDescription : '&8暂无描述'"
+                          fontSize: 36
+                          through: true
+              笔记滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 120
+                  normal: ~171,159,129,255
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              笔记滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 36
+                  maxDragY: 84
+                  normal: ~57,111,132,255
+                  shape: ~round_rect
+                  radius: 4
+              笔记阅读提示:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 104
-                  y: 140
-                  texts: "var.detailDescription != none && var.detailDescription != '' ? '&f' + var.detailDescription : '&f该路径点暂无描述'"
+                  x: 28
+                  y: 180
+                  texts: ~&8笔记 / 悬停横读 / 滚轮纵读
                   fontSize: 36
                   through: true
               路径点编辑按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f编辑路径点
+                  tip: ~&0编辑路径点
                   point: ~top_left
-                  x: 24
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 28
+                  y: 468
+                  width: 92
+                  height: 48
                 action:
                   clickLeft: |-
                     var.editPanelVisible = true
@@ -957,30 +1214,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~130,200,130,255
-                      hover: ~150,220,150,255
+                      normal: ~161,183,146,255
+                      hover: ~187,205,172,255
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   路径点编辑按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f编辑
+                      texts: ~&0编辑
                       fontSize: 36
                       through: true
               路径点导航按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f导航到路径点
+                  tip: ~&0导航到路径点
                   point: ~top_left
-                  x: 120
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 128
+                  y: 468
+                  width: 92
+                  height: 48
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
@@ -1002,30 +1259,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackWaypoint ? '236,180,24,255' : '60,60,66,255')"
-                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackWaypoint ? '246,200,44,255' : '60,60,66,255')"
+                      normal: "(var.detailNavigated || var.detailCanTrackWaypoint) ? '204,184,137,255' : '191,186,166,255'"
+                      hover: "(var.detailNavigated || var.detailCanTrackWaypoint) ? '227,209,166,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   路径点导航按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
+                      texts: "var.detailNavigated ? '&0取消' : '&0导航'"
                       fontSize: 36
                       through: true
               路径点分享按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f分享路径点
+                  tip: ~&0分享路径点
                   point: ~top_left
-                  x: 216
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 228
+                  y: 468
+                  width: 92
+                  height: 48
                   visible: "var.shareEnabled"
                 action:
                   clickLeft: |-
@@ -1042,13 +1299,13 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   路径点分享按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f分享
+                      texts: ~&0分享
                       fontSize: 36
                       through: true
               路径点删除按钮:
@@ -1056,10 +1313,10 @@ controls:
                 attribute:
                   tip: ~&c删除路径点
                   point: ~top_left
-                  x: 312
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 328
+                  y: 468
+                  width: 92
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
@@ -1073,19 +1330,19 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanDeleteWaypoint ? '220,80,80,255' : '60,60,66,255'"
-                      hover: "var.detailCanDeleteWaypoint ? '240,100,100,255' : '60,60,66,255'"
+                      normal: "var.detailCanDeleteWaypoint ? '207,153,135,255' : '191,186,166,255'"
+                      hover: "var.detailCanDeleteWaypoint ? '230,183,157,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   路径点删除按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f删除
+                      texts: ~&0删除
                       fontSize: 36
                       through: true
           # ─── 外部目标详情面板（只有导航）───
@@ -1093,10 +1350,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.viewW - 448"
-              y: "(var.viewH - 400) / 2"
-              width: 420
-              height: 400
+              x: "var.viewW - 484"
+              y: 132
+              width: 460
+              height: 540
               visible: "var.detailSelectedType == 'external'"
               mapCapture: true
             children:
@@ -1105,53 +1362,134 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: "~238,228,201,250"
                   shape: ~round_rect
                   radius: 20
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               外部目标类型图标:
                 type: Text
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 28
-                  texts: ~&d✦
-                  fontSize: 100
+                  texts: ~&3其它目标 / 导航线索
+                  fontSize: 36
                   through: true
               外部目标详情标题:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 76
-                  texts: "var.detailTitle"
-                  fontSize: 38
+                  width: 404
+                  height: 44
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读完整名称
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 3500)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  标题布局:
+                    type: HStack
+                    attribute:
+                      height: 44
+                    children:
+                      标题文字:
+                        type: Text
+                        attribute:
+                          texts: "'&0' + var.detailTitle"
+                          fontSize: 48
+                          through: true
               外部目标位置信息:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 112
-                  texts: "'&f' + var.detailLocation"
+                  point: ~top_left
+                  x: 28
+                  y: 136
+                  texts: "'&8' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
               外部目标详情描述:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 28
+                  y: 206
+                  width: 386
+                  height: 120
+                  moveY: "self.parent['笔记滑块'].getDragYRatio()"
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读长句 / 滚轮或拖动滑块纵读
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 5000)"
+                  leave: "self.scrollAnim = none"
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  笔记布局:
+                    type: VStack
+                    attribute:
+                      width: 386
+                    children:
+                      笔记文字:
+                        type: Text
+                        attribute:
+                          texts: "var.detailDescription != none && var.detailDescription != '' ? '&0' + var.detailDescription : '&8暂无描述'"
+                          fontSize: 36
+                          through: true
+              笔记滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 120
+                  normal: ~171,159,129,255
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              笔记滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 36
+                  maxDragY: 84
+                  normal: ~57,111,132,255
+                  shape: ~round_rect
+                  radius: 4
+              笔记阅读提示:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 142
-                  texts: "var.detailDescription"
-                  fontSize: 48
+                  point: ~top_left
+                  x: 28
+                  y: 180
+                  texts: ~&8笔记 / 悬停横读 / 滚轮纵读
+                  fontSize: 36
+                  through: true
               外部目标导航按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f导航到目标
+                  tip: ~&0导航到目标
                   point: ~top_left
-                  x: 150
-                  y: 300
-                  width: 120
-                  height: 44
+                  x: 28
+                  y: 468
+                  width: 404
+                  height: 48
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
@@ -1173,19 +1511,19 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailNavigated ? '200,84,84,255' : (var.detailCanTrackExternal ? '236,180,24,255' : '60,60,66,255')"
-                      hover: "var.detailNavigated ? '220,104,104,255' : (var.detailCanTrackExternal ? '246,200,44,255' : '60,60,66,255')"
+                      normal: "(var.detailNavigated || var.detailCanTrackExternal) ? '204,184,137,255' : '191,186,166,255'"
+                      hover: "(var.detailNavigated || var.detailCanTrackExternal) ? '227,209,166,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   外部目标导航按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.detailNavigated ? '&f取消' : '&f导航'"
+                      texts: "var.detailNavigated ? '&0取消' : '&0导航'"
                       fontSize: 36
                       through: true
           # ─── 标记点详情面板（命名/修改描述/删除/分享）───
@@ -1193,10 +1531,10 @@ controls:
             type: Canvas
             attribute:
               point: ~top_left
-              x: "var.viewW - 448"
-              y: "(var.viewH - 400) / 2"
-              width: 420
-              height: 400
+              x: "var.viewW - 484"
+              y: 132
+              width: 460
+              height: 540
               visible: "var.detailSelectedType == 'pin'"
               mapCapture: true
             children:
@@ -1205,34 +1543,55 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: "~238,228,201,250"
                   shape: ~round_rect
                   radius: 20
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               标记点类型图标:
                 type: Text
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 28
-                  texts: ~&b◈
-                  fontSize: 100
+                  texts: ~&3标记点 / 地理笔记
+                  fontSize: 36
                   through: true
               标记点详情标题:
-                type: Text
+                type: Scroll
                 attribute:
-                  point: ~top_center
+                  point: ~top_left
+                  x: 28
                   y: 76
-                  texts: "var.detailTitle"
-                  fontSize: 38
+                  width: 404
+                  height: 44
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读完整名称
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 3500)"
+                  leave: "self.scrollAnim = none"
+                children:
+                  标题布局:
+                    type: HStack
+                    attribute:
+                      height: 44
+                    children:
+                      标题文字:
+                        type: Text
+                        attribute:
+                          texts: "'&0' + var.detailTitle"
+                          fontSize: 48
+                          through: true
               标记点位置信息:
                 type: Text
                 attribute:
-                  point: ~top_center
-                  y: 106
-                  texts: "'&f' + var.detailLocation"
+                  point: ~top_left
+                  x: 28
+                  y: 136
+                  texts: "'&8' + var.detailLocation"
                   fontSize: 36
                   visible: "var.detailLocation != none && var.detailLocation != ''"
                   through: true
@@ -1240,29 +1599,87 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 30
-                  y: 140
-                  texts: ~&f描述
+                  x: 28
+                  y: 362
+                  texts: "var.detailNavigated ? '&3状态 / 正在追踪' : '&8状态 / 未追踪'"
                   fontSize: 36
                   through: true
               标记点描述内容:
+                type: Scroll
+                attribute:
+                  point: ~top_left
+                  x: 28
+                  y: 206
+                  width: 386
+                  height: 120
+                  moveY: "self.parent['笔记滑块'].getDragYRatio()"
+                  scrollAnim: none
+                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                  tip: ~&8悬停横读长句 / 滚轮或拖动滑块纵读
+                action:
+                  enter: "self.scrollAnim = Lerp(0, 1, 5000)"
+                  leave: "self.scrollAnim = none"
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0) {
+                      self.parent['笔记滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                children:
+                  笔记布局:
+                    type: VStack
+                    attribute:
+                      width: 386
+                    children:
+                      笔记文字:
+                        type: Text
+                        attribute:
+                          texts: "var.detailDescription != none && var.detailDescription != '' ? '&0' + var.detailDescription : '&8暂无描述'"
+                          fontSize: 36
+                          through: true
+              笔记滑轨:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 120
+                  normal: ~171,159,129,255
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              笔记滑块:
+                type: Texture
+                attribute:
+                  point: ~top_right
+                  x: -28
+                  y: 206
+                  width: 8
+                  height: 36
+                  maxDragY: 84
+                  normal: ~57,111,132,255
+                  shape: ~round_rect
+                  radius: 4
+              笔记阅读提示:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 104
-                  y: 140
-                  texts: "var.detailDescription != none && var.detailDescription != '' ? '&f' + var.detailDescription : '&f该标记点暂无描述'"
+                  x: 28
+                  y: 180
+                  texts: ~&8笔记 / 悬停横读 / 滚轮纵读
                   fontSize: 36
                   through: true
               标记点编辑按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f编辑标记点
+                  tip: ~&0编辑标记点
                   point: ~top_left
-                  x: 24
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 28
+                  y: 468
+                  width: 92
+                  height: 48
                 action:
                   clickLeft: |-
                     var.editPanelVisible = true
@@ -1278,30 +1695,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~130,200,130,255
-                      hover: ~150,220,150,255
+                      normal: ~161,183,146,255
+                      hover: ~187,205,172,255
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   标记点编辑按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f编辑
+                      texts: ~&0编辑
                       fontSize: 36
                       through: true
               标记点追踪按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f在地图上追踪标记点
+                  tip: ~&0在地图上追踪标记点
                   point: ~top_left
-                  x: 120
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 128
+                  y: 468
+                  width: 92
+                  height: 48
                 action:
                   clickLeft: |-
                     if (var.detailNavigated) {
@@ -1315,30 +1732,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailNavigated ? '200,84,84,255' : '236,180,24,255'"
-                      hover: "var.detailNavigated ? '220,104,104,255' : '246,200,44,255'"
+                      normal: "var.detailNavigated ? '207,153,135,255' : '204,184,137,255'"
+                      hover: "var.detailNavigated ? '230,183,157,255' : '227,209,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   标记点追踪按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: "var.detailNavigated ? '&f取消' : '&f追踪'"
+                      texts: "var.detailNavigated ? '&0取消' : '&0追踪'"
                       fontSize: 36
                       through: true
               标记点分享按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f分享标记点
+                  tip: ~&0分享标记点
                   point: ~top_left
-                  x: 216
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 228
+                  y: 468
+                  width: 92
+                  height: 48
                   visible: "var.shareEnabled"
                 action:
                   clickLeft: |-
@@ -1355,13 +1772,13 @@ controls:
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   标记点分享按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f分享
+                      texts: ~&0分享
                       fontSize: 36
                       through: true
               标记点删除按钮:
@@ -1369,10 +1786,10 @@ controls:
                 attribute:
                   tip: ~&c删除标记点
                   point: ~top_left
-                  x: 312
-                  y: 260
-                  width: 90
-                  height: 44
+                  x: 328
+                  y: 468
+                  width: 92
+                  height: 48
                   enable: "!var.actionBusy && var.actionToken != none"
                 action:
                   clickLeft: |-
@@ -1386,31 +1803,31 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.detailCanDeletePin ? '220,80,80,255' : '60,60,66,255'"
-                      hover: "var.detailCanDeletePin ? '240,100,100,255' : '60,60,66,255'"
+                      normal: "var.detailCanDeletePin ? '207,153,135,255' : '191,186,166,255'"
+                      hover: "var.detailCanDeletePin ? '230,183,157,255' : '191,186,166,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   标记点删除按钮文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f删除
+                      texts: ~&0删除
                       fontSize: 36
                       through: true
-          # ─── 右下角常驻：新建路径点按钮 ───
+          # ─── 右下角：当前位置路径点，与选中地图落点区分 ───
           新建路径点按钮:
             type: Canvas
             attribute:
-              tip: ~&f在选中位置新建路径点
+              tip: ~&0在玩家当前位置新建路径点
               point: ~top_left
-              x: "var.viewW - 300"
-              y: "var.viewH - 60"
-              width: 130
-              height: 44
+              x: "var.viewW - 380"
+              y: "var.viewH - 76"
+              width: 168
+              height: 52
               enable: "!var.actionBusy && var.actionToken != none && var.canCreateWaypoint"
               visible: "var.detailSelectedType != 'anchor' && var.detailSelectedType != 'external'"
             action:
@@ -1425,31 +1842,31 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.canCreateWaypoint ? '130,200,130,255' : '60,60,66,255'"
-                  hover: "var.canCreateWaypoint ? '150,220,150,255' : '60,60,66,255'"
+                  normal: "var.canCreateWaypoint ? '161,183,146,255' : '191,186,166,255'"
+                  hover: "var.canCreateWaypoint ? '187,205,172,255' : '191,186,166,255'"
                   shape: ~round_rect
                   radius: 12
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               新建路径点按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f新建路径点
+                  texts: ~&0记录当前位置
                   fontSize: 36
                   through: true
           # ─── 右下角常驻：新建标记点按钮（点击空白处后出现）───
           新建标记点按钮:
             type: Canvas
             attribute:
-              tip: ~&f在点击位置新建标记点
+              tip: ~&0在点击位置新建标记点
               point: ~top_left
-              x: "var.viewW - 160"
-              y: "var.viewH - 60"
-              width: 130
-              height: 44
+              x: "var.viewW - 192"
+              y: "var.viewH - 76"
+              width: 168
+              height: 52
               enable: "!var.actionBusy && var.actionToken != none"
               visible: "var.pinCreateX != none && var.pinCreateZ != none"
             action:
@@ -1474,25 +1891,25 @@ controls:
                   radius: 12
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               新建标记点按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f新建标记点
+                  texts: ~&0标注选中落点
                   fontSize: 36
                   through: true
           # ─── 右下角浮层：标记浏览按钮（展开分类浏览面板；详情面板展开时左移避让）───
           浏览标记按钮:
             type: Canvas
             attribute:
-              tip: ~&f标记浏览
+              tip: ~&0标记浏览
               point: ~top_left
-              x: 116
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
+              x: 148
+              y: "var.viewH - 76"
+              width: 112
+              height: 52
             action:
               clickLeft: |-
                 var.browsePanelOpen = !var.browsePanelOpen
@@ -1505,31 +1922,31 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
+                  normal: "~231,219,187,250"
+                  hover: "~157,193,195,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               浏览标记按钮图标:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.browsePanelOpen ? '&b☰' : '&f☰'"
-                  fontSize: "var.browsePanelOpen ? '56' : '40'"
+                  texts: "var.browsePanelOpen ? '&3地标目录' : '&0地标目录'"
+                  fontSize: 36
                   through: true
           # ─── 左下角：图层切换按钮（地表↔洞穴二态；仅当前维度生效，浏览其他世界时点击无视觉变化）───
           图层按钮:
             type: Canvas
             attribute:
-              tip: ~&f切换图层（地表/洞穴）
+              tip: ~&0切换图层（地表/洞穴）
               point: ~top_left
-              x: 204
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
+              x: 272
+              y: "var.viewH - 76"
+              width: 112
+              height: 52
               enable: "var.mapRenderer != none"
             action:
               clickLeft: |-
@@ -1542,31 +1959,31 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
+                  normal: "~231,219,187,250"
+                  hover: "~157,193,195,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               图层按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.mapRenderer.isMenuCaveView() ? '&b洞穴' : '&f地表'"
-                  fontSize: 30
+                  texts: "var.mapRenderer != none && var.mapRenderer.isMenuCaveView() ? '&3洞穴图层' : '&0地表图层'"
+                  fontSize: 36
                   through: true
           # ─── 左下角：洞穴切片深度循环（16/30/48/64，Xaero CAVE_MODE_DEPTH；也可按 N）───
           洞深按钮:
             type: Canvas
             attribute:
-              tip: ~&f洞穴层深度（按 N 切换）
+              tip: ~&0洞穴层深度（按 N 切换）
               point: ~top_left
-              x: 288
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
+              x: 396
+              y: "var.viewH - 76"
+              width: 112
+              height: 52
               enable: "var.mapRenderer != none"
             action:
               clickLeft: |-
@@ -1579,30 +1996,30 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
+                  normal: "~231,219,187,250"
+                  hover: "~157,193,195,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               洞深按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "'&f深' + var.mapRenderer.getCaveDepthText()"
-                  fontSize: 30
+                  texts: "'&8深度 &0' + var.mapRenderer.getCaveDepthText()"
+                  fontSize: 36
                   through: true
           # ─── 标记浏览面板：内部顶部分类按钮 + 滚动条目列表 ───
           标记浏览面板:
             type: Canvas
             attribute:
-              point: ~bottom_left
-              x: 28
-              y: -134
-              width: 360
-              height: 380
+              point: ~top_left
+              x: 24
+              y: 164
+              width: 420
+              height: "var.viewH - 290"
               visible: "var.browsePanelOpen"
               mapCapture: true
             children:
@@ -1610,23 +2027,53 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~Frosted:30;100,100,100,255
+                  normal: ~238,228,201,250
                   shape: ~round_rect
                   radius: 16
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
+              浏览目录标题:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 20
+                  texts: ~&0地标目录
+                  fontSize: 48
+                  through: true
+              浏览目录说明:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 58
+                  texts: ~&8点击地标定位 / 悬停读全名 / 滚轮浏览
+                  fontSize: 36
+                  through: true
+              浏览空状态:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 148
+                  texts:
+                    - ~&8此分类尚无地标
+                    - ~&8切换世界或点击地图添加标记
+                  fontSize: 36
+                  through: true
+                  visible: "(var.browseCategory == 'anchor' && var.anchorRows.keys().length == 0) || (var.browseCategory == 'waypoint' && var.waypointRows.keys().length == 0) || (var.browseCategory == 'pin' && var.pinRows.keys().length == 0) || (var.browseCategory == 'external' && var.externalTargetRows.keys().length == 0)"
               # 面板内顶部分类按钮（锚点/路径点/标记点/其它目标）
               分类锚点按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f锚点
+                  tip: ~&0锚点
                   point: ~top_left
-                  x: 12
-                  y: 14
-                  width: 76
-                  height: 38
+                  x: 20
+                  y: 92
+                  width: 88
+                  height: 40
                 action:
                   clickLeft: |-
                     var.browseCategory = 'anchor'
@@ -1636,30 +2083,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.browseCategory == 'anchor' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: ~72,76,84,255
+                      normal: "var.browseCategory == 'anchor' ? '132,182,193,255' : '225,214,187,255'"
+                      hover: ~243,232,204,255
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   分类锚点字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f锚点
+                      texts: ~&0锚点
                       fontSize: 36
                       through: true
               分类路径点按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f路径点
+                  tip: ~&0路径点
                   point: ~top_left
-                  x: 92
-                  y: 14
-                  width: 76
-                  height: 38
+                  x: 116
+                  y: 92
+                  width: 88
+                  height: 40
                 action:
                   clickLeft: |-
                     var.browseCategory = 'waypoint'
@@ -1669,30 +2116,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.browseCategory == 'waypoint' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: ~72,76,84,255
+                      normal: "var.browseCategory == 'waypoint' ? '132,182,193,255' : '225,214,187,255'"
+                      hover: ~243,232,204,255
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   分类路径点字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f路径点
+                      texts: ~&0路径点
                       fontSize: 36
                       through: true
               分类标记点按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f标记点
+                  tip: ~&0标记点
                   point: ~top_left
-                  x: 172
-                  y: 14
-                  width: 76
-                  height: 38
+                  x: 212
+                  y: 92
+                  width: 88
+                  height: 40
                 action:
                   clickLeft: |-
                     var.browseCategory = 'pin'
@@ -1702,30 +2149,30 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.browseCategory == 'pin' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: ~72,76,84,255
+                      normal: "var.browseCategory == 'pin' ? '132,182,193,255' : '225,214,187,255'"
+                      hover: ~243,232,204,255
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   分类标记点字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f标记点
+                      texts: ~&0标记点
                       fontSize: 36
                       through: true
               分类其它按钮:
                 type: Canvas
                 attribute:
-                  tip: ~&f其它目标
+                  tip: ~&0其它目标
                   point: ~top_left
-                  x: 252
-                  y: 14
-                  width: 76
-                  height: 38
+                  x: 308
+                  y: 92
+                  width: 88
+                  height: 40
                 action:
                   clickLeft: |-
                     var.browseCategory = 'external'
@@ -1735,57 +2182,58 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.browseCategory == 'external' ? '74,144,226,255' : '52,56,64,255'"
-                      hover: ~72,76,84,255
+                      normal: "var.browseCategory == 'external' ? '132,182,193,255' : '225,214,187,255'"
+                      hover: ~243,232,204,255
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
-                        width: "self.isHovered() ? '4' : '3'"
-                        color: ~255,255,255,255
+                        width: "self.isHovered() ? 2 : 1"
+                        color: ~142,128,97,255
                   分类其它字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&f其它
+                      texts: ~&0其它
                       fontSize: 36
                       through: true
               浏览滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -8
-                  y: 60
-                  width: 12
-                  height: 308
-                  normal: ~40,44,52,225
+                  x: -14
+                  y: 152
+                  width: 8
+                  height: "self.parent.height - 176"
+                  normal: ~171,159,129,255
+                  through: true
                   shape: ~round_rect
                   radius: 6
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               浏览滑块:
                 type: Texture
                 val: 浏览滑块
                 attribute:
                   point: ~top_right
-                  x: -8
-                  y: 60
-                  width: 12
-                  height: 60
-                  normal: ~74,144,226,255
-                  maxDragY: 248
+                  x: -14
+                  y: 152
+                  width: 8
+                  height: 72
+                  normal: ~57,111,132,255
+                  maxDragY: "self.parent.height - 248"
                   shape: ~round_rect
                   radius: 6
               浏览滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 10
-                  y: 60
-                  width: 328
-                  height: 308
+                  x: 20
+                  y: 152
+                  width: 372
+                  height: "self.parent.height - 176"
                   moveY: "self.parent['浏览滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -1799,26 +2247,26 @@ controls:
                   浏览列表:
                     type: VStack
                     attribute:
-                      width: 328
+                      width: 372
                     children:
                       # ── 锚点列表（browseCategory 过滤；条目由 init/update copy 循环生成） ──
                       锚点列表:
                         type: VStack
                         val: browse_anchor
                         attribute:
-                          width: 328
+                          width: 372
                           spaceBetween: 10
                           visible: "var.browseCategory == 'anchor'"
                         children:
                           浏览锚点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: ~&0点击定位并选中
                               entryKey: 0.round()
                               entry: var.anchorRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
-                              height: 64
+                              width: 372
+                              height: 88
                             action:
                               clickLeft: |-
                                 if (self.entry != none) {
@@ -1832,38 +2280,64 @@ controls:
                               浏览锚点项底:
                                 type: Texture
                                 attribute:
-                                  point: ~stretch_all
+                                  point: ~top_left
+                                  x: 4
+                                  y: 4
+                                  width: "self.parent.width - 8"
+                                  height: "self.parent.height - 8"
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '132,182,193,255' : '225,214,187,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '157,201,208,255' : '243,232,204,255'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255,255,255,255
+                                    color: ~142,128,97,255
                               浏览锚点项图标:
                                 type: Text
                                 attribute:
                                   point: ~middle_left
                                   x: 18
-                                  texts: "self.parent.entry != none && self.parent.entry['remote'] == true ? '&b☁' : '&a◎'"
-                                  fontSize: "self.parent.entry != none && self.parent.entry['remote'] == true ? '60' : '91'"
+                                  texts: "self.parent.entry != none && self.parent.entry['remote'] == true ? '&3☁' : '&2◎'"
+                                  fontSize: 48
                                   through: true
                               浏览锚点项名称:
-                                type: Text
+                                type: Scroll
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['displayName']"
-                                  fontSize: 40
+                                  y: 14
+                                  width: 296
+                                  height: 32
                                   through: true
+                                  scrollAnim: none
+                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                                action:
+                                  tick: |-
+                                    if(self.parent.isHovered()) {
+                                      if(self.scrollAnim == none) { self.scrollAnim = Lerp(0, 1, 3500) }
+                                    } else { self.scrollAnim = none }
+                                children:
+                                  名称布局:
+                                    type: HStack
+                                    attribute:
+                                      height: 32
+                                      through: true
+                                    children:
+                                      名称文字:
+                                        type: Text
+                                        attribute:
+                                          texts: "'&0' + self.parent.parent.parent.entry['displayName']"
+                                          fontSize: 36
+                                          through: true
                               浏览锚点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
-                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  point: ~top_left
+                                  x: 56
+                                  y: 54
+                                  texts: "'&8X &0' + self.parent.entry['x'].round() + '  &8Z &0' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 路径点列表 ──
@@ -1871,19 +2345,19 @@ controls:
                         type: VStack
                         val: browse_waypoint
                         attribute:
-                          width: 328
+                          width: 372
                           spaceBetween: 10
                           visible: "var.browseCategory == 'waypoint'"
                         children:
                           浏览路径点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: ~&0点击定位并选中
                               entryKey: 0.round()
                               entry: var.waypointRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
-                              height: 64
+                              width: 372
+                              height: 88
                             action:
                               clickLeft: |-
                                 if (self.entry != none) {
@@ -1897,38 +2371,64 @@ controls:
                               浏览路径点项底:
                                 type: Texture
                                 attribute:
-                                  point: ~stretch_all
+                                  point: ~top_left
+                                  x: 4
+                                  y: 4
+                                  width: "self.parent.width - 8"
+                                  height: "self.parent.height - 8"
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '132,182,193,255' : '225,214,187,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '157,201,208,255' : '243,232,204,255'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255,255,255,255
+                                    color: ~142,128,97,255
                               浏览路径点项图标:
                                 type: Text
                                 attribute:
                                   point: ~middle_left
                                   x: 20
-                                  texts: ~&e⚑
+                                  texts: ~&6⚑
                                   fontSize: 48
                                   through: true
                               浏览路径点项名称:
-                                type: Text
+                                type: Scroll
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 14
+                                  width: 296
+                                  height: 32
                                   through: true
+                                  scrollAnim: none
+                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                                action:
+                                  tick: |-
+                                    if(self.parent.isHovered()) {
+                                      if(self.scrollAnim == none) { self.scrollAnim = Lerp(0, 1, 3500) }
+                                    } else { self.scrollAnim = none }
+                                children:
+                                  名称布局:
+                                    type: HStack
+                                    attribute:
+                                      height: 32
+                                      through: true
+                                    children:
+                                      名称文字:
+                                        type: Text
+                                        attribute:
+                                          texts: "'&0' + self.parent.parent.parent.entry['name']"
+                                          fontSize: 36
+                                          through: true
                               浏览路径点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
-                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  point: ~top_left
+                                  x: 56
+                                  y: 54
+                                  texts: "'&8X &0' + self.parent.entry['x'].round() + '  &8Z &0' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 标记点列表 ──
@@ -1936,19 +2436,19 @@ controls:
                         type: VStack
                         val: browse_pin
                         attribute:
-                          width: 328
+                          width: 372
                           spaceBetween: 10
                           visible: "var.browseCategory == 'pin'"
                         children:
                           浏览标记点项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: ~&0点击定位并选中
                               entryKey: 0.round()
                               entry: var.pinRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
-                              height: 64
+                              width: 372
+                              height: 88
                             action:
                               clickLeft: |-
                                 if (self.entry != none) {
@@ -1962,38 +2462,64 @@ controls:
                               浏览标记点项底:
                                 type: Texture
                                 attribute:
-                                  point: ~stretch_all
+                                  point: ~top_left
+                                  x: 4
+                                  y: 4
+                                  width: "self.parent.width - 8"
+                                  height: "self.parent.height - 8"
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '132,182,193,255' : '225,214,187,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '157,201,208,255' : '243,232,204,255'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255,255,255,255
+                                    color: ~142,128,97,255
                               浏览标记点项图标:
                                 type: Text
                                 attribute:
                                   point: ~middle_left
                                   x: 20
-                                  texts: ~&b◈
+                                  texts: ~&3◈
                                   fontSize: 81
                                   through: true
                               浏览标记点项名称:
-                                type: Text
+                                type: Scroll
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 14
+                                  width: 296
+                                  height: 32
                                   through: true
+                                  scrollAnim: none
+                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                                action:
+                                  tick: |-
+                                    if(self.parent.isHovered()) {
+                                      if(self.scrollAnim == none) { self.scrollAnim = Lerp(0, 1, 3500) }
+                                    } else { self.scrollAnim = none }
+                                children:
+                                  名称布局:
+                                    type: HStack
+                                    attribute:
+                                      height: 32
+                                      through: true
+                                    children:
+                                      名称文字:
+                                        type: Text
+                                        attribute:
+                                          texts: "'&0' + self.parent.parent.parent.entry['name']"
+                                          fontSize: 36
+                                          through: true
                               浏览标记点项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
-                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  point: ~top_left
+                                  x: 56
+                                  y: 54
+                                  texts: "'&8X &0' + self.parent.entry['x'].round() + '  &8Z &0' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
                       # ── 其它目标列表 ──
@@ -2001,19 +2527,19 @@ controls:
                         type: VStack
                         val: browse_external
                         attribute:
-                          width: 328
+                          width: 372
                           spaceBetween: 10
                           visible: "var.browseCategory == 'external'"
                         children:
                           浏览其它项:
                             type: Canvas
                             attribute:
-                              tip: ~&f点击定位并选中
+                              tip: ~&0点击定位并选中
                               entryKey: 0.round()
                               entry: var.externalTargetRows[self.entryKey]
                               visible: self.entry != none
-                              width: 328
-                              height: 64
+                              width: 372
+                              height: 88
                             action:
                               clickLeft: |-
                                 if (self.entry != none) {
@@ -2027,16 +2553,20 @@ controls:
                               浏览其它项底:
                                 type: Texture
                                 attribute:
-                                  point: ~stretch_all
+                                  point: ~top_left
+                                  x: 4
+                                  y: 4
+                                  width: "self.parent.width - 8"
+                                  height: "self.parent.height - 8"
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['selected'] ? '132,182,193,255' : '225,214,187,255'"
+                                  hover: "self.parent.entry != none && self.parent.entry['selected'] ? '157,201,208,255' : '243,232,204,255'"
                                   shape: ~round_rect
                                   radius: 12
                                 effect:
                                   stroke:
                                     width: 3
-                                    color: ~255,255,255,255
+                                    color: ~142,128,97,255
                               浏览其它项图标:
                                 type: Text
                                 attribute:
@@ -2046,31 +2576,53 @@ controls:
                                   fontSize: 64
                                   through: true
                               浏览其它项名称:
-                                type: Text
+                                type: Scroll
                                 attribute:
-                                  point: ~middle_left
+                                  point: ~top_left
                                   x: 56
-                                  texts: "'&f' + self.parent.entry['name']"
-                                  fontSize: 40
+                                  y: 14
+                                  width: 296
+                                  height: 32
                                   through: true
+                                  scrollAnim: none
+                                  moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                                action:
+                                  tick: |-
+                                    if(self.parent.isHovered()) {
+                                      if(self.scrollAnim == none) { self.scrollAnim = Lerp(0, 1, 3500) }
+                                    } else { self.scrollAnim = none }
+                                children:
+                                  名称布局:
+                                    type: HStack
+                                    attribute:
+                                      height: 32
+                                      through: true
+                                    children:
+                                      名称文字:
+                                        type: Text
+                                        attribute:
+                                          texts: "'&0' + self.parent.parent.parent.entry['name']"
+                                          fontSize: 36
+                                          through: true
                               浏览其它项坐标:
                                 type: Text
                                 attribute:
-                                  point: ~middle_right
-                                  x: -16
-                                  texts: "'&f' + self.parent.entry['x'].round() + ',' + self.parent.entry['z'].round()"
+                                  point: ~top_left
+                                  x: 56
+                                  y: 54
+                                  texts: "'&8X &0' + self.parent.entry['x'].round() + '  &8Z &0' + self.parent.entry['z'].round()"
                                   fontSize: 36
                                   through: true
-          # ─── 左下角：世界切换槽位 + 世界列表浮层（原神式）───
+          # ─── 地理工具纸签：世界图册与地标目录互斥展开 ───
           世界槽位:
             type: Canvas
             attribute:
-              tip: ~&f世界列表
+              tip: ~&0世界列表
               point: ~top_left
-              x: 28
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
+              x: 24
+              y: "var.viewH - 76"
+              width: 112
+              height: 52
             action:
               clickLeft: |-
                 var.worldListOpen = !var.worldListOpen
@@ -2083,39 +2635,39 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;200,200,200,255"
-                  hover: "~Frosted:30;255,255,255,255"
+                  normal: "~231,219,187,250"
+                  hover: "~157,193,195,255"
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               世界槽位图标:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "var.worldListOpen ? '&b◉' : '&f◎'"
-                  fontSize: "var.worldListOpen ? '72' : '81'"
+                  texts: "var.worldListOpen ? '&3世界图册' : '&0世界图册'"
+                  fontSize: 36
                   through: true
           世界槽位名:
             type: Text
             attribute:
               point: ~top_left
               x: 28
-              y: "var.viewH - 96 - 26"
-              texts: "'&f' + var.selectedWorldName"
+              y: "var.viewH - 110"
+              texts: "'&f个人路径点 &7' + var.waypointCount.round() + ' / ' + var.waypointLimit.round()"
               fontSize: 36
               through: true
           # 世界列表浮层：槽位上方弹出，图标+世界名竖排
           世界列表浮层:
             type: Canvas
             attribute:
-              point: ~bottom_left
-              x: 28
-              y: -134
-              width: 360
-              height: 380
+              point: ~top_left
+              x: 24
+              y: 164
+              width: 420
+              height: "var.viewH - 290"
               visible: "var.worldListOpen"
               mapCapture: true
             children:
@@ -2124,58 +2676,70 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "~Frosted:30;100,100,100,255"
+                  normal: "~238,228,201,250"
                   shape: ~round_rect
                   radius: 16
                 effect:
                   stroke:
                     width: 4
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               世界浮层标题:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 18
-                  y: 12
-                  texts: ~&f世界列表
+                  x: 20
+                  y: 20
+                  texts: ~&0世界图册
+                  fontSize: 48
+                  through: true
+              世界图册说明:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 20
+                  y: 60
+                  texts:
+                    - ~&8点击世界浏览 / 右侧按钮传送
+                    - ~&8跨服来源列于名称下方
                   fontSize: 36
                   through: true
               世界浮层滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -8
-                  y: 40
-                  width: 12
-                  height: 328
-                  normal: ~40,44,52,225
+                  x: -14
+                  y: 122
+                  width: 8
+                  height: "self.parent.height - 146"
+                  normal: ~171,159,129,255
+                  through: true
                   shape: ~round_rect
                   radius: 6
                 effect:
                   stroke:
                     width: 3
-                    color: ~255,255,255,255
+                    color: ~142,128,97,255
               世界浮层滑块:
                 type: Texture
                 val: 世界浮层滑块
                 attribute:
                   point: ~top_right
-                  x: -8
-                  y: 40
-                  width: 12
-                  height: 60
-                  normal: ~74,144,226,255
-                  maxDragY: 268
+                  x: -14
+                  y: 122
+                  width: 8
+                  height: 72
+                  normal: ~57,111,132,255
+                  maxDragY: "self.parent.height - 218"
                   shape: ~round_rect
                   radius: 6
               世界浮层滚动栏:
                 type: Scroll
                 attribute:
                   point: ~top_left
-                  x: 10
-                  y: 40
-                  width: 328
-                  height: 328
+                  x: 20
+                  y: 122
+                  width: 372
+                  height: "self.parent.height - 146"
                   moveY: "self.parent['世界浮层滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -2190,18 +2754,18 @@ controls:
                     val: world_entry
                     type: VStack
                     attribute:
-                      width: 328
+                      width: 372
                       spaceBetween: 10
                     children:
                       地图项目:
                         type: Canvas
                         attribute:
-                          tip: ~&f点击浏览该世界
+                          tip: ~&0点击浏览该世界
                           entryKey: 0.round()
                           entry: var.worldRows[self.entryKey]
                           visible: self.entry != none
-                          width: 320
-                          height: 64
+                          width: 372
+                          height: 92
                         action:
                           clickLeft: |-
                             if (self.entry != none) {
@@ -2212,40 +2776,66 @@ controls:
                           地图项目背景:
                             type: Texture
                             attribute:
-                              point: ~stretch_all
+                              point: ~top_left
+                              x: 4
+                              y: 4
+                              width: "self.parent.width - 8"
+                              height: "self.parent.height - 8"
                               through: true
-                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '74,144,226,255' : '52,56,64,255'"
-                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '94,164,246,255' : '72,76,84,255'"
+                              normal: "self.parent.entry != none && self.parent.entry['selected'] ? '132,182,193,255' : '225,214,187,255'"
+                              hover: "self.parent.entry != none && self.parent.entry['selected'] ? '157,201,208,255' : '243,232,204,255'"
                               shape: ~round_rect
                               radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: ~255,255,255,255
+                                color: ~142,128,97,255
                           地图项目图标:
                             type: Text
                             attribute:
                               point: ~middle_left
                               x: 18
-                              texts: "self.parent.entry != none && self.parent.entry['selected'] ? '&a◉' : '&2◎'"
-                              fontSize: "self.parent.entry['selected'] ? '48' : '91'"
+                              texts: "self.parent.entry != none && self.parent.entry['selected'] ? '&3选' : '&8图'"
+                              fontSize: 48
                               through: true
                           地图项目文字:
-                            type: Text
+                            type: Scroll
                             attribute:
-                              point: ~middle_left
+                              point: ~top_left
                               x: 56
-                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['displayName'] : none"
-                              fontSize: 40
+                              y: 14
+                              width: 244
+                              height: 32
                               through: true
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            action:
+                              tick: |-
+                                if(self.parent.isHovered()) {
+                                  if(self.scrollAnim == none) { self.scrollAnim = Lerp(0, 1, 3500) }
+                                } else { self.scrollAnim = none }
+                            children:
+                              世界名称布局:
+                                type: HStack
+                                attribute:
+                                  height: 32
+                                  through: true
+                                children:
+                                  世界名称文字:
+                                    type: Text
+                                    attribute:
+                                      texts: "'&0' + self.parent.parent.parent.entry['displayName']"
+                                      fontSize: 36
+                                      through: true
                           # 远程世界徽标：显示来源服务器名（worldRows[].remote/server 由服务端下发）
                           地图项目服务器:
                             type: Text
                             attribute:
-                              point: ~middle_right
-                              x: -56
-                              texts: "self.parent.entry != none && self.parent.entry['remote'] == true ? '&b☁ &f' + self.parent.entry['server'] : ''"
-                              fontSize: 32
+                              point: ~top_left
+                              x: 56
+                              y: 54
+                              texts: "'&3跨服 &8/ &0' + self.parent.entry['server']"
+                              fontSize: 36
                               visible: "self.parent.entry != none && self.parent.entry['remote'] == true"
                               through: true
                           # 跨世界传送按钮：只对"非玩家当前世界"的条目显示，
@@ -2254,7 +2844,7 @@ controls:
                           地图项目传送:
                             type: Canvas
                             attribute:
-                              tip: ~&f传送到该世界
+                              tip: ~&0传送到该世界
                               point: ~middle_right
                               x: -10
                               width: 40
@@ -2267,7 +2857,7 @@ controls:
                                 if (self.parent.entry != none && var.actionToken != none) {
                                   var.crossWorldPromptType = 'teleport_world'
                                   var.crossWorldTargetWorld = self.parent.entry['id']
-                                  var.crossWorldTargetName = self.parent.entry['remote'] == true ? self.parent.entry['displayName'] + ' &7@ &f' + self.parent.entry['server'] : self.parent.entry['displayName']
+                                  var.crossWorldTargetName = self.parent.entry['remote'] == true ? self.parent.entry['displayName'] + ' &8@ &0' + self.parent.entry['server'] : self.parent.entry['displayName']
                                   var.crossWorldRemote = self.parent.entry['remote'] == true
                                   var.crossWorldPromptVisible = true
                                 }
@@ -2277,30 +2867,30 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "var.actionToken != none ? '74,144,226,255' : '60,60,66,255'"
-                                  hover: "var.actionToken != none ? '94,164,246,255' : '60,60,66,255'"
+                                  normal: "var.actionToken != none ? '132,182,193,255' : '191,186,166,255'"
+                                  hover: "var.actionToken != none ? '157,201,208,255' : '191,186,166,255'"
                                   shape: ~round_rect
                                   radius: 10
                                 effect:
                                   stroke:
-                                    width: "self.isHovered() ? '4' : '3'"
-                                    color: ~255,255,255,255
+                                    width: "self.isHovered() ? 2 : 1"
+                                    color: ~142,128,97,255
                               地图项目传送图标:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  texts: ~&f⚑
+                                  texts: ~&0⚑
                                   fontSize: 36
                                   through: true
           复位按钮:
             type: Canvas
             attribute:
-              tip: ~&f复位视野
+              tip: ~&0复位视野
               point: ~top_left
-              x: 204
-              y: "var.viewH - 96"
-              width: 72
-              height: 72
+              x: 520
+              y: "var.viewH - 76"
+              width: 112
+              height: 52
               enable: "var.mapRenderer != none"
             action:
               clickLeft: |-
@@ -2313,32 +2903,31 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~Frosted:30;200,200,200,255
-                  hover: ~Frosted:30;255,255,255,255
+                  normal: ~231,219,187,250
+                  hover: ~157,193,195,255
                   shape: ~round_rect
                   radius: 18
                 effect:
                   stroke:
-                    width: "self.isHovered() ? '4' : '3'"
-                    color: ~255,255,255,255
+                    width: "self.isHovered() ? 2 : 1"
+                    color: ~142,128,97,255
               复位按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  y: -3
-                  texts: ~&f⟳
-                  fontSize: 72
+                  texts: ~&0回到原点
+                  fontSize: 36
                   through: true
           # 取消导航按钮（顶栏右侧，清除当前追踪）
           取消导航按钮:
             type: Canvas
             attribute:
-              tip: ~&f取消当前导航
+              tip: ~&0取消当前导航
               point: ~top_right
-              x: -220
-              y: 26
-              width: 108
-              height: 44
+              x: -180
+              y: 33
+              width: 112
+              height: 48
             action:
               clickLeft: |-
                 if (var.clearTrackVisible) {
@@ -2350,15 +2939,15 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.clearTrackVisible ? '220,80,80,255' : '60,60,66,255'"
-                  hover: "var.clearTrackVisible ? '240,100,100,255' : '60,60,66,255'"
+                  normal: "var.clearTrackVisible ? '207,153,135,255' : '191,186,166,255'"
+                  hover: "var.clearTrackVisible ? '230,183,157,255' : '191,186,166,255'"
                   shape: ~round_rect
                   radius: 12
               取消导航按钮文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f取消导航
+                  texts: ~&0取消导航
                   fontSize: 36
                   through: true
           # ─── 设置副面板（居中模态：左栏小地图外观，右栏实体显示；改动即写服务端留存）───
@@ -2366,6 +2955,8 @@ controls:
             type: Canvas
             attribute:
               point: ~stretch_all
+              width: "var.viewW"
+              height: "var.viewH"
               visible: var.showHudSettings
               mapCapture: true
             children:
@@ -2380,32 +2971,32 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 960
-                  height: 440
+                  height: 500
                 children:
                   设置对话框底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~Frosted:30;100,100,100,255
+                      normal: ~238,228,201,250
                       shape: ~round_rect
                       radius: 16
                     effect:
                       stroke:
                         width: 4
-                        color: ~255,255,255,255
+                        color: ~142,128,97,255
                   设置标题:
                     type: Text
                     attribute:
                       point: ~top_center
                       y: 22
-                      texts: ~&f地图设置
+                      texts: ~&0制图工具 / 显示设置
                       fontSize: 48
                       through: true
                   设置关闭按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f关闭设置
+                      tip: ~&0关闭设置
                       point: ~top_right
                       x: -20
                       y: 20
@@ -2420,15 +3011,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~60,60,66,255
-                          hover: ~220,80,80,255
+                          normal: ~191,186,166,255
+                          hover: ~207,153,135,255
                           shape: ~round_rect
                           radius: 10
                       设置关闭字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f✕
+                          texts: ~&0✕
                           fontSize: 36
                           through: true
                   设置顶部分隔线:
@@ -2458,7 +3049,7 @@ controls:
                       point: ~top_left
                       x: 44
                       y: 98
-                      texts: ~&e小地图
+                      texts: ~&3随身地图 / 外观
                       fontSize: 36
                       through: true
                   形状标签:
@@ -2467,13 +3058,13 @@ controls:
                       point: ~top_left
                       x: 44
                       y: 142
-                      texts: ~&f形状
+                      texts: ~&0形状
                       fontSize: 36
                       through: true
                   圆形按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f圆形小地图
+                      tip: ~&0圆形小地图
                       point: ~top_left
                       x: 140
                       y: 132
@@ -2491,25 +3082,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'CIRCLE' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       圆形按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f圆形
+                          texts: ~&0圆形
                           fontSize: 36
                           through: true
                   方形按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f方形小地图
+                      tip: ~&0方形小地图
                       point: ~top_left
                       x: 296
                       y: 132
@@ -2527,19 +3118,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudShape()) == 'SQUARE' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       方形按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f方形
+                          texts: ~&0方形
                           fontSize: 36
                           through: true
                   位置标签:
@@ -2548,13 +3139,13 @@ controls:
                       point: ~top_left
                       x: 44
                       y: 202
-                      texts: ~&f位置
+                      texts: ~&0位置
                       fontSize: 36
                       through: true
                   左上按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f小地图置于左上角
+                      tip: ~&0小地图置于左上角
                       point: ~top_left
                       x: 140
                       y: 192
@@ -2572,25 +3163,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_LEFT' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       左上按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f左上
+                          texts: ~&0左上
                           fontSize: 36
                           through: true
                   右上按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f小地图置于右上角
+                      tip: ~&0小地图置于右上角
                       point: ~top_left
                       x: 218
                       y: 192
@@ -2608,25 +3199,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'TOP_RIGHT' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       右上按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f右上
+                          texts: ~&0右上
                           fontSize: 36
                           through: true
                   左下按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f小地图置于左下角
+                      tip: ~&0小地图置于左下角
                       point: ~top_left
                       x: 296
                       y: 192
@@ -2644,25 +3235,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_LEFT' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       左下按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f左下
+                          texts: ~&0左下
                           fontSize: 36
                           through: true
                   右下按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f小地图置于右下角
+                      tip: ~&0小地图置于右下角
                       point: ~top_left
                       x: 374
                       y: 192
@@ -2680,19 +3271,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && ('' + var.mapRenderer.getHudPosition()) == 'BOTTOM_RIGHT' ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 10
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       右下按钮字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f右下
+                          texts: ~&0右下
                           fontSize: 36
                           through: true
                   尺寸标签:
@@ -2701,13 +3292,13 @@ controls:
                       point: ~top_left
                       x: 44
                       y: 262
-                      texts: ~&f尺寸
+                      texts: ~&0尺寸
                       fontSize: 36
                       through: true
                   尺寸减按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f减小小地图尺寸
+                      tip: ~&0减小小地图尺寸
                       point: ~top_left
                       x: 140
                       y: 252
@@ -2725,19 +3316,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       尺寸减字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f-
+                          texts: ~&0-
                           fontSize: 36
                           through: true
                   尺寸值文字:
@@ -2747,13 +3338,13 @@ controls:
                       x: 292
                       y: 262
                       center: true
-                      texts: "var.mapRenderer != none ? '&f' + var.mapRenderer.getHudSize().round() + ' &fpx' : '&f-'"
+                      texts: "var.mapRenderer != none ? '&0' + var.mapRenderer.getHudSize().round() + ' &0px' : '&0-'"
                       fontSize: 36
                       through: true
                   尺寸加按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f增大小地图尺寸
+                      tip: ~&0增大小地图尺寸
                       point: ~top_left
                       x: 396
                       y: 252
@@ -2771,19 +3362,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       尺寸加字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f+
+                          texts: ~&0+
                           fontSize: 36
                           through: true
                   缩放标签:
@@ -2792,13 +3383,13 @@ controls:
                       point: ~top_left
                       x: 44
                       y: 322
-                      texts: ~&f缩放
+                      texts: ~&0缩放
                       fontSize: 36
                       through: true
                   缩放减按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f缩小地图缩放
+                      tip: ~&0缩小地图缩放
                       point: ~top_left
                       x: 140
                       y: 312
@@ -2816,19 +3407,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       缩放减字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f-
+                          texts: ~&0-
                           fontSize: 36
                           through: true
                   缩放值文字:
@@ -2838,13 +3429,13 @@ controls:
                       x: 292
                       y: 322
                       center: true
-                      texts: "var.mapRenderer != none ? '&f' + (var.mapRenderer.getHudZoom() * 100).round() + '&f%' : '&f-'"
+                      texts: "var.mapRenderer != none ? '&0' + (var.mapRenderer.getHudZoom() * 100).round() + '&0%' : '&0-'"
                       fontSize: 36
                       through: true
                   缩放加按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f放大地图缩放
+                      tip: ~&0放大地图缩放
                       point: ~top_left
                       x: 396
                       y: 312
@@ -2862,19 +3453,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       缩放加字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f+
+                          texts: ~&0+
                           fontSize: 36
                           through: true
                   # ─── 右栏：实体显示 ───
@@ -2884,7 +3475,7 @@ controls:
                       point: ~top_left
                       x: 504
                       y: 98
-                      texts: ~&e实体显示
+                      texts: ~&3地理图层 / 实体
                       fontSize: 36
                       through: true
                   雷达标签:
@@ -2893,13 +3484,13 @@ controls:
                       point: ~top_left
                       x: 504
                       y: 142
-                      texts: ~&f实体雷达
+                      texts: ~&0实体雷达
                       fontSize: 36
                       through: true
                   雷达开关:
                     type: Canvas
                     attribute:
-                      tip: ~&f实体雷达点开关（按 V 也可切换）
+                      tip: ~&0实体雷达点开关（按 V 也可切换）
                       point: ~top_left
                       x: 812
                       y: 132
@@ -2917,19 +3508,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '82,140,26,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '102,160,46,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '82,140,26,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '102,160,46,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       雷达开关字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '&f开' : '&7关'"
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarEnabled() ? '&0开' : '&8关'"
                           fontSize: 36
                           through: true
                   名称标签:
@@ -2938,13 +3529,13 @@ controls:
                       point: ~top_left
                       x: 504
                       y: 202
-                      texts: ~&f名称标签
+                      texts: ~&0名称标签
                       fontSize: 36
                       through: true
                   名称开关:
                     type: Canvas
                     attribute:
-                      tip: ~&f实体名称标签开关
+                      tip: ~&0实体名称标签开关
                       point: ~top_left
                       x: 812
                       y: 192
@@ -2962,19 +3553,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '82,140,26,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '102,160,46,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '82,140,26,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '102,160,46,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       名称开关字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '&f开' : '&7关'"
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarNames() ? '&0开' : '&8关'"
                           fontSize: 36
                           through: true
                   类别标签:
@@ -2983,13 +3574,13 @@ controls:
                       point: ~top_left
                       x: 504
                       y: 262
-                      texts: ~&f类别
+                      texts: ~&0类别
                       fontSize: 36
                       through: true
                   玩家类别按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f显示玩家/NPC点
+                      tip: ~&0显示玩家/NPC点
                       point: ~top_left
                       x: 596
                       y: 252
@@ -3007,25 +3598,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '74,144,226,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '94,164,246,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '132,182,193,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '157,201,208,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       玩家类别字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '&f玩家' : '&7玩家'"
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPlayers() ? '&0玩家' : '&8玩家'"
                           fontSize: 36
                           through: true
                   怪物类别按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f显示怪物点
+                      tip: ~&0显示怪物点
                       point: ~top_left
                       x: 708
                       y: 252
@@ -3043,25 +3634,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '200,84,84,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '220,104,104,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '200,84,84,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '220,104,104,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       怪物类别字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '&f怪物' : '&7怪物'"
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarHostile() ? '&0怪物' : '&8怪物'"
                           fontSize: 36
                           through: true
                   动物类别按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f显示动物点
+                      tip: ~&0显示动物点
                       point: ~top_left
                       x: 820
                       y: 252
@@ -3079,34 +3670,38 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '212,180,60,255' : '52,56,64,255'"
-                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '232,200,80,255' : '72,76,84,255'"
+                          normal: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '212,180,60,255' : '225,214,187,255'"
+                          hover: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '232,200,80,255' : '243,232,204,255'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       动物类别字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '&f动物' : '&7动物'"
+                          texts: "var.mapRenderer != none && var.mapRenderer.isRadarPassive() ? '&0动物' : '&8动物'"
                           fontSize: 36
                           through: true
                   设置底部提示:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 392
-                      texts: ~&7快捷键：V 雷达 · 右键按钮切名称 · N 切洞穴深度 · [ 切形状 · +- 大小（可客户端自定义按键绑定）
-                      fontSize: 32
+                      y: 416
+                      texts:
+                        - ~&8调整即时保存 / 快捷键可在客户端重新绑定
+                        - ~&8V 雷达 / N 洞穴深度 / [ 形状 / +- 尺寸 / , . 缩放
+                      fontSize: 36
                       through: true
           # ─── 路径点/标记点编辑面板（模态遮罩，居中弹窗）───
           编辑面板层:
             type: Canvas
             attribute:
               point: ~stretch_all
+              width: "var.viewW"
+              height: "var.viewH"
               visible: "var.editPanelVisible"
               mapCapture: true
             children:
@@ -3120,27 +3715,27 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~middle_center
-                  width: 520
-                  height: 340
+                  width: 600
+                  height: 400
                 children:
                   编辑对话框底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~Frosted:30;100,100,100,255
+                      normal: ~238,228,201,250
                       shape: ~round_rect
                       radius: 16
                     effect:
                       stroke:
                         width: 4
-                        color: ~255,255,255,255
+                        color: ~142,128,97,255
                   编辑标题:
                     type: Text
                     attribute:
                       point: ~top_center
                       y: 22
-                      texts: "var.detailSelectedType == 'pin' ? '&f编辑标记点' : '&f编辑路径点'"
+                      texts: "var.detailSelectedType == 'pin' ? '&0编辑标记点' : '&0编辑路径点'"
                       fontSize: 48
                       through: true
                   编辑名称标签:
@@ -3149,7 +3744,7 @@ controls:
                       point: ~top_left
                       x: 36
                       y: 92
-                      texts: ~&f名称
+                      texts: ~&0名称
                       fontSize: 36
                       through: true
                   编辑名称输入框:
@@ -3157,14 +3752,14 @@ controls:
                     val: 编辑名称输入框
                     attribute:
                       point: ~top_left
-                      x: 112
+                      x: 132
                       y: 88
-                      width: 370
-                      height: 34
+                      width: 300
+                      height: 26
                       length: 64
                       fontSize: 48
                       emptyText: "~输入名称"
-                      background: "~Frosted:20;255,255,255,30"
+                      background: ~57,81,85,235
                       canLoseFocus: true
                   编辑描述标签:
                     type: Text
@@ -3172,7 +3767,7 @@ controls:
                       point: ~top_left
                       x: 36
                       y: 142
-                      texts: ~&f描述
+                      texts: ~&0描述
                       fontSize: 36
                       through: true
                   编辑描述输入框:
@@ -3180,20 +3775,20 @@ controls:
                     val: 编辑描述输入框
                     attribute:
                       point: ~top_left
-                      x: 112
-                      y: 138
-                      width: 370
-                      height: 96
+                      x: 132
+                      y: 148
+                      width: 300
+                      height: 88
                       length: 256
                       allowNewLine: true
                       fontSize: 48
                       emptyText: "~输入描述（可选）"
-                      background: "~Frosted:20;255,255,255,30"
+                      background: ~57,81,85,235
                       canLoseFocus: true
                   编辑保存按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f保存修改
+                      tip: ~&0保存修改
                       point: ~bottom_left
                       x: 60
                       y: -30
@@ -3217,25 +3812,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~130,200,130,255
-                          hover: ~150,220,150,255
+                          normal: ~161,183,146,255
+                          hover: ~187,205,172,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       编辑保存文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f保存
+                          texts: ~&0保存
                           fontSize: 36
                           through: true
                   编辑取消按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f取消
+                      tip: ~&0取消
                       point: ~bottom_right
                       x: -60
                       y: -30
@@ -3250,19 +3845,19 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       编辑取消文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f取消
+                          texts: ~&0取消
                           fontSize: 36
                           through: true
           # ─── 跨世界导航确认弹窗（模态遮罩，挡住下层一切点击）───
@@ -3270,6 +3865,8 @@ controls:
             type: Canvas
             attribute:
               point: ~stretch_all
+              width: "var.viewW"
+              height: "var.viewH"
               visible: "var.crossWorldPromptVisible"
               mapCapture: true
             children:
@@ -3283,60 +3880,78 @@ controls:
                 type: Canvas
                 attribute:
                   point: ~middle_center
-                  width: 480
-                  height: 220
+                  width: 760
+                  height: 330
                 children:
                   对话框底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~Frosted:30;100,100,100,255
+                      normal: ~238,228,201,250
                       shape: ~round_rect
                       radius: 16
                     effect:
                       stroke:
                         width: 4
-                        color: ~255,255,255,255
+                        color: ~142,128,97,255
                   对话框标题:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 24
-                      texts: "var.crossWorldRemote == true ? '&b☁ &f跨服传送' : (var.crossWorldPromptType == 'navigate' ? '&f跨世界导航' : '&f跨世界传送')"
+                      y: 32
+                      texts: "var.crossWorldPromptType == 'navigate' ? '&0跨世界导航' : '&0目的地传送确认'"
                       fontSize: 36
                       through: true
                   对话框内容:
-                    type: Text
+                    type: Scroll
                     attribute:
-                      point: ~top_center
-                      y: 72
-                      texts: "var.crossWorldPromptType == 'teleport_world' ? (var.crossWorldRemote == true ? '&f是否跨服传送到 &f' + var.crossWorldTargetName + '&f？' : '&f是否传送到世界 &f' + var.crossWorldTargetName + '&f？') : (var.crossWorldRemote == true ? '&f目标位于远程服务器 &f' + var.detailServerName + '&f，是否跨服传送？' : '&f目标位于 &f' + var.selectedWorldName + '&f，是否传送到该世界？')"
-                      fontSize: 48
-                      through: true
+                      point: ~top_left
+                      x: 40
+                      y: 82
+                      width: 680
+                      height: 44
+                      scrollAnim: none
+                      moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                      tip: ~&8悬停查看完整目的地
+                    action:
+                      enter: "self.scrollAnim = Lerp(0, 1, 4000)"
+                      leave: "self.scrollAnim = none"
+                    children:
+                      目的地布局:
+                        type: HStack
+                        attribute:
+                          height: 44
+                        children:
+                          目的地文字:
+                            type: Text
+                            attribute:
+                              texts: "var.crossWorldPromptType == 'teleport_world' ? '&8目的地 / &0' + var.crossWorldTargetName : '&8目的地 / &0' + var.selectedWorldName"
+                              fontSize: 48
+                              through: true
                   # 远程传送提示：费用在目标服落地时扣除
                   对话框远程提示:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 142
-                      texts: ~&7费用将在进入目标服务器后扣除
-                      fontSize: 32
+                      y: 180
+                      texts: ~&8费用将在进入目标服务器后扣除
+                      fontSize: 36
                       visible: "var.crossWorldRemote == true"
                       through: true
                   对话框费用:
                     type: Text
                     attribute:
                       point: ~top_center
-                      y: 112
-                      texts: "'&e传送费用: &f' + var.detailCrossWorldCostText"
+                      y: 140
+                      texts: "'&6传送费用: &0' + var.detailCrossWorldCostText"
                       fontSize: 48
                       visible: "var.crossWorldPromptType != 'teleport_world' && var.detailCrossWorldCostText != none && var.detailCrossWorldCostText != ''"
                       through: true
                   确认按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f确认
+                      tip: ~&0确认
                       point: ~bottom_left
                       x: 40
                       y: -24
@@ -3362,25 +3977,25 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~74,144,226,255
-                          hover: ~94,164,246,255
+                          normal: ~132,182,193,255
+                          hover: ~157,201,208,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       确认文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "var.crossWorldRemote == true ? '&f跨服传送' : (var.crossWorldPromptType == 'navigate' ? '&f传送并导航' : '&f传送')"
+                          texts: "var.crossWorldPromptType == 'navigate' ? '&0传送并导航' : '&0确认传送'"
                           fontSize: 36
                           through: true
                   取消按钮:
                     type: Canvas
                     attribute:
-                      tip: ~&f取消
+                      tip: ~&0取消
                       point: ~bottom_right
                       x: -40
                       y: -24
@@ -3395,18 +4010,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~52,56,64,255
-                          hover: ~72,76,84,255
+                          normal: ~225,214,187,255
+                          hover: ~243,232,204,255
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
-                            width: "self.isHovered() ? '4' : '3'"
-                            color: ~255,255,255,255
+                            width: "self.isHovered() ? 2 : 1"
+                            color: ~142,128,97,255
                       取消文字:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: ~&f取消
+                          texts: ~&0取消
                           fontSize: 36
                           through: true

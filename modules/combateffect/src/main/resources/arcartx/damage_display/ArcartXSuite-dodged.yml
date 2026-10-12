@@ -1,13 +1,16 @@
 # AXS CombatEffect — 闪避飘字样式 (dodged)
 # 说明: 闪避时显示的提示样式（damage=0，仅显示提示文字/图标）
 # 文档: https://wiki.arcartx.com/docs/arcartx_v2/2_simple/9_damage_display
+# 部署: 自动导出跳过已有文件；更新此样式需手动同步到 plugins/ArcartX/damage_display/ 的同名文件。
 
 ArcartXSuite-dodged:
-  textureWidth: 44
-  textureHeight: 66
+  # 普通伤害的 0.65 倍，保持 2:3 比例；闪避提示不抢伤害数字层级。
+  textureWidth: 26
+  textureHeight: 39
+  # 位置随机偏移（世界坐标单位）：低分散，保持零伤害提示轻量。
   randomMin: 0
-  randomMax: 0.2
-  # 闪避飘字固定 damage=0，永远不显示小数，因此不配置 decimalPlaces 与小数点贴图，且只需要将0的贴图（什么图的都行）
+  randomMax: 0.08
+  # 服务端闪避固定发送 damage=0，仅显示 0.png；保留 0-9 顺序，不配置 decimalPlaces 或小数点贴图。
   textures:
     - "damage/dodged/0.png"
     - "damage/dodged/1.png"

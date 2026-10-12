@@ -1,20 +1,108 @@
-# 掉落物交互面板（透明 Menu，捕获鼠标光标并处理按键交互）
-# 打开后通过发包给服务端，由服务端发包更新 loot_panel HUD。
-# 滚轮切换选中由 loot_panel HUD 的 wheel 触发器统一处理（依赖 var.menuOpen 守卫避免 Menu 打开时双发）
+# 战利品野外工具组 / 交互层：仅显示底边操作签，不遮挡世界与 loot_panel。
+# 物品列表、令牌与拾取点击仍由背后的 loot_panel HUD 管理。
 ui:
-  isHud: false  # 非 HUD，是独立打开的 Menu 界面
-  defaultOpen: false  # 不随启动自动打开
-  background: false  # 无背景遮罩（透明菜单）
-  escClose: true  # 按 ESC 关闭
-  through: true  # 鼠标穿透（仅捕获交互，不阻挡游戏画面）
+  isHud: false
+  defaultOpen: false
+  background: false
+  escClose: true
+  through: true
+  action:
+    load: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+# 保留关闭通知；不另发拾取 / 滚轮包，避免与 HUD 重复。
 action:
-  # 关闭菜单时通知服务端
   close: |-
     Packet.send('pickup', 'close_menu')
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
+      through: true
+    children:
+      野外操作签:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: "var.viewH - 136"
+          width: 740
+          height: 96
+          through: true
+        children:
+          皮革底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~38,43,34,236
+              shape: ~round_rect
+              radius: 6
+              through: true
+            effect:
+              stroke:
+                width: 2
+                color: ~158,137,88,255
+          装订边:
+            type: Texture
+            attribute:
+              point: ~top_left
+              width: 6
+              height: 96
+              normal: ~190,155,82,255
+              through: true
+          模式:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 22
+              y: 10
+              texts: "~&e野外拾取 &8/ &f光标模式"
+              fontSize: 36
+              through: true
+          操作说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 22
+              y: 50
+              texts: "~&7点击物品拾取 · 悬停看全名"
+              fontSize: 36
+              through: true
+          返回签:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -16
+              width: 128
+              height: 44
+              through: true
+            children:
+              羊皮纸:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~222,207,169,255
+                  shape: ~round_rect
+                  radius: 4
+                  through: true
+              返回文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&0ESC 返回"
+                  fontSize: 36
+                  through: true

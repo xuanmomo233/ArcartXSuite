@@ -1,48 +1,55 @@
-# 文件用途: 完整版在线玩家列表 TAB HUD（带玩家头像 + PING 图标）。
-# 对应 Tab 定义: tabs/demo.yml（ui-id: "tab-rich"，packet-handler: "tab"）。
-# 消费 map 形态 pack（字典列表），每个元素含 uuid / name / ping / health 字段。
-# 布局: 顶部居中毛玻璃背景 + 多列 VGrid 玩家行（头像 + 名称 + PING）。
-# 特性: 按住 TAB 显示，松开隐藏；玩家头像通过 PlayerSkin 纹理渲染。
+# tab-rich / tabs/demo.yml / packet-handler: tab
+# Portrait directory: eight dense rows per column, at most three columns on screen.
+# All entries remain available through the horizontal lane; no 120-player visual cap.
+# Navy translucent surfaces only: no full-screen texture, blur, or opaque world overlay.
 ui:
-  isHud: true  # 是否为 HUD（无界面容器，直接渲染到屏幕）
+  isHud: true
   hide:
-  - player_list  # 隐藏原版 player_list 控件
-  escClose: false  # 按 ESC 不关闭（HUD 常驻）
-  defaultOpen: true  # 模块加载时默认打开此 HUD
+  - player_list
+  escClose: false
+  defaultOpen: true
   action:
     load: |-
       var.RichTAB刷新轮次 = 0
       var.RichTAB在线人数 = 0
+      var.RichTAB单列数量 = 1
+      var.RichTAB第一列人数 = 0
       var.RichTAB显示 = false
-    # UI 加载时初始化变量
-    # 按下 TAB 键: 请求服务端刷新并计算列数
+      var.RichTAB名称位移 = 0
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
         var.RichTAB单列数量 = math.ceil(var.RichTAB在线人数 / val.RichTAB遍历.row)
-        var.RichTAB第一列人数 = math.min(var.RichTAB在线人数, 15)
+        var.RichTAB第一列人数 = math.min(var.RichTAB在线人数, 8)
         var.RichTAB显示 = true
+        var.RichTAB名称位移 = 0
+        val.RichTAB横向滑块.setDragXRatio(0)
       }
-    # 松开 TAB 键: 隐藏列表
+      // One-column steps, usable while holding TAB without opening a mouse screen.
+      if(var.RichTAB显示 && self.currentKeyPress() == "RIGHT"){
+        val.RichTAB横向滑块.setDragXRatio(math.min(1, val.RichTAB横向滑块.getDragXRatio() + 1 / math.max(1, var.RichTAB单列数量 - 3)))
+      }
+      if(var.RichTAB显示 && self.currentKeyPress() == "LEFT"){
+        val.RichTAB横向滑块.setDragXRatio(math.max(0, val.RichTAB横向滑块.getDragXRatio() - 1 / math.max(1, var.RichTAB单列数量 - 3)))
+      }
+      if(var.RichTAB显示 && self.currentKeyPress() == "DOWN"){
+        var.RichTAB名称位移 = math.min(1, var.RichTAB名称位移 + 0.25)
+      }
+      if(var.RichTAB显示 && self.currentKeyPress() == "UP"){
+        var.RichTAB名称位移 = math.max(0, var.RichTAB名称位移 - 0.25)
+      }
     keyRelease: |-
       if(self.currentKeyReleased() == "TAB"){
         var.RichTAB显示 = false
       }
   packetHandler:
-    # 完整版示例：消费 map 形态 pack（uuid / name / ping / health 等字段）。
-    # 服务端配置参考 ArcartXTab.yml 中的 tabs.demo，pack 写法为：
-    #   pack:
-    #     uuid: "{player_uuid}"
-    #     name: "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
-    #     ping: "%axstab_ping_icon%"
-    #     health: "%player_health%"
+    # Preserve map accesses, generation-qualified copies, and PlayerSkin assignment timing.
     tab: |-
       i = 0
       var.RichTAB刷新轮次 = var.RichTAB刷新轮次 + 1
       while(val.RichTAB遍历2.childrenCount() > 1){
         val.RichTAB遍历2.get(1).remove()
       }
-      //与 tab.yml 同样使用伪判断绕过 ax 控件复制 BUG
       while(i < packet.size()){
         if(val.player_row != none) {
           ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i.round())
@@ -55,111 +62,248 @@ ui:
       }
       var.RichTAB在线人数 = packet.size()
       var.RichTAB单列数量 = math.ceil(var.RichTAB在线人数 / val.RichTAB遍历.row)
-      var.RichTAB第一列人数 = math.min(var.RichTAB在线人数, 15)
-# ============ 控件定义 ============
+      var.RichTAB第一列人数 = math.min(var.RichTAB在线人数, 8)
 controls:
-  自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
-      RichTAB背景:  # 毛玻璃半透明背景面板，宽度随列数动态变化
-        type: Texture
+      RichTAB背景:
+        type: Canvas
         attribute:
           point: ~top_center
-          width: 50 + 322 * var.RichTAB单列数量  # 宽度 = 基础宽度 + 每列宽度 * 列数
-          height: 70 + 32 * var.RichTAB第一列人数  # 高度随第一列人数动态调整
-          y: 40
-          normal: ~Frosted:30;0,0,0,255  # 毛玻璃材质，30 模糊度，黑色不透明
-          visible: var.RichTAB显示  # 仅按住 TAB 时显示
-          shape: ~round_rect
-          radius: 20
-        effect:
-          stroke:  # 描边
-            width: 3
-            color: ~0,0,0,255
+          y: 24
+          width: "24 + 448 * math.min(3, math.max(1, var.RichTAB单列数量))"
+          height: "200 + 48 * math.max(1, var.RichTAB第一列人数)"
+          visible: var.RichTAB显示
+          through: true
         children:
-          标题:  # 标题文字"在线玩家（完整版）："
+          目录底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~12,24,44,164
+              shape: ~round_rect
+              radius: 8
+              through: true
+          目录规则线:
+            type: Texture
+            attribute:
+              width: "self.parent.width"
+              height: 3
+              normal: ~35,159,214,230
+              through: true
+          标题:
             type: Text
             attribute:
-              y: 23
-              x: 26
-              fontSize: 33
-              texts: "'&a在线玩家（完整版）：'"
-              lineSpace: 8
-          RichTAB遍历:  # 玩家行占位网格（VGrid），创建时预复制 118 个 ROW 模板
-            type: VGrid
+              x: 24
+              y: 16
+              fontSize: 54
+              texts: ~&f在线名册
+              through: true
+          在线人数:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 16
+              texts: "'&b' + var.RichTAB在线人数.round() + ' &7在线'"
+              fontSize: 54
+              through: true
+          # Legacy aliases retained. The old placeholder grid now supplies real column headings.
+          # row is an explicitly declared custom capacity used by the original UI actions.
+          RichTAB遍历:
+            type: HStack
             val: RichTAB遍历
             attribute:
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              row: 15  # 每列最多 15 行
-              y: 60
-              x: 26
+              x: 24
+              y: 80
+              height: 36
+              spaceBetween: 24
+              row: 8
             action:
-              # 创建时预生成 118 个占位行（对应最大在线人数），按 ID 控制可见性
               create: |-
-                for(i in range(1, 119)){
-                  ROW = self['ROW'].copy('ROW' + i.round())
-                  ROW.ID = i.round()
+                for(i in range(1, 2)){
+                  header = self['ROW'].copy('ROW' + i.round())
+                  header.ID = i.round()
                 }
             children:
-              ROW:  # 单个玩家行占位模板（灰色圆角背景），按 ID 和在线人数控制可见
-                type: Texture
+              ROW:
+                type: Canvas
                 val: ROW
                 attribute:
-                  width: 320
-                  height: 30
-                  shape: ~round_rect
-                  radius: 8
+                  width: 424
+                  height: 36
                   ID: 0.round()
-                  normal: ~95,95,95,200
-                  visible: var.RichTAB显示 && self.ID < var.RichTAB在线人数  # 仅显示在线人数范围内的行
-          RichTAB遍历2:  # 玩家内容渲染网格，packetHandler 动态复制 player_row 填充头像/名称/PING
-            type: VGrid
-            val: RichTAB遍历2
-            attribute:
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              row: 15
-              y: 60
-              x: 26
-            children:
-              player_row:  # 玩家行内容模板（Canvas），packetHandler 复制后填充头像/名称/PING
-                type: Canvas
-                val: player_row
-                attribute:
-                  width: 320
-                  height: 30
-                  x: 4
-                  y: 4
-                  visible: false  # 默认隐藏，packetHandler 中设为 true
+                  visible: "self.ID < math.min(3, math.max(1, var.RichTAB单列数量))"
+                  through: true
                 children:
-                  头部:  # 玩家头像（Texture），normal 设为 PlayerSkin:<uuid>
-                    type: Texture
-                    attribute:
-                      width: 28
-                      height: 28
-                      x: 0
-                      y: 0
-                      shape: ~round_rect
-                      radius: 4
-                      normal: "~120,120,120,255"
-                  名称文字:  # 玩家名称（含 PVP/vanish 颜色前缀）
+                  玩家标题:
                     type: Text
                     attribute:
-                      x: 36
-                      y: 0
-                      fontSize: 28
-                      texts: "~none"
-                      lineSpace: 4
-                  ping_text:  # PING 延迟图标（由 %axstab_ping_icon% 渲染）
+                      x: 56
+                      texts: ~&7玩家
+                      fontSize: 36
+                      through: true
+                  信号标题:
                     type: Text
                     attribute:
-                      x: 250
-                      y: 0
-                      fontSize: 28
-                      texts: "~none"
-                      lineSpace: 4
+                      point: ~top_right
+                      x: -12
+                      texts: ~&7PING
+                      fontSize: 36
+                      through: true
+          名册滚动区:
+            type: Scroll
+            attribute:
+              x: 24
+              y: 124
+              width: "448 * math.min(3, math.max(1, var.RichTAB单列数量)) - 24"
+              height: "48 * math.max(1, var.RichTAB第一列人数)"
+              moveX: val.RichTAB横向滑块.getDragXRatio()
+            action:
+              wheel: |-
+                val.RichTAB横向滑块.setDragXRatio(math.max(0, math.min(1, self.moveX - self.wheelValue / math.max(1, var.RichTAB单列数量 - 3))))
+            children:
+              名册画布:
+                type: Canvas
+                attribute:
+                  width: "448 * math.max(1, var.RichTAB单列数量) - 24"
+                  height: "48 * math.max(1, var.RichTAB第一列人数)"
+                  through: true
+                children:
+                  RichTAB遍历2:
+                    type: VGrid
+                    val: RichTAB遍历2
+                    attribute:
+                      spaceBetweenY: 4
+                      spaceBetweenX: 24
+                      row: 8
+                    children:
+                      player_row:
+                        type: Canvas
+                        val: player_row
+                        attribute:
+                          width: 424
+                          height: 44
+                          visible: false
+                          through: true
+                        children:
+                          行底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              normal: ~21,37,57,164
+                              through: true
+                          行标尺:
+                            type: Texture
+                            attribute:
+                              width: 2
+                              height: 44
+                              normal: ~35,159,214,190
+                              through: true
+                          头部:
+                            type: Texture
+                            attribute:
+                              point: ~middle_left
+                              x: 10
+                              width: 32
+                              height: 32
+                              normal: ~120,120,120,255
+                              through: true
+                          # The original packet write still addresses this direct child.
+                          名称文字:
+                            type: Scroll
+                            attribute:
+                              x: 56
+                              y: 4
+                              width: 244
+                              height: 36
+                              texts: ~none
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : var.RichTAB名称位移"
+                            action:
+                              enter: "self.scrollAnim = Lerp(0, 1, 3000)"
+                              leave: "self.scrollAnim = none"
+                            children:
+                              名称布局:
+                                type: HStack
+                                attribute:
+                                  height: 36
+                                children:
+                                  玩家名:
+                                    type: Text
+                                    attribute:
+                                      texts: self.parent.parent.texts
+                                      fontSize: 36
+                                      through: true
+                          信号分界:
+                            type: Texture
+                            attribute:
+                              x: 316
+                              y: 8
+                              width: 1
+                              height: 28
+                              normal: ~137,167,187,140
+                              through: true
+                          ping_text:
+                            type: Text
+                            attribute:
+                              point: ~middle_right
+                              x: -12
+                              fontSize: 36
+                              texts: ~none
+                              through: true
+          空名册:
+            type: Text
+            attribute:
+              x: 80
+              y: 128
+              texts: "var.RichTAB刷新轮次 == 0 ? '&7正在同步名册' : '&7暂无在线条目'"
+              fontSize: 36
+              visible: var.RichTAB在线人数 == 0
+              through: true
+          横向滑轨:
+            type: Texture
+            attribute:
+              x: 24
+              y: "136 + 48 * math.max(1, var.RichTAB第一列人数)"
+              width: "self.parent.width - 48"
+              height: 6
+              normal: ~92,121,145,170
+              visible: var.RichTAB单列数量 > 3
+              through: true
+          横向滑块:
+            type: Texture
+            val: RichTAB横向滑块
+            attribute:
+              x: 24
+              y: "136 + 48 * math.max(1, var.RichTAB第一列人数)"
+              width: 120
+              height: 6
+              maxDragX: "self.parent.width - 168"
+              normal: ~35,159,214,230
+              hover: ~188,210,224,230
+              visible: var.RichTAB单列数量 > 3
+          浏览提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -16
+              texts: "var.RichTAB单列数量 > 3 ? '&bLEFT / RIGHT &7分栏浏览' : '&7UP / DOWN 浏览长名'"
+              fontSize: 36
+              through: true
+          收起提示:
+            type: Text
+            attribute:
+              point: ~bottom_right
+              x: -24
+              y: -16
+              texts: "var.RichTAB单列数量 > 3 ? '&7UP / DOWN 浏览长名' : '&7松开 TAB 收起'"
+              fontSize: 36
+              visible: var.RichTAB单列数量 > 1
+              through: true

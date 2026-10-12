@@ -1,13 +1,5 @@
-# AXS BattlePass 主界面（总览）
-# 打开方式: /bp open 或 Packet 触发
-# 数据交互: packetHandler init
-# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/奖励/任务）+ 内容区
-# 视觉规范:
-#   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片 255,255,255,125  卡片浮起 255,255,255,90  描边 255,255,255,165
-#   主色（琥珀金）232,180,90   已激活 124,196,142
-#   档位色: 免费 196,200,208 / 高级 232,180,90 / 典藏 186,140,232
-
+# Season expedition journal · 01 / cover and current route
+# Indigo ink / ochre chapter rail / cream reward paper. Design viewport: 1920x1080.
 ui:
   isHud: false
   background: false
@@ -19,21 +11,6 @@ ui:
   level: 8
   itemSize: 16
   packetHandler:
-    # packetHandler: init
-    # 界面初始化时接收服务端数据包，将包字段写入 UI 变量
-    # 包字段:
-    #   - packetId: 包标识符，用于后续 Packet.send 回传
-    #   - seasonName: 当前赛季名称
-    #   - currentLevel: 玩家当前战令等级
-    #   - maxLevel: 赛季最大等级
-    #   - currentXp: 当前等级已获得经验值
-    #   - xpPerLevel: 当前等级升下一级所需经验值（按成长曲线动态计算）
-    #   - xpNeeded: 升级还需经验值
-    #   - premiumUnlocked: 是否已解锁高级版（premium）
-    #   - deluxeUnlocked: 是否已解锁豪华版（deluxe）
-    #   - tier: 当前档位标识（FREE / PREMIUM / DELUXE）
-    #   - tierDisplay: 档位显示文本（含颜色代码）
-    #   - progressRatio: 当前等级进度比例（0~1）
     init: |-
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
@@ -57,10 +34,6 @@ ui:
       var.xpNeeded = 1000
       var.xpPerLevel = 1000
       var.packetId = 'AXS_BATTLEPASS'
-      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
-      // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
-      // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
-      // contentW = 内容区宽度（左 372 右 48 边距），cardW = 内容区内并排两张卡的单张宽度
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -71,7 +44,6 @@ ui:
       var.cardW = (var.contentW - 96) / 2
     open: |-
       Packet.send(var.packetId, 'refresh')
-    # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -81,943 +53,217 @@ ui:
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
       var.cardW = (var.contentW - 96) / 2
-
-# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
-  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
   全屏玻璃底:
     type: Texture
-    attribute:
-      point: ~stretch_all
-      through: true
-      normal: ~Frosted:24;30,32,38,110
-  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
-  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
-  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边；
-  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配，顶栏与内容区同步铺满
+    attribute: {point: ~stretch_all, normal: '~Frosted:16;24,29,51,235'}
   自适应全局布局:
     type: Adaptive
-    attribute:
-      point: ~top_center
-      width: 1920
-      height: 1080
+    attribute: {point: ~top_center, width: 1920, height: 1080}
     children:
-      # ── 顶栏 ───────────────────────────────────────────
-      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
       顶栏:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "-var.offX"
-          width: "var.viewW"
-          height: 96
+        attribute: {point: ~top_left, x: '-var.offX', width: var.viewW, height: 96}
         children:
           顶栏底:
             type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-          顶栏底线:
-            type: Texture
-            attribute:
-              point: ~horizontal_stretch_bottom
-              height: 1
-              normal: ~62,66,74,210
-          标题色块:
-            type: Texture
-            attribute:
-              point: ~middle_left
-              x: 48
-              width: 6
-              height: 36
-              normal: ~232,180,90,255
-              shape: ~round_rect
-              radius: 3
+            attribute: {point: ~stretch_all, normal: '~29,35,62,255'}
           标题:
             type: Text
-            attribute:
-              point: ~middle_left
-              x: 68
-              texts: "~&f战令"
-              fontSize: 48
-          标题竖线:
-            type: Texture
-            attribute:
-              point: ~middle_left
-              x: 168
-              width: 1
-              height: 30
-              normal: ~62,66,74,210
+            attribute: {point: ~middle_left, x: 48, texts: '~&f战令 / 远征手记', fontSize: 48, through: true}
           赛季名:
             type: Text
-            attribute:
-              point: ~middle_left
-              x: 188
-              texts: "'&f' + var.seasonName"
-              fontSize: 36
-          # 右侧：档位徽章 + 关闭
-          档位徽章:
-            type: Canvas
-            attribute:
-              point: ~middle_right
-              x: -112
-              width: 148
-              height: 38
-            children:
-              徽章底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 19
-                effect:
-                  stroke:
-                    width: 3
-                    color: "var.deluxeUnlocked == 'true' ? '186,140,232,230' : (var.premiumUnlocked == 'true' ? '232,180,90,230' : '255,255,255,230')"
-              徽章圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 12
-                  height: 12
-                  normal: "var.deluxeUnlocked == 'true' ? '186,140,232,255' : (var.premiumUnlocked == 'true' ? '232,180,90,255' : '196,200,208,255')"
-                  shape: ~circle
-              徽章文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 34
-                  texts: "var.tierDisplay"
-                  fontSize: 32
+            attribute: {point: ~middle_left, x: 540, texts: "'&e' + var.seasonName", fontSize: 36, through: true, limit: 24}
           关闭按钮:
             type: Canvas
-            attribute:
-              point: ~middle_right
-              x: -40
-              width: 40
-              height: 40
+            attribute: {point: ~middle_right, x: -48, width: 160, height: 52}
             action:
-              clickLeft: |-
-                Screen.close()
+              clickLeft: Screen.close()
             children:
               关闭背景:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+                attribute: {point: ~stretch_all, normal: '~44,53,88,255', hover: '~62,73,111,255', shape: ~round_rect, radius: 6, through: true}
               关闭文字:
                 type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 40
-                  texts: "~&f✕"
-                  fontSize: 32
-                  through: true
-
-      # ── 左侧导航 ───────────────────────────────────────
+                attribute: {point: ~middle_center, texts: '~&f合上 / ESC', fontSize: 36, through: true}
       左侧导航:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 120
-          width: 300
-          height: "var.viewH - 144"
+        attribute: {point: ~top_left, x: '48 - var.offX', y: 120, width: 300, height: 'var.viewH - 144'}
         children:
           导航底:
             type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          # 当前页：总览
+            attribute: {point: ~stretch_all, normal: '~187,140,66,255', shape: ~round_rect, radius: 8}
+          目录标题:
+            type: Text
+            attribute: {point: ~top_left, x: 24, y: 26, texts: '~&0远征目录', fontSize: 48, through: true}
+          目录副题:
+            type: Text
+            attribute: {point: ~top_left, x: 24, y: 84, texts: '~&0SEASON JOURNAL', fontSize: 36, through: true}
           导航总览:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 18
-              width: 272
-              height: 58
+            attribute: {point: ~top_left, x: 16, y: 154, width: 268, height: 72}
             children:
               总览底:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~232,180,90,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              总览高亮条:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 8
-                  width: 4
-                  height: 28
-                  normal: ~232,180,90,255
-                  shape: ~round_rect
-                  radius: 2
+                attribute: {point: ~stretch_all, normal: '~32,40,70,255', shape: ~round_rect, radius: 6, through: true}
               总览文字:
                 type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&0总览"
-                  fontSize: 36
+                attribute: {point: ~middle_left, x: 20, texts: '~&f01 / 行程总览', fontSize: 36, through: true}
           导航奖励:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 84
-              width: 272
-              height: 58
+            attribute: {point: ~top_left, x: 16, y: 238, width: 268, height: 72}
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_rewards')
+              clickLeft: Packet.send(var.packetId, 'open_rewards')
             children:
               奖励底:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+                attribute: {point: ~stretch_all, normal: '~207,166,97,255', hover: '~239,223,190,255', shape: ~round_rect, radius: 6, through: true}
               奖励文字:
                 type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f奖励"
-                  fontSize: 36
-                  through: true
+                attribute: {point: ~middle_left, x: 20, texts: '~&0第二章 / 奖励', fontSize: 36, through: true}
           导航任务:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 150
-              width: 272
-              height: 58
+            attribute: {point: ~top_left, x: 16, y: 322, width: 268, height: 72}
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_tasks')
+              clickLeft: Packet.send(var.packetId, 'open_tasks')
             children:
               任务底:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+                attribute: {point: ~stretch_all, normal: '~207,166,97,255', hover: '~239,223,190,255', shape: ~round_rect, radius: 6, through: true}
               任务文字:
                 type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f任务"
-                  fontSize: 36
-                  through: true
+                attribute: {point: ~middle_left, x: 20, texts: '~&0第三章 / 任务', fontSize: 36, through: true}
           导航结算:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
+            attribute: {point: ~top_left, x: 16, y: 406, width: 268, height: 72}
             action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_settlement')
+              clickLeft: Packet.send(var.packetId, 'open_settlement')
             children:
               结算底:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+                attribute: {point: ~stretch_all, normal: '~207,166,97,255', hover: '~239,223,190,255', shape: ~round_rect, radius: 6, through: true}
               结算文字:
                 type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f结算"
-                  fontSize: 36
-                  through: true
-          导航分隔线:
+                attribute: {point: ~middle_left, x: 20, texts: '~&0终章 / 结算', fontSize: 36, through: true}
+          装订线:
             type: Texture
-            attribute:
-              point: ~top_left
-              x: 18
-              y: 298
-              width: 264
-              height: 2
-              normal: ~255,255,255,230
-          档位区标题:
+            attribute: {point: ~top_left, x: 24, y: 522, width: 252, height: 2, normal: '~91,67,35,255', through: true}
+          旅程提示:
             type: Text
             attribute:
               point: ~top_left
-              x: 20
-              y: 314
-              texts: "~&f档位"
-              fontSize: 30
-          # 免费档
-          免费档行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 348
-              width: 272
-              height: 48
-            children:
-              免费底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              免费圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: ~196,200,208,255
-                  shape: ~circle
-              免费文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 32
-                  texts: "~&f免费"
-                  fontSize: 32
-              免费状态:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -16
-                  texts: "~&a已激活"
-                  fontSize: 30
-          # 高级档
-          高级档行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 404
-              width: 272
-              height: 48
-            children:
-              高级底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.premiumUnlocked == 'true' ? '150,130,90,210' : '62,66,74,210'"
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: "var.premiumUnlocked == 'true' ? '232,180,90,230' : '255,255,255,230'"
-              高级圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: "var.premiumUnlocked == 'true' ? '232,180,90,255' : '196,200,208,200'"
-                  shape: ~circle
-              高级文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 32
-                  texts: "var.premiumUnlocked == 'true' ? '&f高级' : '&f高级'"
-                  fontSize: 32
-              高级状态:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -16
-                  texts: "var.premiumUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
-                  fontSize: 30
-          # 典藏档
-          典藏档行:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 460
-              width: 272
-              height: 48
-            children:
-              典藏底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: "var.deluxeUnlocked == 'true' ? '130,110,160,210' : '62,66,74,210'"
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: "var.deluxeUnlocked == 'true' ? '186,140,232,230' : '255,255,255,230'"
-              典藏圆点:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 14
-                  width: 10
-                  height: 10
-                  normal: "var.deluxeUnlocked == 'true' ? '186,140,232,255' : '196,200,208,200'"
-                  shape: ~circle
-              典藏文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 32
-                  texts: "var.deluxeUnlocked == 'true' ? '&f典藏' : '&f典藏'"
-                  fontSize: 32
-              典藏状态:
-                type: Text
-                attribute:
-                  point: ~middle_right
-                  x: -16
-                  texts: "var.deluxeUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
-                  fontSize: 30
-
-      # ── 内容区（总览）───────────────────────────────────
+              x: 24
+              y: 556
+              texts: ['~&0任务累积经验', '~&0等级开启奖励', '~&0终章记录收获']
+              fontSize: 36
+              through: true
+          页码:
+            type: Text
+            attribute: {point: ~bottom_left, x: 24, y: -32, texts: '~&001 / 04 · 总览', fontSize: 36, through: true}
       内容区:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "372 - var.offX"
-          y: 120
-          width: "var.contentW"
-          height: "var.viewH - 144"
+        attribute: {point: ~top_left, x: '372 - var.offX', y: 120, width: var.contentW, height: 'var.viewH - 144'}
         children:
           内容底:
             type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
+            attribute: {point: ~stretch_all, normal: '~239,232,215,255', shape: ~round_rect, radius: 8}
           页标题:
             type: Text
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 26
-              texts: "~&f赛季总览"
-              fontSize: 40
+            attribute: {point: ~top_left, x: 36, y: 28, texts: '~&0这一季，走到哪一站？', fontSize: 64, through: true}
           页标题说明:
             type: Text
-            attribute:
-              point: ~top_left
-              x: 176
-              y: 32
-              texts: "~&f累积经验提升等级，解锁各档位奖励"
-              fontSize: 30
-
-          # 等级大卡
+            attribute: {point: ~top_left, x: 38, y: 102, texts: '~&8记录当前等级，规划下一段远征。', fontSize: 36, through: true}
           等级卡片:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 84
-              width: "var.cardW"
-              height: 320
+            attribute: {point: ~top_left, x: 32, y: 164, width: 'var.contentW - 64', height: 280}
             children:
               等级卡底:
                 type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
+                attribute: {point: ~stretch_all, normal: '~32,40,70,255', shape: ~round_rect, radius: 8}
               等级标签:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 24
-                  texts: "~&f当前等级"
-                  fontSize: 32
+                attribute: {point: ~top_left, x: 32, y: 24, texts: '~&e当前路标 / LEVEL', fontSize: 36, through: true}
               等级数字:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 26
-                  y: 54
-                  texts: "'&fLv.' + var.currentLevel"
-                  fontSize: 88
+                attribute: {point: ~top_left, x: 32, y: 74, texts: "'&fLv.' + var.currentLevel", fontSize: 100, through: true}
               等级上限:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 200
-                  y: 84
-                  texts: "'&f/ ' + var.maxLevel"
-                  fontSize: 44
+                attribute: {point: ~top_left, x: 360, y: 112, texts: "'&7终点 / ' + var.maxLevel", fontSize: 48, through: true}
               经验文本:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 172
-                  width: "var.cardW - 60"
-                  texts: "'&f经验 &f' + var.currentXp + ' &f/ ' + var.xpPerLevel"
-                  fontSize: 34
+                attribute: {point: ~top_left, x: 'var.contentW * 0.52', y: 32, texts: "'&f本级经验 / ' + var.currentXp + ' / ' + var.xpPerLevel", fontSize: 36, through: true}
               还需经验:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 206
-                  width: "var.cardW - 60"
-                  texts: "'&f升级还需 &e' + var.xpNeeded + ' &f经验'"
-                  fontSize: 32
+                attribute: {point: ~top_left, x: 'var.contentW * 0.52', y: 88, texts: "(type.toNumber(var.maxLevel) > 0 && type.toNumber(var.currentLevel) >= type.toNumber(var.maxLevel)) ? '&e已抵达本季终点' : '&e距下一站还需 ' + var.xpNeeded + ' XP'", fontSize: 48, through: true}
               进度百分比:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: "var.cardW - 96"
-                  y: 246
-                  texts: "'&e' + ((type.toNumber(var.progressRatio) * 100).round()) + '%'"
-                  fontSize: 32
+                attribute: {point: ~top_right, x: -32, y: 164, texts: "'&e' + (type.toNumber(var.progressRatio) * 100).round() + '%'", fontSize: 36, through: true}
               进度条容器:
                 type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 254
-                  width: "var.cardW - 140"
-                  height: 8
+                attribute: {point: ~top_left, x: 32, y: 220, width: 'var.contentW - 128', height: 12}
                 children:
                   进度条背景:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 4
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,255,255,165
+                    attribute: {point: ~stretch_all, normal: '~68,78,113,255', shape: ~round_rect, radius: 6, through: true}
                   进度条填充:
                     type: Texture
-                    attribute:
-                      point: ~top_left
-                      width: "(type.toNumber(var.progressRatio) > 1 ? 1 : type.toNumber(var.progressRatio)) * (var.cardW - 140)"
-                      height: 8
-                      normal: ~232,180,90,255
-                      shape: ~round_rect
-                      radius: 4
-
-          # 档位权益卡
-          档位卡片:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: "64 + var.cardW"
-              y: 84
-              width: "var.cardW"
-              height: 320
-            children:
-              档位卡底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              档位卡标题:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 24
-                  texts: "~&f档位权益"
-                  fontSize: 36
-              免费权益:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 24
-                  y: 72
-                  width: "var.cardW - 48"
-                  height: 66
-                children:
-                  免费权益底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  免费权益色条:
-                    type: Texture
-                    attribute:
-                      point: ~middle_left
-                      x: 10
-                      width: 4
-                      height: 34
-                      normal: ~196,200,208,255
-                      shape: ~round_rect
-                      radius: 2
-                  免费权益名:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 12
-                      texts: "~&f免费档"
-                      fontSize: 34
-                  免费权益说明:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 40
-                      texts: "~&f所有玩家默认享有的基础奖励"
-                      fontSize: 28
-                  免费权益状态:
-                    type: Text
-                    attribute:
-                      point: ~middle_right
-                      x: -20
-                      texts: "~&a已激活"
-                      fontSize: 30
-              高级权益:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 24
-                  y: 152
-                  width: "var.cardW - 48"
-                  height: 66
-                children:
-                  高级权益底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.premiumUnlocked == 'true' ? '150,130,90,210' : '62,66,74,210'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.premiumUnlocked == 'true' ? '232,180,90,230' : '255,255,255,230'"
-                  高级权益色条:
-                    type: Texture
-                    attribute:
-                      point: ~middle_left
-                      x: 10
-                      width: 4
-                      height: 34
-                      normal: "var.premiumUnlocked == 'true' ? '232,180,90,255' : '196,200,208,210'"
-                      shape: ~round_rect
-                      radius: 2
-                  高级权益名:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 12
-                      texts: "var.premiumUnlocked == 'true' ? '&f高级档' : '&f高级档'"
-                      fontSize: 34
-                  高级权益说明:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 40
-                      texts: "~&f每个等级额外一份奖励"
-                      fontSize: 28
-                  高级权益状态:
-                    type: Text
-                    attribute:
-                      point: ~middle_right
-                      x: -20
-                      texts: "var.premiumUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
-                      fontSize: 30
-              典藏权益:
-                type: Canvas
-                attribute:
-                  point: ~top_left
-                  x: 24
-                  y: 232
-                  width: "var.cardW - 48"
-                  height: 66
-                children:
-                  典藏权益底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: "var.deluxeUnlocked == 'true' ? '130,110,160,210' : '62,66,74,210'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.deluxeUnlocked == 'true' ? '186,140,232,230' : '255,255,255,230'"
-                  典藏权益色条:
-                    type: Texture
-                    attribute:
-                      point: ~middle_left
-                      x: 10
-                      width: 4
-                      height: 34
-                      normal: "var.deluxeUnlocked == 'true' ? '186,140,232,255' : '196,200,208,210'"
-                      shape: ~round_rect
-                      radius: 2
-                  典藏权益名:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 12
-                      texts: "var.deluxeUnlocked == 'true' ? '&f典藏档' : '&f典藏档'"
-                      fontSize: 34
-                  典藏权益说明:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 40
-                      texts: "~&f专属奖励与稀有道具"
-                      fontSize: 28
-                  典藏权益状态:
-                    type: Text
-                    attribute:
-                      point: ~middle_right
-                      x: -20
-                      texts: "var.deluxeUnlocked == 'true' ? '&a已激活' : '&f未解锁'"
-                      fontSize: 30
-
-          # 快捷入口
+                    attribute: {point: ~top_left, width: '(type.toNumber(var.progressRatio) > 1 ? 1 : type.toNumber(var.progressRatio)) * (var.contentW - 128)', height: 12, normal: '~205,163,84,255', shape: ~round_rect, radius: 6, through: true}
           快捷入口:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 436
-              width: "var.contentW - 64"
-              height: 200
+            attribute: {point: ~top_left, x: 32, y: 480, width: var.cardW, height: 324}
             children:
-              快捷底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
               快捷标题:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 22
-                  texts: "~&f继续推进"
-                  fontSize: 36
+                attribute: {point: ~top_left, x: 8, y: 0, texts: '~&001 / 继续行程', fontSize: 54, through: true}
               快捷说明:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 60
-                  texts: "~&f完成每日与每周任务积累经验，等级达标后到奖励页领取"
-                  fontSize: 30
-              # 主按钮：查看奖励
-              奖励按钮:
-                type: Canvas
-                attribute:
-                  point: ~bottom_left
-                  x: 28
-                  y: -24
-                  width: 260
-                  height: 56
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'open_rewards')
-                children:
-                  奖励按钮底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~232,180,90,235
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '245,205,130,255' : '245,205,130,230'"
-                  奖励按钮文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 260
-                      texts: "~&0领取奖励"
-                      fontSize: 34
-                      through: true
-              # 次按钮：任务列表
+                attribute: {point: ~top_left, x: 8, y: 70, texts: ['~&8每日、每周、赛季任务带来经验。', '~&8抵达等级路标后，领取旅途奖励。'], fontSize: 36, through: true}
               任务按钮:
                 type: Canvas
-                attribute:
-                  point: ~bottom_left
-                  x: 308
-                  y: -24
-                  width: 260
-                  height: 56
+                attribute: {point: ~top_left, x: 8, y: 180, width: 'var.cardW - 16', height: 62}
                 action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'open_tasks')
+                  clickLeft: Packet.send(var.packetId, 'open_tasks')
                 children:
                   任务按钮底:
                     type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+                    attribute: {point: ~stretch_all, normal: '~32,40,70,255', hover: '~55,65,102,255', shape: ~round_rect, radius: 6, through: true}
                   任务按钮文字:
                     type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 260
-                      texts: "~&f任务列表"
-                      fontSize: 34
-                      through: true
-
-          # 玩法说明
-          玩法说明:
+                    attribute: {point: ~middle_left, x: 24, texts: '~&f下一步 / 查看任务路线 >', fontSize: 36, through: true}
+              奖励按钮:
+                type: Canvas
+                attribute: {point: ~top_left, x: 8, y: 256, width: 'var.cardW - 16', height: 62}
+                action:
+                  clickLeft: Packet.send(var.packetId, 'open_rewards')
+                children:
+                  奖励按钮底:
+                    type: Texture
+                    attribute: {point: ~stretch_all, normal: '~213,177,109,255', hover: '~227,194,130,255', shape: ~round_rect, radius: 6, through: true}
+                  奖励按钮文字:
+                    type: Text
+                    attribute: {point: ~middle_left, x: 24, texts: '~&0已到达 / 打开奖励路标 >', fontSize: 36, through: true}
+          档位卡片:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 664
-              width: "var.contentW - 64"
-              height: "var.viewH - 840"
+            attribute: {point: ~top_left, x: '64 + var.cardW', y: 480, width: var.cardW, height: 324}
             children:
-              说明底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~62,66,74,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              说明标题:
+              档位卡标题:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 22
-                  texts: "~&f玩法说明"
-                  fontSize: 36
-              说明行一:
+                attribute: {point: ~top_left, x: 8, y: 0, texts: '~&002 / 通行档位', fontSize: 54, through: true}
+              档位徽章:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 66
-                  width: "var.contentW - 120"
-                  texts: "~&f• 完成任务获得经验，经验满一格即提升一级"
-                  fontSize: 30
-              说明行二:
+                attribute: {point: ~top_right, x: -12, y: 12, texts: var.tierDisplay, fontSize: 36, through: true}
+              免费权益:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 100
-                  width: "var.contentW - 120"
-                  texts: "~&f• 每个等级对应免费 / 高级 / 典藏三档奖励，已解锁档位可在奖励页领取"
-                  fontSize: 30
-              说明行三:
+                attribute: {point: ~top_left, x: 8, y: 82, texts: ['~&0免费 / 已激活', '~&8基础奖励，所有玩家默认享有'], fontSize: 36, through: true}
+              高级权益:
                 type: Text
-                attribute:
-                  point: ~top_left
-                  x: 28
-                  y: 134
-                  width: "var.contentW - 120"
-                  texts: "~&f• 未领取的奖励会保留至赛季结束，建议及时领取"
-                  fontSize: 30
+                attribute: {point: ~top_left, x: 8, y: 164, texts: ["var.premiumUnlocked == 'true' ? '&0高级 / 已激活' : '&0高级 / 未解锁'", '~&8每个等级额外一份奖励'], fontSize: 36, through: true}
+              典藏权益:
+                type: Text
+                attribute: {point: ~top_left, x: 8, y: 246, texts: ["var.deluxeUnlocked == 'true' ? '&0典藏 / 已激活' : '&0典藏 / 未解锁'", '~&8专属奖励与稀有道具'], fontSize: 36, through: true}
+          装订页脚线:
+            type: Texture
+            attribute: {point: ~bottom_left, x: 40, y: -78, width: 'var.contentW - 80', height: 2, normal: '~198,185,157,255', through: true}
+          玩法说明:
+            type: Text
+            attribute: {point: ~bottom_left, x: 40, y: -30, texts: '~&8旅途备忘 / 经验满格提升等级；已解锁档位可领奖，建议及时领取。', fontSize: 36, through: true}

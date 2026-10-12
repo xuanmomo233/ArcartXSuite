@@ -1,12 +1,15 @@
 # AXS CombatEffect — 劣势克制飘字样式 (disadvantaged)
 # 说明: 元素克制（劣势）时显示的伤害数字样式
 # 文档: https://wiki.arcartx.com/docs/arcartx_v2/2_simple/9_damage_display
+# 部署: 自动导出跳过已有文件；更新此样式需手动同步到 plugins/ArcartX/damage_display/ 的同名文件。
 
 ArcartXSuite-disadvantaged:
-  textureWidth: 44
-  textureHeight: 66
+  # 普通伤害的 0.8 倍，保持 2:3 比例；劣势数字较弱但仍清晰。
+  textureWidth: 32
+  textureHeight: 48
+  # 位置随机偏移（世界坐标单位）：收紧分散，减少弱伤害提示干扰。
   randomMin: 0
-  randomMax: 0.2
+  randomMax: 0.10
   # 小数位数：控制伤害数字显示几位小数。
   # 0 = 仅整数（小数部分被截断/舍入）；1 = 显示 1 位小数（如 12.5）；2 = 显示 2 位小数（如 12.50）。
   # 当此值 > 0 时，客户端会从 textures 列表第 11 张取小数点贴图渲染。

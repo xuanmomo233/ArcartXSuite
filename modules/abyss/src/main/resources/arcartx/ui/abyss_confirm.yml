@@ -1,6 +1,4 @@
-﻿# AXS 资源说明
-# 用途: Abyss 进本确认框 —— 副本信息确认 + 进入/取消
-# 前置依赖: ArcartX；Abyss 模块启用后自动注册导出。
+# Abyss / deployment order: review the destination, entry cost and time limit before entering.
 ui:
   isHud: false
   defaultOpen: false
@@ -11,9 +9,6 @@ ui:
   screenScale: true
   show: true
   packetHandler:
-    # packetHandler: init
-    # 包字段: packetId/action_token/dungeonId/dungeonName/difficulty/desc0..2
-    #         minPlayers/maxPlayers/staminaCost/moneyCost/cooldown/timeLimit
     init: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']
@@ -45,8 +40,6 @@ ui:
       var.moneyCost = 0
       var.cooldown = 0
       var.timeLimit = 0
-      var.accent = '186,140,232,255'
-      var.accentDim = '96,80,140,190'
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
 controls:
@@ -54,7 +47,7 @@ controls:
     type: Texture
     attribute:
       point: ~stretch_all
-      normal: ~Frosted:30;16,12,30,220
+      normal: ~Frosted:26;7,9,10,225
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -66,135 +59,197 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 560
-          height: 520
+          width: 1060
+          height: 664
         children:
-          面板背景:
+          铁板底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;24,19,40,240
-              shape: ~round_rect
-              radius: 16
+              normal: ~20,23,24,252
+              through: true
             effect:
               stroke:
-                width: 2
-                color: var.accentDim
-          标题标线:
+                width: 3
+                color: ~108,85,64,255
+          顶部危险带:
             type: Texture
             attribute:
-              point: ~top_center
-              y: 34
-              width: 26
-              height: 3
-              normal: var.accent
+              width: 1060
+              height: 10
+              normal: ~147,55,43,255
+              through: true
+          档案号:
+            type: Text
+            attribute:
+              x: 52
+              y: 35
+              texts: ~&6A B Y S S   /   DEPLOYMENT ORDER   02
+              fontSize: 36
               through: true
           标题:
             type: Text
             attribute:
-              point: ~top_center
-              y: 52
+              x: 52
+              y: 88
               texts: "'&f' + var.dungeonName"
-              fontSize: 64
-              limit: 12
+              fontSize: 72
+              limit: 16
               through: true
           难度:
             type: Text
             attribute:
-              point: ~top_center
-              y: 138
-              texts: "'&7难度  &f' + var.difficulty"
-              fontSize: 36
+              x: 56
+              y: 166
+              texts: "'&c危险等级  /  &f' + var.difficulty"
+              fontSize: 48
               through: true
-          条件行:
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 196
-              fontSize: 36
-              through: true
-              texts:
-                - "'&8人数  &f' + var.minPlayers.round() + '-' + var.maxPlayers.round() + '人   &8体力  &b' + var.staminaCost.round()"
-                - "'&8门票  &e' + var.moneyCost.round() + '   &8限时  &f' + var.timeLimit.round() + 's   &8冷却  &f' + var.cooldown.round() + 's'"
-          分隔线:
+          分隔竖线:
             type: Texture
             attribute:
-              point: ~top_center
-              y: 296
-              width: 440
-              height: 1
-              normal: ~96,80,140,120
+              x: 646
+              y: 220
+              width: 2
+              height: 290
+              normal: ~106,83,61,225
+              through: true
+          左栏标题:
+            type: Text
+            attribute:
+              x: 54
+              y: 228
+              texts: ~&6任务情报  /  ROUTE INTEL
+              fontSize: 36
+              through: true
+          简报底:
+            type: Texture
+            attribute:
+              x: 50
+              y: 284
+              width: 560
+              height: 226
+              normal: ~29,32,32,255
               through: true
           描述:
             type: Text
             attribute:
-              point: ~top_center
-              y: 316
+              x: 70
+              y: 306
               fontSize: 36
+              limit: 28
               through: true
               texts:
-                - "'&7' + var.desc0"
+                - "'&f' + var.desc0"
                 - "'&7' + var.desc1"
                 - "'&7' + var.desc2"
-          操作区:
-            type: HStack
+          右栏标题:
+            type: Text
             attribute:
-              point: ~bottom_center
-              y: -36
-              height: 54
-              spaceBetween: 24
+              x: 686
+              y: 228
+              texts: ~&6出发前核查  /  REQUIREMENTS
+              fontSize: 36
+              through: true
+          队伍条件:
+            type: Text
+            attribute:
+              x: 688
+              y: 294
+              texts: "'&7队伍人数    &f' + var.minPlayers.round() + ' - ' + var.maxPlayers.round() + ' 人'"
+              fontSize: 36
+              through: true
+          体力条件:
+            type: Text
+            attribute:
+              x: 688
+              y: 352
+              texts: "'&7体力消耗    &6' + var.staminaCost.round()"
+              fontSize: 36
+              through: true
+          门票条件:
+            type: Text
+            attribute:
+              x: 688
+              y: 410
+              texts: "'&7入场门票    &6' + var.moneyCost.round()"
+              fontSize: 36
+              through: true
+          时限条件:
+            type: Text
+            attribute:
+              x: 688
+              y: 468
+              texts: "'&7行动时限    &f' + var.timeLimit.round() + 's    &8冷却 &f' + var.cooldown.round() + 's'"
+              fontSize: 36
+              through: true
+          底部分隔:
+            type: Texture
+            attribute:
+              x: 50
+              y: 544
+              width: 960
+              height: 2
+              normal: ~107,70,50,225
+              through: true
+          风险提示:
+            type: Text
+            attribute:
+              x: 54
+              y: 580
+              texts: ~&c注意 / 部署后将消耗入场资源
+              fontSize: 36
+              through: true
+          进入按钮:
+            type: Canvas
+            attribute:
+              x: 640
+              y: 574
+              width: 210
+              height: 62
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'enter', var.dungeonId, var.actionToken)
+                Screen.close()
             children:
-              进入按钮:
-                type: Canvas
+              进入底:
+                type: Texture
                 attribute:
-                  width: 170
-                  height: 54
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'enter', var.dungeonId, var.actionToken)
-                    Screen.close()
-                children:
-                  进入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~170,120,220,230
-                      hover: ~200,150,240,245
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                  进入字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&0进 入
-                      fontSize: 36
-                      through: true
-              取消按钮:
-                type: Canvas
+                  point: ~stretch_all
+                  normal: ~184,111,57,255
+                  hover: ~224,159,79,255
+                  through: true
+              进入字:
+                type: Text
                 attribute:
-                  width: 170
-                  height: 54
-                action:
-                  clickLeft: "Screen.close()"
-                children:
-                  取消底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~62,66,74,230
-                      hover: ~82,90,105,245
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: var.accentDim
-                  取消字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: ~&f取 消
-                      fontSize: 36
-                      through: true
+                  point: ~middle_center
+                  texts: ~&0确认部署
+                  fontSize: 36
+                  through: true
+          取消按钮:
+            type: Canvas
+            attribute:
+              x: 870
+              y: 574
+              width: 138
+              height: 62
+            action:
+              clickLeft: "Screen.close()"
+            children:
+              取消底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~46,49,48,255
+                  hover: ~78,67,55,255
+                  through: true
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~107,84,62,255
+              取消字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&f返回
+                  fontSize: 36
+                  through: true

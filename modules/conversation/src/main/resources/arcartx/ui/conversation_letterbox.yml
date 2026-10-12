@@ -1,5 +1,6 @@
 # AXS 资源说明
-# 用途: Conversation 模块电影序列 letterbox 黑边 HUD，播放时在屏幕上下显示黑边。
+# 用途: Conversation 电影序列 HUD — 克制的墨黑画幅，中央世界完全透出。
+# 画幅约占上下各 10.5%，使用实际视口贴边，超宽屏不留侧缝。
 # 前置依赖: ArcartX；Conversation 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.conversation.enabled
 # 关联文件: ArcartXConversation.yml
@@ -60,31 +61,91 @@ ui:
       var.letterboxVisible = packet['visible']
   action:
     load: |-
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.matteH = var.viewH * 0.105
 controls:
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~top_center
       width: 1920
       height: 1080
+      through: true
     children:
       上黑边:
-        type: Texture
+        type: Canvas
         attribute:
-          point: ~top_center
-          x: 0
+          point: ~top_left
+          x: "-var.offX"
           y: 0
-          width: 1920
-          height: 180
-          normal: ~0,0,0,255
+          width: "var.viewW"
+          height: "var.matteH"
           visible: var.letterboxVisible == true
+          through: true
+        children:
+          上幕底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~7,7,6,255
+              through: true
+          上幕内沿:
+            type: Texture
+            attribute:
+              point: ~bottom_center
+              width: "var.viewW"
+              height: 1
+              normal: ~45,40,30,255
+              through: true
+          上幕画幅标:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              x: 64
+              y: -16
+              width: 64
+              height: 2
+              normal: ~132,112,78,228
+              through: true
       下黑边:
-        type: Texture
+        type: Canvas
         attribute:
-          point: ~bottom_center
-          x: 0
-          y: 0
-          width: 1920
-          height: 180
-          normal: ~0,0,0,255
+          point: ~top_left
+          x: "-var.offX"
+          y: "var.viewH - var.matteH"
+          width: "var.viewW"
+          height: "var.matteH"
           visible: var.letterboxVisible == true
+          through: true
+        children:
+          下幕底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~7,7,6,255
+              through: true
+          下幕内沿:
+            type: Texture
+            attribute:
+              point: ~top_center
+              width: "var.viewW"
+              height: 1
+              normal: ~45,40,30,255
+              through: true
+          下幕画幅标:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -64
+              y: 16
+              width: 64
+              height: 2
+              normal: ~132,112,78,228
+              through: true

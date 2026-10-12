@@ -1,19 +1,19 @@
-# AXS Menu ESC UI（浮岛网格版）— 替换暂停界面
+# AXS Menu ESC UI（指令台网格版）— 继续游戏优先，左右快捷入口保留角色展示
 # 布局结构（设计分辨率 1920x1080，全屏自适应，场景保持可见，角色居中展示）：
-#   ┌ 左上角「菜单标题」徽章        右上角双货币条 ┐
-#   ├ 顶部居中徽章（菱形纹饰 + 玩家名 + 等阶阅历） ┤
+#   ┌ 左上继续游戏 / 标题徽章        右上角双货币条 ┐
+#   ├ 紧凑身份徽章（玩家名 + 等阶阅历），减少装饰占高 ┤
 #   │                                            │
 #   │   [格][格]     第三人称角色      [格][格]    │  ← 左右各 2 列磁贴，中央留空
 #   │   [格][格]        (展示位)       [格][格]    │
-#   ├ 左下页脚按钮组          底部说明条          右下页脚按钮组 ┘
+#   ├ 左下工具横向滚动        底部说明条        右下工具横向滚动 ┘
 #
 # 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
 # 客户端回包: Packet.send('AXS_MENU', 'click'/'footer', token, id) / page / esc_open / close
 #
 # 启用方式：菜单 yml 顶部配置 `ui-id: menu_esc_grid`（不带命名空间），
 # 模块启动时会自动注册本文件并把所有 init/update 包投递到它。
-# 注意：本文件与 menu_esc.yml 都声明了 match: 暂停界面，同时注册两套 ESC UI
-# 时只应保留一个生效（把暂不使用的 UI 文件从 ui/ 目录移除或改名即可）。
+# 注意：两套 ESC UI 使用相同暂停匹配目标；同时注册时仅启用一个 match。
+# 本文件默认注释 match，保留 menu_esc.yml 接管暂停。
 ui:
   isHud: false
   match:
@@ -78,6 +78,8 @@ ui:
       var.右数 = 0
       var.左页脚数 = 0
       var.右页脚数 = 0
+      var.footerLeftRatio = 0
+      var.footerRightRatio = 0
       var.labels = {}
       var.footerLabels = {}
       var.左引用 = {}
@@ -99,6 +101,15 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
+      // 可调设计尺寸；网格 / 标签 / 滑块统一由同一组尺寸派生
+      var.tileH = 156
+      var.tileGap = 16
+      var.footerH = 124
+      var.footerGap = 18
+      var.footerW = (var.viewW - 704) / 2
+      var.characterGap = 400
+      var.tileW = math.min(180, (var.viewW - var.characterGap - var.tileGap * 2 - 176) / 4)
+      var.deckW = var.tileW * 4 + var.tileGap * 2 + var.characterGap
     open: |-
       var.closing = false
       var.actionBusy = false
@@ -190,6 +201,8 @@ ui:
       }
       if(changedPage){
         val.grid_slider.setDragYRatio(0)
+        var.footerLeftRatio = 0
+        var.footerRightRatio = 0
       }
       // ── 统计左右两侧数量（偶列进左块，奇列进右块）──
       目标数 = var.buttonCount.round()
@@ -371,6 +384,7 @@ controls:
               point: ~stretch_all
               normal: ~10,16,26,88
               alpha: "1 - var.anim.get()"
+              through: true
           顶部暗角:
             type: Texture
             attribute:
@@ -401,13 +415,59 @@ controls:
                 color2: ~10,16,26,130
                 type: 0
                 angleDeg: 90
+          继续游戏:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: "44 - var.anim.get() * 160"
+              y: 28
+              width: 292
+              height: 80
+              enable: "!var.closing"
+            action:
+              clickLeft: |-
+                var.menuUi.actions['closeMenu']()
+            children:
+              继续底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~239,231,210,255
+                  hover: ~250,245,230,255
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+              继续字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: ~&0ESC  继续游戏
+                  fontSize: 48
+                  through: true
+          工具说明:
+            type: Text
+            attribute:
+              x: 44
+              y: "var.viewH - var.footerH - 64"
+              texts: "var.左页脚数 * (math.min(144, var.tileW) + var.footerGap) - var.footerGap > var.footerW ? '&7实用工具 · 滚轮查看更多' : '&7设置与实用工具'"
+              fontSize: 36
+              through: true
+          退出说明:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -44
+              y: "var.viewH - var.footerH - 64"
+              texts: "var.右页脚数 * (math.min(144, var.tileW) + var.footerGap) - var.footerGap > var.footerW ? '&7会话工具 / 退出 · 滚轮查看更多' : '&7会话工具 / 退出'"
+              fontSize: 36
+              through: true
           # ── 左上角：菜单标题徽章 ──
           标题徽章:
             type: Canvas
             attribute:
               x: "44 - var.anim.get() * 160"
-              y: 30
-              width: 230
+              y: 124
+              width: 292
               height: 52
             children:
               徽章底:
@@ -430,7 +490,7 @@ controls:
                   width: 14
                   height: 14
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               徽章字:
                 type: Text
@@ -439,7 +499,7 @@ controls:
                   y: 8
                   texts: "'&f' + var.displayTitle"
                   fontSize: 36
-                  limit: 5
+                  limit: 10
                   through: true
           # ── 右上角：双货币条 ──
           货币栏:
@@ -546,7 +606,7 @@ controls:
               point: ~top_center
               y: "34 - var.anim.get() * 26"
               width: 640
-              height: 252
+              height: 186
               through: true
             children:
               竖芒:
@@ -555,25 +615,25 @@ controls:
                   x: 318
                   y: 0
                   width: 4
-                  height: 128
+                  height: 76
                   normal: ~240,232,210,255
                   through: true
               横芒:
                 type: Texture
                 attribute:
-                  x: 245
-                  y: 62
-                  width: 150
+                  x: 274
+                  y: 36
+                  width: 92
                   height: 4
                   normal: ~240,232,210,255
                   through: true
               外菱:
                 type: Texture
                 attribute:
-                  x: 274
-                  y: 17
-                  width: 92
-                  height: 92
+                  x: 294
+                  y: 12
+                  width: 52
+                  height: 52
                   rotate: 45
                   normal: ~52,66,82,200
                   through: true
@@ -584,10 +644,10 @@ controls:
               内菱:
                 type: Texture
                 attribute:
-                  x: 300
-                  y: 43
-                  width: 40
-                  height: 40
+                  x: 308
+                  y: 26
+                  width: 24
+                  height: 24
                   rotate: 45
                   normal: ~230,216,184,255
                   through: true
@@ -599,43 +659,43 @@ controls:
                   width: 12
                   height: 12
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               下饰菱:
                 type: Texture
                 attribute:
                   x: 314
-                  y: 117
+                  y: 64
                   width: 12
                   height: 12
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               左饰菱:
                 type: Texture
                 attribute:
-                  x: 226
-                  y: 58
+                  x: 264
+                  y: 32
                   width: 12
                   height: 12
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               右饰菱:
                 type: Texture
                 attribute:
-                  x: 402
-                  y: 58
+                  x: 364
+                  y: 32
                   width: 12
                   height: 12
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               玩家名:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 140
+                  y: 100
                   texts: "'&f' + Player.getName()"
                   fontSize: 64
                   limit: 16
@@ -644,8 +704,8 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_center
-                  y: 202
-                  texts: "'&e冒险等阶 ' + Player.getLevel().round() + '  ·  阅历 ' + (server.player_exp * server.player_exp_to_level).round() + ' / ' + server.player_exp_to_level"
+                  y: 154
+                  texts: "'&f冒险等阶 ' + Player.getLevel().round() + '  ·  阅历 ' + (server.player_exp * server.player_exp_to_level).round() + ' / ' + server.player_exp_to_level"
                   fontSize: 36
                   through: true
           # ── 分页器（多页时显示）──
@@ -653,7 +713,7 @@ controls:
             type: Canvas
             attribute:
               point: ~top_center
-              y: 292
+              y: 248
               width: 182
               height: 40
               visible: var.pageCount > 1
@@ -726,10 +786,10 @@ controls:
           网格滚动区:
             type: Scroll
             attribute:
-              x: "(var.viewW - 876) / 2"
-              y: "308 + var.anim.get() * 36"
-              width: 876
-              height: "var.viewH - 486"
+              x: "(var.viewW - var.deckW) / 2"
+              y: "304 + var.anim.get() * 36"
+              width: "var.deckW"
+              height: "var.viewH - 498"
               moveY: val.grid_slider.getDragYRatio()
             action:
               wheel: |-
@@ -741,8 +801,8 @@ controls:
               网格内容:
                 type: Canvas
                 attribute:
-                  width: 876
-                  height: "math.max(152, var.gridRows * 152)"
+                  width: "var.deckW"
+                  height: "math.max(var.tileH + var.tileGap, var.gridRows * (var.tileH + var.tileGap))"
                 children:
                   左列网格:
                     type: HGrid
@@ -751,8 +811,8 @@ controls:
                       x: 0
                       y: 0
                       column: 2
-                      spaceBetweenX: 18
-                      spaceBetweenY: 12
+                      spaceBetweenX: "var.tileGap"
+                      spaceBetweenY: "var.tileGap"
                     children:
                       菜单按钮:
                         type: Canvas
@@ -760,12 +820,12 @@ controls:
                           entryKey: 0.round()
                           entry: var.buttonRows[self.entryKey]
                           visible: self.entry != none
-                          width: 120
-                          height: 140
+                          width: "var.tileW"
+                          height: "var.tileH"
                           hoverAnim: none
                           pressAnim: none
                           middleScale: "1 - self.pressAnim.get() * 0.05"
-                          surface: "(self.isHovered() && self.entry['enabled']) ? '248,243,231,255' : '238,233,221,242'"
+                          surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,245'"
                         action:
                           create: |-
                             self.hoverAnim = Smooth(0, 0, 130)
@@ -795,10 +855,10 @@ controls:
                           图标底:
                             type: Texture
                             attribute:
-                              x: 12
-                              y: "-self.parent.hoverAnim.get() * 4"
-                              width: 96
-                              height: 96
+                              x: 4
+                              y: "6 - self.parent.hoverAnim.get() * 4"
+                              width: "self.parent.width - 8"
+                              height: "self.parent.height - 54"
                               normal: self.parent.surface
                               shape: ~round_rect
                               radius: 10
@@ -806,13 +866,13 @@ controls:
                             effect:
                               stroke:
                                 width: "self.parent.isHovered() ? 2 : 1"
-                                color: "self.parent.isHovered() ? '214,190,143,255' : '150,143,124,255'"
+                                color: "self.parent.isHovered() ? '139,211,223,255' : '79,103,129,255'"
                           图标:
                             type: Slot
                             attribute:
                               slotType: ~Icon
-                              x: 24
-                              y: "12 - self.parent.hoverAnim.get() * 4"
+                              x: "(self.parent.width - 72) / 2"
+                              y: "(self.parent.height - 120) / 2 - self.parent.hoverAnim.get() * 4"
                               width: 72
                               height: 72
                               itemScale: 1.1
@@ -823,8 +883,8 @@ controls:
                             type: Texture
                             attribute:
                               x: 4
-                              y: 102
-                              width: 112
+                              y: "self.parent.height - 44"
+                              width: "self.parent.width - 8"
                               height: 34
                               normal: ~22,30,42,175
                               shape: ~round_rect
@@ -834,18 +894,18 @@ controls:
                             type: Text
                             attribute:
                               point: ~top_center
-                              y: 104
+                              y: "self.parent.height - 42"
                               texts: "'&f' + var.labels[self.parent.entryKey]"
                               fontSize: 36
-                              limit: 5
+                              limit: "math.max(1, math.floor((self.parent.width - 16) / 18))"
                               through: true
                           禁用遮色:
                             type: Texture
                             attribute:
-                              x: 12
-                              y: 0
-                              width: 96
-                              height: 96
+                              x: 4
+                              y: 6
+                              width: "self.parent.width - 8"
+                              height: "self.parent.height - 54"
                               normal: ~40,48,60,175
                               visible: "!self.parent.entry['enabled']"
                               shape: ~round_rect
@@ -855,11 +915,11 @@ controls:
                     type: HGrid
                     val: grid_right
                     attribute:
-                      x: 618
+                      x: "var.tileW * 2 + var.tileGap + var.characterGap"
                       y: 0
                       column: 2
-                      spaceBetweenX: 18
-                      spaceBetweenY: 12
+                      spaceBetweenX: "var.tileGap"
+                      spaceBetweenY: "var.tileGap"
                     children:
                       菜单按钮:
                         type: Canvas
@@ -867,12 +927,12 @@ controls:
                           entryKey: 0.round()
                           entry: var.buttonRows[self.entryKey]
                           visible: self.entry != none
-                          width: 120
-                          height: 140
+                          width: "var.tileW"
+                          height: "var.tileH"
                           hoverAnim: none
                           pressAnim: none
                           middleScale: "1 - self.pressAnim.get() * 0.05"
-                          surface: "(self.isHovered() && self.entry['enabled']) ? '248,243,231,255' : '238,233,221,242'"
+                          surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,245'"
                         action:
                           create: |-
                             self.hoverAnim = Smooth(0, 0, 130)
@@ -902,10 +962,10 @@ controls:
                           图标底:
                             type: Texture
                             attribute:
-                              x: 12
-                              y: "-self.parent.hoverAnim.get() * 4"
-                              width: 96
-                              height: 96
+                              x: 4
+                              y: "6 - self.parent.hoverAnim.get() * 4"
+                              width: "self.parent.width - 8"
+                              height: "self.parent.height - 54"
                               normal: self.parent.surface
                               shape: ~round_rect
                               radius: 10
@@ -913,13 +973,13 @@ controls:
                             effect:
                               stroke:
                                 width: "self.parent.isHovered() ? 2 : 1"
-                                color: "self.parent.isHovered() ? '214,190,143,255' : '150,143,124,255'"
+                                color: "self.parent.isHovered() ? '139,211,223,255' : '79,103,129,255'"
                           图标:
                             type: Slot
                             attribute:
                               slotType: ~Icon
-                              x: 24
-                              y: "12 - self.parent.hoverAnim.get() * 4"
+                              x: "(self.parent.width - 72) / 2"
+                              y: "(self.parent.height - 120) / 2 - self.parent.hoverAnim.get() * 4"
                               width: 72
                               height: 72
                               itemScale: 1.1
@@ -930,8 +990,8 @@ controls:
                             type: Texture
                             attribute:
                               x: 4
-                              y: 102
-                              width: 112
+                              y: "self.parent.height - 44"
+                              width: "self.parent.width - 8"
                               height: 34
                               normal: ~22,30,42,175
                               shape: ~round_rect
@@ -941,18 +1001,18 @@ controls:
                             type: Text
                             attribute:
                               point: ~top_center
-                              y: 104
+                              y: "self.parent.height - 42"
                               texts: "'&f' + var.labels[self.parent.entryKey]"
                               fontSize: 36
-                              limit: 5
+                              limit: "math.max(1, math.floor((self.parent.width - 16) / 18))"
                               through: true
                           禁用遮色:
                             type: Texture
                             attribute:
-                              x: 12
-                              y: 0
-                              width: 96
-                              height: 96
+                              x: 4
+                              y: 6
+                              width: "self.parent.width - 8"
+                              height: "self.parent.height - 54"
                               normal: ~40,48,60,175
                               visible: "!self.parent.entry['enabled']"
                               shape: ~round_rect
@@ -963,16 +1023,16 @@ controls:
             type: Texture
             val: grid_slider
             attribute:
-              x: "(var.viewW + 876) / 2 + 8"
-              y: "308 + var.anim.get() * 36"
-              width: 5
+              x: "(var.viewW + var.deckW) / 2 + 8"
+              y: "304 + var.anim.get() * 36"
+              width: 8
               height: 52
-              maxDragY: "var.viewH - 538"
-              normal: ~224,209,177,255
-              hover: ~166,143,91,255
+              maxDragY: "var.viewH - 550"
+              normal: ~96,173,190,255
+              hover: ~139,211,223,255
               shape: ~round_rect
               radius: 2
-              visible: "var.gridRows * 152 > var.viewH - 486"
+              visible: "var.gridRows * (var.tileH + var.tileGap) > var.viewH - 498"
           # ── 空状态提示 ──
           空提示:
             type: Text
@@ -985,225 +1045,247 @@ controls:
               visible: var.buttonCount <= 0
               through: true
           # ── 左下页脚按钮组（偶数位页脚按钮）──
-          左页脚列:
-            type: HStack
-            val: footer_left
+          左工具滚动区:
+            type: Scroll
             attribute:
               point: ~bottom_left
               x: "44 - var.anim.get() * 160"
               y: "-34 + var.anim.get() * 180"
-              height: 140
-              spaceBetween: 18
+              width: "var.footerW"
+              height: "var.footerH"
+              moveX: "var.footerLeftRatio"
+            action:
+              wheel: |-
+                var.footerLeftRatio = math.max(0, math.min(1, self.moveX - self.wheelValue * 0.16))
+                var.preview = none
             children:
-              页脚按钮:
-                type: Canvas
+              左页脚列:
+                type: HStack
+                val: footer_left
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.footerRows[self.entryKey]
-                  visible: self.entry != none
-                  width: 120
-                  height: 140
-                  hoverAnim: none
-                  pressAnim: none
-                  middleScale: "1 - self.pressAnim.get() * 0.05"
-                  surface: "(self.isHovered() && self.entry['enabled']) ? '248,243,231,255' : '238,233,221,242'"
-                action:
-                  create: |-
-                    self.hoverAnim = Smooth(0, 0, 130)
-                    self.pressAnim = Smooth(0, 0, 180)
-                  enter: |-
-                    var.preview = self.entry
-                    var.previewTitle = var.footerLabels[self.entryKey]
-                    var.previewKey = 'footer:' + self.entry['id']
-                    var.menuUi.actions['preview']()
-                  leave: |-
-                    if(var.previewKey == 'footer:' + self.entry['id']){
-                      var.preview = none
-                    }
-                  clickLeft: |-
-                    if(!var.closing && self.entry != none && self.entry['enabled'] && !var.actionBusy){
-                      self.pressAnim = Smooth(1, 0, 180)
-                      Sound.self('minecraft:ui.button.click', 1.1, 18)
-                      if(self.entry['clientAction'] == 'options'){
-                        Game.options()
-                      } elif(self.entry['clientAction'] == 'quit'){
-                        Game.quit()
-                      } elif(var.actionToken != none){
-                        var.actionBusy = true
-                        var.actionBusySeconds = 0
-                        Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
-                      }
-                    }
+                  height: "var.footerH"
+                  spaceBetween: "var.footerGap"
                 children:
-                  图标底:
-                    type: Texture
+                  页脚按钮:
+                    type: Canvas
                     attribute:
-                      x: 12
-                      y: "-self.parent.hoverAnim.get() * 4"
-                      width: 96
-                      height: 96
-                      normal: self.parent.surface
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: "self.parent.isHovered() ? 2 : 1"
-                        color: "self.parent.isHovered() ? '214,190,143,255' : '150,143,124,255'"
-                  图标:
-                    type: Slot
-                    attribute:
-                      slotType: ~Icon
-                      x: 24
-                      y: "12 - self.parent.hoverAnim.get() * 4"
-                      width: 72
-                      height: 72
-                      itemScale: 1.1
-                      normal: ~0,0,0,0
-                      through: true
-                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
-                  标签底:
-                    type: Texture
-                    attribute:
-                      x: 4
-                      y: 102
-                      width: 112
-                      height: 34
-                      normal: ~22,30,42,175
-                      shape: ~round_rect
-                      radius: 8
-                      through: true
-                  标签:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 104
-                      texts: "'&f' + var.footerLabels[self.parent.entryKey]"
-                      fontSize: 36
-                      limit: 5
-                      through: true
-                  禁用遮色:
-                    type: Texture
-                    attribute:
-                      x: 12
-                      y: 0
-                      width: 96
-                      height: 96
-                      normal: ~40,48,60,175
-                      visible: "!self.parent.entry['enabled']"
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
+                      entryKey: 0.round()
+                      entry: var.footerRows[self.entryKey]
+                      visible: self.entry != none
+                      width: "math.min(144, var.tileW)"
+                      height: "var.footerH"
+                      hoverAnim: none
+                      pressAnim: none
+                      middleScale: "1 - self.pressAnim.get() * 0.05"
+                      surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,245'"
+                    action:
+                      create: |-
+                        self.hoverAnim = Smooth(0, 0, 130)
+                        self.pressAnim = Smooth(0, 0, 180)
+                      enter: |-
+                        var.preview = self.entry
+                        var.previewTitle = var.footerLabels[self.entryKey]
+                        var.previewKey = 'footer:' + self.entry['id']
+                        var.menuUi.actions['preview']()
+                      leave: |-
+                        if(var.previewKey == 'footer:' + self.entry['id']){
+                          var.preview = none
+                        }
+                      clickLeft: |-
+                        if(!var.closing && self.entry != none && self.entry['enabled'] && !var.actionBusy){
+                          self.pressAnim = Smooth(1, 0, 180)
+                          Sound.self('minecraft:ui.button.click', 1.1, 18)
+                          if(self.entry['clientAction'] == 'options'){
+                            Game.options()
+                          } elif(self.entry['clientAction'] == 'quit'){
+                            Game.quit()
+                          } elif(var.actionToken != none){
+                            var.actionBusy = true
+                            var.actionBusySeconds = 0
+                            Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
+                          }
+                        }
+                    children:
+                      图标底:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: "6 - self.parent.hoverAnim.get() * 4"
+                          width: "self.parent.width - 8"
+                          height: "self.parent.height - 54"
+                          normal: "self.parent.entry['clientAction'] == 'quit' ? '68,43,51,255' : self.parent.surface"
+                          shape: ~round_rect
+                          radius: 10
+                          through: true
+                        effect:
+                          stroke:
+                            width: "self.parent.isHovered() ? 2 : 1"
+                            color: "self.parent.entry['clientAction'] == 'quit' ? '202,126,116,235' : (self.parent.isHovered() ? '139,211,223,255' : '79,103,129,255')"
+                      图标:
+                        type: Slot
+                        attribute:
+                          slotType: ~Icon
+                          x: "(self.parent.width - 48) / 2"
+                          y: "(self.parent.height - 96) / 2 - self.parent.hoverAnim.get() * 4"
+                          width: 48
+                          height: 48
+                          itemScale: 0.75
+                          normal: ~0,0,0,0
+                          through: true
+                          seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                      标签底:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: "self.parent.height - 44"
+                          width: "self.parent.width - 8"
+                          height: 34
+                          normal: ~22,30,42,175
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      标签:
+                        type: Text
+                        attribute:
+                          point: ~top_center
+                          y: "self.parent.height - 42"
+                          texts: "'&f' + var.footerLabels[self.parent.entryKey]"
+                          fontSize: 36
+                          limit: "math.max(1, math.floor((self.parent.width - 16) / 18))"
+                          through: true
+                      禁用遮色:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: 6
+                          width: "self.parent.width - 8"
+                          height: "self.parent.height - 54"
+                          normal: ~40,48,60,175
+                          visible: "!self.parent.entry['enabled']"
+                          shape: ~round_rect
+                          radius: 10
+                          through: true
           # ── 右下页脚按钮组（奇数位页脚按钮）──
-          右页脚列:
-            type: HStack
-            val: footer_right
+          右工具滚动区:
+            type: Scroll
             attribute:
               point: ~bottom_right
               x: "-44 + var.anim.get() * 160"
               y: "-34 + var.anim.get() * 180"
-              height: 140
-              spaceBetween: 18
+              width: "var.footerW"
+              height: "var.footerH"
+              moveX: "var.footerRightRatio"
+            action:
+              wheel: |-
+                var.footerRightRatio = math.max(0, math.min(1, self.moveX - self.wheelValue * 0.16))
+                var.preview = none
             children:
-              页脚按钮:
-                type: Canvas
+              右页脚列:
+                type: HStack
+                val: footer_right
                 attribute:
-                  entryKey: 0.round()
-                  entry: var.footerRows[self.entryKey]
-                  visible: self.entry != none
-                  width: 120
-                  height: 140
-                  hoverAnim: none
-                  pressAnim: none
-                  middleScale: "1 - self.pressAnim.get() * 0.05"
-                  surface: "(self.isHovered() && self.entry['enabled']) ? '248,243,231,255' : '238,233,221,242'"
-                action:
-                  create: |-
-                    self.hoverAnim = Smooth(0, 0, 130)
-                    self.pressAnim = Smooth(0, 0, 180)
-                  enter: |-
-                    var.preview = self.entry
-                    var.previewTitle = var.footerLabels[self.entryKey]
-                    var.previewKey = 'footer:' + self.entry['id']
-                    var.menuUi.actions['preview']()
-                  leave: |-
-                    if(var.previewKey == 'footer:' + self.entry['id']){
-                      var.preview = none
-                    }
-                  clickLeft: |-
-                    if(!var.closing && self.entry != none && self.entry['enabled'] && !var.actionBusy){
-                      self.pressAnim = Smooth(1, 0, 180)
-                      Sound.self('minecraft:ui.button.click', 1.1, 18)
-                      if(self.entry['clientAction'] == 'options'){
-                        Game.options()
-                      } elif(self.entry['clientAction'] == 'quit'){
-                        Game.quit()
-                      } elif(var.actionToken != none){
-                        var.actionBusy = true
-                        var.actionBusySeconds = 0
-                        Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
-                      }
-                    }
+                  height: "var.footerH"
+                  spaceBetween: "var.footerGap"
                 children:
-                  图标底:
-                    type: Texture
+                  页脚按钮:
+                    type: Canvas
                     attribute:
-                      x: 12
-                      y: "-self.parent.hoverAnim.get() * 4"
-                      width: 96
-                      height: 96
-                      normal: self.parent.surface
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
-                    effect:
-                      stroke:
-                        width: "self.parent.isHovered() ? 2 : 1"
-                        color: "self.parent.isHovered() ? '214,190,143,255' : '150,143,124,255'"
-                  图标:
-                    type: Slot
-                    attribute:
-                      slotType: ~Icon
-                      x: 24
-                      y: "12 - self.parent.hoverAnim.get() * 4"
-                      width: 72
-                      height: 72
-                      itemScale: 1.1
-                      normal: ~0,0,0,0
-                      through: true
-                      seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
-                  标签底:
-                    type: Texture
-                    attribute:
-                      x: 4
-                      y: 102
-                      width: 112
-                      height: 34
-                      normal: ~22,30,42,175
-                      shape: ~round_rect
-                      radius: 8
-                      through: true
-                  标签:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 104
-                      texts: "'&f' + var.footerLabels[self.parent.entryKey]"
-                      fontSize: 36
-                      limit: 5
-                      through: true
-                  禁用遮色:
-                    type: Texture
-                    attribute:
-                      x: 12
-                      y: 0
-                      width: 96
-                      height: 96
-                      normal: ~40,48,60,175
-                      visible: "!self.parent.entry['enabled']"
-                      shape: ~round_rect
-                      radius: 10
-                      through: true
+                      entryKey: 0.round()
+                      entry: var.footerRows[self.entryKey]
+                      visible: self.entry != none
+                      width: "math.min(144, var.tileW)"
+                      height: "var.footerH"
+                      hoverAnim: none
+                      pressAnim: none
+                      middleScale: "1 - self.pressAnim.get() * 0.05"
+                      surface: "(self.isHovered() && self.entry['enabled']) ? '47,69,95,255' : '30,44,65,245'"
+                    action:
+                      create: |-
+                        self.hoverAnim = Smooth(0, 0, 130)
+                        self.pressAnim = Smooth(0, 0, 180)
+                      enter: |-
+                        var.preview = self.entry
+                        var.previewTitle = var.footerLabels[self.entryKey]
+                        var.previewKey = 'footer:' + self.entry['id']
+                        var.menuUi.actions['preview']()
+                      leave: |-
+                        if(var.previewKey == 'footer:' + self.entry['id']){
+                          var.preview = none
+                        }
+                      clickLeft: |-
+                        if(!var.closing && self.entry != none && self.entry['enabled'] && !var.actionBusy){
+                          self.pressAnim = Smooth(1, 0, 180)
+                          Sound.self('minecraft:ui.button.click', 1.1, 18)
+                          if(self.entry['clientAction'] == 'options'){
+                            Game.options()
+                          } elif(self.entry['clientAction'] == 'quit'){
+                            Game.quit()
+                          } elif(var.actionToken != none){
+                            var.actionBusy = true
+                            var.actionBusySeconds = 0
+                            Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
+                          }
+                        }
+                    children:
+                      图标底:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: "6 - self.parent.hoverAnim.get() * 4"
+                          width: "self.parent.width - 8"
+                          height: "self.parent.height - 54"
+                          normal: "self.parent.entry['clientAction'] == 'quit' ? '68,43,51,255' : self.parent.surface"
+                          shape: ~round_rect
+                          radius: 10
+                          through: true
+                        effect:
+                          stroke:
+                            width: "self.parent.isHovered() ? 2 : 1"
+                            color: "self.parent.entry['clientAction'] == 'quit' ? '202,126,116,235' : (self.parent.isHovered() ? '139,211,223,255' : '79,103,129,255')"
+                      图标:
+                        type: Slot
+                        attribute:
+                          slotType: ~Icon
+                          x: "(self.parent.width - 48) / 2"
+                          y: "(self.parent.height - 96) / 2 - self.parent.hoverAnim.get() * 4"
+                          width: 48
+                          height: 48
+                          itemScale: 0.75
+                          normal: ~0,0,0,0
+                          through: true
+                          seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                      标签底:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: "self.parent.height - 44"
+                          width: "self.parent.width - 8"
+                          height: 34
+                          normal: ~22,30,42,175
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                      标签:
+                        type: Text
+                        attribute:
+                          point: ~top_center
+                          y: "self.parent.height - 42"
+                          texts: "'&f' + var.footerLabels[self.parent.entryKey]"
+                          fontSize: 36
+                          limit: "math.max(1, math.floor((self.parent.width - 16) / 18))"
+                          through: true
+                      禁用遮色:
+                        type: Texture
+                        attribute:
+                          x: 4
+                          y: 6
+                          width: "self.parent.width - 8"
+                          height: "self.parent.height - 54"
+                          normal: ~40,48,60,175
+                          visible: "!self.parent.entry['enabled']"
+                          shape: ~round_rect
+                          radius: 10
+                          through: true
           # ── 底部居中：悬停说明条 ──
           说明条:
             type: Canvas
@@ -1211,14 +1293,14 @@ controls:
               point: ~bottom_center
               y: "-30 + var.anim.get() * 180"
               width: 560
-              height: 116
+              height: 124
               through: true
             children:
               说明底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~40,50,62,232
+                  normal: ~29,43,65,245
                   shape: ~round_rect
                   radius: 10
                   through: true
@@ -1234,14 +1316,14 @@ controls:
                   width: 9
                   height: 9
                   rotate: 45
-                  normal: ~226,196,132,255
+                  normal: ~96,173,190,255
                   through: true
               说明标题:
                 type: Text
                 attribute:
                   x: 40
                   y: 14
-                  texts: "var.preview != none ? '&f' + var.previewTitle : '&f功能一览'"
+                  texts: "var.preview != none ? '&f' + var.previewTitle : '&f快捷入口 / 使用条件'"
                   fontSize: 36
                   limit: 16
                   through: true
@@ -1249,8 +1331,8 @@ controls:
                 type: Text
                 attribute:
                   x: 40
-                  y: 52
-                  texts: "var.preview != none ? var.previewColor + var.previewBody : '&7将鼠标移至图标，查看功能与使用条件'"
+                  y: 48
+                  texts: "var.preview != none ? var.previewColor + var.previewBody : '&7悬停预览 · 左上继续 · 下方会话工具'"
                   fontSize: 36
                   limit: 20
                   through: true
@@ -1258,7 +1340,7 @@ controls:
                 type: Text
                 attribute:
                   x: 40
-                  y: 84
-                  texts: "var.actionBusy ? '&e正在处理，请稍候…' : '&7左键选择  /  滚轮浏览  /  ESC 返回'"
+                  y: 88
+                  texts: "var.actionBusy ? '&e正在处理，请稍候…' : '&7左键选择  /  滚轮浏览  /  ESC 继续'"
                   fontSize: 36
                   through: true

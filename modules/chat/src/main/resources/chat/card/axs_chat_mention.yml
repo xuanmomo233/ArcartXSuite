@@ -1,57 +1,105 @@
 # ArcartXSuite Chat — @提及通知卡片模板
-# 当有人在聊天中 @你 时显示此卡片
-# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
+# 当有人在聊天中 @你 时显示此卡片；保持 card 根节点与直属 data 作用域
+# 图标只占标题行；十行消息使用整宽内容区并按实际 Text 尺寸向下延伸
 root_control:
   type: card
   attribute:
-    width: "Math.max(val.title_label.width, val.message_label.width) + 200 < 500 ? 500 : Math.max(val.title_label.width, val.message_label.width) + 200"
-    height: "Math.max(100, val.message_label.y + val.message_label.height + 20)"
+    width: "Math.max(400, Math.max(val.title_label.x + val.title_label.width, val.message_label.x + val.message_label.width + 12) + 24)"
+    height: "Math.max(148, val.message_label.y + val.message_label.height + 24)"
   children:
     background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~25,25,35,200
+        normal: ~19,35,42,240
         shape: ~round_rect
-        radius: 12
+        radius: 14
+        through: true
       effect:
         stroke:
           width: 2
-          color: ~255,255,255,120
-    icon:
-      type: Text
+          color: ~76,172,170,220
+    accent:
+      type: Texture
       attribute:
-        fontSize: 200
-        x: 25
-        y: "self.parent.height/2 - 5"
-        texts: "'§b@'"
+        x: 8
+        y: 16
+        width: 4
+        height: "self.parent.height - 32"
+        normal: ~93,215,204,255
+        shape: ~round_rect
+        radius: 2
         through: true
+    icon:
+      type: Canvas
+      attribute:
+        x: 24
+        y: 16
+        width: 64
+        height: 64
+        through: true
+      children:
+        badge:
+          type: Texture
+          attribute:
+            width: "self.parent.width"
+            height: "self.parent.height"
+            normal: ~31,79,84,255
+            shape: ~circle
+            through: true
+        symbol:
+          type: Text
+          attribute:
+            point: ~middle_center
+            fontSize: 64
+            texts: "'§b@'"
+            through: true
     title_label:
       type: Text
       val: title_label
       attribute:
-        fontSize: 64
-        x: 160
-        y: 15
-        texts: "self.parent.data['senderDisplayName'] + ' §7在 §f' + self.parent.data['channel'] + ' §7中提到了你'"
+        fontSize: 54
+        x: 108
+        y: 20
+        texts: "self.parent.data['senderDisplayName'] + ' §7在 §f' + self.parent.data['channel'] + ' §b中提到了你'"
+        through: true
+    header_rule:
+      type: Texture
+      attribute:
+        x: 24
+        y: "val.message_label.y - 20"
+        width: "self.parent.width - 48"
+        height: 2
+        normal: ~53,98,108,255
+        through: true
+    message_surface:
+      type: Texture
+      attribute:
+        x: 24
+        y: "val.message_label.y - 8"
+        width: "self.parent.width - 48"
+        height: "val.message_label.height + 16"
+        normal: ~25,49,57,255
+        shape: ~round_rect
+        radius: 8
         through: true
     message_label:
       type: Text
       val: message_label
       attribute:
-        fontSize: 64
-        x: 160
-        y: 60
+        fontSize: 48
+        x: 36
+        y: "Math.max(104, val.title_label.y + val.title_label.height + 32)"
         through: true
         texts:
-          - "'§7' + self.parent.data['msg0']"
-          - "self.parent.data['msg1'] != none ? '§7' + self.parent.data['msg1'] : none"
-          - "self.parent.data['msg2'] != none ? '§7' + self.parent.data['msg2'] : none"
-          - "self.parent.data['msg3'] != none ? '§7' + self.parent.data['msg3'] : none"
-          - "self.parent.data['msg4'] != none ? '§7' + self.parent.data['msg4'] : none"
-          - "self.parent.data['msg5'] != none ? '§7' + self.parent.data['msg5'] : none"
-          - "self.parent.data['msg6'] != none ? '§7' + self.parent.data['msg6'] : none"
-          - "self.parent.data['msg7'] != none ? '§7' + self.parent.data['msg7'] : none"
-          - "self.parent.data['msg8'] != none ? '§7' + self.parent.data['msg8'] : none"
-          - "self.parent.data['msg9'] != none ? '§7' + self.parent.data['msg9'] : none"
+          - "'§f' + self.parent.data['msg0']"
+          - "self.parent.data['msg1'] != none ? '§f' + self.parent.data['msg1'] : none"
+          - "self.parent.data['msg2'] != none ? '§f' + self.parent.data['msg2'] : none"
+          - "self.parent.data['msg3'] != none ? '§f' + self.parent.data['msg3'] : none"
+          - "self.parent.data['msg4'] != none ? '§f' + self.parent.data['msg4'] : none"
+          - "self.parent.data['msg5'] != none ? '§f' + self.parent.data['msg5'] : none"
+          - "self.parent.data['msg6'] != none ? '§f' + self.parent.data['msg6'] : none"
+          - "self.parent.data['msg7'] != none ? '§f' + self.parent.data['msg7'] : none"
+          - "self.parent.data['msg8'] != none ? '§f' + self.parent.data['msg8'] : none"
+          - "self.parent.data['msg9'] != none ? '§f' + self.parent.data['msg9'] : none"

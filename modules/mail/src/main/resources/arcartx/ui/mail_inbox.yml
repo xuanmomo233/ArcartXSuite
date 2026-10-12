@@ -1,9 +1,4 @@
-# AXS Mail 收件箱（翠绿信使重写版）
-# 范式: 全屏玻璃底 + Adaptive(~top_center,1920x1080) + 顶栏贴顶铺满 + 左侧导航 + 内容区
-# 布局: 左导航(收件箱/日志/写信/兑换码/管理 + 底部摘要) + 内容区(筛选栏 + 邮件列表 + 详情 + 操作栏 + CDK)
-# 配色: 翠绿信使 主色80,180,120 底30,32,38,110 抬升36,38,48,245 描边60,64,82,220
-# 逻辑: packetHandler/action/val引用/entryKey/copy 与原版一致，仅重构布局结构与配色
-
+# AXS Mail — 私人邮局与信件阅读
 ui:
   isHud: false
   background: false
@@ -15,46 +10,53 @@ ui:
   level: 8
   itemSize: 16
   hide:
-    - hotbar
-    - experience_bar
-    - crosshair
-    - item_name
-    - jump_bar
-    - mount_health
-    - player_state
-    - player_health
-    - armor_level
-    - food_level
-    - air_level
+  - hotbar
+  - experience_bar
+  - crosshair
+  - item_name
+  - jump_bar
+  - mount_health
+  - player_state
+  - player_health
+  - armor_level
+  - food_level
+  - air_level
   action:
     load: |-
-      var.filteredCount = 0
+      var.mailUi = self
+      var.messages = {}
+      var.selectedAttachments = {}
       var.attachmentItemJsons = {}
-      var.claimableCount = 0
-      var.unreadCount = 0
-      var.actionBusySeconds = 0
+      var.mailRefs = {}
+      var.attachmentRefs = {}
+      var.maxMailCount = 0
+      var.attachmentCount = 0
+      var.filteredCount = 0
       var.totalCount = 0
-      var.selectedBody = ['&f暂无正文']
-      var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
+      var.unreadCount = 0
+      var.claimableCount = 0
+      var.filterMode = 'all'
+      var.selectedId = none
+      var.selectedBody = []
+      var.selectedClaimable = false
+      var.isAdmin = false
+      var.cdkCode = ''
+      var.confirmMode = ''
+      var.deleteTarget = none
       var.actionBusy = false
-      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放
-      sx = Screen.getWidth() / 1920
-      sy = Screen.getHeight() / 1080
-      s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
-      var.viewW = Screen.getWidth() / s
-      var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
-    open: |-
-      Packet.send('AXS_MAIL', 'refresh')
+      var.actionBusySeconds = 0
+      var.mailRound = 0
+      var.attachmentRound = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      self.actions['resize']()
+    open: Packet.send('AXS_MAIL', 'refresh')
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
-      var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 420
     seconds: |-
       if(var.actionBusy){
         var.actionBusySeconds = var.actionBusySeconds + 1
@@ -65,204 +67,89 @@ ui:
       }else{
         var.actionBusySeconds = 0
       }
-  packetHandler:
-    # packetHandler: init
-    # 包字段:
-    #   - messages: 邮件列表（Map，键为索引，每项含 id/subject/sender_name/source_text/status_text/preview/unread/claimable/source_type 等子字段）
-    #   - filter_mode: 当前筛选模式（all/unread/claimable/system/player/preset/cdk）
-    #   - total_count: 收件箱邮件总数
-    #   - unread_count: 未读邮件数
-    #   - claimable_count: 可领取邮件数
-    #   - selected_id: 当前选中邮件的 ID
-    #   - selected_subject: 选中邮件的标题
-    #   - selected_sender_name: 选中邮件的发件人名称
-    #   - selected_source_text: 选中邮件的来源描述文本
-    #   - selected_status_text: 选中邮件的状态描述文本
-    #   - selected_created_at: 选中邮件的创建时间
-    #   - selected_expires_at: 选中邮件的到期时间
-    #   - selected_body: 选中邮件的正文内容（列表形式，每行一个元素）
-    #   - selected_attachment_summary: 选中邮件的附件摘要文本
-    #   - selected_claimable: 选中邮件是否可领取
-    #   - maxMailCount: 邮件列表最大显示条数（用于动态生成列表项）
-    #   - is_admin: 当前玩家是否为管理员（控制管理导航项显隐）
-    init: |-
-      var.aIndex = 0
-      var.messages = packet['messages']
+    applyPacket: |-
+      oldId = var.selectedId
+      oldFilter = var.filterMode
+      oldMailCount = var.maxMailCount
+      oldAttachmentCount = var.attachmentCount
       var.filterMode = packet['filter_mode']
       var.totalCount = packet['total_count']
       var.unreadCount = packet['unread_count']
       var.claimableCount = packet['claimable_count']
-      var.selectedId = packet['selected_id'] != none && packet['selected_id'] != '' ? packet['selected_id'] : none
       var.selectedSubject = packet['selected_subject']
       var.selectedSenderName = packet['selected_sender_name']
       var.selectedSourceText = packet['selected_source_text']
       var.selectedStatusText = packet['selected_status_text']
       var.selectedCreatedAt = packet['selected_created_at']
       var.selectedExpiresAt = packet['selected_expires_at']
-      var.selectedBody = packet['selected_body']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
-      var.selectedAttachments = packet['selected_attachments']
       var.selectedClaimable = packet['selected_claimable']
-      var.maxMailCount = packet['maxMailCount']
       var.isAdmin = packet['is_admin']
-      var.actionBusy = false
-      while(val.mail_list.childrenCount() > 1){
-        val.mail_list.get(1).remove()
-      }
-      for(i in range(1, var.maxMailCount - 1)){
-        key = i.round()
-        if(val.mail_list['邮件项目'] != none) {
-          e = val.mail_list['邮件项目'].copy('邮件项目' + key)
-          e.entryKey = key
-        }
-      }
-      // ── 附件槽位：构建 itemJsons 字典 + 动态复制模板 ──
-      var.aKeys = var.selectedAttachments.keys()
-      for(key in var.aKeys){
-        attEntry = var.selectedAttachments[key]
-        if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
-          var.attachmentItemJsons[key] = attEntry['itemJson']
-        } else {
-          var.attachmentItemJsons[key] = var.emptyItemJson
-        }
-      }
-      while(val.附件列表.childrenCount() > 1){
-        val.附件列表.get(1).remove()
-      }
-      for(key in var.aKeys){
-        if(val.附件列表['附件模板'] != none) {
-          item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
-          item.entryKey = key
-        }
-        var.aIndex = var.aIndex + 1
-      }
-      for(i in range(1, var.aIndex)){
-        if(val.附件列表 != none) {
-          item = val.附件列表.get(i.round())
-          if(item != none && item['附件图标'] != none){
-            item['附件图标'].seticon()
-          }
-        }
-      }
-      // 计算当前筛选下的邮件数量，用于空列表提示
-      var.filteredCount = 0
-      if(var.messages != none){
-        for(key in var.messages.keys()){
-          msg = var.messages[key]
-          if(msg != none){
-            if(var.filterMode == 'all' ||
-               (var.filterMode == 'unread' && msg['unread'] == true) ||
-               (var.filterMode == 'claimable' && msg['claimable'] == true) ||
-               (var.filterMode == 'system' && msg['source_type'] == 'system') ||
-               (var.filterMode == 'player' && msg['source_type'] == 'player') ||
-               (var.filterMode == 'preset' && msg['source_type'] == 'preset') ||
-               (var.filterMode == 'cdk' && msg['source_type'] == 'cdk')){
-              var.filteredCount = var.filteredCount + 1
-            }
-          }
-        }
-      }
-    # packetHandler: update（字段与 init 相同）
-    update: |-
-      // 保存旧数量，用于判断是否需要重建列表
-      oldMaxMailCount = var.maxMailCount
-      var.messages = packet['messages']
-      var.filterMode = packet['filter_mode']
-      var.totalCount = packet['total_count']
-      var.unreadCount = packet['unread_count']
-      var.claimableCount = packet['claimable_count']
+      var.messages = packet['messages'] != none ? packet['messages'] : {}
+      var.selectedAttachments = packet['selected_attachments'] != none ? packet['selected_attachments'] : {}
+      var.selectedBody = packet['selected_body'] != none ? packet['selected_body'] : []
       var.selectedId = packet['selected_id'] != none && packet['selected_id'] != '' ? packet['selected_id'] : none
-      var.selectedSubject = packet['selected_subject']
-      var.selectedSenderName = packet['selected_sender_name']
-      var.selectedSourceText = packet['selected_source_text']
-      var.selectedStatusText = packet['selected_status_text']
-      var.selectedCreatedAt = packet['selected_created_at']
-      var.selectedExpiresAt = packet['selected_expires_at']
-      var.selectedBody = packet['selected_body']
-      var.selectedAttachmentSummary = packet['selected_attachment_summary']
-      var.selectedAttachments = packet['selected_attachments']
-      var.selectedClaimable = packet['selected_claimable']
-      var.maxMailCount = packet['maxMailCount']
-      var.isAdmin = packet['is_admin']
+      var.maxMailCount = var.messages.size()
+      var.attachmentCount = var.selectedAttachments.size()
+      var.filteredCount = var.maxMailCount
+      var.confirmMode = ''
       var.actionBusy = false
-      // ── 邮件列表：仅在数量变化时重建 ──
-      if(var.maxMailCount != oldMaxMailCount){
-        while(val.mail_list.childrenCount() > 1){
-          val.mail_list.get(1).remove()
+      var.actionBusySeconds = 0
+      if(var.maxMailCount != oldMailCount){
+        for(key in var.mailRefs.keys()){
+          var.mailRefs[key].remove()
         }
-        template = val.mail_list['邮件项目']
-        if(template != none){
+        var.mailRefs = {}
+        var.mailRound = var.mailRound + 1
+        if(var.maxMailCount > 1){
+          template = val.mail_list.get(0)
           for(i in range(1, var.maxMailCount - 1)){
-            key = i.round()
-            e = template.copy('邮件项目' + key)
-            e.entryKey = key
+            row = template.copy('邮件项目_' + var.mailRound.round() + '_' + i.round())
+            row.entryKey = i.round()
+            var.mailRefs[i.round()] = row
           }
         }
       }
-      // ── 附件槽位：构建 itemJsons 字典 + 数量变化时重建 ──
-      oldAttCount = var.oldAttCount
-      var.aKeys = var.selectedAttachments.keys()
-      for(key in var.aKeys){
-        attEntry = var.selectedAttachments[key]
-        if(attEntry != none && attEntry['itemJson'] != none && attEntry['itemJson'] != ''){
-          var.attachmentItemJsons[key] = attEntry['itemJson']
-        } else {
-          var.attachmentItemJsons[key] = var.emptyItemJson
+      if(var.attachmentCount != oldAttachmentCount){
+        for(key in var.attachmentRefs.keys()){
+          var.attachmentRefs[key].remove()
         }
-      }
-      if(var.aKeys.size() != oldAttCount){
-        while(val.附件列表.childrenCount() > 1){
-          val.附件列表.get(1).remove()
-        }
-        var.aIndex = 0
-        for(key in var.aKeys){
-          if(val.附件列表['附件模板'] != none) {
-            item = val.附件列表['附件模板'].copy('附件项' + var.aIndex.round())
-            item.entryKey = key
-          }
-          var.aIndex = var.aIndex + 1
-        }
-      }
-      var.oldAttCount = var.aKeys.size()
-      // 重新触发附件图标 seticon（数据变了但 seticon 不会自动刷新）
-      for(i in range(1, val.附件列表.childrenCount())){
-        if(val.附件列表 != none) {
-          item = val.附件列表.get(i.round())
-          if(item != none && item['附件图标'] != none){
-            item['附件图标'].seticon()
+        var.attachmentRefs = {}
+        var.attachmentRound = var.attachmentRound + 1
+        if(var.attachmentCount > 0){
+          template = val.附件列表.get(0)
+          for(i in range(0, var.attachmentCount - 1)){
+            row = template.copy('附件项_' + var.attachmentRound.round() + '_' + i.round())
+            var.attachmentRefs[i.round()] = row
           }
         }
       }
-      // 计算当前筛选下的邮件数量，用于空列表提示
-      var.filteredCount = 0
-      if(var.messages != none){
-        for(key in var.messages.keys()){
-          msg = var.messages[key]
-          if(msg != none){
-            if(var.filterMode == 'all' ||
-               (var.filterMode == 'unread' && msg['unread'] == true) ||
-               (var.filterMode == 'claimable' && msg['claimable'] == true) ||
-               (var.filterMode == 'system' && msg['source_type'] == 'system') ||
-               (var.filterMode == 'player' && msg['source_type'] == 'player') ||
-               (var.filterMode == 'preset' && msg['source_type'] == 'preset') ||
-               (var.filterMode == 'cdk' && msg['source_type'] == 'cdk')){
-              var.filteredCount = var.filteredCount + 1
-            }
-          }
-        }
+      var.attachmentItemJsons = {}
+      var.attachmentIndex = 0
+      for(key in var.selectedAttachments.keys()){
+        entry = var.selectedAttachments[key]
+        var.attachmentItemJsons[key] = entry['itemJson'] != none && entry['itemJson'] != '' ? entry['itemJson'] : var.emptyItemJson
+        row = var.attachmentRefs[var.attachmentIndex.round()]
+        row.entryKey = key
+        row['附件图标'].seticon()
+        var.attachmentIndex = var.attachmentIndex + 1
       }
-
-# ─── 控件树 ────────────────────────────────────────────────────────
-# 布局: 顶栏(标题色块+标题+关闭) + 左导航(5项+摘要) + 内容区(筛选+列表+详情+操作+CDK)
-# 配色: 翠绿信使 深底浅字 — 抬升面36,38,48 凹槽28,30,40 描边60,64,82 强调80,180,120
-# fontSize: 48(顶栏标题) / 36(区域标题/按钮/信息) / 32(小标签) — 全部标准档位
+      if(oldId != var.selectedId){
+        val.详情滑块.setDragYRatio(0)
+      }
+      if(oldFilter != var.filterMode){
+        val.邮件滑块.setDragYRatio(0)
+      }
+  packetHandler:
+    init: self.actions['applyPacket']()
+    update: self.actions['applyPacket']()
 controls:
-  全屏玻璃底:
+  背景:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:24;30,32,38,110
+      normal: ~32,23,25,240
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -270,1053 +157,1175 @@ controls:
       width: 1920
       height: 1080
     children:
-      # ── 顶栏 ──────────────────────────────────────────
       顶栏:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "-var.offX"
-          width: "var.viewW"
-          height: 96
+          x: -var.offX
+          y: 0
+          width: var.viewW
+          height: 104
         children:
-          顶栏底:
+          底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-          顶栏底线:
-            type: Texture
+              through: true
+              normal: ~238,228,210,255
+          品牌:
+            type: Text
             attribute:
-              point: ~horizontal_stretch_bottom
-              height: 1
-              normal: ~60,64,82,220
-          标题色块:
-            type: Texture
-            attribute:
-              point: ~middle_left
               x: 48
-              width: 6
-              height: 36
-              normal: ~80,180,120,255
+              y: 24
+              texts: ~&0私人邮局
+              fontSize: 72
+              through: true
+          副题:
+            type: Text
+            attribute:
+              x: 320
+              y: 46
+              texts: ~&8信件 · 附件 · 通知
+              fontSize: 36
+              through: true
+          日志:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 684
+              y: 24
+              width: 120
+              height: 56
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~90,48,50,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f日志
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS_MAIL', 'logs')
+          写信:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 548
+              y: 24
+              width: 120
+              height: 56
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~90,48,50,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f写信
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Packet.send('AXS_MAIL', 'compose')
+          管理:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 412
+              y: 24
+              width: 120
+              height: 56
+              visible: var.isAdmin == true
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.isAdmin == true ? ''90,48,50,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f管理
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(var.isAdmin == true){
+                  Packet.send('AXS_MAIL', 'admin')
+                }
+          刷新:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 276
+              y: 24
+              width: 120
+              height: 56
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: '!var.actionBusy ? ''90,48,50,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f刷新
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  var.actionBusy = true
+                  var.actionBusySeconds = 0
+                  Packet.send('AXS_MAIL', 'refresh')
+                }
+          关闭:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 140
+              y: 24
+              width: 92
+              height: 56
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~90,48,50,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f关闭
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: Screen.close()
+      摘要:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: -var.offX
+          y: 116
+          width: var.viewW
+          height: 64
+        children:
+          计数:
+            type: Text
+            attribute:
+              x: 48
+              y: 18
+              texts: '''&f收件 '' + var.totalCount + ''  &7/  &f未读 '' + var.unreadCount + ''  &7/  &e可领取 '' + var.claimableCount'
+              fontSize: 48
+              through: true
+          提示:
+            type: Text
+            attribute:
+              x: var.viewW - 608
+              y: 24
+              texts: 'var.actionBusy ? ''&7正在等待服务端…'' : ''&7信件与附件状态以服务端为准'''
+              fontSize: 36
+              through: true
+              limit: 32
+      筛选栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 48 - var.offX
+          y: 196
+          width: 1008
+          height: 52
+        children:
+          全部:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 0
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''all'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f全部
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'all')
+                }
+          未读:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 144
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''unread'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f未读
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'unread')
+                }
+          可领取:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 288
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''claimable'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f可领取
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'claimable')
+                }
+          系统:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 432
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''system'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f系统
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'system')
+                }
+          玩家:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 576
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''player'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f玩家
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'player')
+                }
+          预设:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 720
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''preset'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f预设
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'preset')
+                }
+          兑换码:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 864
+              y: 0
+              width: 128
+              height: 52
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: 'var.filterMode == ''cdk'' ? ''153,99,72,255'' : ''61,45,44,255'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f兑换码
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy){
+                  Packet.send('AXS_MAIL', 'filter', 'cdk')
+                }
+      收件索引:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 48 - var.offX
+          y: 276
+          width: 480
+          height: var.viewH - 428
+        children:
+          底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~42,33,33,255
               shape: ~round_rect
-              radius: 3
+              radius: 12
           标题:
             type: Text
             attribute:
-              point: ~middle_left
-              x: 68
-              texts: "~&fAXS 邮箱"
+              x: 24
+              y: 24
+              texts: ~&f收件索引
               fontSize: 48
-          关闭按钮:
-            type: Canvas
-            attribute:
-              point: ~middle_right
-              x: -48
-              width: 48
-              height: 48
-            action:
-              clickLeft: |-
-                Screen.close()
-            children:
-              关闭背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "~&f✕"
-                  fontSize: 36
-                  through: true
-
-      # ── 左侧导航 ──────────────────────────────────────
-      左侧导航:
-        type: Canvas
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 120
-          width: 300
-          height: "var.viewH - 144"
-        children:
-          导航底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          # 当前页：收件箱
-          导航收件箱:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 18
-              width: 272
-              height: 58
-            children:
-              收件箱底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~80,180,120,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              收件箱高亮条:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 8
-                  width: 4
-                  height: 28
-                  normal: ~80,180,120,255
-                  shape: ~round_rect
-                  radius: 2
-              收件箱文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&0收件箱"
-                  fontSize: 36
-          导航日志:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 84
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'logs')
-            children:
-              日志底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              日志文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f日志"
-                  fontSize: 36
-                  through: true
-          导航写信:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 150
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'compose')
-            children:
-              写信底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              写信文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f写信"
-                  fontSize: 36
-                  through: true
-          导航管理:
-            type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
-              visible: "var.isAdmin == true"
-            action:
-              clickLeft: |-
-                Packet.send('AXS_MAIL', 'admin')
-            children:
-              管理底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,245
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-              管理文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f管理"
-                  fontSize: 36
-                  through: true
-          导航分隔线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 18
-              y: "var.isAdmin == true ? 298 : 216"
-              width: 264
-              height: 2
-              normal: ~60,64,82,220
-          摘要标题:
+              through: true
+          副题:
             type: Text
             attribute:
-              point: ~top_left
-              x: 20
-              y: "var.isAdmin == true ? 316 : 234"
-              texts: "~&f邮箱概览"
+              x: 24
+              y: 74
+              texts: '''&7当前筛选 '' + var.filteredCount + '' 封'''
               fontSize: 36
-          摘要总数:
+              through: true
+          空态:
             type: Text
             attribute:
-              point: ~top_left
-              x: 20
-              y: "var.isAdmin == true ? 362 : 280"
-              texts: "'&f总数 &b' + var.totalCount.round()"
-              fontSize: 32
-          摘要未读:
-            type: Text
+              x: 24
+              y: 152
+              texts: 'var.totalCount == 0 ? ''&7收件箱暂时为空'' : ''&7此筛选下没有信件'''
+              fontSize: 36
+              through: true
+              visible: var.filteredCount == 0
+          邮件滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -8
+              y: 128
+              width: 6
+              height: var.viewH - 588
+              normal: ~124,118,103,70
+              through: true
+          邮件滑块:
+            type: Texture
+            val: 邮件滑块
+            attribute:
+              point: ~top_right
+              x: -8
+              y: 128
+              width: 6
+              height: 64
+              maxDragY: var.viewH - 588 - 64
+              normal: ~175,147,97,255
+              shape: ~round_rect
+              radius: 3
+          邮件滚动:
+            type: Scroll
             attribute:
               point: ~top_left
-              x: 20
-              y: "var.isAdmin == true ? 402 : 320"
-              texts: "'&f未读 &b' + var.unreadCount.round()"
-              fontSize: 32
-          摘要可领取:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 20
-              y: "var.isAdmin == true ? 442 : 360"
-              texts: "'&f可领取 &b' + var.claimableCount.round()"
-              fontSize: 32
-
-      # ── 内容区 ──────────────────────────────────────────
-      # 范式: 大白毛玻璃底(255,255,255,100) + 暗色面板分区(36,38,48,210)
-      # 布局: 筛选栏(顶) + 邮件列表(左暗色面板) + 详情(右暗色面板) + 底部操作+CDK合并栏
-      内容区:
+              x: 24
+              y: 128
+              width: 438
+              height: var.viewH - 588
+              moveY: val.邮件滑块.getDragYRatio()
+            action:
+              wheel: |-
+                ratio = self.moveY - self.wheelValue * 0.1
+                ratio = ratio < 0 ? 0 : ratio
+                ratio = ratio > 1 ? 1 : ratio
+                val.邮件滑块.setDragYRatio(ratio)
+            children:
+              mail_stack:
+                type: VStack
+                val: mail_list
+                attribute:
+                  width: 428
+                  spaceBetween: 12
+                children:
+                  邮件项目:
+                    type: Canvas
+                    attribute:
+                      x: 0
+                      y: 0
+                      width: 428
+                      height: 124
+                      entryKey: 0.round()
+                      entry: var.messages[self.entryKey]
+                      visible: self.entry != none
+                    children:
+                      底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: 'self.parent.entry[''id''] == var.selectedId ? ''101,61,54,255'' : ''58,44,42,255'''
+                          shape: ~round_rect
+                          radius: 8
+                      未读标记:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 14
+                          texts: 'self.parent.entry[''unread''] == true ? ''&e未读'' : ''&7已读'''
+                          fontSize: 36
+                          through: true
+                      主题:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 46
+                          texts: '''&f'' + self.parent.entry[''subject'']'
+                          fontSize: 48
+                          through: true
+                          limit: 24
+                      发件人:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 92
+                          texts: '''&7'' + self.parent.entry[''sender_name'']'
+                          fontSize: 36
+                          through: true
+                          limit: 18
+                      附件状态:
+                        type: Text
+                        attribute:
+                          x: 300
+                          y: 14
+                          texts: 'self.parent.entry[''claimable''] == true ? ''&e可领取'' : ''&7'' + self.parent.entry[''status_text'']'
+                          fontSize: 36
+                          through: true
+                          limit: 7
+                    action:
+                      clickLeft: |-
+                        if(self.entry != none && !var.actionBusy){
+                          Packet.send('AXS_MAIL', 'select', self.entry['id'])
+                        }
+      信件阅读:
         type: Canvas
         attribute:
           point: ~top_left
-          x: "372 - var.offX"
-          y: 120
-          width: "var.contentW"
-          height: "var.viewH - 144"
+          x: 552 - var.offX
+          y: 276
+          width: var.viewW - 600
+          height: var.viewH - 428
         children:
-          # 内容区大白毛玻璃底
-          内容底:
+          底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
+              through: true
+              normal: ~238,228,210,255
               shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~255,255,255,230
-          # 筛选栏
-          筛选栏:
-            type: HStack
+              radius: 12
+          阅读纸面:
+            type: Texture
             attribute:
               point: ~top_left
-              x: 24
-              y: 20
-              height: 40
-              spaceBetween: 8
-            children:
-              筛选全部:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'all'
-                    Packet.send('AXS_MAIL', 'filter', 'all')
-                children:
-                  筛选全部底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'all' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'all' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选全部文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'all' ? '&0全部' : '&f全部'"
-                      fontSize: 32
-                      through: true
-              筛选未读:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'unread'
-                    Packet.send('AXS_MAIL', 'filter', 'unread')
-                children:
-                  筛选未读底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'unread' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'unread' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选未读文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'unread' ? '&0未读' : '&f未读'"
-                      fontSize: 32
-                      through: true
-              筛选可领取:
-                type: Canvas
-                attribute:
-                  width: 112
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'claimable'
-                    Packet.send('AXS_MAIL', 'filter', 'claimable')
-                children:
-                  筛选可领取底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'claimable' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'claimable' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选可领取文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'claimable' ? '&0可领取' : '&f可领取'"
-                      fontSize: 32
-                      through: true
-              筛选系统:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'system'
-                    Packet.send('AXS_MAIL', 'filter', 'system')
-                children:
-                  筛选系统底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'system' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'system' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选系统文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'system' ? '&0系统' : '&f系统'"
-                      fontSize: 32
-                      through: true
-              筛选玩家:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'player'
-                    Packet.send('AXS_MAIL', 'filter', 'player')
-                children:
-                  筛选玩家底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'player' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'player' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选玩家文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'player' ? '&0玩家' : '&f玩家'"
-                      fontSize: 32
-                      through: true
-              筛选预设:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'preset'
-                    Packet.send('AXS_MAIL', 'filter', 'preset')
-                children:
-                  筛选预设底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'preset' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'preset' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选预设文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'preset' ? '&0预设' : '&f预设'"
-                      fontSize: 32
-                      through: true
-              筛选CDK:
-                type: Canvas
-                attribute:
-                  width: 96
-                  height: 40
-                action:
-                  clickLeft: |-
-                    var.filterMode = 'cdk'
-                    Packet.send('AXS_MAIL', 'filter', 'cdk')
-                children:
-                  筛选CDK底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: "var.filterMode == 'cdk' ? '80,180,120,230' : '36,38,48,245'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.filterMode == 'cdk' ? '80,180,120,255' : '255,255,255,230'"
-                  筛选CDK文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "var.filterMode == 'cdk' ? '&0CDK' : '&fCDK'"
-                      fontSize: 32
-                      through: true
-
-          # 邮件列表区（左侧暗色面板）
-          邮件列表区:
-            type: Canvas
+              through: true
+              normal: ~53,40,37,255
+              x: 16
+              y: 16
+              width: self.parent.width - 32
+              height: self.parent.height - 120
+              shape: ~round_rect
+              radius: 8
+          空态:
+            type: Text
+            attribute:
+              x: 48
+              y: 64
+              texts: ~&8选择一封信件开始阅读
+              fontSize: 54
+              through: true
+              visible: var.selectedId == none
+          详情滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -8
+              y: 40
+              width: 6
+              height: var.viewH - 572
+              normal: ~124,118,103,70
+              through: true
+              visible: var.selectedId != none
+          详情滑块:
+            type: Texture
+            val: 详情滑块
+            attribute:
+              point: ~top_right
+              x: -8
+              y: 40
+              width: 6
+              height: 64
+              maxDragY: var.viewH - 572 - 64
+              normal: ~175,147,97,255
+              shape: ~round_rect
+              radius: 3
+              visible: var.selectedId != none
+          详情滚动:
+            type: Scroll
             attribute:
               point: ~top_left
-              x: 24
-              y: 76
-              width: 560
-              height: "var.viewH - 144 - 76 - 76"
+              x: 40
+              y: 40
+              width: self.parent.width - 80
+              height: var.viewH - 572
+              moveY: val.详情滑块.getDragYRatio()
+              visible: var.selectedId != none
+            action:
+              wheel: |-
+                ratio = self.moveY - self.wheelValue * 0.1
+                ratio = ratio < 0 ? 0 : ratio
+                ratio = ratio > 1 ? 1 : ratio
+                val.详情滑块.setDragYRatio(ratio)
             children:
-              列表底:
-                type: Texture
+              详情内容:
+                type: VStack
                 attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~36,38,48,210
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              列表空提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "~&7暂无邮件"
-                  fontSize: 64
-                  visible: "var.totalCount == 0"
-              筛选空提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "~&7当前筛选无邮件"
-                  fontSize: 64
-                  visible: "var.totalCount > 0 && var.filteredCount == 0"
-              邮件滑轨:
-                type: Texture
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 12
-                  width: 10
-                  height: "self.parent.height - 24"
-                  normal: ~40,44,52,225
-                  shape: ~round_rect
-                  radius: 5
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~120,220,160,230
-              邮件滑块:
-                type: Texture
-                val: 邮件滑块
-                attribute:
-                  point: ~top_right
-                  x: -12
-                  y: 12
-                  width: 10
-                  height: 50
-                  normal: ~80,180,120,230
-                  maxDragY: "self.parent.height - 74"
-                  shape: ~round_rect
-                  radius: 5
-              左侧滚动栏:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 14
-                  y: 12
-                  width: "self.parent.width - 40"
-                  height: "self.parent.height - 24"
-                  moveY: "self.parent['邮件滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['邮件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['邮件滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
+                  width: self.parent.width
+                  spaceBetween: 24
                 children:
-                  mail_stack:
-                    val: mail_list
+                  主题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&f'' + var.selectedSubject'
+                      fontSize: 64
+                      through: true
+                      limit: 42
+                  发件信息:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts:
+                      - '''&7来自  &f'' + var.selectedSenderName'
+                      - '''&7来源  &f'' + var.selectedSourceText + ''  &7状态  &f'' + var.selectedStatusText'
+                      fontSize: 36
+                      through: true
+                      limit: 65
+                  时间:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts:
+                      - '''&7寄出  &f'' + var.selectedCreatedAt'
+                      - '''&7到期  &f'' + var.selectedExpiresAt'
+                      fontSize: 36
+                      through: true
+                      limit: 65
+                  正文标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: ~&6正文
+                      fontSize: 36
+                      through: true
+                  正文:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: var.selectedBody
+                      fontSize: 48
+                      through: true
+                      limit: 65
+                  附件标题:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      texts: '''&6附件  &7'' + var.selectedAttachmentSummary'
+                      fontSize: 36
+                      through: true
+                      limit: 65
+                  附件列表:
                     type: VStack
+                    val: 附件列表
                     attribute:
-                      width: "self.parent.width - 10"
-                      spaceBetween: 8
+                      width: self.parent.width
+                      spaceBetween: 12
                     children:
-                      邮件项目:
+                      附件模板:
                         type: Canvas
                         attribute:
-                          entryKey: 0.round()
-                          entry: var.messages[self.entryKey]
-                          width: "self.parent.width"
-                          height: 88
-                          visible: "self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread'] == true) || (var.filterMode == 'claimable' && self.entry['claimable'] == true) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk'))"
-                        action:
-                          clickLeft: |-
-                            Packet.send('AXS_MAIL', 'select', self.entry['id'])
+                          x: 0
+                          y: 0
+                          width: self.parent.width
+                          height: 80
+                          entryKey: none
+                          entry: var.selectedAttachments[self.entryKey]
+                          visible: self.entryKey != none && self.entry != none
                         children:
-                          项目底:
+                          底:
                             type: Texture
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "var.selectedId == self.parent.entry['id'] ? '80,180,120,210' : '36,38,48,245'"
+                              normal: ~74,54,46,255
                               shape: ~round_rect
-                              radius: 10
-                            effect:
-                              stroke:
-                                width: 3
-                                color: "var.selectedId == self.parent.entry['id'] ? '120,220,160,255' : (self.isHovered() ? '120,220,160,255' : '255,255,255,230')"
-                          未读圆点:
-                            type: Texture
+                              radius: 8
+                          附件图标:
+                            type: Slot
                             attribute:
-                              point: ~top_left
+                              slotType: ~Icon
+                              itemScale: 0.8
                               x: 12
                               y: 12
-                              width: 8
-                              height: 8
-                              normal: ~235,180,90,255
-                              shape: ~circle
-                              visible: "self.parent.entry['unread'] == true"
-                          主题文字:
+                              width: 56
+                              height: 56
+                              through: true
+                              normal: ~35,40,36,220
+                              shape: ~round_rect
+                              radius: 8
+                              seticon: self.setItemIcon(var.attachmentItemJsons[self.parent.entryKey])
+                          描述:
                             type: Text
                             attribute:
-                              point: ~top_left
-                              x: 30
-                              y: 10
-                              texts: "'&f' + self.parent.entry['subject']"
-                              fontSize: 32
-                          元信息文字:
-                            type: Text
-                            attribute:
-                              point: ~top_left
-                              x: 30
-                              y: 42
-                              texts: "'&f' + self.parent.entry['sender_name'] + '  &b' + self.parent.entry['source_text']"
-                              fontSize: 32
-                          预览文字:
-                            type: Text
-                            attribute:
-                              point: ~top_left
-                              x: 30
-                              y: 64
-                              texts: "'&f' + self.parent.entry['preview']"
-                              fontSize: 32
-
-          # 邮件详情区（右侧暗色面板）
-          邮件详情区:
+                              x: 84
+                              y: 28
+                              texts: '''&f'' + self.parent.entry[''description'']'
+                              fontSize: 36
+                              through: true
+                              limit: 60
+          领取:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 608
-              y: 76
-              width: "var.contentW - 608 - 24"
-              height: "var.viewH - 144 - 76 - 76"
+              x: 24
+              y: var.viewH - 508
+              width: 176
+              height: 64
             children:
-              详情底:
+              底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~36,38,48,210
+                  normal: '!var.actionBusy && var.selectedId != none && var.selectedClaimable == true ? ''90,48,50,255'' : ''77,77,72,180'''
                   shape: ~round_rect
-                  radius: 12
+                  radius: 8
                 effect:
                   stroke:
-                    width: 3
-                    color: ~255,255,255,230
-              详情空提示:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
                 type: Text
                 attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f领取附件
+                  fontSize: 36
+                  through: true
                   point: ~middle_center
-                  texts: "~&7暂无邮件"
-                  fontSize: 64
-                  visible: "var.totalCount == 0"
-              未选提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "~&7请选择一封邮件查看详情"
-                  fontSize: 64
-                  visible: "var.totalCount > 0 && var.selectedId == none"
-              详情选中区:
-                type: Canvas
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.selectedId != none && var.selectedClaimable == true){
+                  var.actionBusy = true
+                  var.actionBusySeconds = 0
+                  Packet.send('AXS_MAIL', 'claim', var.selectedId)
+                }
+          领取状态:
+            type: Text
+            attribute:
+              x: 224
+              y: var.viewH - 488
+              texts: 'var.selectedClaimable == true ? ''&8附件等待领取'' : ''&8没有可领取附件'''
+              fontSize: 36
+              through: true
+              visible: var.selectedId != none
+          删除:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: self.parent.width - 184
+              y: var.viewH - 508
+              width: 160
+              height: 64
+            children:
+              底:
+                type: Texture
                 attribute:
                   point: ~stretch_all
-                  width: "self.parent.width"
-                  height: "self.parent.height"
-                  visible: "var.selectedId != none"
-                children:
-                  详情滑轨:
-                    type: Texture
-                    attribute:
-                      point: ~top_right
-                      x: -12
-                      y: 20
-                      width: 10
-                      height: "self.parent.height - 50"
-                      normal: ~40,44,52,225
-                      shape: ~round_rect
-                      radius: 5
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~120,220,160,230
-                  详情滑块:
-                    type: Texture
-                    val: 详情滑块
-                    attribute:
-                      point: ~top_right
-                      x: -12
-                      y: 20
-                      width: 10
-                      height: 50
-                      normal: ~80,180,120,230
-                      maxDragY: "self.parent.height - 100"
-                      shape: ~round_rect
-                      radius: 5
-                  详情滚动栏:
-                    type: Scroll
-                    attribute:
-                      point: ~top_left
-                      x: 20
-                      y: 20
-                      width: "self.parent.width - 52"
-                      height: "self.parent.height - 50"
-                      moveY: "self.parent['详情滑块'].getDragYRatio()"
-                    action:
-                      wheel: |-
-                        if(self.moveY >= 0 && self.wheelValue > 0){
-                          self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                        if(self.moveY <= 1 && self.wheelValue < 0){
-                          self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                        }
-                    children:
-                      详情内容:
-                        type: VStack
-                        attribute:
-                          width: "self.parent.width"
-                          spaceBetween: 16
-                        children:
-                          详情主题:
-                            type: Text
-                            attribute:
-                              texts: "'&b' + var.selectedSubject"
-                              fontSize: 48
-                          详情元信息:
-                            type: Text
-                            attribute:
-                              texts: "'&f发件人 &b' + var.selectedSenderName + '  &f来源 &b' + var.selectedSourceText + '  &f状态 &b' + var.selectedStatusText"
-                              fontSize: 32
-                          详情时间:
-                            type: Text
-                            attribute:
-                              texts:
-                                - "'&f创建 &b' + var.selectedCreatedAt"
-                                - "'&f到期 &b' + var.selectedExpiresAt"
-                              fontSize: 32
-                          详情附件:
-                            type: VStack
-                            val: 附件列表
-                            attribute:
-                              width: "self.parent.width"
-                              spaceBetween: 8
-                            children:
-                              附件模板:
-                                type: Canvas
-                                attribute:
-                                  entryKey: none
-                                  entry: var.selectedAttachments[self.entryKey]
-                                  visible: self.entryKey != none && self.entry != none
-                                  width: "self.parent.width - 6"
-                                  height: 72
-                                children:
-                                  附件背景:
-                                    type: Texture
-                                    attribute:
-                                      point: ~stretch_all
-                                      through: true
-                                      normal: ~44,48,60,235
-                                      shape: ~round_rect
-                                      radius: 10
-                                    effect:
-                                      stroke:
-                                        width: 3
-                                        color: ~80,180,120,220
-                                  附件图标:
-                                    type: Slot
-                                    attribute:
-                                      slotType: ~Icon
-                                      itemScale: 0.72
-                                      x: 8
-                                      y: 8
-                                      width: 56
-                                      height: 56
-                                      normal: ~36,38,48,180
-                                      shape: ~round_rect
-                                      radius: 8
-                                      seticon: "self.setItemIcon(var.attachmentItemJsons[self.parent.entryKey])"
-                                  附件描述:
-                                    type: Text
-                                    attribute:
-                                      point: ~middle_left
-                                      x: 76
-                                      texts: "'&f' + self.parent.entry['description']"
-                                      fontSize: 32
-                                      through: true
-                          详情正文:
-                            type: Text
-                            attribute:
-                              texts: "var.selectedBody"
-                              fontSize: 36
-
-          # 底部操作+CDK合并栏（统一高度48）
-          底部操作栏:
-            type: HStack
+                  through: true
+                  normal: '!var.actionBusy && var.selectedId != none ? ''97,49,46,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f删除信件
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.selectedId != none){
+                  var.deleteTarget = var.selectedId
+                  var.confirmMode = 'selected'
+                }
+      底部工具:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 48 - var.offX
+          y: var.viewH - 112
+          width: var.viewW - 96
+          height: 64
+        children:
+          批量领取:
+            type: Canvas
             attribute:
-              point: ~bottom_left
-              x: 24
-              y: -16
-              height: 48
-              spaceBetween: 18
+              point: ~top_left
+              x: 0
+              y: 0
+              width: 184
+              height: 64
             children:
-              领取按钮:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: '!var.actionBusy && var.claimableCount > 0 ? ''90,48,50,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f全部领取
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.claimableCount > 0){
+                  var.actionBusy = true
+                  var.actionBusySeconds = 0
+                  Packet.send('AXS_MAIL', 'claimall')
+                }
+          批量删除:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 200
+              y: 0
+              width: 184
+              height: 64
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: '!var.actionBusy && var.totalCount > 0 ? ''97,49,46,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f全部删除
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.totalCount > 0){
+                  var.confirmMode = 'all'
+                }
+          兑换输入:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 776
+              y: 0
+              width: 360
+              height: 64
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~238,228,210,255
+                  shape: ~round_rect
+                  radius: 8
+              输入:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 10
+                  width: 336
+                  height: 44
+                  length: 18
+                  emptyText: ~&8输入兑换码
+                  fontSize: 36
+                action:
+                  textChange: var.cdkCode = self.getContent()
+          兑换:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: var.viewW - 400
+              y: 0
+              width: 144
+              height: 64
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: '!var.actionBusy && var.cdkCode != none && var.cdkCode != '''' ? ''90,48,50,255'' : ''77,77,72,180'''
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 1
+                    color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+              文字:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: ~&f兑换
+                  fontSize: 36
+                  through: true
+                  point: ~middle_center
+            action:
+              clickLeft: |-
+                if(!var.actionBusy && var.cdkCode != none && var.cdkCode != ''){
+                  var.actionBusy = true
+                  var.actionBusySeconds = 0
+                  Packet.send('AXS_MAIL', 'cdk', var.cdkCode)
+                }
+      删除确认:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: -var.offX
+          width: var.viewW
+          height: var.viewH
+          visible: var.confirmMode != ''
+        children:
+          遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: false
+              normal: ~12,8,8,210
+          确认框:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              x: 0
+              y: 0
+              width: 720
+              height: 320
+            children:
+              底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~238,228,210,255
+                  shape: ~round_rect
+                  radius: 12
+              标题:
+                type: Text
+                attribute:
+                  x: 36
+                  y: 36
+                  texts: 'var.confirmMode == ''all'' ? ''&4删除全部信件？'' : ''&4删除这封信件？'''
+                  fontSize: 64
+                  through: true
+              说明:
+                type: Text
+                attribute:
+                  x: 36
+                  y: 116
+                  texts:
+                  - ~&8该操作会请求服务端删除信件。
+                  - ~&8请先核对需要保留的正文与附件。
+                  fontSize: 36
+                  through: true
+              取消:
                 type: Canvas
                 attribute:
-                  width: 120
-                  height: 48
-                  enable: "!var.actionBusy && var.selectedId != none"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'claim', var.selectedId)
+                  point: ~top_left
+                  x: 36
+                  y: 228
+                  width: 288
+                  height: 64
                 children:
-                  领取底:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~80,180,120,230
+                      normal: ~90,48,50,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 8
                     effect:
-                      ripple:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  领取文字:
+                        width: 1
+                        color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+                  文字:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: "~&0领取"
+                      x: 0
+                      y: 0
+                      texts: ~&f保留信件
                       fontSize: 36
                       through: true
-              删除按钮:
+                      point: ~middle_center
+                action:
+                  clickLeft: var.confirmMode = ''
+              确认:
                 type: Canvas
                 attribute:
-                  width: 120
-                  height: 48
-                  enable: "!var.actionBusy && var.selectedId != none"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'delete', var.selectedId)
+                  point: ~top_left
+                  x: 396
+                  y: 228
+                  width: 288
+                  height: 64
                 children:
-                  删除底:
+                  底:
                     type: Texture
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~36,38,48,245
+                      normal: ~119,43,43,255
                       shape: ~round_rect
-                      radius: 10
+                      radius: 8
                     effect:
-                      ripple:
                       stroke:
-                        width: 3
-                        color: "self.isHovered() ? '235,100,100,255' : '255,255,255,230'"
-                  删除文字:
+                        width: 1
+                        color: 'self.parent.isHovered() ? ''183,149,86,255'' : ''118,112,96,100'''
+                  文字:
                     type: Text
                     attribute:
-                      point: ~middle_center
-                      texts: "~&f删除"
+                      x: 0
+                      y: 0
+                      texts: ~&f确认删除
                       fontSize: 36
                       through: true
-              全部领取按钮:
-                type: Canvas
-                attribute:
-                  width: 168
-                  height: 48
-                  enable: "!var.actionBusy"
+                      point: ~middle_center
                 action:
                   clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'claimall')
-                children:
-                  全部领取底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  全部领取文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f全部领取"
-                      fontSize: 36
-                      through: true
-              全部删除按钮:
-                type: Canvas
-                attribute:
-                  width: 168
-                  height: 48
-                  enable: "!var.actionBusy"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'deleteall')
-                children:
-                  全部删除底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '235,100,100,255' : '255,255,255,230'"
-                  全部删除文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f全部删除"
-                      fontSize: 36
-                      through: true
-              刷新按钮:
-                type: Canvas
-                attribute:
-                  width: 120
-                  height: 48
-                  enable: "!var.actionBusy"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'refresh')
-                children:
-                  刷新底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  刷新文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&f刷新"
-                      fontSize: 36
-                      through: true
-              兑换码输入框:
-                type: Canvas
-                attribute:
-                  width: 300
-                  height: 48
-                children:
-                  兑换码输入底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      normal: ~36,38,48,245
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: ~255,255,255,230
-                  兑换码输入框文本:
-                    type: TextBox
-                    attribute:
-                      x: 10
-                      y: 6
-                      width: 280
-                      height: 36
-                      length: 18
-                      emptyText: "~&f输入CDK兑换"
-                      fontSize: 36
-                    action:
-                      textChange: |-
-                        var.cdkCode = self.getContent()
-              兑换按钮:
-                type: Canvas
-                attribute:
-                  width: 120
-                  height: 48
-                  enable: "!var.actionBusy && var.cdkCode != none"
-                action:
-                  clickLeft: |-
-                    var.actionBusy = true
-                    Packet.send('AXS_MAIL', 'cdk', var.cdkCode)
-                children:
-                  兑换底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~80,180,120,230
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 3
-                        color: "self.isHovered() ? '120,220,160,255' : '255,255,255,230'"
-                  兑换文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      texts: "~&0兑换"
-                      fontSize: 36
-                      through: true
+                    if(!var.actionBusy && var.confirmMode != ''){
+                      var.actionBusy = true
+                      var.actionBusySeconds = 0
+                      if(var.confirmMode == 'all'){
+                        Packet.send('AXS_MAIL', 'deleteall')
+                      }else{
+                        Packet.send('AXS_MAIL', 'delete', var.deleteTarget)
+                      }
+                      var.confirmMode = ''
+                    }

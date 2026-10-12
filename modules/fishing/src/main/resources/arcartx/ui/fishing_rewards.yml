@@ -1,26 +1,4 @@
-# AXS 钓鱼赛季等级奖励界面
-# 打开方式: Packet.send(packetId, 'open_rewards') 或通过钓鱼主界面导航入口
-# 数据交互: packetHandler init
-# 布局: 全屏暗色玻璃 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务）+ 垂直滚动奖励列表
-# 每个条目展示：等级要求、图标、名称、领取状态（可领取/已领取/未达标）
-# 视觉规范（钓鱼青蓝主题）:
-#   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
-#   卡片底 26,34,46,210  卡片描边 80,200,220,240
-#   主色（青蓝）50,170,200  已领取 124,196,142  悬停 80,200,220
-#
-# packetHandler init 包字段:
-#   - packetId: "AXS_FISHING_REWARDS"
-#   - level: 玩家当前钓鱼等级
-#   - claimedRewards: 已领取奖励 ID 列表
-#   - rewards: 奖励映射（key 为序号字符串，含 id/level/type/iconName/iconMaterial/iconAmount/claimable/claimed）
-#     其中 claimable/claimed 为 Java boolean，UI 端用 == true 比较（不是 'true' 字符串）
-#   - iconJson{idx}: 每个奖励的图标 itemJson（Java 端生成的完整物品 JSON，分离模式 flat 字段）
-#   - rewardCount: 奖励条目总数
-#
-# 客户端发送包:
-#   Packet.send(packetId, 'open_rewards')                    — 界面打开时请求数据
-#   Packet.send(packetId, 'claim_reward', rewardId)          — 领取指定奖励
-
+# Lakeside field guide / 03 · A milestone ledger, not a shop.
 ui:
   isHud: false
   background: false
@@ -31,8 +9,6 @@ ui:
   show: true
   level: 8
   packetHandler:
-    # packetHandler: init
-    # 接收奖励列表数据包，动态生成奖励条目子元素
     init: |-
       var.claimableCount = 0
       var.iconJsons = {}
@@ -43,59 +19,45 @@ ui:
       var.claimedRewards = packet['claimedRewards']
       var.rewards = packet['rewards']
       var.rewardCount = packet['rewardCount']
-      // 构建 iconJsons 映射（Java 端生成的完整 itemJson，分离模式 flat 字段）
-      // 注意：不要在 UI 端拼接 SNBT（材质名大小写/Count 浮点都会出问题）
+      var.claimedCount = 0
       if(var.rewards != none){
         for(key in var.rewards.keys()){
           json = packet['iconJson' + key]
-          if(json != none && json != ''){
-            var.iconJsons[key] = json
-          } else {
-            var.iconJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      // 统计可领取数量
-      if(var.rewards != none){
-        for(key in var.rewards.keys()){
+          var.iconJsons[key] = (json != none && json != '') ? json : var.emptyItemJson
           entry = var.rewards[key]
           if(entry != none && entry['claimable'] == true){
             var.claimableCount = var.claimableCount + 1
           }
+          if(entry != none && entry['claimed'] == true){
+            var.claimedCount = var.claimedCount + 1
+          }
         }
       }
-      // 动态生成奖励条目（模板在索引0，复制 1~count-1 共 count-1 项）
-      while(val.奖励列表.childrenCount() > 1){
-        val.奖励列表.get(1).remove()
+      for(key in var.rewardRefs.keys()){
+        var.rewardRefs[key].remove()
       }
+      var.rewardRefs = {}
+      var.rewardGeneration = (var.rewardGeneration + 1).round()
       for(i in range(1, var.rewardCount - 1)){
         key = i.round()
-        if(val.奖励列表['奖励条目'] != none) {
-          e = val.奖励列表['奖励条目'].copy('奖励条目' + key)
-          e.entryKey = key
-        }
+        e = val.奖励列表.get(0).copy('奖励条目_' + var.rewardGeneration + '_' + key)
+        e.entryKey = key
+        var.rewardRefs[key] = e
       }
-      // 数据就绪后触发每个奖励图标的 seticon()
-      if(val.奖励列表['奖励条目'] != none && val.奖励列表['奖励条目']['图标'] != none){
-        val.奖励列表['奖励条目']['图标'].seticon()
-      }
-      for(i in range(1, var.rewardCount - 1)){
-        key = i.round()
-        e = val.奖励列表['奖励条目' + key]
-        if(e != none && e['图标'] != none){
-          e['图标'].seticon()
-        }
-      }
+      var.iconDelay = 2
   action:
-    # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
       var.level = 1
       var.actionBusy = false
       var.busySeconds = 0
       var.packetId = 'AXS_FISHING_REWARDS'
       var.rewardCount = 0
+      var.claimableCount = 0
+      var.claimedCount = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      // 视口换算：把窗口实际宽高折算回设计坐标系
+      var.rewardRefs = {}
+      var.rewardGeneration = 0
+      var.iconDelay = 0
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
@@ -103,7 +65,6 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-    # open: 界面打开后主动请求服务端推送数据
     open: |-
       Packet.send(var.packetId, 'refresh_rewards')
     seconds: |-
@@ -114,7 +75,6 @@ ui:
           Packet.send(var.packetId, 'refresh_rewards')
         }
       }
-    # resize: 窗口尺寸变化后重算可用高宽
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -123,567 +83,131 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-
-# ─── 控件树 ────────────────────────────────────────────────────────
+    tick: |-
+      if(var.iconDelay > 0){
+        var.iconDelay = var.iconDelay - 1
+        if(var.iconDelay == 0){
+          val.奖励列表.get(0)['图标'].seticon()
+          for(key in var.rewardRefs.keys()){
+            var.rewardRefs[key]['图标'].seticon()
+          }
+        }
+      }
 controls:
-  # 全屏毛玻璃底（真高斯模糊世界背景）；置于顶层以覆盖整块屏幕
-  全屏玻璃底:
-    type: Texture
-    attribute:
-      point: ~stretch_all
-      normal: ~Frosted:24;12,22,38,110
-  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
-  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
-  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边；
-  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配，顶栏与内容区同步铺满
+  全屏玻璃底: {type: Texture, attribute: {point: ~stretch_all, normal: '~Frosted:18;20,43,52,170'}}
   自适应全局布局:
     type: Adaptive
-    attribute:
-      point: ~top_center
-      width: 1920
-      height: 1080
+    attribute: {point: ~top_center, width: 1920, height: 1080}
     children:
-      # ── 顶栏 ───────────────────────────────────────────
-      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
       顶栏:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "-var.offX"
-          width: "var.viewW"
-          height: 96
+        attribute: {x: '-var.offX', width: 'var.viewW', height: 96}
         children:
-          顶栏底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-          顶栏底线:
-            type: Texture
-            attribute:
-              point: ~horizontal_stretch_bottom
-              height: 1
-              normal: ~80,200,220,230
-          标题色块:
-            type: Texture
-            attribute:
-              point: ~middle_left
-              x: 48
-              width: 6
-              height: 36
-              normal: ~50,170,200,255
-              shape: ~round_rect
-              radius: 3
-          标题:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 68
-              texts: "~&f钓鱼"
-              fontSize: 48
-          标题竖线:
-            type: Texture
-            attribute:
-              point: ~middle_left
-              x: 168
-              width: 1
-              height: 30
-              normal: ~80,200,220,230
-          页名:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 188
-              texts: "~&f奖励"
-              fontSize: 36
-          当前等级:
-            type: Text
-            attribute:
-              point: ~middle_right
-              x: -112
-              texts: "'&f当前等级 &bLv.' + var.level.round()"
-              fontSize: 34
+          顶栏底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,250'}}
+          标题: {type: Text, attribute: {point: ~middle_left, x: 48, texts: '~&f湖畔手册', fontSize: 54}}
+          页名: {type: Text, attribute: {point: ~middle_left, x: 340, texts: '~&7钓鱼 / &f成长奖励', fontSize: 36}}
           关闭按钮:
             type: Canvas
-            attribute:
-              point: ~middle_right
-              x: -40
-              width: 40
-              height: 40
-            action:
-              clickLeft: |-
-                Screen.close()
+            attribute: {point: ~middle_right, x: -40, width: 112, height: 52}
+            action: {clickLeft: 'Screen.close()'}
             children:
-              关闭背景:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: 40
-                  texts: "~&f✕"
-                  fontSize: 32
-                  through: true
-
-      # ── 左侧导航 ───────────────────────────────────────
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~48,75,83,255', hover: '~73,107,106,255', shape: ~round_rect, radius: 12, through: true}}
+              字: {type: Text, attribute: {point: ~middle_center, texts: '~&f关闭', fontSize: 36, through: true}}
       左侧导航:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "48 - var.offX"
-          y: 120
-          width: 300
-          height: "var.viewH - 144"
+        attribute: {x: '48 - var.offX', y: 120, width: 300, height: 'var.viewH - 144'}
         children:
-          导航底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~80,200,220,240
+          导航底: {type: Texture, attribute: {point: ~stretch_all, normal: '~231,222,196,250', shape: ~round_rect, radius: 18}}
+          索引标题: {type: Text, attribute: {x: 24, y: 24, texts: '~&8FIELD GUIDE / 目录', fontSize: 36}}
           导航总览:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 18
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_main')
+            attribute: {x: 16, y: 88, width: 268, height: 62}
+            action: {clickLeft: "Packet.send(var.packetId, 'open_main')"}
             children:
-              总览底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              总览文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f总览"
-                  fontSize: 36
-                  through: true
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f01  垂钓日志', fontSize: 36, through: true}}
           导航图鉴:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 84
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_collection')
+            attribute: {x: 16, y: 162, width: 268, height: 62}
+            action: {clickLeft: "Packet.send(var.packetId, 'open_collection')"}
             children:
-              图鉴底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              图鉴文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f图鉴"
-                  fontSize: 36
-                  through: true
-          # 当前页：奖励
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f02  鱼种图鉴', fontSize: 36, through: true}}
           导航奖励:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 150
-              width: 272
-              height: 58
+            attribute: {x: 16, y: 236, width: 268, height: 62}
             children:
-              奖励底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  normal: ~50,170,200,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  stroke:
-                    width: 3
-                    color: ~50,170,200,230
-              奖励高亮条:
-                type: Texture
-                attribute:
-                  point: ~middle_left
-                  x: 8
-                  width: 4
-                  height: 28
-                  normal: ~50,170,200,255
-                  shape: ~round_rect
-                  radius: 2
-              奖励文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&0奖励"
-                  fontSize: 36
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~157,190,169,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&003  成长奖励', fontSize: 36, through: true}}
           导航天赋:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 216
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_talents')
+            attribute: {x: 16, y: 310, width: 268, height: 62}
+            action: {clickLeft: "Packet.send(var.packetId, 'open_talents')"}
             children:
-              天赋底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              天赋文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f天赋"
-                  fontSize: 36
-                  through: true
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f04  技艺网络', fontSize: 36, through: true}}
           导航任务:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 282
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_tasks')
+            attribute: {x: 16, y: 384, width: 268, height: 62}
+            action: {clickLeft: "Packet.send(var.packetId, 'open_tasks')"}
             children:
-              任务底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              任务文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f任务"
-                  fontSize: 36
-                  through: true
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f05  湖畔委托', fontSize: 36, through: true}}
           导航饵料:
             type: Canvas
-            attribute:
-              point: ~top_left
-              x: 14
-              y: 348
-              width: 272
-              height: 58
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'open_baits')
+            attribute: {x: 16, y: 458, width: 268, height: 62}
+            action: {clickLeft: "Packet.send(var.packetId, 'open_baits')"}
             children:
-              饵料底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~26,34,46,210
-                  shape: ~round_rect
-                  radius: 10
-                effect:
-                  ripple:
-                  stroke:
-                    width: 3
-                    color: "self.isHovered() ? '80,200,220,255' : '80,200,220,240'"
-              饵料文字:
-                type: Text
-                attribute:
-                  point: ~middle_left
-                  x: 28
-                  texts: "~&f饵料"
-                  fontSize: 36
-                  through: true
-          导航分隔线:
-            type: Texture
-            attribute:
-              point: ~top_left
-              x: 18
-              y: 430
-              width: 264
-              height: 2
-              normal: ~80,200,220,220
-
-      # ── 内容区（奖励列表）───────────────────────────────
+              底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,245', hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+              字: {type: Text, attribute: {point: ~middle_left, x: 20, texts: '~&f06  行前饵料', fontSize: 36, through: true}}
+          状态图例: {type: Text, attribute: {x: 24, y: 580, texts: ['~&8成长解锁里程碑', '~&8浅绿：可领取', '~&8已领：记录完成', '~&8未达：继续积累经验'], fontSize: 36}}
       内容区:
         type: Canvas
-        attribute:
-          point: ~top_left
-          x: "372 - var.offX"
-          y: 120
-          width: "var.contentW"
-          height: "var.viewH - 144"
+        attribute: {x: '372 - var.offX', y: 120, width: 'var.contentW', height: 'var.viewH - 144'}
         children:
-          内容底:
-            type: Texture
-            attribute:
-              point: ~stretch_all
-              normal: ~Frosted:30;255,255,255,100
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 3
-                color: ~80,200,220,240
-          页标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 32
-              y: 26
-              texts: "~&f赛季奖励"
-              fontSize: 40
-          页标题说明:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 196
-              y: 32
-              texts: "~&f按等级排列，达到对应等级即可领取"
-              fontSize: 30
-          # 空状态：无奖励数据时显示
-          空状态:
-            type: Canvas
-            attribute:
-              point: ~middle_center
-              width: "var.contentW - 100"
-              height: 120
-              visible: var.rewardCount == 0
-            children:
-              空状态文本:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  width: "var.contentW - 100"
-                  texts: "~&f暂无赛季奖励数据"
-                  fontSize: 36
-
-          # 滚动滑轨：右侧滚动条轨道
-          奖励滑轨:
-            type: Texture
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 96
-              width: 12
-              height: "var.viewH - 264"
-              normal: ~15,25,38,220
-              shape: ~round_rect
-              radius: 6
-            effect:
-              stroke:
-                width: 2
-                color: ~80,200,220,240
-          # 滚动滑块：右侧滚动条滑块
+          内容底: {type: Texture, attribute: {point: ~stretch_all, normal: '~191,209,191,248', shape: ~round_rect, radius: 18}}
+          页标题: {type: Text, attribute: {x: 32, y: 24, texts: '~&0成长奖励', fontSize: 64}}
+          当前等级: {type: Text, attribute: {point: ~top_right, x: -32, y: 40, texts: "'&8垂钓等级 Lv.' + var.level.round()", fontSize: 36}}
+          统计底: {type: Texture, attribute: {x: 32, y: 116, width: 'var.contentW - 64', height: 92, normal: '~23,49,64,255', shape: ~round_rect, radius: 12}}
+          领取统计: {type: Text, attribute: {x: 56, y: 144, texts: "'&f可领取 ' + var.claimableCount.round() + '   &7已领取 ' + var.claimedCount.round() + ' / ' + var.rewardCount.round()", fontSize: 36}}
+          保存状态: {type: Text, attribute: {point: ~top_right, x: -56, y: 144, texts: "var.actionBusy ? '&e正在领取，请稍候...' : '&7按等级排列 / 滚轮翻阅'", fontSize: 36}}
+          空状态: {type: Text, attribute: {point: ~middle_center, texts: '~&8本赛季暂无奖励记录', fontSize: 48, visible: 'var.rewardCount == 0'}}
+          奖励滑轨: {type: Texture, attribute: {point: ~top_right, x: -16, y: 236, width: 12, height: 'var.viewH - 404', normal: '~140,166,151,255', shape: ~round_rect, radius: 6}}
           奖励滑块:
             type: Texture
             val: 奖励滑块
-            attribute:
-              point: ~top_right
-              x: -16
-              y: 96
-              width: 12
-              height: 120
-              normal: ~50,170,200,220
-              maxDragY: "var.viewH - 384"
-              shape: ~round_rect
-              radius: 6
-
-          # 滚动区：可滚动的奖励列表容器
+            attribute: {point: ~top_right, x: -16, y: 236, width: 12, height: 120, maxDragY: 'var.viewH - 524', normal: '~23,49,64,255', shape: ~round_rect, radius: 6}
           滚动区:
             type: Scroll
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 96
-              width: "var.contentW - 72"
-              height: "var.viewH - 264"
-              moveY: "self.parent['奖励滑块'].getDragYRatio()"
+            attribute: {x: 28, y: 236, width: 'var.contentW - 76', height: 'var.viewH - 404', moveY: "self.parent['奖励滑块'].getDragYRatio()"}
             action:
               wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+                self.parent['奖励滑块'].setDragYRatio(math.max(0, math.min(1, self.moveY - self.wheelValue * 0.1)))
             children:
-              # 奖励列表：垂直堆叠布局
               奖励列表:
-                val: 奖励列表
                 type: VStack
-                attribute:
-                  width: "var.contentW - 72"
-                  spaceBetween: 12
-                  height: "var.rewardCount * 122"
+                val: 奖励列表
+                attribute: {width: 'var.contentW - 76', spaceBetween: 16}
                 children:
-                  # ── 奖励条目模板（索引0）──────────────────────
-                  # 每个条目横向排列：等级徽章 | 物品图标 | 名称+类型 | 领取状态
                   奖励条目:
                     type: Canvas
-                    attribute:
-                      entryKey: 0.round()
-                      entry: var.rewards[self.entryKey]
-                      visible: self.entry != none
-                      width: "var.contentW - 72"
-                      height: 110
+                    attribute: {entryKey: 0.round(), entry: 'var.rewards[self.entryKey]', visible: 'self.entry != none', width: 'var.contentW - 76', height: 140}
                     children:
-                      # 条目背景（颜色随状态变化）
-                      条目底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: "self.parent.entry != none && self.parent.entry['claimed'] == true ? '36,42,50,180' : (self.parent.entry != none && self.parent.entry['claimable'] == true ? '28,52,48,215' : '26,34,46,210')"
-                          shape: ~round_rect
-                          radius: 12
-                        effect:
-                          stroke:
-                            width: 2
-                            color: "self.parent.entry != none && self.parent.entry['claimable'] == true ? '80,200,220,230' : (self.parent.entry != none && self.parent.entry['claimed'] == true ? '124,196,142,240' : '80,200,220,230')"
-
-                      # 等级徽章：显示奖励所需等级
+                      条目底: {type: Texture, attribute: {point: ~stretch_all, normal: "self.parent.entry['claimable'] == true ? '157,190,169,255' : '231,222,196,255'", shape: ~round_rect, radius: 14, through: true}}
                       等级徽章:
                         type: Canvas
-                        attribute:
-                          x: 16
-                          y: 15
-                          width: 100
-                          height: 80
+                        attribute: {x: 12, y: 12, width: 112, height: 116}
                         children:
-                          徽章底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '46,120,72,220' : (self.parent.parent.entry != none && self.parent.parent.entry['claimed'] == true ? '50,80,60,200' : '40,48,58,200')"
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              stroke:
-                                width: 2
-                                color: "self.parent.parent.entry != none && self.parent.parent.entry['claimable'] == true ? '80,200,220,200' : '80,200,220,230'"
-                          等级文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              width: 100
-                              texts: "self.parent.parent.entry != none ? '&fLv.' + self.parent.parent.entry['level'].round() : none"
-                              fontSize: 32
-                              through: true
-
-                      # 物品图标（不开 through：穿透会导致 hover 事件丢失，tooltip 不显示）
+                          底: {type: Texture, attribute: {point: ~stretch_all, normal: '~23,49,64,255', shape: ~round_rect, radius: 12, through: true}}
+                          字: {type: Text, attribute: {point: ~middle_center, texts: "'&fLv.' + self.parent.parent.entry['level'].round()", fontSize: 36, through: true}}
                       图标:
                         type: Slot
-                        attribute:
-                          x: 132
-                          y: 15
-                          width: 80
-                          height: 80
-                          normal: ~18,28,40,180
-                          shape: ~round_rect
-                          radius: 10
-                          slotType: ~Icon
-                          itemScale: 0.85
-                          overwriteText: "~"
-                          seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
-
-                      # 奖励名称
-                      名称:
-                        type: Text
-                        attribute:
-                          x: 232
-                          y: 20
-                          width: "var.contentW - 500"
-                          texts: "self.parent.entry != none ? '&f' + self.parent.entry['iconName'] : none"
-                          fontSize: 32
-                          through: true
-
-                      # 奖励类型
-                      类型:
-                        type: Text
-                        attribute:
-                          x: 232
-                          y: 60
-                          width: "var.contentW - 500"
-                          texts: "self.parent.entry != none ? '&7类型: &b' + (self.parent.entry['type'] == 'currency' ? '货币' : (self.parent.entry['type'] == 'item' ? '物品' : self.parent.entry['type'])) : none"
-                          fontSize: 30
-                          through: true
-
-                      # 领取按钮：可领取时显示（青蓝高亮 + 点击领取）
+                        attribute: {x: 144, y: 24, width: 92, height: 92, normal: '~99,141,142,255', shape: ~round_rect, radius: 12, slotType: ~Icon, itemScale: 0.85, overwriteText: '~', seticon: 'self.setItemIcon(var.iconJsons[self.parent.entryKey])'}
+                      名称: {type: Text, attribute: {x: 264, y: 28, texts: "'&0' + self.parent.entry['iconName']", fontSize: 48, limit: 18, through: true}}
+                      类型: {type: Text, attribute: {x: 264, y: 88, texts: "'&8' + self.parent.entry['type'] + ' · x' + self.parent.entry['iconAmount'].round()", fontSize: 36, through: true}}
                       领取按钮:
                         type: Canvas
-                        attribute:
-                          point: ~middle_right
-                          x: -16
-                          width: 160
-                          height: 44
-                          visible: "self.parent.entry != none && self.parent.entry['claimable'] == true"
+                        attribute: {point: ~middle_right, x: -24, width: 200, height: 64, visible: "self.parent.entry['claimable'] == true", enable: '!var.actionBusy && var.actionToken != none'}
                         action:
                           clickLeft: |-
                             if(!var.actionBusy && var.actionToken != none){
@@ -692,67 +216,7 @@ controls:
                               Packet.send(var.packetId, 'claim_reward', var.actionToken, self.parent.entry['id'])
                             }
                         children:
-                          领取背景:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~46,120,72,220
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              ripple:
-                              stroke:
-                                width: 2
-                                color: "self.isHovered() ? '80,200,220,255' : '80,200,220,230'"
-                          领取文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              width: 160
-                              texts: "~&a领取"
-                              fontSize: 30
-                              through: true
-
-                      # 已领取标识：绿色勾选
-                      已领取标识:
-                        type: Text
-                        attribute:
-                          point: ~middle_right
-                          x: -16
-                          width: 160
-                          texts: "~&a✔ &7已领取"
-                          fontSize: 28
-                          through: true
-                          visible: "self.parent.entry != none && self.parent.entry['claimed'] == true"
-
-                      # 未达标标识：灰色锁定
-                      未达标标识:
-                        type: Canvas
-                        attribute:
-                          point: ~middle_right
-                          x: -16
-                          width: 160
-                          height: 44
-                          visible: "self.parent.entry != none && self.parent.entry['claimable'] != true && self.parent.entry['claimed'] != true"
-                        children:
-                          未达标底:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: ~40,44,52,180
-                              shape: ~round_rect
-                              radius: 10
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,200,220,225
-                          未达标文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              width: 160
-                              texts: "~&7🔒 未达标"
-                              fontSize: 26
-                              through: true
+                          领取背景: {type: Texture, attribute: {point: ~stretch_all, normal: "var.actionBusy ? '80,103,102,255' : '23,49,64,255'", hover: '~53,89,96,255', shape: ~round_rect, radius: 10, through: true}}
+                          领取文字: {type: Text, attribute: {point: ~middle_center, texts: "var.actionBusy ? '&7处理中' : '&f领取奖励'", fontSize: 36, through: true}}
+                      已领取标识: {type: Text, attribute: {point: ~middle_right, x: -32, texts: '~&2已领取', fontSize: 36, visible: "self.parent.entry['claimed'] == true", through: true}}
+                      未达标标识: {type: Text, attribute: {point: ~middle_right, x: -32, texts: "'&8需要 Lv.' + self.parent.entry['level'].round()", fontSize: 36, visible: "self.parent.entry['claimable'] != true && self.parent.entry['claimed'] != true", through: true}}

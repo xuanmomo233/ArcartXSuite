@@ -26,6 +26,11 @@ ui:
       var.actionToken = packet['action_token']
       var.title = packet['title']
       var.dungeonRows = packet['dungeonRows']
+      var.iconJsons = {}
+      for(key in var.dungeonRows.keys()){
+        icon = var.dungeonRows[key]['iconJson']
+        var.iconJsons[key] = icon != none && icon != '' ? icon : var.air
+      }
       var.dungeonCount = packet['dungeonCount']
       var.hasParty = packet['hasParty']
       var.partyText = packet['partyText']
@@ -69,6 +74,7 @@ ui:
       var.actionToken = ''
       var.title = '深渊回廊'
       var.dungeonRows = {}
+      var.iconJsons = {}
       var.dungeonCount = 0
       var.hasParty = false
       var.partyText = '未组队'
@@ -78,12 +84,12 @@ ui:
       var.卡片轮次 = 0
       var.卡片引用 = {}
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.accent = '186,140,232,255'
-      var.accentDim = '96,80,140,190'
-      var.accentHover = '220,180,255,235'
-      var.cardBg = '38,30,58,255'
-      var.cardBgActive = '68,52,96,255'
-      var.cardBgHover = '52,40,76,255'
+      var.accent = '219,164,83,255'
+      var.accentDim = '105,84,62,210'
+      var.accentHover = '248,203,123,255'
+      var.cardBg = '25,28,29,245'
+      var.cardBgActive = '66,47,36,250'
+      var.cardBgHover = '48,39,34,255'
       self.actions['resize']()
     resize: |-
       sx = Screen.getWidth() / 1920
@@ -92,7 +98,7 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.viewH = Screen.getHeight() / s
       var.offX = (var.viewW - 1920) / 2
-      var.leftW = var.viewW * 0.6
+      var.leftW = var.viewW * 0.48
       var.rightW = var.viewW - var.leftW
     open: |-
       Sound.self('minecraft:item.book.page_turn', 0.9, 14)
@@ -115,16 +121,18 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;20,16,38,245
+              normal: ~Frosted:24;8,10,11,245
+              through: true
           暮色底幕:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~16,12,30,255
+              normal: ~10,12,13,242
+              through: true
             effect:
               gradient:
-                color1: ~30,22,52,255
-                color2: ~12,9,24,255
+                color1: ~30,27,25,255
+                color2: ~8,11,12,255
                 type: 0
                 angleDeg: 65
           # ── 页眉 ──
@@ -142,7 +150,7 @@ controls:
             attribute:
               x: 120
               y: 46
-              texts: ~&fA B Y S S  /  深渊回廊
+              texts: ~&6A B Y S S   /   E X P E D I T I O N
               fontSize: 36
               alpha: 0.78
               through: true
@@ -152,7 +160,7 @@ controls:
               x: 72
               y: 104
               texts: var.title
-              fontSize: 88
+              fontSize: 72
               limit: 20
               through: true
           引导语:
@@ -160,7 +168,7 @@ controls:
             attribute:
               x: 76
               y: 176
-              texts: ~&7选择一处深渊裂隙，踏入其中。
+              texts: ~&7远征地图   /   标记裂隙，核查危险与补给后出发
               fontSize: 36
               through: true
           队伍状态底色:
@@ -171,9 +179,7 @@ controls:
               y: 62
               width: 240
               height: 48
-              normal: ~38,30,58,255
-              shape: ~round_rect
-              radius: 8
+              normal: ~34,37,37,245
               through: true
             effect:
               stroke:
@@ -185,7 +191,7 @@ controls:
               point: ~top_right
               x: -166
               y: 72
-              texts: "'&7' + var.partyText"
+              texts: "'&6队伍 / &f' + var.partyText"
               fontSize: 36
               through: true
           关闭按钮:
@@ -203,15 +209,14 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~150,58,58,235
-                  hover: ~190,75,75,245
-                  shape: ~circle
+                  normal: ~96,39,35,235
+                  hover: ~156,59,46,245
                   through: true
               关闭字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: ~&f✕
+                  texts: ~&fX
                   fontSize: 36
                   through: true
           分隔线:
@@ -221,9 +226,34 @@ controls:
               y: 232
               width: "var.leftW - 152"
               height: 1
-              normal: ~96,80,140,160
+              normal: ~132,87,62,195
               through: true
-          # ── 左列：地牢卡片滚动列表 ──
+          地图标题:
+            type: Text
+            attribute:
+              x: 76
+              y: 260
+              texts: ~&601   /   裂隙坐标
+              fontSize: 48
+              through: true
+          地图注释:
+            type: Text
+            attribute:
+              x: 78
+              y: 320
+              texts: ~&8按危险等级核查每处入口 · 点击标记查看行动简报
+              fontSize: 36
+              through: true
+          地图纵轴:
+            type: Texture
+            attribute:
+              x: 105
+              y: 388
+              width: 2
+              height: "var.viewH - 520"
+              normal: ~132,87,62,150
+              through: true
+          # ── 左列：地图标记滚动列表 ──
           左侧区域:
             type: Canvas
             attribute:
@@ -234,7 +264,7 @@ controls:
                 type: Canvas
                 attribute:
                   x: 76
-                  y: 380
+                  y: 460
                   width: "var.leftW - 152"
                   height: 160
                   visible: var.dungeonCount <= 0
@@ -243,7 +273,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~top_center
-                      texts: ~&f暂无开放的地牢
+                      texts: ~&f当前没有可用的裂隙
                       fontSize: 54
                       through: true
                   空说明:
@@ -251,18 +281,18 @@ controls:
                     attribute:
                       point: ~top_center
                       y: 56
-                      texts: ~&7请稍后再来，或联系管理员配置地牢模板。
+                      texts: ~&7行动档案尚未解锁 · 请稍后重试
                       fontSize: 36
                       through: true
               卡片滑轨:
                 type: Texture
                 attribute:
                   point: ~top_right
-                  x: -52
-                  y: 252
+                  x: -58
+                  y: 388
                   width: 10
-                  height: "var.viewH - 380"
-                  normal: ~40,32,62,220
+                  height: "var.viewH - 520"
+                  normal: ~29,31,31,235
                   shape: ~round_rect
                   radius: 5
                   through: true
@@ -275,21 +305,21 @@ controls:
                 val: list_slider
                 attribute:
                   point: ~top_right
-                  x: -52
-                  y: 252
+                  x: -58
+                  y: 388
                   width: 10
                   height: 120
                   normal: var.accent
-                  maxDragY: "var.viewH - 380 - 120"
+                  maxDragY: "var.viewH - 640"
                   shape: ~round_rect
                   radius: 5
               卡片滚动区:
                 type: Scroll
                 attribute:
                   x: 76
-                  y: 252
-                  width: "var.leftW - 152"
-                  height: "var.viewH - 380"
+                  y: 388
+                  width: "var.leftW - 158"
+                  height: "var.viewH - 520"
                   moveY: val.list_slider.getDragYRatio()
                 action:
                   wheel: |-
@@ -302,7 +332,7 @@ controls:
                     type: VStack
                     val: dungeon_rows
                     attribute:
-                      width: "var.leftW - 168"
+                      width: "var.leftW - 176"
                       spaceBetween: 12
                     children:
                       地牢卡片:
@@ -312,8 +342,8 @@ controls:
                           entry: var.dungeonRows[self.entryKey]
                           active: "self.entry != none && var.selectedId == self.entry['id']"
                           visible: self.entry != none
-                          width: "var.leftW - 168"
-                          height: 116
+                          width: "var.leftW - 176"
+                          height: 136
                         action:
                           clickLeft: |-
                             if(self.entry != none){
@@ -326,14 +356,12 @@ controls:
                           卡片底色:
                             type: Texture
                             attribute:
-                              x: 2
+                              x: 36
                               y: 2
-                              width: "self.parent.width - 4"
+                              width: "self.parent.width - 38"
                               height: "self.parent.height - 4"
                               normal: "self.parent.active ? var.cardBgActive : var.cardBg"
                               hover: var.cardBgHover
-                              shape: ~round_rect
-                              radius: 12
                               through: true
                             effect:
                               stroke:
@@ -342,10 +370,10 @@ controls:
                           选中侧线:
                             type: Texture
                             attribute:
-                              x: 3
-                              y: 26
-                              width: "self.parent.active ? 5 : (self.parent.isHovered() ? 4 : 3)"
-                              height: 64
+                              x: 17
+                              y: 54
+                              width: "self.parent.active ? 12 : 8"
+                              height: 12
                               alpha: "self.parent.active ? 1 : (self.parent.isHovered() ? 0.72 : 0.42)"
                               normal: var.accent
                               shape: ~round_rect
@@ -354,32 +382,30 @@ controls:
                           图标底座:
                             type: Texture
                             attribute:
-                              x: 24
+                              x: 62
                               y: 24
-                              width: 68
-                              height: 68
-                              normal: var.accent
+                              width: 78
+                              height: 78
+                              normal: ~47,49,46,255
                               alpha: "(self.parent.active || self.parent.isHovered()) ? 1 : 0.74"
-                              shape: ~round_rect
-                              radius: 14
                               through: true
                           图标:
                             type: Slot
                             attribute:
                               slotType: ~Icon
-                              x: 32
-                              y: 32
-                              width: 52
-                              height: 52
+                              x: 72
+                              y: 34
+                              width: 58
+                              height: 58
                               itemScale: 0.82
                               normal: ~0,0,0,0
                               through: true
-                              seticon: "self.setItemIcon(self.parent.entry['iconJson'] != none ? self.parent.entry['iconJson'] : var.air)"
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
                           名称:
                             type: Text
                             attribute:
-                              x: 112
-                              y: 22
+                              x: 164
+                              y: 20
                               texts: "'&f' + self.parent.entry['name']"
                               fontSize: 48
                               limit: 14
@@ -387,8 +413,8 @@ controls:
                           难度人数:
                             type: Text
                             attribute:
-                              x: 112
-                              y: 68
+                              x: 164
+                              y: 72
                               texts: "'&7' + self.parent.entry['difficulty'] + '   &8' + self.parent.entry['minPlayers'].round() + '-' + self.parent.entry['maxPlayers'].round() + '人' + (self.parent.entry['partyRequired'] ? '   &c需组队' : '')"
                               fontSize: 36
                               through: true
@@ -396,21 +422,20 @@ controls:
                             type: Text
                             attribute:
                               point: ~middle_right
-                              x: -24
-                              texts: "self.parent.entry['cooldownLeft'] > 0 ? '&c冷却 ' + self.parent.entry['cooldownLeft'].round() + 's' : (self.parent.entry['running'] > 0 ? '&a运行中' : '')"
+                              x: -20
+                              y: 38
+                              texts: "self.parent.entry['cooldownLeft'] > 0 ? '&c封锁 ' + self.parent.entry['cooldownLeft'].round() + 's' : (self.parent.entry['running'] > 0 ? '&6进行中' : '&8可部署')"
                               fontSize: 36
                               through: true
-          # ── 右列：详情面板 ──
+          # ── 右列：目的地行动简报 ──
           详情底:
             type: Texture
             attribute:
-              x: "var.leftW + 24"
-              y: 96
-              width: "var.rightW - 120"
-              height: "var.viewH - 192"
-              normal: ~24,19,40,235
-              shape: ~round_rect
-              radius: 16
+              x: "var.leftW + 12"
+              y: 246
+              width: "var.rightW - 88"
+              height: "var.viewH - 320"
+              normal: ~22,25,26,245
             effect:
               stroke:
                 width: 2
@@ -418,35 +443,43 @@ controls:
           详情标题标线:
             type: Texture
             attribute:
-              x: "var.leftW + 76"
-              y: 152
+              x: "var.leftW + 66"
+              y: 322
               width: 22
               height: 3
               normal: var.accent
               visible: var.selEntry != none
               through: true
+          简报编号:
+            type: Text
+            attribute:
+              x: "var.leftW + 66"
+              y: 280
+              texts: ~&602   /   目的地简报
+              fontSize: 36
+              through: true
           详情标题:
             type: Text
             attribute:
-              x: "var.leftW + 76"
-              y: 166
-              texts: "var.selEntry != none ? '&f' + var.selEntry['name'] : '&7未选择地牢'"
+              x: "var.leftW + 66"
+              y: 350
+              texts: "var.selEntry != none ? '&f' + var.selEntry['name'] : '&7待标记裂隙'"
               fontSize: 64
               limit: 12
               through: true
           详情难度:
             type: Text
             attribute:
-              x: "var.leftW + 78"
-              y: 250
-              texts: "var.selEntry != none ? '&7难度  &f' + var.selEntry['difficulty'] : ''"
+              x: "var.leftW + 68"
+              y: 438
+              texts: "var.selEntry != none ? '&c危险等级   &f' + var.selEntry['difficulty'] : ''"
               fontSize: 36
               through: true
           详情条件行:
             type: Text
             attribute:
-              x: "var.leftW + 78"
-              y: 306
+              x: "var.leftW + 68"
+              y: 494
               fontSize: 36
               through: true
               texts:
@@ -457,18 +490,18 @@ controls:
           详情描述标线:
             type: Texture
             attribute:
-              x: "var.leftW + 78"
-              y: 470
-              width: "var.rightW - 196"
+              x: "var.leftW + 68"
+              y: 670
+              width: "var.rightW - 198"
               height: 1
-              normal: ~96,80,140,120
+              normal: ~129,86,57,185
               visible: var.selEntry != none
               through: true
           详情描述:
             type: Text
             attribute:
-              x: "var.leftW + 78"
-              y: 492
+              x: "var.leftW + 68"
+              y: 704
               fontSize: 36
               through: true
               texts:
@@ -478,15 +511,15 @@ controls:
           操作区:
             type: HStack
             attribute:
-              x: "var.leftW + 78"
-              y: "var.viewH - 156"
+              x: "var.leftW + 68"
+              y: "var.viewH - 166"
               height: 54
               spaceBetween: 16
             children:
               进入按钮:
                 type: Canvas
                 attribute:
-                  width: 180
+                  width: 220
                   height: 54
                   visible: var.selEntry != none
                 action:
@@ -500,16 +533,14 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~170,120,220,230
-                      hover: ~200,150,240,245
-                      shape: ~round_rect
-                      radius: 10
+                      normal: ~187,121,61,245
+                      hover: ~224,163,79,255
                       through: true
                   进入字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&0进 入
+                      texts: ~&0部署远征
                       fontSize: 36
                       through: true
               队伍按钮:
@@ -525,16 +556,14 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~80,160,240,230
-                      hover: ~110,185,255,245
-                      shape: ~round_rect
-                      radius: 10
+                      normal: ~62,65,61,235
+                      hover: ~98,91,70,245
                       through: true
                   队伍字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      texts: ~&0队 伍
+                      texts: ~&f编 队
                       fontSize: 36
                       through: true
               刷新按钮:
@@ -550,10 +579,8 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: ~62,66,74,230
-                      hover: ~82,90,105,245
-                      shape: ~round_rect
-                      radius: 10
+                      normal: ~36,40,41,235
+                      hover: ~67,62,49,245
                       through: true
                     effect:
                       stroke:
@@ -571,7 +598,7 @@ controls:
             attribute:
               x: 76
               y: "var.viewH - 60"
-              texts: ~&8单击左侧卡片查看详情，点击「进入」开始挑战
+              texts: ~&8行动提示  /  单击地图标记选择目的地 · 出发前核查体力、门票与队伍限制
               fontSize: 36
               alpha: 0.6
               through: true

@@ -1,70 +1,132 @@
 # ArcartXSuite Chat — 红包卡片模板
-# 玩家/管理员发放红包时，在聊天栏中显示此卡片
-# 点击卡片 → Chat.say('/chat grab <packetId>') 领取（与可点击文字兜底一致）
-# 数据字段（服务端 payload）: packetId / senderName / senderDisplayName / typeName / wish / count / expire
-# 卡片宽度与高度由 UI 侧根据 Text 控件实际渲染尺寸自适应
+# 点击卡片 → Chat.say('/chat grab <packetId>')，保留整个背景的领取交互
+# 服务端字段: packetId / senderName / senderDisplayName / typeName / wish / count / expire
+# 图标与发放者占标题行；整宽祝福、份数/时效、领取栏分层，空祝福不留空行
 root_control:
   type: card
   attribute:
-    width: "Math.max(560, Math.max(val.title_label.width, val.info_label.width) + 220)"
-    height: "Math.max(160, val.info_label.y + val.info_label.height + 18)"
+    width: "Math.max(400, Math.max(Math.max(val.title_label.x + val.title_label.width, val.info_label.x + val.info_label.width + 12), Math.max(val.count_label.x + val.count_label.width + 12, val.grab_hint.x + val.grab_hint.width + 12)) + 24)"
+    height: "val.grab_hint.y + val.grab_hint.height + 26"
   children:
     background:
       type: Texture
       attribute:
         width: "self.parent.width"
         height: "self.parent.height"
-        normal: ~196,50,43,235
+        normal: ~54,29,49,244
+        hover: ~69,37,61,250
         shape: ~round_rect
         radius: 14
       effect:
         stroke:
-          width: 3
-          color: ~255,205,100,200
+          width: 2
+          color: ~215,164,101,235
       action:
         click: |-
           Chat.say('/chat grab ' + self.parent.data['packetId'])
+    accent:
+      type: Texture
+      attribute:
+        x: 8
+        y: 16
+        width: 4
+        height: "self.parent.height - 32"
+        normal: ~237,180,102,255
+        shape: ~round_rect
+        radius: 2
+        through: true
     coin:
       type: Texture
       attribute:
-        x: 30
-        y: "self.parent.height/2 - 45"
-        width: 90
-        height: 90
-        normal: ~255,205,90,255
+        x: 24
+        y: 16
+        width: 64
+        height: 64
+        normal: ~235,184,109,255
         shape: ~circle
         through: true
       effect:
         stroke:
           width: 2
-          color: ~255,235,170,255
+          color: ~255,220,163,255
     coin_label:
       type: Text
+      val: coin_label
       attribute:
-        fontSize: 54
-        x: 75
-        y: "self.parent.height/2 - 15"
-        center: true
-        texts: "'§c开'"
+        fontSize: 48
+        x: "24 + (64 - val.coin_label.width) / 2"
+        y: "16 + (64 - val.coin_label.height) / 2"
+        texts: "'§4开'"
         through: true
     title_label:
       type: Text
       val: title_label
       attribute:
-        fontSize: 48
-        x: 160
-        y: 18
+        fontSize: 54
+        x: 108
+        y: 20
         texts: "'§f' + self.parent.data['senderDisplayName'] + ' §7发出 §e' + self.parent.data['typeName']"
+        through: true
+    header_rule:
+      type: Texture
+      attribute:
+        x: 24
+        y: "val.info_label.y - 20"
+        width: "self.parent.width - 48"
+        height: 2
+        normal: ~123,80,89,255
+        through: true
+    wish_surface:
+      type: Texture
+      attribute:
+        x: 24
+        y: "val.info_label.y - 8"
+        width: "self.parent.width - 48"
+        height: "val.info_label.height + 16"
+        normal: ~77,43,66,255
+        shape: ~round_rect
+        radius: 8
+        visible: "self.parent.data['wish'] != none && self.parent.data['wish'] != ''"
         through: true
     info_label:
       type: Text
       val: info_label
       attribute:
-        fontSize: 36
-        x: 160
-        y: 74
+        fontSize: 48
+        x: 36
+        y: "Math.max(104, val.title_label.y + val.title_label.height + 32)"
         through: true
-        texts:
-          - "self.parent.data['wish'] != none && self.parent.data['wish'] != '' ? '§e' + self.parent.data['wish'] : none"
-          - "'§7共 §e' + self.parent.data['count'] + ' §7份'"
-          - "'§8点击卡片领取 · §7约 ' + self.parent.data['expire'] + ' §8分钟内有效'"
+        texts: "self.parent.data['wish'] != none && self.parent.data['wish'] != '' ? '§e' + self.parent.data['wish'] : none"
+    count_label:
+      type: Text
+      val: count_label
+      attribute:
+        fontSize: 36
+        x: 36
+        y: "self.parent.data['wish'] != none && self.parent.data['wish'] != '' ? val.info_label.y + val.info_label.height + 24 : val.info_label.y"
+        texts: "'§7共 §e' + self.parent.data['count'] + ' §7份 · 约 §f' + self.parent.data['expire'] + ' §7分钟内有效'"
+        through: true
+    grab_surface:
+      type: Texture
+      attribute:
+        x: 24
+        y: "val.grab_hint.y - 10"
+        width: "self.parent.width - 48"
+        height: "val.grab_hint.height + 20"
+        normal: ~36,76,79,255
+        shape: ~round_rect
+        radius: 10
+        through: true
+      effect:
+        stroke:
+          width: 1
+          color: ~228,184,119,235
+    grab_hint:
+      type: Text
+      val: grab_hint
+      attribute:
+        fontSize: 48
+        x: 36
+        y: "val.count_label.y + val.count_label.height + 30"
+        texts: "'§e点击卡片领取'"
+        through: true
