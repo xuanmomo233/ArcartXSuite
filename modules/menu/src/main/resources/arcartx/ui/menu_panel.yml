@@ -16,7 +16,7 @@ ui:
     # 包字段:
     #   - packetId: 包标识符（'AXS_MENU'）
     #   - menuId: 菜单唯一标识
-    #   - layout: 布局模式（panel / esc / full）
+    #   - layout: 布局模式（panel / esc）
     #   - title: 菜单标题文本
     #   - pageId: 当前页面 ID
     #   - pageTitle: 当前页面标题

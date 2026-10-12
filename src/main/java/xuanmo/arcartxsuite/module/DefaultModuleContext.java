@@ -3,15 +3,23 @@ package xuanmo.arcartxsuite.module;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandMap;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
@@ -72,6 +80,7 @@ final class DefaultModuleContext implements ModuleContext {
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
     private final List<String> registeredCommandNames = new ArrayList<>();
+    private final Map<String, PluginCommand> dynamicCommands = new HashMap<>();
     private final List<xuanmo.arcartxsuite.api.KeybindHandler> registeredKeybindHandlers = new ArrayList<>();
 
     private final PlaceholderResolverAPI placeholderResolver;
@@ -382,8 +391,6 @@ final class DefaultModuleContext implements ModuleContext {
             command.setExecutor(executor);
             command.setTabCompleter(executor);
             registeredCommandNames.add(commandName);
-            // 若该命令的名字空间变体此前因 Paper 1.21+ 冲突整理被移除，恢复注册
-            xuanmo.arcartxsuite.util.CommandLabelDeduper.restoreNamespaced(plugin, command);
             logger.fine("命令 '" + commandName + "' 已绑定到 " + executor.getClass().getSimpleName());
             return;
         }
@@ -398,7 +405,13 @@ final class DefaultModuleContext implements ModuleContext {
     /**
      * 通过 Bukkit CommandMap 动态注册命令（不依赖 plugin.yml 声明）。
      * <p>
-     * 用于支持模块在运行时注册配置化命令别名等场景。
+     * 模块命令统一走此路径：plugin.yml 声明的命令会在插件加载时无条件注册，
+     * 导致模块未启用/禁用时仍占用命令名与其他插件冲突。动态注册保证命令
+     * 只在所属模块启用期间存在。
+     * <p>
+     * 元数据（permission/description/usage/aliases）取自 jar 内
+     * {@code module-commands.yml}；无元数据的命令名（如配置自定义别名）
+     * 不设 Bukkit 层 permission，由执行器自行校验。
      *
      * @param commandName 命令名
      * @param executor    命令执行器
@@ -406,31 +419,34 @@ final class DefaultModuleContext implements ModuleContext {
      */
     private boolean registerDynamicCommand(String commandName, TabExecutor executor) {
         try {
-            org.bukkit.command.CommandMap commandMap = getCommandMap();
+            CommandMap commandMap = getCommandMap();
             if (commandMap == null) return false;
-            // 避免重复注册
-            if (commandMap.getCommand(commandName) != null) {
-                // 命令已存在（可能是其他插件注册的），只绑定执行器
-                org.bukkit.command.Command existing = commandMap.getCommand(commandName);
-                if (existing instanceof PluginCommand pc && pc.getPlugin() == plugin) {
-                    pc.setExecutor(executor);
-                    pc.setTabCompleter(executor);
-                    registeredCommandNames.add(commandName);
-                    return true;
-                }
-                // 命令属于其他插件，不覆盖
-                logger.warning("命令 '" + commandName + "' 已被其他插件注册，跳过");
-                return false;
+            Command existing = commandMap.getCommand(commandName);
+            if (existing instanceof PluginCommand pc && pc.getPlugin() == plugin) {
+                pc.setExecutor(executor);
+                pc.setTabCompleter(executor);
+                dynamicCommands.put(commandName, pc);
+                return true;
             }
-            // 用反射创建 PluginCommand（构造函数需要 Plugin 参数）
-            java.lang.reflect.Constructor<PluginCommand> ctor =
-                PluginCommand.class.getDeclaredConstructor(String.class, org.bukkit.plugin.Plugin.class);
-            ctor.setAccessible(true);
-            PluginCommand newCommand = ctor.newInstance(commandName, plugin);
+            PluginCommand newCommand = dynamicCommands.get(commandName);
+            if (newCommand == null) {
+                // 用反射创建 PluginCommand（构造函数需要 Plugin 参数）
+                java.lang.reflect.Constructor<PluginCommand> ctor =
+                    PluginCommand.class.getDeclaredConstructor(String.class, org.bukkit.plugin.Plugin.class);
+                ctor.setAccessible(true);
+                newCommand = ctor.newInstance(commandName, plugin);
+                applyCommandMetadata(newCommand, commandName);
+            }
             newCommand.setExecutor(executor);
             newCommand.setTabCompleter(executor);
+            // label 被其他插件占用时 register 仍保留 <fallback>:<name> 前缀形式
+            if (existing != null) {
+                logger.info("命令 '" + commandName + "' 已被其他插件注册，将仅通过 "
+                    + plugin.getName().toLowerCase() + ":" + commandName + " 前缀形式可用");
+            }
             commandMap.register(plugin.getName().toLowerCase(), newCommand);
-            registeredCommandNames.add(commandName);
+            dynamicCommands.put(commandName, newCommand);
+            syncCommandsSafely();
             return true;
         } catch (Exception e) {
             logger.warning("动态注册命令 '" + commandName + "' 失败: " + e.getMessage());
@@ -439,14 +455,56 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     /**
+     * 从 jar 内 {@code module-commands.yml} 读取命令元数据并套用到命令上。
+     */
+    private void applyCommandMetadata(PluginCommand command, String commandName) {
+        ConfigurationSection section = commandMetadata().getConfigurationSection("commands." + commandName);
+        if (section == null) return;
+        String permission = section.getString("permission");
+        if (permission != null) command.setPermission(permission);
+        String description = section.getString("description");
+        if (description != null) command.setDescription(description);
+        String usage = section.getString("usage");
+        if (usage != null) command.setUsage(usage);
+        List<String> aliases = section.getStringList("aliases");
+        if (!aliases.isEmpty()) command.setAliases(aliases);
+    }
+
+    private static volatile YamlConfiguration commandMetadataCache;
+
+    /**
+     * 惰性加载 {@code module-commands.yml}（进程内缓存一份）。
+     */
+    private YamlConfiguration commandMetadata() {
+        YamlConfiguration cached = commandMetadataCache;
+        if (cached == null) {
+            synchronized (DefaultModuleContext.class) {
+                cached = commandMetadataCache;
+                if (cached == null) {
+                    cached = new YamlConfiguration();
+                    try (InputStream in = plugin.getResource("module-commands.yml")) {
+                        if (in != null) {
+                            cached.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+                        }
+                    } catch (Exception e) {
+                        logger.warning("加载 module-commands.yml 失败: " + e.getMessage());
+                    }
+                    commandMetadataCache = cached;
+                }
+            }
+        }
+        return cached;
+    }
+
+    /**
      * 获取 Bukkit 服务器的 CommandMap。
      */
-    private org.bukkit.command.CommandMap getCommandMap() {
+    private CommandMap getCommandMap() {
         try {
             org.bukkit.Server server = Bukkit.getServer();
             java.lang.reflect.Field commandMapField = server.getClass().getDeclaredField("commandMap");
             commandMapField.setAccessible(true);
-            return (org.bukkit.command.CommandMap) commandMapField.get(server);
+            return (CommandMap) commandMapField.get(server);
         } catch (Exception e) {
             logger.warning("获取 CommandMap 失败: " + e.getMessage());
             return null;
@@ -454,9 +512,56 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     /**
-     * 解绑当前模块注册的所有命令（内部调用，设置为空执行器）。
+     * 读取 SimpleCommandMap 的 knownCommands（含 Paper 子类实现）。
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Command> knownCommands() {
+        try {
+            CommandMap commandMap = getCommandMap();
+            if (commandMap == null) return null;
+            Class<?> type = commandMap.getClass();
+            while (type != null) {
+                try {
+                    java.lang.reflect.Field field = type.getDeclaredField("knownCommands");
+                    field.setAccessible(true);
+                    return (Map<String, Command>) field.get(commandMap);
+                } catch (NoSuchFieldException ignored) {
+                    type = type.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("获取 knownCommands 失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Paper 的 Server#syncCommands() 同步客户端命令树；Spigot 无此 API，反射 best-effort。
+     */
+    private void syncCommandsSafely() {
+        try {
+            Bukkit.getServer().getClass().getMethod("syncCommands").invoke(Bukkit.getServer());
+        } catch (NoSuchMethodException ignored) {
+        } catch (Exception e) {
+            logger.fine("syncCommands 调用失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 解绑当前模块注册的所有命令（内部调用）。
+     * <p>
+     * plugin.yml 声明的命令仅重置执行器；动态注册的命令从 CommandMap 彻底移除
+     * （含别名与 fallback 前缀条目），使命令名立即可被其他插件使用。
      */
     void unbindCommands() {
+        if (!dynamicCommands.isEmpty()) {
+            Map<String, Command> known = knownCommands();
+            if (known != null) {
+                known.values().removeIf(dynamicCommands::containsValue);
+            }
+            dynamicCommands.clear();
+            syncCommandsSafely();
+        }
         for (String commandName : registeredCommandNames) {
             PluginCommand command = plugin.getCommand(commandName);
             if (command != null) {
@@ -464,8 +569,6 @@ final class DefaultModuleContext implements ModuleContext {
                 command.setTabCompleter(null);
             }
         }
-        // 解绑后命令回到未启用状态：重新执行冲突整理，把被占名字让回对方
-        xuanmo.arcartxsuite.util.CommandLabelDeduper.schedule(plugin, logger);
         registeredCommandNames.clear();
     }
 

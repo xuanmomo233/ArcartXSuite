@@ -1,7 +1,7 @@
 # ============================================================
 # 示例功能菜单 — 居中面板布局
 # 本文件演示 ArcartXSuite Menu 模块的完整配置语法
-# 一个 .yml 文件可包含多个菜单（用 --- 分隔），第一个为主菜单
+# 一个 .yml 文件可包含多个菜单（用 --- 分隔），每个文档都是一个独立菜单
 # ============================================================
 
 # ─── 基础属性 ───────────────────────────────────────────────
@@ -18,38 +18,45 @@ id: example
 # 也支持 MiniMessage 格式：<green>, <bold>, <gradient:red:blue> 等
 title: "&f&l服务器菜单"
 
-# 布局模式（必填）
-# 可选值：
-#   panel  — 居中弹出面板（适合功能菜单、商店）
-#   esc    — 左侧滑出面板（专用于替代 ESC 暂停界面）
-#   full   — 全屏布局（适合大型导航）
+# 布局模式（可选，默认读 ArcartXMenu.yml 的 settings.default-layout）
+# 可选值（仅两种，填写其他值一律回落为 panel）：
+#   panel  — 居中弹出面板（使用 ui/menu_panel.yml，纵向功能列表 + 右侧详情）
+#   esc    — 左侧滑出面板（使用 ui/menu_esc.yml，4 列网格，专用于替代 ESC 暂停界面）
 layout: panel
 
-# 每行按钮列数（必填）
-# 控制按钮网格每行排列的按钮数量（配合 buttons-per-page 控制单页容量）
-# 推荐 2-4（按钮宽度固定，列数过多会超出面板宽度）
+# 每行按钮列数（可选，默认读 ArcartXMenu.yml 的 settings.columns）
+# 仅网格类 UI 消费此值：内置的 menu_panel_grid（panel 网格版，经 ui-id 启用）
+# 会按它排布按钮格；menu_panel（纵向列表）、menu_esc（固定 4 列）、
+# menu_esc_grid（固定 2+2 浮岛）都不读取它，写错不会影响这三个 UI。
+# 服务端同时会下发每个按钮的 column/row 字段，自定义网格 UI 也可取用。
 columns: 4
 
-# 每页最大按钮数量（必填）
-# 超出此数量的按钮会被直接截断不显示（静默丢弃，不会自动分页）
-# 需要多页时请手动配置 pages: 并用 "page: <页面id>" 动作切换
-# 推荐值：columns × 期望行数（如 4列 × 4行 = 16）
+# 每页最大按钮数量（可选，默认读 ArcartXMenu.yml 的 settings.buttons-per-page）
+# 服务端硬上限：单页可见按钮数超过它会被直接截断不显示（不会自动分页），
+# 与布局/列数无关，对所有 UI 生效。
+# 需要多页请手动配置 pages:，用 "page: <页面id>" 动作切换
+# （page: 也接受 prev/next，效果等同内置翻页按钮）。
+# 建议值：单个页面实际要展示的按钮数上限
 buttons-per-page: 64
 
 # ─── 自定义 UI 目标（可选）────────────────────────────────────
 # 默认情况下，菜单根据 layout 自动选择 panel / esc UI 并使用 init/update handler。
 # 想让某个菜单使用完全不同的界面风格时，用 ui-id 指定一个自定义 UI 文件：
 #
-#   1. 把写好的 UI 文件放到  plugins/ArcartXSuite/ui/<名字>.yml
+#   1. 把写好的 UI 文件放到  plugins/ArcartX-Suite/ui/<名字>.yml
 #      （ui-id 不带命名空间前缀，文件名必须与 ui-id 完全一致）
 #   2. 在这里写  ui-id: <名字>
 #   3. 模块启动 / 菜单重载时会自动把该文件注册下发给客户端，无需手动注册
 #
 # 自定义 UI 的数据包字段与内置菜单 UI 完全一致（buttonRows / footerRows /
-# action_token / summary / detailRows 等），不写 packet-handler 时默认走
-# init / update 生命周期 —— 直接复制 ui/menu_panel.yml、ui/menu_esc.yml
-# 或 ui/menu_esc_grid.yml（内置的浮岛网格版 ESC 布局）的 packetHandler
-# 和 action 写法再改布局即可。
+# action_token / summary / detailRows / columns 等），不写 packet-handler 时
+# 默认走 init / update 生命周期 —— 直接复制 ui/menu_panel.yml、
+# ui/menu_esc.yml、ui/menu_esc_grid.yml（浮岛网格版 ESC 布局）或
+# ui/menu_panel_grid.yml（网格版 panel 布局，真正消费 columns）的
+# packetHandler 和 action 写法再改布局即可。
+#
+# 网格版面板（按钮按 columns 列网格排列，本菜单当前 columns: 4）：
+# ui-id: "menu_panel_grid"
 #
 # 单 UI 目标（简写格式，面板菜单示例）：
 # ui-id: "my_custom_panel"
@@ -140,15 +147,25 @@ command-regex:
 # 玩家对匹配的物品执行指定动作时打开菜单
 item-binds:
   - material: COMPASS            # 物品材质（Minecraft 物品 ID，大写）
-    name-contains: "功能菜单"     # 物品名称包含的文字（模糊匹配）
-    action: RIGHT_CLICK          # 触发动作：RIGHT_CLICK / LEFT_CLICK / SHIFT_RIGHT_CLICK / SHIFT_LEFT_CLICK
-  # 更多绑定示例：
+    name-contains: "功能菜单"     # 物品名称包含的文字（模糊匹配，忽略颜色代码）
+    action: RIGHT_CLICK          # 触发动作：RIGHT_CLICK / LEFT_CLICK（仅区分左右键）
+                                 # 可加 SHIFT_ 或 SNEAK_ 前缀要求潜行：
+                                 #   SHIFT_RIGHT_CLICK / SHIFT_LEFT_CLICK
+    sneak: any                   # 潜行要求（可选）：true=必须潜行 / false=必须非潜行
+                                 # any=不限（默认）；显式配置优先于 action 的 SHIFT_ 前缀
+  # 更多可选字段：
+  #   menu: "<菜单id>"           — 打开其他菜单（默认打开本菜单，菜单级 item-binds 一般不用写）
+  #   name-regex: "正则"          — 物品名正则匹配（可与 name-contains 叠加）
+  #   lore-contains: "文字"       — 按 lore 行包含匹配（代替/叠加 name-contains）
+  #   custom-model-data: 1001     — 要求物品的 CustomModelData 等于该值
+  #   main-hand: true             — 允许主手触发（默认 true）
+  #   off-hand: false             — 是否允许副手触发（默认 true）
+  #   permission: "menu.clock"    — 可选：额外权限要求
   # - material: CLOCK
   #   name-contains: "时钟菜单"
   #   action: RIGHT_CLICK
-  #   permission: "menu.clock"    — 可选：额外权限要求
   # - material: NETHER_STAR
-  #   lore-contains: "右键打开"   — 按 lore 匹配（代替 name-contains）
+  #   lore-contains: "右键打开"
   #   action: RIGHT_CLICK
 # ─── 页面定义 ───────────────────────────────────────────────
 # 一个菜单可包含多个页面，通过 "page:" 动作切换
@@ -182,7 +199,7 @@ pages:
         order: 0
         # 按钮级权限（可选），无权限的玩家看不到此按钮
         permission: "arcartxsuite.warehouse.use"
-        # 按钮图标配置（可选，仅 panel/full 布局有效）
+        # 按钮图标配置（可选，panel 与 esc 布局均会渲染图标）
         icon:
           material: CHEST                # 材质（Minecraft 物品 ID）
           name: "&f仓库"                 # 图标悬浮名称
@@ -311,17 +328,18 @@ pages:
             - "角色等级达到 5 级后，可使用此入口。"
           action-hint: "点击左侧功能，查看在线奖励"
         order: 2
-        # 按钮显示条件（可选）
-        # 条件满足时按钮正常显示，不满足时：
-        #   - 若配置了 deny-message：按钮仍显示但点击后提示消息
-        #   - 若未配置 deny-message：按钮完全隐藏
+        # 按钮使用条件（可选）
+        # 注意与下方 map 按钮的 requirements 区分键名：
+        #   requirements    — 查看条件：不满足时按钮完全不渲染（隐藏）
+        #   use-conditions  — 使用条件：按钮始终渲染，不满足时显示为禁用态，
+        #                    点击后发送 deny-message（未配置则发送默认"不可用"提示）
         use-conditions:
           - "%player_level% >= 5"
           # 等价的 Aria 脚本条件（注入 AXS player 门面到 global. 命名空间，Suite 自动补 return）:
           # - "aria: global.player.getLevel() >= 5"
-        # 条件不满足时的提示消息
+        # 条件不满足时点击按钮发送的提示消息
         deny-message: "&c需要达到 5 级才能领取在线奖励"
-        # deny-actions: 条件不满足时执行的动作（可选）
+        # deny-actions: 使用条件不满足时执行的拒绝动作（可选，与 deny-message 并行执行）
         # deny-actions:
         #   - "sound: ENTITY_VILLAGER_NO|1.0|1.0"
         #   - "close"
@@ -359,9 +377,10 @@ pages:
             - "从熟悉的地方出发，寻找新的目的地。"
           action-hint: "点击左侧功能，展开世界地图"
         order: 4
-        # requirements 与 condition 的区别：
-        #   requirements — 不满足时按钮完全不显示（硬性隐藏）
-        #   condition    — 不满足时可显示 deny-message 或执行 deny-actions
+        # requirements 与 use-conditions 的区别：
+        #   requirements    — 不满足时按钮完全不渲染（硬性隐藏，玩家看不到）
+        #   use-conditions  — 不满足时按钮显示为禁用态，点击发送 deny-message
+        #                    并执行 deny-actions（若配置）
         requirements:
           - "%player_level% >= 1"
         actions:
@@ -386,11 +405,13 @@ pages:
         actions:
           - "open: teleport"
 
-      # ─── 帮助（演示：不关闭菜单的命令） ───
+      # ─── 帮助（演示：命令动作） ───
       help:
         text: "&f帮助"
         order: 6
-        # 未加 "close" 时，执行命令后菜单保持打开
+        # 注意：command/chat/connect/op/console/signal/aria/js 动作执行后，
+        # 服务端会按 ArcartXMenu.yml 的 close-on-action（默认 true）自动关闭菜单；
+        # 想让菜单在命令后保持打开，需把该配置改为 false。
         actions:
           - "command: help"
 

@@ -16,10 +16,12 @@ layout: esc
 # 切换菜单时建议将 ui/menu_esc.yml 的 match 段修改
 ui-id: menu_esc
 
-# 每行按钮列数
+# 每行按钮列数 —— 注意：menu_esc.yml 固定 4 列网格、menu_esc_grid.yml 固定 2+2 布局，
+# 此值对内置 UI 无效，仅网格类自定义 UI 才会消费
 columns: 2
 
-# 每页最大按钮数量
+# 每页最大按钮数量（超出会被截断不显示，不会自动分页；
+# 需要多页请配置 pages: 并用 "page: <页面id>" 动作切换）
 buttons-per-page: 64
 
 # 打开菜单所需权限，为空表示无权限要求
@@ -123,8 +125,8 @@ pages:
         icon:
           material: ENDER_CHEST
           name: "&f在线奖励"
-        # 可选：添加条件限制（需 PlaceholderAPI）
-        # condition:
+        # 可选：添加使用条件（不满足时按钮显示禁用态，点击发送 deny-message）
+        # use-conditions:
         #   - "%player_level% >= 5"
         # deny-message: "&c需要达到 5 级才能领取在线奖励"
         actions:

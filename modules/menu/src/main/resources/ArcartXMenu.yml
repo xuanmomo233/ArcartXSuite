@@ -22,9 +22,9 @@ client:
 
 settings:
   menus-directory: "menus"  # 菜单定义文件目录（相对模块数据目录）
-  default-layout: "panel"  # 默认布局模式（panel / esc / full）
-  columns: 2  # 默认每行按钮列数
-  buttons-per-page: 12  # 每页最大按钮数量
+  default-layout: "panel"  # 默认布局模式（panel / esc，其他值一律按 panel 处理）
+  columns: 2  # 默认每行按钮列数（仅网格类自定义 UI 消费，内置 UI 不读取）
+  buttons-per-page: 12  # 每页最大按钮数量（超出截断不显示，不自动分页）
   click-cooldown-ms: 300  # 按钮点击冷却时间（毫秒）
   close-on-action: true  # 点击按钮执行动作后是否自动关闭菜单
   # 打开菜单失败时是否向玩家发送提示
@@ -34,5 +34,6 @@ settings:
     - menu: example  # 绑定的目标菜单 ID
       material: NETHER_STAR  # 触发物品的材质
       name-contains: "服务器菜单"  # 物品名称包含的关键词
-      action: RIGHT_CLICK  # 触发动作（RIGHT_CLICK / LEFT_CLICK 等）
+      action: RIGHT_CLICK  # 触发动作（RIGHT_CLICK / LEFT_CLICK；SHIFT_ 前缀要求潜行，如 SHIFT_RIGHT_CLICK）
+      # sneak: true/false  # 可选：潜行要求（true=必须潜行，false=必须非潜行，不写=不限；显式配置优先于 action 的 SHIFT_ 前缀）
 

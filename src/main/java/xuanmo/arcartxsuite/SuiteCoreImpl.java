@@ -389,10 +389,6 @@ public final class SuiteCoreImpl implements SuiteCore {
             });
         }
 
-        // 15. Paper 1.21+ 命令名冲突整理：未绑定执行器的声明命令若与其它插件
-        // 同名，让位消除补全列表的 [xN] 噪音（延迟 1 tick 等全部插件注册完）
-        xuanmo.arcartxsuite.util.CommandLabelDeduper.schedule(host, getLogger());
-
         consoleInfo(ChatColor.GREEN + "加载完成");
     }
 

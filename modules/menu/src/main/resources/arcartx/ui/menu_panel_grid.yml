@@ -1,0 +1,1200 @@
+# AXS Menu 面板网格 UI — 通用配置驱动菜单（网格版 panel 布局）
+# 与 menu_panel.yml 的差异：左侧纵向功能列表替换为 HGrid 网格，
+# 网格列数真正消费菜单配置 columns（按钮格宽随列数自适应铺满内容区），
+# 右侧详情面板、翻页栏、页脚栏与数据协议完全一致。
+# 启用方式：菜单 yml 顶部配置 `ui-id: menu_panel_grid`（不带命名空间），
+# 模块启动时会自动注册本文件并把所有 init/update 包投递到它。
+# 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> 模板复制渲染
+# 客户端回包: Packet.send('AXS_MENU', 'click', token, id) / page / refresh / close / footer
+ui:
+  isHud: false
+  defaultOpen: false
+  # 如果想打开图标物品的tooltip，需要设置为true
+  through: false
+  background: false
+  closeDied: true
+  escClose: true
+  show: true
+  screenScale: true
+  packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_MENU'）
+    #   - menuId: 菜单唯一标识
+    #   - layout: 布局模式（panel / esc）
+    #   - title: 菜单标题文本
+    #   - pageId: 当前页面 ID
+    #   - pageTitle: 当前页面标题
+    #   - pageIndex: 当前页索引（从 0 开始）
+    #   - pageCount: 总页数
+    #   - columns: 按钮网格列数（本 UI 真正消费，驱动 HGrid 列数与格宽）
+    #   - hasPrev: 是否有上一页
+    #   - hasNext: 是否有下一页
+    #   - buttonRows: 按钮数据行（字典，key 为索引）
+    #   - buttonCount: 按钮总数
+    #   - footerRows: 页脚按钮数据行
+    #   - footerCount: 页脚按钮总数
+    #   - maxButtonCount: 按钮最大数量（保留字段，本 UI 不使用）
+    #   - maxFooterCount: 页脚按钮最大数量
+    init: |-
+      var.incoming = packet
+      var.resetMenu = true
+      self.actions['applyPacket']()
+    # packetHandler: update
+    # 包字段: 与 init 相同（全量刷新菜单数据）
+    update: |-
+      var.incoming = packet
+      var.resetMenu = false
+      self.actions['applyPacket']()
+  action:
+    load: |-
+      var.menuUi = self
+      var.buttonCount = 0
+      var.footerCount = 0
+      var.detailCount = 0
+      var.pageCount = 1
+      var.pageIndex = 0
+      var.packetId = 'AXS_MENU'
+      var.accent = '214,190,143,255'
+      var.columns = 4
+      var.cellGap = 12
+      var.gridRows = 0
+      var.按钮轮次 = 0
+      var.页脚轮次 = 0
+      var.说明轮次 = 0
+      var.air = '{"id":"minecraft:air","Count":1b}'
+      var.actionBusySeconds = 0
+      var.按钮引用 = {}
+      var.页脚引用 = {}
+      var.说明引用 = {}
+      var.openAnim = Smooth(0, 1, 280)
+      var.detailAnim = Smooth(0, 1, 180)
+      self.actions['resize']()
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewW = Screen.getWidth() / s
+      var.viewH = Screen.getHeight() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.leftW = var.viewW * 0.64
+      var.rightW = var.viewW - var.leftW
+      var.gridW = var.leftW - 184
+    open: |-
+      var.openAnim.reset()
+      var.actionBusy = false
+      Sound.self('minecraft:item.book.page_turn', 0.9, 14)
+    tick: |-
+      if(var.pendingEntry != none && Time.currentTime() - var.pendingAt >= 110){
+        self.actions['selectPreview']()
+      }
+    seconds: |-
+      if(var.actionBusy){
+        var.actionBusySeconds = var.actionBusySeconds + 1
+        if(var.actionBusySeconds >= 3){
+          var.actionBusy = false
+          var.actionBusySeconds = 0
+        }
+      }else{
+        var.actionBusySeconds = 0
+      }
+    selectPreview: |-
+      if(var.pendingEntry != none){
+        if(var.selectedId != var.pendingEntry['id'] || var.selectedFooter != var.pendingFooter){
+          var.selected = var.pendingEntry
+          var.selectedId = var.selected['id']
+          var.selectedFooter = var.pendingFooter
+          val.detail_slider.setDragYRatio(0)
+          var.detailAnim.reset()
+          self.actions['refreshDetails']()
+        }
+        var.pendingEntry = none
+      }
+    applyPacket: |-
+      changedPage = var.resetMenu || var.menuId != var.incoming['menuId'] || var.pageId != var.incoming['pageId']
+      previousId = var.selectedId
+      previousFooter = var.selectedFooter
+      var.pendingEntry = none
+      var.selected = none
+      var.packetId = var.incoming['packetId']
+      var.actionToken = var.incoming['action_token']
+      var.actionBusy = false
+      var.menuId = var.incoming['menuId']
+      var.layout = var.incoming['layout']
+      var.title = var.incoming['title']
+      var.pageId = var.incoming['pageId']
+      var.pageTitle = var.incoming['pageTitle']
+      var.pageIndex = var.incoming['pageIndex']
+      var.pageCount = var.incoming['pageCount']
+      var.columns = var.incoming['columns']
+      if(var.columns == none){
+        var.columns = 4
+      }
+      if(var.columns < 1){
+        var.columns = 4
+      }
+      var.columns = var.columns.round()
+      var.hasPrev = var.incoming['hasPrev']
+      var.hasNext = var.incoming['hasNext']
+      var.buttonRows = var.incoming['buttonRows']
+      var.buttonCount = var.incoming['buttonCount']
+      var.footerRows = var.incoming['footerRows']
+      var.footerCount = var.incoming['footerCount']
+      var.maxButtonCount = var.incoming['maxButtonCount']
+      var.maxFooterCount = var.incoming['maxFooterCount']
+      var.gridRows = math.ceil(var.buttonCount / var.columns)
+      if(changedPage){
+        var.selectedId = none
+        val.grid_slider.setDragYRatio(0)
+        val.footer_slider.setDragXRatio(0)
+      }
+      // 动态行模板用 get(0)，copy/remove/seticon 全部走引用字典
+      目标按钮数 = var.buttonCount.round()
+      if(val.button_rows.childrenCount() - 1 != 目标按钮数 - 1){
+        for(key in var.按钮引用.keys()){
+          var.按钮引用[key].remove()
+        }
+        var.按钮引用 = {}
+        var.按钮轮次 = (var.按钮轮次 + 1).round()
+        模板 = val.button_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标按钮数 - 1)){
+          mb = 模板.copy('菜单按钮_' + var.按钮轮次 + '_' + i.round())
+          mb.entryKey = i.round()
+          var.按钮引用[i.round()] = mb
+        }
+      }
+      目标页脚数 = var.footerCount.round()
+      if(val.footer_rows.childrenCount() - 1 != 目标页脚数 - 1){
+        for(key in var.页脚引用.keys()){
+          var.页脚引用[key].remove()
+        }
+        var.页脚引用 = {}
+        var.页脚轮次 = (var.页脚轮次 + 1).round()
+        模板 = val.footer_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标页脚数 - 1)){
+          fb = 模板.copy('页脚按钮_' + var.页脚轮次 + '_' + i.round())
+          fb.entryKey = i.round()
+          var.页脚引用[i.round()] = fb
+        }
+      }
+      // 图标分离字典与选中还原，一次遍历完成
+      var.iconJsons = {}
+      for(key in var.buttonRows.keys()){
+        entry = var.buttonRows[key]
+        var.iconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air
+        if(!var.selectedFooter && var.selectedId == entry['id']){
+          var.selected = entry
+        }
+      }
+      var.footerIconJsons = {}
+      for(key in var.footerRows.keys()){
+        entry = var.footerRows[key]
+        var.footerIconJsons[key] = entry['hasIcon'] ? entry['itemJson'] : var.air
+        if(var.selectedFooter && var.selectedId == entry['id']){
+          var.selected = entry
+        }
+      }
+      if(目标按钮数 > 0){
+        mb = val.button_rows.get(0)
+        mb['图标'].seticon()
+        for(i in range(1, 目标按钮数 - 1)){
+          mb = var.按钮引用[i.round()]
+          mb['图标'].seticon()
+        }
+      }
+      if(目标页脚数 > 0){
+        fb = val.footer_rows.get(0)
+        fb['图标'].seticon()
+        for(i in range(1, 目标页脚数 - 1)){
+          fb = var.页脚引用[i.round()]
+          fb['图标'].seticon()
+        }
+      }
+      if(var.selected == none){
+        var.selectedFooter = false
+        var.selected = var.buttonRows[0.round()]
+        if(var.selected == none && var.footerCount > 0){
+          var.selectedFooter = true
+          var.selected = var.footerRows[0.round()]
+        }
+      }
+      var.selectedId = var.selected['id']
+      if(changedPage || previousId != var.selectedId || previousFooter != var.selectedFooter){
+        val.detail_slider.setDragYRatio(0)
+        var.detailAnim.reset()
+      }
+      self.actions['refreshDetails']()
+    refreshDetails: |-
+      var.detailRows = var.selected['detailRows']
+      var.detailCount = 0
+      var.accent = '214,190,143,255'
+      if(var.selected != none){
+        var.detailCount = var.selected['detailCount']
+        var.accent = var.selected['accent']
+      }
+      目标行数 = var.detailCount.round()
+      if(val.detail_rows.childrenCount() - 1 != 目标行数 - 1){
+        for(key in var.说明引用.keys()){
+          var.说明引用[key].remove()
+        }
+        var.说明引用 = {}
+        var.说明轮次 = (var.说明轮次 + 1).round()
+        模板 = val.detail_rows.get(0)
+        模板.entryKey = 0.round()
+        for(i in range(1, 目标行数 - 1)){
+          row = 模板.copy('说明行_' + var.说明轮次 + '_' + i.round())
+          row.entryKey = i.round()
+          var.说明引用[i.round()] = row
+        }
+      }
+      iconJson = var.selected['hasIcon'] ? var.selected['itemJson'] : var.air
+      val.detail_icon.setItemIcon(iconJson)
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      全屏画布:
+        type: Canvas
+        attribute:
+          x: "-var.offX"
+          width: "var.viewW"
+          height: "var.viewH"
+        children:
+          场景磨砂:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;16,27,42,245
+          暮色底幕:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~16,27,42,255
+            effect:
+              gradient:
+                color1: ~20,34,52,255
+                color2: ~11,21,35,255
+                type: 0
+                angleDeg: 65
+          导航内容:
+            type: Canvas
+            attribute:
+              width: "var.leftW"
+              height: "var.viewH"
+              alpha: "var.openAnim.get()"
+            children:
+              页眉标线:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: 56
+                  width: 28
+                  height: 3
+                  normal: ~233,200,139,255
+                  through: true
+              品牌标记:
+                type: Text
+                attribute:
+                  x: 120
+                  y: 46
+                  texts: ~&fN A V I G A T I O N  /  游戏导航
+                  fontSize: 36
+                  alpha: 0.78
+                  through: true
+              标题:
+                type: Text
+                attribute:
+                  x: 72
+                  y: 106
+                  texts: var.title
+                  fontSize: 100
+                  limit: 24
+                  through: true
+              引导语:
+                type: Text
+                attribute:
+                  x: 76
+                  y: 178
+                  texts: ~&7下一段旅程，从这里开始。
+                  fontSize: 36
+                  through: true
+              分类底色:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: 226
+                  width: 224
+                  height: 48
+                  normal: ~42,60,80,255
+                  shape: ~round_rect
+                  radius: 8
+                  through: true
+              章节标记:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: 238
+                  width: 4
+                  height: 24
+                  normal: var.accent
+                  through: true
+              当前分类:
+                type: Text
+                attribute:
+                  x: 98
+                  y: 236
+                  texts: var.pageTitle
+                  fontSize: 48
+                  limit: 10
+                  through: true
+              功能数量:
+                type: Text
+                attribute:
+                  point: ~top_right
+                  x: -78
+                  y: 240
+                  texts: "'&f' + var.buttonCount.round() + '  /  功能'"
+                  fontSize: 36
+                  alpha: 0.78
+                  through: true
+              分隔线:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: 286
+                  width: "var.leftW - 152"
+                  height: 1
+                  normal: ~83,108,135,160
+                  through: true
+              空提示:
+                type: Canvas
+                attribute:
+                  x: 76
+                  y: 360
+                  width: "var.leftW - 152"
+                  height: 160
+                  visible: var.buttonCount <= 0
+                children:
+                  空标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      texts: ~&f这里暂时没有可用功能
+                      fontSize: 54
+                      through: true
+                  空说明:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 52
+                      texts: ~&7试试切换页面，或稍后再次回来。
+                      fontSize: 36
+                      through: true
+              网格滚动区:
+                type: Scroll
+                attribute:
+                  x: 76
+                  y: 304
+                  width: "var.gridW + 24"
+                  height: "var.viewH - 518"
+                  moveY: val.grid_slider.getDragYRatio()
+                action:
+                  wheel: |-
+                    ratio = self.moveY - self.wheelValue * 0.12
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.grid_slider.setDragYRatio(ratio)
+                children:
+                  按钮网格:
+                    type: HGrid
+                    val: button_rows
+                    attribute:
+                      width: "var.gridW"
+                      column: "var.columns"
+                      spaceBetweenX: "var.cellGap"
+                      spaceBetweenY: 12
+                    children:
+                      菜单按钮:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.buttonRows[self.entryKey]
+                          active: "!var.selectedFooter && var.selectedId == self.entry['id']"
+                          visible: self.entry != none
+                          width: "(var.gridW - (var.columns - 1) * var.cellGap) / var.columns"
+                          height: 184
+                          through: false
+                        action:
+                          enter: |-
+                            var.pendingEntry = self.entry
+                            var.pendingFooter = false
+                            var.pendingAt = Time.currentTime()
+                            Sound.self('minecraft:ui.button.click', 1.9, 6)
+                          leave: |-
+                            if(!var.pendingFooter && var.pendingEntry['id'] == self.entry['id']){
+                              var.pendingEntry = none
+                            }
+                          clickLeft: |-
+                            var.pendingEntry = self.entry
+                            var.pendingFooter = false
+                            var.menuUi.actions['selectPreview']()
+                            if(self.entry != none && self.entry['enabled'] && var.actionToken != none && !var.actionBusy){
+                              var.actionBusy = true
+                              var.actionBusySeconds = 0
+                              Sound.self('minecraft:ui.button.click', 1.0, 20)
+                              Packet.send(var.packetId, 'click', var.actionToken, self.entry['id'])
+                            }
+                        children:
+                          卡片底色:
+                            type: Texture
+                            attribute:
+                              x: 2
+                              y: 2
+                              width: "self.parent.width - 4"
+                              height: "self.parent.height - 4"
+                              normal: "self.parent.active ? '52,78,101,255' : '28,44,63,255'"
+                              hover: ~56,82,108,255
+                              shape: ~round_rect
+                              radius: 12
+                              through: true
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "self.parent.active ? self.parent.entry['accent'] : (self.parent.isHovered() ? '128,160,188,235' : '70,96,122,190')"
+                          选中染色:
+                            type: Texture
+                            attribute:
+                              x: 3
+                              y: 3
+                              width: "self.parent.width - 6"
+                              height: "self.parent.height - 6"
+                              normal: self.parent.entry['accent']
+                              alpha: 0.16
+                              visible: self.parent.active
+                              shape: ~round_rect
+                              radius: 11
+                              through: true
+                          选中顶线:
+                            type: Texture
+                            attribute:
+                              x: 12
+                              y: 10
+                              width: "self.parent.width - 24"
+                              height: 3
+                              normal: self.parent.entry['accent']
+                              alpha: "self.parent.active ? 1 : (self.parent.isHovered() ? 0.6 : 0.35)"
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
+                          图标底座:
+                            type: Texture
+                            attribute:
+                              point: ~top_center
+                              y: 24
+                              width: 68
+                              height: 68
+                              normal: self.parent.entry['accent']
+                              alpha: "(self.parent.active || self.parent.isHovered()) ? 1 : 0.74"
+                              shape: ~round_rect
+                              radius: 14
+                              through: true
+                          图标:
+                            type: Slot
+                            attribute:
+                              point: ~top_center
+                              slotType: ~Icon
+                              y: 32
+                              width: 52
+                              height: 52
+                              itemScale: 0.82
+                              normal: ~0,0,0,0
+                              visible: self.parent.entry['hasIcon']
+                              through: true
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey])"
+                          无图标序号:
+                            type: Text
+                            attribute:
+                              point: ~top_center
+                              y: 38
+                              texts: "'&0' + (self.parent.entryKey + 1).round()"
+                              visible: "!self.parent.entry['hasIcon']"
+                              fontSize: 48
+                              through: true
+                          标签:
+                            type: Text
+                            attribute:
+                              point: ~top_center
+                              y: 108
+                              texts: self.parent.entry['text']
+                              fontSize: 48
+                              limit: 12
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.7"
+                              through: true
+                          简介:
+                            type: Text
+                            attribute:
+                              point: ~top_center
+                              y: 148
+                              texts: "'&f' + self.parent.entry['summary']"
+                              fontSize: 36
+                              limit: 18
+                              alpha: "self.parent.active ? 0.94 : (self.parent.isHovered() ? 0.88 : 0.72)"
+                              through: true
+                          禁用遮色:
+                            type: Texture
+                            attribute:
+                              x: 3
+                              y: 3
+                              width: "self.parent.width - 6"
+                              height: "self.parent.height - 6"
+                              normal: ~13,22,35,130
+                              visible: "!self.parent.entry['enabled']"
+                              shape: ~round_rect
+                              radius: 11
+                              through: true
+                          禁用标记:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -14
+                              y: 10
+                              texts: ~&7—
+                              visible: "!self.parent.entry['enabled']"
+                              fontSize: 36
+                              through: true
+              网格滑轨:
+                type: Texture
+                attribute:
+                  x: "var.leftW - 55"
+                  y: 304
+                  width: 3
+                  height: "var.viewH - 518"
+                  normal: ~104,131,154,60
+                  visible: "var.gridRows * 196 - 12 > var.viewH - 518"
+                  through: true
+              网格滑块:
+                type: Texture
+                val: grid_slider
+                attribute:
+                  x: "var.leftW - 58"
+                  y: 304
+                  width: 9
+                  height: 64
+                  maxDragY: "var.viewH - 582"
+                  normal: ~104,131,154,180
+                  hover: ~233,200,139,255
+                  shape: ~round_rect
+                  radius: 4
+                  visible: "var.gridRows * 196 - 12 > var.viewH - 518"
+              底部操作底幕:
+                type: Texture
+                attribute:
+                  y: "var.viewH - 204"
+                  width: "var.leftW"
+                  height: 204
+                  normal: ~19,32,49,255
+                  through: true
+              操作区顶线:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: "var.viewH - 204"
+                  width: "var.leftW - 152"
+                  height: 1
+                  normal: ~72,97,124,180
+                  through: true
+              翻页栏:
+                type: Canvas
+                attribute:
+                  x: 76
+                  y: "var.viewH - 182"
+                  width: "var.leftW - 152"
+                  height: 54
+                children:
+                  上一页按钮:
+                    type: Canvas
+                    attribute:
+                      width: 150
+                      height: 54
+                      enable: var.hasPrev
+                    action:
+                      clickLeft: |-
+                        Sound.self('minecraft:item.book.page_turn', 1.1, 18)
+                        Packet.send(var.packetId, 'page', 'prev')
+                    children:
+                      上页底色:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.hasPrev ? '49,76,105,255' : '27,41,59,255'"
+                          hover: "var.hasPrev ? '65,98,130,255' : '27,41,59,255'"
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "var.hasPrev ? (self.parent.isHovered() ? '150,185,214,255' : '104,139,172,255') : '49,66,85,255'"
+                      上页文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f‹  上一页
+                          fontSize: 36
+                          alpha: "var.hasPrev ? 1 : 0.6"
+                          through: true
+                  页码:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: "'&f' + (var.pageIndex + 1).round() + '  &8/  &7' + var.pageCount.round()"
+                      fontSize: 36
+                      through: true
+                  下一页按钮:
+                    type: Canvas
+                    attribute:
+                      point: ~top_right
+                      width: 150
+                      height: 54
+                      enable: var.hasNext
+                    action:
+                      clickLeft: |-
+                        Sound.self('minecraft:item.book.page_turn', 1.1, 18)
+                        Packet.send(var.packetId, 'page', 'next')
+                    children:
+                      下页底色:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: "var.hasNext ? '49,76,105,255' : '27,41,59,255'"
+                          hover: "var.hasNext ? '65,98,130,255' : '27,41,59,255'"
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                        effect:
+                          stroke:
+                            width: 3
+                            color: "var.hasNext ? (self.parent.isHovered() ? '150,185,214,255' : '104,139,172,255') : '49,66,85,255'"
+                      下页文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&f下一页  ›
+                          fontSize: 36
+                          alpha: "var.hasNext ? 1 : 0.6"
+                          through: true
+              底部分界:
+                type: Texture
+                attribute:
+                  x: 76
+                  y: "var.viewH - 108"
+                  width: "var.leftW - 152"
+                  height: 1
+                  normal: ~72,97,124,150
+                  through: true
+              页脚滚动区:
+                type: Scroll
+                attribute:
+                  x: 76
+                  y: "var.viewH - 84"
+                  width: "var.leftW - 370"
+                  height: 52
+                  moveX: val.footer_slider.getDragXRatio()
+                  visible: var.footerCount > 0
+                action:
+                  wheel: |-
+                    ratio = self.moveX - self.wheelValue * 0.15
+                    if(ratio < 0){ ratio = 0 }
+                    if(ratio > 1){ ratio = 1 }
+                    val.footer_slider.setDragXRatio(ratio)
+                children:
+                  页脚栏:
+                    type: HStack
+                    val: footer_rows
+                    attribute:
+                      height: 52
+                      spaceBetween: 12
+                    children:
+                      页脚按钮:
+                        type: Canvas
+                        attribute:
+                          entryKey: 0.round()
+                          entry: var.footerRows[self.entryKey]
+                          visible: self.entry != none
+                          width: 212
+                          height: 52
+                        action:
+                          enter: |-
+                            var.pendingEntry = self.entry
+                            var.pendingFooter = true
+                            var.pendingAt = Time.currentTime()
+                            Sound.self('minecraft:ui.button.click', 1.9, 6)
+                          leave: |-
+                            if(var.pendingFooter && var.pendingEntry['id'] == self.entry['id']){
+                              var.pendingEntry = none
+                            }
+                          clickLeft: |-
+                            var.pendingEntry = self.entry
+                            var.pendingFooter = true
+                            var.menuUi.actions['selectPreview']()
+                            if(self.entry != none && self.entry['enabled']){
+                              Sound.self('minecraft:ui.button.click', 1.1, 18)
+                              if(self.entry['clientAction'] == 'options'){
+                                Game.options()
+                              } elif(self.entry['clientAction'] == 'quit'){
+                                Game.quit()
+                              } elif(var.actionToken != none && !var.actionBusy){
+                                var.actionBusy = true
+                                Packet.send(var.packetId, 'footer', var.actionToken, self.entry['id'])
+                              }
+                            }
+                        children:
+                          页脚底色:
+                            type: Texture
+                            attribute:
+                              x: 2
+                              y: 2
+                              width: 208
+                              height: 48
+                              normal: "var.selectedFooter && var.selectedId == self.parent.entry['id'] ? '52,79,105,255' : '31,49,70,255'"
+                              hover: ~56,83,109,255
+                              shape: ~round_rect
+                              radius: 8
+                              through: true
+                            effect:
+                              stroke:
+                                width: 3
+                                color: "var.selectedFooter && var.selectedId == self.parent.entry['id'] ? self.parent.entry['accent'] : (self.parent.isHovered() ? '128,160,188,235' : '70,96,122,190')"
+                          图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              x: 12
+                              y: 10
+                              width: 32
+                              height: 32
+                              itemScale: 0.5
+                              normal: ~0,0,0,0
+                              visible: self.parent.entry['hasIcon']
+                              through: true
+                              seticon: "self.setItemIcon(var.footerIconJsons[self.parent.entryKey])"
+                          禁用遮色:
+                            type: Texture
+                            attribute:
+                              x: 8
+                              y: 6
+                              width: 40
+                              height: 40
+                              normal: ~13,22,35,140
+                              visible: "!self.parent.entry['enabled']"
+                              shape: ~round_rect
+                              radius: 8
+                              through: true
+                          页脚文字:
+                            type: Text
+                            attribute:
+                              x: "self.parent.entry['hasIcon'] ? 54 : 18"
+                              y: 15
+                              texts: self.parent.entry['text']
+                              fontSize: 36
+                              limit: 10
+                              alpha: "self.parent.entry['enabled'] ? 1 : 0.4"
+                              through: true
+              页脚滑块:
+                type: Texture
+                val: footer_slider
+                attribute:
+                  x: 76
+                  y: "var.viewH - 22"
+                  width: 64
+                  height: 5
+                  maxDragX: "var.leftW - 434"
+                  normal: ~104,131,154,170
+                  hover: ~233,200,139,255
+                  shape: ~round_rect
+                  radius: 2
+                  visible: "var.footerCount * 224 - 12 > var.leftW - 370"
+              浏览提示:
+                type: Text
+                attribute:
+                  x: 76
+                  y: "var.viewH - 66"
+                  texts: ~&f移动鼠标预览 · 点击功能进入
+                  fontSize: 36
+                  alpha: 0.72
+                  visible: var.footerCount <= 0
+                  through: true
+              返回游戏:
+                type: Canvas
+                attribute:
+                  point: ~bottom_right
+                  x: -76
+                  y: -32
+                  width: 192
+                  height: 52
+                action:
+                  clickLeft: |-
+                    Sound.self('minecraft:ui.button.click', 0.9, 20)
+                    Packet.send(var.packetId, 'close')
+                    var.menuUi.close()
+                children:
+                  返回底色:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~233,200,139,255
+                      hover: ~250,223,175,255
+                      shape: ~round_rect
+                      radius: 8
+                      through: true
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "self.parent.isHovered() ? '255,240,214,255' : '176,146,96,140'"
+                  返回文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      texts: ~&0ESC  返回游戏
+                      fontSize: 36
+                      through: true
+          详情面板:
+            type: Canvas
+            attribute:
+              x: "var.leftW"
+              width: "var.rightW"
+              height: "var.viewH"
+            children:
+              详情底幕:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~27,44,63,255
+                effect:
+                  gradient:
+                    color1: ~34,54,75,255
+                    color2: ~20,34,51,255
+                    type: 0
+                    angleDeg: 90
+              侧边分界:
+                type: Texture
+                attribute:
+                  width: 2
+                  height: "var.viewH"
+                  normal: ~104,131,154,150
+                  through: true
+              主题顶线:
+                type: Texture
+                attribute:
+                  width: "var.rightW"
+                  height: 3
+                  normal: var.accent
+                  through: true
+              详情霞光:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 3
+                  width: "var.rightW"
+                  height: 210
+                  normal: ~255,255,255,10
+                  through: true
+                effect:
+                  gradient:
+                    color1: ~255,255,255,24
+                    color2: ~255,255,255,0
+                    type: 0
+                    angleDeg: 90
+              详情内容:
+                type: Canvas
+                attribute:
+                  width: "var.rightW"
+                  height: "var.viewH"
+                  visible: var.selected != none
+                  alpha: "var.openAnim.get() * var.detailAnim.get()"
+                children:
+                  分类指示:
+                    type: Texture
+                    attribute:
+                      x: 56
+                      y: 70
+                      width: 8
+                      height: 8
+                      normal: var.accent
+                      shape: ~circle
+                      through: true
+                  功能分类:
+                    type: Text
+                    attribute:
+                      x: 82
+                      y: 60
+                      texts: "'&f' + var.selected['category']"
+                      fontSize: 36
+                      limit: 30
+                      alpha: 0.88
+                      through: true
+                  主视觉:
+                    type: Canvas
+                    attribute:
+                      x: 56
+                      y: "128 + (1 - var.detailAnim.get()) * 12"
+                      width: "var.rightW - 112"
+                      height: 248
+                    children:
+                      主视觉底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: var.accent
+                          shape: ~round_rect
+                          radius: 18
+                          through: true
+                        effect:
+                          gradient:
+                            color1: var.accent
+                            color2: ~73,108,139,255
+                            type: 0
+                            angleDeg: 25
+                          stroke:
+                            width: 3
+                            color: ~226,231,232,210
+                      主视觉编号:
+                        type: Text
+                        attribute:
+                          x: 24
+                          y: 22
+                          texts: ~&0F E A T U R E
+                          fontSize: 36
+                          alpha: 0.6
+                          through: true
+                      装饰圆盘:
+                        type: Texture
+                        attribute:
+                          point: ~middle_center
+                          width: 184
+                          height: 184
+                          normal: ~235,231,217,255
+                          shape: ~circle
+                          visible: "!var.selected['hasArtwork']"
+                          through: true
+                        effect:
+                          stroke:
+                            width: 5
+                            color: ~248,241,225,255
+                      内层圆盘:
+                        type: Texture
+                        attribute:
+                          point: ~middle_center
+                          width: 152
+                          height: 152
+                          normal: ~178,198,207,255
+                          shape: ~circle
+                          visible: "!var.selected['hasArtwork']"
+                          through: true
+                      详情图标:
+                        type: Slot
+                        val: detail_icon
+                        attribute:
+                          point: ~middle_center
+                          slotType: ~Icon
+                          width: 96
+                          height: 96
+                          itemScale: 1.45
+                          normal: ~0,0,0,0
+                          visible: "var.selected['hasIcon'] && !var.selected['hasArtwork']"
+                          through: true
+                      默认主视觉:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: ~&0AX
+                          fontSize: 81
+                          visible: "!var.selected['hasIcon'] && !var.selected['hasArtwork']"
+                          through: true
+                      展示图片:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: var.selected['artwork']
+                          visible: var.selected['hasArtwork']
+                          shape: ~round_rect
+                          radius: 16
+                          through: true
+                  功能标题:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: 418
+                      texts: var.selected['text']
+                      fontSize: 81
+                      limit: 16
+                      through: true
+                  功能简介:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: 480
+                      texts: "'&f' + var.selected['summary']"
+                      fontSize: 36
+                      limit: 26
+                      alpha: 0.82
+                      through: true
+                  说明分界:
+                    type: Texture
+                    attribute:
+                      x: 56
+                      y: 538
+                      width: 48
+                      height: 3
+                      normal: var.accent
+                      through: true
+                  说明标题:
+                    type: Text
+                    attribute:
+                      x: 124
+                      y: 527
+                      texts: ~&f功能介绍
+                      fontSize: 36
+                      alpha: 0.9
+                      through: true
+                  说明底色:
+                    type: Texture
+                    attribute:
+                      x: 40
+                      y: 554
+                      width: "var.rightW - 80"
+                      height: "var.viewH - 726"
+                      normal: ~23,39,57,255
+                      shape: ~round_rect
+                      radius: 12
+                      through: true
+                    effect:
+                      stroke:
+                        width: 3
+                        color: ~66,91,115,180
+                  说明滚动区:
+                    type: Scroll
+                    attribute:
+                      x: 56
+                      y: 568
+                      width: "var.rightW - 112"
+                      height: "var.viewH - 756"
+                      moveY: val.detail_slider.getDragYRatio()
+                    action:
+                      wheel: |-
+                        ratio = self.moveY - self.wheelValue * 0.12
+                        if(ratio < 0){ ratio = 0 }
+                        if(ratio > 1){ ratio = 1 }
+                        val.detail_slider.setDragYRatio(ratio)
+                    children:
+                      说明列表:
+                        type: VStack
+                        val: detail_rows
+                        attribute:
+                          width: "var.rightW - 112"
+                          spaceBetween: 0
+                        children:
+                          说明行:
+                            type: Canvas
+                            attribute:
+                              entryKey: 0.round()
+                              entry: var.detailRows[self.entryKey]
+                              width: "var.rightW - 112"
+                              height: 32
+                              visible: self.entry != none
+                              through: true
+                            children:
+                              说明文字:
+                                type: Text
+                                attribute:
+                                  texts: self.parent.entry['text']
+                                  fontSize: 36
+                                  through: true
+                  状态区底幕:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: "var.viewH - 168"
+                      width: "var.rightW"
+                      height: 168
+                      normal: ~22,36,53,255
+                      through: true
+                  状态分界:
+                    type: Texture
+                    attribute:
+                      x: 56
+                      y: "var.viewH - 168"
+                      width: "var.rightW - 112"
+                      height: 1
+                      normal: ~72,97,124,170
+                      through: true
+                  状态指示:
+                    type: Texture
+                    attribute:
+                      x: 56
+                      y: "var.viewH - 128"
+                      width: 10
+                      height: 10
+                      shape: ~circle
+                      normal: "var.selected['enabled'] ? '126,209,168,255' : '221,131,110,255'"
+                      through: true
+                  状态文字:
+                    type: Text
+                    attribute:
+                      x: 82
+                      y: "var.viewH - 138"
+                      texts: "'&f' + var.selected['statusText']"
+                      fontSize: 36
+                      through: true
+                  操作提示:
+                    type: Text
+                    attribute:
+                      x: 56
+                      y: "var.viewH - 82"
+                      texts: "'&7' + var.selected['actionHint']"
+                      fontSize: 36
+                      limit: 28
+                      through: true
+              说明滑块:
+                type: Texture
+                val: detail_slider
+                attribute:
+                  x: "var.rightW - 34"
+                  y: 568
+                  width: 8
+                  height: 52
+                  maxDragY: "var.viewH - 808"
+                  normal: ~104,131,154,180
+                  hover: ~233,200,139,255
+                  shape: ~round_rect
+                  radius: 4
+                  visible: "var.selected != none && var.detailCount * 32 > var.viewH - 756"
+              等待详情:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  width: "var.rightW - 112"
+                  height: 180
+                  visible: var.selected == none
+                children:
+                  等待标题:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      texts: ~&f你的下一段旅程
+                      fontSize: 64
+                      through: true
+                  等待说明:
+                    type: Text
+                    attribute:
+                      point: ~top_center
+                      y: 68
+                      texts: ~&7从左侧选择一个功能，了解更多。
+                      fontSize: 36
+                      through: true

@@ -78,6 +78,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         mappings.put(MenuService.PANEL_UI_RESOURCE_PATH, MenuService.PANEL_UI_FILE_PATH);
         mappings.put(MenuService.ESC_UI_RESOURCE_PATH, MenuService.ESC_UI_FILE_PATH);
         mappings.put(MenuService.ESC_GRID_UI_RESOURCE_PATH, MenuService.ESC_GRID_UI_FILE_PATH);
+        mappings.put(MenuService.PANEL_GRID_UI_RESOURCE_PATH, MenuService.PANEL_GRID_UI_FILE_PATH);
         return new ModuleUiSpec(mappings, configuration != null && configuration.ui().overwriteUiFiles());
     }
 

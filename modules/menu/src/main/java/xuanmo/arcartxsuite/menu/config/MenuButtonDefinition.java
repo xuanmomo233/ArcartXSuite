@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param viewConditions 控制按钮可见性的脚本条件列表
  * @param useConditions  控制按钮可点击性的脚本条件列表
  * @param denyMessage    条件不满足时的拒绝消息
+ * @param denyActions    使用条件不满足时执行的拒绝动作列表
  * @param actions        点击时执行的动作定义列表
  * @param clientAction   客户端侧动作标识，由 UI 引擎直接处理
  * @param icon           按钮图标定义
@@ -32,6 +33,7 @@ public record MenuButtonDefinition(
     List<ScriptCondition> viewConditions,
     List<ScriptCondition> useConditions,
     String denyMessage,
+    List<MenuActionDefinition> denyActions,
     List<MenuActionDefinition> actions,
     String clientAction,
     IconDefinition icon,
@@ -42,8 +44,8 @@ public record MenuButtonDefinition(
                                 List<ScriptCondition> viewConditions, List<ScriptCondition> useConditions,
                                 String denyMessage, List<MenuActionDefinition> actions,
                                 String clientAction, IconDefinition icon) {
-        this(id, text, order, permission, viewConditions, useConditions, denyMessage, actions,
-            clientAction, icon, Details.defaults());
+        this(id, text, order, permission, viewConditions, useConditions, denyMessage, List.of(),
+            actions, clientAction, icon, Details.defaults());
     }
 
     public record Details(String summary, String category, String accent, String artwork,
@@ -109,6 +111,7 @@ public record MenuButtonDefinition(
             viewConditions,
             useConditions,
             section.getString("deny-message", section.getString("denyMessage", "")),
+            MenuActionDefinition.parseList(section.getStringList("deny-actions"), logger),
             MenuActionDefinition.parseList(section.getStringList("actions"), logger),
             section.getString("client-action", section.getString("clientAction", "")),
             IconDefinition.load(section.getConfigurationSection("icon")),

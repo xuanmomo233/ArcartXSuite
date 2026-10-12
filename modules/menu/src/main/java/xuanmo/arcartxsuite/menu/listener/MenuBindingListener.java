@@ -93,7 +93,7 @@ public final class MenuBindingListener implements Listener {
             if (!matchesHand(binding, mainHand)) {
                 continue;
             }
-            if (!matchesClick(binding, action)) {
+            if (!matchesClick(binding, action, player)) {
                 continue;
             }
             if (!MenuConditionEvaluator.hasPermission(player, binding.permission())) {
@@ -112,7 +112,10 @@ public final class MenuBindingListener implements Listener {
         return mainHand ? binding.mainHand() : binding.offHand();
     }
 
-    private static boolean matchesClick(MenuItemBinding binding, Action action) {
+    private static boolean matchesClick(MenuItemBinding binding, Action action, Player player) {
+        if (binding.requireSneak() != null && binding.requireSneak() != player.isSneaking()) {
+            return false;
+        }
         boolean rightClick = action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
         boolean leftClick = action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK;
         boolean wantsRight = binding.clickAction() == Action.RIGHT_CLICK_AIR

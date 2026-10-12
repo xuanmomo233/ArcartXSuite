@@ -19,6 +19,7 @@ import org.bukkit.event.block.Action;
  * @param loreContains   物品 Lore 需包含的文本
  * @param customModelData 自定义模型数据 ID，{@code -1} 表示不限制
  * @param clickAction    触发所需的点击类型
+ * @param requireSneak   潜行要求：{@code null} 不限，{@code true} 必须潜行，{@code false} 必须非潜行
  * @param mainHand       是否允许主手触发
  * @param offHand        是否允许副手触发
  * @param permission     触发所需的权限节点，空字符串表示无限制
@@ -31,6 +32,7 @@ public record MenuItemBinding(
     String loreContains,
     int customModelData,
     Action clickAction,
+    Boolean requireSneak,
     boolean mainHand,
     boolean offHand,
     String permission
@@ -73,6 +75,15 @@ public record MenuItemBinding(
      */
     public static MenuItemBinding load(ConfigurationSection section, String defaultMenuId) {
         String menuId = section.getString("menu", section.getString("open", defaultMenuId));
+        ClickSpec clickSpec = parseClickSpec(section.getString("action", section.getString("click", "RIGHT_CLICK")));
+        Boolean requireSneak = clickSpec.sneak() ? Boolean.TRUE : null;
+        if (section.isSet("sneak")) {
+            requireSneak = switch (section.getString("sneak", "any").trim().toLowerCase(Locale.ROOT)) {
+                case "true", "yes", "on", "require", "required", "sneak", "shift" -> Boolean.TRUE;
+                case "false", "no", "off", "never", "stand", "standing" -> Boolean.FALSE;
+                default -> null;
+            };
+        }
         return new MenuItemBinding(
             menuId == null ? "" : menuId,
             section.getString("material", ""),
@@ -80,21 +91,36 @@ public record MenuItemBinding(
             section.getString("name-regex", section.getString("nameRegex", "")),
             section.getString("lore-contains", section.getString("loreContains", "")),
             section.getInt("custom-model-data", section.getInt("customModelData", -1)),
-            parseAction(section.getString("action", section.getString("click", "RIGHT_CLICK"))),
+            clickSpec.action(),
+            requireSneak,
             section.getBoolean("main-hand", section.getBoolean("mainHand", true)),
             section.getBoolean("off-hand", section.getBoolean("offHand", true)),
             section.getString("permission", "")
         );
     }
 
-    private static Action parseAction(String raw) {
+    /**
+     * 解析 action 写法，返回基础点击类型与是否要求潜行。
+     * {@code SHIFT_*} / {@code SNEAK_*} 前缀表示必须潜行，其余值仅区分左右键。
+     */
+    private static ClickSpec parseClickSpec(String raw) {
         if (raw == null || raw.isBlank()) {
-            return Action.RIGHT_CLICK_AIR;
+            return new ClickSpec(Action.RIGHT_CLICK_AIR, false);
         }
-        return switch (raw.trim().toUpperCase(Locale.ROOT)) {
-            case "LEFT", "LEFT_CLICK", "LEFT_CLICK_AIR", "LEFT_CLICK_BLOCK" -> Action.LEFT_CLICK_AIR;
-            case "PHYSICAL" -> Action.PHYSICAL;
-            default -> Action.RIGHT_CLICK_AIR;
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        boolean sneak = false;
+        if (normalized.startsWith("SHIFT_") || normalized.startsWith("SNEAK_")) {
+            sneak = true;
+            normalized = normalized.substring(normalized.indexOf('_') + 1);
+        }
+        return switch (normalized) {
+            case "LEFT", "LEFT_CLICK", "LEFT_CLICK_AIR", "LEFT_CLICK_BLOCK" ->
+                new ClickSpec(Action.LEFT_CLICK_AIR, sneak);
+            case "PHYSICAL" -> new ClickSpec(Action.PHYSICAL, sneak);
+            default -> new ClickSpec(Action.RIGHT_CLICK_AIR, sneak);
         };
+    }
+
+    private record ClickSpec(Action action, boolean sneak) {
     }
 }
