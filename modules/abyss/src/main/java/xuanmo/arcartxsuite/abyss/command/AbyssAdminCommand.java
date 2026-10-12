@@ -24,7 +24,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
     private static final List<String> ACTIONS = List.of(
         "help", "status", "reload", "list", "info", "enter", "leave",
         "force_complete", "force_fail", "cancel", "stamina", "cooldown", "tp",
-        "puzzle", "design", "region");
+        "puzzle", "design", "region", "capture");
 
     private final AbyssService service;
     private final java.util.logging.Logger logger;
@@ -67,6 +67,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                 case "puzzle" -> cmdPuzzle(sender, args);
                 case "design" -> cmdDesign(sender, args);
                 case "region" -> cmdRegion(sender, args);
+                case "capture" -> cmdCapture(sender, args);
                 default -> sender.sendMessage(service.msg("usage.admin-unknown", "label", label));
             }
         } catch (Exception e) {
@@ -86,6 +87,7 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
             return switch (action) {
                 case "region" -> filter(
                     List.of("pos1", "pos2", "sel", "save", "list", "info", "remove"), args[2]);
+                case "capture" -> filter(List.of("list", "point"), args[2]);
                 case "design" -> {
                     List<String> c = new ArrayList<>(
                         service.instances().getAllTemplates().stream()
@@ -115,6 +117,9 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                             .toList(), args[3]);
                     default -> List.of();
                 };
+                case "capture" -> filter(
+                    service.roomSets() != null ? service.roomSets().listSets()
+                        : List.of(), args[3]);
                 default -> List.of();
             };
         }
@@ -128,6 +133,19 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
                     && ("info".equalsIgnoreCase(args[2])
                         || "remove".equalsIgnoreCase(args[2]))) {
                     return filter(service.regions().list(tpl), args[4]);
+                }
+            }
+            if ("capture".equals(action)) {
+                if ("point".equalsIgnoreCase(args[2]) && service.roomSets() != null) {
+                    var set = service.roomSets().get(args[3]);
+                    return set == null ? List.of()
+                        : filter(new ArrayList<>(set.keySet()), args[4]);
+                }
+                // capture <集> <房> <类型>：第 5 参补房型
+                if (!"list".equalsIgnoreCase(args[2])
+                    && !"point".equalsIgnoreCase(args[2])) {
+                    return filter(List.of("start", "combat", "elite", "boss",
+                        "shop", "treasure", "event", "rest"), args[4]);
                 }
             }
         }
@@ -583,6 +601,189 @@ public final class AbyssAdminCommand implements ModuleCommandHandler {
             }
             default -> sender.sendMessage(service.msg("usage.region"));
         }
+    }
+
+    // ═══ procgen 房间构件捕获 ═══
+
+    /**
+     * /axs abyss capture <集> <房> <类型>      — 选区快照为房间构件（region+meta）
+     * /axs abyss capture point <集> <房> <目标> — 补标锚点（spawn/mob:/chest:/npc:/interact:）
+     * /axs abyss capture list <集>              — 列出集内房间
+     */
+    private void cmdCapture(CommandSender sender, String[] args) {
+        var lib = service.roomSets();
+        if (lib == null) {
+            sender.sendMessage(service.msg("region.unavailable"));
+            return;
+        }
+        String sub = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "";
+        switch (sub) {
+            case "list" -> {
+                if (args.length < 4) {
+                    sender.sendMessage(service.msg("usage.capture-list"));
+                    return;
+                }
+                var set = lib.get(args[3]);
+                sender.sendMessage(set == null || set.isEmpty()
+                    ? service.msg("capture.empty", "set", args[3])
+                    : service.msg("capture.list", "set", args[3],
+                        "rooms", String.join(", ", set.keySet())));
+            }
+            case "point" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(service.msg("admin-action.only-player"));
+                    return;
+                }
+                if (args.length < 6) {
+                    sender.sendMessage(service.msg("usage.capture-point"));
+                    return;
+                }
+                String err = capturePoint(lib, args[3], args[4], args[5], p);
+                if (err != null) {
+                    sender.sendMessage(service.msg("capture.failed", "error", err));
+                } else {
+                    sender.sendMessage(service.msg("capture.point-added",
+                        "room", args[4], "target", args[5]));
+                }
+            }
+            default -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(service.msg("admin-action.only-player"));
+                    return;
+                }
+                if (args.length < 5) {
+                    sender.sendMessage(service.msg("usage.capture"));
+                    return;
+                }
+                String err = captureRoom(lib, args[2], args[3], args[4], p);
+                if (err != null) {
+                    sender.sendMessage(service.msg("capture.failed", "error", err));
+                } else {
+                    sender.sendMessage(service.msg("capture.saved",
+                        "set", args[2], "room", args[3], "type", args[4]));
+                }
+            }
+        }
+    }
+
+    /** 选区 → 房间构件（region.yml + yml meta）。 */
+    private @Nullable String captureRoom(
+            xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary lib,
+            String set, String room, String type, Player p) {
+        var lib2 = service.regions();
+        var sel = lib2 != null ? lib2.selection(p.getUniqueId()) : null;
+        if (sel == null || !sel.complete()) {
+            return "先用 /axs abyss region pos1|pos2 标好两个角";
+        }
+        if (!p.getWorld().getName().equals(sel.world())) {
+            return "你已离开选区所在世界（" + sel.world() + "）";
+        }
+        // 类型合法性
+        try {
+            xuanmo.arcartxsuite.abyss.procgen.ProcGenRoomAsset.RoomKind
+                .valueOf(type.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return "非法房型（start/combat/elite/boss/shop/treasure/event/rest）";
+        }
+        var rt = xuanmo.arcartxsuite.abyss.template.RegionTemplate.capture(
+            p.getWorld(), sel.x1(), sel.y1(), sel.z1(), sel.x2(), sel.y2(), sel.z2());
+        java.io.File dir = lib.dir(set);
+        dir.mkdirs();
+        // 归一最小角 → capture-origin（point 命令换算房内坐标用）
+        int ox = Math.min(sel.x1(), sel.x2()), oy = Math.min(sel.y1(), sel.y2()),
+            oz = Math.min(sel.z1(), sel.z2());
+        try {
+            rt.save(new java.io.File(dir, room + ".region.yml"));
+        } catch (java.io.IOException e) {
+            return "region 保存失败: " + e.getMessage();
+        }
+        // meta yml（已存在时合并：只更新 type/capture-origin，不动手填的锚点表）
+        java.io.File metaFile = new java.io.File(dir, room + ".yml");
+        org.bukkit.configuration.file.YamlConfiguration meta =
+            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(metaFile);
+        meta.set("type", type.toLowerCase(Locale.ROOT));
+        meta.set("weight", meta.getInt("weight", 10));
+        meta.set("capture-origin",
+            sel.world() + "," + ox + "," + oy + "," + oz);
+        // 玩家位置 → 相对出生点（若在选区内）
+        int[] rel = relTo(p.getLocation(), sel.world(), ox, oy, oz);
+        if (rel != null) {
+            meta.set("spawn", rel[0] + "," + rel[1] + "," + rel[2]);
+        }
+        try {
+            meta.save(metaFile);
+        } catch (java.io.IOException e) {
+            return "meta 保存失败: " + e.getMessage();
+        }
+        lib.reload();
+        return null;
+    }
+
+    /** 补标锚点：spawn / mob:<id>[:波] / chest:<id> / npc:<id> / interact:<id>。 */
+    private @Nullable String capturePoint(
+            xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary lib,
+            String set, String room, String target, Player p) {
+        java.io.File metaFile = new java.io.File(lib.dir(set), room + ".yml");
+        if (!metaFile.isFile()) return "房间不存在（先 capture 建构件）";
+        org.bukkit.configuration.file.YamlConfiguration meta =
+            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(metaFile);
+        String o = meta.getString("capture-origin", "");
+        String[] op = o.split(",");
+        if (op.length != 4) return "房间缺 capture-origin（重新 capture 一次生成）";
+        int[] rel = relTo(p.getLocation(), op[0],
+            parseInt(op[1], 0), parseInt(op[2], 0), parseInt(op[3], 0));
+        if (rel == null) return "你不在该房间的捕获世界/范围内";
+        String loc = rel[0] + "," + rel[1] + "," + rel[2];
+
+        String[] t = target.split(":", 2);
+        switch (t[0].toLowerCase(Locale.ROOT)) {
+            case "spawn" -> meta.set("spawn", loc);
+            case "chest" -> appendList(meta, "chests", loc + ": " + t[1]);
+            case "npc" -> appendList(meta, "npcs", loc + ": " + t[1]);
+            case "interact" -> appendList(meta, "interacts", loc + ": " + t[1]);
+            case "mob" -> {
+                // mob:<id>[:波] → mobs 或 mobs-wave-N
+                String ref = t.length > 1 ? t[1] : "";
+                int w = 1;
+                int wi = ref.lastIndexOf(':');
+                if (wi > 0 && ref.substring(wi + 1).matches("\\d+")) {
+                    w = Integer.parseInt(ref.substring(wi + 1));
+                    ref = ref.substring(0, wi);
+                }
+                appendList(meta, w <= 1 ? "mobs" : "mobs-wave-" + w,
+                    loc + ": " + ref);
+            }
+            default -> {
+                return "非法目标（spawn/mob:<id>[:波]/chest:<id>/npc:<id>/interact:<id>）";
+            }
+        }
+        try {
+            meta.save(metaFile);
+        } catch (java.io.IOException e) {
+            return "meta 保存失败: " + e.getMessage();
+        }
+        lib.reload();
+        return null;
+    }
+
+    /** 玩家块位置 → 相对 capture-origin 的房内坐标；不在同世界返回 null。 */
+    private static int[] relTo(org.bukkit.Location l, String world,
+                               int ox, int oy, int oz) {
+        if (l.getWorld() == null || !l.getWorld().getName().equals(world)) return null;
+        return new int[]{l.getBlockX() - ox, l.getBlockY() - oy, l.getBlockZ() - oz};
+    }
+
+    private static void appendList(
+            org.bukkit.configuration.file.YamlConfiguration yml,
+            String key, String value) {
+        java.util.List<String> l = yml.getStringList(key);
+        l.add(value);
+        yml.set(key, l);
+    }
+
+    private static int parseInt(String s, int def) {
+        try { return Integer.parseInt(s.trim()); }
+        catch (Exception e) { return def; }
     }
 
     private static List<String> filter(List<String> candidates, String input) {

@@ -32,6 +32,17 @@ public final class RoomSetLibrary {
     /** 清缓存重扫（reload 时调用）。 */
     public void reload() { sets.clear(); }
 
+    /** 房间集目录（capture 命令写入用；不存在时会自动建）。 */
+    public File dir(String setName) { return new File(rootDir, setName); }
+
+    /** 全部房间集名（tab 补全/列表）。 */
+    public List<String> listSets() {
+        File[] dirs = rootDir.listFiles(File::isDirectory);
+        List<String> out = new ArrayList<>();
+        if (dirs != null) for (File d : dirs) out.add(d.getName());
+        return out;
+    }
+
     private static boolean worldEditAvailable() {
         return org.bukkit.Bukkit.getPluginManager().isPluginEnabled("FastAsyncWorldEdit")
             || org.bukkit.Bukkit.getPluginManager().isPluginEnabled("WorldEdit");

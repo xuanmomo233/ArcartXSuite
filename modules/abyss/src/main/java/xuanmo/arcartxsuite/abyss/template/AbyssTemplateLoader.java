@@ -185,6 +185,7 @@ public final class AbyssTemplateLoader {
             puzzles, buffs, shops,
             stages,
             procgen,
+            cfg.getString("cross-server", cfg.getString("cross_server", null)),
             functions, dir
         );
     }

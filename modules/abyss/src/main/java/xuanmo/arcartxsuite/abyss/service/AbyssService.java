@@ -128,6 +128,7 @@ public final class AbyssService {
     private xuanmo.arcartxsuite.abyss.stage.StageManager stageManager;
     private xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary roomSetLibrary;
     private xuanmo.arcartxsuite.abyss.procgen.ProcGenManager procgenManager;
+    private xuanmo.arcartxsuite.abyss.cross.CrossDungeonManager crossDungeon;
     private DungeonNpcManager npcs;
     private RewardResolver rewards;
     private QuestManager quests;
@@ -279,6 +280,10 @@ public final class AbyssService {
             dataFolder, logger);
         procgenManager = new xuanmo.arcartxsuite.abyss.procgen.ProcGenManager(
             this, roomSetLibrary, logger);
+        // 跨服：副本 cross-server 声明后启用（宿主通道缺席时静默降级）
+        crossDungeon = new xuanmo.arcartxsuite.abyss.cross.CrossDungeonManager(
+            this, crossServer, plugin, logger);
+        crossDungeon.start();
         instanceTasks = new InstanceTaskScheduler(plugin, scheduler, logger);
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
@@ -448,6 +453,7 @@ public final class AbyssService {
         }
         if (playerData != null) playerData.shutdown();
         if (repository != null) repository.shutdown();
+        if (crossDungeon != null) crossDungeon.stop();
         try {
             storageManager.closeModuleDataSource("abyss");
         } catch (Throwable ignored) { }
@@ -748,6 +754,14 @@ public final class AbyssService {
         }
         if (!instances.hasAvailableSlot(template)) {
             return EnterResult.fail("副本实例已达上限");
+        }
+        // 远端副本：cross-server 声明宿主节点且非本节点 → 走跨服握手前送玩家。
+        // 宿主节点上本段恒为 false（cs.equals(ownNode)）——远端到达后正常重入此方法。
+        String cs = template.crossServer();
+        if (cs != null && !cs.isBlank() && crossDungeon != null
+            && crossDungeon.active() && !cs.equals(crossDungeon.nodeId())) {
+            crossDungeon.requestRemoteEnter(players, template);
+            return EnterResult.success();
         }
         // 预热严格模式：配置了预热的地牢池空则拒绝进入
         var preloadCfg = config.abyss().preload();
@@ -1535,6 +1549,7 @@ public final class AbyssService {
         }
         if (guideService != null) guideService.handleQuit(player);
         if (designManager != null) designManager.close(player);
+        if (crossDungeon != null) crossDungeon.onPlayerQuit(player);
         AbyssInstance instance = instances.getInstance(player);
         if (instance == null) return;
         // 非正常退出标记（下次进服执行恢复动作；顺带记录进本前 GameMode——
@@ -1562,6 +1577,8 @@ public final class AbyssService {
 
     /** 玩家进服（监听器调用）：恢复位置 + 预载数据 + 异常退出恢复动作。 */
     public void handleJoin(Player player) {
+        // 跨服抵达的玩家优先收编（远端副本预订在等待中；非预订玩家立即返回）
+        if (crossDungeon != null) crossDungeon.onPlayerJoin(player);
         playerData.preloadCooldowns(player.getUniqueId());
         scheduler.scheduleOnce(plugin, () -> {
             Location loc = playerData.takePendingLocation(player.getUniqueId());
@@ -1958,6 +1975,11 @@ public final class AbyssService {
             runScript(instance, lines,
                 ScriptContext.withVars(instance, trigger, Map.of()));
         }
+    }
+
+    /** 非实例绑定的裸延迟调度（跨服握手超时等用）。 */
+    public void scheduleDelayedRaw(Runnable r, long delayTicks) {
+        scheduler.scheduleOnce(plugin, r, delayTicks);
     }
 
     /** 主线程执行。 */

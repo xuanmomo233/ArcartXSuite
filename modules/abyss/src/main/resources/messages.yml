@@ -41,6 +41,9 @@ error:
 usage:
   enter: "{prefix}&e用法: /{label} enter <地牢>"
   rank: "{prefix}&c排行 UI 未启用，用法: /{label} rank <地牢>"
+  capture: "{prefix}&e用法: /{label} capture <集> <房> <类型> | capture point <集> <房> <目标> | capture list <集>"
+  capture-list: "{prefix}&e用法: /{label} capture list <集>"
+  capture-point: "{prefix}&e用法: /{label} capture point <集> <房> <spawn|mob:<id>[:波]|chest:<id>|npc:<id>|interact:<id>>"
   invite: "{prefix}&e用法: /{label} invite <玩家>"
   kick: "{prefix}&e用法: /{label} kick <玩家>"
   leader: "{prefix}&e用法: /{label} leader <玩家>"
@@ -126,6 +129,20 @@ procgen:
   challenge-clear: "{prefix}&6限时挑战达成！获得额外奖励"
   encore-start: "{prefix}&d连战开始！敌人卷土重来……"
   grade: "{prefix}&6通关评级：&e{grade} &7（{score} 分）"
+capture:
+  saved: "{prefix}&a房间构件已保存: &f{set}/{room} &7(&e{type}&7)"
+  point-added: "{prefix}&a锚点已登记到 {room}: &f{target}"
+  list: "{prefix}&7房间集 &f{set}&7: &e{rooms}"
+  empty: "{prefix}&c房间集 {set} 为空或不存在"
+  failed: "{prefix}&c捕获失败: {error}"
+cross:
+  requesting: "{prefix}&7正在连接远程副本节点 &f{node}&7……"
+  timeout: "{prefix}&c远程副本 {dungeon} 握手超时"
+  forwarding: "{prefix}&a已建立连接，正在前往 &f{node} &7……"
+  declined: "{prefix}&c远程副本拒绝了进入请求（{reason}）"
+  arrived: "{prefix}&a已抵达副本节点（{arrived}/{total}）——等待队友就绪"
+  enter-failed: "{prefix}&c进本失败：{reason}"
+  forward-failed: "{prefix}&c无法连接至节点 {node}"
 
 chest:
   claimed: "{prefix}&e你已经领取过这个宝箱了"

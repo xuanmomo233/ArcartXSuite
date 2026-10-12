@@ -66,6 +66,7 @@ public record AbyssTemplate(
     ShopConfig shops,
     StageConfig stages,
     @Nullable ProcGenConfig procgen,
+    @Nullable String crossServer,
     @Nullable String functions,
     File dir
 ) {
