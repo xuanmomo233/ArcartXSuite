@@ -120,7 +120,8 @@ public final class ProcGenMaterializer {
             cutHole(world, bwx, floorY + 1, db[1], db[0], db[2], 'x');
             a.doors.add(doorBox(awx, floorY + 1, da[1], da[0], da[2], 'x'));
             b.doors.add(doorBox(bwx, floorY + 1, db[1], db[0], db[2], 'x'));
-            corridorTube(world, awx + 1, bwx - 1, floorY, cx, dw, dh, 'x', cfg);
+            // 走廊中心对齐 a 侧门心（默认门即格轴心 cx；定制门对齐自己一侧）
+            corridorTube(world, awx + 1, bwx - 1, floorY, da[1], dw, dh, 'x', cfg);
         } else {
             int cz = cellAxisX(a, b);
             int anz = a.worldZ + a.d - 1;    // a 南墙面
@@ -131,7 +132,7 @@ public final class ProcGenMaterializer {
             cutHole(world, db[1], floorY + 1, bnz, db[0], db[2], 'z');
             a.doors.add(doorBox(anz, floorY + 1, da[1], da[0], da[2], 'z'));
             b.doors.add(doorBox(bnz, floorY + 1, db[1], db[0], db[2], 'z'));
-            corridorTube(world, anz + 1, bnz - 1, floorY, cz, dw, dh, 'z', cfg);
+            corridorTube(world, anz + 1, bnz - 1, floorY, da[1], dw, dh, 'z', cfg);
         }
     }
 

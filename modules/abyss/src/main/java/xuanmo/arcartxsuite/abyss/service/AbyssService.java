@@ -755,13 +755,19 @@ public final class AbyssService {
         if (!instances.hasAvailableSlot(template)) {
             return EnterResult.fail("副本实例已达上限");
         }
-        // 远端副本：cross-server 声明宿主节点且非本节点 → 走跨服握手前送玩家。
-        // 宿主节点上本段恒为 false（cs.equals(ownNode)）——远端到达后正常重入此方法。
+        // 远端副本：cross-server 声明宿主节点。
+        //   本节点=宿主 → 走本地路径；本节点≠宿主 → 跨服握手前送；
+        //   跨服通道未启用且非宿主 → 拒绝（不能静默退化为本地副本）。
         String cs = template.crossServer();
-        if (cs != null && !cs.isBlank() && crossDungeon != null
-            && crossDungeon.active() && !cs.equals(crossDungeon.nodeId())) {
-            crossDungeon.requestRemoteEnter(players, template);
-            return EnterResult.success();
+        if (cs != null && !cs.isBlank()) {
+            boolean isHost = crossDungeon != null && cs.equals(crossDungeon.nodeId());
+            if (!isHost) {
+                if (crossDungeon != null && crossDungeon.active()) {
+                    crossDungeon.requestRemoteEnter(players, template);
+                    return EnterResult.success();
+                }
+                return EnterResult.fail(msg("cross.forward-failed", "node", cs));
+            }
         }
         // 预热严格模式：配置了预热的地牢池空则拒绝进入
         var preloadCfg = config.abyss().preload();
@@ -784,6 +790,11 @@ public final class AbyssService {
                     return EnterResult.fail(msg("dungeon.module-locked"));
                 }
             }
+        }
+        // procgen 前置校验：房间集缺失/缺必需房型 → 加载世界前就拒绝
+        if (template.procgen() != null && procgenManager != null) {
+            String perr = procgenManager.validate(template);
+            if (perr != null) return EnterResult.fail(perr);
         }
         // floors+pool 模式需要 WorldEdit/FAWE 粘贴房间；缺席直接拒绝（不传进虚空再失败）
         if (template.mode() == AbyssTemplate.Mode.FLOORS && roomManager != null) {
@@ -915,6 +926,15 @@ public final class AbyssService {
         if (spawn == null) spawn = world.getSpawnLocation();
         instance.saveOriginalLocation(player, player.getLocation());
         instance.savePlayerGameMode(player);
+        // procgen 副本设计模式：物化几何供作者进世界检查房间构件
+        //（不注册运行时——design 不跑 startInstance，怪组/交互/NPC 不落）
+        if (instance.getTemplate().procgen() != null && procgenManager != null) {
+            try {
+                procgenManager.materialize(instance, world);
+            } catch (Throwable t) {
+                logger.warning("[abyss] procgen 设计物化失败: " + t.getMessage());
+            }
+        }
         // world_init 是传送前的造地形段——设计模式也要跑，否则脚本建图的副本是空虚空；
         // init/start 等玩法脚本仍跳过（实例不激活玩法系统）
         runLifecycleScript(instance, "world_init", null);

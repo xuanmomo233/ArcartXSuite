@@ -81,7 +81,9 @@ public final class RoomSetLibrary {
         Map<String, File> regions = new HashMap<>();
         for (File f : files) {
             String n = f.getName().toLowerCase();
-            if (n.endsWith(".schem")) {
+            if (n.endsWith(".schematic")) {
+                schems.put(f.getName().substring(0, n.length() - 10), f);
+            } else if (n.endsWith(".schem")) {
                 schems.put(f.getName().substring(0, n.length() - 6), f);
             } else if (n.endsWith(".region.yml")) {
                 regions.put(f.getName().substring(0, n.length() - 11), f);

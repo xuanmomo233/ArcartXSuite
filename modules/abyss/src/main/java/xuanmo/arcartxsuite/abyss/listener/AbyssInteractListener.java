@@ -59,6 +59,17 @@ public final class AbyssInteractListener implements Listener {
         if (type == null) return;
         ItemStack hand = event.getItem();
         service.interacts().onBlockTrigger(instance, player, type, event.getClickedBlock(), hand);
+        // 副本内右键容器一律取消原版 GUI——战利品统一走 open_chest_ui 的
+        // ArcartX 宝箱 UI（procgen/floors 宝箱点共用；否则原版界面叠在自定义 UI 下）
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            org.bukkit.block.Block b = event.getClickedBlock();
+            if (b != null && switch (b.getType()) {
+                case CHEST, TRAPPED_CHEST, ENDER_CHEST, BARREL -> true;
+                default -> false;
+            }) {
+                event.setCancelled(true);
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

@@ -86,6 +86,23 @@ public final class ProcGenManager {
 
     public RoomSetLibrary library() { return library; }
 
+    /** 进本前校验：房间集缺失/空/缺必需房型 → 返回错误文案；null=可用。 */
+    public @Nullable String validate(AbyssTemplate t) {
+        ProcGenConfig cfg = t.procgen();
+        if (cfg == null) return null;
+        Map<RoomKind, List<ProcGenRoomAsset>> byKind = library.byKind(cfg.roomSet());
+        if (byKind.isEmpty()) {
+            return "房间集 " + cfg.roomSet() + " 为空或不存在";
+        }
+        for (RoomKind k : new RoomKind[]{RoomKind.START, RoomKind.COMBAT,
+                RoomKind.BOSS}) {
+            if (byKind.getOrDefault(k, List.of()).isEmpty()) {
+                return "房间集 " + cfg.roomSet() + " 缺少必需房型 " + k;
+            }
+        }
+        return null;
+    }
+
     // ── 物化（continueWorldReady 阶段，world_init 之前） ──
 
     /**
@@ -317,7 +334,8 @@ public final class ProcGenManager {
         if (st == null || roomIdx < 0 || roomIdx >= st.rooms.size()) return;
         RoomRuntime rr = st.rooms.get(roomIdx);
         if (wave < 0 || wave >= rr.placed.asset.waves().length) return;
-        spawnGroupNow(instance, st, roomIdx, wave);
+        // 增兵组独立命名：不计入波次链，清掉这批不触发下一波/清房
+        spawnGroupNow(instance, st, roomIdx, wave, true);
     }
 
     /** 房间是否已清（阶段条件 room_cleared: 用；按索引或构件名匹配）。 */
@@ -410,8 +428,8 @@ public final class ProcGenManager {
             }
             broadcastIn(instance, msg("procgen.challenge-clear"));
         }
-        // Boss 房清完 → 评级 + 通关
-        if (rr.placed.asset.kind() == RoomKind.BOSS) {
+        // Boss 房清完 → 评级 + 通关（连战加赏重放 boss 波次的再清不重复结算）
+        if (rr.placed.asset.kind() == RoomKind.BOSS && !instance.isFinished()) {
             gradeAndFinish(instance, st);
         }
         service.publishEvent("axs.abyss.procgen_room_clear", null,
@@ -430,6 +448,15 @@ public final class ProcGenManager {
     /** 注册并生成该房该波怪组（seq 递增保证组名唯一，可重放同波）。 */
     private void spawnGroupNow(AbyssInstance instance, InstState st,
                                int ri, int wave) {
+        spawnGroupNow(instance, st, ri, wave, false);
+    }
+
+    /**
+     * @param reinforceMode true=增兵组（独立命名，不推进波次链）；
+     *                      false=波次组（完成时驱动下一波/清房）
+     */
+    private void spawnGroupNow(AbyssInstance instance, InstState st,
+                               int ri, int wave, boolean reinforceMode) {
         RoomRuntime rr = st.rooms.get(ri);
         List<ProcGenRoomAsset.RoomMob> mobs = rr.placed.asset.waves()[wave];
         if (mobs == null || mobs.isEmpty()) return;
@@ -452,7 +479,9 @@ public final class ProcGenManager {
             spawns.add(new MonsterSpawn(m.mobId(),
                 p[0] + "," + p[1] + "," + p[2], 1, levelBase));
         }
-        String gname = groupName(ri, wave, seq);
+        String gname = reinforceMode
+            ? reinforceName(ri, seq)
+            : groupName(ri, wave, seq);
         service.mobGroups().registerRuntimeGroup(instance,
             new MonsterGroup(gname, false, SpawnTiming.MANUAL,
                 0, -1, List.of(), spawns, 0,
@@ -565,6 +594,11 @@ public final class ProcGenManager {
 
     private static String groupName(int roomIdx, int wave, int seq) {
         return "pg_" + roomIdx + "_w" + (wave + 1) + "_s" + seq;
+    }
+
+    /** 增兵组名：不含 _w 段，parseGroup 不识别→不干扰波次链。 */
+    private static String reinforceName(int roomIdx, int seq) {
+        return "pg_" + roomIdx + "_r" + seq;
     }
 
     /** "pg_<ri>_w<n>_s<seq>" → [ri, n-1]。 */

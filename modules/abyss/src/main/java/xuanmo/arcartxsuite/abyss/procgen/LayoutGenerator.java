@@ -187,12 +187,12 @@ public final class LayoutGenerator {
             }
         }
 
-        // ── 门边：所有相邻格对 ──
+        // ── 门边：所有相邻格对（只迭代 +x/+z 正方向——a 恒为西/北侧，
+        //    每条边恰好生成一次且朝向确定，cutDoorPair 依赖这个不变量）──
         for (PlacedRoom a : layout.rooms) {
-            for (int[] dir : DIRS) {
+            for (int[] dir : new int[][]{{1, 0}, {0, 1}}) {
                 PlacedRoom b = cells.get(key(a.cellI + dir[0], a.cellJ + dir[1]));
-                if (b == null) continue;
-                if (a.hashCode() <= b.hashCode()) { // 每对只记一次
+                if (b != null) {
                     layout.edges.add(new DoorEdge(a, b, dir[0] != 0 ? 'x' : 'z'));
                 }
             }
