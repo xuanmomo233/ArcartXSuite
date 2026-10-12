@@ -1,5 +1,20 @@
-type: combat
-weight: 10
+# ════════════════════════════════════════════════════════════════
+# 房间构件：combat_1（普通战斗房）
+# 构件 = 本文件(元数据) + 同名几何文件(combat_1.region.yml / .schem)
+#
+# ▶ 坐标系：所有 x,y,z 都是【房内相对坐标】——以几何文件左下角为原点，
+#   y=0 是地板层、y=1 是地面站位层。房间生成时随机旋转，这些坐标自动换算，
+#   照原始朝向写即可。游戏内用 /axs abyss capture point 站在目标点自动写入。
+# ▶ 锚点只绑【位置】不绑方块：chests 点的下方块放什么都行（箱/桶/末影箱/
+#   装饰块/画框），右键即开箱；NPC 是生成的实体，不占方块。
+# ════════════════════════════════════════════════════════════════
+
+type: combat            # 房型：start/combat/elite/boss/shop/treasure/event/rest
+weight: 10              # 抽取权重（同类型房间按权重随机抽）
+
+# ── 波次怪物 ──────────────────────────────────────────────
+# mobs=第 1 波；mobs-wave-2..N=后续波（不可跳号）
+# "x,y,z: 怪物id"——id 支持 vanilla:<原版实体> 或 MythicMobs 的怪物 id
 mobs:
   - "4,1,6: vanilla:zombie"
   - "6,1,6: vanilla:zombie"
@@ -8,6 +23,11 @@ mobs-wave-2:
   - "4,1,4: vanilla:zombie"
   - "8,1,4: vanilla:skeleton"
   - "6,1,8: vanilla:zombie"
+
+# ── 房间脚本 ──────────────────────────────────────────────
+# on-enter  首次有人进房（多玩家只跑第一个人的）
+# on-clear  房间肃清（最后一波怪清完/事件房手动完成）
+# on-wave   按波次号触发（1 基）：on-wave: { "2": [...] }
 scripts:
   on-enter:
     - "message @trigger &e战斗开始！肃清此房开启通路"

@@ -1,5 +1,9 @@
+# 房间构件：rest_1（休整房——无怪无锁，进房即记已清计入探索分）
+# 非战斗房不需要 mobs；想要治疗/补给效果就在 on-enter 里写
+# effect/heal/set_health 等脚本动作
 type: rest
 weight: 10
+
 scripts:
   on-enter:
     - "message @trigger &a抵达休整点，喘口气吧"

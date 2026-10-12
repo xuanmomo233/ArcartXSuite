@@ -1,5 +1,7 @@
+# 房间构件：combat_2（小型战斗房，字段语义见 combat_1.yml）
 type: combat
-weight: 8
+weight: 8               # 权重低于 combat_1 → 更稀有的小房
+
 mobs:
   - "3,1,5: vanilla:zombie"
   - "7,1,5: vanilla:skeleton"

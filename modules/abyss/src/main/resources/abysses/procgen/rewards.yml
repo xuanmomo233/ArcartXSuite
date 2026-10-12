@@ -14,7 +14,9 @@ rewards:
       - "material:EMERALD:8"
     money: 200
 
-# 宝箱奖励
+# 宝箱奖励（chests 锚点/宝箱交互点开箱）
+#   · 每个玩家独立 roll 一份，互不干扰；领完该箱标记"已领取"
+#   · 清房后潜行右键宝箱 → 连战加赏（重打一波+挑战奖励，procgen.yml encore 开关）
 chest-rewards:
   abyss_chest:
     title: "战利品宝箱"

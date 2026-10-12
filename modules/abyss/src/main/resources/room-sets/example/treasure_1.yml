@@ -1,4 +1,10 @@
+# 房间构件：treasure_1（宝藏房）
+# chests 锚点（字段语义见 shop_1.yml 注释）：
+#   · 右键开箱——每个玩家独立一份，领完标记"已领取"
+#   · 清房后【潜行右键】→ 连战加赏（重打一波+额外奖励，每房一次，
+#     由 procgen.yml challenges.encore 开关）
 type: treasure
 weight: 10
+
 chests:
   - "4,1,4: abyss_chest"

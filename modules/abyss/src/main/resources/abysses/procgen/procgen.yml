@@ -1,63 +1,80 @@
-# 随机地牢生成配置（本文件存在即启用 procgen 模式）
-# 房间构件池：data/abyss/room-sets/example/（全局共享，可多副本复用）
+# ════════════════════════════════════════════════════════════════
+# 随机拼装地牢配置（本文件存在即启用 procgen 模式，无需 floors.yml）
+#
+# 模型：从【房间构件集】随机抽手建房间，随机旋转后按「主链+支线」拼接。
+#   主链 = 起点房 → 战斗房×N → Boss 房（必达）；
+#   支线 = 商店/宝藏/精英/事件/休整房 挂接在主链中段。
+#   相邻房间的共用墙自动挖门洞（墙不必留门）+ 走廊桥接。
+#   战斗房进门封门 → 分波刷怪 → 清完开门。
+#
+# 构件集：data/abyss/room-sets/<集名>/（全局共享池，多副本可复用）。
+#   每个构件 = <名>.yml(元数据) + <名>.region.yml | <名>.schem(几何)。
+#   房间内所有坐标都是"房内相对坐标"，生成随机旋转时自动换算。
+#
+# 快速上手：/axs abyss region pos1|pos2 框选区 →
+#   /axs abyss capture <集> <房名> <类型> 捕获构件 →
+#   /axs abyss capture point <集> <房> spawn|mob:id|mob:id:波|chest:id|npc:id|interact:id 标锚点。
+# ════════════════════════════════════════════════════════════════
 
-room-set: example
-length: standard            # short/standard/long 房型数量档
-# counts:                   # 精确覆盖（数字或 "a-b"）
+room-set: example           # 引用 room-sets/<集名>
+length: standard            # 房型数量档：short(约6房)/standard(约8房)/long(约11房)
+# counts:                   # 精确覆盖房型数量（数字或 "a-b" 范围）
 #   combat: "4-6"
 #   elite: 1
+#   shop: 1
 
-mob-level: "1-3"            # MythicMobs/vanilla 怪物等级（范围随机）
-seal-combat-doors: true     # 战斗房进门封门
-seal-material: IRON_BARS
-wave-delay: 40              # 波次间隔 tick
-elite-level-bonus: 2        # 精英房怪等级 +N
+mob-level: "1-3"            # 怪等级（数字或范围，每波随机；精英房另+elite-level-bonus）
+seal-combat-doors: true     # 战斗房首次进人→门洞封死（清完自动开）
+seal-material: IRON_BARS    # 封门填充材质
+wave-delay: 40              # 上一波清完→下一波刷出的间隔 tick
+elite-level-bonus: 2        # 精英房怪等级额外 +N
 
-spawn-telegraph:
-  delay: 20                 # tick：预兆到出怪的间隔
+spawn-telegraph:            # 刷怪预兆（封门后到刷怪的警示表现）
+  delay: 20                 # 预兆持续 tick
   particle: PORTAL
   sound: "entity.evoker.prepare_summon"
   volume: 0.8
   pitch: 1.0
 
-# 房间词缀：进房时按概率随机强化
+# 房间词缀：非 start/（可选）boss 房首次进人时按概率随机强化——
+# 词缀在 modifier-defs 里定义：怪等级加成/进房广播/进房脚本
 modifiers:
-  chance: 0.4
-  include-boss: false
+  chance: 0.4               # 每房携带词缀的概率（精英房必带）
+  include-boss: false       # boss 房是否参与词缀抽取
 modifier-defs:
   bloodlust:
-    mob-level-bonus: 2
-    announce: "&4&l嗜血之厅！敌人更加凶悍……"
-    on-enter:
+    mob-level-bonus: 2      # 该房所有怪等级 +N
+    announce: "&4&l嗜血之厅！敌人更加凶悍……"   # 进房广播（空=不响）
+    on-enter:               # 进房脚本行（@trigger=首个进房者）
       - "message @trigger &4嗜血之厅：怪物等级 +2"
   gold_vein:
     announce: "&e黄金矿脉：本房奖励提升"
     on-enter:
       - "message @trigger &e黄金矿脉：本房奖励提升"
 
-corridor:
-  length: 6                 # 房间间距（0=相贴）
-  door-width: 5
-  door-height: 5
-  floor: STONE_BRICKS
-  wall: STONE_BRICKS
-  ceiling: STONE_BRICKS
+corridor:                   # 房间之间的走廊管（门洞同宽）
+  length: 6                 # 房间间距（0=相贴，墙挨墙）
+  door-width: 5             # 门洞宽（相邻墙同宽同位——门洞会自动挖开）
+  door-height: 5            # 门洞高
+  floor: STONE_BRICKS       # 走廊地板
+  wall: STONE_BRICKS        # 走廊侧墙
+  ceiling: STONE_BRICKS     # 走廊天花
 
 challenges:
-  timed:
-    chance: 0.3             # 战斗房进入时限时挑战概率
+  timed:                    # 限时挑战：进战斗房按概率倒计时，限时内清房得挑战奖励
+    chance: 0.3
     seconds: 60
-  encore: true              # 潜行右键宝箱连战加赏
+  encore: true              # 连战加赏：清房后【潜行右键宝箱】→重打一波+挑战奖励
   reward: "加赏礼包"         # 挑战达成奖励（rewards.yml 奖励集名）
 
-grading:
-  par-seconds-per-room: 60
-  scripts:
+grading:                    # Boss 肃清后的通关评级：探索50(已清房占比)+生存30(死亡扣分)+速度20
+  par-seconds-per-room: 60  # 速度分基准：平均每房用时（越快分越高）
+  scripts:                  # 评级触发脚本（S/A/B/C 键名）
     S:
       - "message @all &6&lSS 级完美通关！全队额外奖励"
       - "grant_reward @all 深渊加赏"
     A:
       - "message @all &eA 级通关，表现出色！"
 
-seed-mode: random           # random/daily/fixed；daily=全服当日同图
-# seed-value: 12345
+seed-mode: random           # random=每局随机 / daily=全服当日同一张图 / fixed=固定图
+# seed-value: 12345         # seed-mode=fixed 时生效

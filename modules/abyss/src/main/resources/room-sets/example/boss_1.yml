@@ -1,5 +1,9 @@
+# 房间构件：boss_1（主链终点的 Boss 房——每个副本必须且只会放一间）
+# 该房肃清后：按 探索50+生存30+速度20 评级 → 跑 grading.scripts.<等级>
+# → 副本自动 complete
 type: boss
 weight: 10
+
 mobs:
   - "7,1,7: vanilla:wither_skeleton"
   - "5,1,7: vanilla:zombie"
@@ -8,6 +12,7 @@ mobs-wave-2:
   - "7,1,7: vanilla:wither_skeleton"
   - "5,1,5: vanilla:skeleton"
   - "9,1,5: vanilla:skeleton"
+
 scripts:
   on-enter:
     - "message @trigger &4&lBOSS 房！肃清全部敌人通关"
