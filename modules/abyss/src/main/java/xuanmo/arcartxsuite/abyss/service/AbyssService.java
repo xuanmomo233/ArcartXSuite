@@ -537,6 +537,8 @@ public final class AbyssService {
                 regionLibrary.evict(t.id());
             }
         }
+        // 房间集缓存失效（room-sets/ 下文件可能已更新）
+        if (roomSetLibrary != null) roomSetLibrary.reload();
         // 外部配套文件部署（external/ → Chemdah/questgps 目录；缺席即跳过）
         if (externalInstaller == null && moduleDataFolder != null) {
             externalInstaller = new xuanmo.arcartxsuite.abyss.integration.DungeonExternalInstaller(

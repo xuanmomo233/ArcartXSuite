@@ -27,7 +27,6 @@ import xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType;
 import xuanmo.arcartxsuite.abyss.template.MonsterConfig.MonsterGroup;
 import xuanmo.arcartxsuite.abyss.template.MonsterConfig.MonsterSpawn;
 import xuanmo.arcartxsuite.abyss.template.MonsterConfig.SpawnTiming;
-import xuanmo.arcartxsuite.abyss.template.NpcConfig.DungeonNpc;
 import xuanmo.arcartxsuite.abyss.template.ProcGenConfig;
 
 /**
@@ -167,30 +166,29 @@ public final class ProcGenManager {
                     continue;
                 }
                 int[] p = rr.placed.toWorld(ir.x(), ir.y(), ir.z());
+                // region 清空走点匹配——模板 region 是绝对坐标，房内坐标已换算成点
                 service.interacts().registerRuntime(instance, new Interact(
                     "pg_" + i + "_" + ir.ref(),
                     tpl.type(),
                     p[0] + "," + p[1] + "," + p[2],
-                    tpl.region(), tpl.requiredItem(), tpl.requiredBlock(),
+                    List.of(), tpl.requiredItem(), tpl.requiredBlock(),
                     tpl.entityName(), tpl.once(), tpl.failMessage(),
                     tpl.conditions(), tpl.script()));
             }
             // NPC（房内相对坐标 → 世界落点；同名 NPC 多房共存需改名）
             if (world != null) {
                 for (var n : asset.npcs()) {
-                    DungeonNpc tpl = t.npcs().npcs().get(n.ref());
+                    var tpl = t.npcs().npcs().get(n.ref());
                     if (tpl == null) {
                         logger.warning("[abyss] procgen 房间 " + asset.name()
                             + " 引用了不存在的 NPC: " + n.ref());
                         continue;
                     }
                     int[] p = rr.placed.toWorld(n.x(), n.y(), n.z());
-                    service.npcs().spawnAt(instance,
-                        new DungeonNpc(n.ref() + "@pg" + i, tpl.displayName(),
-                            tpl.type(), "", tpl.skin(), tpl.lookAtPlayer(),
-                            tpl.dialogs(), tpl.dialogInterval(), tpl.clickScript(),
-                            tpl.once()),
-                        new Location(world, p[0] + 0.5, p[1], p[2] + 0.5));
+                    // spawnKey 带房间后缀防 dedup；点击解析仍走模板基名
+                    service.npcs().spawnAt(instance, tpl,
+                        new Location(world, p[0] + 0.5, p[1], p[2] + 0.5),
+                        n.ref() + "@pg" + i);
                 }
             }
         }
@@ -353,10 +351,12 @@ public final class ProcGenManager {
         RoomRuntime rr = st.rooms.get(ri);
         ProcGenRoomAsset asset = rr.placed.asset;
         var k = asset.kind();
-        // 词缀 roll（进房时一次）
-        rollModifier(instance, st, ri, p);
-        // 脚本 on-enter
-        runLines(instance, asset.onEnter(), p);
+        // 房间级事件只在"首次有人进房"（WAITING）触发——后续玩家进房不重roll词缀
+        boolean firstEver = st.roomState.get(ri) == RoomState.WAITING;
+        if (firstEver) {
+            rollModifier(instance, st, ri, p);
+            runLines(instance, asset.onEnter(), p);
+        }
         if (k == RoomKind.START) return;
 
         boolean combat = hasWaves(rr) && !asset.manualClear();

@@ -113,11 +113,20 @@ public final class DungeonNpcManager {
 
     /** 在指定落点生成 NPC（procgen 房间相对坐标换算后的世界点用）。 */
     public boolean spawnAt(AbyssInstance instance, DungeonNpc npc, Location loc) {
+        return spawnAt(instance, npc, loc, npc.name());
+    }
+
+    /**
+     * 在指定落点生成 NPC，spawned 登记用 {@code spawnKey}（同模板 NPC
+     * 多房布点时用唯一 key，点击路由仍用模板基名解析 click-script/会话）。
+     */
+    public boolean spawnAt(AbyssInstance instance, DungeonNpc npc, Location loc,
+                           String spawnKey) {
         String npcName = npc.name();
         if (instance.getWorld() == null || loc == null) return false;
         Map<String, Object> existing = spawned.get(instance.getInstanceId());
         if (existing != null) {
-            Object old = existing.remove(npcName);
+            Object old = existing.remove(spawnKey);
             if (old != null) removeHandle(old);
         }
 
@@ -138,7 +147,8 @@ public final class DungeonNpcManager {
         if (handle == null) return false;
 
         spawned.computeIfAbsent(instance.getInstanceId(), k -> new ConcurrentHashMap<>())
-            .put(npcName, handle);
+            .put(spawnKey, handle);
+        // tag 存模板基名：fireClick 按模板 npcs.yml 查定义
         handleToNpc.put(handleKey(handle), npcName + "@" + instance.getInstanceId());
         return true;
     }
