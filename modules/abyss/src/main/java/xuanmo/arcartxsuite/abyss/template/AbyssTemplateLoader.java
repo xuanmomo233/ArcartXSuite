@@ -81,6 +81,13 @@ public final class AbyssTemplateLoader {
         PuzzleConfig puzzles = PuzzleConfig.load(loadYaml(dir, "puzzles.yml"));
         BuffConfig buffs = BuffConfig.load(loadYaml(dir, "buffs.yml"));
         ShopConfig shops = ShopConfig.load(loadYaml(dir, "shops.yml"));
+        // 阶段机：stages.yml 独立文件 + scripts.yml 内联 stages:/阶段: 段并入
+        ConfigurationSection stagesFile = loadYaml(dir, "stages.yml");
+        ConfigurationSection scriptsYaml = loadYaml(dir, "scripts.yml");
+        ConfigurationSection inlineStages = scriptsYaml == null ? null
+            : firstSection(scriptsYaml.getConfigurationSection("stages"),
+                scriptsYaml.getConfigurationSection("阶段"));
+        StageConfig stages = StageConfig.load(stagesFile, inlineStages);
 
         // floors 模式：floors.yml（层链+defaults）+ rooms.yml（房间模板池）
         AbyssTemplate.Mode mode;
@@ -174,6 +181,7 @@ public final class AbyssTemplateLoader {
             floors,
             plans, entrances,
             puzzles, buffs, shops,
+            stages,
             functions, dir
         );
     }
@@ -227,6 +235,11 @@ public final class AbyssTemplateLoader {
                 || lower.startsWith(baseName.toLowerCase() + "."));
         });
         return files != null && files.length > 0 ? files[0] : null;
+    }
+
+    private static @Nullable ConfigurationSection firstSection(
+        @Nullable ConfigurationSection a, @Nullable ConfigurationSection b) {
+        return a != null ? a : b;
     }
 
     private static @Nullable ConfigurationSection loadYaml(File dir, String name) {

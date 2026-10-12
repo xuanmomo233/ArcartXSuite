@@ -251,6 +251,15 @@ final class BuiltinActions {
         });
         reg.register("run_script", (ctx, args, s) ->
             service.get().runCustomScript(ctx.getInstance(), ctx.replace(args), ctx.getTrigger()));
+        // 阶段机：立即完成当前阶段并推进 next（manual 阶段/事件房手动清房的出口）
+        reg.register("complete_stage", (ctx, args, s) ->
+            service.get().stages().completeCurrent(ctx.getInstance(), ctx.getTrigger()));
+        reg.register("set_stage", (ctx, args, s) -> {
+            // set_stage <阶段id>：跳阶段（跳过当前阶段 on-complete）
+            if (service.get().stages() != null) {
+                service.get().stages().jump(ctx.getInstance(), ctx.replace(args), ctx.getTrigger());
+            }
+        });
         reg.register("delay", (ctx, args, s) -> {
             // delay <秒> <动作行...>：延迟执行一段动作（不阻塞当前脚本）
             String[] parts = splitFirst(args, 1);

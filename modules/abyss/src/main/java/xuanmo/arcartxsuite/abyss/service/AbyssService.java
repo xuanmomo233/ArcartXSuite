@@ -125,6 +125,7 @@ public final class AbyssService {
     private ObstacleManager obstacles;
     private InteractManager interacts;
     private InstanceTaskScheduler instanceTasks;
+    private xuanmo.arcartxsuite.abyss.stage.StageManager stageManager;
     private DungeonNpcManager npcs;
     private RewardResolver rewards;
     private QuestManager quests;
@@ -255,14 +256,22 @@ public final class AbyssService {
                 Map.of("obstacle", e.obstacleName(), "kind", e.kind()))),
             this::locParser);
         interacts = new InteractManager(scriptConditionEvaluator, logger);
-        interacts.setCallbacks((inst, e) -> runScript(inst, e.script(),
-            ScriptContext.withVars(inst, e.trigger(), Map.of("interact", e.interactName()))),
-            this::locParser);
+        interacts.setCallbacks((inst, e) -> {
+            runScript(inst, e.script(),
+                ScriptContext.withVars(inst, e.trigger(), Map.of("interact", e.interactName())));
+            // 交互触发是阶段推进事件源之一
+            if (stageManager != null) stageManager.onEvent(inst);
+        }, this::locParser);
         interacts.setExternalItemMatcher((req, hand) -> rewards.matches(req, hand));
         puzzleManager = new xuanmo.arcartxsuite.abyss.puzzle.PuzzleManager(logger);
         puzzleManager.setCallback(new PuzzleCallbackImpl());
         interacts.setPuzzleCallback((inst, e) ->
             puzzleManager.onInteractFired(inst, e.interactName(), e.trigger()));
+        // 阶段机：事件驱动推进（怪组清完/交互触发/complete_stage/超时 + watchdog 慢扫）
+        stageManager = new xuanmo.arcartxsuite.abyss.stage.StageManager(
+            this, plugin, scheduler, logger);
+        stageManager.setScriptLauncher((inst, lines, trig, vars) ->
+            runScript(inst, lines, ScriptContext.withVars(inst, trig, vars)));
         instanceTasks = new InstanceTaskScheduler(plugin, scheduler, logger);
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
@@ -560,6 +569,8 @@ public final class AbyssService {
     public RewardResolver rewards() { return rewards; }
     public QuestManager quests() { return quests; }
     public InstanceTaskScheduler instanceTasks() { return instanceTasks; }
+    /** 阶段机（无 stages 配置的副本内部为空操作）。 */
+    public xuanmo.arcartxsuite.abyss.stage.StageManager stages() { return stageManager; }
     public ScriptRunner scripts() { return scriptRunner; }
     /** ARIA/JS 动作执行器（宿主 ScriptConditionEvaluator 同时实现 ScriptActionExecutor）。 */
     public xuanmo.arcartxsuite.api.condition.ScriptActionExecutor scriptActions() {
@@ -1295,6 +1306,8 @@ public final class AbyssService {
         npcs.initInstance(instance);
         // start 脚本
         runLifecycleScript(instance, "start", null);
+        // 阶段机启动（stages.yml 配置的副本从入口阶段开始推进）
+        if (stageManager != null) stageManager.start(instance);
         // 副本 HUD + 引导目标补推
         if (uiFacade instanceof AbyssUiService ui) {
             for (Player p : instance.getPlayers()) {
@@ -1852,6 +1865,7 @@ public final class AbyssService {
         obstacles.cleanup(instance);
         interacts.cleanup(instance);
         if (puzzleManager != null) puzzleManager.cleanup(instance);
+        if (stageManager != null) stageManager.clear(instance);
         if (guideService != null) guideService.cleanup(instance);
         if (buffManager != null) buffManager.cleanup(instance);
         if (designManager != null) designManager.closeInstance(instance);
@@ -1948,6 +1962,8 @@ public final class AbyssService {
             try {
                 // 消失扫描（怪被刷掉兜底）
                 mobGroups.sweepVanished(i);
+                // 阶段机慢扫：变量条件等无回调事件的路径兜底
+                if (stageManager != null) stageManager.onEvent(i);
                 // 超时
                 if (i.isTimeout()) {
                     if (i.getTemplate().timeoutAction() == AbyssTemplate.TimeoutAction.FAIL) {
@@ -2037,6 +2053,8 @@ public final class AbyssService {
             broadcast(instance, msg("dungeon.mob-group-next", "group", groupName));
             // floors：房间组全清 → 解锁判定
             if (roomManager != null) roomManager.onGroupComplete(instance, groupName);
+            // 阶段机：怪组清完是阶段通关条件的主要事件源
+            if (stageManager != null) stageManager.onEvent(instance);
         }
 
         @Override

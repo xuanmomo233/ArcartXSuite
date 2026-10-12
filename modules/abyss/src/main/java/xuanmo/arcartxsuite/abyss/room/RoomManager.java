@@ -98,6 +98,23 @@ public final class RoomManager {
         }
     }
 
+    /**
+     * 房间是否已清（供 stages/conditions 查询）。
+     * {@code roomId} 可写运行时 id（{@code f1_r3_xxx}）或模板 id
+     * （模板房复用时任一实例已清即真）。
+     */
+    public boolean isRoomCleared(AbyssInstance instance, String roomId) {
+        InstanceRuntime rt = states.get(instance.getInstanceId());
+        if (rt == null || roomId == null) return false;
+        for (FloorRuntime fr : rt.floors) {
+            for (RoomRuntime r : fr.rooms) {
+                if ((r.id.equals(roomId) || r.tpl.id().equals(roomId))
+                    && r.state == RoomState.CLEARED) return true;
+            }
+        }
+        return false;
+    }
+
     /** 层运行态。 */
     public static final class FloorRuntime {
         public final Floor floor;

@@ -276,6 +276,14 @@ public final class MonsterGroupManager {
      * <p>需要静默移除且不触发联动的场景用 {@link #removeGroup}。
      * 不触发联动会让依赖链/房间清判软锁（该组永不推进）。</p>
      */
+    /** 组是否已清完（COMPLETED 含 kill_group 跳过）。供 stages/conditions 查询。 */
+    public boolean isGroupComplete(AbyssInstance instance, String groupName) {
+        Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
+        if (groups == null) return false;
+        GroupRuntime rt = groups.get(groupName);
+        return rt != null && rt.state == GroupState.COMPLETED;
+    }
+
     public void killGroup(AbyssInstance instance, String groupName) {
         Map<String, GroupRuntime> groups = instanceGroups.get(instance.getInstanceId());
         if (groups == null) return;

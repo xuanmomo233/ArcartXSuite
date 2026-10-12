@@ -64,6 +64,7 @@ public record AbyssTemplate(
     PuzzleConfig puzzles,
     BuffConfig buffs,
     ShopConfig shops,
+    StageConfig stages,
     @Nullable String functions,
     File dir
 ) {
