@@ -120,6 +120,12 @@ dungeon:
   floor-enter: "{prefix}&6进入 &e{floor}"
   stage-enter: "{prefix}&6阶段：&e{stage}"
   module-locked: "{prefix}&c进入条件未满足：需先完成前置主线任务"
+procgen:
+  room-clear: "{prefix}&a房间已肃清，通路开启"
+  timed-challenge: "{prefix}&e限时挑战开始！{seconds} 秒内肃清本房可获额外奖励"
+  challenge-clear: "{prefix}&6限时挑战达成！获得额外奖励"
+  encore-start: "{prefix}&d连战开始！敌人卷土重来……"
+  grade: "{prefix}&6通关评级：&e{grade} &7（{score} 分）"
 
 chest:
   claimed: "{prefix}&e你已经领取过这个宝箱了"

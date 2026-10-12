@@ -1,0 +1,13 @@
+type: elite
+weight: 10
+mobs:
+  - "4,1,6: vanilla:wither_skeleton"
+  - "8,1,6: vanilla:skeleton"
+  - "6,1,8: vanilla:skeleton"
+mobs-wave-2:
+  - "6,1,6: vanilla:wither_skeleton"
+  - "4,1,4: vanilla:skeleton"
+  - "8,1,4: vanilla:skeleton"
+scripts:
+  on-enter:
+    - "message @trigger &6精英房！强敌出没——小心应战"

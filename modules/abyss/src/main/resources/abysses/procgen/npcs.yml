@@ -1,0 +1,12 @@
+# 旅队商人（shop 房布点用）
+旅队商人:
+  display-name: "&6旅队商人"
+  type: WANDERING_TRADER
+  location: "0,64,0"           # 占位（procgen 房内布点覆盖实际落点）
+  look-at-player: true
+  dialogs:
+    - "&6旅队商人&7: 过路的勇士，看看货？"
+    - "&6旅队商人&7: 这些可都是深渊里淘来的好东西。"
+  dialog-interval: 60
+  click-script:
+    - "message @trigger &7旅队商人：本店暂未开张——先去肃清前路吧"

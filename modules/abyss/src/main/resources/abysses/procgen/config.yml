@@ -1,0 +1,26 @@
+# 示例地牢：随机深渊（ProcGen 模型随机拼装地牢）
+# procgen.yml 存在即启用：每局从 room-sets/example 随机抽取房间构件，
+# 随机旋转+主链支线拼装+自动切门走廊——地图每局不重样。
+#
+# 玩法：战斗房进门封门 → 多波次 → 清完开门；潜行右键宝箱连战加赏；
+#       词缀随机强化房间；Boss 清完按探索/生存/速度评 S/A/B/C。
+
+name: "&5随机深渊"
+icon: "OBSIDIAN"
+difficulty: "普通"
+description:
+  - "&7手建房间构件随机拼装，每局地图不重样"
+  - "&7战斗房封门波次 / 商店宝藏支线 / 房间词缀"
+  - "&7潜行右键宝箱触发连战加赏；通关评 S/A/B/C"
+
+world:
+  template: "void"          # 虚空世界，几何全部由 procgen 物化
+  spawn: "0,64,0"           # 兜底出生点（实际用起点房 spawn 覆盖）
+
+time-limit: 1200
+timeout-action: "FAIL"
+max-instances: 0
+
+requirements:
+  min-players: 1
+  max-players: 4

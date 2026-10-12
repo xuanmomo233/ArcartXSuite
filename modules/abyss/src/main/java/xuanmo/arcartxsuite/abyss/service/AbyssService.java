@@ -126,6 +126,8 @@ public final class AbyssService {
     private InteractManager interacts;
     private InstanceTaskScheduler instanceTasks;
     private xuanmo.arcartxsuite.abyss.stage.StageManager stageManager;
+    private xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary roomSetLibrary;
+    private xuanmo.arcartxsuite.abyss.procgen.ProcGenManager procgenManager;
     private DungeonNpcManager npcs;
     private RewardResolver rewards;
     private QuestManager quests;
@@ -272,6 +274,11 @@ public final class AbyssService {
             this, plugin, scheduler, logger);
         stageManager.setScriptLauncher((inst, lines, trig, vars) ->
             runScript(inst, lines, ScriptContext.withVars(inst, trig, vars)));
+        // procgen：房间集库 + 运行管理器
+        roomSetLibrary = new xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary(
+            dataFolder, logger);
+        procgenManager = new xuanmo.arcartxsuite.abyss.procgen.ProcGenManager(
+            this, roomSetLibrary, logger);
         instanceTasks = new InstanceTaskScheduler(plugin, scheduler, logger);
         instanceTasks.setFireCallback((inst, f) -> runScript(inst, f.script(),
             ScriptContext.withVars(inst, null, f.vars())));
@@ -471,6 +478,36 @@ public final class AbyssService {
                 logger.fine("[abyss] 示例资源导出失败 " + f + ": " + t.getMessage());
             }
         }
+        // procgen 示例地牢 + 房间集（缺文件才导，不覆盖服主自建）
+        File pg = new File(dataFolder, "abysses/procgen");
+        for (String f : new String[]{"config.yml", "procgen.yml",
+                "npcs.yml", "rewards.yml"}) {
+            File target = new File(pg, f);
+            if (target.isFile()) continue;
+            try {
+                module.exportModuleResource("abysses/procgen/" + f, target, false);
+            } catch (Throwable t) {
+                logger.fine("[abyss] procgen 示例导出失败 " + f + ": " + t.getMessage());
+            }
+        }
+        File rs = new File(dataFolder, "room-sets/example");
+        for (String f : new String[]{
+                "start_1.yml", "start_1.region.yml",
+                "combat_1.yml", "combat_1.region.yml",
+                "combat_2.yml", "combat_2.region.yml",
+                "elite_1.yml", "elite_1.region.yml",
+                "boss_1.yml", "boss_1.region.yml",
+                "shop_1.yml", "shop_1.region.yml",
+                "treasure_1.yml", "treasure_1.region.yml",
+                "rest_1.yml", "rest_1.region.yml"}) {
+            File target = new File(rs, f);
+            if (target.isFile()) continue;
+            try {
+                module.exportModuleResource("room-sets/example/" + f, target, false);
+            } catch (Throwable t) {
+                logger.fine("[abyss] 房间集导出失败 " + f + ": " + t.getMessage());
+            }
+        }
     }
 
     /** 重载模板（/axs reload abyss 时模块会重建服务；另供 admin reload 用）。 */
@@ -571,6 +608,10 @@ public final class AbyssService {
     public InstanceTaskScheduler instanceTasks() { return instanceTasks; }
     /** 阶段机（无 stages 配置的副本内部为空操作）。 */
     public xuanmo.arcartxsuite.abyss.stage.StageManager stages() { return stageManager; }
+    /** 随机地牢运行管理器（procgen.yml 配置的副本）。 */
+    public xuanmo.arcartxsuite.abyss.procgen.ProcGenManager procgen() { return procgenManager; }
+    /** 房间集库（全局共享池 data/abyss/room-sets/）。 */
+    public xuanmo.arcartxsuite.abyss.procgen.RoomSetLibrary roomSets() { return roomSetLibrary; }
     public ScriptRunner scripts() { return scriptRunner; }
     /** ARIA/JS 动作执行器（宿主 ScriptConditionEvaluator 同时实现 ScriptActionExecutor）。 */
     public xuanmo.arcartxsuite.api.condition.ScriptActionExecutor scriptActions() {
@@ -1040,6 +1081,20 @@ public final class AbyssService {
     /** 区块就绪后的进图主流程：world-init → 落点兜底 → 传送+扣费 → 全员进图判定。 */
     private void continueWorldReady(AbyssInstance instance, World world,
                                     Location spawn, List<Player> players) {
+        // procgen 物化先于 world-init：随机地牢几何由引擎建好，
+        // world-init 脚本仍可在其上叠加；出生点换到起点房 spawn
+        AbyssTemplate tpl = instance.getTemplate();
+        if (tpl.procgen() != null && procgenManager != null) {
+            try {
+                Location s = procgenManager.materialize(instance, world);
+                if (s != null) spawn = s;
+            } catch (Throwable t) {
+                logger.warning("[abyss] procgen 物化失败 " + tpl.id()
+                    + ": " + t.getMessage());
+                failDungeon(instance, FailReason.SCRIPTED);
+                return;
+            }
+        }
         // world-init 段：玩家传送前跑（造平台/铺场景），init 保持原位（进图后）
         runLifecycleScript(instance, "world_init", null);
         // 落点兜底：spawn 下方 4 格无支撑时垫一块，防虚空模板直接坠亡
@@ -1304,6 +1359,8 @@ public final class AbyssService {
         instanceTasks.initInstance(instance);
         // NPC
         npcs.initInstance(instance);
+        // procgen：怪组/交互/NPC 注册必须在各自 initInstance 之后（init 会覆盖注册表）
+        if (procgenManager != null) procgenManager.initRuntime(instance);
         // start 脚本
         runLifecycleScript(instance, "start", null);
         // 阶段机启动（stages.yml 配置的副本从入口阶段开始推进）
@@ -1866,6 +1923,7 @@ public final class AbyssService {
         interacts.cleanup(instance);
         if (puzzleManager != null) puzzleManager.cleanup(instance);
         if (stageManager != null) stageManager.clear(instance);
+        if (procgenManager != null) procgenManager.cleanup(instance);
         if (guideService != null) guideService.cleanup(instance);
         if (buffManager != null) buffManager.cleanup(instance);
         if (designManager != null) designManager.closeInstance(instance);
@@ -1889,6 +1947,15 @@ public final class AbyssService {
     /** 实例级一次性延迟任务（随实例清理）。 */
     public void scheduleOnce(AbyssInstance instance, Runnable r, long delayTicks) {
         instance.registerTask(scheduler.scheduleOnce(plugin, r, delayTicks));
+    }
+
+    /** 外部管理器跑脚本行（procgen 房间脚本/阶段机共享入口）。 */
+    public void runScriptPublic(AbyssInstance instance, List<String> lines,
+                                @Nullable Player trigger) {
+        if (!lines.isEmpty()) {
+            runScript(instance, lines,
+                ScriptContext.withVars(instance, trigger, Map.of()));
+        }
     }
 
     /** 主线程执行。 */
@@ -2017,6 +2084,7 @@ public final class AbyssService {
             try {
                 obstacles.tickProximity(i);
                 if (roomManager != null) roomManager.tick(i);
+                if (procgenManager != null) procgenManager.tick(i);
                 for (Player p : i.getPlayers()) {
                     interacts.onRegionTrigger(i, p,
                         xuanmo.arcartxsuite.abyss.template.InteractConfig.InteractType.STEP_ON);
@@ -2053,6 +2121,8 @@ public final class AbyssService {
             broadcast(instance, msg("dungeon.mob-group-next", "group", groupName));
             // floors：房间组全清 → 解锁判定
             if (roomManager != null) roomManager.onGroupComplete(instance, groupName);
+            // procgen：房组波次链
+            if (procgenManager != null) procgenManager.onGroupComplete(instance, groupName);
             // 阶段机：怪组清完是阶段通关条件的主要事件源
             if (stageManager != null) stageManager.onEvent(instance);
         }

@@ -65,6 +65,7 @@ public record AbyssTemplate(
     BuffConfig buffs,
     ShopConfig shops,
     StageConfig stages,
+    @Nullable ProcGenConfig procgen,
     @Nullable String functions,
     File dir
 ) {

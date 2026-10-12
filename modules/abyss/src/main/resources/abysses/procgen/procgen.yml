@@ -1,0 +1,63 @@
+# 随机地牢生成配置（本文件存在即启用 procgen 模式）
+# 房间构件池：data/abyss/room-sets/example/（全局共享，可多副本复用）
+
+room-set: example
+length: standard            # short/standard/long 房型数量档
+# counts:                   # 精确覆盖（数字或 "a-b"）
+#   combat: "4-6"
+#   elite: 1
+
+mob-level: "1-3"            # MythicMobs/vanilla 怪物等级（范围随机）
+seal-combat-doors: true     # 战斗房进门封门
+seal-material: IRON_BARS
+wave-delay: 40              # 波次间隔 tick
+elite-level-bonus: 2        # 精英房怪等级 +N
+
+spawn-telegraph:
+  delay: 20                 # tick：预兆到出怪的间隔
+  particle: PORTAL
+  sound: "entity.evoker.prepare_summon"
+  volume: 0.8
+  pitch: 1.0
+
+# 房间词缀：进房时按概率随机强化
+modifiers:
+  chance: 0.4
+  include-boss: false
+modifier-defs:
+  bloodlust:
+    mob-level-bonus: 2
+    announce: "&4&l嗜血之厅！敌人更加凶悍……"
+    on-enter:
+      - "message @trigger &4嗜血之厅：怪物等级 +2"
+  gold_vein:
+    announce: "&e黄金矿脉：本房奖励提升"
+    on-enter:
+      - "message @trigger &e黄金矿脉：本房奖励提升"
+
+corridor:
+  length: 6                 # 房间间距（0=相贴）
+  door-width: 5
+  door-height: 5
+  floor: STONE_BRICKS
+  wall: STONE_BRICKS
+  ceiling: STONE_BRICKS
+
+challenges:
+  timed:
+    chance: 0.3             # 战斗房进入时限时挑战概率
+    seconds: 60
+  encore: true              # 潜行右键宝箱连战加赏
+  reward: "加赏礼包"         # 挑战达成奖励（rewards.yml 奖励集名）
+
+grading:
+  par-seconds-per-room: 60
+  scripts:
+    S:
+      - "message @all &6&lSS 级完美通关！全队额外奖励"
+      - "grant_reward @all 深渊加赏"
+    A:
+      - "message @all &eA 级通关，表现出色！"
+
+seed-mode: random           # random/daily/fixed；daily=全服当日同图
+# seed-value: 12345

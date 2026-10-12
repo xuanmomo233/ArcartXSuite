@@ -1,0 +1,5 @@
+type: rest
+weight: 10
+scripts:
+  on-enter:
+    - "message @trigger &a抵达休整点，喘口气吧"

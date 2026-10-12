@@ -1,0 +1,13 @@
+type: boss
+weight: 10
+mobs:
+  - "7,1,7: vanilla:wither_skeleton"
+  - "5,1,7: vanilla:zombie"
+  - "9,1,7: vanilla:zombie"
+mobs-wave-2:
+  - "7,1,7: vanilla:wither_skeleton"
+  - "5,1,5: vanilla:skeleton"
+  - "9,1,5: vanilla:skeleton"
+scripts:
+  on-enter:
+    - "message @trigger &4&lBOSS 房！肃清全部敌人通关"

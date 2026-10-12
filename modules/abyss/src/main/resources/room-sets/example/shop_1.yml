@@ -1,0 +1,6 @@
+type: shop
+weight: 10
+npcs:
+  - "4,1,3: 旅队商人"
+chests:
+  - "4,1,4: abyss_chest"

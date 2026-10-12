@@ -193,8 +193,14 @@ public final class StageManager {
                 return service.mobGroups().isGroupComplete(instance, c.substring(14).trim());
             }
             if (c.regionMatches(true, 0, "room_cleared:", 0, 13)) {
+                String ref = c.substring(13).trim();
+                var pg = service.procgen();
+                if (pg != null) {
+                    Boolean r = pg.roomClearedByName(instance, ref);
+                    if (r != null) return r;
+                }
                 var rm = service.roomManager();
-                return rm != null && rm.isRoomCleared(instance, c.substring(13).trim());
+                return rm != null && rm.isRoomCleared(instance, ref);
             }
             if (c.regionMatches(true, 0, "players_alive", 0, 13)) {
                 long alive = instance.getPlayers().stream()

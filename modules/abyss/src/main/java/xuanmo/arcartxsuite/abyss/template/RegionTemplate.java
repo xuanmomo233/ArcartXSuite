@@ -50,6 +50,14 @@ public final class RegionTemplate {
         this.layers = layers;
     }
 
+    /** 内部构造（procgen 从外部几何源——如 WE clipboard——转换装载用）。 */
+    public static @Nullable RegionTemplate of(int width, int height, int depth,
+                                              List<String> palette, byte[][] layers) {
+        if (width <= 0 || height <= 0 || depth <= 0) return null;
+        return new RegionTemplate(width, height, depth,
+            List.copyOf(palette), layers);
+    }
+
     public int width() { return width; }
     public int height() { return height; }
     public int depth() { return depth; }
@@ -107,11 +115,36 @@ public final class RegionTemplate {
      * @return 实际放置的方块数
      */
     public int paste(World world, int ox, int oy, int oz, boolean withAir) {
+        return pasteRotated(world, ox, oy, oz, withAir, 0);
+    }
+
+    /**
+     * 旋转铺放：{@code rotDeg} ∈ {0,90,180,270} 绕 Y 顺时针。
+     * 调色板逐项经 {@link BlockData#rotate} 转换朝向方块（楼梯/栅栏/门等），
+     * 不可旋转的块保持原样。旋转后 footprint 宽高互换由调用方用
+     * {@link #rotatedSize(int)} 预先换算。
+     *
+     * @return 实际放置的方块数
+     */
+    public int pasteRotated(World world, int ox, int oy, int oz, boolean withAir,
+                            int rotDeg) {
+        int r = ((rotDeg % 360) + 360) % 360;
         BlockData[] resolved = new BlockData[palette.size()];
         boolean[] isAir = new boolean[palette.size()];
+        org.bukkit.block.structure.StructureRotation rot = switch (r) {
+            case 90 -> org.bukkit.block.structure.StructureRotation.CLOCKWISE_90;
+            case 180 -> org.bukkit.block.structure.StructureRotation.CLOCKWISE_180;
+            case 270 -> org.bukkit.block.structure.StructureRotation.COUNTERCLOCKWISE_90;
+            default -> org.bukkit.block.structure.StructureRotation.NONE;
+        };
         for (int i = 0; i < palette.size(); i++) {
             isAir[i] = isAirData(palette.get(i));
-            resolved[i] = resolve(palette.get(i));
+            BlockData data = resolve(palette.get(i));
+            if (data != null && rot != org.bukkit.block.structure.StructureRotation.NONE) {
+                // rotate() 原地转换（void）——resolved 数组存的还是同一个对象
+                try { data.rotate(rot); } catch (Throwable ignored) { }
+            }
+            resolved[i] = data;
         }
         int placed = 0;
         for (int y = 0; y < height; y++) {
@@ -122,13 +155,40 @@ public final class RegionTemplate {
                     int idx = (layer[off] & 0xFF) | ((layer[off + 1] & 0xFF) << 8);
                     if (idx >= palette.size() || resolved[idx] == null) continue;
                     if (!withAir && isAir[idx]) continue;
-                    Block b = world.getBlockAt(ox + x, oy + y, oz + z);
+                    // 目标坐标随旋转重映射（绕 footprint 中心轴，y 不变）
+                    int dx = x, dz = z;
+                    switch (r) {
+                        case 90 -> { dx = depth - 1 - z; dz = x; }
+                        case 180 -> { dx = width - 1 - x; dz = depth - 1 - z; }
+                        case 270 -> { dx = z; dz = width - 1 - x; }
+                        default -> { }
+                    }
+                    Block b = world.getBlockAt(ox + dx, oy + y, oz + dz);
                     b.setBlockData(resolved[idx], false);
                     placed++;
                 }
             }
         }
         return placed;
+    }
+
+    /** 旋转后的 footprint 尺寸（90/270 宽深互换）。 */
+    public int[] rotatedSize(int rotDeg) {
+        int r = ((rotDeg % 360) + 360) % 360;
+        return (r == 90 || r == 270)
+            ? new int[]{depth, height, width}
+            : new int[]{width, height, depth};
+    }
+
+    /** 房内相对坐标 (x,y,z) 按旋转换算到旋转后坐标（绕 footprint 中心，y 不变）。 */
+    public int[] rotatePoint(int x, int y, int z, int rotDeg) {
+        int r = ((rotDeg % 360) + 360) % 360;
+        return switch (r) {
+            case 90 -> new int[]{depth - 1 - z, y, x};
+            case 180 -> new int[]{width - 1 - x, y, depth - 1 - z};
+            case 270 -> new int[]{z, y, width - 1 - x};
+            default -> new int[]{x, y, z};
+        };
     }
 
     private static boolean isAirData(String s) {

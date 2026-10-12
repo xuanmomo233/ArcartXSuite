@@ -1,0 +1,34 @@
+# 命名奖励集（grant_reward <集名>）+ 宝箱奖励（open_chest_ui <名>）
+rewards:
+  # 限时挑战/连战加赏
+  加赏礼包:
+    items:
+      - "material:DIAMOND:1"
+      - "material:GOLD_INGOT:4"
+    money: 50
+
+  # S 级通关额外奖励
+  深渊加赏:
+    items:
+      - "material:NETHERITE_SCRAP:1"
+      - "material:EMERALD:8"
+    money: 200
+
+# 宝箱奖励
+chest-rewards:
+  abyss_chest:
+    title: "战利品宝箱"
+    rows: 3
+    options:
+      - item: "material:IRON_SWORD:1"
+        weight: 20
+      - item: "material:GOLDEN_APPLE:1"
+        weight: 15
+      - item: "material:DIAMOND:2"
+        weight: 10
+      - item: "material:EMERALD:4"
+        weight: 25
+      - item: "material:ARROW:16"
+        weight: 30
+      - item: "material:COOKED_BEEF:8"
+        weight: 30

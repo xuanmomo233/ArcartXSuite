@@ -1,0 +1,4 @@
+type: treasure
+weight: 10
+chests:
+  - "4,1,4: abyss_chest"

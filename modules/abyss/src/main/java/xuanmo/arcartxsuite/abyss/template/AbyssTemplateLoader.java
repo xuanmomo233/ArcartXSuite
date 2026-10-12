@@ -88,6 +88,8 @@ public final class AbyssTemplateLoader {
             : firstSection(scriptsYaml.getConfigurationSection("stages"),
                 scriptsYaml.getConfigurationSection("阶段"));
         StageConfig stages = StageConfig.load(stagesFile, inlineStages);
+        // procgen.yml 存在即启用随机拼装地牢
+        ProcGenConfig procgen = ProcGenConfig.load(loadYaml(dir, "procgen.yml"), id);
 
         // floors 模式：floors.yml（层链+defaults）+ rooms.yml（房间模板池）
         AbyssTemplate.Mode mode;
@@ -182,6 +184,7 @@ public final class AbyssTemplateLoader {
             plans, entrances,
             puzzles, buffs, shops,
             stages,
+            procgen,
             functions, dir
         );
     }

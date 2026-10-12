@@ -1,0 +1,15 @@
+type: combat
+weight: 10
+mobs:
+  - "4,1,6: vanilla:zombie"
+  - "6,1,6: vanilla:zombie"
+  - "8,1,6: vanilla:zombie"
+mobs-wave-2:
+  - "4,1,4: vanilla:zombie"
+  - "8,1,4: vanilla:skeleton"
+  - "6,1,8: vanilla:zombie"
+scripts:
+  on-enter:
+    - "message @trigger &e战斗开始！肃清此房开启通路"
+  on-clear:
+    - "message @all &a该房间已肃清"

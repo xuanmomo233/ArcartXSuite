@@ -254,6 +254,45 @@ final class BuiltinActions {
         // 阶段机：立即完成当前阶段并推进 next（manual 阶段/事件房手动清房的出口）
         reg.register("complete_stage", (ctx, args, s) ->
             service.get().stages().completeCurrent(ctx.getInstance(), ctx.getTrigger()));
+        // ═══ procgen 房间动作（作用于触发者/指定房；非 procgen 副本空操作）═══
+        reg.register("procgen_clear_room", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg != null) pg.clearCurrentRoom(ctx.getInstance(), ctx.getTrigger());
+        });
+        reg.register("procgen_open_doors", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg != null) pg.doorsAt(ctx.getInstance(), ctx.getTrigger(), true);
+        });
+        reg.register("procgen_seal_doors", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg != null) pg.doorsAt(ctx.getInstance(), ctx.getTrigger(), false);
+        });
+        reg.register("procgen_next_wave", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg != null) pg.nextWaveAt(ctx.getInstance(), ctx.getTrigger());
+        });
+        // procgen_chest <房idx> <宝箱id>：潜行右键走连战加赏，否则开宝箱 UI
+        reg.register("procgen_chest", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg == null) return;
+            String[] parts = splitFirst(args, 1);
+            int ri = (int) parseDouble(parts[0], -1);
+            String chest = ctx.replace(rest(parts, 1));
+            forEach(ctx, "@trigger", p -> {
+                if (!pg.onChestInteract(ctx.getInstance(), p, ri, chest)) {
+                    service.get().openChest(p, chest, ctx.getInstance());
+                }
+            });
+        });
+        // 增兵（procgen_reinforce <房idx> <波号>：重放指定波怪组）
+        reg.register("procgen_reinforce", (ctx, args, s) -> {
+            var pg = service.get().procgen();
+            if (pg == null) return;
+            String[] parts = splitFirst(args, 1);
+            int ri = (int) parseDouble(parts[0], -1);
+            int wave = (int) parseDouble(rest(parts, 1), 0);
+            pg.reinforce(ctx.getInstance(), ri, wave - 1);
+        });
         reg.register("set_stage", (ctx, args, s) -> {
             // set_stage <阶段id>：跳阶段（跳过当前阶段 on-complete）
             if (service.get().stages() != null) {

@@ -68,6 +68,12 @@ public final class InteractManager {
         return true;
     }
 
+    /** 运行时注册任意交互定义（procgen 物化时用——交互点在房间物化后才能定位置）。 */
+    public void registerRuntime(AbyssInstance instance, Interact def) {
+        active.computeIfAbsent(instance.getInstanceId(), k -> new ConcurrentHashMap<>())
+            .put(def.name(), def);
+    }
+
     public boolean delete(AbyssInstance instance, String name) {
         Map<String, Interact> map = active.get(instance.getInstanceId());
         return map != null && map.remove(name) != null;
