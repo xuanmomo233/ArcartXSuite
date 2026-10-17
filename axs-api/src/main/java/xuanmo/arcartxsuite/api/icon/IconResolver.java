@@ -69,7 +69,7 @@ public final class IconResolver {
     }
 
     /**
-     * 将图标定义解析为 itemJson 字符串，供 UI 引擎渲染。
+     * 将图标定义解析为单件 itemJson，供 UI 引擎渲染；真实数量由 UI 独立文本展示。
      *
      * @param player 目标玩家，用于占位符解析
      * @param icon   图标定义，为 null 或无有效图标时返回空字符串
@@ -80,13 +80,13 @@ public final class IconResolver {
             return "";
         }
         if (icon.json() != null && !icon.json().isBlank()) {
-            return icon.json();
+            return xuanmo.arcartxsuite.api.util.ItemPreview.singleCount(icon.json());
         }
         ItemStack stack = resolveItemStack(player, icon);
         if (stack == null || itemStackBridge == null) {
             return "";
         }
-        return itemStackBridge.itemToJson(stack).orElse("");
+        return itemStackBridge.itemToPreviewJson(stack).orElse("");
     }
 
     /**
@@ -100,6 +100,12 @@ public final class IconResolver {
             return "";
         }
         return itemStackBridge.itemToJson(stack).orElse("");
+    }
+
+    /** 将物品转换为单件预览图标，真实数量由调用方单独发送。 */
+    public String itemToPreviewJson(@Nullable ItemStack stack) {
+        if (stack == null || itemStackBridge == null) return "";
+        return itemStackBridge.itemToPreviewJson(stack).orElse("");
     }
 
     private ItemStack applyCustomNbt(ItemStack stack, IconDefinition icon) {

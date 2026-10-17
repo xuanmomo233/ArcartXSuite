@@ -160,7 +160,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             LotteryService.GachaItemInfo info = service.describeGachaItem(pool, item);
             // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.resultItemJsons
             payload.put("resultItemJson" + key, poolItemJson(player, item));
-            names.put(key, item.name());
+            names.put(key, previewName(item));
             stars.put(key, info.star());
             ups.put(key, info.up());
             highest = Math.max(highest, info.star());
@@ -183,7 +183,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resultCount", item == null ? 0 : 1);
         // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.resultItemJsons
         payload.put("resultItemJson1", item == null ? "" : poolItemJson(player, item));
-        payload.put("resultItemName", item == null ? "" : item.name());
+        payload.put("resultItemName", item == null ? "" : previewName(item));
         payload.put("resultRarity", result == null ? "" : result.rarity());
         // 动画带伪随机物品: 50 个物品填满动画带，第 39 个（card 38）是中奖物品
         fillAnimationItems(player, payload, item, result == null ? "" : result.rarity());
@@ -250,7 +250,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             String key = Integer.toString(i + 1);
             // itemJson 分离模式（§7）：放在 packet 顶层字段，UI 端遍历构建 var.batchItemJsons
             payload.put("batchItemJson" + key, item == null ? "" : poolItemJson(player, item));
-            names.put(key, item == null ? "" : item.name());
+            names.put(key, item == null ? "" : previewName(item));
             rarities.put(key, result == null ? "" : result.rarity());
         }
         payload.put("batchCount", results.size());
@@ -372,7 +372,8 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             PoolItem item = poolItems.get(i);
             String key = Integer.toString(i + 1);
             Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("name", item.name());
+            entry.put("name", previewName(item));
+            entry.put("amount", item.amount());
             entry.put("rarity", item.rarity() == null ? "" : item.rarity());
             items.put(key, entry);
             itemJsons.put(key, poolItemJson(player, item));
@@ -462,9 +463,13 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         return iconResolver.resolveItemJson(player, icon);
     }
 
+    private static String previewName(PoolItem item) {
+        return item.name() + (item.amount() > 1 ? " x" + item.amount() : "");
+    }
+
     private String poolItemJson(Player player, PoolItem item) {
         if (item.icon() != null) return iconResolver.resolveItemJson(player, item.icon());
-        return iconResolver.itemToJson(service.generateItem(item, player));
+        return iconResolver.itemToPreviewJson(service.generateItem(item, player));
     }
 
     private String upItemIconJson(Player player, PoolDefinition pool) {
@@ -537,7 +542,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                     if (index >= 100) break;
                     PoolItem item = itemMap.get(key);
                     int star = gachaStarOf(pool, key);
-                    String name = item != null ? item.name() : key;
+                    String name = item != null ? previewName(item) : key;
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("timeText", timeText);
                     row.put("star", star);
@@ -627,7 +632,8 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             PoolItem item = itemsWithRarity.get(i).getKey();
             String itemRarity = itemsWithRarity.get(i).getValue();
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", item.name());
+            row.put("name", previewName(item));
+            row.put("amount", item.amount());
             row.put("rarity", itemRarity);
             row.put("weight", item.weight());
             // 计算概率百分比：P(物品) = P(稀有度) × P(物品|稀有度)
@@ -809,7 +815,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     private String itemName(PoolDefinition pool, String itemId) {
         if (pool.caseConfig() != null) {
             for (PoolItem item : pool.caseConfig().items()) {
-                if (item.key().equals(itemId)) return item.name();
+                if (item.key().equals(itemId)) return previewName(item);
             }
         }
         return itemId;

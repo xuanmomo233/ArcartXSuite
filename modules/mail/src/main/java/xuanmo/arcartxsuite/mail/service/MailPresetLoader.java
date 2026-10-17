@@ -6,6 +6,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -48,13 +51,26 @@ public final class MailPresetLoader {
             return Map.of();
         }
 
+        Arrays.sort(files, Comparator.comparing(File::getName));
         for (File file : files) {
-            YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
+            YamlConfiguration configuration = new YamlConfiguration();
+            try {
+                configuration.load(file);
+            } catch (InvalidConfigurationException exception) {
+                throw new IOException("邮件预设文件 '" + file.getName() + "' YAML 格式错误: " + exception.getMessage(), exception);
+            }
             ConfigurationSection presetSection = configuration.getConfigurationSection("preset");
             if (presetSection == null) {
-                continue;
+                throw new IOException("邮件预设文件 '" + file.getName()
+                    + "' 缺少顶层 preset: 配置节（该名称固定），预设 ID 请填写在 preset.id。");
             }
-            String id = string(presetSection.getString("id", file.getName().replace(".yml", ""))).toLowerCase(Locale.ROOT);
+            String id = string(presetSection.getString("id", file.getName().substring(0, file.getName().length() - 4))).toLowerCase(Locale.ROOT);
+            if (!id.matches("[a-z0-9_-]{1,64}")) {
+                throw new IOException("邮件预设文件 '" + file.getName() + "' 的 preset.id 无效: " + id);
+            }
+            if (result.containsKey(id)) {
+                throw new IOException("邮件预设文件 '" + file.getName() + "' 的 preset.id 重复: " + id);
+            }
             boolean enabled = presetSection.getBoolean("enabled", true);
             String displayName = string(presetSection.getString("display-name", id));
             String subject = string(presetSection.getString("subject", displayName));

@@ -254,6 +254,24 @@ public final class AfkRewardService {
         }
     }
 
+    private void hideHud(Player player) {
+        PacketBridgeAPI bridge = packetBridge;
+        if (bridge == null || hudUiId == null || !bridge.isAvailable()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("area", "");
+        payload.put("time", "");
+        payload.put("next", "0");
+        payload.put("players", "0");
+        payload.put("session_rewards", "0");
+        payload.put("session_time", "");
+        payload.put("visible", "false");
+        try {
+            bridge.sendPacket(player, hudUiId, "update", payload);
+        } catch (RuntimeException ignored) {
+            // 客户端桥接不可用时不影响挂机状态清理。
+        }
+    }
+
     private void processPlayer(Player player) {
         UUID uuid = player.getUniqueId();
         PlayerAfkState state = afkStates.get(uuid);
@@ -497,6 +515,7 @@ public final class AfkRewardService {
                 if (!manual) {
                     afkStates.remove(uuid);
                     enterNotified.remove(uuid);
+                    hideHud(player);
                 }
                 sendAntiAbuseHint(player, key);
                 if (manual) {
@@ -525,6 +544,7 @@ public final class AfkRewardService {
                 if ("KICK".equalsIgnoreCase(anti.botDetection().action())) {
                     afkStates.remove(uuid);
                     enterNotified.remove(uuid);
+                    hideHud(player);
                 }
                 sendAntiAbuseHint(player, "hints.anti-abuse.bot-suspected");
                 return false;
@@ -926,6 +946,7 @@ public final class AfkRewardService {
         afkStates.remove(uuid);
         enterNotified.remove(uuid);
         pendingManualEndReasons.remove(uuid);
+        hideHud(player);
 
         if (!silent) {
             String msg = messages != null ? messages.get(times > 0 ? "hints.manual.end" : "hints.manual.end-no-reward",

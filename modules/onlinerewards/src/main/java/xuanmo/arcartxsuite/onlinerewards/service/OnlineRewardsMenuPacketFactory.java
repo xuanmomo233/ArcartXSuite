@@ -385,6 +385,7 @@ public final class OnlineRewardsMenuPacketFactory {
         for (int i = 0; i < rewards.size(); i++) {
             String json = resolveIconJson(player, iconResolver, rewards.get(i).icon());
             payload.put("rewardIconJson" + i, json);
+            payload.put("rewardIconAmount" + i, rewards.get(i).icon() == null ? 1 : rewards.get(i).icon().amount());
         }
     }
 
@@ -401,10 +402,12 @@ public final class OnlineRewardsMenuPacketFactory {
         int idx = 0;
         for (OnlineRewardsPeriodicReward reward : configuration.weeklyRewards()) {
             payload.put("periodicIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            payload.put("periodicIconAmount" + idx, reward.icon() == null ? 1 : reward.icon().amount());
             idx++;
         }
         for (OnlineRewardsPeriodicReward reward : configuration.monthlyRewards()) {
             payload.put("periodicIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            payload.put("periodicIconAmount" + idx, reward.icon() == null ? 1 : reward.icon().amount());
             idx++;
         }
     }
@@ -421,17 +424,21 @@ public final class OnlineRewardsMenuPacketFactory {
     ) {
         int idx = 0;
         payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, configuration.signIn().baseIcon()));
+        payload.put("signinIconAmount" + idx, configuration.signIn().baseIcon() == null ? 1 : configuration.signIn().baseIcon().amount());
         idx++;
         for (OnlineRewardsMilestoneReward reward : configuration.signIn().streakRewards()) {
             payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            payload.put("signinIconAmount" + idx, reward.icon() == null ? 1 : reward.icon().amount());
             idx++;
         }
         for (OnlineRewardsMilestoneReward reward : configuration.signIn().totalRewards()) {
             payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            payload.put("signinIconAmount" + idx, reward.icon() == null ? 1 : reward.icon().amount());
             idx++;
         }
         for (OnlineRewardsDayOfMonthReward reward : configuration.signIn().dayOfMonthRewards()) {
             payload.put("signinIconJson" + idx, resolveIconJson(player, iconResolver, reward.icon()));
+            payload.put("signinIconAmount" + idx, reward.icon() == null ? 1 : reward.icon().amount());
             idx++;
         }
     }

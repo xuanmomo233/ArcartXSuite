@@ -460,7 +460,7 @@ public final class LootScannerService implements Listener {
                 stack.getType().name(),
                 resolveDisplayName(stack),
                 stack.getAmount(),
-                itemStackBridge.itemToJson(stack).orElse("")
+                itemStackBridge.itemToPreviewJson(stack).orElse("")
             ));
             if (entries.size() >= maxDisplay) {
                 break;

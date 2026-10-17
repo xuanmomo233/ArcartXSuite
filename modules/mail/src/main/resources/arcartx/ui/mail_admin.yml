@@ -34,6 +34,7 @@ ui:
       var.view = 'list'
       var.subView = 'item'
       var.air = '{"id":"minecraft:air","Count":1b}'
+      var.attachmentAmounts = {}
       var.presetDetailLoaded = false
       var.showDispatchConfirm = false
       // 视口换算
@@ -103,6 +104,7 @@ ui:
       var.view = 'edit'
       var.subView = 'item'
       var.attachmentJsons = packet['attachment_jsons']
+      var.attachmentAmounts = packet['attachment_amounts'] != none ? packet['attachment_amounts'] : {}
       // 货币附件和 CDK 结构化字典（Java 端以索引字符串为 key）
       var.editCurrencyList = packet['currencyAttachmentsList']
       var.editCdkList = packet['cdkList']
@@ -303,6 +305,7 @@ ui:
         var.presetDetailLoaded = false
       } else {
         var.attachmentJsons = packet['attachment_jsons']
+        var.attachmentAmounts = packet['attachment_amounts'] != none ? packet['attachment_amounts'] : {}
         var.editItemCount = var.attachmentJsons.size().round()
       }
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
@@ -2308,6 +2311,15 @@ controls:
                               stroke:
                                 width: 2
                                 color: ~255,255,255,230
+                            children:
+                              数量:
+                                type: Text
+                                attribute:
+                                  x: 6
+                                  y: 38
+                                  texts: "var.attachmentAmounts[self.parent.entryKey] != none ? '&f' + var.attachmentAmounts[self.parent.entryKey].round() : none"
+                                  fontSize: 32
+                                  through: true
                   管理背包:
                     type: Canvas
                     attribute:

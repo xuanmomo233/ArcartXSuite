@@ -715,6 +715,15 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                            children:
+                              数量:
+                                type: Text
+                                attribute:
+                                  x: 5
+                                  y: 52
+                                  texts: "self.parent.parent.entry != none && self.parent.parent.entry['itemAmount'] != none && self.parent.parent.entry['itemAmount'] != '0' ? '&f' + self.parent.parent.entry['itemAmount'] : none"
+                                  fontSize: 30
+                                  through: true
                           状态文字:
                             type: Text
                             attribute:
@@ -830,6 +839,15 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                            children:
+                              数量:
+                                type: Text
+                                attribute:
+                                  x: 5
+                                  y: 52
+                                  texts: "self.parent.parent.entry != none && self.parent.parent.entry['itemAmount'] != none && self.parent.parent.entry['itemAmount'] != '0' ? '&f' + self.parent.parent.entry['itemAmount'] : none"
+                                  fontSize: 30
+                                  through: true
                           状态文字:
                             type: Text
                             attribute:
@@ -944,6 +962,15 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                            children:
+                              数量:
+                                type: Text
+                                attribute:
+                                  x: 5
+                                  y: 52
+                                  texts: "self.parent.parent.entry != none && self.parent.parent.entry['itemAmount'] != none && self.parent.parent.entry['itemAmount'] != '0' ? '&f' + self.parent.parent.entry['itemAmount'] : none"
+                                  fontSize: 30
+                                  through: true
                           状态文字:
                             type: Text
                             attribute:

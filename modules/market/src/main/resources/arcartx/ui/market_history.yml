@@ -588,6 +588,15 @@ controls:
                           shape: ~round_rect
                           radius: 10
                           seticon: "self.setItemIcon(var.itemJsons[self.parent.entryKey] != none ? var.itemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        children:
+                          数量:
+                            type: Text
+                            attribute:
+                              x: 5
+                              y: 48
+                              texts: "self.parent.parent.entry != none && self.parent.parent.entry['itemAmount'] > 0 ? '&f' + self.parent.parent.entry['itemAmount'].round() : none"
+                              fontSize: 30
+                              through: true
                         effect:
                           stroke:
                             width: 2

@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 /**
@@ -115,11 +116,16 @@ public final class ChemdahMetadataReader {
         return List.copyOf(translated);
     }
 
-    public String taskStatusText(PlayerProfile profile, Task task, boolean completed, boolean availablePage) {
+    public String taskStatusText(PlayerProfile profile, Task task, boolean completed, QuestGpsPage page) {
         if (completed) {
             return "已完成";
         }
-        if (availablePage) {
+        // 已结束的任务不再有实时目标进度；缺少历史记录不能当作仍在进行，
+        // 也不能把可选或后来新增的目标直接标记为完成。
+        if (page == QuestGpsPage.COMPLETED) {
+            return "任务已结束（无历史进度）";
+        }
+        if (page == QuestGpsPage.AVAILABLE) {
             return "未开始";
         }
         return "进行中";

@@ -79,6 +79,7 @@ import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
 import xuanmo.arcartxsuite.mail.storage.MailRepository;
 import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
+import xuanmo.arcartxsuite.mail.util.MailItemPreview;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -506,6 +507,7 @@ public final class MailService implements Listener {
     public MailOperationResult reloadPresets() {
         try {
             loadPresets();
+            syncPresetCdks();
             return MailOperationResult.success(message("admin.preset-reloaded", presets.size()));
         } catch (Exception exception) {
             this.logger.warning("重新加载预设失败: " + exception.getMessage());
@@ -692,6 +694,7 @@ public final class MailService implements Listener {
         composePacket.put("is_admin", player.hasPermission("arcartxsuite.admin"));
         // 序列化附件（背包槽位使用 ~Backpack 类型，由客户端自动显示，无需发送 backpack_jsons）
         composePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
+        composePacket.put("attachment_amounts", MailItemPreview.amounts(session.attachments()));
         bridge.sendPacket(player, composeUiId, "init", composePacket);
     }
 
@@ -701,7 +704,8 @@ public final class MailService implements Listener {
         for (int i = 0; i < attachments.size(); i++) {
             ItemStack item = attachments.get(i);
             if (item != null && !item.getType().isAir()) {
-                jsons.put(Integer.toString(i), iconResolver.itemToJson(item));
+                jsons.put(Integer.toString(i), iconResolver.itemToJson(
+                    MailItemPreview.copyForIcon(item)));
             }
         }
         return jsons;
@@ -1341,7 +1345,9 @@ public final class MailService implements Listener {
             payload.put("cdkList", cdkMap);
             // 物品附件图标 JSON：直接从预设定义反序列化并序列化为 UI 图标 JSON
             // 不依赖 populateAdminContainer 的 session（该 session 可能因反序列化环境差异为空）
-            payload.put("attachment_jsons", serializeAttachments(deserializePresetItems(def)));
+            List<ItemStack> previewItems = deserializePresetItems(def);
+            payload.put("attachment_jsons", serializeAttachments(previewItems));
+            payload.put("attachment_amounts", MailItemPreview.amounts(previewItems));
         }
         bridge.sendPacket(player, adminUiId, "preset-detail", payload);
     }
@@ -1609,7 +1615,6 @@ public final class MailService implements Listener {
     }
 
     private void loadPresets() throws IOException {
-        presets.clear();
         File directory = new File(baseDataDir, configuration.presetsDirectory());
         if (!directory.exists() && !directory.mkdirs()) {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
@@ -1617,7 +1622,11 @@ public final class MailService implements Listener {
         exportBundledPresetIfMissing(directory);
         // 预设加载使用 admin 附件上限（取 admin 和 playerSend 的较大值，确保 admin 保存的附件不被截断）
         int presetMaxAttachments = Math.max(adminAttachmentSlots(), configuration.playerSend().maxAttachments());
-        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, presetMaxAttachments, itemSourceRegistry, vanillaItemNameBridge, iconResolver));
+        Map<String, MailPresetDefinition> loaded = MailPresetLoader.loadPresets(
+            directory, this.logger, presetMaxAttachments, itemSourceRegistry, vanillaItemNameBridge, iconResolver);
+        // 全部文件解析成功后再替换，避免错误配置在重载时清空仍可用的预设。
+        presets.clear();
+        presets.putAll(loaded);
     }
 
     private void syncPresetCdks() throws Exception {
@@ -2289,6 +2298,7 @@ public final class MailService implements Listener {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("itemAttachmentCount", count);
         payload.put("attachment_jsons", serializeAttachments(session.attachments()));
+        payload.put("attachment_amounts", MailItemPreview.amounts(session.attachments()));
         bridge.sendPacket(player, adminUiId, "attachment-count", payload);
     }
 
@@ -2842,6 +2852,7 @@ public final class MailService implements Listener {
             // 序列化附件（背包槽位使用 ~Backpack 类型，由客户端自动显示，无需发送 backpack_jsons）
             if (session != null) {
                 composeUpdatePacket.put("attachment_jsons", serializeAttachments(session.attachments()));
+                composeUpdatePacket.put("attachment_amounts", MailItemPreview.amounts(session.attachments()));
             }
             bridge.sendPacket(
                 player,

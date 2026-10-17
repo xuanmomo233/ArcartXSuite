@@ -1811,7 +1811,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
             currentSlots = repository.loadSlotSummaries(ownerType, ownerId, warehouseId);
         debug("DEPOSIT-STACK load player=" + player.getName() + " ownerType=" + ownerType + " ownerId=" + ownerId
             + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + WarehouseTexts.shortHash(itemHash)
-            + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " verify=" + configuration.verifyOnDeposit());
+            + " itemJsonEmpty=" + itemJson(prototype).isBlank() + " verify=" + configuration.verifyOnDeposit());
 
         for (SlotItemRecord current : currentSlots) {
             if (remaining <= 0 || !itemHash.equals(current.itemHash())) {
@@ -1835,7 +1835,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 String categoryId = resolveCategory(prototype);
                 // searchText 写 displayName（原版物品为中文翻译名，自定义物品为自定义名）
                 SearchTokens searchTokens = WarehouseTexts.toSearchTokens(displayName);
-                String displayJson = itemJson(prototype, 1L);
+                String displayJson = itemJson(prototype);
                 repository.upsertSlot(new SlotItemRecord(
                     ownerType,
                     ownerId,
@@ -3222,13 +3222,11 @@ public final class WarehouseService implements Listener, WarehouseAccess {
         return itemStack.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 
-    String itemJson(ItemStack itemStack, long displayAmount) {
+    String itemJson(ItemStack itemStack) {
         if (itemStackBridge == null || itemStack == null || itemStack.getType().isAir()) {
             return "";
         }
-        ItemStack display = itemStack.clone();
-        display.setAmount((int) Math.max(1L, Math.min(displayAmount, Math.max(1, itemStack.getMaxStackSize()))));
-        return itemStackBridge.itemToJson(display).orElse("");
+        return itemStackBridge.itemToPreviewJson(itemStack).orElse("");
     }
     String resolveCategory(ItemStack itemStack) {
         List<CategoryDefinition> definitions = new ArrayList<>(configuration.categories().values());
@@ -3590,7 +3588,7 @@ public final class WarehouseService implements Listener, WarehouseAccess {
                 String displayName = resolveDisplayName(prototype);
                 String categoryId = resolveCategory(prototype);
                 SearchTokens searchTokens = WarehouseTexts.toSearchTokens(displayName);
-                String displayJson = itemJson(prototype, 1L);
+                String displayJson = itemJson(prototype);
                 long now = System.currentTimeMillis();
                 long createdAt = repository.loadSlot(OWNER_PERSONAL, ownerId, warehouseId, slotIndex)
                     .map(SlotItemRecord::createdAt).orElse(now);

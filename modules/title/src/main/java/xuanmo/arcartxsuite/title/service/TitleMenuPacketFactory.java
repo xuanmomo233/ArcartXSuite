@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import org.bukkit.ChatColor;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleDisplayConfiguration;
 import xuanmo.arcartxsuite.title.config.TitleGroupDefinition;
@@ -72,7 +74,7 @@ public final class TitleMenuPacketFactory {
             Map<String, Object> titleData = new LinkedHashMap<>();
             titleData.put("id", definition.id());
             titleData.put("kind", definition.kind().configKey());
-            titleData.put("display_name", definition.displayName());
+            titleData.put("display_name", ChatColor.stripColor(MessageProvider.translateColors(definition.displayName())));
             titleData.put("chat_prefix", definition.chatPrefix());
             titleData.put("chat_suffix", definition.chatSuffix());
             titleData.put("tab_prefix", definition.tabPrefix());
@@ -125,7 +127,7 @@ public final class TitleMenuPacketFactory {
         packet.put("hidden_count", resolvedState.hiddenCount());
         packet.put("equipped_count", resolvedState.equippedTitleIdsByGroup().size());
         packet.put("equipped_by_group", equippedByGroup);
-        packet.put("selected_display_name", selectedDefinition == null ? "" : selectedDefinition.displayName());
+        packet.put("selected_display_name", selectedDefinition == null ? "" : ChatColor.stripColor(MessageProvider.translateColors(selectedDefinition.displayName())));
         packet.put("selected_kind", selectedDefinition == null ? "" : selectedDefinition.kind().configKey());
         packet.put("selected_chat_prefix", selectedDefinition == null ? "" : selectedDefinition.chatPrefix());
         packet.put("selected_chat_suffix", selectedDefinition == null ? "" : selectedDefinition.chatSuffix());
@@ -203,7 +205,7 @@ public final class TitleMenuPacketFactory {
         packet.put("max_set_count", sets.size());
         packet.put("max_equipped_count", equippedByGroup.size());
         packet.put("display_title_id", resolvedState.totalDisplayTitle() == null ? "" : resolvedState.totalDisplayTitle().id());
-        packet.put("display_title_name", displayTitleField(configuration, resolvedState, TitleDefinition::displayName));
+        packet.put("display_title_name", ChatColor.stripColor(MessageProvider.translateColors(displayTitleField(configuration, resolvedState, TitleDefinition::displayName))));
         packet.put("display_title_chat_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::chatPrefix));
         packet.put("display_title_chat_suffix", displayTitleField(configuration, resolvedState, TitleDefinition::chatSuffix));
         packet.put("display_title_tab_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::tabPrefix));
@@ -327,7 +329,7 @@ public final class TitleMenuPacketFactory {
             entry.put("group_id", groupId);
             entry.put("group_name", groupDefinition.name());
             entry.put("title_id", title == null ? "" : title.id());
-            entry.put("display_name", title == null ? "" : title.displayName());
+            entry.put("display_name", title == null ? "" : ChatColor.stripColor(MessageProvider.translateColors(title.displayName())));
             entry.put("quality_name", quality == null ? (title == null ? "" : title.qualityId()) : quality.name());
             result.put(rowKey(index++), entry);
         }

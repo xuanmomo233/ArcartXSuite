@@ -431,7 +431,7 @@ final class WarehousePacketFactory {
             row.put("amount", item.getAmount());
             row.put("category", service.resolveCategory(item));
             row.put("material", item.getType().name());
-            row.put("itemJson", service.itemJson(item, item.getAmount()));
+            row.put("itemJson", service.itemJson(item));
             row.put("lore", WarehouseTexts.loreLines(item));
             row.put("locked", service.isItemLocked(item));
             result.put(Integer.toString(raw), row);
@@ -678,14 +678,14 @@ final class WarehousePacketFactory {
     String displayItemJson(SlotItemRecord item) {
         String stored = item.itemJson();
         if (stored != null && !stored.isBlank()) {
-            return stored;
+            return xuanmo.arcartxsuite.api.util.ItemPreview.singleCount(stored);
         }
         if (item.itemData() == null || item.itemData().isBlank()) {
             return stored == null ? "" : stored;
         }
         try {
             ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
-            String json = service.itemJson(stack, 1L);
+            String json = service.itemJson(stack);
             return json.isBlank() ? (stored == null ? "" : stored) : json;
         } catch (RuntimeException exception) {
             return stored == null ? "" : stored;

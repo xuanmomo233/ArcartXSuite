@@ -63,6 +63,9 @@ ui:
       var.calendarSignedCount = 0
       var.periodicIconJsons = {}
       var.rewardIconJsons = {}
+      var.rewardAmounts = {}
+      var.periodicAmounts = {}
+      var.signinAmounts = {}
       var.signinIconJsons = {}
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']
@@ -109,6 +112,7 @@ ui:
         for(i in range(0, var.maxRewardCount)){
           key = i.round()
           json = packet['rewardIconJson' + key]
+          var.rewardAmounts[key] = packet['rewardIconAmount' + key] != none ? packet['rewardIconAmount' + key] : 1
           if(json != none && json != ''){
             var.rewardIconJsons[key] = json
           }
@@ -119,6 +123,7 @@ ui:
         for(i in range(0, var.maxPeriodicCount)){
           key = i.round()
           json = packet['periodicIconJson' + key]
+          var.periodicAmounts[key] = packet['periodicIconAmount' + key] != none ? packet['periodicIconAmount' + key] : 1
           if(json != none && json != ''){
             var.periodicIconJsons[key] = json
           }
@@ -129,6 +134,7 @@ ui:
         for(i in range(0, var.maxSigninRewardCount)){
           key = i.round()
           json = packet['signinIconJson' + key]
+          var.signinAmounts[key] = packet['signinIconAmount' + key] != none ? packet['signinIconAmount' + key] : 1
           if(json != none && json != ''){
             var.signinIconJsons[key] = json
           }
@@ -284,6 +290,7 @@ ui:
         for(i in range(0, var.maxRewardCount)){
           key = i.round()
           json = packet['rewardIconJson' + key]
+          var.rewardAmounts[key] = packet['rewardIconAmount' + key] != none ? packet['rewardIconAmount' + key] : 1
           if(json != none && json != ''){
             var.rewardIconJsons[key] = json
           }
@@ -295,6 +302,7 @@ ui:
         for(i in range(0, var.maxPeriodicCount)){
           key = i.round()
           json = packet['periodicIconJson' + key]
+          var.periodicAmounts[key] = packet['periodicIconAmount' + key] != none ? packet['periodicIconAmount' + key] : 1
           if(json != none && json != ''){
             var.periodicIconJsons[key] = json
           }
@@ -306,6 +314,7 @@ ui:
         for(i in range(0, var.maxSigninRewardCount)){
           key = i.round()
           json = packet['signinIconJson' + key]
+          var.signinAmounts[key] = packet['signinIconAmount' + key] != none ? packet['signinIconAmount' + key] : 1
           if(json != none && json != ''){
             var.signinIconJsons[key] = json
           }
@@ -1694,6 +1703,15 @@ controls:
                                   itemScale: 0.85
                                   overwriteText: "~"
                                   seticon: "self.setItemIcon(var.rewardIconJsons[self.parent.entryKey] != none ? var.rewardIconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                                children:
+                                  数量:
+                                    type: Text
+                                    attribute:
+                                      x: 5
+                                      y: 52
+                                      texts: "var.rewardAmounts[self.parent.parent.entryKey] != none && var.rewardAmounts[self.parent.parent.entryKey] > 1 ? '&f' + var.rewardAmounts[self.parent.parent.entryKey].round() : none"
+                                      fontSize: 30
+                                      through: true
                               阶段奖项名称:
                                 type: Text
                                 attribute:
@@ -1830,6 +1848,15 @@ controls:
                                   itemScale: 0.85
                                   overwriteText: "~"
                                   seticon: "self.setItemIcon(var.periodicIconJsons[self.parent.entryKey] != none ? var.periodicIconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                                children:
+                                  数量:
+                                    type: Text
+                                    attribute:
+                                      x: 5
+                                      y: 52
+                                      texts: "var.periodicAmounts[self.parent.parent.entryKey] != none && var.periodicAmounts[self.parent.parent.entryKey] > 1 ? '&f' + var.periodicAmounts[self.parent.parent.entryKey].round() : none"
+                                      fontSize: 30
+                                      through: true
                               周期奖项名称:
                                 type: Text
                                 attribute:
@@ -1957,6 +1984,15 @@ controls:
                                   itemScale: 0.85
                                   overwriteText: "~"
                                   seticon: "self.setItemIcon(var.signinIconJsons[self.parent.entryKey] != none ? var.signinIconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                                children:
+                                  数量:
+                                    type: Text
+                                    attribute:
+                                      x: 5
+                                      y: 52
+                                      texts: "var.signinAmounts[self.parent.parent.entryKey] != none && var.signinAmounts[self.parent.parent.entryKey] > 1 ? '&f' + var.signinAmounts[self.parent.parent.entryKey].round() : none"
+                                      fontSize: 30
+                                      through: true
                               签到奖项名称:
                                 type: Text
                                 attribute:

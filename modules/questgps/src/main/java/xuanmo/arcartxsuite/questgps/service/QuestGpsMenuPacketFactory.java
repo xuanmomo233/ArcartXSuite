@@ -3,6 +3,8 @@ package xuanmo.arcartxsuite.questgps.service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.bukkit.ChatColor;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
@@ -86,7 +88,7 @@ public final class QuestGpsMenuPacketFactory {
         packet.put("navigationReady", navigationReady);
         packet.put("selected_quest_id", detail.questId());
         packet.put("selectedQuestId", detail.questId());
-        packet.put("selectedQuestName", detail.displayName());
+        packet.put("selectedQuestName", ChatColor.stripColor(MessageProvider.translateColors(detail.displayName())));
         packet.put("selectedQuestState", detail.stateText());
         packet.put("selectedQuestPath", detail.path());
         packet.put("selectedQuestDescriptionText", String.join("\n", detail.descriptionLines()));
@@ -139,7 +141,7 @@ public final class QuestGpsMenuPacketFactory {
         for (QuestGpsSnapshotBuilder.ListRow row : snapshot.questRows()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", row.questId());
-            entry.put("name", row.displayName());
+            entry.put("name", ChatColor.stripColor(MessageProvider.translateColors(row.displayName())));
             entry.put("summary", row.summaryText());
             entry.put("state", row.stateText());
             entry.put("trackable", row.trackAvailable());
@@ -154,7 +156,7 @@ public final class QuestGpsMenuPacketFactory {
         for (QuestGpsSnapshotBuilder.TaskRow row : detail.taskRows()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("id", row.taskId());
-            entry.put("text", row.text());
+            entry.put("text", ChatColor.stripColor(MessageProvider.translateColors(row.text())));
             entry.put("description", row.descriptionText());
             entry.put("status", row.statusText());
             entry.put("completed", row.completed());

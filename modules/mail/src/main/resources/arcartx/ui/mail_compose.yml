@@ -41,6 +41,7 @@ ui:
     load: |-
       var.actionToken = ''
       var.attachmentCount = 0
+      var.attachmentAmounts = {}
       var.bodyMax = 400
       var.composeVault = '0'
       var.itemFee = '0'
@@ -108,6 +109,7 @@ ui:
       var.totalFeeCurrencyName = packet['total_fee_currency_name']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
+      var.attachmentAmounts = packet['attachment_amounts'] != none ? packet['attachment_amounts'] : {}
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
@@ -137,6 +139,7 @@ ui:
       var.totalFeeCurrencyName = packet['total_fee_currency_name']
       var.isAdmin = packet['is_admin']
       var.attachmentJsons = packet['attachment_jsons']
+      var.attachmentAmounts = packet['attachment_amounts'] != none ? packet['attachment_amounts'] : {}
       var.actionBusy = false
       // 附件槽位为 Icon 类型，需要手动 seticon 刷新；背包槽位为 Backpack 类型，自动显示
       for(i in range(0, 5)){
@@ -523,6 +526,16 @@ controls:
                       stroke:
                         width: 2
                         color: ~255,255,255,230
+
+                    children:
+                      数量:
+                        type: Text
+                        attribute:
+                          x: 6
+                          y: 42
+                          texts: "var.attachmentAmounts[self.parent.entryKey] != none ? '&f' + var.attachmentAmounts[self.parent.entryKey].round() : none"
+                          fontSize: 32
+                          through: true
 
           背包面板:
             type: Canvas

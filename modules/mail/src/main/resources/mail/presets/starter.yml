@@ -5,6 +5,9 @@
 # 关联文件: ArcartXMail.yml
 # 重载命令: /axs mail reload
 # 最小使用路径: preset.id + /axs mail preset send <presetId> <player|all-online|all-registered>
+# 顶层 preset: 是固定配置节名称，不要改成预设 ID；只修改下面的 id 字段。
+# 保存文件后执行 /axs mail preset reload，再用 /axs mail preset list 检查已加载的 ID。
+# 重载影响后续派发的邮件；已经派发的邮件保留发送时的奖励数据。
 #
 # item-attachments 物品来源（source）支持：
 #   minecraft  — 原版物品（id 为材质名，如 APPLE/DIAMOND）
@@ -15,7 +18,7 @@
 # 物品库未安装时该附件会被跳过并在日志打印警告，其余附件正常发放。
 
 preset:
-  # 预设唯一 ID；建议与文件名一致。
+  # 命令和 UI 使用的预设唯一 ID；建议与文件名一致，不要与其他预设重复。
   id: starter
   enabled: true
   display-name: 新手欢迎信

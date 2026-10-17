@@ -2095,7 +2095,7 @@ public final class FishingService {
         for (String effectType : effectOrder) {
             Double sum = bonusSums.get(effectType);
             if (sum != null && sum != 0.0) {
-                activeBonuses.add(formatEffect(effectType, sum));
+                activeBonuses.add("&8" + formatEffect(effectType, sum));
             }
         }
         payload.put("activeBonuses", activeBonuses);
@@ -2125,9 +2125,10 @@ public final class FishingService {
             entry.put("type", reward.type());
             // iconName 供 UI 端文本显示用（从 IconDefinition 提取）
             xuanmo.arcartxsuite.api.icon.IconDefinition iconDef = reward.icon();
-            entry.put("iconName", iconDef != null && iconDef.name() != null ? iconDef.name() : "");
+            entry.put("iconName", iconDef != null && iconDef.name() != null
+                ? ChatColor.stripColor(MessageProvider.translateColors(iconDef.name())) : "");
             entry.put("iconMaterial", iconDef != null ? iconDef.material() : "");
-            entry.put("iconAmount", iconDef != null ? iconDef.amount() : 1);
+            entry.put("iconAmount", reward.item() != null ? reward.item().amount() : (iconDef != null ? iconDef.amount() : 1));
             entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId()));
             entry.put("claimed", seasonData.claimedRewards().contains(reward.rewardId()));
             rewardsMap.put(Integer.toString(idx), entry);
@@ -2334,7 +2335,7 @@ public final class FishingService {
             meta.setLore(lore);
             stack.setItemMeta(meta);
         }
-        return iconResolver.itemToJson(stack);
+        return iconResolver.itemToPreviewJson(stack);
     }
 
     /**

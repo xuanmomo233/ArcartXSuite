@@ -216,7 +216,8 @@ public final class QuestGpsRewardPreviewResolver {
     ) {
         String title = blankTo(configuredTitle, resolveItemName(itemStack));
         String description = blankTo(configuredDescription, resolveItemSummary(itemStack));
-        String itemJson = itemJsonSerializer.apply(itemStack).orElse("");
+        String itemJson = itemJsonSerializer.apply(
+            xuanmo.arcartxsuite.api.util.ItemPreview.copyForIcon(itemStack)).orElse("");
         return new ResolvedRewardPreview(
             rewardId,
             type,

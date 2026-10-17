@@ -126,7 +126,7 @@ public final class QuestGpsPresentationService {
                     task.getId(),
                     metadataReader.taskDisplayText(profile, template, task, definition, configuration.presentation()),
                     descriptionText,
-                    metadataReader.taskStatusText(profile, task, completed, page == QuestGpsPage.AVAILABLE),
+                    metadataReader.taskStatusText(profile, task, completed, page),
                     completed,
                     page == QuestGpsPage.ACTIVE && navigationService.taskTrackable(questPlayer, template.getId(), task.getId()),
                     taskSortOrder(definition, task.getId())

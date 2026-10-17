@@ -3,6 +3,11 @@
 }
 
 dependencies {
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(project(":axs-api"))
+    testImplementation("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
+    testImplementation(files("../../libs/Chemdah-1.1.33-FREE.jar"))
     compileOnly(project(":axs-api"))
     compileOnly(project(":axs-core"))
     compileOnly("org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT")
@@ -13,6 +18,15 @@ dependencies {
 tasks.compileJava {
     options.encoding = "UTF-8"
     options.release = 17
+}
+
+tasks.compileTestJava {
+    options.encoding = "UTF-8"
+    options.release = 17
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.jar {

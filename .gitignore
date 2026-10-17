@@ -70,3 +70,4 @@ src/main/resources/native/*.so
 keys/
 API_USAGE_GUIDE.md
 API_INSPECTION_REPORT.md
+modules.zip

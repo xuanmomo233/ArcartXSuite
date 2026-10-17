@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -20,6 +21,7 @@ import xuanmo.arcartxsuite.abyss.template.AbyssTemplate;
 import xuanmo.arcartxsuite.abyss.template.RewardConfig;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 
 /**
  * Abyss ArcartX UI 服务：5 个界面（浏览/队伍/宝箱/HUD/排行统计）+ 客户端包路由。
@@ -110,8 +112,8 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (AbyssTemplate t : service.instances().getAllTemplates()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", t.id());
-            row.put("name", t.name());
-            row.put("difficulty", t.difficulty());
+            row.put("name", ChatColor.stripColor(MessageProvider.translateColors(t.name())));
+            row.put("difficulty", ChatColor.stripColor(MessageProvider.translateColors(t.difficulty())));
             row.put("icon", t.icon());
             // 图标 itemJson（Slot.setItemIcon 渲染；桥缺席时 itemJsonOf 兜底基础图标）
             org.bukkit.Material iconMat = org.bukkit.Material.matchMaterial(t.icon());
@@ -308,7 +310,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         int di = 0;
         for (AbyssTemplate t : service.instances().getAllTemplates()) {
             dungeonRows.put(Integer.toString(di++),
-                Map.of("id", t.id(), "name", t.name()));
+                Map.of("id", t.id(), "name", ChatColor.stripColor(MessageProvider.translateColors(t.name()))));
         }
         payload.put("dungeonRows", dungeonRows);
         payload.put("dungeonCount", di);
@@ -574,6 +576,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (int i = 0; i < 9; i++) {
             payload.put("itemJson" + i,
                 i < items.size() ? itemJsonOf(items.get(i)) : AIR_ITEM_JSON);
+            payload.put("itemAmount" + i, i < items.size() ? items.get(i).getAmount() : 0);
         }
         packetBridge.openUiUnsafe(player, chestUi());
         packetBridge.sendPacket(player, chestUi(), "init", payload);
@@ -664,12 +667,12 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         if (it == null) return "";
         if (itemBridge != null) {
             try {
-                String j = itemBridge.itemToJson(it).orElse("");
+                String j = itemBridge.itemToPreviewJson(it).orElse("");
                 if (!j.isEmpty()) return j;
             } catch (Throwable ignored) { }
         }
         return "{\"id\":\"minecraft:" + it.getType().name().toLowerCase(java.util.Locale.ROOT)
-            + "\",\"Count\":" + it.getAmount() + "b}";
+            + "\",\"Count\":1b}";
     }
 
     // ═══ 设计模式 ═══
@@ -926,6 +929,14 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         }
         String action = data.get(0).toLowerCase();
         switch (action) {
+            case "open_confirm" -> {
+                if (!checkToken(player, data, 2)) return true;
+                String dungeonId = data.size() > 1 ? data.get(1) : null;
+                AbyssTemplate template = dungeonId != null
+                    ? service.instances().getTemplate(dungeonId) : null;
+                if (template != null) openEntryConfirm(player, template);
+                return true;
+            }
             case "enter" -> {
                 if (!checkToken(player, data, 2)) return true;
                 String dungeonId = data.size() > 1 ? data.get(1) : null;
@@ -1553,6 +1564,7 @@ public final class AbyssUiService implements AbyssService.UiServiceFacade,
         for (int i = 0; i < 9; i++) {
             payload.put("itemJson" + i,
                 i < pc.items().size() ? itemJsonOf(pc.items().get(i)) : AIR_ITEM_JSON);
+            payload.put("itemAmount" + i, i < pc.items().size() ? pc.items().get(i).getAmount() : 0);
         }
         packetBridge.sendPacket(player, chestUi(), "init", payload);
     }

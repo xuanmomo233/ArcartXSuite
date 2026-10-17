@@ -19,14 +19,23 @@ ui:
       var.chestTitle = packet['chestTitle']
       var.itemCount = packet['itemCount']
       var.itemJson0 = packet['itemJson0']
+      var.itemAmount0 = packet['itemAmount0'] != none ? packet['itemAmount0'] : 0
       var.itemJson1 = packet['itemJson1']
+      var.itemAmount1 = packet['itemAmount1'] != none ? packet['itemAmount1'] : 0
       var.itemJson2 = packet['itemJson2']
+      var.itemAmount2 = packet['itemAmount2'] != none ? packet['itemAmount2'] : 0
       var.itemJson3 = packet['itemJson3']
+      var.itemAmount3 = packet['itemAmount3'] != none ? packet['itemAmount3'] : 0
       var.itemJson4 = packet['itemJson4']
+      var.itemAmount4 = packet['itemAmount4'] != none ? packet['itemAmount4'] : 0
       var.itemJson5 = packet['itemJson5']
+      var.itemAmount5 = packet['itemAmount5'] != none ? packet['itemAmount5'] : 0
       var.itemJson6 = packet['itemJson6']
+      var.itemAmount6 = packet['itemAmount6'] != none ? packet['itemAmount6'] : 0
       var.itemJson7 = packet['itemJson7']
+      var.itemAmount7 = packet['itemAmount7'] != none ? packet['itemAmount7'] : 0
       var.itemJson8 = packet['itemJson8']
+      var.itemAmount8 = packet['itemAmount8'] != none ? packet['itemAmount8'] : 0
       var.dirty = true
       self.actions['applyIcons']()
   action:
@@ -117,6 +126,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson0)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount0 > 0 ? '&f' + var.itemAmount0.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '0', var.actionToken)"
               槽位1:
@@ -131,6 +149,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson1)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount1 > 0 ? '&f' + var.itemAmount1.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '1', var.actionToken)"
               槽位2:
@@ -145,6 +172,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson2)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount2 > 0 ? '&f' + var.itemAmount2.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '2', var.actionToken)"
               槽位3:
@@ -159,6 +195,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson3)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount3 > 0 ? '&f' + var.itemAmount3.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '3', var.actionToken)"
               槽位4:
@@ -173,6 +218,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson4)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount4 > 0 ? '&f' + var.itemAmount4.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '4', var.actionToken)"
               槽位5:
@@ -187,6 +241,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson5)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount5 > 0 ? '&f' + var.itemAmount5.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '5', var.actionToken)"
               槽位6:
@@ -201,6 +264,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson6)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount6 > 0 ? '&f' + var.itemAmount6.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '6', var.actionToken)"
               槽位7:
@@ -215,6 +287,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson7)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount7 > 0 ? '&f' + var.itemAmount7.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '7', var.actionToken)"
               槽位8:
@@ -229,6 +310,15 @@ controls:
                   radius: 8
                   itemScale: 0.8
                   seticon: "self.setItemIcon(var.itemJson8)"
+                children:
+                  数量:
+                    type: Text
+                    attribute:
+                      x: 3
+                      y: 28
+                      texts: "var.itemAmount8 > 0 ? '&f' + var.itemAmount8.round() : none"
+                      fontSize: 24
+                      through: true
                 action:
                   clickLeft: "Packet.send(var.packetId, 'chest_claim_one', '8', var.actionToken)"
           领取按钮:

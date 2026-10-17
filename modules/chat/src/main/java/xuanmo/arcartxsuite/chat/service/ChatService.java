@@ -882,7 +882,7 @@ public final class ChatService implements Listener {
             }
         }
 
-        Optional<String> itemJson = itemStackBridge.itemToJson(itemForSerialization);
+        Optional<String> itemJson = itemStackBridge.itemToPreviewJson(itemForSerialization);
         if (itemJson.isEmpty()) {
             return null;
         }

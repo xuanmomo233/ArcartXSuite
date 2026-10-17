@@ -325,6 +325,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             entry.put("locked", String.valueOf(!tierUnlocked));
             entry.put("levelReached", String.valueOf(levelReached));
             entry.put("type", reward.type());
+            entry.put("itemAmount", Integer.toString(previewAmount(reward)));
             rewardsMap.put(entryKey, entry);
 
             // 推送图标 itemJson（flat 字段）
@@ -401,7 +402,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
                     if (reward.icon() != null && reward.icon().name() != null) {
                         displayName = reward.icon().name();
                     }
-                    tierEntry.put("name", displayName);
+                    int amount = previewAmount(reward);
+                    tierEntry.put("name", displayName + (amount > 1 ? " x" + amount : ""));
                     // 推送图标
                     String iconJson = iconResolver.resolveItemJson(player, reward.icon());
                     payload.put("iconJson" + idx + "_" + iconIdx, iconJson);
@@ -598,6 +600,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
 
     private static String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static int previewAmount(BattlePassReward reward) {
+        if (!"item".equalsIgnoreCase(reward.type()) && !"mail".equalsIgnoreCase(reward.type())) return 0;
+        return reward.item() == null ? 0 : Math.max(1, reward.item().amount());
     }
 
     /**

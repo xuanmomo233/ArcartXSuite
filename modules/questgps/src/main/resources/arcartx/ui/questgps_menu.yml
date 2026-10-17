@@ -1126,6 +1126,15 @@ controls:
                               shape: ~round_rect
                               radius: 8
                               seticon: "self.setItemIcon(var.rewardItemJsons[self.parent.entryKey] != none ? var.rewardItemJsons[self.parent.entryKey] : var.emptyItemJson)"
+                            children:
+                              数量:
+                                type: Text
+                                attribute:
+                                  x: 4
+                                  y: 32
+                                  texts: "self.parent.parent.entry != none && self.parent.parent.entry['amount'] > 1 ? '&f' + self.parent.parent.entry['amount'].round() : none"
+                                  fontSize: 28
+                                  through: true
                           奖励名:
                             type: Text
                             attribute:

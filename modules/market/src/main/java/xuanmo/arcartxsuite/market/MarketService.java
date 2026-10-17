@@ -822,8 +822,10 @@ public class MarketService {
             item.put("seller", listing.getSeller().toString());
             item.put("sellerName", listing.getSellerName());
             // itemJson 分离模式：itemData 反序列化为 ItemStack 再转 JSON，减小嵌套 packet 体积
-            packet.put("itemJson" + key, pshopItemJson(listing));
+            ItemDisplay preview = serializedItemPreview(listing.getItemData());
+            packet.put("itemJson" + key, preview.json());
             item.put("itemDisplayName", listing.getItemDisplayName());
+            item.put("itemAmount", preview.amount());
             item.put("price", listing.getPrice());
             item.put("currency", listing.getCurrency());
             item.put("currencyName", currencyDisplayName(listing.getCurrency()));
@@ -1644,6 +1646,8 @@ public class MarketService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", listing.getId());
             row.put("name", listing.getItemDisplayName());
+            ItemDisplay preview = serializedItemPreview(listing.getItemData());
+            row.put("itemAmount", preview.amount());
             row.put("seller", listing.getSellerName());
             row.put("price", formatPrice(listing.getStartingBid()));
             row.put("minBid", minBid);
@@ -1660,7 +1664,7 @@ public class MarketService {
             listingTexts.put(key, listing.getItemDisplayName());
 
             // 物品 JSON（flat 字段）
-            packet.put("itemJson" + i, listingItemJson(listing));
+            packet.put("itemJson" + i, preview.json());
         }
         packet.put("listings", listingsMap);
         packet.put("listingTexts", listingTexts);
@@ -1718,7 +1722,8 @@ public class MarketService {
                     String key = Integer.toString(idx);
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("key", itemEntry.getKey());
-                    row.put("name", shopItem.displayName());
+                    // 商品卡由 UI 控制正文颜色，物品原有颜色仍保留在图标及悬浮提示中。
+                    row.put("name", ChatColor.stripColor(MessageProvider.translateColors(shopItem.displayName())));
                     row.put("price", formatPrice(shopItem.buyPrice()));
                     row.put("currencyName", currencyDisplayName(shopItem.currency()));
                     row.put("stock", formatShopStock(player, activeShopId, itemEntry.getKey(), shopItem));
@@ -1847,13 +1852,15 @@ public class MarketService {
             row.put("typeText", typeText);
             row.put("typeColor", typeColor);
             row.put("itemName", h.itemDisplayName());
+            ItemDisplay preview = serializedItemPreview(h.itemData());
+            row.put("itemAmount", preview.amount());
             row.put("counterpart", counterpart);
             row.put("amount", formatPrice(h.price()) + " " + currencyDisplayName(h.currency()));
             row.put("time", TIME_FMT.format(new Date(h.timestamp())));
             records.put(key, row);
 
             // 物品 JSON（flat 字段）
-            packet.put("historyItemJson" + i, historyItemJson(h));
+            packet.put("historyItemJson" + i, preview.json());
         }
         packet.put("records", records);
         packet.put("maxRecordCount", records.size());
@@ -1890,36 +1897,24 @@ public class MarketService {
     private String itemToJson(ItemStack item) {
         if (item == null || item.getType().isAir()) return "";
         if (itemStackBridge != null) {
-            return itemStackBridge.itemToJson(item).orElse("");
+            return itemStackBridge.itemToPreviewJson(item).orElse("");
         }
         return "";
     }
 
-    private String listingItemJson(AuctionListing listing) {
+    private ItemDisplay serializedItemPreview(String itemData) {
+        int amount = 0;
         try {
-            ItemStack item = itemSerializer.deserialize(listing.getItemData());
-            return item != null ? itemToJson(item) : "";
-        } catch (Exception e) {
-            return "";
+            ItemStack item = itemSerializer.deserialize(itemData);
+            if (item == null) return new ItemDisplay("", 0);
+            amount = item.getAmount();
+            return new ItemDisplay(itemToJson(item), amount);
+        } catch (Exception exception) {
+            return new ItemDisplay("", amount);
         }
     }
 
-    private String pshopItemJson(PlayerShopListing listing) {
-        try {
-            ItemStack item = itemSerializer.deserialize(listing.getItemData());
-            return item != null ? itemToJson(item) : "";
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private String historyItemJson(AuctionHistory h) {
-        try {
-            ItemStack item = itemSerializer.deserialize(h.itemData());
-            return item != null ? itemToJson(item) : "";
-        } catch (Exception e) {
-            return "";
-        }
+    private record ItemDisplay(String json, int amount) {
     }
 
     private String shopItemJson(Player player, ShopService.ShopItem shopItem) {

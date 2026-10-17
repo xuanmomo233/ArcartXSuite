@@ -82,6 +82,7 @@ public final class RecipeCollector {
     private Map<String, Object> buildShapedEntry(ShapedRecipe recipe) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("resultJson", serializeItemWithLore(recipe.getResult()));
+        entry.put("resultAmount", recipe.getResult().getAmount());
         entry.put("resultItemId", recipe.getResult().getType().getKey().toString());
         entry.put("resultName", recipe.getResult().getType().name().toLowerCase().replace('_', ' '));
         entry.put("resultZhName", translate(recipe.getResult().getType()));
@@ -101,12 +102,22 @@ public final class RecipeCollector {
         for (String row : shape) shapeList.add(row);
         entry.put("shape", shapeList);
         entry.put("previewGrid", buildShapedPreviewGrid(shape, recipe.getIngredientMap()));
+        List<Integer> amounts = new ArrayList<>(Collections.nCopies(9, 0));
+        Map<Character, ItemStack> rawIngredients = recipe.getIngredientMap();
+        for (int row = 0; row < shape.length; row++) {
+            for (int col = 0; col < shape[row].length(); col++) {
+                ItemStack ingredient = rawIngredients.get(shape[row].charAt(col));
+                if (ingredient != null) amounts.set(row * 3 + col, ingredient.getAmount());
+            }
+        }
+        entry.put("previewAmounts", amounts);
         return entry;
     }
 
     private Map<String, Object> buildShapelessEntry(ShapelessRecipe recipe) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("resultJson", serializeItemWithLore(recipe.getResult()));
+        entry.put("resultAmount", recipe.getResult().getAmount());
         entry.put("resultItemId", recipe.getResult().getType().getKey().toString());
         entry.put("resultName", recipe.getResult().getType().name().toLowerCase().replace('_', ' '));
         entry.put("resultZhName", translate(recipe.getResult().getType()));
@@ -120,12 +131,17 @@ public final class RecipeCollector {
         }
         entry.put("ingredients", ingredientList);
         entry.put("previewGrid", buildShapelessPreviewGrid(recipe.getIngredientList()));
+        List<Integer> amounts = new ArrayList<>(Collections.nCopies(9, 0));
+        List<ItemStack> ingredients = recipe.getIngredientList();
+        for (int i = 0; i < Math.min(ingredients.size(), 9); i++) amounts.set(i, ingredients.get(i).getAmount());
+        entry.put("previewAmounts", amounts);
         return entry;
     }
 
     private Map<String, Object> buildCookingEntry(ItemStack result, ItemStack input, String type) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("resultJson", serializeItemWithLore(result));
+        entry.put("resultAmount", result.getAmount());
         entry.put("resultItemId", result.getType().getKey().toString());
         entry.put("resultName", result.getType().name().toLowerCase().replace('_', ' '));
         entry.put("resultZhName", translate(result.getType()));
@@ -134,6 +150,7 @@ public final class RecipeCollector {
         entry.put("type", type);
         List<String> previewGrid = new ArrayList<>(Collections.nCopies(1, serializeItemWithLore(input)));
         entry.put("previewGrid", previewGrid);
+        entry.put("previewAmounts", List.of(input.getAmount()));
         return entry;
     }
 
@@ -162,7 +179,7 @@ public final class RecipeCollector {
 
     public String serializeItem(ItemStack item) {
         if (item == null) return "{\"id\":\"minecraft:air\",\"Count\":1b}";
-        return "{\"id\":\"" + item.getType().getKey().toString() + "\",\"Count\":" + item.getAmount() + "b}";
+        return "{\"id\":\"" + item.getType().getKey().toString() + "\",\"Count\":1b}";
     }
 
     public String serializeIconWithLore(Material material, String displayName, String lore) {

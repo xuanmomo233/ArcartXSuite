@@ -1070,6 +1070,7 @@ controls:
                                   附件图标:
                                     type: Slot
                                     attribute:
+                                      entry: self.parent.entry
                                       slotType: ~Icon
                                       itemScale: 0.72
                                       x: 8
@@ -1080,6 +1081,15 @@ controls:
                                       shape: ~round_rect
                                       radius: 8
                                       seticon: "self.setItemIcon(var.attachmentItemJsons[self.parent.entryKey])"
+                                    children:
+                                      数量:
+                                        type: Text
+                                        attribute:
+                                          x: 4
+                                          y: 32
+                                          texts: "self.parent.entry != none && self.parent.entry['type'] == 'ITEM' ? '&f' + self.parent.entry['amount'].round() : none"
+                                          fontSize: 28
+                                          through: true
                                   附件描述:
                                     type: Text
                                     attribute:

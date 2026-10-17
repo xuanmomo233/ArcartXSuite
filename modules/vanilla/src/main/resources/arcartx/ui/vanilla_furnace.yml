@@ -29,6 +29,8 @@ ui:
     load: |-
       var.showAll = true
       var.previewGrid = []
+      var.previewAmounts = []
+      var.previewResultAmount = 0
       var.searchText = ''
       var.burnTime = 0
       var.burnTimeTotal = 1
@@ -268,13 +270,22 @@ controls:
               width: 21
               height: 21
               slotType: ~Icon
-              seticon: self.setItemIcon(var.previewGrid[0])
+              seticon: "self.setItemIcon(var.previewGrid[0])"
               normal: ~Frosted:0;40,40,40,180
               itemScale: 0.7
               point: ~middle_center
               alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.previewVisible ? 1 : 0"
               through: true
               visible: true
+            children:
+              数量:
+                type: Text
+                attribute:
+                  x: 1
+                  y: 13
+                  texts: "var.previewAmounts[0] != none && var.previewAmounts[0] > 1 ? '&f' + var.previewAmounts[0].round() : none"
+                  fontSize: 8
+                  through: true
           燃料槽:
             type: Slot
             attribute:
@@ -382,6 +393,15 @@ controls:
               alpha: "var.selectedRecipe != none && var.recipeBookOpen && var.resultVisible ? 1 : 0"
               through: true
               visible: true
+            children:
+              数量:
+                type: Text
+                attribute:
+                  x: 1
+                  y: 15
+                  texts: "var.previewResultAmount > 1 ? '&f' + var.previewResultAmount.round() : none"
+                  fontSize: 8
+                  through: true
           配方书面板:
             type: Canvas
             attribute:
@@ -596,8 +616,17 @@ controls:
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 6
-                          seticon: self.setItemIcon(var.recipeJsons[self.entryKey])
+                          seticon: "self.setItemIcon(var.recipeJsons[self.entryKey])"
                           itemScale: 0.7
+                        children:
+                          数量:
+                            type: Text
+                            attribute:
+                              x: 1
+                              y: 11
+                              texts: "self.parent.entry != none && self.parent.entry['resultAmount'] > 1 ? '&f' + self.parent.entry['resultAmount'].round() : none"
+                              fontSize: 8
+                              through: true
                         action:
                           clickLeft: |-
                             if(var.shiftHeld){
@@ -616,6 +645,8 @@ controls:
                               recipe = var.recipes[self.entryKey]
                               if(recipe != none){
                                 var.previewGrid = recipe['previewGrid']
+                                var.previewAmounts = recipe['previewAmounts'] != none ? recipe['previewAmounts'] : []
+                                var.previewResultAmount = recipe['resultAmount'] != none ? recipe['resultAmount'] : 0
                                 slot = val.预览输入槽
                                 if(slot != none){
                                   slot.seticon()

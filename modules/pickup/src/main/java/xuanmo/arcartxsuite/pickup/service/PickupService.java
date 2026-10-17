@@ -185,7 +185,7 @@ public final class PickupService implements Listener {
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("itemJson", itemStackBridge.itemToJson(itemStack).orElse(""));
+        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).orElse(""));
         payload.put("amount", amount);
 
         // 补发路径同样代表"发生了一次拾取"，无论 HUD 最终是否成功打开都发事件
@@ -229,7 +229,7 @@ public final class PickupService implements Listener {
 
         ItemStack itemStack = event.getItem().getItemStack();
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("itemJson", itemStackBridge.itemToJson(itemStack).orElse(""));
+        payload.put("itemJson", itemStackBridge.itemToPreviewJson(itemStack).orElse(""));
         payload.put("amount", itemStack.getAmount());
 
         UUID playerId = player.getUniqueId();

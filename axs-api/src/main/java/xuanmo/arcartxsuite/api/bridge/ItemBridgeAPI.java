@@ -32,6 +32,12 @@ public interface ItemBridgeAPI {
      */
     @NotNull Optional<String> itemToJson(@NotNull ItemStack itemStack);
 
+    /** 虚拟 UI 图标使用数量为 1 的完整副本；不会修改用于发放或持久化的物品。 */
+    @NotNull
+    default Optional<String> itemToPreviewJson(@NotNull ItemStack itemStack) {
+        return itemToJson(xuanmo.arcartxsuite.api.util.ItemPreview.copyForIcon(itemStack));
+    }
+
     /**
      * 在物品上写入一个字符串型 NBT 标签，返回带该标签的物品。
      * <p>

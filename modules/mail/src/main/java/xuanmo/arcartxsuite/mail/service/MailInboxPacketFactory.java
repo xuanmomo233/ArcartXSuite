@@ -10,7 +10,6 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
@@ -21,6 +20,7 @@ import xuanmo.arcartxsuite.mail.model.MailPage;
 import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
 import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
+import xuanmo.arcartxsuite.mail.util.MailItemPreview;
 
 /**
  * 收件箱界面数据包工厂，构建发送给客户端的收件箱列表与选中邮件详情数据包。
@@ -187,8 +187,9 @@ public final class MailInboxPacketFactory {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("type", attachment.type().name());
             entry.put("description", attachment.description().isBlank() ? attachment.type().name() : attachment.description());
-            entry.put("amount", attachment.amount());
-            entry.put("itemJson", buildAttachmentItemJson(attachment, iconResolver));
+            AttachmentPreview preview = buildAttachmentPreview(attachment, iconResolver);
+            entry.put("amount", preview.amount());
+            entry.put("itemJson", preview.itemJson());
             result.put(Integer.toString(index), entry);
             index++;
         }
@@ -196,49 +197,25 @@ public final class MailInboxPacketFactory {
     }
 
     /**
-     * 将单个附件序列化为 UI 可渲染的 itemJson 字符串。
+     * 将物品附件转换为数量为 1 的预览图标与独立的真实数量；货币保留配置的图标。
      * <p>
-     * 物品附件：反序列化 Base64 itemData 后重建为 CraftItemStack，再通过 IconResolver.itemToJson 序列化。
-     * 重建步骤是必要的——Bukkit 反序列化得到的 ItemStack 不是 CraftItemStack，
-     * native item2json 无法读取其 ItemMeta 中的 displayName/lore，会导致 UI 悬浮显示原版名称而非自定义名称。
+     * 物品附件：反序列化 Base64 itemData 后复制完整物品数据，再通过 IconResolver.itemToJson 序列化。
+     * 不能重建材质并挑选复制少数 ItemMeta 字段，否则模组 NBT 等数据会丢失。
      * 货币附件：通过 IconResolver.resolveItemJson 解析 IconDefinition（支持完整 menu 风格 icon 配置）。
      * 货币附件无 IconDefinition 时回退为纸片 + 描述文本。
      */
-    private static String buildAttachmentItemJson(MailAttachment attachment, @Nullable IconResolver iconResolver) {
-        if (iconResolver == null) {
-            return "";
-        }
+    private static AttachmentPreview buildAttachmentPreview(MailAttachment attachment, @Nullable IconResolver iconResolver) {
+        double amount = attachment.amount();
         try {
             if (attachment.isItem() && attachment.itemData() != null && !attachment.itemData().isBlank()) {
                 ItemStack stack = MailItemSerializer.deserialize(attachment.itemData());
-                // 重建为 CraftItemStack，确保 item2json 能正确序列化 ItemMeta 中的 displayName/lore
-                ItemStack fresh = new ItemStack(stack.getType(), stack.getAmount());
-                ItemMeta srcMeta = stack.getItemMeta();
-                if (srcMeta != null) {
-                    ItemMeta freshMeta = fresh.getItemMeta();
-                    if (freshMeta != null) {
-                        if (srcMeta.hasDisplayName()) {
-                            freshMeta.setDisplayName(srcMeta.getDisplayName());
-                        }
-                        if (srcMeta.hasLore()) {
-                            freshMeta.setLore(srcMeta.getLore());
-                        }
-                        if (srcMeta.hasCustomModelData()) {
-                            freshMeta.setCustomModelData(srcMeta.getCustomModelData());
-                        }
-                        if (srcMeta.hasEnchants()) {
-                            for (org.bukkit.enchantments.Enchantment ench : srcMeta.getEnchants().keySet()) {
-                                freshMeta.addEnchant(ench, srcMeta.getEnchantLevel(ench), true);
-                            }
-                        }
-                        fresh.setItemMeta(freshMeta);
-                    }
-                }
-                return iconResolver.itemToJson(fresh);
-            } else if (attachment.isCurrency()) {
+                amount = stack.getAmount();
+                String json = iconResolver == null ? "" : iconResolver.itemToJson(MailItemPreview.copyForIcon(stack));
+                return new AttachmentPreview(json, amount);
+            } else if (attachment.isCurrency() && iconResolver != null) {
                 // 货币附件：优先使用 IconDefinition（menu 风格完整图标配置）
                 if (attachment.icon() != null && attachment.icon().hasIcon()) {
-                    return iconResolver.resolveItemJson(null, attachment.icon());
+                    return new AttachmentPreview(iconResolver.resolveItemJson(null, attachment.icon()), attachment.amount());
                 }
                 // 回退：纸片 + 描述文本
                 ItemStack stack = new ItemStack(Material.PAPER, 1);
@@ -248,12 +225,14 @@ public final class MailInboxPacketFactory {
                     meta.setDisplayName(desc);
                     stack.setItemMeta(meta);
                 }
-                return iconResolver.itemToJson(stack);
+                return new AttachmentPreview(iconResolver.itemToJson(stack), attachment.amount());
             }
-            return "";
         } catch (Exception ignored) {
-            return "";
         }
+        return new AttachmentPreview("", amount);
+    }
+
+    private record AttachmentPreview(String itemJson, double amount) {
     }
 
     private static String sourceText(MailSourceType type, MessageProvider messages) {

@@ -652,6 +652,15 @@ controls:
                           itemScale: 0.85
                           overwriteText: "~"
                           seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
+                        children:
+                          数量:
+                            type: Text
+                            attribute:
+                              x: 5
+                              y: 52
+                              texts: "self.parent.parent.entry != none && self.parent.parent.entry['iconAmount'] > 1 ? '&f' + self.parent.parent.entry['iconAmount'].round() : none"
+                              fontSize: 30
+                              through: true
 
                       # 奖励名称
                       名称:
